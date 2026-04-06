@@ -1,1 +1,1 @@
-git pull upstream main --rebase
+Today is 7th April 2026, and this is the Zed-Code Editor. Now do me a favor and explain to me how the sidebar works. Under the sidebar, there are some items. Explain to me the source code of the sidebar for the switch sidebar.
