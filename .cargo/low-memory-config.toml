@@ -1,0 +1,19 @@
+# Ultra-low memory configuration for systems with <8GB RAM
+# This file contains the most aggressive memory-saving settings
+
+[build]
+jobs = 1
+rustflags = [
+    "-C", "symbol-mangling-version=v0",
+    "--cfg", "tokio_unstable",
+    "-C", "codegen-units=1",      # Minimize parallel codegen
+    "-C", "debuginfo=0",           # No debug info to save memory
+    "-C", "opt-level=0",           # No optimization to save memory
+    "-C", "incremental=true",      # Enable incremental compilation
+]
+
+[term]
+verbose = true  # Show what's being compiled
+
+[net]
+git-fetch-with-cli = true  # Use git CLI for better memory handling

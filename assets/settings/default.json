@@ -11,8 +11,8 @@
   // - "dark": Use the theme indicated by the "dark" field
   "theme": {
     "mode": "system",
-    "light": "One Light",
-    "dark": "One Dark",
+    "light": "Dx Light",
+    "dark": "Dx Dark",
   },
   "icon_theme": "Zed (Default)",
   // The name of a base set of key bindings to use.
@@ -1144,11 +1144,6 @@
     //
     // Default: false
     "show_turn_stats": false,
-    // Whether to show the merge conflict indicator in the status bar
-    // that offers to resolve conflicts using the agent.
-    //
-    // Default: true
-    "show_merge_conflict_indicator": true,
   },
   // Whether the screen sharing icon is shown in the os status bar.
   "show_call_status_icon": true,

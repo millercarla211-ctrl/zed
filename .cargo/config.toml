@@ -1,6 +1,8 @@
 [build]
 # v0 mangling scheme provides more detailed backtraces around closures
 rustflags = ["-C", "symbol-mangling-version=v0", "--cfg", "tokio_unstable"]
+# Limit parallel jobs for low-memory systems (<8GB RAM)
+jobs = 1
 
 [alias]
 xtask = "run --package xtask --"
@@ -8,12 +10,25 @@ perf-test = ["test", "--profile", "release-fast", "--lib", "--bins", "--tests", 
 # Keep similar flags here to share some ccache
 perf-compare = ["run", "--profile", "release-fast", "-p", "perf", "--config", "target.'cfg(true)'.rustflags=[\"--cfg\", \"perf_enabled\"]", "--", "compare"]
 
-[target.'cfg(target_os = "windows")']
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld"
 rustflags = [
     "--cfg",
-    "windows_slim_errors",        # This cfg will reduce the size of `windows::core::Error` from 16 bytes to 4 bytes
+    "windows_slim_errors",
     "-C",
-    "target-feature=+crt-static", # This fixes the linking issue when compiling livekit on Windows
+    "target-feature=+crt-static",
+    "-C",
+    "debuginfo=0",
+    "-C",
+    "link-arg=/DEBUG:NONE",
+    "-C",
+    "link-arg=/INCREMENTAL:NO",
+    "-C",
+    "link-arg=/OPT:NOREF",
+    "-C",
+    "link-arg=/OPT:NOICF",
+    "-C",
+    "link-arg=/PDBALTPATH:none",
 ]
 
 # We need lld to link libwebrtc.a successfully on aarch64-linux
