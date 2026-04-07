@@ -150,6 +150,17 @@ impl TabContentParams {
     }
 }
 
+pub struct PaneTabBarControls {
+    pub start: Option<AnyElement>,
+    pub end: Option<AnyElement>,
+}
+
+impl PaneTabBarControls {
+    pub fn new(start: Option<AnyElement>, end: Option<AnyElement>) -> Self {
+        Self { start, end }
+    }
+}
+
 pub enum TabTooltipContent {
     Text(SharedString),
     Custom(Box<dyn Fn(&mut Window, &mut App) -> AnyView>),
@@ -344,6 +355,14 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
 
     fn show_toolbar(&self) -> bool {
         true
+    }
+
+    fn pane_tab_bar_controls(
+        &self,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<PaneTabBarControls> {
+        None
     }
 
     fn pixel_position_of_cursor(&self, _: &App) -> Option<Point<Pixels>> {
@@ -543,6 +562,11 @@ pub trait ItemHandle: 'static + Send {
     fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)>;
     fn breadcrumb_prefix(&self, window: &mut Window, cx: &mut App) -> Option<gpui::AnyElement>;
     fn show_toolbar(&self, cx: &App) -> bool;
+    fn pane_tab_bar_controls(
+        &self,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Option<PaneTabBarControls>;
     fn pixel_position_of_cursor(&self, cx: &App) -> Option<Point<Pixels>>;
     fn downgrade_item(&self) -> Box<dyn WeakItemHandle>;
     fn workspace_settings<'a>(&self, cx: &'a App) -> &'a WorkspaceSettings;
@@ -1106,6 +1130,14 @@ impl<T: Item> ItemHandle for Entity<T> {
 
     fn show_toolbar(&self, cx: &App) -> bool {
         self.read(cx).show_toolbar()
+    }
+
+    fn pane_tab_bar_controls(
+        &self,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Option<PaneTabBarControls> {
+        self.update(cx, |this, cx| this.pane_tab_bar_controls(window, cx))
     }
 
     fn pixel_position_of_cursor(&self, cx: &App) -> Option<Point<Pixels>> {

@@ -283,6 +283,8 @@ actions!(
         NewFileSplitVertical,
         /// Creates a new file in a horizontal split.
         NewFileSplitHorizontal,
+        /// Creates a new web preview tab.
+        NewWebPreview,
         /// Opens a new search.
         NewSearch,
         /// Opens a new window.

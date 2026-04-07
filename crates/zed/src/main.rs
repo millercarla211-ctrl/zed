@@ -180,6 +180,13 @@ static STARTUP_TIME: OnceLock<Instant> = OnceLock::new();
 fn main() {
     STARTUP_TIME.get_or_init(|| Instant::now());
 
+    #[cfg(target_os = "windows")]
+    // Embedded child webviews need GPUI's Win32 renderer to avoid DirectComposition.
+    // This fork prioritizes the in-editor web preview over DirectComposition on Windows.
+    unsafe {
+        env::set_var("GPUI_DISABLE_DIRECT_COMPOSITION", "1");
+    }
+
     #[cfg(unix)]
     util::prevent_root_execution();
 
@@ -748,6 +755,7 @@ fn main() {
         markdown_preview::init(cx);
         csv_preview::init(cx);
         svg_preview::init(cx);
+        web_preview::init(cx);
         onboarding::init(cx);
         settings_ui::init(cx);
         keymap_editor::init(cx);

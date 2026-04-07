@@ -1,6 +1,6 @@
 use crate::{
-    CloseWindow, NewFile, NewTerminal, OpenInTerminal, OpenOptions, OpenTerminal, OpenVisible,
-    SplitDirection, ToggleFileFinder, ToggleProjectSymbols, ToggleZoom, Workspace,
+    CloseWindow, NewFile, NewTerminal, NewWebPreview, OpenInTerminal, OpenOptions, OpenTerminal,
+    OpenVisible, SplitDirection, ToggleFileFinder, ToggleProjectSymbols, ToggleZoom, Workspace,
     WorkspaceItemBuilder, ZoomIn, ZoomOut,
     focus_follows_mouse::FocusFollowsMouse as _,
     invalid_item_view::InvalidItemView,
@@ -3465,6 +3465,14 @@ impl Pane {
         window: &mut Window,
         cx: &mut Context<Pane>,
     ) -> TabBar {
+        if let Some(active_item) = self.active_item()
+            && let Some(custom_controls) = active_item.pane_tab_bar_controls(window, cx)
+        {
+            return tab_bar
+                .start_children(custom_controls.start)
+                .end_children(custom_controls.end);
+        }
+
         tab_bar
             .when(
                 self.display_nav_history_buttons.unwrap_or_default(),
@@ -4183,6 +4191,8 @@ fn default_render_tab_bar_buttons(
                 .menu(move |window, cx| {
                     Some(ContextMenu::build(window, cx, |menu, _, _| {
                         menu.action("New File", NewFile.boxed_clone())
+                            .action("New Terminal", NewTerminal::default().boxed_clone())
+                            .action("New Web Preview", NewWebPreview.boxed_clone())
                             .action("Open File", ToggleFileFinder::default().boxed_clone())
                             .separator()
                             .action(
@@ -4195,8 +4205,6 @@ fn default_render_tab_bar_buttons(
                                 .boxed_clone(),
                             )
                             .action("Search Symbols", ToggleProjectSymbols.boxed_clone())
-                            .separator()
-                            .action("New Terminal", NewTerminal::default().boxed_clone())
                     }))
                 }),
         )

@@ -212,6 +212,7 @@ members = [
     "crates/vim",
     "crates/vim_mode_setting",
     "crates/watch",
+    "crates/web_preview",
     "crates/web_search",
     "crates/web_search_providers",
     "crates/which_key",
@@ -371,6 +372,7 @@ lmstudio = { path = "crates/lmstudio" }
 lsp = { path = "crates/lsp" }
 markdown = { path = "crates/markdown" }
 markdown_preview = { path = "crates/markdown_preview" }
+web_preview = { path = "crates/web_preview" }
 svg_preview = { path = "crates/svg_preview" }
 media = { path = "crates/media" }
 menu = { path = "crates/menu" }
