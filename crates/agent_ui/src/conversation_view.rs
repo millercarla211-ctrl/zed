@@ -2348,6 +2348,7 @@ impl ConversationView {
         }
     }
 
+    #[cfg(feature = "audio")]
     fn play_notification_sound(&self, window: &Window, cx: &mut App) {
         let settings = AgentSettings::get_global(cx);
         let _visible = window.is_window_active()
@@ -2358,7 +2359,6 @@ impl ConversationView {
                     .upgrade()
                     .is_some_and(|workspace| AgentPanel::is_visible(&workspace, cx))
             };
-        #[cfg(feature = "audio")]
         if settings.play_sound_when_agent_done.should_play(_visible) {
             Audio::play_sound(Sound::AgentDone, cx);
         }
@@ -2527,6 +2527,26 @@ impl ConversationView {
             active_thread.update(cx, |thread, cx| {
                 thread.message_editor.update(cx, |editor, cx| {
                     editor.insert_dragged_files(paths, added_worktrees, window, cx);
+                    editor.focus_handle(cx).focus(window, cx);
+                })
+            });
+        }
+    }
+
+    pub(crate) fn insert_content_blocks(
+        &self,
+        blocks: Vec<acp::ContentBlock>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if blocks.is_empty() {
+            return;
+        }
+
+        if let Some(active_thread) = self.active_thread() {
+            active_thread.update(cx, |thread, cx| {
+                thread.message_editor.update(cx, |editor, cx| {
+                    editor.append_message(blocks, Some("\n\n"), window, cx);
                     editor.focus_handle(cx).focus(window, cx);
                 })
             });

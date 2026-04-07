@@ -12,6 +12,7 @@
 - [x] Document any Windows-specific issues encountered
 
 ## Completed
+- [x] ~~Finish web preview agent attachments, selector context, and toolbar interactions~~ ✅ (completed: 2026-04-07)
 - [x] ~~Configure git for fork maintenance~~ ✅ (completed: 2026-04-07)
 - [x] ~~Create dev branch for development work~~ ✅ (completed: 2026-04-07)
 - [x] ~~Create forge branch for Windows optimizations~~ ✅ (completed: 2026-04-07)

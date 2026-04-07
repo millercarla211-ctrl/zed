@@ -1529,11 +1529,11 @@ impl WorkspaceDb {
                 user = Some(options.remote_user);
                 remote_env = serde_json::to_string(&options.remote_env).ok();
             }
-            #[cfg(any(test, feature = "test-support"))]
-            RemoteConnectionOptions::Mock(options) => {
+            #[allow(unreachable_patterns)]
+            _ => {
                 kind = RemoteConnectionKind::Ssh;
-                host = Some(format!("mock-{}", options.id));
-                user = Some(format!("mock-user-{}", options.id));
+                host = Some("mock".to_string());
+                user = Some("mock-user".to_string());
             }
         }
         Self::get_or_create_remote_connection_query(

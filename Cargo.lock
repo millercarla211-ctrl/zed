@@ -20891,8 +20891,11 @@ dependencies = [
 name = "web_preview"
 version = "0.1.0"
 dependencies = [
+ "acp_thread",
+ "agent-client-protocol",
  "agent_ui",
  "anyhow",
+ "base64 0.22.1",
  "editor",
  "fs",
  "futures 0.3.32",

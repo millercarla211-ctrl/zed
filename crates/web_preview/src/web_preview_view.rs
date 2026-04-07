@@ -1,36 +1,38 @@
+use agent_client_protocol as acp;
 use agent_ui::AgentPanel;
 use anyhow::{Context as _, Result, anyhow};
+use base64::Engine as _;
 use editor::Editor;
 use gpui::{
-    App, AppContext as _, AsyncApp, Bounds, ClipboardItem, Context, Entity, EntityId,
-    EventEmitter, FocusHandle, Focusable, Pixels, Render, SharedString, Subscription, Task,
-    WeakEntity, Window, canvas,
+    App, AppContext as _, Bounds, ClipboardItem, Context, Entity, EventEmitter, FocusHandle,
+    Focusable, Image as GpuiImage, MouseButton, Pixels, Render, SharedString, Subscription, Task,
+    WeakEntity, Window, canvas, svg,
 };
+#[cfg(target_os = "windows")]
+use gpui::{AsyncApp, EntityId, ImageFormat as GpuiImageFormat};
 use menu::Confirm;
 use paths::data_dir;
 use serde_json::Value;
 use std::{
     cell::{Cell, RefCell},
     fs,
-    num::NonZeroIsize,
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
-use ui::{
-    Color, ContextMenu, IconButton, IconName, IconSize, Label, LabelSize, PopoverMenuHandle,
-    Tooltip, prelude::*,
-};
+#[cfg(target_os = "windows")]
+use std::{io::Cursor, num::NonZeroIsize};
+use ui::{Color, IconButton, IconName, IconSize, Label, LabelSize, prelude::*};
 use workspace::item::{Item, ItemEvent, PaneTabBarControls};
 use workspace::notifications::NotificationId;
-use workspace::{NewWebPreview, Pane, SplitDirection, Toast, ToggleZoom, Workspace, WorkspaceId};
+use workspace::{NewWebPreview, Pane, Toast, Workspace, WorkspaceId};
 
 use crate::{OpenPreview, OpenPreviewToTheSide};
 
 #[cfg(target_os = "windows")]
-use image::{RgbaImage, imageops};
+use image::{ImageFormat as ExternalImageFormat, RgbaImage, imageops, imageops::FilterType};
 #[cfg(target_os = "windows")]
 use raw_window_handle::{
     HandleError, HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle,
@@ -39,23 +41,23 @@ use raw_window_handle::{
 use windows::Win32::{
     Foundation::{HWND, POINT, RECT},
     Graphics::Gdi::{
-        BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BitBlt, CAPTUREBLT, CreateCompatibleBitmap,
-        CreateCompatibleDC, DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC, GetDIBits, HBITMAP,
-        HGDIOBJ, ReleaseDC, SRCCOPY, SelectObject, ClientToScreen,
+        BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BitBlt, CAPTUREBLT, ClientToScreen,
+        CreateCompatibleBitmap, CreateCompatibleDC, DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC,
+        GetDIBits, HBITMAP, HGDIOBJ, ReleaseDC, SRCCOPY, SelectObject,
     },
     UI::WindowsAndMessaging::{
-        FindWindowExW, GWL_STYLE, GetWindowLongPtrW, HWND_BOTTOM, SWP_FRAMECHANGED,
-        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SetWindowLongPtrW,
-        SetWindowPos, ShowWindow, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+        FindWindowExW, GWL_STYLE, GetWindowLongPtrW, HWND_BOTTOM, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+        SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SetWindowLongPtrW, SetWindowPos,
+        ShowWindow, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
     },
 };
 #[cfg(target_os = "windows")]
+use wry::WebViewBuilderExtWindows;
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 use wry::{
     PageLoadEvent, Rect as WryRect, WebContext, WebView, WebViewBuilder,
     dpi::{LogicalPosition, LogicalSize, Position, Size},
 };
-#[cfg(target_os = "windows")]
-use wry::WebViewBuilderExtWindows;
 
 const DEFAULT_WEB_PREVIEW_URL: &str = "https://www.google.com/";
 const GOOGLE_SEARCH_URL: &str = "https://www.google.com/search";
@@ -96,11 +98,6 @@ enum BrowserEvent {
 
 #[derive(Clone, Debug)]
 enum BrowserAgentPayload {
-    Screenshot {
-        path: PathBuf,
-        url: String,
-        kind: &'static str,
-    },
     InspectElement {
         url: String,
         title: Option<String>,
@@ -112,6 +109,7 @@ enum BrowserAgentPayload {
         href: Option<String>,
         src: Option<String>,
         rect: Option<BrowserRect>,
+        css: Option<String>,
         html: Option<String>,
     },
 }
@@ -124,7 +122,7 @@ struct BrowserRect {
     height: f64,
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 struct NativeWebPreview {
     _context: Box<WebContext>,
     webview: WebView,
@@ -179,6 +177,7 @@ pub struct WebPreviewView {
     active_url: SharedString,
     bookmarks: Vec<String>,
     detected_extensions: Vec<DetectedExtension>,
+    extensions_scanned: bool,
     load_state: PreviewLoadState,
     host_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
     last_applied_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
@@ -186,11 +185,9 @@ pub struct WebPreviewView {
     browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
     deferred_ipc_messages: Vec<String>,
     ipc_flush_scheduled: bool,
-    extensions_menu_handle: PopoverMenuHandle<ContextMenu>,
-    more_menu_handle: PopoverMenuHandle<ContextMenu>,
     event_pump_task: Option<Task<()>>,
     zoom_factor: f64,
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     native_preview: Rc<RefCell<Option<NativeWebPreview>>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -278,7 +275,8 @@ impl WebPreviewView {
                 page_title: None,
                 active_url: current_url.into(),
                 bookmarks: load_bookmarks(&workspace_context.profile_dir).unwrap_or_default(),
-                detected_extensions: scan_local_extensions().unwrap_or_default(),
+                detected_extensions: Vec::new(),
+                extensions_scanned: false,
                 load_state: PreviewLoadState::Ready,
                 host_bounds: Rc::new(RefCell::new(None)),
                 last_applied_bounds: Rc::new(RefCell::new(None)),
@@ -286,11 +284,9 @@ impl WebPreviewView {
                 browser_events,
                 deferred_ipc_messages: Vec::new(),
                 ipc_flush_scheduled: false,
-                extensions_menu_handle: Default::default(),
-                more_menu_handle: Default::default(),
                 event_pump_task: None,
                 zoom_factor: 1.0,
-                #[cfg(target_os = "windows")]
+                #[cfg(any(target_os = "windows", target_os = "macos"))]
                 native_preview: Rc::new(RefCell::new(None)),
                 _subscriptions: vec![],
             };
@@ -332,13 +328,17 @@ impl WebPreviewView {
             .and_then(|path| path.file_name())
             .map(|name| slugify(&name.to_string_lossy()))
             .filter(|slug| !slug.is_empty())
-            .or_else(|| workspace.database_id().map(|id| format!("workspace-{id:?}")))
+            .or_else(|| {
+                workspace
+                    .database_id()
+                    .map(|id| format!("workspace-{id:?}"))
+            })
             .unwrap_or_else(|| "workspace".to_string());
 
         PreviewWorkspaceContext {
             workspace_id: workspace.database_id(),
             root_path,
-            root_name: root_name.clone().into(),
+            root_name: root_name.into(),
             preview_key: preview_slug.clone().into(),
             profile_dir: data_dir()
                 .join("web_preview")
@@ -382,18 +382,31 @@ impl WebPreviewView {
         Ok(())
     }
 
-    fn should_disable_webview_input(&self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        // Disable webview input when URL editor has focus
-        self.url_editor.focus_handle(cx).is_focused(window)
+    fn confirm_navigation(&mut self, _: &Confirm, window: &mut Window, cx: &mut Context<Self>) {
+        self.navigate_to_input(window, cx);
+        cx.notify();
     }
 
-    fn confirm_navigation(
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    fn release_native_preview_focus(&self) {
+        let borrow = self.native_preview.borrow();
+        if let Some(preview) = borrow.as_ref() {
+            let _ = preview.webview.focus_parent();
+        }
+    }
+
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    fn release_native_preview_focus(&self) {}
+
+    fn focus_url_editor(
         &mut self,
-        _: &Confirm,
+        _: &gpui::MouseDownEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.navigate_to_input(window, cx);
+        self.release_native_preview_focus();
+        let focus_handle = self.url_editor.focus_handle(cx);
+        window.focus(&focus_handle, cx);
     }
 
     fn navigate_to_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -421,17 +434,6 @@ impl WebPreviewView {
         }
     }
 
-    fn open_in_browser(
-        &mut self,
-        _: &gpui::ClickEvent,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Ok(url) = normalized_url(&self.current_url_text(cx)) {
-            cx.open_url(url.as_str());
-        }
-    }
-
     fn toggle_bookmark(
         &mut self,
         _: &gpui::ClickEvent,
@@ -443,16 +445,16 @@ impl WebPreviewView {
             return;
         }
 
-        let message = if let Some(index) = self.bookmarks.iter().position(|bookmark| bookmark == &url)
-        {
-            self.bookmarks.remove(index);
-            "Removed bookmark"
-        } else {
-            self.bookmarks.push(url);
-            self.bookmarks.sort();
-            self.bookmarks.dedup();
-            "Bookmarked page"
-        };
+        let message =
+            if let Some(index) = self.bookmarks.iter().position(|bookmark| bookmark == &url) {
+                self.bookmarks.remove(index);
+                "Removed bookmark"
+            } else {
+                self.bookmarks.push(url);
+                self.bookmarks.sort();
+                self.bookmarks.dedup();
+                "Bookmarked page"
+            };
 
         if let Err(error) = self.persist_bookmarks() {
             self.load_state = PreviewLoadState::Error(error.to_string().into());
@@ -467,12 +469,7 @@ impl WebPreviewView {
         cx.notify();
     }
 
-    fn go_forward(
-        &mut self,
-        _: &gpui::ClickEvent,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn go_forward(&mut self, _: &gpui::ClickEvent, _window: &mut Window, cx: &mut Context<Self>) {
         let _ = self.evaluate_script("history.forward();");
         cx.notify();
     }
@@ -489,19 +486,8 @@ impl WebPreviewView {
         cx.notify();
     }
 
-    fn reset_zoom(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        self.zoom_factor = 1.0;
-        let _ = self.apply_zoom();
-        cx.notify();
-    }
-
-    fn copy_current_url(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        cx.write_to_clipboard(ClipboardItem::new_string(self.active_url.to_string()));
-        self.show_toast("Copied current URL", cx);
-    }
-
     fn open_devtools(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
             let opened = {
                 let borrow = self.native_preview.borrow();
@@ -520,25 +506,17 @@ impl WebPreviewView {
 
     fn inspect_element(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let script = "window.__zedWebPreview && window.__zedWebPreview.inspectNextElement();";
-        if self.evaluate_script(script).is_ok() {
-            self.show_toast("Click an element in the page to send it to the agent.", cx);
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Click an element in the page to send it to the agent.", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("Element selector is unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic("Element selector crashed before it could start", cx);
+            }
         }
-    }
-
-    fn hard_reload(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let _ = self.evaluate_script(
-            "window.location.reload(); if (window.performance && performance.clearResourceTimings) { performance.clearResourceTimings(); }",
-        );
-        let _ = self.reload_webview(window, cx);
-    }
-
-    fn clear_browsing_history(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if let Err(error) = self.clear_all_browsing_data() {
-            self.load_state = PreviewLoadState::Error(error.to_string().into());
-        } else {
-            self.show_toast("Cleared browsing history", cx);
-        }
-        cx.notify();
     }
 
     fn clear_cache(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -546,15 +524,6 @@ impl WebPreviewView {
             self.load_state = PreviewLoadState::Error(error.to_string().into());
         } else {
             self.show_toast("Cleared browser cache", cx);
-        }
-        cx.notify();
-    }
-
-    fn clear_cookies(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if let Err(error) = self.delete_all_cookies() {
-            self.load_state = PreviewLoadState::Error(error.to_string().into());
-        } else {
-            self.show_toast("Cleared cookies", cx);
         }
         cx.notify();
     }
@@ -579,42 +548,44 @@ impl WebPreviewView {
             }
             Err(()) => {
                 self.load_state = PreviewLoadState::Error(
-                    format!(
-                        "Failed to open extension path {}",
-                        extension_path.display()
-                    )
-                    .into(),
+                    format!("Failed to open extension path {}", extension_path.display()).into(),
                 );
             }
         }
     }
 
     fn take_screenshot(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match self.capture_and_store_screenshot(None, window) {
-            Ok(path) => {
-                self.send_to_agent_panel(
-                    BrowserAgentPayload::Screenshot {
-                        path,
-                        url: self.active_url.to_string(),
-                        kind: "Viewport",
-                    },
-                    window,
+        match catch_unwind(AssertUnwindSafe(|| {
+            self.capture_screenshot_payload(None, window)
+        })) {
+            Ok(Ok((_path, image, blocks))) => {
+                cx.write_to_clipboard(ClipboardItem::new_image(&image));
+                self.append_content_blocks_to_agent_panel(blocks, window, cx);
+                self.show_toast(
+                    "Captured web preview screenshot to clipboard and AI input",
                     cx,
                 );
-                self.show_toast("Captured web preview screenshot", cx);
             }
-            Err(error) => {
-                self.load_state = PreviewLoadState::Error(error.to_string().into());
+            Ok(Err(error)) => {
+                self.report_action_error("Web preview screenshot failed", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic("Web preview screenshot crashed", cx);
             }
         }
         cx.notify();
     }
 
-    fn capture_area_screenshot(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        let script = "window.__zedWebPreview && window.__zedWebPreview.captureAreaScreenshot();";
-        if self.evaluate_script(script).is_ok() {
-            self.show_toast("Drag an area on the page to capture it.", cx);
-        }
+    fn report_action_error(&mut self, prefix: &str, error: anyhow::Error, cx: &mut Context<Self>) {
+        let message = format!("{prefix}: {error}");
+        self.load_state = PreviewLoadState::Error(message.clone().into());
+        self.show_toast(message, cx);
+    }
+
+    fn report_action_panic(&mut self, message: &str, cx: &mut Context<Self>) {
+        let message = message.to_string();
+        self.load_state = PreviewLoadState::Error(message.clone().into());
+        self.show_toast(message, cx);
     }
 
     fn apply_browser_events(
@@ -628,10 +599,19 @@ impl WebPreviewView {
         for event in events {
             match event {
                 BrowserEvent::UrlChanged(url) => {
+                    let previous_url = self.active_url.to_string();
                     self.active_url = url.clone().into();
-                    self.url_editor.update(cx, |editor, cx| {
-                        editor.set_text(url.as_str(), window, cx);
-                    });
+                    let editor_focus = self.url_editor.focus_handle(cx);
+                    let editor_text = self.current_url_text(cx);
+                    let should_sync_editor = !editor_focus.is_focused(window)
+                        || editor_text.is_empty()
+                        || editor_text == previous_url;
+
+                    if should_sync_editor {
+                        self.url_editor.update(cx, |editor, cx| {
+                            editor.set_text(url.as_str(), window, cx);
+                        });
+                    }
                 }
                 BrowserEvent::TitleChanged(title) => {
                     self.page_title = Some(title.into());
@@ -688,78 +668,140 @@ impl WebPreviewView {
 
         match kind {
             "inspect-element" => {
-                let data = BrowserAgentPayload::InspectElement {
-                    url: payload
-                        .get("url")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string(),
-                    title: payload
-                        .get("title")
-                        .and_then(Value::as_str)
-                        .map(ToOwned::to_owned),
-                    selector: payload
-                        .get("selector")
-                        .and_then(Value::as_str)
-                        .map(ToOwned::to_owned),
-                    tag: payload.get("tag").and_then(Value::as_str).map(ToOwned::to_owned),
-                    id: payload.get("id").and_then(Value::as_str).map(ToOwned::to_owned),
-                    classes: payload
-                        .get("classes")
-                        .and_then(Value::as_array)
-                        .map(|classes| {
-                            classes
-                                .iter()
-                                .filter_map(Value::as_str)
-                                .map(ToOwned::to_owned)
-                                .collect()
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let raw_rect = payload.get("rect").and_then(parse_browser_rect);
+                    let scale = payload
+                        .get("scale")
+                        .and_then(Value::as_f64)
+                        .filter(|value| *value > 0.0)
+                        .unwrap_or(1.0);
+                    let data = BrowserAgentPayload::InspectElement {
+                        url: payload
+                            .get("url")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
+                        title: payload
+                            .get("title")
+                            .and_then(Value::as_str)
+                            .map(ToOwned::to_owned),
+                        selector: payload
+                            .get("selector")
+                            .and_then(Value::as_str)
+                            .map(ToOwned::to_owned),
+                        tag: payload
+                            .get("tag")
+                            .and_then(Value::as_str)
+                            .map(ToOwned::to_owned),
+                        id: payload
+                            .get("id")
+                            .and_then(Value::as_str)
+                            .map(ToOwned::to_owned),
+                        classes: payload
+                            .get("classes")
+                            .and_then(Value::as_array)
+                            .map(|classes| {
+                                classes
+                                    .iter()
+                                    .filter_map(Value::as_str)
+                                    .map(ToOwned::to_owned)
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                        text: payload
+                            .get("text")
+                            .and_then(Value::as_str)
+                            .map(ToOwned::to_owned),
+                        href: payload
+                            .get("href")
+                            .and_then(Value::as_str)
+                            .map(ToOwned::to_owned),
+                        src: payload
+                            .get("src")
+                            .and_then(Value::as_str)
+                            .map(ToOwned::to_owned),
+                        rect: raw_rect,
+                        css: payload
+                            .get("css")
+                            .and_then(Value::as_str)
+                            .map(ToOwned::to_owned),
+                        html: payload
+                            .get("html")
+                            .and_then(Value::as_str)
+                            .map(ToOwned::to_owned),
+                    };
+                    let screenshot_png = raw_rect
+                        .map(|rect| BrowserRect {
+                            x: rect.x * scale,
+                            y: rect.y * scale,
+                            width: rect.width * scale,
+                            height: rect.height * scale,
                         })
-                        .unwrap_or_default(),
-                    text: payload
-                        .get("text")
-                        .and_then(Value::as_str)
-                        .map(ToOwned::to_owned),
-                    href: payload
-                        .get("href")
-                        .and_then(Value::as_str)
-                        .map(ToOwned::to_owned),
-                    src: payload.get("src").and_then(Value::as_str).map(ToOwned::to_owned),
-                    rect: payload.get("rect").and_then(parse_browser_rect),
-                    html: payload
-                        .get("html")
-                        .and_then(Value::as_str)
-                        .map(ToOwned::to_owned),
-                };
-                self.send_to_agent_panel(data, window, cx);
-                self.show_toast("Sent inspected element to the agent panel", cx);
+                        .map(|crop| self.capture_screenshot_png_bytes(Some(crop), window))
+                        .transpose()
+                        .ok()
+                        .flatten()
+                        .and_then(|png_bytes| self.prepare_agent_png_bytes(png_bytes).ok());
+                    self.append_content_blocks_to_agent_panel(
+                        self.inspect_element_agent_blocks(&data, screenshot_png.as_deref()),
+                        window,
+                        cx,
+                    );
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {
+                        self.show_toast("Sent inspected element to the agent panel", cx);
+                    }
+                    Ok(Err(error)) => {
+                        self.report_action_error("Element selector failed to send data", error, cx);
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "Element selector crashed while collecting page data",
+                            cx,
+                        );
+                    }
+                }
             }
             "capture-area" => {
-                let scale = payload
-                    .get("scale")
-                    .and_then(Value::as_f64)
-                    .filter(|value| *value > 0.0)
-                    .unwrap_or(1.0);
-                let rect = payload
-                    .get("rect")
-                    .and_then(parse_browser_rect)
-                    .ok_or_else(|| anyhow!("Capture area payload is missing a rectangle"))?;
-                let crop = BrowserRect {
-                    x: rect.x * scale,
-                    y: rect.y * scale,
-                    width: rect.width * scale,
-                    height: rect.height * scale,
-                };
-                let path = self.capture_and_store_screenshot(Some(crop), window)?;
-                self.send_to_agent_panel(
-                    BrowserAgentPayload::Screenshot {
-                        path,
-                        url: self.active_url.to_string(),
-                        kind: "Area",
-                    },
-                    window,
-                    cx,
-                );
-                self.show_toast("Captured selected area to the agent panel", cx);
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let scale = payload
+                        .get("scale")
+                        .and_then(Value::as_f64)
+                        .filter(|value| *value > 0.0)
+                        .unwrap_or(1.0);
+                    let rect = payload
+                        .get("rect")
+                        .and_then(parse_browser_rect)
+                        .ok_or_else(|| anyhow!("Capture area payload is missing a rectangle"))?;
+                    let crop = BrowserRect {
+                        x: rect.x * scale,
+                        y: rect.y * scale,
+                        width: rect.width * scale,
+                        height: rect.height * scale,
+                    };
+                    let (_path, image, blocks) =
+                        self.capture_screenshot_payload(Some(crop), window)?;
+                    cx.write_to_clipboard(ClipboardItem::new_image(&image));
+                    self.append_content_blocks_to_agent_panel(blocks, window, cx);
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {
+                        self.show_toast(
+                            "Captured selected web preview area to clipboard and AI input",
+                            cx,
+                        );
+                    }
+                    Ok(Err(error)) => {
+                        self.report_action_error("Selected-area screenshot failed", error, cx);
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "Selected-area screenshot crashed while processing",
+                            cx,
+                        );
+                    }
+                }
             }
             _ => {}
         }
@@ -767,20 +809,28 @@ impl WebPreviewView {
         Ok(())
     }
 
-    fn send_to_agent_panel(
+    fn append_content_blocks_to_agent_panel(
         &mut self,
-        payload: BrowserAgentPayload,
+        blocks: Vec<acp::ContentBlock>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if blocks.is_empty() {
+            return;
+        }
+
         let Some(workspace) = self.workspace.upgrade() else {
             return;
         };
 
-        let note = format_agent_note(payload);
-        let window_handle = Window::window_handle(window);
+        let workspace_for_retry = workspace.downgrade();
+        window.defer(cx, move |window, cx| {
+            let Some(workspace) = workspace_for_retry.upgrade() else {
+                return;
+            };
 
-        let _ = cx.update_window(window_handle, |_, window, cx| {
+            let mut needs_retry = false;
+            let retry_blocks = blocks.clone();
             workspace.update(cx, |workspace, cx| {
                 if workspace.panel::<AgentPanel>(cx).is_none() {
                     workspace.open_panel::<AgentPanel>(window, cx);
@@ -790,23 +840,71 @@ impl WebPreviewView {
                     .focus_panel::<AgentPanel>(window, cx)
                     .or_else(|| workspace.panel::<AgentPanel>(cx))
                 else {
+                    needs_retry = true;
                     return;
                 };
 
-                let Some(thread_view) = panel.read(cx).active_thread_view(cx) else {
-                    return;
-                };
-
-                thread_view.update(cx, |thread_view, cx| {
-                    thread_view.message_editor.update(cx, |editor, cx| {
-                        if !editor.is_empty(cx) {
-                            editor.insert_text("\n\n", window, cx);
-                        }
-                        editor.insert_text(&note, window, cx);
-                    });
+                panel.update(cx, |panel, cx| {
+                    panel.insert_content_blocks(blocks, window, cx);
                 });
             });
+
+            if needs_retry {
+                let workspace_for_second_retry = workspace.downgrade();
+                window.defer(cx, move |window, cx| {
+                    let Some(workspace) = workspace_for_second_retry.upgrade() else {
+                        return;
+                    };
+
+                    workspace.update(cx, |workspace, cx| {
+                        let Some(panel) = workspace
+                            .focus_panel::<AgentPanel>(window, cx)
+                            .or_else(|| workspace.panel::<AgentPanel>(cx))
+                        else {
+                            return;
+                        };
+
+                        panel.update(cx, |panel, cx| {
+                            panel.insert_content_blocks(retry_blocks, window, cx);
+                        });
+                    });
+                });
+            }
         });
+    }
+
+    fn inspect_element_agent_blocks(
+        &self,
+        payload: &BrowserAgentPayload,
+        screenshot_png_bytes: Option<&[u8]>,
+    ) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        let mut has_context_attachment = false;
+
+        if let Some(png_bytes) = screenshot_png_bytes {
+            blocks.push(acp::ContentBlock::Image(acp::ImageContent::new(
+                base64::engine::general_purpose::STANDARD.encode(png_bytes),
+                "image/png",
+            )));
+            has_context_attachment = true;
+        }
+
+        if let Some(url_block) = self.inspect_element_url_attachment_block(payload) {
+            if has_context_attachment {
+                blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n")));
+            }
+            blocks.push(url_block);
+            has_context_attachment = true;
+        }
+
+        if has_context_attachment {
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(
+            format_agent_note(payload),
+        )));
+        blocks
     }
 
     fn show_toast(&mut self, message: impl Into<SharedString>, cx: &mut Context<Self>) {
@@ -815,75 +913,27 @@ impl WebPreviewView {
         };
 
         let message = message.into();
-        workspace.update(cx, |workspace, cx| {
-            workspace.show_toast(
-                Toast::new(
-                    NotificationId::named("web-preview-toast".into()),
-                    message.to_string(),
-                )
+        let workspace = workspace.downgrade();
+        cx.defer(move |cx| {
+            let Some(workspace) = workspace.upgrade() else {
+                return;
+            };
+
+            let _ = workspace.update(cx, |workspace, cx| {
+                workspace.show_toast(
+                    Toast::new(
+                        NotificationId::named("web-preview-toast".into()),
+                        message.to_string(),
+                    )
                     .autohide(),
-                cx,
-            );
-        });
-    }
-
-    fn open_new_browser_tab(
-        &mut self,
-        _event: &gpui::ClickEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(workspace) = self.workspace.upgrade() else {
-            return;
-        };
-
-        workspace.update(cx, |workspace, cx| {
-            let view = Self::open_or_create(workspace, window, cx);
-            workspace.active_pane().update(cx, |pane, cx| {
-                pane.add_item(Box::new(view), true, true, None, window, cx);
-            });
-            cx.notify();
-        });
-    }
-
-    fn split_browser_tab(
-        &mut self,
-        _event: &gpui::ClickEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(workspace) = self.workspace.upgrade() else {
-            return;
-        };
-
-        workspace.update(cx, |workspace, cx| {
-            let _ = workspace.split_and_clone(
-                workspace.active_pane().clone(),
-                SplitDirection::Right,
-                window,
-                cx,
-            );
-        });
-    }
-
-    fn toggle_browser_zoom(
-        &mut self,
-        _event: &gpui::ClickEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(workspace) = self.workspace.upgrade() else {
-            return;
-        };
-
-        workspace.update(cx, |workspace, cx| {
-            workspace.active_pane().update(cx, |pane, cx| {
-                pane.toggle_zoom(&ToggleZoom, window, cx);
+                    cx,
+                );
             });
         });
     }
 
     fn open_extensions_root(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.ensure_extensions_scanned(cx);
         let Some(path) = self
             .detected_extensions
             .first()
@@ -901,25 +951,25 @@ impl WebPreviewView {
     }
 
     fn render_extensions_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let has_extensions = !self.detected_extensions.is_empty();
-        let tooltip_text = if has_extensions {
-            format!("Open extensions folder ({})", self.detected_extensions.len())
-        } else {
-            "No local browser extensions detected".to_string()
-        };
-
-        IconButton::new("web-preview-extensions-trigger", IconName::Blocks)
-            .icon_size(IconSize::Small)
-            .icon_color(if has_extensions {
-                Color::Default
-            } else {
-                Color::Muted
-            })
-            .disabled(!has_extensions)
-            .tooltip(Tooltip::text(tooltip_text))
-            .on_click(cx.listener(|this, _, window, cx| {
+        self.render_toolbar_action_button(
+            "web-preview-extensions-trigger",
+            IconName::Blocks,
+            true,
+            cx.listener(|this, _, window, cx| {
                 this.open_extensions_root(window, cx);
-            }))
+            }),
+            cx,
+        )
+    }
+
+    fn ensure_extensions_scanned(&mut self, cx: &mut Context<Self>) {
+        if self.extensions_scanned {
+            return;
+        }
+
+        self.detected_extensions = scan_local_extensions().unwrap_or_default();
+        self.extensions_scanned = true;
+        cx.notify();
     }
 
     #[cfg(target_os = "windows")]
@@ -955,14 +1005,37 @@ impl WebPreviewView {
         }));
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    fn ensure_native_preview(&mut self, window: &mut Window, _cx: &mut Context<Self>) {
+        if self.native_preview.borrow().is_some() || self.native_mount_requested.get() {
+            return;
+        }
+
+        self.native_mount_requested.set(true);
+        let result = create_native_preview_for_macos_window(
+            window,
+            self.workspace_context.profile_dir.clone(),
+            self.active_url.to_string(),
+            self.zoom_factor,
+            self.host_bounds.clone(),
+            self.browser_events.clone(),
+            self.native_preview.clone(),
+        );
+        self.native_mount_requested.set(false);
+
+        if let Err(error) = result {
+            self.load_state = PreviewLoadState::Error(error.to_string().into());
+        }
+    }
+
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     fn ensure_native_preview(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
         self.load_state = PreviewLoadState::Error(
-            "Native web preview is currently implemented for Windows only in this fork.".into(),
+            "Native web preview underlay support is wired for Windows and macOS. Linux still needs GTK/X11 integration or a separate Wayland embedding path.".into(),
         );
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     fn load_url(&mut self, url: &str, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
         self.ensure_native_preview(window, cx);
         let mut borrow = self.native_preview.borrow_mut();
@@ -973,12 +1046,19 @@ impl WebPreviewView {
         Ok(())
     }
 
-    #[cfg(not(target_os = "windows"))]
-    fn load_url(&mut self, _url: &str, _window: &mut Window, _cx: &mut Context<Self>) -> Result<()> {
-        Err(anyhow!("Native web preview is not available on this platform"))
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    fn load_url(
+        &mut self,
+        _url: &str,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Result<()> {
+        Err(anyhow!(
+            "Native web preview is not available on this platform"
+        ))
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     fn reload_webview(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
         self.ensure_native_preview(window, cx);
         let borrow = self.native_preview.borrow();
@@ -989,12 +1069,14 @@ impl WebPreviewView {
         Ok(())
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     fn reload_webview(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> Result<()> {
-        Err(anyhow!("Native web preview is not available on this platform"))
+        Err(anyhow!(
+            "Native web preview is not available on this platform"
+        ))
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     fn evaluate_script(&self, script: &str) -> Result<()> {
         let borrow = self.native_preview.borrow();
         let preview = borrow
@@ -1004,12 +1086,14 @@ impl WebPreviewView {
         Ok(())
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     fn evaluate_script(&self, _script: &str) -> Result<()> {
-        Err(anyhow!("Native web preview is not available on this platform"))
+        Err(anyhow!(
+            "Native web preview is not available on this platform"
+        ))
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     fn apply_zoom(&self) -> Result<()> {
         let borrow = self.native_preview.borrow();
         let preview = borrow
@@ -1019,12 +1103,14 @@ impl WebPreviewView {
         Ok(())
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     fn apply_zoom(&self) -> Result<()> {
-        Err(anyhow!("Native web preview is not available on this platform"))
+        Err(anyhow!(
+            "Native web preview is not available on this platform"
+        ))
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     fn clear_all_browsing_data(&self) -> Result<()> {
         let borrow = self.native_preview.borrow();
         let preview = borrow
@@ -1034,26 +1120,11 @@ impl WebPreviewView {
         Ok(())
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     fn clear_all_browsing_data(&self) -> Result<()> {
-        Err(anyhow!("Native web preview is not available on this platform"))
-    }
-
-    #[cfg(target_os = "windows")]
-    fn delete_all_cookies(&self) -> Result<()> {
-        let borrow = self.native_preview.borrow();
-        let preview = borrow
-            .as_ref()
-            .ok_or_else(|| anyhow!("The native web preview is not available"))?;
-        for cookie in preview.webview.cookies()? {
-            preview.webview.delete_cookie(&cookie)?;
-        }
-        Ok(())
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    fn delete_all_cookies(&self) -> Result<()> {
-        Err(anyhow!("Native web preview is not available on this platform"))
+        Err(anyhow!(
+            "Native web preview is not available on this platform"
+        ))
     }
 
     #[cfg(target_os = "windows")]
@@ -1092,39 +1163,242 @@ impl WebPreviewView {
         _crop: Option<BrowserRect>,
         _window: &Window,
     ) -> Result<PathBuf> {
-        Err(anyhow!("Web preview screenshots are not available on this platform"))
+        Err(anyhow!(
+            "Web preview screenshots are not available on this platform"
+        ))
+    }
+
+    fn screenshot_agent_blocks(&self, png_bytes: &[u8]) -> Vec<acp::ContentBlock> {
+        let mut blocks = vec![acp::ContentBlock::Image(acp::ImageContent::new(
+            base64::engine::general_purpose::STANDARD.encode(png_bytes),
+            "image/png",
+        ))];
+
+        if let Some(url_block) = self.current_url_attachment_block() {
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n")));
+            blocks.push(url_block);
+        }
+
+        blocks
+    }
+
+    fn current_url_attachment_block(&self) -> Option<acp::ContentBlock> {
+        self.url_attachment_block(self.active_url.trim())
+    }
+
+    fn inspect_element_url_attachment_block(
+        &self,
+        payload: &BrowserAgentPayload,
+    ) -> Option<acp::ContentBlock> {
+        match payload {
+            BrowserAgentPayload::InspectElement { url, .. } => self.url_attachment_block(url),
+        }
+    }
+
+    fn url_attachment_block(&self, url: &str) -> Option<acp::ContentBlock> {
+        let url = url.trim();
+        let parsed = url::Url::parse(url).ok()?;
+        match parsed.scheme() {
+            "http" | "https" => Some(acp::ContentBlock::ResourceLink(acp::ResourceLink::new(
+                url.to_string(),
+                url.to_string(),
+            ))),
+            _ => None,
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn prepare_agent_png_bytes(&self, png_bytes: Vec<u8>) -> Result<Vec<u8>> {
+        const MAX_AGENT_IMAGE_BYTES: usize = 2 * 1024 * 1024;
+        const MAX_AGENT_IMAGE_EDGE: u32 = 1600;
+
+        let Ok(image) = image::load_from_memory(&png_bytes) else {
+            return Ok(png_bytes);
+        };
+
+        if png_bytes.len() <= MAX_AGENT_IMAGE_BYTES
+            && image.width() <= MAX_AGENT_IMAGE_EDGE
+            && image.height() <= MAX_AGENT_IMAGE_EDGE
+        {
+            return Ok(png_bytes);
+        }
+
+        let resized = image.resize(
+            MAX_AGENT_IMAGE_EDGE,
+            MAX_AGENT_IMAGE_EDGE,
+            FilterType::Lanczos3,
+        );
+        let mut cursor = Cursor::new(Vec::new());
+        resized
+            .write_to(&mut cursor, ExternalImageFormat::Png)
+            .with_context(|| "Failed to encode the AI screenshot attachment")?;
+        Ok(cursor.into_inner())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn prepare_agent_png_bytes(&self, png_bytes: Vec<u8>) -> Result<Vec<u8>> {
+        Ok(png_bytes)
+    }
+
+    #[cfg(target_os = "windows")]
+    fn capture_screenshot_png_bytes(
+        &self,
+        crop: Option<BrowserRect>,
+        window: &Window,
+    ) -> Result<Vec<u8>> {
+        let path = self.capture_and_store_screenshot(crop, window)?;
+        fs::read(&path)
+            .with_context(|| format!("Failed to read screenshot bytes from {}", path.display()))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn capture_screenshot_png_bytes(
+        &self,
+        _crop: Option<BrowserRect>,
+        _window: &Window,
+    ) -> Result<Vec<u8>> {
+        Err(anyhow!(
+            "Web preview screenshots are not available on this platform"
+        ))
+    }
+
+    #[cfg(target_os = "windows")]
+    fn capture_screenshot_payload(
+        &self,
+        crop: Option<BrowserRect>,
+        window: &Window,
+    ) -> Result<(PathBuf, GpuiImage, Vec<acp::ContentBlock>)> {
+        let path = self.capture_and_store_screenshot(crop, window)?;
+        let png_bytes = fs::read(&path)
+            .with_context(|| format!("Failed to read screenshot from {}", path.display()))?;
+        let agent_png_bytes = self.prepare_agent_png_bytes(png_bytes.clone())?;
+        let image = GpuiImage::from_bytes(GpuiImageFormat::Png, png_bytes);
+        let blocks = self.screenshot_agent_blocks(&agent_png_bytes);
+        Ok((path, image, blocks))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn capture_screenshot_payload(
+        &self,
+        _crop: Option<BrowserRect>,
+        _window: &Window,
+    ) -> Result<(PathBuf, GpuiImage, Vec<acp::ContentBlock>)> {
+        Err(anyhow!(
+            "Web preview screenshots are not available on this platform"
+        ))
     }
 
     fn render_more_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .items_center()
             .gap_1()
-            .child(
-                IconButton::new("web-preview-devtools", IconName::Debug)
-                    .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text("Open DevTools"))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.open_devtools(window, cx);
-                    })),
-            )
-            .child(
-                IconButton::new("web-preview-open-browser", IconName::ArrowUpRight)
-                    .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text("Open In Browser"))
-                    .on_click(cx.listener(Self::open_in_browser)),
-            )
-            .child(
-                IconButton::new("web-preview-clear-cache", IconName::Trash)
-                    .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text("Clear Cache"))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.clear_cache(window, cx);
-                    })),
-            )
+            .child(self.render_toolbar_action_button(
+                "web-preview-screenshot",
+                IconName::Screen,
+                true,
+                cx.listener(|this, _, window, cx| {
+                    this.take_screenshot(window, cx);
+                }),
+                cx,
+            ))
+            .child(self.render_toolbar_action_button(
+                "web-preview-inspect",
+                IconName::Code,
+                true,
+                cx.listener(|this, _, window, cx| {
+                    this.inspect_element(window, cx);
+                }),
+                cx,
+            ))
+            .child(self.render_toolbar_action_button(
+                "web-preview-devtools",
+                IconName::Terminal,
+                true,
+                cx.listener(|this, _, window, cx| {
+                    this.open_devtools(window, cx);
+                }),
+                cx,
+            ))
+            .child(self.render_toolbar_action_button(
+                "web-preview-zoom-in",
+                IconName::Plus,
+                true,
+                cx.listener(|this, _, window, cx| {
+                    this.zoom_in(window, cx);
+                }),
+                cx,
+            ))
+            .child(self.render_toolbar_action_button(
+                "web-preview-zoom-out",
+                IconName::Dash,
+                true,
+                cx.listener(|this, _, window, cx| {
+                    this.zoom_out(window, cx);
+                }),
+                cx,
+            ))
+            .child(self.render_toolbar_action_button(
+                "web-preview-clear-cache",
+                IconName::Trash,
+                true,
+                cx.listener(|this, _, window, cx| {
+                    this.clear_cache(window, cx);
+                }),
+                cx,
+            ))
+    }
+
+    fn render_toolbar_action_button(
+        &self,
+        id: &'static str,
+        icon: IconName,
+        enabled: bool,
+        on_click: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let colors = cx.theme().colors();
+        let group_name = SharedString::from(format!("{id}-group"));
+
+        let icon = svg()
+            .size(IconSize::Small.rems())
+            .flex_none()
+            .path(icon.path())
+            .text_color(if enabled {
+                colors.icon_muted
+            } else {
+                colors.icon_disabled
+            })
+            .when(enabled, |this| {
+                this.group_hover(group_name.clone(), |style| {
+                    style.text_color(colors.icon_accent)
+                })
+            });
+
+        let button = h_flex()
+            .id(id)
+            .group(group_name)
+            .flex_none()
+            .w_6()
+            .h_6()
+            .items_center()
+            .justify_center()
+            .rounded_md()
+            .child(icon);
+
+        if enabled {
+            button
+                .cursor_pointer()
+                .hover(|style| style.bg(colors.ghost_element_hover))
+                .active(|style| style.bg(colors.ghost_element_active))
+                .on_click(on_click)
+                .into_any_element()
+        } else {
+            button.into_any_element()
+        }
     }
 
     fn render_webview_body(&self, _cx: &mut Context<Self>) -> AnyElement {
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
             let host_bounds = self.host_bounds.clone();
             let last_applied_bounds = self.last_applied_bounds.clone();
@@ -1134,11 +1408,11 @@ impl WebPreviewView {
                 move |bounds, _window, _cx| {
                     *host_bounds.borrow_mut() = Some(bounds);
                     if let Some(preview) = native_preview.borrow_mut().as_mut() {
-                        let should_update_bounds = last_applied_bounds
-                            .borrow()
-                            .as_ref()
-                            .copied()
-                            != Some(bounds);
+                        // Always keep webview visible
+                        let _ = preview.webview.set_visible(true);
+
+                        let should_update_bounds =
+                            last_applied_bounds.borrow().as_ref().copied() != Some(bounds);
                         if should_update_bounds {
                             let _ = set_webview_bounds(&preview.webview, bounds);
                             *last_applied_bounds.borrow_mut() = Some(bounds);
@@ -1152,14 +1426,14 @@ impl WebPreviewView {
             .into_any_element();
         }
 
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
         {
             return v_flex()
                 .size_full()
                 .items_center()
                 .justify_center()
                 .child(
-                    Label::new("Web Preview is currently available on Windows in this fork.")
+                    Label::new("Web Preview native embedding is wired for Windows and macOS. Linux still needs compositor-specific host integration.")
                         .size(LabelSize::Small)
                         .color(Color::Muted),
                 )
@@ -1185,6 +1459,10 @@ impl Item for WebPreviewView {
 
     fn tab_icon(&self, _window: &Window, _cx: &App) -> Option<ui::Icon> {
         Some(ui::Icon::new(IconName::Public))
+    }
+
+    fn tab_tooltip_text(&self, _cx: &App) -> Option<SharedString> {
+        (!self.active_url.trim().is_empty()).then(|| self.active_url.clone())
     }
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
@@ -1239,6 +1517,7 @@ impl Item for WebPreviewView {
                 active_url: current_url.clone().into(),
                 bookmarks,
                 detected_extensions,
+                extensions_scanned: self.extensions_scanned,
                 load_state: PreviewLoadState::Ready,
                 host_bounds: Rc::new(RefCell::new(None)),
                 last_applied_bounds: Rc::new(RefCell::new(None)),
@@ -1246,11 +1525,9 @@ impl Item for WebPreviewView {
                 browser_events,
                 deferred_ipc_messages: Vec::new(),
                 ipc_flush_scheduled: false,
-                extensions_menu_handle: Default::default(),
-                more_menu_handle: Default::default(),
                 event_pump_task: None,
                 zoom_factor: 1.0,
-                #[cfg(target_os = "windows")]
+                #[cfg(any(target_os = "windows", target_os = "macos"))]
                 native_preview: Rc::new(RefCell::new(None)),
                 _subscriptions: vec![],
             };
@@ -1269,17 +1546,31 @@ impl Item for WebPreviewView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        #[cfg(target_os = "windows")]
-        self.ensure_native_preview(window, cx);
-        self.url_editor.focus_handle(cx).focus(window, cx);
+        // Defer focus to ensure webview doesn't interfere
+        let focus_handle = self.url_editor.focus_handle(cx);
+        cx.defer_in(window, move |_, window, cx| {
+            focus_handle.focus(window, cx);
+        });
     }
 
     fn deactivated(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
-        // Webview stays visible - no hiding needed
+        // Hide webview when tab is deactivated
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        if let Some(preview) = self.native_preview.borrow_mut().as_mut() {
+            let _ = preview.webview.set_visible(false);
+        }
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        _window.set_background_appearance(gpui::WindowBackgroundAppearance::Opaque);
     }
 
     fn workspace_deactivated(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
-        // Webview stays visible - no hiding needed
+        // Hide webview when window loses focus
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        if let Some(preview) = self.native_preview.borrow_mut().as_mut() {
+            let _ = preview.webview.set_visible(false);
+        }
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        _window.set_background_appearance(gpui::WindowBackgroundAppearance::Opaque);
     }
 }
 
@@ -1294,6 +1585,12 @@ impl Render for WebPreviewView {
         };
         if !pending_events.is_empty() {
             self.apply_browser_events(pending_events, window, cx);
+        }
+
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        {
+            window.set_background_appearance(gpui::WindowBackgroundAppearance::Transparent);
+            self.ensure_native_preview(window, cx);
         }
 
         let body = self.render_webview_body(cx);
@@ -1311,11 +1608,6 @@ impl Render for WebPreviewView {
             Color::Accent
         } else {
             Color::Muted
-        };
-        let bookmark_tooltip = if is_bookmarked {
-            "Remove bookmark"
-        } else {
-            "Bookmark page"
         };
 
         div()
@@ -1344,19 +1636,16 @@ impl Render for WebPreviewView {
                             .child(
                                 IconButton::new("web-preview-back", IconName::ArrowLeft)
                                     .icon_size(IconSize::Small)
-                                    .tooltip(Tooltip::text("Back"))
                                     .on_click(cx.listener(Self::go_back)),
                             )
                             .child(
                                 IconButton::new("web-preview-forward", IconName::ArrowRight)
                                     .icon_size(IconSize::Small)
-                                    .tooltip(Tooltip::text("Forward"))
                                     .on_click(cx.listener(Self::go_forward)),
                             )
                             .child(
                                 IconButton::new("web-preview-reload", IconName::RotateCw)
                                     .icon_size(IconSize::Small)
-                                    .tooltip(Tooltip::text("Reload"))
                                     .on_click(cx.listener(Self::reload)),
                             )
                             .child(
@@ -1378,6 +1667,10 @@ impl Render for WebPreviewView {
                                                 div()
                                                     .flex_1()
                                                     .min_w_0()
+                                                    .on_mouse_down(
+                                                        MouseButton::Left,
+                                                        cx.listener(Self::focus_url_editor),
+                                                    )
                                                     .child(self.url_editor.clone()),
                                             )
                                             .child(
@@ -1386,8 +1679,9 @@ impl Render for WebPreviewView {
                                                     bookmark_icon,
                                                 )
                                                 .icon_size(IconSize::Small)
-                                                .icon_color(bookmark_color)
-                                                .tooltip(Tooltip::text(bookmark_tooltip))
+                                                .icon_color(Color::Muted)
+                                                .toggle_state(is_bookmarked)
+                                                .selected_icon_color(bookmark_color)
                                                 .on_click(cx.listener(Self::toggle_bookmark)),
                                             ),
                                     ),
@@ -1410,16 +1704,6 @@ impl Render for WebPreviewView {
                             .w_full()
                             .overflow_hidden()
                             .child(body)
-                            .when(self.should_disable_webview_input(window, cx), |this| {
-                                // Add transparent overlay to block webview input when URL editor is focused
-                                this.child(
-                                    div()
-                                        .absolute()
-                                        .inset_0()
-                                        .bg(gpui::transparent_black())
-                                        .cursor_text()
-                                )
-                            })
                             .when_some(error_message, |this, error| {
                                 this.child(
                                     div()
@@ -1443,14 +1727,18 @@ impl Render for WebPreviewView {
 }
 
 fn push_browser_event(event_queue: &Arc<Mutex<Vec<BrowserEvent>>>, event: BrowserEvent) {
-    let mut queue = event_queue.lock().expect("browser event queue lock poisoned");
+    let mut queue = event_queue
+        .lock()
+        .expect("browser event queue lock poisoned");
     queue.push(event);
 }
 
 #[cfg(target_os = "windows")]
 fn mount_native_preview(request: NativePreviewMountRequest) {
     eprintln!("[web-preview] deferred mount start");
-    let result = catch_unwind(AssertUnwindSafe(|| create_native_preview_for_request(&request)));
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        create_native_preview_for_request(&request)
+    }));
 
     match result {
         Ok(Ok(())) => eprintln!("[web-preview] deferred mount ok"),
@@ -1498,6 +1786,7 @@ fn create_native_preview_for_request(request: &NativePreviewMountRequest) -> Res
     let builder = WebViewBuilder::new_with_web_context(web_context.as_mut())
         .with_bounds(initial_bounds)
         .with_url(url.as_str())
+        .with_focused(false)
         .with_clipboard(true)
         .with_hotkeys_zoom(false)
         .with_back_forward_navigation_gestures(true)
@@ -1554,6 +1843,83 @@ fn create_native_preview_for_request(request: &NativePreviewMountRequest) -> Res
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
+fn create_native_preview_for_macos_window(
+    window: &Window,
+    profile_dir: PathBuf,
+    initial_url: String,
+    zoom_factor: f64,
+    host_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
+    browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
+    native_preview: Rc<RefCell<Option<NativeWebPreview>>>,
+) -> Result<()> {
+    if native_preview.borrow().is_some() {
+        return Ok(());
+    }
+
+    fs::create_dir_all(&profile_dir)
+        .with_context(|| "Failed to prepare the Web Preview profile directory")?;
+
+    let url = normalized_url(&initial_url)?;
+    let event_queue = browser_events.clone();
+    let mut web_context = Box::new(WebContext::new(Some(profile_dir)));
+
+    let initial_bounds = host_bounds
+        .borrow()
+        .as_ref()
+        .copied()
+        .map(bounds_to_wry_rect)
+        .unwrap_or_else(|| WryRect {
+            position: Position::Logical(LogicalPosition::new(0.0, 0.0)),
+            size: Size::Logical(LogicalSize::new(32.0, 32.0)),
+        });
+
+    let webview = WebViewBuilder::new_with_web_context(web_context.as_mut())
+        .with_bounds(initial_bounds)
+        .with_url(url.as_str())
+        .with_focused(false)
+        .with_clipboard(true)
+        .with_hotkeys_zoom(false)
+        .with_back_forward_navigation_gestures(true)
+        .with_default_context_menus(false)
+        .with_devtools(true)
+        .with_visible(true)
+        .with_initialization_script(WEB_PREVIEW_BRIDGE_SCRIPT)
+        .with_document_title_changed_handler({
+            let event_queue = event_queue.clone();
+            move |title| push_browser_event(&event_queue, BrowserEvent::TitleChanged(title))
+        })
+        .with_on_page_load_handler({
+            let event_queue = event_queue.clone();
+            move |event, url| {
+                if matches!(event, PageLoadEvent::Finished) {
+                    push_browser_event(&event_queue, BrowserEvent::UrlChanged(url));
+                }
+            }
+        })
+        .with_ipc_handler(move |request| {
+            push_browser_event(
+                &event_queue,
+                BrowserEvent::IpcMessage(request.body().to_string()),
+            );
+        })
+        .build_as_child(window)
+        .with_context(|| "Failed to build the embedded web preview")?;
+
+    webview.zoom(zoom_factor)?;
+
+    if let Some(bounds) = *host_bounds.borrow() {
+        let _ = set_webview_bounds(&webview, bounds);
+    }
+
+    *native_preview.borrow_mut() = Some(NativeWebPreview {
+        _context: web_context,
+        webview,
+    });
+
+    Ok(())
+}
+
 fn parse_browser_rect(value: &Value) -> Option<BrowserRect> {
     Some(BrowserRect {
         x: value.get("x")?.as_f64()?,
@@ -1563,12 +1929,8 @@ fn parse_browser_rect(value: &Value) -> Option<BrowserRect> {
     })
 }
 
-fn format_agent_note(payload: BrowserAgentPayload) -> String {
+fn format_agent_note(payload: &BrowserAgentPayload) -> String {
     match payload {
-        BrowserAgentPayload::Screenshot { path, url, kind } => format!(
-            "Web Preview {kind} screenshot captured.\nURL: {url}\nImage path: {}",
-            path.display()
-        ),
         BrowserAgentPayload::InspectElement {
             url,
             title,
@@ -1580,42 +1942,48 @@ fn format_agent_note(payload: BrowserAgentPayload) -> String {
             href,
             src,
             rect,
+            css,
             html,
         } => {
             let mut message = format!("Web Preview inspected element.\nURL: {url}");
-            if let Some(title) = title.filter(|title| !title.is_empty()) {
+            if let Some(title) = title.as_deref().filter(|title| !title.is_empty()) {
                 message.push_str(&format!("\nPage title: {title}"));
             }
-            if let Some(selector) = selector.filter(|selector| !selector.is_empty()) {
+            if let Some(selector) = selector.as_deref().filter(|selector| !selector.is_empty()) {
                 message.push_str(&format!("\nSelector: {selector}"));
             }
-            if let Some(tag) = tag.filter(|tag| !tag.is_empty()) {
+            if let Some(tag) = tag.as_deref().filter(|tag| !tag.is_empty()) {
                 message.push_str(&format!("\nTag: {tag}"));
             }
-            if let Some(id) = id.filter(|id| !id.is_empty()) {
+            if let Some(id) = id.as_deref().filter(|id| !id.is_empty()) {
                 message.push_str(&format!("\nID: {id}"));
             }
             if !classes.is_empty() {
                 message.push_str(&format!("\nClasses: {}", classes.join(" ")));
             }
-            if let Some(text) = text.filter(|text| !text.is_empty()) {
+            if let Some(text) = text.as_deref().filter(|text| !text.is_empty()) {
                 message.push_str(&format!("\nText: {text}"));
             }
-            if let Some(href) = href.filter(|href| !href.is_empty()) {
+            if let Some(href) = href.as_deref().filter(|href| !href.is_empty()) {
                 message.push_str(&format!("\nHref: {href}"));
             }
-            if let Some(src) = src.filter(|src| !src.is_empty()) {
+            if let Some(src) = src.as_deref().filter(|src| !src.is_empty()) {
                 message.push_str(&format!("\nSource: {src}"));
             }
-            if let Some(rect) = rect {
+            if let Some(rect) = rect.as_ref() {
                 message.push_str(&format!(
                     "\nRect: x={:.1}, y={:.1}, width={:.1}, height={:.1}",
                     rect.x, rect.y, rect.width, rect.height
                 ));
             }
-            if let Some(html) = html.filter(|html| !html.is_empty()) {
+            if let Some(css) = css.as_deref().filter(|css| !css.is_empty()) {
+                message.push_str("\nCSS snapshot:\n```css\n");
+                message.push_str(css);
+                message.push_str("\n```");
+            }
+            if let Some(html) = html.as_deref().filter(|html| !html.is_empty()) {
                 message.push_str("\nHTML snippet:\n```html\n");
-                message.push_str(&html);
+                message.push_str(html);
                 message.push_str("\n```");
             }
             message
@@ -1624,6 +1992,10 @@ fn format_agent_note(payload: BrowserAgentPayload) -> String {
 }
 
 fn display_title_from_url(url: &str) -> String {
+    if url.eq_ignore_ascii_case("about:blank") {
+        return "Preview".to_string();
+    }
+
     url::Url::parse(url)
         .ok()
         .and_then(|url| {
@@ -1677,10 +2049,8 @@ fn load_bookmarks(profile_dir: &Path) -> Result<Vec<String>> {
         return Ok(Vec::new());
     }
 
-    let data =
-        fs::read(&path).with_context(|| format!("Failed to read {}", path.display()))?;
-    serde_json::from_slice(&data)
-        .with_context(|| format!("Failed to parse {}", path.display()))
+    let data = fs::read(&path).with_context(|| format!("Failed to read {}", path.display()))?;
+    serde_json::from_slice(&data).with_context(|| format!("Failed to parse {}", path.display()))
 }
 
 fn scan_local_extensions() -> Result<Vec<DetectedExtension>> {
@@ -1723,7 +2093,10 @@ fn scan_local_extensions() -> Result<Vec<DetectedExtension>> {
                 ),
                 (
                     "Firefox",
-                    local_app_data.join("Mozilla").join("Firefox").join("Profiles"),
+                    local_app_data
+                        .join("Mozilla")
+                        .join("Firefox")
+                        .join("Profiles"),
                     false,
                 ),
             ];
@@ -1863,69 +2236,7 @@ fn scan_firefox_extensions(
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
-fn prepare_wry_extensions_dir(
-    profile_dir: &Path,
-    detected_extensions: &[DetectedExtension],
-) -> Result<Option<PathBuf>> {
-    let loadable = detected_extensions
-        .iter()
-        .filter(|extension| extension.supports_chromium_loading)
-        .collect::<Vec<_>>();
-    if loadable.is_empty() {
-        return Ok(None);
-    }
-
-    let staging_root = profile_dir.join("wry_extensions");
-    fs::create_dir_all(&staging_root)
-        .with_context(|| format!("Failed to create {}", staging_root.display()))?;
-
-    for extension in loadable {
-        let target = staging_root.join(format!(
-            "{}-{}",
-            slugify(&extension.browser),
-            slugify(&extension.id)
-        ));
-        if target.exists() {
-            continue;
-        }
-        copy_dir_all(&extension.path, &target)?;
-    }
-
-    Ok(Some(staging_root))
-}
-
-#[cfg(not(target_os = "windows"))]
-fn prepare_wry_extensions_dir(
-    _profile_dir: &Path,
-    _detected_extensions: &[DetectedExtension],
-) -> Result<Option<PathBuf>> {
-    Ok(None)
-}
-
-fn copy_dir_all(source: &Path, destination: &Path) -> Result<()> {
-    fs::create_dir_all(destination)
-        .with_context(|| format!("Failed to create {}", destination.display()))?;
-    for entry in fs::read_dir(source)? {
-        let entry = entry?;
-        let entry_path = entry.path();
-        let target_path = destination.join(entry.file_name());
-        if entry_path.is_dir() {
-            copy_dir_all(&entry_path, &target_path)?;
-        } else {
-            fs::copy(&entry_path, &target_path).with_context(|| {
-                format!(
-                    "Failed to copy {} to {}",
-                    entry_path.display(),
-                    target_path.display()
-                )
-            })?;
-        }
-    }
-    Ok(())
-}
-
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn set_webview_bounds(webview: &WebView, bounds: Bounds<Pixels>) -> Result<()> {
     let rect = bounds_to_wry_rect(bounds);
     webview.set_bounds(rect)?;
@@ -1933,7 +2244,7 @@ fn set_webview_bounds(webview: &WebView, bounds: Bounds<Pixels>) -> Result<()> {
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn bounds_to_wry_rect(bounds: Bounds<Pixels>) -> WryRect {
     WryRect {
         position: Position::Logical(LogicalPosition::new(
@@ -2001,7 +2312,9 @@ fn promote_child_webviews(parent: HWND) {
 fn screen_rect_for_bounds(window: &Window, bounds: Bounds<Pixels>) -> Result<RECT> {
     let handle = raw_window_handle::HasWindowHandle::window_handle(window)?;
     let RawWindowHandle::Win32(raw_handle) = handle.as_raw() else {
-        return Err(anyhow!("Unsupported window handle for web preview screenshots"));
+        return Err(anyhow!(
+            "Unsupported window handle for web preview screenshots"
+        ));
     };
 
     let hwnd = HWND(raw_handle.hwnd.get() as *mut _);
@@ -2050,8 +2363,8 @@ fn capture_screen_rect(rect: RECT) -> Result<RgbaImage> {
 
         let bitmap = CreateCompatibleBitmap(screen_dc, width, height);
         if bitmap.0.is_null() {
-            DeleteDC(memory_dc);
-            ReleaseDC(None, screen_dc);
+            let _ = DeleteDC(memory_dc);
+            let _ = ReleaseDC(None, screen_dc);
             return Err(anyhow!("Failed to create a compatible bitmap"));
         }
 
@@ -2070,10 +2383,12 @@ fn capture_screen_rect(rect: RECT) -> Result<RgbaImage> {
         let _ = SelectObject(memory_dc, previous);
 
         if blit_result.is_err() {
-            DeleteObject(HGDIOBJ(bitmap.0));
-            DeleteDC(memory_dc);
-            ReleaseDC(None, screen_dc);
-            return Err(anyhow!("Failed to copy the web preview surface into a bitmap"));
+            let _ = DeleteObject(HGDIOBJ(bitmap.0));
+            let _ = DeleteDC(memory_dc);
+            let _ = ReleaseDC(None, screen_dc);
+            return Err(anyhow!(
+                "Failed to copy the web preview surface into a bitmap"
+            ));
         }
 
         let mut bitmap_info = BITMAPINFO {
@@ -2099,9 +2414,9 @@ fn capture_screen_rect(rect: RECT) -> Result<RgbaImage> {
             DIB_RGB_COLORS,
         );
 
-        DeleteObject(HGDIOBJ(bitmap.0));
-        DeleteDC(memory_dc);
-        ReleaseDC(None, screen_dc);
+        let _ = DeleteObject(HGDIOBJ(bitmap.0));
+        let _ = DeleteDC(memory_dc);
+        let _ = ReleaseDC(None, screen_dc);
 
         if rows == 0 {
             return Err(anyhow!("Failed to read the captured bitmap data"));
@@ -2126,7 +2441,9 @@ fn crop_image(image: RgbaImage, rect: BrowserRect) -> Result<RgbaImage> {
     let height = rect.height.max(1.0).round() as u32;
 
     if x >= image_width || y >= image_height {
-        return Err(anyhow!("The selected capture area is outside the visible page"));
+        return Err(anyhow!(
+            "The selected capture area is outside the visible page"
+        ));
     }
 
     let width = width.min(image_width.saturating_sub(x));
@@ -2171,6 +2488,53 @@ const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
       node = parent;
     }
     return parts.join(" > ");
+  };
+
+  const styleSnapshot = (element) => {
+    if (!(element instanceof Element)) return null;
+    const computed = window.getComputedStyle(element);
+    const properties = [
+      "display",
+      "position",
+      "z-index",
+      "width",
+      "height",
+      "min-width",
+      "min-height",
+      "max-width",
+      "max-height",
+      "margin",
+      "padding",
+      "gap",
+      "align-items",
+      "justify-content",
+      "flex",
+      "flex-direction",
+      "grid-template-columns",
+      "grid-template-rows",
+      "color",
+      "background-color",
+      "font-family",
+      "font-size",
+      "font-weight",
+      "line-height",
+      "text-align",
+      "border",
+      "border-radius",
+      "box-shadow",
+      "opacity",
+      "overflow",
+      "transform"
+    ];
+
+    const lines = properties
+      .map((property) => {
+        const value = computed.getPropertyValue(property)?.trim();
+        return value ? `${property}: ${value};` : null;
+      })
+      .filter(Boolean);
+
+    return lines.length ? lines.join("\n") : null;
   };
 
   const createOverlay = () => {
@@ -2233,6 +2597,7 @@ const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
           kind: "inspect-element",
           url: window.location.href,
           title: document.title,
+          scale: window.devicePixelRatio || 1,
           selector: cssSelector(element),
           tag: element.tagName.toLowerCase(),
           id: element.id || null,
@@ -2240,6 +2605,7 @@ const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
           text: limitText(element.innerText || element.textContent, 2000),
           href: element.getAttribute("href"),
           src: element.getAttribute("src"),
+          css: styleSnapshot(element),
           html: limitText(element.outerHTML, 4000),
           rect: {
             x: rect.x,
@@ -2368,6 +2734,14 @@ mod tests {
 
     #[test]
     fn title_uses_host_name() {
-        assert_eq!(display_title_from_url("https://www.google.com/"), "www.google.com");
+        assert_eq!(
+            display_title_from_url("https://www.google.com/"),
+            "www.google.com"
+        );
+    }
+
+    #[test]
+    fn title_uses_preview_for_blank_page() {
+        assert_eq!(display_title_from_url("about:blank"), "Preview");
     }
 }
