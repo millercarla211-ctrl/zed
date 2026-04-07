@@ -17,6 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Removed the persistent top-bar notice above the web preview and made the extensions action available even before the first extension scan.
 - GPUI workspace toasts now render from the top-right instead of the bottom edge, and web preview actions use the normal toast path again.
 - Web preview screenshot and element-selector actions now guard against action-path panics and shrink oversized AI image attachments before insertion.
+- Windows web preview now mounts into a separate underlay host window, and the GPUI preview body stops painting an opaque editor background over the browser region.
+- Windows no longer forces `GPUI_DISABLE_DIRECT_COMPOSITION=1` at startup, which is required for alpha-based hole-punch composition work.
 
 ---
 

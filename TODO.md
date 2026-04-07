@@ -4,7 +4,7 @@
 > Last updated: 2026-04-07
 
 ## In Progress
-(none)
+- [ ] Implement Windows web preview underlay host and transparent GPUI hole-punch plumbing
 
 ## Pending
 - [x] Sync with upstream Zed (first sync after setup)

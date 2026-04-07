@@ -813,6 +813,36 @@ impl PlatformWindow for WindowsWindow {
     fn set_background_appearance(&self, background_appearance: WindowBackgroundAppearance) {
         self.state.background_appearance.set(background_appearance);
         let hwnd = self.0.hwnd;
+        let use_layered_alpha = background_appearance == WindowBackgroundAppearance::Transparent;
+
+        unsafe {
+            let exstyle = WINDOW_EX_STYLE(get_window_long(hwnd, GWL_EXSTYLE) as u32);
+            let layered_exstyle = if use_layered_alpha {
+                exstyle | WS_EX_LAYERED
+            } else {
+                exstyle & !WS_EX_LAYERED
+            };
+            if layered_exstyle != exstyle {
+                set_window_long(hwnd, GWL_EXSTYLE, layered_exstyle.0 as isize);
+                SetWindowPos(
+                    hwnd,
+                    None,
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER,
+                )
+                .inspect_err(|error| log::error!("SetWindowPos for layered alpha failed: {error}"))
+                .ok();
+            }
+
+            if use_layered_alpha {
+                SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA)
+                    .inspect_err(|error| log::error!("SetLayeredWindowAttributes failed: {error}"))
+                    .ok();
+            }
+        }
 
         // using Dwm APIs for Mica and MicaAlt backdrops.
         // others follow the set_window_composition_attribute approach

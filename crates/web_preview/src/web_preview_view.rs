@@ -19,7 +19,7 @@ use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, Once},
     time::{SystemTime, UNIX_EPOCH},
 };
 #[cfg(target_os = "windows")]
@@ -45,10 +45,13 @@ use windows::Win32::{
         CreateCompatibleBitmap, CreateCompatibleDC, DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC,
         GetDIBits, HBITMAP, HGDIOBJ, ReleaseDC, SRCCOPY, SelectObject,
     },
+    System::LibraryLoader::GetModuleHandleW,
     UI::WindowsAndMessaging::{
-        FindWindowExW, GWL_STYLE, GetWindowLongPtrW, HWND_BOTTOM, SWP_FRAMECHANGED, SWP_NOACTIVATE,
-        SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SetWindowLongPtrW, SetWindowPos,
-        ShowWindow, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+        CreateWindowExW, DefWindowProcW, DestroyWindow, FindWindowExW, GWL_STYLE,
+        GetWindowLongPtrW, HWND_BOTTOM, RegisterClassW, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED,
+        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SetWindowLongPtrW,
+        SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
+        WS_EX_TOOLWINDOW, WS_POPUP,
     },
 };
 #[cfg(target_os = "windows")]
@@ -126,6 +129,8 @@ struct BrowserRect {
 struct NativeWebPreview {
     _context: Box<WebContext>,
     webview: WebView,
+    #[cfg(target_os = "windows")]
+    underlay_host: WindowsUnderlayHostWindow,
 }
 
 #[cfg(target_os = "windows")]
@@ -145,10 +150,49 @@ impl RawParentWindow {
             hwnd: raw_handle.hwnd,
         })
     }
+
+    fn as_hwnd(&self) -> HWND {
+        HWND(self.hwnd.get() as *mut _)
+    }
 }
 
 #[cfg(target_os = "windows")]
 impl HasWindowHandle for RawParentWindow {
+    fn window_handle(&self) -> std::result::Result<WindowHandle<'_>, HandleError> {
+        let handle = Win32WindowHandle::new(self.hwnd);
+        Ok(unsafe { WindowHandle::borrow_raw(RawWindowHandle::Win32(handle)) })
+    }
+}
+
+#[cfg(target_os = "windows")]
+struct WindowsUnderlayHostWindow {
+    hwnd: NonZeroIsize,
+}
+
+#[cfg(target_os = "windows")]
+impl WindowsUnderlayHostWindow {
+    fn new(hwnd: HWND) -> Result<Self> {
+        let hwnd = NonZeroIsize::new(hwnd.0 as isize)
+            .ok_or_else(|| anyhow!("Failed to create the Windows web preview underlay host"))?;
+        Ok(Self { hwnd })
+    }
+
+    fn as_hwnd(&self) -> HWND {
+        HWND(self.hwnd.get() as *mut _)
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl Drop for WindowsUnderlayHostWindow {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = DestroyWindow(self.as_hwnd());
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl HasWindowHandle for WindowsUnderlayHostWindow {
     fn window_handle(&self) -> std::result::Result<WindowHandle<'_>, HandleError> {
         let handle = Win32WindowHandle::new(self.hwnd);
         Ok(unsafe { WindowHandle::borrow_raw(RawWindowHandle::Win32(handle)) })
@@ -163,6 +207,7 @@ struct NativePreviewMountRequest {
     profile_dir: PathBuf,
     initial_url: String,
     zoom_factor: f64,
+    scale_factor: f32,
     host_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
     browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
     native_preview: Rc<RefCell<Option<NativeWebPreview>>>,
@@ -180,6 +225,7 @@ pub struct WebPreviewView {
     extensions_scanned: bool,
     load_state: PreviewLoadState,
     host_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
+    #[cfg(target_os = "macos")]
     last_applied_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
     native_mount_requested: Rc<Cell<bool>>,
     browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
@@ -279,6 +325,7 @@ impl WebPreviewView {
                 extensions_scanned: false,
                 load_state: PreviewLoadState::Ready,
                 host_bounds: Rc::new(RefCell::new(None)),
+                #[cfg(target_os = "macos")]
                 last_applied_bounds: Rc::new(RefCell::new(None)),
                 native_mount_requested: Rc::new(Cell::new(false)),
                 browser_events,
@@ -993,6 +1040,7 @@ impl WebPreviewView {
             profile_dir: self.workspace_context.profile_dir.clone(),
             initial_url: self.active_url.to_string(),
             zoom_factor: self.zoom_factor,
+            scale_factor: window.scale_factor(),
             host_bounds: self.host_bounds.clone(),
             browser_events: self.browser_events.clone(),
             native_preview: self.native_preview.clone(),
@@ -1401,19 +1449,34 @@ impl WebPreviewView {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
             let host_bounds = self.host_bounds.clone();
+            #[cfg(target_os = "macos")]
             let last_applied_bounds = self.last_applied_bounds.clone();
             let native_preview = self.native_preview.clone();
 
             return canvas(
-                move |bounds, _window, _cx| {
+                move |bounds, window, _cx| {
                     *host_bounds.borrow_mut() = Some(bounds);
                     if let Some(preview) = native_preview.borrow_mut().as_mut() {
                         // Always keep webview visible
                         let _ = preview.webview.set_visible(true);
 
-                        let should_update_bounds =
-                            last_applied_bounds.borrow().as_ref().copied() != Some(bounds);
-                        if should_update_bounds {
+                        #[cfg(target_os = "windows")]
+                        {
+                            let _ = sync_windows_underlay_preview(preview, window, bounds);
+                        }
+
+                        #[cfg(target_os = "macos")]
+                        {
+                            let should_update_bounds =
+                                last_applied_bounds.borrow().as_ref().copied() != Some(bounds);
+                            if should_update_bounds {
+                                let _ = set_webview_bounds(&preview.webview, bounds);
+                                *last_applied_bounds.borrow_mut() = Some(bounds);
+                            }
+                        }
+
+                        #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+                        {
                             let _ = set_webview_bounds(&preview.webview, bounds);
                             *last_applied_bounds.borrow_mut() = Some(bounds);
                         }
@@ -1520,6 +1583,7 @@ impl Item for WebPreviewView {
                 extensions_scanned: self.extensions_scanned,
                 load_state: PreviewLoadState::Ready,
                 host_bounds: Rc::new(RefCell::new(None)),
+                #[cfg(target_os = "macos")]
                 last_applied_bounds: Rc::new(RefCell::new(None)),
                 native_mount_requested: Rc::new(Cell::new(false)),
                 browser_events,
@@ -1558,6 +1622,10 @@ impl Item for WebPreviewView {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         if let Some(preview) = self.native_preview.borrow_mut().as_mut() {
             let _ = preview.webview.set_visible(false);
+            #[cfg(target_os = "windows")]
+            unsafe {
+                let _ = ShowWindow(preview.underlay_host.as_hwnd(), SW_HIDE);
+            }
         }
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         _window.set_background_appearance(gpui::WindowBackgroundAppearance::Opaque);
@@ -1568,6 +1636,10 @@ impl Item for WebPreviewView {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         if let Some(preview) = self.native_preview.borrow_mut().as_mut() {
             let _ = preview.webview.set_visible(false);
+            #[cfg(target_os = "windows")]
+            unsafe {
+                let _ = ShowWindow(preview.underlay_host.as_hwnd(), SW_HIDE);
+            }
         }
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         _window.set_background_appearance(gpui::WindowBackgroundAppearance::Opaque);
@@ -1617,7 +1689,6 @@ impl Render for WebPreviewView {
             .track_focus(&self.focus_handle(cx))
             .size_full()
             .overflow_hidden()
-            .bg(cx.theme().colors().editor_background)
             .child(
                 v_flex()
                     .size_full()
@@ -1703,6 +1774,7 @@ impl Render for WebPreviewView {
                             .min_h_0()
                             .w_full()
                             .overflow_hidden()
+                            .bg(gpui::transparent_black())
                             .child(body)
                             .when_some(error_message, |this, error| {
                                 this.child(
@@ -1768,19 +1840,24 @@ fn create_native_preview_for_request(request: &NativePreviewMountRequest) -> Res
     let url = normalized_url(&request.initial_url)?;
     let event_queue = request.browser_events.clone();
     let mut web_context = Box::new(WebContext::new(Some(request.profile_dir.clone())));
+    let main_window = request.parent_window.as_hwnd();
 
-    prepare_parent_for_child_webview(HWND(request.parent_window.hwnd.get() as *mut _));
-
-    let initial_bounds = request
+    let initial_host_rect = request
         .host_bounds
         .borrow()
         .as_ref()
         .copied()
-        .map(bounds_to_wry_rect)
-        .unwrap_or_else(|| WryRect {
-            position: Position::Logical(LogicalPosition::new(0.0, 0.0)),
-            size: Size::Logical(LogicalSize::new(32.0, 32.0)),
+        .and_then(|bounds| screen_rect_for_hwnd(main_window, request.scale_factor, bounds).ok())
+        .unwrap_or(RECT {
+            left: 0,
+            top: 0,
+            right: 32,
+            bottom: 32,
         });
+    let underlay_host = create_windows_underlay_host_window(initial_host_rect)?;
+    prepare_parent_for_child_webview(underlay_host.as_hwnd());
+
+    let initial_bounds = wry_rect_for_host_rect(initial_host_rect);
 
     eprintln!("[web-preview] create request builder");
     let builder = WebViewBuilder::new_with_web_context(web_context.as_mut())
@@ -1823,20 +1900,27 @@ fn create_native_preview_for_request(request: &NativePreviewMountRequest) -> Res
 
     eprintln!("[web-preview] create request build");
     let webview = builder
-        .build_as_child(&request.parent_window)
+        .build_as_child(&underlay_host)
         .with_context(|| "Failed to build the embedded web preview")?;
     eprintln!("[web-preview] create request built");
     webview.zoom(request.zoom_factor)?;
 
     if let Some(bounds) = *request.host_bounds.borrow() {
         eprintln!("[web-preview] create request bounds");
-        let _ = set_webview_bounds(&webview, bounds);
+        let _ = sync_windows_underlay_preview_inner(
+            &underlay_host,
+            &webview,
+            main_window,
+            request.scale_factor,
+            bounds,
+        );
     }
-    promote_child_webviews(HWND(request.parent_window.hwnd.get() as *mut _));
+    promote_child_webviews(underlay_host.as_hwnd());
 
     *request.native_preview.borrow_mut() = Some(NativeWebPreview {
         _context: web_context,
         webview,
+        underlay_host,
     });
     eprintln!("[web-preview] create request done");
 
@@ -2236,7 +2320,7 @@ fn scan_firefox_extensions(
     Ok(())
 }
 
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[cfg(target_os = "macos")]
 fn set_webview_bounds(webview: &WebView, bounds: Bounds<Pixels>) -> Result<()> {
     let rect = bounds_to_wry_rect(bounds);
     webview.set_bounds(rect)?;
@@ -2244,7 +2328,17 @@ fn set_webview_bounds(webview: &WebView, bounds: Bounds<Pixels>) -> Result<()> {
     Ok(())
 }
 
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[cfg(target_os = "windows")]
+fn wry_rect_for_host_rect(rect: RECT) -> WryRect {
+    let width = (rect.right - rect.left).max(1) as f64;
+    let height = (rect.bottom - rect.top).max(1) as f64;
+    WryRect {
+        position: Position::Logical(LogicalPosition::new(0.0, 0.0)),
+        size: Size::Logical(LogicalSize::new(width, height)),
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn bounds_to_wry_rect(bounds: Bounds<Pixels>) -> WryRect {
     WryRect {
         position: Position::Logical(LogicalPosition::new(
@@ -2256,6 +2350,105 @@ fn bounds_to_wry_rect(bounds: Bounds<Pixels>) -> WryRect {
             f64::from(bounds.size.height.max(Pixels::from(1.0))),
         )),
     }
+}
+
+#[cfg(target_os = "windows")]
+const WEB_PREVIEW_UNDERLAY_WINDOW_CLASS: windows::core::PCWSTR =
+    windows::core::w!("Zed::WebPreviewUnderlay");
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn web_preview_underlay_window_proc(
+    hwnd: HWND,
+    message: u32,
+    wparam: windows::Win32::Foundation::WPARAM,
+    lparam: windows::Win32::Foundation::LPARAM,
+) -> windows::Win32::Foundation::LRESULT {
+    unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
+}
+
+#[cfg(target_os = "windows")]
+fn register_windows_underlay_host_class() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| unsafe {
+        let instance = GetModuleHandleW(None).expect("module handle for web preview underlay");
+        let window_class = WNDCLASSW {
+            lpfnWndProc: Some(web_preview_underlay_window_proc),
+            lpszClassName: WEB_PREVIEW_UNDERLAY_WINDOW_CLASS,
+            hInstance: instance.into(),
+            ..Default::default()
+        };
+        let _ = RegisterClassW(&window_class);
+    });
+}
+
+#[cfg(target_os = "windows")]
+fn create_windows_underlay_host_window(rect: RECT) -> Result<WindowsUnderlayHostWindow> {
+    register_windows_underlay_host_class();
+    let instance = unsafe { GetModuleHandleW(None)? };
+    let width = (rect.right - rect.left).max(1);
+    let height = (rect.bottom - rect.top).max(1);
+    let hwnd = unsafe {
+        CreateWindowExW(
+            WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
+            WEB_PREVIEW_UNDERLAY_WINDOW_CLASS,
+            windows::core::w!(""),
+            WS_POPUP,
+            rect.left,
+            rect.top,
+            width,
+            height,
+            None,
+            None,
+            Some(instance.into()),
+            None,
+        )
+    }?;
+    WindowsUnderlayHostWindow::new(hwnd)
+}
+
+#[cfg(target_os = "windows")]
+fn sync_windows_underlay_preview(
+    preview: &mut NativeWebPreview,
+    window: &Window,
+    bounds: Bounds<Pixels>,
+) -> Result<()> {
+    let main_window = RawParentWindow::from_window(window)?.as_hwnd();
+    sync_windows_underlay_preview_inner(
+        &preview.underlay_host,
+        &preview.webview,
+        main_window,
+        window.scale_factor(),
+        bounds,
+    )
+}
+
+#[cfg(target_os = "windows")]
+fn sync_windows_underlay_preview_inner(
+    underlay_host: &WindowsUnderlayHostWindow,
+    webview: &WebView,
+    main_window: HWND,
+    scale_factor: f32,
+    bounds: Bounds<Pixels>,
+) -> Result<()> {
+    let screen_rect = screen_rect_for_hwnd(main_window, scale_factor, bounds)?;
+    let width = (screen_rect.right - screen_rect.left).max(1);
+    let height = (screen_rect.bottom - screen_rect.top).max(1);
+
+    unsafe {
+        SetWindowPos(
+            underlay_host.as_hwnd(),
+            Some(main_window),
+            screen_rect.left,
+            screen_rect.top,
+            width,
+            height,
+            SWP_NOACTIVATE | SWP_SHOWWINDOW,
+        )?;
+        let _ = ShowWindow(underlay_host.as_hwnd(), SW_SHOW);
+    }
+
+    webview.set_bounds(wry_rect_for_host_rect(screen_rect))?;
+    Ok(())
 }
 
 #[cfg(target_os = "windows")]
@@ -2309,15 +2502,7 @@ fn promote_child_webviews(parent: HWND) {
 }
 
 #[cfg(target_os = "windows")]
-fn screen_rect_for_bounds(window: &Window, bounds: Bounds<Pixels>) -> Result<RECT> {
-    let handle = raw_window_handle::HasWindowHandle::window_handle(window)?;
-    let RawWindowHandle::Win32(raw_handle) = handle.as_raw() else {
-        return Err(anyhow!(
-            "Unsupported window handle for web preview screenshots"
-        ));
-    };
-
-    let hwnd = HWND(raw_handle.hwnd.get() as *mut _);
+fn screen_rect_for_hwnd(hwnd: HWND, scale: f32, bounds: Bounds<Pixels>) -> Result<RECT> {
     let mut client_origin = POINT { x: 0, y: 0 };
     unsafe {
         if !ClientToScreen(hwnd, &mut client_origin).as_bool() {
@@ -2327,7 +2512,6 @@ fn screen_rect_for_bounds(window: &Window, bounds: Bounds<Pixels>) -> Result<REC
         }
     }
 
-    let scale = window.scale_factor();
     let left = client_origin.x + (f32::from(bounds.origin.x) * scale).round() as i32;
     let top = client_origin.y + (f32::from(bounds.origin.y) * scale).round() as i32;
     let width = (f32::from(bounds.size.width) * scale).round().max(1.0) as i32;
@@ -2339,6 +2523,21 @@ fn screen_rect_for_bounds(window: &Window, bounds: Bounds<Pixels>) -> Result<REC
         right: left + width,
         bottom: top + height,
     })
+}
+
+#[cfg(target_os = "windows")]
+fn screen_rect_for_bounds(window: &Window, bounds: Bounds<Pixels>) -> Result<RECT> {
+    let handle = raw_window_handle::HasWindowHandle::window_handle(window)?;
+    let RawWindowHandle::Win32(raw_handle) = handle.as_raw() else {
+        return Err(anyhow!(
+            "Unsupported window handle for web preview screenshots"
+        ));
+    };
+    screen_rect_for_hwnd(
+        HWND(raw_handle.hwnd.get() as *mut _),
+        window.scale_factor(),
+        bounds,
+    )
 }
 
 #[cfg(target_os = "windows")]
