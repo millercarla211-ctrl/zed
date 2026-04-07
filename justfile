@@ -1,5 +1,6 @@
 # Justfile for running Zed on low-end devices with <8GB RAM
 # Based on expert recommendations for memory-constrained systems
+set shell := ["powershell.exe", "-NoLogo", "-Command"]
 
 # Default recipe - shows available commands
 default:
@@ -39,17 +40,28 @@ check:
     @echo "Checking code (no build)..."
     cargo check -p zed
 
+# Format code with rustfmt (low memory)
+fmt:
+    @echo "Formatting workspace with rustfmt (low memory)..."
+    cargo fmt --all
+
+# Lint a single package with clippy using minimal parallelism
+lint package="web_preview":
+    @echo "Linting package '{{package}}' with low-memory clippy settings..."
+    @echo "Tip: run 'just lint zed' for the main app or 'just lint web_preview' for the preview crate"
+    cargo clippy -p {{package}} --all-targets -j 1 -- -D warnings
+
 # Clean build artifacts
 clean:
     @echo "WARNING: This will delete all build progress!"
     @echo "Press Ctrl+C to cancel, or wait 5 seconds..."
-    sleep 5
+    Start-Sleep -Seconds 5
     cargo clean
 
 # Clean only the final binary (keeps incremental cache)
 clean-binary:
     @echo "Cleaning only the final binary (keeps incremental build cache)..."
-    rm -f target/debug/zed target/debug/zed.exe
+    Remove-Item -LiteralPath target/debug/zed,target/debug/zed.exe -Force -ErrorAction SilentlyContinue
 
 # Install nightly Rust and Cranelift (one-time setup)
 setup-cranelift:
@@ -87,6 +99,9 @@ help:
     @echo "  just run           - Build and run with optimized settings"
     @echo "  just run-cranelift - Use Cranelift backend (BEST for low memory)"
     @echo "  just continue      - Resume interrupted build"
+    @echo "  just fmt           - Format the workspace with rustfmt"
+    @echo "  just lint          - Lint web_preview with low-memory clippy"
+    @echo "  just lint zed      - Lint the main app with low-memory clippy"
     @echo ""
     @echo "SETUP:"
     @echo "  just setup-cranelift   - Install nightly Rust + Cranelift (one-time)"

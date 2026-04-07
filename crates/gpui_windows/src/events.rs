@@ -832,10 +832,6 @@ impl WindowsWindowInner {
     }
 
     fn handle_hit_test_msg(&self, handle: HWND, lparam: LPARAM) -> Option<isize> {
-        if !self.is_movable || self.state.is_fullscreen() {
-            return None;
-        }
-
         let callback = self.state.callbacks.hit_test_window_control.take();
         let drag_area = if let Some(mut callback) = callback {
             let area = callback();
@@ -857,6 +853,10 @@ impl WindowsWindowInner {
             None
         };
 
+        if !self.is_movable || self.state.is_fullscreen() {
+            return drag_area;
+        }
+
         if !self.hide_title_bar {
             // If the OS draws the title bar, we don't need to handle hit test messages.
             return drag_area;
@@ -871,7 +871,6 @@ impl WindowsWindowInner {
             x: lparam.signed_loword().into(),
             y: lparam.signed_hiword().into(),
         };
-
         unsafe { ScreenToClient(handle, &mut cursor_point).ok().log_err() };
         if !self.state.is_maximized() && 0 <= cursor_point.y && cursor_point.y <= frame_y {
             // x-axis actually goes from -frame_x to 0

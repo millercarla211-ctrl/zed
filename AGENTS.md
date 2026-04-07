@@ -445,9 +445,124 @@ The web preview feature provides an embedded web browser inside the editor using
 - Tab navigation arrows remain for tab switching
 - Web navigation arrows are in the preview's own toolbar
 
+**Hole-Punching Architecture (CRITICAL - MUST IMPLEMENT NOW):**
+
+The web preview MUST use a "hole-punching underlay" approach for proper UI layering on ALL platforms.
+
+**The Problem:**
+Standard webviews float ON TOP of the app, blocking UI elements like Command Palette, tooltips, and menus.
+
+**The Solution - Underlay Architecture:**
+1. **Place webview BEHIND the GPUI window** (not on top)
+2. **Make GPUI window background transparent** where webview should show
+3. **GPUI UI always renders on top** - Command Palette, menus, tooltips work perfectly
+4. **Webview shows through transparent areas** of GPUI window
+
+**How It Works:**
+- Webpage content shows through transparent GPUI background
+- When you open Command Palette, GPUI draws it normally on top
+- GPUI is the top layer, so editor UI has priority over webview
+- Webview's internal dropdowns cannot float over GPUI elements (acceptable limitation)
+
+**Implementation Requirements (ALL PLATFORMS - NOT OPTIONAL):**
+
+1. **Windows Platform** (`crates/gpui/src/platform/windows/`) - PRIORITY:
+   - Create webview window as PARENT window (not child)
+   - Create GPUI window as CHILD of webview window with `WS_EX_TRANSPARENT` extended style
+   - Set GPUI window background to transparent where webview should show
+   - Use `SetLayeredWindowAttributes` or DWM composition for transparency
+   - **STATUS: NOT IMPLEMENTED - MUST DO NOW**
+
+2. **macOS Platform** (`crates/gpui/src/platform/mac/`) - CRITICAL:
+   - Create webview as parent NSWindow
+   - Create GPUI NSWindow as child with transparent background
+   - Use `setOpaque(false)` and `setBackgroundColor(NSColor.clear)`
+   - Implement proper window layering with NSWindow level management
+   - **STATUS: NOT IMPLEMENTED - MUST DO NOW**
+   - **THIS IS NOT "FUTURE WORK" - THIS IS REQUIRED FOR PROFESSIONAL CROSS-PLATFORM SUPPORT**
+
+3. **Linux Platform** (`crates/gpui/src/platform/linux/`) - CRITICAL:
+   - Create webview as parent X11/Wayland window
+   - Create GPUI window as child with transparent background
+   - Use compositor transparency features (X11: ARGB visual, Wayland: wl_surface transparency)
+   - Handle both X11 and Wayland properly
+   - **STATUS: NOT IMPLEMENTED - MUST DO NOW**
+   - **THIS IS NOT "FUTURE WORK" - THIS IS REQUIRED FOR PROFESSIONAL CROSS-PLATFORM SUPPORT**
+
+4. **Web Preview Integration** (`crates/web_preview/`):
+   - Coordinate with GPUI to mark webview area as transparent
+   - Ensure webview bounds match transparent area
+   - Handle window resizing to keep layers synchronized
+   - Must work identically on Windows, macOS, and Linux
+
+**Expected Result (ALL PLATFORMS):**
+- Webview content visible through GPUI window
+- Command Palette, menus, tooltips render perfectly on top
+- Zero input lag (OS handles hit-testing naturally)
+- Native performance for both webview and editor UI
+- Identical behavior on Windows, macOS, and Linux
+
+**CRITICAL NOTES:**
+- **ALL THREE PLATFORMS MUST BE IMPLEMENTED** - This is not optional
+- macOS and Linux are NOT "future work" - they are core requirements
+- Professional software supports all major platforms from day one
+- DO NOT implement OS-level hit-testing (WM_NCHITTEST) - that was the wrong approach
+- Implement proper underlay architecture as described above
+- Test on all three platforms before considering complete
+
+**Implementation Order:**
+1. Windows (current platform, implement first)
+2. macOS (implement immediately after Windows)
+3. Linux (implement immediately after macOS)
+4. Test all three platforms thoroughly
+
+**Reference Files:**
+- `HOLE_PUNCHING.md` - Full explanation of underlay architecture
+- `IMPLEMENT_HOLE_PUNCHING.txt` - Detailed implementation steps (OUTDATED - ignore)
+
 ---
 
-## 14. Final Directive
+## 14. Code Formatting and Linting
+
+### 14.1 — Always Format and Lint After Changes
+
+After making ANY code changes, you MUST run formatting and linting:
+
+```bash
+# Format all code
+just fmt
+
+# Run linter and auto-fix issues
+just fix
+
+# Or fix specific package
+just fix -p web_preview
+```
+
+### 14.2 — Before Committing
+
+Always run these commands before committing:
+
+```bash
+# 1. Format code
+just fmt
+
+# 2. Fix linting issues
+just fix
+
+# 3. Run tests (if applicable)
+cargo test -p <package_name>
+```
+
+### 14.3 — Formatting Rules
+- **ALWAYS run `just fmt`** after editing Rust files
+- **ALWAYS run `just fix`** to auto-fix linter warnings
+- **DO NOT commit** unformatted or unlinted code
+- **CHECK diagnostics** with getDiagnostics tool after changes
+
+---
+
+## 15. Final Directive
 
 **You are an autonomous execution engine.**
 

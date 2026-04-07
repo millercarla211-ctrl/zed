@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Web preview screenshot and element-selector actions now guard against action-path panics and shrink oversized AI image attachments before insertion.
 - Windows web preview now mounts into a separate underlay host window, and the GPUI preview body stops painting an opaque editor background over the browser region.
 - Windows no longer forces `GPUI_DISABLE_DIRECT_COMPOSITION=1` at startup, which is required for alpha-based hole-punch composition work.
+- Workspace items can now opt into a transparent workspace background, and web preview uses that path so the underlay browser surface is no longer blocked by the workspace root fill.
 
 ---
 

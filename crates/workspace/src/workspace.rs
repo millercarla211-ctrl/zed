@@ -8048,6 +8048,9 @@ impl Render for Workspace {
 
         let theme = cx.theme().clone();
         let colors = theme.colors();
+        let transparent_workspace_background = self
+            .active_item(cx)
+            .is_some_and(|item| item.requires_transparent_workspace_background());
         let notification_entities = self
             .notifications
             .iter()
@@ -8082,7 +8085,6 @@ impl Render for Workspace {
                         .child(
                             div()
                                 .id("workspace")
-                                .bg(colors.background)
                                 .relative()
                                 .flex_1()
                                 .w_full()
@@ -8092,6 +8094,9 @@ impl Render for Workspace {
                                 .border_t_1()
                                 .border_b_1()
                                 .border_color(colors.border)
+                                .when(!transparent_workspace_background, |this| {
+                                    this.bg(colors.background)
+                                })
                                 .child({
                                     let this = cx.entity();
                                     canvas(

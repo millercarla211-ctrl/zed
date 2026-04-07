@@ -67,6 +67,7 @@ pub struct WindowsWindowState {
     pub click_state: ClickState,
     pub current_cursor: Cell<Option<HCURSOR>>,
     pub nc_button_pressed: Cell<Option<u32>>,
+    pub mouse_passthrough_snapshot: RefCell<MousePassthroughSnapshot>,
 
     pub display: Cell<WindowsDisplay>,
     /// Flag to instruct the `VSyncProvider` thread to invalidate the directx devices
@@ -159,6 +160,7 @@ impl WindowsWindowState {
             click_state,
             current_cursor: Cell::new(current_cursor),
             nc_button_pressed: Cell::new(nc_button_pressed),
+            mouse_passthrough_snapshot: RefCell::default(),
             display: Cell::new(display),
             fullscreen: Cell::new(fullscreen),
             initial_placement: Cell::new(initial_placement),
@@ -361,6 +363,7 @@ pub(crate) struct Callbacks {
     pub(crate) should_close: Cell<Option<Box<dyn FnMut() -> bool>>>,
     pub(crate) close: Cell<Option<Box<dyn FnOnce()>>>,
     pub(crate) hit_test_window_control: Cell<Option<Box<dyn FnMut() -> Option<WindowControlArea>>>>,
+    pub(crate) hit_test_passthrough: Cell<Option<Box<dyn FnMut(Point<Pixels>) -> bool>>>,
     pub(crate) appearance_changed: Cell<Option<Box<dyn FnMut()>>>,
 }
 
@@ -940,6 +943,18 @@ impl PlatformWindow for WindowsWindow {
             .state
             .callbacks
             .hit_test_window_control
+            .set(Some(callback));
+    }
+
+    fn set_mouse_passthrough_snapshot(&self, snapshot: MousePassthroughSnapshot) {
+        *self.0.state.mouse_passthrough_snapshot.borrow_mut() = snapshot;
+    }
+
+    fn on_hit_test_passthrough(&self, callback: Box<dyn FnMut(Point<Pixels>) -> bool>) {
+        self.0
+            .state
+            .callbacks
+            .hit_test_passthrough
             .set(Some(callback));
     }
 

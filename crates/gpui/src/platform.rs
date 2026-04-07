@@ -31,10 +31,11 @@ pub(crate) type PlatformScreenCaptureFrame = core_video::image_buffer::CVImageBu
 use crate::{
     Action, AnyWindowHandle, App, AsyncWindowContext, BackgroundExecutor, Bounds,
     DEFAULT_WINDOW_SIZE, DevicePixels, DispatchEventResult, Font, FontId, FontMetrics, FontRun,
-    ForegroundExecutor, GlyphId, GpuSpecs, ImageSource, Keymap, LineLayout, Pixels, PlatformInput,
-    Point, Priority, RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams, Scene,
-    ShapedGlyph, ShapedRun, SharedString, Size, SvgRenderer, SystemWindowTab, Task,
-    ThreadTaskTimings, Window, WindowControlArea, hash, point, px, size,
+    ForegroundExecutor, GlyphId, GpuSpecs, ImageSource, Keymap, LineLayout,
+    MousePassthroughSnapshot, Pixels, PlatformInput, Point, Priority, RenderGlyphParams,
+    RenderImage, RenderImageParams, RenderSvgParams, Scene, ShapedGlyph, ShapedRun, SharedString,
+    Size, SvgRenderer, SystemWindowTab, Task, ThreadTaskTimings, Window, WindowControlArea, hash,
+    point, px, size,
 };
 use anyhow::Result;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
@@ -632,6 +633,8 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn on_moved(&self, callback: Box<dyn FnMut()>);
     fn on_should_close(&self, callback: Box<dyn FnMut() -> bool>);
     fn on_hit_test_window_control(&self, callback: Box<dyn FnMut() -> Option<WindowControlArea>>);
+    fn set_mouse_passthrough_snapshot(&self, _snapshot: MousePassthroughSnapshot) {}
+    fn on_hit_test_passthrough(&self, _callback: Box<dyn FnMut(Point<Pixels>) -> bool>) {}
     fn on_close(&self, callback: Box<dyn FnOnce()>);
     fn on_appearance_changed(&self, callback: Box<dyn FnMut()>);
     fn on_button_layout_changed(&self, _callback: Box<dyn FnMut()>) {}

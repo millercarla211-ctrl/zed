@@ -1876,7 +1876,6 @@ impl Interactivity {
                             } else {
                                 None
                             };
-
                             let scroll_offset =
                                 self.clamp_scroll_position(bounds, &style, window, cx);
                             let result = f(&style, scroll_offset, hitbox, window, cx);
@@ -1910,6 +1909,26 @@ impl Interactivity {
             || !self.drop_listeners.is_empty()
             || self.tooltip_builder.is_some()
             || window.is_inspector_picking(cx)
+    }
+
+    fn should_block_mouse_passthrough(&self, style: &Style) -> bool {
+        self.hitbox_behavior != HitboxBehavior::Normal
+            || self.window_control.is_some()
+            || style.mouse_cursor.is_some()
+            || self.scroll_offset.is_some()
+            || self.tracked_focus_handle.is_some()
+            || self.hover_listener.is_some()
+            || !self.mouse_up_listeners.is_empty()
+            || !self.mouse_pressure_listeners.is_empty()
+            || !self.mouse_down_listeners.is_empty()
+            || !self.mouse_move_listeners.is_empty()
+            || !self.click_listeners.is_empty()
+            || !self.aux_click_listeners.is_empty()
+            || !self.scroll_wheel_listeners.is_empty()
+            || self.has_pinch_listeners()
+            || self.drag_listener.is_some()
+            || !self.drop_listeners.is_empty()
+            || self.tooltip_builder.is_some()
     }
 
     fn clamp_scroll_position(
@@ -2051,6 +2070,9 @@ impl Interactivity {
                                                     area,
                                                     hitbox.clone(),
                                                 );
+                                            }
+                                            if self.should_block_mouse_passthrough(&style) {
+                                                window.mark_hitbox_interactive(hitbox);
                                             }
 
                                             self.paint_mouse_listeners(

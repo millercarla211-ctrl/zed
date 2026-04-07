@@ -236,6 +236,13 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
         None
     }
 
+    fn requires_transparent_workspace_background() -> bool
+    where
+        Self: Sized,
+    {
+        false
+    }
+
     /// (model id, Item)
     fn for_each_project_item(
         &self,
@@ -585,6 +592,7 @@ pub trait ItemHandle: 'static + Send {
         window: &mut Window,
         cx: &mut App,
     ) -> Vec<(SharedString, Box<dyn Action>)>;
+    fn requires_transparent_workspace_background(&self) -> bool;
     fn can_autosave(&self, cx: &App) -> bool {
         let is_deleted = self.project_entry_ids(cx).is_empty();
         self.is_dirty(cx) && !self.has_conflict(cx) && self.can_save(cx) && !is_deleted
@@ -1189,6 +1197,10 @@ impl<T: Item> ItemHandle for Entity<T> {
         self.update(cx, |this, cx| {
             this.tab_extra_context_menu_actions(window, cx)
         })
+    }
+
+    fn requires_transparent_workspace_background(&self) -> bool {
+        T::requires_transparent_workspace_background()
     }
 }
 
