@@ -6,7 +6,8 @@ inclusion: always
 
 # AI Agent Coordination System
 
-**CURRENT DATE: April 7, 2026**
+**CURRENT DATE: February 7, 2026**
+**AI MODEL: GPT-5.4 (Released March 5, 2026)**
 
 > This file governs how AI agents work on this Codex fork project.
 > Read this file FIRST before starting any work.
@@ -24,10 +25,18 @@ inclusion: always
 5. Check `TODO.md` for current tasks
 
 ### 0.2 — Technology Awareness
+- **GPT-5.4 Model** — Using OpenAI's latest model with 1M token context window
 - **Rust Edition 2024** — Always use `edition = "2024"` in Cargo.toml
 - **Latest Stable** — Use most recent stable releases
 - **Search First** — Web search for latest APIs before implementing
 - **Check Deprecations** — Verify APIs haven't changed
+
+### 0.3 — GPT-5.4 Capabilities (March 2026)
+- **1M Token Context** — Can handle entire large codebases in context
+- **Computer Use** — Native screenshot reading and UI automation (75% success rate on OSWorld)
+- **Advanced Reasoning** — Configurable reasoning effort for complex tasks
+- **Tool Search** — Improved tool discovery and orchestration
+- **Agentic Workflows** — Better at planning, executing, and verifying multi-step tasks
 
 ---
 
@@ -208,19 +217,35 @@ The `AGENTS.md` file contains detailed Rust conventions:
 - Avoid adding to `codex-core` (it's bloated)
 
 ### 6.2 — Build Commands
+
+**IMPORTANT: Use `just run` for building and running the project.**
+
+The project uses `justfile` for build automation. DO NOT use manual `cargo build` commands.
+
 ```bash
+# Run the project (builds automatically)
+just run
+
 # Format code (always run after changes)
 just fmt
 
 # Test specific project
-cargo test -p codex-tui
+cargo test -p web_preview
 
 # Fix linter issues
 just fix -p <project>
 
-# Update Bazel lockfile after dependency changes
+# Update Bazel lockfile after dependency changes (if using Bazel)
 just bazel-lock-update
 ```
+
+**Build Command Rules:**
+- ✅ Use `just run` to build and run
+- ✅ Use `just fmt` to format code
+- ✅ Use `cargo test` for testing
+- ❌ DO NOT use `cargo build` directly
+- ❌ DO NOT use `cargo run` directly
+- ❌ DO NOT use custom build scripts
 
 ---
 
@@ -356,13 +381,69 @@ cargo add serde
 
 ### 13.2 — Key Directories
 ```
-codex-rs/           # Rust codebase
-  core/             # Core functionality (avoid adding here)
-  tui/              # Terminal UI
-  app-server/       # Application server
+crates/             # All Rust crates
+  web_preview/      # NEW: Embedded web browser (wry-based)
+  workspace/        # Workspace and pane management
+  zed/              # Main application entry
 .cargo/             # Cargo configurations
-.codex/             # Codex-specific files
+assets/             # Icons, fonts, themes
 ```
+
+### 13.3 — Web Preview Feature (Added February 2026)
+
+**Location:** `crates/web_preview/`
+
+The web preview feature provides an embedded web browser inside the editor using the `wry` library (WebView2 on Windows).
+
+**Key Files:**
+- `crates/web_preview/src/web_preview_view.rs` — Main implementation (2,440 lines)
+- `crates/web_preview/src/web_preview.rs` — Module initialization
+- `crates/web_preview/Cargo.toml` — Dependencies (wry 0.53)
+- `WEB_PREVIEW_IMPLEMENTATION.md` — Complete documentation
+
+**Features Implemented:**
+- ✅ Full web browser with navigation (back/forward/reload)
+- ✅ URL input bar with bookmark system
+- ✅ Browser extensions support (Chrome/Firefox auto-detection)
+- ✅ Developer tools integration
+- ✅ Screenshot capture (full page and area selection)
+- ✅ Zoom controls (10% increments)
+- ✅ Session isolation per workspace
+- ✅ IPC communication with agent panel
+- ✅ Custom tab bar controls (URL bar, navigation buttons)
+- ✅ Transparent overlay for input blocking when URL editor focused
+
+**Architecture:**
+- Webview stays ALWAYS VISIBLE (no hiding logic)
+- Input blocking via transparent overlay when URL editor has focus
+- Native webview (WebView2 on Windows)
+- Isolated browser profiles per workspace ID
+- Profile storage: `~/.local/share/zed/web_preview_profiles/{workspace_id}/`
+
+**Windows-Specific:**
+- Disables DirectComposition to support child webviews
+- Environment variable: `GPUI_DISABLE_DIRECT_COMPOSITION=1`
+- Set in `crates/zed/src/main.rs`
+
+**Integration Points:**
+1. `Cargo.toml` — Added web_preview to members and dependencies
+2. `crates/zed/Cargo.toml` — Added web_preview dependency
+3. `crates/zed/src/main.rs` — Windows fix + init call
+4. `crates/workspace/src/workspace.rs` — NewWebPreview action
+5. `crates/workspace/src/pane.rs` — Context menu integration
+6. `crates/workspace/src/item.rs` — PaneTabBarControls trait
+
+**Usage:**
+- Open via context menu: Tab bar `+` button → "New Web Preview"
+- Navigate using toolbar: Back/Forward/Reload buttons + URL input
+- Bookmark pages with star icon
+- Access DevTools, screenshots, and more via toolbar buttons
+
+**Important Notes:**
+- DO NOT add webview hiding logic — it stays visible always
+- Input control is via transparent overlay, not visibility
+- Tab navigation arrows remain for tab switching
+- Web navigation arrows are in the preview's own toolbar
 
 ---
 

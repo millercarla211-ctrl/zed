@@ -1,1 +1,3 @@
 Today is 7th April 2026, and this is the Zed-Code Editor. Now do me a favor and explain to me how the sidebar works. Under the sidebar, there are some items. Explain to me the source code of the sidebar for the switch sidebar.
+
+Now do research about the latest Codex CLI with GPT 5.4 model, as today is 7th February 2026, and update the agents.md file to tell our Codex agent to not run any other command related to building; instead, use just the run command, and let our agent know about our current webview implementations and the new features or web preview correctly so that the agent can work on it from now on.

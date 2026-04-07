@@ -182,7 +182,6 @@ pub struct WebPreviewView {
     load_state: PreviewLoadState,
     host_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
     last_applied_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
-    last_applied_visibility: Rc<Cell<bool>>,
     native_mount_requested: Rc<Cell<bool>>,
     browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
     deferred_ipc_messages: Vec<String>,
@@ -283,7 +282,6 @@ impl WebPreviewView {
                 load_state: PreviewLoadState::Ready,
                 host_bounds: Rc::new(RefCell::new(None)),
                 last_applied_bounds: Rc::new(RefCell::new(None)),
-                last_applied_visibility: Rc::new(Cell::new(false)),
                 native_mount_requested: Rc::new(Cell::new(false)),
                 browser_events,
                 deferred_ipc_messages: Vec::new(),
@@ -384,24 +382,9 @@ impl WebPreviewView {
         Ok(())
     }
 
-    fn should_hide_native_preview(&self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        if self.more_menu_handle.is_deployed() || self.extensions_menu_handle.is_deployed() {
-            return true;
-        }
-
-        let Some(workspace) = self.workspace.upgrade() else {
-            return false;
-        };
-
-        workspace.update(cx, |workspace, cx| {
-            if workspace.has_active_modal(window, cx) {
-                return true;
-            }
-
-            workspace
-                .active_pane()
-                .update(cx, |pane, cx| pane.context_menu_focused(window, cx))
-        })
+    fn should_disable_webview_input(&self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        // Disable webview input when URL editor has focus
+        self.url_editor.focus_handle(cx).is_focused(window)
     }
 
     fn confirm_navigation(
@@ -1140,30 +1123,23 @@ impl WebPreviewView {
             )
     }
 
-    fn render_webview_body(&self, visible: bool, cx: &mut Context<Self>) -> AnyElement {
+    fn render_webview_body(&self, _cx: &mut Context<Self>) -> AnyElement {
         #[cfg(target_os = "windows")]
         {
             let host_bounds = self.host_bounds.clone();
             let last_applied_bounds = self.last_applied_bounds.clone();
-            let last_applied_visibility = self.last_applied_visibility.clone();
             let native_preview = self.native_preview.clone();
-            let _ = cx;
 
             return canvas(
                 move |bounds, _window, _cx| {
                     *host_bounds.borrow_mut() = Some(bounds);
                     if let Some(preview) = native_preview.borrow_mut().as_mut() {
-                        if last_applied_visibility.get() != visible {
-                            let _ = preview.webview.set_visible(visible);
-                            last_applied_visibility.set(visible);
-                        }
-
                         let should_update_bounds = last_applied_bounds
                             .borrow()
                             .as_ref()
                             .copied()
                             != Some(bounds);
-                        if visible && should_update_bounds {
+                        if should_update_bounds {
                             let _ = set_webview_bounds(&preview.webview, bounds);
                             *last_applied_bounds.borrow_mut() = Some(bounds);
                         }
@@ -1222,68 +1198,11 @@ impl Item for WebPreviewView {
     fn pane_tab_bar_controls(
         &self,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) -> Option<PaneTabBarControls> {
-        Some(PaneTabBarControls::new(
-            Some(
-                h_flex()
-                    .items_center()
-                    .gap_1()
-                    .child(
-                        IconButton::new("browser-renderer-back", IconName::ArrowLeft)
-                            .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::text("Browser Back"))
-                            .on_click(cx.listener(Self::go_back)),
-                    )
-                    .child(
-                        IconButton::new("browser-renderer-forward", IconName::ArrowRight)
-                            .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::text("Browser Forward"))
-                            .on_click(cx.listener(Self::go_forward)),
-                    )
-                    .into_any_element(),
-            ),
-            Some(
-                h_flex()
-                    .items_center()
-                    .gap_1()
-                    .child(
-                        IconButton::new("browser-renderer-new-tab", IconName::Plus)
-                            .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::text("New Website Tab"))
-                            .on_click(cx.listener(Self::open_new_browser_tab)),
-                    )
-                    .child(
-                        IconButton::new("browser-renderer-inspect", IconName::TextSnippet)
-                            .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::text("Inspect Element To Agent"))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.inspect_element(window, cx);
-                            })),
-                    )
-                    .child(
-                        IconButton::new("browser-renderer-screenshot", IconName::Screen)
-                            .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::text("Send Screenshot To Agent"))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.take_screenshot(window, cx);
-                            })),
-                    )
-                    .child(
-                        IconButton::new("browser-renderer-split", IconName::Split)
-                            .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::text("Split Browser View"))
-                            .on_click(cx.listener(Self::split_browser_tab)),
-                    )
-                    .child(
-                        IconButton::new("browser-renderer-zoom", IconName::Maximize)
-                            .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::text("Toggle Zoom"))
-                            .on_click(cx.listener(Self::toggle_browser_zoom)),
-                    )
-                    .into_any_element(),
-            ),
-        ))
+        // Return None to keep default tab navigation arrows
+        // Web navigation is handled in the preview's own toolbar
+        None
     }
 
     fn can_split(&self) -> bool {
@@ -1323,7 +1242,6 @@ impl Item for WebPreviewView {
                 load_state: PreviewLoadState::Ready,
                 host_bounds: Rc::new(RefCell::new(None)),
                 last_applied_bounds: Rc::new(RefCell::new(None)),
-                last_applied_visibility: Rc::new(Cell::new(false)),
                 native_mount_requested: Rc::new(Cell::new(false)),
                 browser_events,
                 deferred_ipc_messages: Vec::new(),
@@ -1357,17 +1275,11 @@ impl Item for WebPreviewView {
     }
 
     fn deactivated(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
-        #[cfg(target_os = "windows")]
-        if let Some(preview) = self.native_preview.borrow_mut().as_mut() {
-            let _ = preview.webview.set_visible(false);
-        }
+        // Webview stays visible - no hiding needed
     }
 
     fn workspace_deactivated(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
-        #[cfg(target_os = "windows")]
-        if let Some(preview) = self.native_preview.borrow_mut().as_mut() {
-            let _ = preview.webview.set_visible(false);
-        }
+        // Webview stays visible - no hiding needed
     }
 }
 
@@ -1384,8 +1296,7 @@ impl Render for WebPreviewView {
             self.apply_browser_events(pending_events, window, cx);
         }
 
-        let hide_native_preview = self.should_hide_native_preview(window, cx);
-        let body = self.render_webview_body(!hide_native_preview, cx);
+        let body = self.render_webview_body(cx);
         let error_message = match &self.load_state {
             PreviewLoadState::Ready => None,
             PreviewLoadState::Error(error) => Some(error.clone()),
@@ -1430,6 +1341,18 @@ impl Render for WebPreviewView {
                             .border_b_1()
                             .border_color(cx.theme().colors().border_variant)
                             .bg(cx.theme().colors().surface_background)
+                            .child(
+                                IconButton::new("web-preview-back", IconName::ArrowLeft)
+                                    .icon_size(IconSize::Small)
+                                    .tooltip(Tooltip::text("Back"))
+                                    .on_click(cx.listener(Self::go_back)),
+                            )
+                            .child(
+                                IconButton::new("web-preview-forward", IconName::ArrowRight)
+                                    .icon_size(IconSize::Small)
+                                    .tooltip(Tooltip::text("Forward"))
+                                    .on_click(cx.listener(Self::go_forward)),
+                            )
                             .child(
                                 IconButton::new("web-preview-reload", IconName::RotateCw)
                                     .icon_size(IconSize::Small)
@@ -1487,6 +1410,16 @@ impl Render for WebPreviewView {
                             .w_full()
                             .overflow_hidden()
                             .child(body)
+                            .when(self.should_disable_webview_input(window, cx), |this| {
+                                // Add transparent overlay to block webview input when URL editor is focused
+                                this.child(
+                                    div()
+                                        .absolute()
+                                        .inset_0()
+                                        .bg(gpui::transparent_black())
+                                        .cursor_text()
+                                )
+                            })
                             .when_some(error_message, |this, error| {
                                 this.child(
                                     div()
@@ -1996,7 +1929,7 @@ fn copy_dir_all(source: &Path, destination: &Path) -> Result<()> {
 fn set_webview_bounds(webview: &WebView, bounds: Bounds<Pixels>) -> Result<()> {
     let rect = bounds_to_wry_rect(bounds);
     webview.set_bounds(rect)?;
-    webview.set_visible(true)?;
+    // Webview stays visible - no hiding
     Ok(())
 }
 
