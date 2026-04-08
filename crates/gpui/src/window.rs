@@ -3962,15 +3962,32 @@ impl Window {
             return false;
         }
 
-        let hit_test = self.rendered_frame.hit_test(position);
-        let Some(topmost_hitbox) = hit_test.ids.first().copied() else {
-            return false;
-        };
-
-        self.rendered_frame
-            .mouse_passthrough_regions
-            .iter()
-            .any(|region| region.hitbox_id == topmost_hitbox && region.bounds.contains(&position))
+        for hitbox in self.rendered_frame.hitboxes.iter().rev() {
+            let bounds = hitbox.bounds.intersect(&hitbox.content_mask.bounds);
+            if bounds.contains(&position) {
+                if self
+                    .rendered_frame
+                    .interactive_hitbox_ids
+                    .contains(&hitbox.id)
+                {
+                    return false;
+                }
+                if self
+                    .rendered_frame
+                    .mouse_passthrough_regions
+                    .iter()
+                    .any(|region| {
+                        region.hitbox_id == hitbox.id && region.bounds.contains(&position)
+                    })
+                {
+                    return true;
+                }
+                if hitbox.behavior == HitboxBehavior::BlockMouse {
+                    break;
+                }
+            }
+        }
+        false
     }
 
     /// Sets the key context for the current element. This context will be used to translate
@@ -4175,6 +4192,9 @@ impl Window {
     fn reset_cursor_style(&self, cx: &mut App) {
         // Set the cursor only if we're the active window.
         if self.is_window_hovered() {
+            if self.should_mouse_passthrough(self.mouse_position()) {
+                return;
+            }
             let style = self
                 .rendered_frame
                 .cursor_style(self)

@@ -1058,10 +1058,33 @@ impl WindowsWindowInner {
         {
             return None;
         }
+        if self.should_yield_cursor_to_underlay(handle) {
+            return Some(1);
+        }
         unsafe {
             SetCursor(self.state.current_cursor.get());
         };
         Some(0)
+    }
+
+    fn should_yield_cursor_to_underlay(&self, handle: HWND) -> bool {
+        let mut cursor_point = POINT::default();
+        unsafe {
+            if GetCursorPos(&mut cursor_point).is_err() {
+                return false;
+            }
+            ScreenToClient(handle, &mut cursor_point).ok().log_err();
+        }
+
+        let position = logical_point(
+            cursor_point.x as f32,
+            cursor_point.y as f32,
+            self.state.scale_factor.get(),
+        );
+        self.state
+            .mouse_passthrough_snapshot
+            .borrow()
+            .should_mouse_passthrough(position)
     }
 
     fn handle_system_settings_changed(

@@ -1,7 +1,7 @@
 # Project TODO
 
 > Auto-managed by AI. Updated after every completed or failed task.
-> Last updated: 2026-04-07
+> Last updated: 2026-04-08
 
 ## In Progress
 - [ ] Implement Windows web preview underlay host and transparent GPUI hole-punch plumbing

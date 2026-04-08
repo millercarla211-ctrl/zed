@@ -50,12 +50,13 @@ use windows::Win32::{
     System::LibraryLoader::GetModuleHandleW,
     UI::WindowsAndMessaging::{
         CWP_SKIPDISABLED, CWP_SKIPINVISIBLE, CWP_SKIPTRANSPARENT, ChildWindowFromPointEx,
-        CreateWindowExW, DefWindowProcW, DestroyWindow, FindWindowExW, GWL_STYLE,
-        GetWindowLongPtrW, HWND_BOTTOM, RegisterClassW, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED,
-        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SendMessageW,
-        SetWindowLongPtrW, SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WM_LBUTTONDOWN, WM_LBUTTONUP,
-        WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN,
-        WM_RBUTTONUP, WNDCLASSW, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_TOOLWINDOW, WS_POPUP,
+        CreateWindowExW, DefWindowProcW, DestroyWindow, FindWindowExW, GUITHREADINFO, GWL_STYLE,
+        GetGUIThreadInfo, GetWindowLongPtrW, HTCLIENT, HWND_BOTTOM, IsChild, RegisterClassW,
+        SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+        SWP_SHOWWINDOW, SendMessageW, SetWindowLongPtrW, SetWindowPos, ShowWindow, WINDOW_EX_STYLE,
+        WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE,
+        WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WNDCLASSW, WS_CLIPCHILDREN,
+        WS_CLIPSIBLINGS, WS_EX_TOOLWINDOW, WS_POPUP,
     },
 };
 #[cfg(target_os = "windows")]
@@ -175,6 +176,9 @@ struct WindowsUnderlayHostWindow {
 
 #[cfg(target_os = "windows")]
 struct WindowsWebviewTarget {
+    host_hwnd: HWND,
+    root_hwnd: HWND,
+    root_client_point: POINT,
     hwnd: HWND,
     client_point: POINT,
 }
@@ -546,19 +550,53 @@ impl WebPreviewView {
         window: &Window,
     ) -> Result<()> {
         let target = self.windows_webview_target(window, event.position)?;
+        let wparam = windows_mouse_wparam(
+            event.modifiers,
+            event
+                .pressed_button
+                .and_then(windows_mouse_button_mask)
+                .unwrap_or_default(),
+        );
+        let set_cursor_lparam = windows_set_cursor_lparam(WM_MOUSEMOVE, HTCLIENT);
         unsafe {
+            SendMessageW(
+                target.host_hwnd,
+                WM_MOUSEMOVE,
+                Some(WPARAM(wparam)),
+                Some(windows_mouse_lparam(target.root_client_point)),
+            );
+            SendMessageW(
+                target.root_hwnd,
+                WM_MOUSEMOVE,
+                Some(WPARAM(wparam)),
+                Some(windows_mouse_lparam(target.root_client_point)),
+            );
             SendMessageW(
                 target.hwnd,
                 WM_MOUSEMOVE,
-                Some(WPARAM(windows_mouse_wparam(
-                    event.modifiers,
-                    event
-                        .pressed_button
-                        .and_then(windows_mouse_button_mask)
-                        .unwrap_or_default(),
-                ))),
+                Some(WPARAM(wparam)),
                 Some(windows_mouse_lparam(target.client_point)),
             );
+            SendMessageW(
+                target.host_hwnd,
+                WM_SETCURSOR,
+                Some(WPARAM(target.hwnd.0 as usize)),
+                Some(set_cursor_lparam),
+            );
+            SendMessageW(
+                target.root_hwnd,
+                WM_SETCURSOR,
+                Some(WPARAM(target.hwnd.0 as usize)),
+                Some(set_cursor_lparam),
+            );
+            if target.hwnd != target.root_hwnd {
+                SendMessageW(
+                    target.hwnd,
+                    WM_SETCURSOR,
+                    Some(WPARAM(target.hwnd.0 as usize)),
+                    Some(set_cursor_lparam),
+                );
+            }
         }
         Ok(())
     }
@@ -595,18 +633,26 @@ impl WebPreviewView {
         } else {
             WM_MOUSEWHEEL
         };
+        if let Some(preview) = self.native_preview.borrow().as_ref() {
+            let _ = preview.webview.focus();
+        }
 
         unsafe {
-            SendMessageW(
-                target.hwnd,
-                message,
-                Some(WPARAM(
-                    (((delta as u16 as u32) << 16)
-                        | windows_mouse_wparam(event.modifiers, 0) as u32)
-                        as usize,
-                )),
-                Some(windows_mouse_lparam(screen_point)),
+            let wparam = WPARAM(
+                (((delta as u16 as u32) << 16) | windows_mouse_wparam(event.modifiers, 0) as u32)
+                    as usize,
             );
+            let lparam = Some(windows_mouse_lparam(screen_point));
+            SendMessageW(target.host_hwnd, message, Some(wparam), lparam);
+            SendMessageW(
+                windows_scroll_target(target.root_hwnd),
+                message,
+                Some(wparam),
+                lparam,
+            );
+            if target.hwnd != target.root_hwnd {
+                SendMessageW(target.hwnd, message, Some(wparam), lparam);
+            }
         }
         Ok(())
     }
@@ -632,7 +678,13 @@ impl WebPreviewView {
         let root_client_point =
             windows_preview_client_point(bounds, window.scale_factor(), position);
         let (hwnd, client_point) = windows_deepest_webview_target(root_hwnd, root_client_point);
-        Ok(WindowsWebviewTarget { hwnd, client_point })
+        Ok(WindowsWebviewTarget {
+            host_hwnd: preview.underlay_host.as_hwnd(),
+            root_hwnd,
+            root_client_point,
+            hwnd,
+            client_point,
+        })
     }
 
     fn navigate_to_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1624,7 +1676,7 @@ impl WebPreviewView {
         }
     }
 
-    fn render_webview_body(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_webview_body(&self, _cx: &mut Context<Self>) -> AnyElement {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
             let host_bounds = self.host_bounds.clone();
@@ -1676,37 +1728,7 @@ impl WebPreviewView {
 
             #[cfg(target_os = "windows")]
             {
-                return div()
-                    .size_full()
-                    .on_any_mouse_down(cx.listener(Self::forward_preview_mouse_down))
-                    .on_mouse_up(
-                        MouseButton::Left,
-                        cx.listener(Self::forward_preview_mouse_up),
-                    )
-                    .on_mouse_up(
-                        MouseButton::Right,
-                        cx.listener(Self::forward_preview_mouse_up),
-                    )
-                    .on_mouse_up(
-                        MouseButton::Middle,
-                        cx.listener(Self::forward_preview_mouse_up),
-                    )
-                    .on_mouse_up_out(
-                        MouseButton::Left,
-                        cx.listener(Self::forward_preview_mouse_up),
-                    )
-                    .on_mouse_up_out(
-                        MouseButton::Right,
-                        cx.listener(Self::forward_preview_mouse_up),
-                    )
-                    .on_mouse_up_out(
-                        MouseButton::Middle,
-                        cx.listener(Self::forward_preview_mouse_up),
-                    )
-                    .on_mouse_move(cx.listener(Self::forward_preview_mouse_move))
-                    .on_scroll_wheel(cx.listener(Self::forward_preview_scroll_wheel))
-                    .child(body)
-                    .into_any_element();
+                return body.into_any_element();
             }
 
             #[cfg(not(target_os = "windows"))]
@@ -2803,6 +2825,28 @@ fn windows_deepest_webview_target(root: HWND, root_client_point: POINT) -> (HWND
 
         (current, current_point)
     }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_scroll_target(root: HWND) -> HWND {
+    unsafe {
+        let mut info = GUITHREADINFO {
+            cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
+            ..Default::default()
+        };
+        if GetGUIThreadInfo(0, &mut info).is_ok() {
+            let focus = info.hwndFocus;
+            if !focus.0.is_null() && (focus == root || IsChild(root, focus).as_bool()) {
+                return focus;
+            }
+        }
+        root
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_set_cursor_lparam(mouse_message: u32, hit_test: u32) -> LPARAM {
+    LPARAM((((mouse_message & 0xffff) << 16) | (hit_test & 0xffff)) as isize)
 }
 
 #[cfg(target_os = "windows")]

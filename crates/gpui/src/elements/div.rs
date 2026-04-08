@@ -1911,13 +1911,9 @@ impl Interactivity {
             || window.is_inspector_picking(cx)
     }
 
-    fn should_block_mouse_passthrough(&self, style: &Style) -> bool {
+    fn should_block_mouse_passthrough(&self, _style: &Style) -> bool {
         self.hitbox_behavior != HitboxBehavior::Normal
             || self.window_control.is_some()
-            || style.mouse_cursor.is_some()
-            || self.scroll_offset.is_some()
-            || self.tracked_focus_handle.is_some()
-            || self.hover_listener.is_some()
             || !self.mouse_up_listeners.is_empty()
             || !self.mouse_pressure_listeners.is_empty()
             || !self.mouse_down_listeners.is_empty()
