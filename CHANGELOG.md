@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- Added a current cross-platform web preview status report that records the completed Windows implementation and the remaining macOS/Linux host work.
+- Added a root-level Windows web preview architecture report that documents the frozen rendering/input model and the "do not touch casually" policy for the working Windows path.
+
+### Changed
+- Began isolating non-Windows web preview work so macOS and Linux support can be developed without modifying the working Windows path.
+- Tidied the root directory by moving auxiliary web preview notes and logs into the `docs` tree, while keeping the canonical Windows implementation report in the repository root.
+- Updated `AGENTS.md` so future work treats the Windows web preview as frozen and develops macOS/Linux support in separate platform-specific paths.
+
 ### Fixed
 - Web preview toolbar action icons now stay muted at rest and only switch to the primary accent during hover and press states.
 - Web preview URL editing no longer forces focus away after navigation and avoids overwriting in-progress input while the page reports URL updates.

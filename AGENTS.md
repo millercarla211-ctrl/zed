@@ -6,7 +6,7 @@ inclusion: always
 
 # AI Agent Coordination System
 
-**CURRENT DATE: February 7, 2026**
+**CURRENT DATE: April 9, 2026**
 **AI MODEL: GPT-5.4 (Released March 5, 2026)**
 
 > This file governs how AI agents work on this Codex fork project.
@@ -420,10 +420,12 @@ The web preview feature provides an embedded web browser inside the editor using
 - Isolated browser profiles per workspace ID
 - Profile storage: `~/.local/share/zed/web_preview_profiles/{workspace_id}/`
 
-**Windows-Specific:**
-- Disables DirectComposition to support child webviews
-- Environment variable: `GPUI_DISABLE_DIRECT_COMPOSITION=1`
-- Set in `crates/zed/src/main.rs`
+**Windows-Specific (Current State - April 9, 2026):**
+- Windows web preview is now the completed reference implementation in this fork
+- The working Windows path is complex and must be treated as **frozen**
+- Do **not** casually refactor the Windows preview/input/rendering path while working on macOS or Linux
+- If non-Windows support needs new host logic, isolate it behind platform-specific code and `#[cfg(...)]` gates
+- The canonical Windows architecture write-up is `WINDOWS_WEB_PREVIEW_IMPLEMENTATION_REPORT.md`
 
 **Integration Points:**
 1. `Cargo.toml` — Added web_preview to members and dependencies
@@ -445,7 +447,7 @@ The web preview feature provides an embedded web browser inside the editor using
 - Tab navigation arrows remain for tab switching
 - Web navigation arrows are in the preview's own toolbar
 
-**Hole-Punching Architecture (CRITICAL - MUST IMPLEMENT NOW):**
+**Hole-Punching Architecture (Cross-Platform Requirement):**
 
 The web preview MUST use a "hole-punching underlay" approach for proper UI layering on ALL platforms.
 
@@ -466,19 +468,17 @@ Standard webviews float ON TOP of the app, blocking UI elements like Command Pal
 
 **Implementation Requirements (ALL PLATFORMS - NOT OPTIONAL):**
 
-1. **Windows Platform** (`crates/gpui/src/platform/windows/`) - PRIORITY:
-   - Create webview window as PARENT window (not child)
-   - Create GPUI window as CHILD of webview window with `WS_EX_TRANSPARENT` extended style
-   - Set GPUI window background to transparent where webview should show
-   - Use `SetLayeredWindowAttributes` or DWM composition for transparency
-   - **STATUS: NOT IMPLEMENTED - MUST DO NOW**
+1. **Windows Platform** (`crates/gpui/src/platform/windows/`) - COMPLETE:
+   - Native Windows web preview is implemented and working
+   - Treat the current Windows behavior as frozen unless fixing a confirmed Windows regression
+   - Do not route new macOS/Linux work through the Windows path
 
 2. **macOS Platform** (`crates/gpui/src/platform/mac/`) - CRITICAL:
    - Create webview as parent NSWindow
    - Create GPUI NSWindow as child with transparent background
    - Use `setOpaque(false)` and `setBackgroundColor(NSColor.clear)`
    - Implement proper window layering with NSWindow level management
-   - **STATUS: NOT IMPLEMENTED - MUST DO NOW**
+   - **STATUS: PARTIAL - STILL REQUIRED**
    - **THIS IS NOT "FUTURE WORK" - THIS IS REQUIRED FOR PROFESSIONAL CROSS-PLATFORM SUPPORT**
 
 3. **Linux Platform** (`crates/gpui/src/platform/linux/`) - CRITICAL:
@@ -486,7 +486,7 @@ Standard webviews float ON TOP of the app, blocking UI elements like Command Pal
    - Create GPUI window as child with transparent background
    - Use compositor transparency features (X11: ARGB visual, Wayland: wl_surface transparency)
    - Handle both X11 and Wayland properly
-   - **STATUS: NOT IMPLEMENTED - MUST DO NOW**
+   - **STATUS: IN PROGRESS / PARTIAL - STILL REQUIRED**
    - **THIS IS NOT "FUTURE WORK" - THIS IS REQUIRED FOR PROFESSIONAL CROSS-PLATFORM SUPPORT**
 
 4. **Web Preview Integration** (`crates/web_preview/`):
@@ -511,13 +511,15 @@ Standard webviews float ON TOP of the app, blocking UI elements like Command Pal
 - Test on all three platforms before considering complete
 
 **Implementation Order:**
-1. Windows (current platform, implement first)
-2. macOS (implement immediately after Windows)
-3. Linux (implement immediately after macOS)
-4. Test all three platforms thoroughly
+1. Freeze Windows exactly as it works now
+2. macOS
+3. Linux X11
+4. Linux Wayland
+5. Test all platforms thoroughly
 
 **Reference Files:**
 - `HOLE_PUNCHING.md` - Full explanation of underlay architecture
+- `WINDOWS_WEB_PREVIEW_IMPLEMENTATION_REPORT.md` - Canonical Windows architecture and freeze policy
 - `IMPLEMENT_HOLE_PUNCHING.txt` - Detailed implementation steps (OUTDATED - ignore)
 
 ---
