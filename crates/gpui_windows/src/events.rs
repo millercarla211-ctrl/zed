@@ -2,7 +2,11 @@ use std::{cell::Cell, rc::Rc};
 
 use ::util::ResultExt;
 use anyhow::Context as _;
-use webview2_com::Microsoft::Web::WebView2::Win32::*;
+use serde_json::{Map as JsonMap, Value as JsonValue};
+use webview2_com::{
+    CallDevToolsProtocolMethodCompletedHandler, ExecuteScriptCompletedHandler,
+    Microsoft::Web::WebView2::Win32::*,
+};
 use windows::{
     Win32::{
         Foundation::*,
@@ -15,7 +19,7 @@ use windows::{
             WindowsAndMessaging::*,
         },
     },
-    core::{Interface, PCWSTR},
+    core::{HSTRING, Interface, PCWSTR},
 };
 
 use crate::*;
@@ -99,7 +103,9 @@ impl WindowsWindowInner {
             }
             WM_MOUSEWHEEL => self.handle_mouse_wheel_msg(handle, wparam, lparam),
             WM_MOUSEHWHEEL => self.handle_mouse_horizontal_wheel_msg(handle, wparam, lparam),
+            WM_SYSKEYDOWN => self.handle_keydown_msg(wparam, lparam),
             WM_SYSKEYUP => self.handle_syskeyup_msg(wparam, lparam),
+            WM_KEYDOWN => self.handle_keydown_msg(wparam, lparam),
             WM_KEYUP => self.handle_keyup_msg(wparam, lparam),
             WM_GPUI_KEYDOWN => self.handle_keydown_msg(wparam, lparam),
             WM_CHAR => self.handle_char_msg(wparam),
@@ -363,86 +369,109 @@ impl WindowsWindowInner {
 
     fn handle_syskeyup_msg(&self, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
         if self.webview_keyboard_focused() {
+            if dispatch_webview_key_event(self.hwnd(), "keyUp", wparam, lparam, None) {
+                return Some(0);
+            }
             return None;
         }
 
-        let input = handle_key_event(wparam, lparam, &self.state, |keystroke, _| {
-            PlatformInput::KeyUp(KeyUpEvent { keystroke })
-        })?;
-        let mut func = self.state.callbacks.input.take()?;
+        {
+            let input = handle_key_event(wparam, lparam, &self.state, |keystroke, _| {
+                PlatformInput::KeyUp(KeyUpEvent { keystroke })
+            })?;
+            let mut func = self.state.callbacks.input.take()?;
 
-        func(input);
-        self.state.callbacks.input.set(Some(func));
+            func(input);
+            self.state.callbacks.input.set(Some(func));
 
-        // Always return 0 to indicate that the message was handled, so we could properly handle `ModifiersChanged` event.
-        Some(0)
+            // Always return 0 to indicate that the message was handled, so we could properly handle `ModifiersChanged` event.
+            return Some(0);
+        }
     }
 
     // It's a known bug that you can't trigger `ctrl-shift-0`. See:
     // https://superuser.com/questions/1455762/ctrl-shift-number-key-combination-has-stopped-working-for-a-few-numbers
     fn handle_keydown_msg(&self, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
         if self.webview_keyboard_focused() {
-            return Some(1);
+            if dispatch_webview_key_event(self.hwnd(), "rawKeyDown", wparam, lparam, None) {
+                return Some(0);
+            }
+            return None;
         }
 
-        let Some(input) = handle_key_event(
-            wparam,
-            lparam,
-            &self.state,
-            |keystroke, prefer_character_input| {
-                PlatformInput::KeyDown(KeyDownEvent {
-                    keystroke,
-                    is_held: lparam.0 & (0x1 << 30) > 0,
-                    prefer_character_input,
-                })
-            },
-        ) else {
-            return Some(1);
-        };
+        {
+            let Some(input) = handle_key_event(
+                wparam,
+                lparam,
+                &self.state,
+                |keystroke, prefer_character_input| {
+                    PlatformInput::KeyDown(KeyDownEvent {
+                        keystroke,
+                        is_held: lparam.0 & (0x1 << 30) > 0,
+                        prefer_character_input,
+                    })
+                },
+            ) else {
+                return Some(1);
+            };
 
-        let Some(mut func) = self.state.callbacks.input.take() else {
-            return Some(1);
-        };
+            let Some(mut func) = self.state.callbacks.input.take() else {
+                return Some(1);
+            };
 
-        let handled = !func(input).propagate;
+            let handled = !func(input).propagate;
 
-        self.state.callbacks.input.set(Some(func));
+            self.state.callbacks.input.set(Some(func));
 
-        if handled { Some(0) } else { Some(1) }
+            return if handled { Some(0) } else { Some(1) };
+        }
     }
 
     fn handle_keyup_msg(&self, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
         if self.webview_keyboard_focused() {
+            if dispatch_webview_key_event(self.hwnd(), "keyUp", wparam, lparam, None) {
+                return Some(0);
+            }
             return None;
         }
 
-        let Some(input) = handle_key_event(wparam, lparam, &self.state, |keystroke, _| {
-            PlatformInput::KeyUp(KeyUpEvent { keystroke })
-        }) else {
-            return Some(1);
-        };
+        {
+            let Some(input) = handle_key_event(wparam, lparam, &self.state, |keystroke, _| {
+                PlatformInput::KeyUp(KeyUpEvent { keystroke })
+            }) else {
+                return Some(1);
+            };
 
-        let Some(mut func) = self.state.callbacks.input.take() else {
-            return Some(1);
-        };
+            let Some(mut func) = self.state.callbacks.input.take() else {
+                return Some(1);
+            };
 
-        let handled = !func(input).propagate;
-        self.state.callbacks.input.set(Some(func));
+            let handled = !func(input).propagate;
+            self.state.callbacks.input.set(Some(func));
 
-        if handled { Some(0) } else { Some(1) }
+            return if handled { Some(0) } else { Some(1) };
+        }
     }
 
     fn handle_char_msg(&self, wparam: WPARAM) -> Option<isize> {
         if self.webview_keyboard_focused() {
+            let input = self.parse_char_message(wparam)?;
+            if !input.chars().any(char::is_control)
+                && dispatch_webview_text_input(self.hwnd(), &input)
+            {
+                return Some(0);
+            }
             return None;
         }
 
-        let input = self.parse_char_message(wparam)?;
-        self.with_input_handler(|input_handler| {
-            input_handler.replace_text_in_range(None, &input);
-        });
+        {
+            let input = self.parse_char_message(wparam)?;
+            self.with_input_handler(|input_handler| {
+                input_handler.replace_text_in_range(None, &input);
+            });
 
-        Some(0)
+            return Some(0);
+        }
     }
 
     fn handle_mouse_down_msg(
@@ -462,7 +491,7 @@ impl WindowsWindowInner {
 
         if let Some((target, relative_point)) =
             webview_passthrough_target_for_point(&self.state, handle, client_point)
-            && let Some(event_kind) = webview_mouse_button_down_kind(button, click_count)
+            && let Some(event_kind) = webview_mouse_button_down_kind(button)
         {
             self.state.webview_input_captured.set(true);
             update_webview_passthrough_focus(handle, true);
@@ -476,7 +505,7 @@ impl WindowsWindowInner {
                 webview_button_mouse_data(button),
                 relative_point,
             );
-            focus_webview_controller(&target);
+            focus_webview_controller(handle, &target);
             return Some(0);
         }
 
@@ -531,6 +560,11 @@ impl WindowsWindowInner {
                 webview_button_mouse_data(button),
                 relative_point,
             );
+            if button == MouseButton::Left {
+                focus_webview_element_at_point(&target, relative_point);
+                update_webview_passthrough_focus(handle, true);
+                focus_webview_controller(handle, &target);
+            }
             return Some(0);
         }
 
@@ -1402,8 +1436,7 @@ impl WindowsWindowInner {
     }
 
     fn webview_keyboard_focused(&self) -> bool {
-        webview_passthrough_target(self.platform_window_handle)
-            .is_some_and(|target| target.keyboard_focused)
+        webview_passthrough_target(self.hwnd()).is_some_and(|target| target.keyboard_focused)
     }
 }
 
@@ -1487,8 +1520,9 @@ fn send_webview_mouse_input(
     }
 }
 
-fn focus_webview_controller(target: &WebviewPassthroughTarget) {
+fn focus_webview_controller(handle: HWND, target: &WebviewPassthroughTarget) {
     unsafe {
+        SetFocus(Some(handle)).log_err();
         if let Ok(controller) = target.controller.cast::<ICoreWebView2Controller>() {
             controller
                 .MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)
@@ -1504,6 +1538,246 @@ fn notify_webview_parent_window_position_changed(handle: HWND) {
         {
             controller.NotifyParentWindowPositionChanged().log_err();
         }
+    }
+}
+
+fn focus_webview_element_at_point(target: &WebviewPassthroughTarget, relative_point: POINT) {
+    let script = format!(
+        "(() => {{\
+            const x = {x} / (window.devicePixelRatio || 1);\
+            const y = {y} / (window.devicePixelRatio || 1);\
+            let element = document.elementFromPoint(x, y);\
+            if (!element) return;\
+            if (element instanceof HTMLLabelElement && element.control) element = element.control;\
+            const editable = element.closest('input, textarea, select, [contenteditable=\"\"], [contenteditable=\"true\"]');\
+            if (!(editable instanceof HTMLElement)) {{\
+                window.__zedHostInput?.setTarget?.(null);\
+                return;\
+            }}\
+            editable.focus({{ preventScroll: true }});\
+            window.__zedHostInput?.setTarget?.(editable);\
+            if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {{\
+                const end = editable.value?.length ?? 0;\
+                editable.setSelectionRange?.(end, end);\
+            }} else if (editable.isContentEditable) {{\
+                const selection = window.getSelection?.();\
+                const range = document.createRange();\
+                range.selectNodeContents(editable);\
+                range.collapse(false);\
+                selection?.removeAllRanges?.();\
+                selection?.addRange?.(range);\
+            }}\
+            if (editable instanceof HTMLInputElement && !['text', 'search', 'url', 'tel', 'email', 'password', 'number'].includes(editable.type)) {{\
+                window.__zedHostInput?.setTarget?.(null);\
+            }}\
+        }})();",
+        x = relative_point.x,
+        y = relative_point.y
+    );
+
+    unsafe {
+        if let Ok(controller) = target.controller.cast::<ICoreWebView2Controller>()
+            && let Ok(webview) = controller.CoreWebView2()
+        {
+            let script = HSTRING::from(script);
+            let _ = webview.ExecuteScript(
+                &script,
+                &ExecuteScriptCompletedHandler::create(Box::new(|_, _| Ok(()))),
+            );
+        }
+    }
+}
+
+fn dispatch_webview_text_input(handle: HWND, text: &str) -> bool {
+    let Ok(text_json) = serde_json::to_string(text) else {
+        return false;
+    };
+    execute_webview_script(
+        handle,
+        &format!("window.__zedHostInput?.insertText?.({text_json}) ?? false;"),
+    )
+}
+
+fn dispatch_webview_key_event(
+    handle: HWND,
+    event_type: &str,
+    wparam: WPARAM,
+    lparam: LPARAM,
+    text: Option<&str>,
+) -> bool {
+    let vkey = VIRTUAL_KEY(wparam.loword());
+    if event_type == "rawKeyDown"
+        && let Some(key) = webview_editing_key(vkey)
+        && execute_webview_script(
+            handle,
+            &format!("window.__zedHostInput?.keyDown?.({key:?}) ?? false;"),
+        )
+    {
+        return true;
+    }
+
+    let mut params = JsonMap::new();
+    params.insert("type".into(), JsonValue::String(event_type.to_string()));
+    params.insert(
+        "modifiers".into(),
+        JsonValue::from(webview_cdp_modifiers(current_modifiers())),
+    );
+    params.insert(
+        "windowsVirtualKeyCode".into(),
+        JsonValue::from(vkey.0 as u32),
+    );
+    params.insert(
+        "nativeVirtualKeyCode".into(),
+        JsonValue::from(vkey.0 as u32),
+    );
+    params.insert(
+        "autoRepeat".into(),
+        JsonValue::Bool(lparam.0 & (0x1 << 30) > 0),
+    );
+
+    if let Some(key) = webview_dom_key(vkey, lparam) {
+        params.insert("key".into(), JsonValue::String(key));
+    }
+    if let Some(code) = webview_dom_code(vkey) {
+        params.insert("code".into(), JsonValue::String(code));
+    }
+    if let Some(text) = text {
+        params.insert("text".into(), JsonValue::String(text.to_string()));
+        params.insert("unmodifiedText".into(), JsonValue::String(text.to_string()));
+    }
+
+    call_webview_devtools_method(handle, "Input.dispatchKeyEvent", JsonValue::Object(params))
+}
+
+fn execute_webview_script(handle: HWND, script: &str) -> bool {
+    let Some(target) = webview_passthrough_target(handle) else {
+        return false;
+    };
+    let Ok(controller) = target.controller.cast::<ICoreWebView2Controller>() else {
+        return false;
+    };
+    let Ok(webview) = (unsafe { controller.CoreWebView2() }) else {
+        return false;
+    };
+    let script = HSTRING::from(script);
+    let handler = ExecuteScriptCompletedHandler::create(Box::new(|_, _| Ok(())));
+    unsafe { webview.ExecuteScript(&script, &handler).is_ok() }
+}
+
+fn call_webview_devtools_method(handle: HWND, method: &str, params: JsonValue) -> bool {
+    let Some(target) = webview_passthrough_target(handle) else {
+        return false;
+    };
+    let Ok(controller) = target.controller.cast::<ICoreWebView2Controller>() else {
+        return false;
+    };
+    let Ok(webview) = (unsafe { controller.CoreWebView2() }) else {
+        return false;
+    };
+
+    let method = HSTRING::from(method);
+    let params = HSTRING::from(params.to_string());
+    let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(|_, _| Ok(())));
+
+    unsafe {
+        webview
+            .CallDevToolsProtocolMethod(&method, &params, &handler)
+            .is_ok()
+    }
+}
+
+fn webview_cdp_modifiers(modifiers: Modifiers) -> u32 {
+    let mut cdp_modifiers = 0;
+    if modifiers.alt {
+        cdp_modifiers |= 1;
+    }
+    if modifiers.control {
+        cdp_modifiers |= 2;
+    }
+    if modifiers.platform {
+        cdp_modifiers |= 4;
+    }
+    if modifiers.shift {
+        cdp_modifiers |= 8;
+    }
+    cdp_modifiers
+}
+
+fn webview_editing_key(vkey: VIRTUAL_KEY) -> Option<&'static str> {
+    match vkey {
+        VK_BACK => Some("Backspace"),
+        VK_DELETE => Some("Delete"),
+        VK_RETURN => Some("Enter"),
+        _ => None,
+    }
+}
+
+fn webview_dom_key(vkey: VIRTUAL_KEY, lparam: LPARAM) -> Option<String> {
+    let key = parse_normal_key(vkey, lparam, current_modifiers())?.0.key;
+    Some(match key.as_str() {
+        "left" => "ArrowLeft".to_string(),
+        "right" => "ArrowRight".to_string(),
+        "up" => "ArrowUp".to_string(),
+        "down" => "ArrowDown".to_string(),
+        "pageup" => "PageUp".to_string(),
+        "pagedown" => "PageDown".to_string(),
+        "backspace" => "Backspace".to_string(),
+        "enter" => "Enter".to_string(),
+        "tab" => "Tab".to_string(),
+        "escape" => "Escape".to_string(),
+        "delete" => "Delete".to_string(),
+        "insert" => "Insert".to_string(),
+        "home" => "Home".to_string(),
+        "end" => "End".to_string(),
+        "space" => " ".to_string(),
+        other if other.starts_with('f') => other.to_ascii_uppercase(),
+        other => other.to_string(),
+    })
+}
+
+fn webview_dom_code(vkey: VIRTUAL_KEY) -> Option<String> {
+    match vkey {
+        VIRTUAL_KEY(0x41..=0x5A) => Some(format!("Key{}", char::from(vkey.0 as u8))),
+        VIRTUAL_KEY(0x30..=0x39) => Some(format!("Digit{}", char::from(vkey.0 as u8))),
+        VK_SPACE => Some("Space".to_string()),
+        VK_RETURN => Some("Enter".to_string()),
+        VK_TAB => Some("Tab".to_string()),
+        VK_BACK => Some("Backspace".to_string()),
+        VK_DELETE => Some("Delete".to_string()),
+        VK_INSERT => Some("Insert".to_string()),
+        VK_ESCAPE => Some("Escape".to_string()),
+        VK_LEFT => Some("ArrowLeft".to_string()),
+        VK_RIGHT => Some("ArrowRight".to_string()),
+        VK_UP => Some("ArrowUp".to_string()),
+        VK_DOWN => Some("ArrowDown".to_string()),
+        VK_HOME => Some("Home".to_string()),
+        VK_END => Some("End".to_string()),
+        VK_PRIOR => Some("PageUp".to_string()),
+        VK_NEXT => Some("PageDown".to_string()),
+        VK_OEM_3 => Some("Backquote".to_string()),
+        VK_OEM_MINUS => Some("Minus".to_string()),
+        VK_OEM_PLUS => Some("Equal".to_string()),
+        VK_OEM_4 => Some("BracketLeft".to_string()),
+        VK_OEM_5 => Some("Backslash".to_string()),
+        VK_OEM_6 => Some("BracketRight".to_string()),
+        VK_OEM_1 => Some("Semicolon".to_string()),
+        VK_OEM_7 => Some("Quote".to_string()),
+        VK_OEM_COMMA => Some("Comma".to_string()),
+        VK_OEM_PERIOD => Some("Period".to_string()),
+        VK_OEM_2 => Some("Slash".to_string()),
+        VK_F1 => Some("F1".to_string()),
+        VK_F2 => Some("F2".to_string()),
+        VK_F3 => Some("F3".to_string()),
+        VK_F4 => Some("F4".to_string()),
+        VK_F5 => Some("F5".to_string()),
+        VK_F6 => Some("F6".to_string()),
+        VK_F7 => Some("F7".to_string()),
+        VK_F8 => Some("F8".to_string()),
+        VK_F9 => Some("F9".to_string()),
+        VK_F10 => Some("F10".to_string()),
+        VK_F11 => Some("F11".to_string()),
+        VK_F12 => Some("F12".to_string()),
+        _ => None,
     }
 }
 
@@ -1572,19 +1846,12 @@ fn webview_mouse_virtual_keys(
     virtual_keys
 }
 
-fn webview_mouse_button_down_kind(
-    button: MouseButton,
-    click_count: usize,
-) -> Option<COREWEBVIEW2_MOUSE_EVENT_KIND> {
-    Some(match (button, click_count >= 2) {
-        (MouseButton::Left, true) => COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_DOUBLE_CLICK,
-        (MouseButton::Left, false) => COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_DOWN,
-        (MouseButton::Right, true) => COREWEBVIEW2_MOUSE_EVENT_KIND_RIGHT_BUTTON_DOUBLE_CLICK,
-        (MouseButton::Right, false) => COREWEBVIEW2_MOUSE_EVENT_KIND_RIGHT_BUTTON_DOWN,
-        (MouseButton::Middle, true) => COREWEBVIEW2_MOUSE_EVENT_KIND_MIDDLE_BUTTON_DOUBLE_CLICK,
-        (MouseButton::Middle, false) => COREWEBVIEW2_MOUSE_EVENT_KIND_MIDDLE_BUTTON_DOWN,
-        (MouseButton::Navigate(_), true) => COREWEBVIEW2_MOUSE_EVENT_KIND_X_BUTTON_DOUBLE_CLICK,
-        (MouseButton::Navigate(_), false) => COREWEBVIEW2_MOUSE_EVENT_KIND_X_BUTTON_DOWN,
+fn webview_mouse_button_down_kind(button: MouseButton) -> Option<COREWEBVIEW2_MOUSE_EVENT_KIND> {
+    Some(match button {
+        MouseButton::Left => COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_DOWN,
+        MouseButton::Right => COREWEBVIEW2_MOUSE_EVENT_KIND_RIGHT_BUTTON_DOWN,
+        MouseButton::Middle => COREWEBVIEW2_MOUSE_EVENT_KIND_MIDDLE_BUTTON_DOWN,
+        MouseButton::Navigate(_) => COREWEBVIEW2_MOUSE_EVENT_KIND_X_BUTTON_DOWN,
     })
 }
 

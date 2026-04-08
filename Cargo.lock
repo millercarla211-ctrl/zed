@@ -8088,6 +8088,7 @@ dependencies = [
  "parking_lot",
  "rand 0.9.2",
  "raw-window-handle",
+ "serde_json",
  "smallvec",
  "util",
  "uuid",

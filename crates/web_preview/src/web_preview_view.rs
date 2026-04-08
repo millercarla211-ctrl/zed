@@ -1590,6 +1590,14 @@ impl Item for WebPreviewView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self._subscriptions.push(cx.on_focus_out(
+            &self.focus_handle(cx),
+            window,
+            |this, _, _window, _cx| {
+                this.release_native_preview_focus();
+            },
+        ));
+
         // Defer focus to ensure webview doesn't interfere
         let focus_handle = self.url_editor.focus_handle(cx);
         cx.defer_in(window, move |_, window, cx| {
@@ -1647,6 +1655,10 @@ impl Render for WebPreviewView {
         } else {
             Color::Muted
         };
+        #[cfg(target_os = "windows")]
+        let preview_surface_background = gpui::transparent_black().alpha(1.0 / 255.0);
+        #[cfg(not(target_os = "windows"))]
+        let preview_surface_background = gpui::transparent_black();
 
         div()
             .id("web-preview")
@@ -1740,7 +1752,9 @@ impl Render for WebPreviewView {
                             .min_h_0()
                             .w_full()
                             .overflow_hidden()
-                            .bg(gpui::transparent_black())
+                            // Keep the Windows top GPUI window hit-testable over the underlay webview
+                            // without visibly obscuring the page.
+                            .bg(preview_surface_background)
                             .child(body)
                             .when_some(error_message, |this, error| {
                                 this.child(

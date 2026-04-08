@@ -124,6 +124,19 @@ pub(crate) fn webview_passthrough_target(main_window: HWND) -> Option<WebviewPas
         .with(|registry| registry.borrow().get(&(main_window.0 as isize)).cloned())
 }
 
+pub fn window_has_focused_webview(main_window: HWND) -> bool {
+    webview_passthrough_target(main_window).is_some_and(|target| target.keyboard_focused)
+}
+
+pub fn any_window_has_focused_webview() -> bool {
+    WEBVIEW_PASSTHROUGH_REGISTRY.with(|registry| {
+        registry
+            .borrow()
+            .values()
+            .any(|target| target.keyboard_focused)
+    })
+}
+
 pub fn create_webview_composition_visual(main_window: HWND) -> Result<IDCompositionVisual> {
     let window = window_from_hwnd(main_window)
         .ok_or_else(|| anyhow::anyhow!("Failed to locate the GPUI window for the web preview"))?;
@@ -356,6 +369,10 @@ impl WindowsWindowState {
 }
 
 impl WindowsWindowInner {
+    pub(crate) fn hwnd(&self) -> HWND {
+        self.hwnd
+    }
+
     fn new(context: &mut WindowCreateContext, hwnd: HWND, cs: &CREATESTRUCTW) -> Result<Rc<Self>> {
         let state = WindowsWindowState::new(
             hwnd,
