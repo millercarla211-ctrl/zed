@@ -498,6 +498,12 @@ impl WindowsWindowInner {
             unsafe {
                 let _ = SetCapture(handle);
             }
+            send_webview_mouse_move(
+                &self.state.webview_hover_active,
+                &target,
+                relative_point,
+                webview_mouse_virtual_keys(current_modifiers(), None),
+            );
             send_webview_mouse_input(
                 &target,
                 event_kind,
@@ -559,6 +565,12 @@ impl WindowsWindowInner {
                 webview_mouse_virtual_keys(current_modifiers(), None),
                 webview_button_mouse_data(button),
                 relative_point,
+            );
+            send_webview_mouse_move(
+                &self.state.webview_hover_active,
+                &target,
+                relative_point,
+                webview_mouse_virtual_keys(current_modifiers(), None),
             );
             if button == MouseButton::Left {
                 focus_webview_element_at_point(&target, relative_point);
@@ -1216,6 +1228,22 @@ impl WindowsWindowInner {
             )
         {
             return None;
+        }
+        let mut cursor_point = POINT::default();
+        unsafe {
+            if GetCursorPos(&mut cursor_point).is_ok() {
+                ScreenToClient(handle, &mut cursor_point).ok().log_err();
+                if let Some((target, relative_point)) =
+                    webview_passthrough_target_for_point(&self.state, handle, cursor_point)
+                {
+                    send_webview_mouse_move(
+                        &self.state.webview_hover_active,
+                        &target,
+                        relative_point,
+                        webview_mouse_virtual_keys(current_modifiers(), None),
+                    );
+                }
+            }
         }
         if let Some(cursor) = self.webview_cursor(handle) {
             unsafe {
