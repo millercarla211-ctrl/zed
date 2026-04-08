@@ -40,6 +40,7 @@ pub struct WebviewPassthroughTarget {
     pub controller: ICoreWebView2CompositionController,
     pub bounds: RECT,
     pub cursor: Option<HCURSOR>,
+    pub keyboard_focused: bool,
 }
 
 thread_local! {
@@ -57,12 +58,15 @@ pub fn register_webview_passthrough_target(
     }
 
     WEBVIEW_PASSTHROUGH_REGISTRY.with(|registry| {
-        registry.borrow_mut().insert(
+        let mut registry = registry.borrow_mut();
+        let existing = registry.get(&(main_window.0 as isize)).cloned();
+        registry.insert(
             main_window.0 as isize,
             WebviewPassthroughTarget {
                 controller,
                 bounds,
-                cursor: None,
+                cursor: existing.as_ref().and_then(|target| target.cursor),
+                keyboard_focused: existing.is_some_and(|target| target.keyboard_focused),
             },
         );
     });
@@ -76,6 +80,18 @@ pub fn update_webview_passthrough_cursor(main_window: HWND, cursor: Option<HCURS
     WEBVIEW_PASSTHROUGH_REGISTRY.with(|registry| {
         if let Some(target) = registry.borrow_mut().get_mut(&(main_window.0 as isize)) {
             target.cursor = cursor;
+        }
+    });
+}
+
+pub fn update_webview_passthrough_focus(main_window: HWND, keyboard_focused: bool) {
+    if main_window.0.is_null() {
+        return;
+    }
+
+    WEBVIEW_PASSTHROUGH_REGISTRY.with(|registry| {
+        if let Some(target) = registry.borrow_mut().get_mut(&(main_window.0 as isize)) {
+            target.keyboard_focused = keyboard_focused;
         }
     });
 }

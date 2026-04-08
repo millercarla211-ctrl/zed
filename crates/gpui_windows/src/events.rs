@@ -362,6 +362,10 @@ impl WindowsWindowInner {
     }
 
     fn handle_syskeyup_msg(&self, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
+        if self.webview_keyboard_focused() {
+            return None;
+        }
+
         let input = handle_key_event(wparam, lparam, &self.state, |keystroke, _| {
             PlatformInput::KeyUp(KeyUpEvent { keystroke })
         })?;
@@ -377,6 +381,10 @@ impl WindowsWindowInner {
     // It's a known bug that you can't trigger `ctrl-shift-0`. See:
     // https://superuser.com/questions/1455762/ctrl-shift-number-key-combination-has-stopped-working-for-a-few-numbers
     fn handle_keydown_msg(&self, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
+        if self.webview_keyboard_focused() {
+            return Some(1);
+        }
+
         let Some(input) = handle_key_event(
             wparam,
             lparam,
@@ -404,6 +412,10 @@ impl WindowsWindowInner {
     }
 
     fn handle_keyup_msg(&self, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
+        if self.webview_keyboard_focused() {
+            return None;
+        }
+
         let Some(input) = handle_key_event(wparam, lparam, &self.state, |keystroke, _| {
             PlatformInput::KeyUp(KeyUpEvent { keystroke })
         }) else {
@@ -421,6 +433,10 @@ impl WindowsWindowInner {
     }
 
     fn handle_char_msg(&self, wparam: WPARAM) -> Option<isize> {
+        if self.webview_keyboard_focused() {
+            return None;
+        }
+
         let input = self.parse_char_message(wparam)?;
         self.with_input_handler(|input_handler| {
             input_handler.replace_text_in_range(None, &input);
@@ -449,6 +465,7 @@ impl WindowsWindowInner {
             && let Some(event_kind) = webview_mouse_button_down_kind(button, click_count)
         {
             self.state.webview_input_captured.set(true);
+            update_webview_passthrough_focus(handle, true);
             unsafe {
                 let _ = SetCapture(handle);
             }
@@ -462,6 +479,8 @@ impl WindowsWindowInner {
             focus_webview_controller(&target);
             return Some(0);
         }
+
+        update_webview_passthrough_focus(handle, false);
 
         unsafe { SetCapture(handle) };
 
@@ -1381,6 +1400,11 @@ impl WindowsWindowInner {
         self.state.input_handler.set(Some(input_handler));
         result
     }
+
+    fn webview_keyboard_focused(&self) -> bool {
+        webview_passthrough_target(self.platform_window_handle)
+            .is_some_and(|target| target.keyboard_focused)
+    }
 }
 
 fn webview_passthrough_target_for_point(
@@ -1582,7 +1606,7 @@ fn webview_button_mouse_data(button: MouseButton) -> u32 {
 }
 
 fn wheel_mouse_data_from_wparam(wparam: WPARAM) -> u32 {
-    ((wparam.signed_hiword() as u16 as u32) << 16) & 0xffff_0000
+    (wparam.signed_hiword() as i16 as i32) as u32
 }
 
 struct ImeContext {

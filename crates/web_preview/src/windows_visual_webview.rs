@@ -8,12 +8,13 @@ use gpui_windows::{
     clear_webview_passthrough_target, create_webview_composition_visual,
     register_webview_passthrough_target, remove_webview_composition_visual,
     set_webview_composition_visual_offset, update_webview_passthrough_cursor,
+    update_webview_passthrough_focus,
 };
 use webview2_com::{
     AddScriptToExecuteOnDocumentCreatedCompletedHandler, ClearBrowsingDataCompletedHandler,
     CoreWebView2EnvironmentOptions, CreateCoreWebView2CompositionControllerCompletedHandler,
     CreateCoreWebView2EnvironmentCompletedHandler, CursorChangedEventHandler,
-    DocumentTitleChangedEventHandler, ExecuteScriptCompletedHandler,
+    DocumentTitleChangedEventHandler, ExecuteScriptCompletedHandler, FocusChangedEventHandler,
     NavigationCompletedEventHandler, WebMessageReceivedEventHandler, take_pwstr, wait_with_pump,
 };
 use windows::{
@@ -41,6 +42,8 @@ pub(crate) struct WindowsVisualWebView {
     webview: ICoreWebView2,
     visual: windows::Win32::Graphics::DirectComposition::IDCompositionVisual,
     cursor_changed_token: i64,
+    got_focus_token: i64,
+    lost_focus_token: i64,
     last_bounds: Option<RECT>,
     visible: bool,
 }
@@ -84,10 +87,13 @@ impl WindowsVisualWebView {
             webview,
             visual,
             cursor_changed_token: 0,
+            got_focus_token: 0,
+            lost_focus_token: 0,
             last_bounds: None,
             visible: true,
         };
         this.register_cursor_handler()?;
+        this.register_focus_handlers()?;
         this.sync_cursor();
         this.set_bounds(bounds, scale_factor)?;
         this.load_url(initial_url)?;
@@ -146,6 +152,7 @@ impl WindowsVisualWebView {
     }
 
     pub(crate) fn focus_parent(&self) -> Result<()> {
+        update_webview_passthrough_focus(self.main_window, false);
         unsafe { SetFocus(Some(self.main_window))? };
         Ok(())
     }
@@ -166,6 +173,7 @@ impl WindowsVisualWebView {
         } else {
             clear_webview_passthrough_target(self.main_window);
             update_webview_passthrough_cursor(self.main_window, None);
+            update_webview_passthrough_focus(self.main_window, false);
         }
         Ok(())
     }
@@ -238,6 +246,25 @@ impl WindowsVisualWebView {
             }
         }
     }
+
+    fn register_focus_handlers(&mut self) -> Result<()> {
+        let main_window = self.main_window;
+        let got_focus = FocusChangedEventHandler::create(Box::new(move |_, _| {
+            update_webview_passthrough_focus(main_window, true);
+            Ok(())
+        }));
+        let lost_focus = FocusChangedEventHandler::create(Box::new(move |_, _| {
+            update_webview_passthrough_focus(main_window, false);
+            Ok(())
+        }));
+        unsafe {
+            self.controller
+                .add_GotFocus(&got_focus, &mut self.got_focus_token)?;
+            self.controller
+                .add_LostFocus(&lost_focus, &mut self.lost_focus_token)?;
+        }
+        Ok(())
+    }
 }
 
 impl Drop for WindowsVisualWebView {
@@ -249,6 +276,12 @@ impl Drop for WindowsVisualWebView {
                 let _ = self
                     .composition_controller
                     .remove_CursorChanged(self.cursor_changed_token);
+            }
+            if self.got_focus_token != 0 {
+                let _ = self.controller.remove_GotFocus(self.got_focus_token);
+            }
+            if self.lost_focus_token != 0 {
+                let _ = self.controller.remove_LostFocus(self.lost_focus_token);
             }
             let _ = self.controller.Close();
         }
