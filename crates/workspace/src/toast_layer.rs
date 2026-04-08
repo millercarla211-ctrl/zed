@@ -222,12 +222,9 @@ impl Render for ToastLayer {
             return div();
         };
 
-        div().absolute().size_full().top_0().right_0().child(
+        div().absolute().top(px(12.)).right(px(12.)).child(
             v_flex()
                 .id(("toast-layer-container", active_toast.id))
-                .absolute()
-                .top(px(12.))
-                .right(px(12.))
                 .flex()
                 .flex_col()
                 .items_end()

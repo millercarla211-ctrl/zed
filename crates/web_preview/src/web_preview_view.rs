@@ -34,6 +34,8 @@ use crate::windows_visual_webview::WindowsVisualWebView;
 use crate::{OpenPreview, OpenPreviewToTheSide};
 
 #[cfg(target_os = "windows")]
+use gpui_windows::window_has_focused_webview;
+#[cfg(target_os = "windows")]
 use image::{ImageFormat as ExternalImageFormat, RgbaImage, imageops, imageops::FilterType};
 #[cfg(target_os = "windows")]
 use raw_window_handle::{
@@ -394,7 +396,18 @@ impl WebPreviewView {
         cx.notify();
     }
 
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    fn release_native_preview_focus(&self) {
+        let borrow = self.native_preview.borrow();
+        if let Some(preview) = borrow.as_ref() {
+            let _ = preview
+                .webview
+                .evaluate_script("window.__zedHostInput?.setTarget?.(null);");
+            let _ = preview.webview.focus_parent();
+        }
+    }
+
+    #[cfg(target_os = "macos")]
     fn release_native_preview_focus(&self) {
         let borrow = self.native_preview.borrow();
         if let Some(preview) = borrow.as_ref() {
@@ -405,15 +418,35 @@ impl WebPreviewView {
     #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     fn release_native_preview_focus(&self) {}
 
+    fn activate_url_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let focus_handle = self.url_editor.focus_handle(cx);
+        #[cfg(target_os = "windows")]
+        let should_select_all = RawParentWindow::from_window(window)
+            .map(|parent_window| window_has_focused_webview(parent_window.as_hwnd()))
+            .unwrap_or_else(|_| !focus_handle.is_focused(window));
+        #[cfg(not(target_os = "windows"))]
+        let should_select_all = !focus_handle.is_focused(window);
+
+        self.release_native_preview_focus();
+        let preview_focus_handle = self.focus_handle(cx);
+        window.focus(&preview_focus_handle, cx);
+        cx.defer_in(window, move |this, window, cx| {
+            window.focus(&focus_handle, cx);
+            if should_select_all {
+                this.url_editor.update(cx, |editor, cx| {
+                    editor.select_all(&editor::actions::SelectAll, window, cx);
+                });
+            }
+        });
+    }
+
     fn focus_url_editor(
         &mut self,
-        _: &gpui::MouseDownEvent,
+        _: &gpui::MouseUpEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.release_native_preview_focus();
-        let focus_handle = self.url_editor.focus_handle(cx);
-        window.focus(&focus_handle, cx);
+        self.activate_url_editor(window, cx);
     }
 
     fn navigate_to_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1703,10 +1736,15 @@ impl Render for WebPreviewView {
                                     .h_8()
                                     .min_w_0()
                                     .px_3()
+                                    .occlude()
                                     .rounded_full()
                                     .bg(cx.theme().colors().editor_background)
                                     .border_1()
                                     .border_color(cx.theme().colors().border_variant)
+                                    .on_mouse_up(
+                                        MouseButton::Left,
+                                        cx.listener(Self::focus_url_editor),
+                                    )
                                     .child(
                                         h_flex()
                                             .size_full()
@@ -1716,10 +1754,6 @@ impl Render for WebPreviewView {
                                                 div()
                                                     .flex_1()
                                                     .min_w_0()
-                                                    .on_mouse_down(
-                                                        MouseButton::Left,
-                                                        cx.listener(Self::focus_url_editor),
-                                                    )
                                                     .child(self.url_editor.clone()),
                                             )
                                             .child(
