@@ -511,7 +511,6 @@ impl WindowsWindowInner {
                 webview_button_mouse_data(button),
                 relative_point,
             );
-            focus_webview_controller(handle, &target);
             return Some(0);
         }
 
@@ -575,7 +574,6 @@ impl WindowsWindowInner {
             if button == MouseButton::Left {
                 focus_webview_element_at_point(&target, relative_point);
                 update_webview_passthrough_focus(handle, true);
-                focus_webview_controller(handle, &target);
             }
             return Some(0);
         }
@@ -1545,17 +1543,6 @@ fn send_webview_mouse_input(
             .controller
             .SendMouseInput(event_kind, virtual_keys, mouse_data, point)
             .log_err();
-    }
-}
-
-fn focus_webview_controller(handle: HWND, target: &WebviewPassthroughTarget) {
-    unsafe {
-        SetFocus(Some(handle)).log_err();
-        if let Ok(controller) = target.controller.cast::<ICoreWebView2Controller>() {
-            controller
-                .MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)
-                .log_err();
-        }
     }
 }
 
