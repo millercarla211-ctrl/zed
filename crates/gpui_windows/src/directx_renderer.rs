@@ -99,7 +99,8 @@ struct DirectXGlobalElements {
 struct DirectComposition {
     comp_device: IDCompositionDevice,
     comp_target: IDCompositionTarget,
-    comp_visual: IDCompositionVisual,
+    root_visual: IDCompositionVisual,
+    gpui_visual: IDCompositionVisual,
 }
 
 impl DirectXRendererDevices {
@@ -178,6 +179,32 @@ impl DirectXRenderer {
 
     pub(crate) fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {
         self.atlas.clone()
+    }
+
+    pub(crate) fn create_webview_visual(&self) -> Result<IDCompositionVisual> {
+        self.direct_composition
+            .as_ref()
+            .context("DirectComposition is disabled for this window")?
+            .create_webview_visual_below_gpui()
+    }
+
+    pub(crate) fn remove_webview_visual(&self, visual: &IDCompositionVisual) -> Result<()> {
+        self.direct_composition
+            .as_ref()
+            .context("DirectComposition is disabled for this window")?
+            .remove_webview_visual(visual)
+    }
+
+    pub(crate) fn set_webview_visual_offset(
+        &self,
+        visual: &IDCompositionVisual,
+        x: f32,
+        y: f32,
+    ) -> Result<()> {
+        self.direct_composition
+            .as_ref()
+            .context("DirectComposition is disabled for this window")?
+            .set_webview_visual_offset(visual, x, y)
     }
 
     fn pre_draw(&self, clear_color: &[f32; 4]) -> Result<()> {
@@ -895,19 +922,59 @@ impl DirectComposition {
     pub fn new(dxgi_device: &IDXGIDevice, hwnd: HWND) -> Result<Self> {
         let comp_device = get_comp_device(dxgi_device)?;
         let comp_target = unsafe { comp_device.CreateTargetForHwnd(hwnd, true) }?;
-        let comp_visual = unsafe { comp_device.CreateVisual() }?;
+        let root_visual = unsafe { comp_device.CreateVisual() }?;
+        let gpui_visual = unsafe { comp_device.CreateVisual() }?;
+
+        unsafe {
+            root_visual.AddVisual(&gpui_visual, true, None::<&IDCompositionVisual>)?;
+            comp_target.SetRoot(&root_visual)?;
+            comp_device.Commit()?;
+        }
 
         Ok(Self {
             comp_device,
             comp_target,
-            comp_visual,
+            root_visual,
+            gpui_visual,
         })
     }
 
     pub fn set_swap_chain(&self, swap_chain: &IDXGISwapChain1) -> Result<()> {
         unsafe {
-            self.comp_visual.SetContent(swap_chain)?;
-            self.comp_target.SetRoot(&self.comp_visual)?;
+            self.gpui_visual.SetContent(swap_chain)?;
+            self.comp_target.SetRoot(&self.root_visual)?;
+            self.comp_device.Commit()?;
+        }
+        Ok(())
+    }
+
+    pub fn create_webview_visual_below_gpui(&self) -> Result<IDCompositionVisual> {
+        let visual = unsafe { self.comp_device.CreateVisual() }?;
+        unsafe {
+            self.root_visual
+                .AddVisual(&visual, false, Some(&self.gpui_visual))?;
+            self.comp_device.Commit()?;
+        }
+        Ok(visual)
+    }
+
+    pub fn remove_webview_visual(&self, visual: &IDCompositionVisual) -> Result<()> {
+        unsafe {
+            self.root_visual.RemoveVisual(visual)?;
+            self.comp_device.Commit()?;
+        }
+        Ok(())
+    }
+
+    pub fn set_webview_visual_offset(
+        &self,
+        visual: &IDCompositionVisual,
+        x: f32,
+        y: f32,
+    ) -> Result<()> {
+        unsafe {
+            visual.SetOffsetX2(x)?;
+            visual.SetOffsetY2(y)?;
             self.comp_device.Commit()?;
         }
         Ok(())

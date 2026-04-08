@@ -2,6 +2,7 @@
 
 use std::{
     cell::{Cell, RefCell},
+    collections::HashMap,
     num::NonZeroIsize,
     path::PathBuf,
     rc::{Rc, Weak},
@@ -15,9 +16,11 @@ use anyhow::{Context as _, Result};
 use futures::channel::oneshot::{self, Receiver};
 use raw_window_handle as rwh;
 use smallvec::SmallVec;
+use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2CompositionController;
 use windows::{
     Win32::{
         Foundation::*,
+        Graphics::DirectComposition::IDCompositionVisual,
         Graphics::Dwm::*,
         Graphics::Gdi::*,
         System::{
@@ -31,6 +34,109 @@ use windows::{
 use crate::direct_manipulation::DirectManipulationHandler;
 use crate::*;
 use gpui::*;
+
+#[derive(Clone)]
+pub struct WebviewPassthroughTarget {
+    pub controller: ICoreWebView2CompositionController,
+    pub bounds: RECT,
+    pub cursor: Option<HCURSOR>,
+}
+
+thread_local! {
+    static WEBVIEW_PASSTHROUGH_REGISTRY: RefCell<HashMap<isize, WebviewPassthroughTarget>> =
+        RefCell::new(HashMap::new());
+}
+
+pub fn register_webview_passthrough_target(
+    main_window: HWND,
+    controller: ICoreWebView2CompositionController,
+    bounds: RECT,
+) {
+    if main_window.0.is_null() {
+        return;
+    }
+
+    WEBVIEW_PASSTHROUGH_REGISTRY.with(|registry| {
+        registry.borrow_mut().insert(
+            main_window.0 as isize,
+            WebviewPassthroughTarget {
+                controller,
+                bounds,
+                cursor: None,
+            },
+        );
+    });
+}
+
+pub fn update_webview_passthrough_cursor(main_window: HWND, cursor: Option<HCURSOR>) {
+    if main_window.0.is_null() {
+        return;
+    }
+
+    WEBVIEW_PASSTHROUGH_REGISTRY.with(|registry| {
+        if let Some(target) = registry.borrow_mut().get_mut(&(main_window.0 as isize)) {
+            target.cursor = cursor;
+        }
+    });
+}
+
+pub fn clear_webview_passthrough_target(main_window: HWND) {
+    if main_window.0.is_null() {
+        return;
+    }
+
+    WEBVIEW_PASSTHROUGH_REGISTRY.with(|registry| {
+        registry.borrow_mut().remove(&(main_window.0 as isize));
+    });
+}
+
+pub(crate) fn lookup_webview_passthrough_target(
+    main_window: HWND,
+    client_point: POINT,
+) -> Option<WebviewPassthroughTarget> {
+    let target = webview_passthrough_target(main_window)?;
+    let bounds = target.bounds;
+    (client_point.x >= bounds.left
+        && client_point.x < bounds.right
+        && client_point.y >= bounds.top
+        && client_point.y < bounds.bottom)
+        .then_some(target)
+}
+
+pub(crate) fn webview_passthrough_target(main_window: HWND) -> Option<WebviewPassthroughTarget> {
+    WEBVIEW_PASSTHROUGH_REGISTRY
+        .with(|registry| registry.borrow().get(&(main_window.0 as isize)).cloned())
+}
+
+pub fn create_webview_composition_visual(main_window: HWND) -> Result<IDCompositionVisual> {
+    let window = window_from_hwnd(main_window)
+        .ok_or_else(|| anyhow::anyhow!("Failed to locate the GPUI window for the web preview"))?;
+    window.state.renderer.borrow().create_webview_visual()
+}
+
+pub fn remove_webview_composition_visual(
+    main_window: HWND,
+    visual: &IDCompositionVisual,
+) -> Result<()> {
+    let window = window_from_hwnd(main_window)
+        .ok_or_else(|| anyhow::anyhow!("Failed to locate the GPUI window for the web preview"))?;
+    window.state.renderer.borrow().remove_webview_visual(visual)
+}
+
+pub fn set_webview_composition_visual_offset(
+    main_window: HWND,
+    visual: &IDCompositionVisual,
+    x: f32,
+    y: f32,
+) -> Result<()> {
+    let window = window_from_hwnd(main_window)
+        .ok_or_else(|| anyhow::anyhow!("Failed to locate the GPUI window for the web preview"))?;
+    window
+        .state
+        .renderer
+        .borrow()
+        .set_webview_visual_offset(visual, x, y)
+}
 
 pub(crate) struct WindowsWindow(pub Rc<WindowsWindowInner>);
 
@@ -68,6 +174,8 @@ pub struct WindowsWindowState {
     pub current_cursor: Cell<Option<HCURSOR>>,
     pub nc_button_pressed: Cell<Option<u32>>,
     pub mouse_passthrough_snapshot: RefCell<MousePassthroughSnapshot>,
+    pub webview_hover_active: Cell<bool>,
+    pub webview_input_captured: Cell<bool>,
 
     pub display: Cell<WindowsDisplay>,
     /// Flag to instruct the `VSyncProvider` thread to invalidate the directx devices
@@ -161,6 +269,8 @@ impl WindowsWindowState {
             current_cursor: Cell::new(current_cursor),
             nc_button_pressed: Cell::new(nc_button_pressed),
             mouse_passthrough_snapshot: RefCell::default(),
+            webview_hover_active: Cell::new(false),
+            webview_input_captured: Cell::new(false),
             display: Cell::new(display),
             fullscreen: Cell::new(fullscreen),
             initial_placement: Cell::new(initial_placement),
@@ -948,11 +1058,9 @@ impl PlatformWindow for WindowsWindow {
 
     fn set_mouse_passthrough_snapshot(&self, snapshot: MousePassthroughSnapshot) {
         *self.0.state.mouse_passthrough_snapshot.borrow_mut() = snapshot;
-        apply_mouse_passthrough_region(
-            self.0.hwnd,
-            self.0.state.scale_factor.get(),
-            &self.0.state.mouse_passthrough_snapshot.borrow(),
-        );
+        unsafe {
+            SetWindowRgn(self.0.hwnd, None, true);
+        }
     }
 
     fn on_hit_test_passthrough(&self, callback: Box<dyn FnMut(Point<Pixels>) -> bool>) {
@@ -1006,187 +1114,6 @@ impl PlatformWindow for WindowsWindow {
         // MB_OK: The sound specified as the Windows Default Beep sound.
         let _ = unsafe { MessageBeep(MB_OK) };
     }
-}
-
-fn apply_mouse_passthrough_region(
-    hwnd: HWND,
-    scale_factor: f32,
-    snapshot: &MousePassthroughSnapshot,
-) {
-    if snapshot.has_captured_hitbox || snapshot.regions.is_empty() {
-        unsafe {
-            SetWindowRgn(hwnd, None, true);
-        }
-        return;
-    }
-
-    let mut client_rect = RECT::default();
-    let mut window_rect = RECT::default();
-    let mut client_origin = POINT::default();
-    unsafe {
-        if GetClientRect(hwnd, &mut client_rect).is_err()
-            || GetWindowRect(hwnd, &mut window_rect).is_err()
-        {
-            return;
-        }
-        if !ClientToScreen(hwnd, &mut client_origin).as_bool() {
-            return;
-        }
-    }
-
-    let client_offset = POINT {
-        x: client_origin.x - window_rect.left,
-        y: client_origin.y - window_rect.top,
-    };
-
-    let window_width = window_rect.right - window_rect.left;
-    let window_height = window_rect.bottom - window_rect.top;
-
-    let region = unsafe { CreateRectRgn(0, 0, window_width, window_height) };
-    if region.is_invalid() {
-        return;
-    }
-
-    let passthrough_rects: Vec<_> = snapshot
-        .regions
-        .iter()
-        .filter_map(|passthrough| {
-            physical_rect_for_bounds(passthrough.bounds, scale_factor, client_rect, client_offset)
-        })
-        .collect();
-
-    for rect in &passthrough_rects {
-        let hole = unsafe { CreateRectRgn(rect.left, rect.top, rect.right, rect.bottom) };
-        if hole.is_invalid() {
-            continue;
-        }
-        unsafe {
-            let _ = CombineRgn(Some(region), Some(region), Some(hole), RGN_DIFF);
-            let _ = DeleteObject(HGDIOBJ(hole.0));
-        }
-    }
-
-    for hitbox in snapshot
-        .hitboxes
-        .iter()
-        .filter(|hitbox| snapshot.interactive_hitbox_ids.contains(&hitbox.id))
-    {
-        let bounds = hitbox.bounds.intersect(&hitbox.content_mask.bounds);
-        if let Some(rect) =
-            physical_rect_for_bounds(bounds, scale_factor, client_rect, client_offset)
-        {
-            let mut pieces = vec![rect];
-            for passthrough_rect in &passthrough_rects {
-                pieces = pieces
-                    .into_iter()
-                    .flat_map(|piece| subtract_rect(piece, *passthrough_rect))
-                    .collect();
-                if pieces.is_empty() {
-                    break;
-                }
-            }
-
-            for piece in pieces {
-                let interactive =
-                    unsafe { CreateRectRgn(piece.left, piece.top, piece.right, piece.bottom) };
-                if interactive.is_invalid() {
-                    continue;
-                }
-                unsafe {
-                    let _ = CombineRgn(Some(region), Some(region), Some(interactive), RGN_OR);
-                    let _ = DeleteObject(HGDIOBJ(interactive.0));
-                }
-            }
-        }
-    }
-
-    unsafe {
-        if SetWindowRgn(hwnd, Some(region), true) == 0 {
-            let _ = DeleteObject(HGDIOBJ(region.0));
-        }
-    }
-}
-
-fn physical_rect_for_bounds(
-    bounds: Bounds<Pixels>,
-    scale_factor: f32,
-    client_rect: RECT,
-    client_offset: POINT,
-) -> Option<RECT> {
-    let left = (bounds.origin.x.as_f32() * scale_factor).floor() as i32;
-    let top = (bounds.origin.y.as_f32() * scale_factor).floor() as i32;
-    let right =
-        ((bounds.origin.x.as_f32() + bounds.size.width.as_f32()) * scale_factor).ceil() as i32;
-    let bottom =
-        ((bounds.origin.y.as_f32() + bounds.size.height.as_f32()) * scale_factor).ceil() as i32;
-
-    let rect = RECT {
-        left: left.clamp(client_rect.left, client_rect.right) + client_offset.x,
-        top: top.clamp(client_rect.top, client_rect.bottom) + client_offset.y,
-        right: right.clamp(client_rect.left, client_rect.right) + client_offset.x,
-        bottom: bottom.clamp(client_rect.top, client_rect.bottom) + client_offset.y,
-    };
-
-    (rect.right > rect.left && rect.bottom > rect.top).then_some(rect)
-}
-
-fn subtract_rect(source: RECT, cut: RECT) -> Vec<RECT> {
-    let Some(intersection) = intersect_rect(source, cut) else {
-        return vec![source];
-    };
-
-    let mut pieces = Vec::with_capacity(4);
-
-    if source.top < intersection.top {
-        pieces.push(RECT {
-            left: source.left,
-            top: source.top,
-            right: source.right,
-            bottom: intersection.top,
-        });
-    }
-
-    if intersection.bottom < source.bottom {
-        pieces.push(RECT {
-            left: source.left,
-            top: intersection.bottom,
-            right: source.right,
-            bottom: source.bottom,
-        });
-    }
-
-    if source.left < intersection.left {
-        pieces.push(RECT {
-            left: source.left,
-            top: intersection.top,
-            right: intersection.left,
-            bottom: intersection.bottom,
-        });
-    }
-
-    if intersection.right < source.right {
-        pieces.push(RECT {
-            left: intersection.right,
-            top: intersection.top,
-            right: source.right,
-            bottom: intersection.bottom,
-        });
-    }
-
-    pieces
-        .into_iter()
-        .filter(|rect| rect.right > rect.left && rect.bottom > rect.top)
-        .collect()
-}
-
-fn intersect_rect(a: RECT, b: RECT) -> Option<RECT> {
-    let rect = RECT {
-        left: a.left.max(b.left),
-        top: a.top.max(b.top),
-        right: a.right.min(b.right),
-        bottom: a.bottom.min(b.bottom),
-    };
-    (rect.right > rect.left && rect.bottom > rect.top).then_some(rect)
 }
 
 #[implement(IDropTarget)]

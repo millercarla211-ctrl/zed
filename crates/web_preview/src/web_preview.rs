@@ -2,6 +2,8 @@ use gpui::{App, actions};
 use workspace::Workspace;
 
 pub mod web_preview_view;
+#[cfg(target_os = "windows")]
+pub(crate) mod windows_visual_webview;
 
 actions!(
     web_preview,

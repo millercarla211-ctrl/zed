@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - GPUI now yields cursor ownership while the pointer is over the web preview passthrough body so the native webview cursor no longer flickers against GPUI over video regions.
 - Windows web preview mouse-move relay now also sends native `WM_SETCURSOR`, so browser hover and cursor updates can work through the GPUI overlay path.
 - Windows web preview body no longer registers GPUI mouse listeners, so the native underlay hole can keep ownership of hover and wheel input instead of fighting the relay path.
+- Windows web preview now forwards hover and wheel through the stable root webview HWND from the Windows message pump, instead of chasing transient Chromium child windows that caused laggy hover and dead wheel input.
 
 ---
 

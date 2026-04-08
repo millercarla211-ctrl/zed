@@ -759,17 +759,21 @@ pub struct MousePassthroughSnapshot {
 }
 
 impl MousePassthroughSnapshot {
+    /// Returns whether the point falls inside any passthrough region, ignoring overlay hitboxes.
+    pub fn contains_passthrough_region(&self, position: Point<Pixels>) -> bool {
+        self.regions
+            .iter()
+            .any(|region| region.bounds.contains(&position))
+    }
+
     /// Returns whether the platform window should yield mouse input at the given point.
+    /// Returns whether the platform window should yield mouse hit-testing at the given point.
     pub fn should_mouse_passthrough(&self, position: Point<Pixels>) -> bool {
         if self.has_captured_hitbox {
             return false;
         }
 
-        if !self
-            .regions
-            .iter()
-            .any(|region| region.bounds.contains(&position))
-        {
+        if !self.contains_passthrough_region(position) {
             return false;
         }
 

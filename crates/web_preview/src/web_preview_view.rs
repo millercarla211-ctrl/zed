@@ -19,7 +19,7 @@ use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
     rc::Rc,
-    sync::{Arc, Mutex, Once},
+    sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
 #[cfg(target_os = "windows")]
@@ -29,6 +29,8 @@ use workspace::item::{Item, ItemEvent, PaneTabBarControls};
 use workspace::notifications::NotificationId;
 use workspace::{NewWebPreview, Pane, Toast, Workspace, WorkspaceId};
 
+#[cfg(target_os = "windows")]
+use crate::windows_visual_webview::WindowsVisualWebView;
 use crate::{OpenPreview, OpenPreviewToTheSide};
 
 #[cfg(target_os = "windows")]
@@ -38,30 +40,15 @@ use raw_window_handle::{
     HandleError, HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle,
 };
 #[cfg(target_os = "windows")]
-use windows::Win32::UI::Input::KeyboardAndMouse::{ReleaseCapture, SetCapture};
-#[cfg(target_os = "windows")]
 use windows::Win32::{
-    Foundation::{HWND, LPARAM, POINT, RECT, WPARAM},
+    Foundation::{HWND, POINT, RECT},
     Graphics::Gdi::{
         BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BitBlt, CAPTUREBLT, ClientToScreen,
         CreateCompatibleBitmap, CreateCompatibleDC, DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC,
-        GetDIBits, HBITMAP, HGDIOBJ, MapWindowPoints, ReleaseDC, SRCCOPY, SelectObject,
-    },
-    System::LibraryLoader::GetModuleHandleW,
-    UI::WindowsAndMessaging::{
-        CWP_SKIPDISABLED, CWP_SKIPINVISIBLE, CWP_SKIPTRANSPARENT, ChildWindowFromPointEx,
-        CreateWindowExW, DefWindowProcW, DestroyWindow, FindWindowExW, GUITHREADINFO, GWL_STYLE,
-        GetGUIThreadInfo, GetWindowLongPtrW, HTCLIENT, HWND_BOTTOM, IsChild, RegisterClassW,
-        SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-        SWP_SHOWWINDOW, SendMessageW, SetWindowLongPtrW, SetWindowPos, ShowWindow, WINDOW_EX_STYLE,
-        WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE,
-        WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WNDCLASSW, WS_CLIPCHILDREN,
-        WS_CLIPSIBLINGS, WS_EX_TOOLWINDOW, WS_POPUP,
+        GetDIBits, HBITMAP, HGDIOBJ, ReleaseDC, SRCCOPY, SelectObject,
     },
 };
-#[cfg(target_os = "windows")]
-use wry::WebViewBuilderExtWindows;
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[cfg(target_os = "macos")]
 use wry::{
     PageLoadEvent, Rect as WryRect, WebContext, WebView, WebViewBuilder,
     dpi::{LogicalPosition, LogicalSize, Position, Size},
@@ -97,7 +84,7 @@ enum PreviewLoadState {
 }
 
 #[derive(Clone, Debug)]
-enum BrowserEvent {
+pub(crate) enum BrowserEvent {
     UrlChanged(String),
     TitleChanged(String),
     IpcMessage(String),
@@ -130,12 +117,15 @@ struct BrowserRect {
     height: f64,
 }
 
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[cfg(target_os = "windows")]
+struct NativeWebPreview {
+    webview: WindowsVisualWebView,
+}
+
+#[cfg(target_os = "macos")]
 struct NativeWebPreview {
     _context: Box<WebContext>,
     webview: WebView,
-    #[cfg(target_os = "windows")]
-    underlay_host: WindowsUnderlayHostWindow,
 }
 
 #[cfg(target_os = "windows")]
@@ -163,50 +153,6 @@ impl RawParentWindow {
 
 #[cfg(target_os = "windows")]
 impl HasWindowHandle for RawParentWindow {
-    fn window_handle(&self) -> std::result::Result<WindowHandle<'_>, HandleError> {
-        let handle = Win32WindowHandle::new(self.hwnd);
-        Ok(unsafe { WindowHandle::borrow_raw(RawWindowHandle::Win32(handle)) })
-    }
-}
-
-#[cfg(target_os = "windows")]
-struct WindowsUnderlayHostWindow {
-    hwnd: NonZeroIsize,
-}
-
-#[cfg(target_os = "windows")]
-struct WindowsWebviewTarget {
-    host_hwnd: HWND,
-    root_hwnd: HWND,
-    root_client_point: POINT,
-    hwnd: HWND,
-    client_point: POINT,
-}
-
-#[cfg(target_os = "windows")]
-impl WindowsUnderlayHostWindow {
-    fn new(hwnd: HWND) -> Result<Self> {
-        let hwnd = NonZeroIsize::new(hwnd.0 as isize)
-            .ok_or_else(|| anyhow!("Failed to create the Windows web preview underlay host"))?;
-        Ok(Self { hwnd })
-    }
-
-    fn as_hwnd(&self) -> HWND {
-        HWND(self.hwnd.get() as *mut _)
-    }
-}
-
-#[cfg(target_os = "windows")]
-impl Drop for WindowsUnderlayHostWindow {
-    fn drop(&mut self) {
-        unsafe {
-            let _ = DestroyWindow(self.as_hwnd());
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-impl HasWindowHandle for WindowsUnderlayHostWindow {
     fn window_handle(&self) -> std::result::Result<WindowHandle<'_>, HandleError> {
         let handle = Win32WindowHandle::new(self.hwnd);
         Ok(unsafe { WindowHandle::borrow_raw(RawWindowHandle::Win32(handle)) })
@@ -468,223 +414,6 @@ impl WebPreviewView {
         self.release_native_preview_focus();
         let focus_handle = self.url_editor.focus_handle(cx);
         window.focus(&focus_handle, cx);
-    }
-
-    #[cfg(target_os = "windows")]
-    fn forward_preview_mouse_down(
-        &mut self,
-        event: &gpui::MouseDownEvent,
-        window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-        if self.forward_windows_mouse_down(event, window).is_ok() {
-            window.prevent_default();
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    fn forward_preview_mouse_move(
-        &mut self,
-        event: &gpui::MouseMoveEvent,
-        window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-        if self.forward_windows_mouse_move(event, window).is_ok() {
-            window.prevent_default();
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    fn forward_preview_mouse_up(
-        &mut self,
-        event: &gpui::MouseUpEvent,
-        window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-        if self.forward_windows_mouse_up(event, window).is_ok() {
-            window.prevent_default();
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    fn forward_preview_scroll_wheel(
-        &mut self,
-        event: &gpui::ScrollWheelEvent,
-        window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-        if self.forward_windows_scroll_wheel(event, window).is_ok() {
-            window.prevent_default();
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    fn forward_windows_mouse_down(
-        &self,
-        event: &gpui::MouseDownEvent,
-        window: &Window,
-    ) -> Result<()> {
-        let Some((message, button_mask)) = windows_mouse_down_message(event.button) else {
-            return Ok(());
-        };
-        let target = self.windows_webview_target(window, event.position)?;
-        if let Some(preview) = self.native_preview.borrow().as_ref() {
-            let _ = preview.webview.focus();
-        }
-        unsafe {
-            let _ = SetCapture(target.hwnd);
-            SendMessageW(
-                target.hwnd,
-                message,
-                Some(WPARAM(windows_mouse_wparam(event.modifiers, button_mask))),
-                Some(windows_mouse_lparam(target.client_point)),
-            );
-        }
-        Ok(())
-    }
-
-    #[cfg(target_os = "windows")]
-    fn forward_windows_mouse_move(
-        &self,
-        event: &gpui::MouseMoveEvent,
-        window: &Window,
-    ) -> Result<()> {
-        let target = self.windows_webview_target(window, event.position)?;
-        let wparam = windows_mouse_wparam(
-            event.modifiers,
-            event
-                .pressed_button
-                .and_then(windows_mouse_button_mask)
-                .unwrap_or_default(),
-        );
-        let set_cursor_lparam = windows_set_cursor_lparam(WM_MOUSEMOVE, HTCLIENT);
-        unsafe {
-            SendMessageW(
-                target.host_hwnd,
-                WM_MOUSEMOVE,
-                Some(WPARAM(wparam)),
-                Some(windows_mouse_lparam(target.root_client_point)),
-            );
-            SendMessageW(
-                target.root_hwnd,
-                WM_MOUSEMOVE,
-                Some(WPARAM(wparam)),
-                Some(windows_mouse_lparam(target.root_client_point)),
-            );
-            SendMessageW(
-                target.hwnd,
-                WM_MOUSEMOVE,
-                Some(WPARAM(wparam)),
-                Some(windows_mouse_lparam(target.client_point)),
-            );
-            SendMessageW(
-                target.host_hwnd,
-                WM_SETCURSOR,
-                Some(WPARAM(target.hwnd.0 as usize)),
-                Some(set_cursor_lparam),
-            );
-            SendMessageW(
-                target.root_hwnd,
-                WM_SETCURSOR,
-                Some(WPARAM(target.hwnd.0 as usize)),
-                Some(set_cursor_lparam),
-            );
-            if target.hwnd != target.root_hwnd {
-                SendMessageW(
-                    target.hwnd,
-                    WM_SETCURSOR,
-                    Some(WPARAM(target.hwnd.0 as usize)),
-                    Some(set_cursor_lparam),
-                );
-            }
-        }
-        Ok(())
-    }
-
-    #[cfg(target_os = "windows")]
-    fn forward_windows_mouse_up(&self, event: &gpui::MouseUpEvent, window: &Window) -> Result<()> {
-        let Some((message, button_mask)) = windows_mouse_up_message(event.button) else {
-            return Ok(());
-        };
-        let target = self.windows_webview_target(window, event.position)?;
-        unsafe {
-            SendMessageW(
-                target.hwnd,
-                message,
-                Some(WPARAM(windows_mouse_wparam(event.modifiers, button_mask))),
-                Some(windows_mouse_lparam(target.client_point)),
-            );
-            let _ = ReleaseCapture();
-        }
-        Ok(())
-    }
-
-    #[cfg(target_os = "windows")]
-    fn forward_windows_scroll_wheel(
-        &self,
-        event: &gpui::ScrollWheelEvent,
-        window: &Window,
-    ) -> Result<()> {
-        let target = self.windows_webview_target(window, event.position)?;
-        let screen_point = windows_screen_point(window, event.position)?;
-        let (horizontal, delta) = windows_scroll_message(&event.delta);
-        let message = if horizontal {
-            WM_MOUSEHWHEEL
-        } else {
-            WM_MOUSEWHEEL
-        };
-        if let Some(preview) = self.native_preview.borrow().as_ref() {
-            let _ = preview.webview.focus();
-        }
-
-        unsafe {
-            let wparam = WPARAM(
-                (((delta as u16 as u32) << 16) | windows_mouse_wparam(event.modifiers, 0) as u32)
-                    as usize,
-            );
-            let lparam = Some(windows_mouse_lparam(screen_point));
-            SendMessageW(target.host_hwnd, message, Some(wparam), lparam);
-            SendMessageW(
-                windows_scroll_target(target.root_hwnd),
-                message,
-                Some(wparam),
-                lparam,
-            );
-            if target.hwnd != target.root_hwnd {
-                SendMessageW(target.hwnd, message, Some(wparam), lparam);
-            }
-        }
-        Ok(())
-    }
-
-    #[cfg(target_os = "windows")]
-    fn windows_webview_target(
-        &self,
-        window: &Window,
-        position: gpui::Point<Pixels>,
-    ) -> Result<WindowsWebviewTarget> {
-        let preview = self.native_preview.borrow();
-        let preview = preview
-            .as_ref()
-            .ok_or_else(|| anyhow!("The native web preview is not mounted"))?;
-        let bounds = self
-            .host_bounds
-            .borrow()
-            .as_ref()
-            .copied()
-            .ok_or_else(|| anyhow!("The web preview bounds are not available"))?;
-        let root_hwnd = windows_webview_hwnd(preview)
-            .ok_or_else(|| anyhow!("Failed to locate the native web preview window"))?;
-        let root_client_point =
-            windows_preview_client_point(bounds, window.scale_factor(), position);
-        let (hwnd, client_point) = windows_deepest_webview_target(root_hwnd, root_client_point);
-        Ok(WindowsWebviewTarget {
-            host_hwnd: preview.underlay_host.as_hwnd(),
-            root_hwnd,
-            root_client_point,
-            hwnd,
-            client_point,
-        })
     }
 
     fn navigate_to_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1676,7 +1405,7 @@ impl WebPreviewView {
         }
     }
 
-    fn render_webview_body(&self, _cx: &mut Context<Self>) -> AnyElement {
+    fn render_webview_body(&self, cx: &mut Context<Self>) -> AnyElement {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
             let host_bounds = self.host_bounds.clone();
@@ -1684,7 +1413,7 @@ impl WebPreviewView {
             let last_applied_bounds = self.last_applied_bounds.clone();
             let native_preview = self.native_preview.clone();
 
-            let body = canvas(
+            let canvas = canvas(
                 move |bounds, window, _cx| {
                     *host_bounds.borrow_mut() = Some(bounds);
                     #[cfg(target_os = "windows")]
@@ -1695,7 +1424,10 @@ impl WebPreviewView {
 
                         #[cfg(target_os = "windows")]
                         {
-                            let _ = sync_windows_underlay_preview(preview, window, bounds);
+                            let _ = preview.webview.set_bounds(
+                                client_rect_for_bounds(bounds, window.scale_factor()),
+                                window.scale_factor(),
+                            );
                         }
 
                         #[cfg(target_os = "macos")]
@@ -1706,12 +1438,6 @@ impl WebPreviewView {
                                 let _ = set_webview_bounds(&preview.webview, bounds);
                                 *last_applied_bounds.borrow_mut() = Some(bounds);
                             }
-                        }
-
-                        #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
-                        {
-                            let _ = set_webview_bounds(&preview.webview, bounds);
-                            *last_applied_bounds.borrow_mut() = Some(bounds);
                         }
                     }
                     #[cfg(target_os = "windows")]
@@ -1728,12 +1454,14 @@ impl WebPreviewView {
 
             #[cfg(target_os = "windows")]
             {
-                return body.into_any_element();
+                let _ = cx;
+                return canvas.into_any_element();
             }
 
             #[cfg(not(target_os = "windows"))]
             {
-                return body.into_any_element();
+                let _ = cx;
+                return canvas.into_any_element();
             }
         }
 
@@ -1874,10 +1602,6 @@ impl Item for WebPreviewView {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         if let Some(preview) = self.native_preview.borrow_mut().as_mut() {
             let _ = preview.webview.set_visible(false);
-            #[cfg(target_os = "windows")]
-            unsafe {
-                let _ = ShowWindow(preview.underlay_host.as_hwnd(), SW_HIDE);
-            }
         }
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         _window.set_background_appearance(gpui::WindowBackgroundAppearance::Opaque);
@@ -2040,7 +1764,7 @@ impl Render for WebPreviewView {
     }
 }
 
-fn push_browser_event(event_queue: &Arc<Mutex<Vec<BrowserEvent>>>, event: BrowserEvent) {
+pub(crate) fn push_browser_event(event_queue: &Arc<Mutex<Vec<BrowserEvent>>>, event: BrowserEvent) {
     let mut queue = event_queue
         .lock()
         .expect("browser event queue lock poisoned");
@@ -2080,90 +1804,33 @@ fn create_native_preview_for_request(request: &NativePreviewMountRequest) -> Res
         .with_context(|| "Failed to prepare the Web Preview profile directory")?;
 
     let url = normalized_url(&request.initial_url)?;
-    let event_queue = request.browser_events.clone();
-    let mut web_context = Box::new(WebContext::new(Some(request.profile_dir.clone())));
     let main_window = request.parent_window.as_hwnd();
-
-    let initial_host_rect = request
+    let initial_bounds = request
         .host_bounds
         .borrow()
         .as_ref()
         .copied()
-        .and_then(|bounds| screen_rect_for_hwnd(main_window, request.scale_factor, bounds).ok())
+        .map(|bounds| client_rect_for_bounds(bounds, request.scale_factor))
         .unwrap_or(RECT {
             left: 0,
             top: 0,
             right: 32,
             bottom: 32,
         });
-    let underlay_host = create_windows_underlay_host_window(initial_host_rect)?;
-    prepare_parent_for_child_webview(underlay_host.as_hwnd());
-
-    let initial_bounds = wry_rect_for_host_rect(initial_host_rect);
-
-    eprintln!("[web-preview] create request builder");
-    let builder = WebViewBuilder::new_with_web_context(web_context.as_mut())
-        .with_bounds(initial_bounds)
-        .with_url(url.as_str())
-        .with_focused(false)
-        .with_clipboard(true)
-        .with_hotkeys_zoom(false)
-        .with_back_forward_navigation_gestures(true)
-        .with_default_context_menus(false)
-        .with_devtools(true)
-        .with_visible(true)
-        .with_browser_extensions_enabled(false)
-        .with_additional_browser_args(
-            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection",
-        )
-        .with_initialization_script(WEB_PREVIEW_BRIDGE_SCRIPT)
-        .with_document_title_changed_handler({
-            let event_queue = event_queue.clone();
-            move |title| {
-                eprintln!("[web-preview] title changed: {title}");
-                push_browser_event(&event_queue, BrowserEvent::TitleChanged(title))
-            }
-        })
-        .with_on_page_load_handler({
-            let event_queue = event_queue.clone();
-            move |event, url| {
-                if matches!(event, PageLoadEvent::Finished) {
-                    eprintln!("[web-preview] page finished: {url}");
-                    push_browser_event(&event_queue, BrowserEvent::UrlChanged(url));
-                }
-            }
-        })
-        .with_ipc_handler(move |request| {
-            push_browser_event(
-                &event_queue,
-                BrowserEvent::IpcMessage(request.body().to_string()),
-            );
-        });
 
     eprintln!("[web-preview] create request build");
-    let webview = builder
-        .build_as_child(&underlay_host)
-        .with_context(|| "Failed to build the embedded web preview")?;
-    eprintln!("[web-preview] create request built");
-    webview.zoom(request.zoom_factor)?;
+    let webview = WindowsVisualWebView::new(
+        main_window,
+        request.profile_dir.clone(),
+        url.as_str(),
+        request.zoom_factor,
+        request.scale_factor,
+        initial_bounds,
+        request.browser_events.clone(),
+    )
+    .with_context(|| "Failed to build the embedded web preview")?;
 
-    if let Some(bounds) = *request.host_bounds.borrow() {
-        eprintln!("[web-preview] create request bounds");
-        let _ = sync_windows_underlay_preview_inner(
-            &underlay_host,
-            &webview,
-            main_window,
-            request.scale_factor,
-            bounds,
-        );
-    }
-    promote_child_webviews(underlay_host.as_hwnd());
-
-    *request.native_preview.borrow_mut() = Some(NativeWebPreview {
-        _context: web_context,
-        webview,
-        underlay_host,
-    });
+    *request.native_preview.borrow_mut() = Some(NativeWebPreview { webview });
     eprintln!("[web-preview] create request done");
 
     Ok(())
@@ -2570,16 +2237,6 @@ fn set_webview_bounds(webview: &WebView, bounds: Bounds<Pixels>) -> Result<()> {
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
-fn wry_rect_for_host_rect(rect: RECT) -> WryRect {
-    let width = (rect.right - rect.left).max(1) as f64;
-    let height = (rect.bottom - rect.top).max(1) as f64;
-    WryRect {
-        position: Position::Logical(LogicalPosition::new(0.0, 0.0)),
-        size: Size::Logical(LogicalSize::new(width, height)),
-    }
-}
-
 #[cfg(target_os = "macos")]
 fn bounds_to_wry_rect(bounds: Bounds<Pixels>) -> WryRect {
     WryRect {
@@ -2595,333 +2252,14 @@ fn bounds_to_wry_rect(bounds: Bounds<Pixels>) -> WryRect {
 }
 
 #[cfg(target_os = "windows")]
-const WEB_PREVIEW_UNDERLAY_WINDOW_CLASS: windows::core::PCWSTR =
-    windows::core::w!("Zed::WebPreviewUnderlay");
-
-#[cfg(target_os = "windows")]
-const MK_LBUTTON_MASK: usize = 0x0001;
-#[cfg(target_os = "windows")]
-const MK_RBUTTON_MASK: usize = 0x0002;
-#[cfg(target_os = "windows")]
-const MK_SHIFT_MASK: usize = 0x0004;
-#[cfg(target_os = "windows")]
-const MK_CONTROL_MASK: usize = 0x0008;
-#[cfg(target_os = "windows")]
-const MK_MBUTTON_MASK: usize = 0x0010;
-
-#[cfg(target_os = "windows")]
-unsafe extern "system" fn web_preview_underlay_window_proc(
-    hwnd: HWND,
-    message: u32,
-    wparam: windows::Win32::Foundation::WPARAM,
-    lparam: windows::Win32::Foundation::LPARAM,
-) -> windows::Win32::Foundation::LRESULT {
-    unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
-}
-
-#[cfg(target_os = "windows")]
-fn register_windows_underlay_host_class() {
-    static ONCE: Once = Once::new();
-    ONCE.call_once(|| unsafe {
-        let instance = GetModuleHandleW(None).expect("module handle for web preview underlay");
-        let window_class = WNDCLASSW {
-            lpfnWndProc: Some(web_preview_underlay_window_proc),
-            lpszClassName: WEB_PREVIEW_UNDERLAY_WINDOW_CLASS,
-            hInstance: instance.into(),
-            ..Default::default()
-        };
-        let _ = RegisterClassW(&window_class);
-    });
-}
-
-#[cfg(target_os = "windows")]
-fn create_windows_underlay_host_window(rect: RECT) -> Result<WindowsUnderlayHostWindow> {
-    register_windows_underlay_host_class();
-    let instance = unsafe { GetModuleHandleW(None)? };
-    let width = (rect.right - rect.left).max(1);
-    let height = (rect.bottom - rect.top).max(1);
-    let hwnd = unsafe {
-        CreateWindowExW(
-            WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
-            WEB_PREVIEW_UNDERLAY_WINDOW_CLASS,
-            windows::core::w!(""),
-            WS_POPUP,
-            rect.left,
-            rect.top,
-            width,
-            height,
-            None,
-            None,
-            Some(instance.into()),
-            None,
-        )
-    }?;
-    WindowsUnderlayHostWindow::new(hwnd)
-}
-
-#[cfg(target_os = "windows")]
-fn sync_windows_underlay_preview(
-    preview: &mut NativeWebPreview,
-    window: &Window,
-    bounds: Bounds<Pixels>,
-) -> Result<()> {
-    let main_window = RawParentWindow::from_window(window)?.as_hwnd();
-    sync_windows_underlay_preview_inner(
-        &preview.underlay_host,
-        &preview.webview,
-        main_window,
-        window.scale_factor(),
-        bounds,
-    )
-}
-
-#[cfg(target_os = "windows")]
-fn sync_windows_underlay_preview_inner(
-    underlay_host: &WindowsUnderlayHostWindow,
-    webview: &WebView,
-    main_window: HWND,
-    scale_factor: f32,
-    bounds: Bounds<Pixels>,
-) -> Result<()> {
-    let screen_rect = screen_rect_for_hwnd(main_window, scale_factor, bounds)?;
-    let width = (screen_rect.right - screen_rect.left).max(1);
-    let height = (screen_rect.bottom - screen_rect.top).max(1);
-
-    unsafe {
-        SetWindowPos(
-            underlay_host.as_hwnd(),
-            Some(main_window),
-            screen_rect.left,
-            screen_rect.top,
-            width,
-            height,
-            SWP_NOACTIVATE | SWP_SHOWWINDOW,
-        )?;
-        let _ = ShowWindow(underlay_host.as_hwnd(), SW_SHOW);
-    }
-
-    webview.set_bounds(wry_rect_for_host_rect(screen_rect))?;
-    Ok(())
-}
-
-#[cfg(target_os = "windows")]
-fn prepare_parent_for_child_webview(hwnd: HWND) {
-    unsafe {
-        let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
-        let clipped_style = style | WS_CLIPCHILDREN.0 as isize | WS_CLIPSIBLINGS.0 as isize;
-        if clipped_style != style {
-            let _ = SetWindowLongPtrW(hwnd, GWL_STYLE, clipped_style);
-            let _ = SetWindowPos(
-                hwnd,
-                None,
-                0,
-                0,
-                0,
-                0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
-            );
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn promote_child_webviews(parent: HWND) {
-    unsafe {
-        let mut previous = None;
-        loop {
-            let child = FindWindowExW(
-                Some(parent),
-                previous,
-                windows::core::w!("WRY_WEBVIEW"),
-                None,
-            )
-            .unwrap_or(HWND(std::ptr::null_mut()));
-            if child.0.is_null() {
-                break;
-            }
-            let _ = SetWindowPos(
-                child,
-                Some(HWND_BOTTOM),
-                0,
-                0,
-                0,
-                0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
-            );
-            let _ = ShowWindow(child, windows::Win32::UI::WindowsAndMessaging::SW_SHOW);
-            previous = Some(child);
-        }
-    }
-}
-
-fn windows_preview_client_point(
-    bounds: Bounds<Pixels>,
-    scale: f32,
-    position: gpui::Point<Pixels>,
-) -> POINT {
-    let local_x = (f32::from(position.x - bounds.origin.x) * scale).round() as i32;
-    let local_y = (f32::from(position.y - bounds.origin.y) * scale).round() as i32;
-    let max_x = (f32::from(bounds.size.width) * scale).round().max(1.0) as i32 - 1;
-    let max_y = (f32::from(bounds.size.height) * scale).round().max(1.0) as i32 - 1;
-
-    POINT {
-        x: local_x.clamp(0, max_x),
-        y: local_y.clamp(0, max_y),
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn windows_screen_point(window: &Window, position: gpui::Point<Pixels>) -> Result<POINT> {
-    let main_window = RawParentWindow::from_window(window)?.as_hwnd();
-    let mut point = POINT {
-        x: (f32::from(position.x) * window.scale_factor()).round() as i32,
-        y: (f32::from(position.y) * window.scale_factor()).round() as i32,
-    };
-    unsafe {
-        if !ClientToScreen(main_window, &mut point).as_bool() {
-            return Err(anyhow!(
-                "Failed to translate the web preview mouse position to screen coordinates"
-            ));
-        }
-    }
-    Ok(point)
-}
-
-#[cfg(target_os = "windows")]
-fn windows_webview_hwnd(preview: &NativeWebPreview) -> Option<HWND> {
-    unsafe {
-        let hwnd = FindWindowExW(
-            Some(preview.underlay_host.as_hwnd()),
-            None,
-            windows::core::w!("WRY_WEBVIEW"),
-            None,
-        )
-        .unwrap_or(HWND(std::ptr::null_mut()));
-        (!hwnd.0.is_null()).then_some(hwnd)
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn windows_deepest_webview_target(root: HWND, root_client_point: POINT) -> (HWND, POINT) {
-    unsafe {
-        let mut current = root;
-        let mut current_point = root_client_point;
-
-        loop {
-            let child = ChildWindowFromPointEx(
-                current,
-                current_point,
-                CWP_SKIPDISABLED | CWP_SKIPINVISIBLE | CWP_SKIPTRANSPARENT,
-            );
-            if child.0.is_null() || child == current {
-                break;
-            }
-
-            let mut mapped = [current_point];
-            let _ = MapWindowPoints(Some(current), Some(child), &mut mapped);
-            current = child;
-            current_point = mapped[0];
-        }
-
-        (current, current_point)
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn windows_scroll_target(root: HWND) -> HWND {
-    unsafe {
-        let mut info = GUITHREADINFO {
-            cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
-            ..Default::default()
-        };
-        if GetGUIThreadInfo(0, &mut info).is_ok() {
-            let focus = info.hwndFocus;
-            if !focus.0.is_null() && (focus == root || IsChild(root, focus).as_bool()) {
-                return focus;
-            }
-        }
-        root
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn windows_set_cursor_lparam(mouse_message: u32, hit_test: u32) -> LPARAM {
-    LPARAM((((mouse_message & 0xffff) << 16) | (hit_test & 0xffff)) as isize)
-}
-
-#[cfg(target_os = "windows")]
-fn windows_mouse_down_message(button: MouseButton) -> Option<(u32, usize)> {
-    let (message, button_mask) = match button {
-        MouseButton::Left => (WM_LBUTTONDOWN, MK_LBUTTON_MASK),
-        MouseButton::Right => (WM_RBUTTONDOWN, MK_RBUTTON_MASK),
-        MouseButton::Middle => (WM_MBUTTONDOWN, MK_MBUTTON_MASK),
-        MouseButton::Navigate(_) => return None,
-    };
-    Some((message, button_mask))
-}
-
-#[cfg(target_os = "windows")]
-fn windows_mouse_up_message(button: MouseButton) -> Option<(u32, usize)> {
-    let (message, button_mask) = match button {
-        MouseButton::Left => (WM_LBUTTONUP, MK_LBUTTON_MASK),
-        MouseButton::Right => (WM_RBUTTONUP, MK_RBUTTON_MASK),
-        MouseButton::Middle => (WM_MBUTTONUP, MK_MBUTTON_MASK),
-        MouseButton::Navigate(_) => return None,
-    };
-    Some((message, button_mask))
-}
-
-#[cfg(target_os = "windows")]
-fn windows_mouse_button_mask(button: MouseButton) -> Option<usize> {
-    Some(match button {
-        MouseButton::Left => MK_LBUTTON_MASK,
-        MouseButton::Right => MK_RBUTTON_MASK,
-        MouseButton::Middle => MK_MBUTTON_MASK,
-        MouseButton::Navigate(_) => return None,
-    })
-}
-
-#[cfg(target_os = "windows")]
-fn windows_mouse_wparam(modifiers: gpui::Modifiers, button_mask: usize) -> usize {
-    let mut wparam = button_mask;
-    if modifiers.shift {
-        wparam |= MK_SHIFT_MASK;
-    }
-    if modifiers.control {
-        wparam |= MK_CONTROL_MASK;
-    }
-    wparam
-}
-
-#[cfg(target_os = "windows")]
-fn windows_mouse_lparam(point: POINT) -> LPARAM {
-    LPARAM((((point.y as u32) & 0xffff) << 16 | ((point.x as u32) & 0xffff)) as isize)
-}
-
-#[cfg(target_os = "windows")]
-fn windows_scroll_message(delta: &gpui::ScrollDelta) -> (bool, i16) {
-    const WHEEL_DELTA: f32 = 120.0;
-    match delta {
-        gpui::ScrollDelta::Pixels(delta) => {
-            if delta.x.abs() > delta.y.abs() {
-                (
-                    true,
-                    (f32::from(delta.x) * WHEEL_DELTA / 40.0).round() as i16,
-                )
-            } else {
-                (
-                    false,
-                    (f32::from(delta.y) * WHEEL_DELTA / 40.0).round() as i16,
-                )
-            }
-        }
-        gpui::ScrollDelta::Lines(delta) => {
-            if delta.x.abs() > delta.y.abs() {
-                (true, (delta.x * WHEEL_DELTA).round() as i16)
-            } else {
-                (false, (delta.y * WHEEL_DELTA).round() as i16)
-            }
-        }
+fn client_rect_for_bounds(bounds: Bounds<Pixels>, scale_factor: f32) -> RECT {
+    RECT {
+        left: (bounds.origin.x.as_f32() * scale_factor).floor() as i32,
+        top: (bounds.origin.y.as_f32() * scale_factor).floor() as i32,
+        right: ((bounds.origin.x.as_f32() + bounds.size.width.as_f32()) * scale_factor).ceil()
+            as i32,
+        bottom: ((bounds.origin.y.as_f32() + bounds.size.height.as_f32()) * scale_factor).ceil()
+            as i32,
     }
 }
 
@@ -3074,7 +2412,7 @@ fn crop_image(image: RgbaImage, rect: BrowserRect) -> Result<RgbaImage> {
     Ok(imageops::crop_imm(&image, x, y, width, height).to_image())
 }
 
-const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
+pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
 (() => {
   if (window.__zedWebPreview) return;
 

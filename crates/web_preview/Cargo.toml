@@ -34,3 +34,9 @@ url.workspace = true
 windows.workspace = true
 workspace.workspace = true
 wry = "0.53"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+gpui_windows.workspace = true
+
+[target."cfg(windows)".dependencies]
+webview2-com = "0.38"
