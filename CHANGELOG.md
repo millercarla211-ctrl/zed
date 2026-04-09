@@ -70,6 +70,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - macOS host retargeting now reapplies native host bounds and visibility when the AppKit parent chain changes, so the preview cannot keep a stale screen-space frame after an in-place parent retarget.
 - Linux X11 host retargeting now preserves underlay stacking and reapplies native bounds/visibility after parent-window changes, so X11 preview hosts cannot keep stale placement or drift above the editor after retarget or resize churn.
 - Linux Wayland hosts now track their exported parent handle as explicit backend state and re-lower after layout churn, visibility restores, and parent-handle retargeting, so the Wayland underlay host stays attached and stacked correctly through compositor-side parent changes.
+- Restored Windows to the original `crates/web_preview` runtime wiring from `windows-webpreview`, while leaving macOS/Linux on separate backend crates, so the smooth proven Windows path is no longer routed through the split facade.
 
 ### Fixed
 - Web preview toolbar action icons now stay muted at rest and only switch to the primary accent during hover and press states.
