@@ -11,11 +11,65 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 - Added a current cross-platform web preview status report that records the completed Windows implementation and the remaining macOS/Linux host work.
 - Added a root-level Windows web preview architecture report that documents the frozen rendering/input model and the "do not touch casually" policy for the working Windows path.
+- Added separate `web_preview_windows`, `web_preview_macos`, and `web_preview_linux` backend crates so platform work can continue without routing through the frozen Windows implementation.
 
 ### Changed
 - Began isolating non-Windows web preview work so macOS and Linux support can be developed without modifying the working Windows path.
 - Tidied the root directory by moving auxiliary web preview notes and logs into the `docs` tree, while keeping the canonical Windows implementation report in the repository root.
 - Updated `AGENTS.md` so future work treats the Windows web preview as frozen and develops macOS/Linux support in separate platform-specific paths.
+- Turned `web_preview` into a thin facade crate that dispatches to platform-specific backends by `#[cfg]`.
+- Started the Linux backend with an isolated X11-first native child-webview path and an explicit Wayland split instead of mixing Linux work into the Windows implementation.
+- Made `web_preview_macos` and `web_preview_linux` target-local backend crates so they stop compiling copied Windows-only modules on the wrong OS.
+- Hardened the macOS backend around its native `WKWebView` path with a platform-local browser event notifier and first-click passthrough behavior.
+- Reordered the macOS native `WKWebView` under GPUI's AppKit view inside the same `NSWindow` so the backend no longer relies purely on default child-view ordering.
+- Wired the Linux backend to initialize and pump GTK alongside GPUI, which is required for `wry`/WebKitGTK child webviews on X11.
+- Registered the macOS and Linux web preview body as a real GPUI passthrough region so those backends now use GPUI's native platform hit-test yielding instead of only drawing the browser under the editor.
+- Split the Linux native mount path into explicit X11 and Wayland branches so future Wayland host work can advance without destabilizing the X11 backend.
+- Added GPUI Wayland exported parent-handle plumbing and started a dedicated Linux Wayland GTK/WebKit host path instead of aborting immediately on Wayland sessions.
+- Moved the macOS backend off pure in-window child-view ordering and onto a dedicated backend-local host-window layer that reparents the native `WKWebView` under GPUI while keeping macOS focus handoff inside the macOS backend.
+- Hardened the non-Windows preview lifecycle so macOS and Linux hide their native preview hosts when a tab or workspace deactivates instead of leaving underlay browser surfaces alive behind the editor.
+- Fixed non-Windows host-window bounds syncing so macOS and Linux Wayland no longer rely only on unchanged local preview bounds when the parent editor window moves.
+- Moved Linux X11 off the remaining legacy child-webview mount path and onto a backend-local managed host model so both Linux backends now use dedicated native host windows instead of mixing host strategies.
+- Split Linux focus handoff from macOS so Linux no longer routes `focus_parent()` back into its backend host window when GPUI needs to reclaim focus.
+- Fixed Linux host-window placement to derive global host-window coordinates from GPUI inner window bounds instead of using local preview coordinates directly.
+- Wired macOS and Linux native host windows to GPUI's window-bounds observer so host placement keeps updating during editor window moves and resizes even without a preview-content-triggered rerender.
+- Wired macOS and Linux native host windows to GPUI window-activation observers and item activity tracking so separate host windows hide and restore with the editor window instead of relying only on tab deactivation.
+- Switched Linux X11 and Wayland preview hosts off unmanaged GTK popup windows and onto undecorated managed GTK toplevel hosts so non-Windows backends stop relying on popup-window-manager quirks for underlay composition.
+- Attached the Linux X11 preview host to the GPUI parent window through an explicit X11 transient relationship and requested RGBA-capable visuals for both Linux host windows so the underlay host surfaces align more closely with the editor window.
+- Changed the macOS host-window visibility restore path to explicitly reorder the backend host below the GPUI parent window instead of relying on a generic front-order call.
+- Made the Linux X11 and Wayland hosts explicitly clear their own backgrounds with transparent Cairo painting so the non-Windows underlay path no longer depends on toolkit default background behavior.
+- Synced the macOS host window's level and collection behavior from the GPUI parent window so host-window ordering stays aligned with the editor's native AppKit state.
+- Made the Linux transparent host-drawing path authoritative by stopping default GTK background drawing after the transparent clear pass and keeping both host windows and fixed containers non-focusable.
+- Moved the macOS screenshot path off the old Windows-only gate and onto backend-local host-window snapshot capture, so the macOS backend no longer falls back to an unsupported screenshot error for screenshot, selected-area capture, and inspect-element image attachments.
+- Reused the screenshot attachment downscaling path on Linux too, so Linux screenshot and inspect-element image attachments now stay aligned with the Windows/macOS agent image size limits.
+- Linux now explicitly hands focus back from the native webview to GPUI controls when the preview toolbar/editor takes focus, instead of leaving that transition implicit in the host window state.
+- Linux X11 and Wayland preview hosts no longer mark their GTK toplevels as permanently non-focusable, so the native page can acquire keyboard focus from user interaction without stealing focus on map.
+- macOS and Linux native preview hosts now explicitly return focus to GPUI before hiding on tab/window deactivation, instead of relying on implicit focus changes during native host teardown.
+- macOS now uses a dedicated backend host `NSWindow` subclass that can become key/main, so native page focus can participate more reliably in the AppKit window chain instead of depending on plain borderless-window defaults.
+- macOS and Linux now track URL-editor focus explicitly and only refocus the native page when the preview becomes active without the GPUI URL editor already owning focus, instead of relying on incidental activation ordering.
+- Tightened the macOS/Linux native-page refocus rule again so the page is only refocused when the preview item itself owns GPUI focus, which prevents native-page focus grabs while other GPUI overlays or controls are active.
+- macOS and Linux native preview creation now retries on transient parent-handle readiness failures instead of latching those timing conditions as permanent mount errors.
+- Fixed the non-Windows render path so macOS/Linux no longer force native preview hosts visible on every repaint, which previously risked overriding the explicit hide/deactivation lifecycle.
+- Fixed the non-Windows passthrough-hole lifecycle so macOS/Linux only register preview mouse passthrough while the native host is actually active, instead of leaving a stale input hole behind when the host is hidden.
+- Tightened the macOS/Linux transient mount retry path so one temporary native-parent readiness failure schedules only a single retry instead of allowing repeated renders to queue duplicate remount attempts.
+- Moved macOS and Linux native preview visibility back onto explicit activation state instead of repaint-time host toggles, added backend-local visible-state tracking, and made non-Windows host show/hide idempotent.
+- Made the macOS host reassert its native parent-window ordering and collection state during bounds updates, and made the Linux Wayland host explicitly lower itself on show just like the X11 host.
+- Fixed a Linux backend regression where the transient native-preview retry path still referenced `cx` through an `_cx` parameter name.
+- Reworked Linux host layout so X11 continues to use preview-sized host windows while Wayland now uses a parent-sized host window with the embedded webview positioned inside it, which is a better match for compositor-safe underlay placement.
+- Added Linux local browser extension discovery for Chromium- and Firefox-family browsers, including common Flatpak profile locations, so the Linux backend no longer leaves extension detection as a Windows-only feature.
+- Expanded Linux Chromium-family extension discovery to scan real multi-profile browser roots instead of only a single `Default` profile directory.
+- Linux X11 and Wayland host screenshot capture now crops to the actual embedded webview rectangle, so Linux screenshots, selected-area captures, and inspect-element attachments operate on the preview surface instead of the full host window.
+- Stopped the Wayland host path from pretending it can control global host-window placement with `move_`, so the Wayland backend now relies on exported-parent attachment plus parent-sized host resizing and internal webview positioning instead.
+- Fixed Linux host initialization so X11 and Wayland hosts now start with the correct embedded webview bounds from the first mount instead of temporarily seeding host state from the wrong window-bounds shape.
+- Linux X11 and Wayland native-host creation now waits for a real preview layout before mounting, instead of mapping a dummy fallback-sized host before the preview rect exists.
+- Linux X11 and Wayland preview hosts now track their native parent attachment as explicit backend state, retarget in place when possible, and force a remount when the host kind or native parent relationship changes underneath the preview.
+- Fixed a Linux backend regression where the preview canvas referenced `native_mount_requested` without capturing that Linux mount state into the closure.
+- Linux Wayland now tears down and refreshes the native preview host when the exported parent handle temporarily disappears, instead of keeping stale host state attached to an invalid parent relationship.
+- macOS preview hosts now track their GPUI AppKit parent/window identity as explicit backend state, retarget that host relationship when it changes, and remount cleanly if the native parent chain becomes temporarily unavailable.
+- macOS native preview mounting now waits for a real preview layout before creating the host window/webview, instead of mapping a fallback-sized host first and correcting it later.
+- macOS host retargeting now reapplies native host bounds and visibility when the AppKit parent chain changes, so the preview cannot keep a stale screen-space frame after an in-place parent retarget.
+- Linux X11 host retargeting now preserves underlay stacking and reapplies native bounds/visibility after parent-window changes, so X11 preview hosts cannot keep stale placement or drift above the editor after retarget or resize churn.
+- Linux Wayland hosts now track their exported parent handle as explicit backend state and re-lower after layout churn, visibility restores, and parent-handle retargeting, so the Wayland underlay host stays attached and stacked correctly through compositor-side parent changes.
 
 ### Fixed
 - Web preview toolbar action icons now stay muted at rest and only switch to the primary accent during hover and press states.
@@ -33,6 +87,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - GPUI now yields cursor ownership while the pointer is over the web preview passthrough body so the native webview cursor no longer flickers against GPUI over video regions.
 - Windows web preview mouse-move relay now also sends native `WM_SETCURSOR`, so browser hover and cursor updates can work through the GPUI overlay path.
 - Windows web preview body no longer registers GPUI mouse listeners, so the native underlay hole can keep ownership of hover and wheel input instead of fighting the relay path.
+- Removed copied `windows_visual_webview` code from the macOS and Linux backend crates so future non-Windows work no longer drags Windows-only files and dependencies with it.
 - Windows web preview now forwards hover and wheel through the stable root webview HWND from the Windows message pump, instead of chasing transient Chromium child windows that caused laggy hover and dead wheel input.
 - Windows composition-hosted web preview keyboard now uses an isolated WebView2 DevTools input bridge for page typing, while leaving the working hover, wheel, click, and z-index paths untouched.
 

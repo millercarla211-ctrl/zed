@@ -213,6 +213,9 @@ members = [
     "crates/vim_mode_setting",
     "crates/watch",
     "crates/web_preview",
+    "crates/web_preview_linux",
+    "crates/web_preview_macos",
+    "crates/web_preview_windows",
     "crates/web_search",
     "crates/web_search_providers",
     "crates/which_key",
@@ -373,6 +376,9 @@ lsp = { path = "crates/lsp" }
 markdown = { path = "crates/markdown" }
 markdown_preview = { path = "crates/markdown_preview" }
 web_preview = { path = "crates/web_preview" }
+web_preview_linux = { path = "crates/web_preview_linux" }
+web_preview_macos = { path = "crates/web_preview_macos" }
+web_preview_windows = { path = "crates/web_preview_windows" }
 svg_preview = { path = "crates/svg_preview" }
 media = { path = "crates/media" }
 menu = { path = "crates/menu" }
