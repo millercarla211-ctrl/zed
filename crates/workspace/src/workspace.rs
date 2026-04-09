@@ -285,6 +285,8 @@ actions!(
         NewFileSplitHorizontal,
         /// Creates a new web preview tab.
         NewWebPreview,
+        /// Creates a new Liquid Glass tab.
+        NewLiquidGlass,
         /// Opens a new search.
         NewSearch,
         /// Opens a new window.

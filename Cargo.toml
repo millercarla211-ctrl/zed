@@ -114,6 +114,7 @@ members = [
     "crates/language_selector",
     "crates/language_tools",
     "crates/languages",
+    "crates/liquid_glass",
     "crates/line_ending_selector",
     "crates/livekit_api",
     "crates/livekit_client",
@@ -375,6 +376,7 @@ lmstudio = { path = "crates/lmstudio" }
 lsp = { path = "crates/lsp" }
 markdown = { path = "crates/markdown" }
 markdown_preview = { path = "crates/markdown_preview" }
+liquid_glass = { path = "crates/liquid_glass" }
 web_preview = { path = "crates/web_preview" }
 web_preview_linux = { path = "crates/web_preview_linux" }
 web_preview_macos = { path = "crates/web_preview_macos" }

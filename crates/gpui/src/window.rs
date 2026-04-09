@@ -7,17 +7,18 @@ use crate::{
     DispatchNodeId, DispatchTree, DisplayId, Edges, Effect, Entity, EntityId, EventEmitter,
     FileDropEvent, FontId, Global, GlobalElementId, GlyphId, GpuSpecs, Hsla, InputHandler, IsZero,
     KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId,
-    LineLayoutIndex, Modifiers, ModifiersChangedEvent, MonochromeSprite, MouseButton, MouseEvent,
-    MouseMoveEvent, MouseUpEvent, Path, Pixels, PlatformAtlas, PlatformDisplay, PlatformInput,
-    PlatformInputHandler, PlatformWindow, Point, PolychromeSprite, Priority, PromptButton,
-    PromptLevel, Quad, Render, RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams,
-    Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y,
-    ScaledPixels, Scene, Shadow, SharedString, Size, StrikethroughStyle, Style, SubpixelSprite,
-    SubscriberSet, Subscription, SystemWindowTab, SystemWindowTabController, TabStopMap,
-    TaffyLayoutEngine, Task, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
-    TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
-    WindowBounds, WindowControls, WindowDecorations, WindowOptions, WindowParams, WindowTextSystem,
-    point, prelude::*, px, rems, size, transparent_black,
+    LineLayoutIndex, LiquidGlass, LiquidGlassParams, Modifiers, ModifiersChangedEvent,
+    MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, Path, Pixels,
+    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
+    PolychromeSprite, Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams,
+    RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
+    SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Scene, Shadow, SharedString, Size,
+    StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab,
+    SystemWindowTabController, TabStopMap, TaffyLayoutEngine, Task, TextRenderingMode, TextStyle,
+    TextStyleRefinement, ThermalState, TransformationMatrix, Underline, UnderlineStyle,
+    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControls, WindowDecorations,
+    WindowOptions, WindowParams, WindowTextSystem, point, prelude::*, px, rems, size,
+    transparent_black,
 };
 use anyhow::{Context as _, Result, anyhow};
 use collections::{FxHashMap, FxHashSet};
@@ -3773,6 +3774,73 @@ impl Window {
             corner_radii,
             tile,
             opacity,
+        });
+        Ok(())
+    }
+
+    /// Paint a Liquid Glass scene into the next frame using a sprite-atlas background texture.
+    ///
+    /// This method should only be called as part of the paint phase of element drawing.
+    pub fn paint_liquid_glass(
+        &mut self,
+        bounds: Bounds<Pixels>,
+        data: Arc<RenderImage>,
+        params: LiquidGlassParams,
+        frame_index: usize,
+    ) -> Result<()> {
+        self.invalidator.debug_assert_paint();
+
+        let scale_factor = self.scale_factor();
+        let bounds = bounds.scale(scale_factor);
+        let glass_bounds = params.glass_bounds.scale(scale_factor);
+        let atlas_params = RenderImageParams {
+            image_id: data.id,
+            frame_index,
+        };
+
+        let tile = self
+            .sprite_atlas
+            .get_or_insert_with(&atlas_params.into(), &mut || {
+                Ok(Some((
+                    data.size(frame_index),
+                    Cow::Borrowed(
+                        data.as_bytes(frame_index)
+                            .expect("It's the caller's job to pass a valid frame index"),
+                    ),
+                )))
+            })?
+            .expect("Callback above only returns Some");
+        let content_mask = self.content_mask().scale(scale_factor);
+        let opacity = self.element_opacity();
+
+        self.next_frame.scene.insert_primitive(LiquidGlass {
+            order: 0,
+            aberration_samples: params.aberration_samples.max(1),
+            blur_iterations: params.blur_iterations,
+            pad: 0,
+            bounds: bounds
+                .map_origin(|origin| origin.floor())
+                .map_size(|size| size.ceil()),
+            content_mask,
+            tile,
+            glass_bounds: glass_bounds
+                .map_origin(|origin| origin.floor())
+                .map_size(|size| size.ceil()),
+            power_factor: params.power_factor,
+            opacity,
+            a: params.a,
+            b: params.b,
+            c: params.c,
+            d: params.d,
+            f_power: params.f_power,
+            noise: params.noise,
+            glow_weight: params.glow_weight,
+            glow_edge0: params.glow_edge0,
+            glow_edge1: params.glow_edge1,
+            glow_bias: params.glow_bias,
+            chromatic_aberration: params.chromatic_aberration,
+            blur_radius: params.blur_radius,
+            blur_downscale: params.blur_downscale,
         });
         Ok(())
     }

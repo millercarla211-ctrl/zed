@@ -714,12 +714,206 @@ fragment float4 polychrome_sprite_fragment(
     color.g = grayscale;
     color.b = grayscale;
   }
-  color.a *= sprite.opacity * saturate(0.5 - distance);
-  return color;
-}
+    color.a *= sprite.opacity * saturate(0.5 - distance);
+    return color;
+  }
 
-struct PathRasterizationVertexOutput {
-  float4 position [[position]];
+  struct LiquidGlassVertexOutput {
+    float4 position [[position]];
+    float2 panel_uv;
+    uint liquid_glass_id [[flat]];
+    float clip_distance [[clip_distance]][4];
+  };
+
+  struct LiquidGlassFragmentInput {
+    float4 position [[position]];
+    float2 panel_uv;
+    uint liquid_glass_id [[flat]];
+  };
+
+  float liquid_smoothstep(float edge0, float edge1, float x) {
+    float t = saturate((x - edge0) / max(edge1 - edge0, 0.00001));
+    return t * t * (3.0 - 2.0 * t);
+  }
+
+  float2 liquid_tile_position(float2 panel_uv, AtlasTile tile,
+                              constant Size_DevicePixels *atlas_size) {
+    float2 tile_origin = float2(tile.bounds.origin.x, tile.bounds.origin.y);
+    float2 tile_size = float2(tile.bounds.size.width, tile.bounds.size.height);
+    return (tile_origin + clamp(panel_uv, float2(0.0), float2(1.0)) * tile_size) /
+           float2((float)atlas_size->width, (float)atlas_size->height);
+  }
+
+  float4 liquid_sample(float2 panel_uv, LiquidGlass instance,
+                       texture2d<float> atlas_texture,
+                       constant Size_DevicePixels *atlas_size) {
+    constexpr sampler atlas_texture_sampler(mag_filter::linear,
+                                            min_filter::linear);
+    return atlas_texture.sample(
+        atlas_texture_sampler,
+        liquid_tile_position(panel_uv, instance.tile, atlas_size));
+  }
+
+  float liquid_sd_superellipse(float2 p, float n, float r) {
+    float2 p_abs = abs(p);
+    float numerator = pow(p_abs.x, n) + pow(p_abs.y, n) - pow(r, n);
+    float den_x = pow(max(p_abs.x, 0.0001), 2.0 * n - 2.0);
+    float den_y = pow(max(p_abs.y, 0.0001), 2.0 * n - 2.0);
+    float denominator = n * sqrt(den_x + den_y) + 0.00001;
+    return numerator / denominator;
+  }
+
+  float liquid_f_dist(LiquidGlass instance, float x) {
+    float base = max(instance.c * 2.718281828459045, 0.0001);
+    return 1.0 - instance.b * pow(base, -instance.d * x - instance.a);
+  }
+
+  float liquid_rand(float2 co) {
+    return fract(sin(dot(co, float2(12.9898, 78.233))) * 43758.5453);
+  }
+
+  float liquid_glow(float2 panel_uv) {
+    return sin(atan2(panel_uv.y * 2.0 - 1.0, panel_uv.x * 2.0 - 1.0) - 0.5);
+  }
+
+  float4 liquid_blur_sample(float2 panel_uv, LiquidGlass instance,
+                            texture2d<float> atlas_texture,
+                            constant Size_DevicePixels *atlas_size) {
+    uint steps = min(instance.blur_iterations, 8u);
+    if (steps == 0u || instance.blur_radius <= 0.0) {
+      return liquid_sample(panel_uv, instance, atlas_texture, atlas_size);
+    }
+
+    float2 texel = float2(
+      1.0 / max(instance.bounds.size.width, 1.0),
+      1.0 / max(instance.bounds.size.height, 1.0)
+    );
+    float blur_scale = max(instance.blur_downscale, 0.1);
+
+    float4 accum = liquid_sample(panel_uv, instance, atlas_texture, atlas_size);
+    float total_weight = 1.0;
+
+    for (uint i = 0u; i < steps; i += 1u) {
+      float t = float(i + 1u) / float(steps);
+      float2 offset = texel * instance.blur_radius * blur_scale * t;
+      accum += liquid_sample(panel_uv + float2(offset.x, 0.0), instance, atlas_texture, atlas_size);
+      accum += liquid_sample(panel_uv - float2(offset.x, 0.0), instance, atlas_texture, atlas_size);
+      accum += liquid_sample(panel_uv + float2(0.0, offset.y), instance, atlas_texture, atlas_size);
+      accum += liquid_sample(panel_uv - float2(0.0, offset.y), instance, atlas_texture, atlas_size);
+      total_weight += 4.0;
+    }
+
+    return accum / total_weight;
+  }
+
+  vertex LiquidGlassVertexOutput liquid_glass_vertex(
+      uint unit_vertex_id [[vertex_id]], uint liquid_glass_id [[instance_id]],
+      constant float2 *unit_vertices [[buffer(SpriteInputIndex_Vertices)]],
+      constant LiquidGlass *sprites [[buffer(SpriteInputIndex_Sprites)]],
+      constant Size_DevicePixels *viewport_size [[buffer(SpriteInputIndex_ViewportSize)]],
+      constant Size_DevicePixels *atlas_size [[buffer(SpriteInputIndex_AtlasTextureSize)]]) {
+    float2 unit_vertex = unit_vertices[unit_vertex_id];
+    LiquidGlass sprite = sprites[liquid_glass_id];
+    float4 device_position = to_device_position(unit_vertex, sprite.bounds, viewport_size);
+    float4 clip_distance =
+        distance_from_clip_rect(unit_vertex, sprite.bounds, sprite.content_mask.bounds);
+
+    return LiquidGlassVertexOutput{
+        device_position,
+        unit_vertex,
+        liquid_glass_id,
+        {clip_distance.x, clip_distance.y, clip_distance.z, clip_distance.w}};
+  }
+
+  fragment float4 liquid_glass_fragment(
+      LiquidGlassFragmentInput input [[stage_in]],
+      constant LiquidGlass *sprites [[buffer(SpriteInputIndex_Sprites)]],
+      constant Size_DevicePixels *atlas_size [[buffer(SpriteInputIndex_AtlasTextureSize)]],
+      texture2d<float> atlas_texture [[texture(SpriteInputIndex_AtlasTexture)]]) {
+    LiquidGlass sprite = sprites[input.liquid_glass_id];
+    float4 base_color = liquid_sample(input.panel_uv, sprite, atlas_texture, atlas_size);
+    float2 glass_origin_uv =
+        (float2(sprite.glass_bounds.origin.x, sprite.glass_bounds.origin.y) -
+         float2(sprite.bounds.origin.x, sprite.bounds.origin.y)) /
+        float2(sprite.bounds.size.width, sprite.bounds.size.height);
+    float2 glass_size_uv =
+        float2(sprite.glass_bounds.size.width, sprite.glass_bounds.size.height) /
+        float2(sprite.bounds.size.width, sprite.bounds.size.height);
+    float2 glass_center_uv = glass_origin_uv + glass_size_uv * 0.5;
+    float2 glass_half_uv = max(glass_size_uv * 0.5, float2(0.0001));
+    float2 glass_local = (input.panel_uv - glass_center_uv) / glass_half_uv;
+    float sdf = liquid_sd_superellipse(glass_local, max(sprite.power_factor, 1.001), 1.0);
+
+    if (sdf > 0.0) {
+      base_color.a *= sprite.opacity;
+      return base_color;
+    }
+
+    float dist = -sdf;
+    float refraction_amount =
+        pow(max(liquid_f_dist(sprite, dist), 0.0), sprite.f_power);
+    float2 sample_panel_uv = clamp(
+        glass_local * refraction_amount * glass_half_uv + glass_center_uv,
+        float2(0.001),
+        float2(0.999));
+
+    float4 color = liquid_blur_sample(sample_panel_uv, sprite, atlas_texture, atlas_size);
+
+    if (sprite.chromatic_aberration > 0.0001) {
+      float edge_factor = 1.0 - liquid_smoothstep(0.0, 0.3, dist);
+      float aberration_strength = sprite.chromatic_aberration * edge_factor * 3.0;
+      float2 base_dir = sample_panel_uv - glass_center_uv;
+      float2 aberration_dir = length(base_dir) > 0.0001
+          ? normalize(base_dir)
+          : float2(1.0, 0.0);
+      uint samples = max(1u, min(sprite.aberration_samples, 8u));
+      float2 texel = float2(
+          1.0 / max(sprite.bounds.size.width, 1.0),
+          1.0 / max(sprite.bounds.size.height, 1.0));
+
+      float r_accum = 0.0;
+      float g_accum = 0.0;
+      float b_accum = 0.0;
+      for (uint i = 0u; i < samples; i += 1u) {
+        float t = samples > 1u ? float(i) / float(samples - 1u) : 0.0;
+        float offset = (t - 0.5) * aberration_strength;
+        r_accum += liquid_blur_sample(
+            sample_panel_uv + aberration_dir * offset * 2.0 + float2(texel.x, 0.0),
+            sprite,
+            atlas_texture,
+            atlas_size).r;
+        g_accum += liquid_blur_sample(
+            sample_panel_uv + aberration_dir * offset * 0.8,
+            sprite,
+            atlas_texture,
+            atlas_size).g;
+        b_accum += liquid_blur_sample(
+            sample_panel_uv - aberration_dir * offset * 1.5 - float2(texel.x, 0.0),
+            sprite,
+            atlas_texture,
+            atlas_size).b;
+      }
+
+      color = float4(
+          r_accum / float(samples),
+          g_accum / float(samples),
+          b_accum / float(samples),
+          color.a);
+    }
+
+    float noise_val = (liquid_rand(input.position.xy * 0.001) - 0.5) * sprite.noise;
+    color.rgb += float3(noise_val);
+
+    float glow_val = liquid_glow(input.panel_uv);
+    float glow_mask = liquid_smoothstep(sprite.glow_edge0, sprite.glow_edge1, dist);
+    float glow_mul = glow_val * sprite.glow_weight * glow_mask + 1.0 + sprite.glow_bias;
+    color.rgb *= glow_mul;
+    color.a *= sprite.opacity;
+    return color;
+  }
+
+  struct PathRasterizationVertexOutput {
+    float4 position [[position]];
   float2 st_position;
   uint vertex_id [[flat]];
   float clip_rect_distance [[clip_distance]][4];

@@ -89,6 +89,7 @@ struct DirectXRenderPipelines {
     mono_sprites: PipelineState<MonochromeSprite>,
     subpixel_sprites: PipelineState<SubpixelSprite>,
     poly_sprites: PipelineState<PolychromeSprite>,
+    liquid_glass: PipelineState<LiquidGlass>,
 }
 
 struct DirectXGlobalElements {
@@ -361,11 +362,14 @@ impl DirectXRenderer {
                 PrimitiveBatch::PolychromeSprites { texture_id, range } => {
                     self.draw_polychrome_sprites(texture_id, range.start, range.len())
                 }
+                PrimitiveBatch::LiquidGlass { texture_id, range } => {
+                    self.draw_liquid_glass(texture_id, range.start, range.len())
+                }
                 PrimitiveBatch::Surfaces(range) => self.draw_surfaces(&scene.surfaces[range]),
             }
             .context(format!(
                 "scene too large:\
-                {} paths, {} shadows, {} quads, {} underlines, {} mono, {} subpixel, {} poly, {} surfaces",
+                {} paths, {} shadows, {} quads, {} underlines, {} mono, {} subpixel, {} poly, {} liquid glass, {} surfaces",
                 scene.paths.len(),
                 scene.shadows.len(),
                 scene.quads.len(),
@@ -373,6 +377,7 @@ impl DirectXRenderer {
                 scene.monochrome_sprites.len(),
                 scene.subpixel_sprites.len(),
                 scene.polychrome_sprites.len(),
+                scene.liquid_glass.len(),
                 scene.surfaces.len(),
             ))?;
         }
@@ -471,6 +476,14 @@ impl DirectXRenderer {
                 &devices.device,
                 &devices.device_context,
                 &scene.polychrome_sprites,
+            )?;
+        }
+
+        if !scene.liquid_glass.is_empty() {
+            self.pipelines.liquid_glass.update_buffer(
+                &devices.device,
+                &devices.device_context,
+                &scene.liquid_glass,
             )?;
         }
 
@@ -721,6 +734,30 @@ impl DirectXRenderer {
         )
     }
 
+    fn draw_liquid_glass(
+        &mut self,
+        texture_id: AtlasTextureId,
+        start: usize,
+        len: usize,
+    ) -> Result<()> {
+        if len == 0 {
+            return Ok(());
+        }
+        let devices = self.devices.as_ref().context("devices missing")?;
+        let resources = self.resources.as_ref().context("resources missing")?;
+        let texture_view = self.atlas.get_texture_view(texture_id);
+        self.pipelines.liquid_glass.draw_range_with_texture(
+            &devices.device,
+            &devices.device_context,
+            &texture_view,
+            slice::from_ref(&resources.viewport),
+            slice::from_ref(&self.globals.global_params_buffer),
+            slice::from_ref(&self.globals.sampler),
+            start as u32,
+            len as u32,
+        )
+    }
+
     fn draw_surfaces(&mut self, surfaces: &[PaintSurface]) -> Result<()> {
         if surfaces.is_empty() {
             return Ok(());
@@ -904,6 +941,13 @@ impl DirectXRenderPipelines {
             16,
             create_blend_state(device)?,
         )?;
+        let liquid_glass = PipelineState::new(
+            device,
+            "liquid_glass_pipeline",
+            ShaderModule::LiquidGlass,
+            16,
+            create_blend_state(device)?,
+        )?;
 
         Ok(Self {
             shadow_pipeline,
@@ -914,6 +958,7 @@ impl DirectXRenderPipelines {
             mono_sprites,
             subpixel_sprites,
             poly_sprites,
+            liquid_glass,
         })
     }
 }
@@ -1664,6 +1709,7 @@ pub(crate) mod shader_resources {
         MonochromeSprite,
         SubpixelSprite,
         PolychromeSprite,
+        LiquidGlass,
         EmojiRasterization,
     }
 
@@ -1737,6 +1783,10 @@ pub(crate) mod shader_resources {
                 ShaderModule::PolychromeSprite => match target {
                     ShaderTarget::Vertex => POLYCHROME_SPRITE_VERTEX_BYTES,
                     ShaderTarget::Fragment => POLYCHROME_SPRITE_FRAGMENT_BYTES,
+                },
+                ShaderModule::LiquidGlass => match target {
+                    ShaderTarget::Vertex => LIQUID_GLASS_VERTEX_BYTES,
+                    ShaderTarget::Fragment => LIQUID_GLASS_FRAGMENT_BYTES,
                 },
                 ShaderModule::EmojiRasterization => match target {
                     ShaderTarget::Vertex => EMOJI_RASTERIZATION_VERTEX_BYTES,
@@ -1828,6 +1878,7 @@ pub(crate) mod shader_resources {
                 ShaderModule::MonochromeSprite => "monochrome_sprite",
                 ShaderModule::SubpixelSprite => "subpixel_sprite",
                 ShaderModule::PolychromeSprite => "polychrome_sprite",
+                ShaderModule::LiquidGlass => "liquid_glass",
                 ShaderModule::EmojiRasterization => "emoji_rasterization",
             }
         }

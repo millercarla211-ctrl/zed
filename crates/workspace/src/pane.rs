@@ -1,7 +1,7 @@
 use crate::{
-    CloseWindow, NewFile, NewTerminal, NewWebPreview, OpenInTerminal, OpenOptions, OpenTerminal,
-    OpenVisible, SplitDirection, ToggleFileFinder, ToggleProjectSymbols, ToggleZoom, Workspace,
-    WorkspaceItemBuilder, ZoomIn, ZoomOut,
+    CloseWindow, NewFile, NewLiquidGlass, NewTerminal, NewWebPreview, OpenInTerminal, OpenOptions,
+    OpenTerminal, OpenVisible, SplitDirection, ToggleFileFinder, ToggleProjectSymbols, ToggleZoom,
+    Workspace, WorkspaceItemBuilder, ZoomIn, ZoomOut,
     focus_follows_mouse::FocusFollowsMouse as _,
     invalid_item_view::InvalidItemView,
     item::{
@@ -4193,6 +4193,7 @@ fn default_render_tab_bar_buttons(
                         menu.action("New File", NewFile.boxed_clone())
                             .action("New Terminal", NewTerminal::default().boxed_clone())
                             .action("New Web Preview", NewWebPreview.boxed_clone())
+                            .action("New Liquid Glass", NewLiquidGlass.boxed_clone())
                             .action("Open File", ToggleFileFinder::default().boxed_clone())
                             .separator()
                             .action(

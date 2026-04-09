@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added a current cross-platform web preview status report that records the completed Windows implementation and the remaining macOS/Linux host work.
 - Added a root-level Windows web preview architecture report that documents the frozen rendering/input model and the "do not touch casually" policy for the working Windows path.
 - Added separate `web_preview_windows`, `web_preview_macos`, and `web_preview_linux` backend crates so platform work can continue without routing through the frozen Windows implementation.
+- Added a new native `Liquid Glass` workspace item entry point beside Web Preview, backed by a GPUI-rendered GPU primitive instead of the old standalone windowed demo.
 
 ### Changed
 - Began isolating non-Windows web preview work so macOS and Linux support can be developed without modifying the working Windows path.
@@ -71,6 +72,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Linux X11 host retargeting now preserves underlay stacking and reapplies native bounds/visibility after parent-window changes, so X11 preview hosts cannot keep stale placement or drift above the editor after retarget or resize churn.
 - Linux Wayland hosts now track their exported parent handle as explicit backend state and re-lower after layout churn, visibility restores, and parent-handle retargeting, so the Wayland underlay host stays attached and stacked correctly through compositor-side parent changes.
 - Restored Windows to the original `crates/web_preview` runtime wiring from `windows-webpreview`, while leaving macOS/Linux on separate backend crates, so the smooth proven Windows path is no longer routed through the split facade.
+- Began merging the old `crates/liquid_glass` standalone demo into Zed proper by moving Liquid Glass assets to the root asset pipeline, replacing imgui controls with native GPUI controls, and wiring the renderer through GPUI's shared primitive/back-end system.
 
 ### Fixed
 - Cleared stale Windows web preview passthrough capture state on capture loss and host deactivation/hide without force-resetting the normal webview keyboard-focus path, so long-lived sessions stop latching dead input while normal interactions keep working.
@@ -92,6 +94,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Removed copied `windows_visual_webview` code from the macOS and Linux backend crates so future non-Windows work no longer drags Windows-only files and dependencies with it.
 - Windows web preview now forwards hover and wheel through the stable root webview HWND from the Windows message pump, instead of chasing transient Chromium child windows that caused laggy hover and dead wheel input.
 - Windows composition-hosted web preview keyboard now uses an isolated WebView2 DevTools input bridge for page typing, while leaving the working hover, wheel, click, and z-index paths untouched.
+- Completed the missing Windows HLSL and macOS Metal backend hooks for the existing `LiquidGlass` primitive so the integrated effect no longer depends on the old standalone wgpu/imgui app path.
 
 ---
 

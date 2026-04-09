@@ -1,9 +1,9 @@
 use crate::{CompositorGpuHint, WgpuAtlas, WgpuContext};
 use bytemuck::{Pod, Zeroable};
 use gpui::{
-    AtlasTextureId, Background, Bounds, DevicePixels, GpuSpecs, MonochromeSprite, Path, Point,
-    PolychromeSprite, PrimitiveBatch, Quad, ScaledPixels, Scene, Shadow, Size, SubpixelSprite,
-    Underline, get_gamma_correction_ratios,
+    AtlasTextureId, Background, Bounds, DevicePixels, GpuSpecs, LiquidGlass, MonochromeSprite,
+    Path, Point, PolychromeSprite, PrimitiveBatch, Quad, ScaledPixels, Scene, Shadow, Size,
+    SubpixelSprite, Underline, get_gamma_correction_ratios,
 };
 use log::warn;
 #[cfg(not(target_family = "wasm"))]
@@ -89,6 +89,7 @@ struct WgpuPipelines {
     mono_sprites: wgpu::RenderPipeline,
     subpixel_sprites: Option<wgpu::RenderPipeline>,
     poly_sprites: wgpu::RenderPipeline,
+    liquid_glass: wgpu::RenderPipeline,
     #[allow(dead_code)]
     surfaces: wgpu::RenderPipeline,
 }
@@ -857,6 +858,18 @@ impl WgpuRenderer {
             &shader_module,
         );
 
+        let liquid_glass = create_pipeline(
+            "liquid_glass",
+            "vs_liquid_glass",
+            "fs_liquid_glass",
+            &layouts.globals,
+            &layouts.instances_with_texture,
+            wgpu::PrimitiveTopology::TriangleStrip,
+            &[Some(color_target.clone())],
+            1,
+            &shader_module,
+        );
+
         let surfaces = create_pipeline(
             "surfaces",
             "vs_surface",
@@ -878,6 +891,7 @@ impl WgpuRenderer {
             mono_sprites,
             subpixel_sprites,
             poly_sprites,
+            liquid_glass,
             surfaces,
         }
     }
@@ -1280,6 +1294,13 @@ impl WgpuRenderer {
                                 &mut instance_offset,
                                 &mut pass,
                             ),
+                        PrimitiveBatch::LiquidGlass { texture_id, range } => self
+                            .draw_liquid_glass(
+                                &scene.liquid_glass[range],
+                                texture_id,
+                                &mut instance_offset,
+                                &mut pass,
+                            ),
                         PrimitiveBatch::Surfaces(_surfaces) => {
                             // Surfaces are macOS-only for video playback
                             // Not implemented for Linux/wgpu
@@ -1421,6 +1442,25 @@ impl WgpuRenderer {
             sprites.len() as u32,
             &tex_info.view,
             &self.resources().pipelines.poly_sprites,
+            instance_offset,
+            pass,
+        )
+    }
+
+    fn draw_liquid_glass(
+        &self,
+        primitives: &[LiquidGlass],
+        texture_id: AtlasTextureId,
+        instance_offset: &mut u64,
+        pass: &mut wgpu::RenderPass<'_>,
+    ) -> bool {
+        let tex_info = self.atlas.get_texture_info(texture_id);
+        let data = unsafe { Self::instance_bytes(primitives) };
+        self.draw_instances_with_texture(
+            data,
+            primitives.len() as u32,
+            &tex_info.view,
+            &self.resources().pipelines.liquid_glass,
             instance_offset,
             pass,
         )

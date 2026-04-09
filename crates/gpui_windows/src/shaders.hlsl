@@ -1226,3 +1226,194 @@ float4 polychrome_sprite_fragment(PolychromeSpriteFragmentInput input): SV_Targe
     color.a *= sprite.opacity * saturate(0.5 - distance);
     return color;
 }
+
+/*
+**
+**              Liquid glass
+**
+*/
+
+struct LiquidGlass {
+    uint order;
+    uint aberration_samples;
+    uint blur_iterations;
+    uint pad;
+    Bounds bounds;
+    Bounds content_mask;
+    AtlasTile tile;
+    Bounds glass_bounds;
+    float power_factor;
+    float opacity;
+    float a;
+    float b;
+    float c;
+    float d;
+    float f_power;
+    float noise;
+    float glow_weight;
+    float glow_edge0;
+    float glow_edge1;
+    float glow_bias;
+    float chromatic_aberration;
+    float blur_radius;
+    float blur_downscale;
+};
+
+struct LiquidGlassVertexOutput {
+    nointerpolation uint liquid_glass_id : TEXCOORD0;
+    float4 position : SV_Position;
+    float2 panel_uv : TEXCOORD1;
+    float4 clip_distance : SV_ClipDistance;
+};
+
+struct LiquidGlassFragmentInput {
+    nointerpolation uint liquid_glass_id : TEXCOORD0;
+    float4 position : SV_Position;
+    float2 panel_uv : TEXCOORD1;
+};
+
+StructuredBuffer<LiquidGlass> liquid_glass: register(t1);
+
+float liquid_smoothstep(float edge0, float edge1, float x) {
+    float t = saturate((x - edge0) / max(edge1 - edge0, 0.00001));
+    return t * t * (3.0 - 2.0 * t);
+}
+
+float2 liquid_tile_uv(float2 panel_uv, AtlasTile tile) {
+    uint atlas_width, atlas_height;
+    t_sprite.GetDimensions(atlas_width, atlas_height);
+    float2 atlas_size = float2(atlas_width, atlas_height);
+    return (float2(tile.bounds.origin) + saturate(panel_uv) * float2(tile.bounds.size)) / atlas_size;
+}
+
+float4 liquid_sample(float2 panel_uv, LiquidGlass instance) {
+    return t_sprite.Sample(s_sprite, liquid_tile_uv(panel_uv, instance.tile));
+}
+
+float liquid_sd_superellipse(float2 p, float n, float r) {
+    float2 p_abs = abs(p);
+    float numerator = pow(p_abs.x, n) + pow(p_abs.y, n) - pow(r, n);
+    float den_x = pow(max(p_abs.x, 0.0001), 2.0 * n - 2.0);
+    float den_y = pow(max(p_abs.y, 0.0001), 2.0 * n - 2.0);
+    float denominator = n * sqrt(den_x + den_y) + 0.00001;
+    return numerator / denominator;
+}
+
+float liquid_f_dist(LiquidGlass instance, float x) {
+    float base = max(instance.c * 2.718281828459045, 0.0001);
+    return 1.0 - instance.b * pow(base, -instance.d * x - instance.a);
+}
+
+float liquid_rand(float2 co) {
+    return frac(sin(dot(co, float2(12.9898, 78.233))) * 43758.5453);
+}
+
+float liquid_glow(float2 panel_uv) {
+    return sin(atan2(panel_uv.y * 2.0 - 1.0, panel_uv.x * 2.0 - 1.0) - 0.5);
+}
+
+float4 liquid_blur_sample(float2 panel_uv, LiquidGlass instance) {
+    uint steps = min(instance.blur_iterations, 8u);
+    if (steps == 0u || instance.blur_radius <= 0.0) {
+        return liquid_sample(panel_uv, instance);
+    }
+
+    float2 texel = float2(
+        1.0 / max(instance.bounds.size.x, 1.0),
+        1.0 / max(instance.bounds.size.y, 1.0)
+    );
+    float blur_scale = max(instance.blur_downscale, 0.1);
+
+    float4 accum = liquid_sample(panel_uv, instance);
+    float total_weight = 1.0;
+
+    for (uint i = 0u; i < steps; i += 1u) {
+        float t = float(i + 1u) / float(steps);
+        float2 offset = texel * instance.blur_radius * blur_scale * t;
+        accum += liquid_sample(panel_uv + float2(offset.x, 0.0), instance);
+        accum += liquid_sample(panel_uv - float2(offset.x, 0.0), instance);
+        accum += liquid_sample(panel_uv + float2(0.0, offset.y), instance);
+        accum += liquid_sample(panel_uv - float2(0.0, offset.y), instance);
+        total_weight += 4.0;
+    }
+
+    return accum / total_weight;
+}
+
+LiquidGlassVertexOutput liquid_glass_vertex(uint vertex_id : SV_VertexID, uint liquid_glass_id : SV_InstanceID) {
+    float2 unit_vertex = float2(float(vertex_id & 1u), 0.5 * float(vertex_id & 2u));
+    LiquidGlass instance = liquid_glass[liquid_glass_id];
+
+    LiquidGlassVertexOutput output;
+    output.position = to_device_position(unit_vertex, instance.bounds);
+    output.panel_uv = unit_vertex;
+    output.liquid_glass_id = liquid_glass_id;
+    output.clip_distance = distance_from_clip_rect(unit_vertex, instance.bounds, instance.content_mask);
+    return output;
+}
+
+float4 liquid_glass_fragment(LiquidGlassFragmentInput input) : SV_Target {
+    LiquidGlass instance = liquid_glass[input.liquid_glass_id];
+    float4 base_color = liquid_sample(input.panel_uv, instance);
+    float2 glass_origin_uv = (instance.glass_bounds.origin - instance.bounds.origin) / instance.bounds.size;
+    float2 glass_size_uv = instance.glass_bounds.size / instance.bounds.size;
+    float2 glass_center_uv = glass_origin_uv + glass_size_uv * 0.5;
+    float2 glass_half_uv = max(glass_size_uv * 0.5, float2(0.0001, 0.0001));
+    float2 glass_local = (input.panel_uv - glass_center_uv) / glass_half_uv;
+    float sdf = liquid_sd_superellipse(glass_local, max(instance.power_factor, 1.001), 1.0);
+
+    if (sdf > 0.0) {
+        base_color.a *= instance.opacity;
+        return base_color;
+    }
+
+    float dist = -sdf;
+    float refraction_amount = pow(max(liquid_f_dist(instance, dist), 0.0), instance.f_power);
+    float2 sample_panel_uv = clamp(
+        glass_local * refraction_amount * glass_half_uv + glass_center_uv,
+        float2(0.001, 0.001),
+        float2(0.999, 0.999)
+    );
+
+    float4 color = liquid_blur_sample(sample_panel_uv, instance);
+
+    if (instance.chromatic_aberration > 0.0001) {
+        float edge_factor = 1.0 - liquid_smoothstep(0.0, 0.3, dist);
+        float aberration_strength = instance.chromatic_aberration * edge_factor * 3.0;
+        float2 base_dir = sample_panel_uv - glass_center_uv;
+        float2 aberration_dir = length(base_dir) > 0.0001 ? normalize(base_dir) : float2(1.0, 0.0);
+        uint samples = max(1u, min(instance.aberration_samples, 8u));
+        float2 texel = float2(
+            1.0 / max(instance.bounds.size.x, 1.0),
+            1.0 / max(instance.bounds.size.y, 1.0)
+        );
+
+        float r_accum = 0.0;
+        float g_accum = 0.0;
+        float b_accum = 0.0;
+        for (uint i = 0u; i < samples; i += 1u) {
+            float t = samples > 1u ? float(i) / float(samples - 1u) : 0.0;
+            float offset = (t - 0.5) * aberration_strength;
+            r_accum += liquid_blur_sample(sample_panel_uv + aberration_dir * offset * 2.0 + float2(texel.x, 0.0), instance).r;
+            g_accum += liquid_blur_sample(sample_panel_uv + aberration_dir * offset * 0.8, instance).g;
+            b_accum += liquid_blur_sample(sample_panel_uv - aberration_dir * offset * 1.5 - float2(texel.x, 0.0), instance).b;
+        }
+
+        color = float4(
+            r_accum / float(samples),
+            g_accum / float(samples),
+            b_accum / float(samples),
+            color.a
+        );
+    }
+
+    float noise_val = (liquid_rand(input.position.xy * 0.001) - 0.5) * instance.noise;
+    color.rgb += float3(noise_val, noise_val, noise_val);
+
+    float glow_val = liquid_glow(input.panel_uv);
+    float glow_mask = liquid_smoothstep(instance.glow_edge0, instance.glow_edge1, dist);
+    float glow_mul = glow_val * instance.glow_weight * glow_mask + 1.0 + instance.glow_bias;
+    color.rgb *= glow_mul;
+    color.a *= instance.opacity;
+    return color;
+}

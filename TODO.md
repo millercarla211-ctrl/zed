@@ -4,9 +4,10 @@
 > Last updated: 2026-04-09
 
 ## In Progress
-- [ ] Runtime-validate the completed macOS, Linux X11, and Linux Wayland web preview backends on real platform sessions when those environments are available
+- [ ] Finish integrating Liquid Glass as a native GPUI-rendered workspace item with platform renderer support and native controls
 
 ## Pending
+- [ ] Runtime-validate the completed macOS, Linux X11, and Linux Wayland web preview backends on real platform sessions when those environments are available
 - [x] Sync with upstream Zed (first sync after setup)
 - [x] Test low-memory build configuration from forge branch
 - [x] Document any Windows-specific issues encountered
