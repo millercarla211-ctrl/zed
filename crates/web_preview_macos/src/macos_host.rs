@@ -7,9 +7,11 @@ use cocoa::{
 use gpui::{Bounds, Pixels, Window};
 use image::RgbaImage;
 use objc::{
-    class, msg_send, sel,
+    class,
     declare::ClassDecl,
+    msg_send,
     runtime::{Class, Object, Sel},
+    sel,
 };
 use objc2_app_kit::{NSPNGFileType, NSWindow as Objc2NSWindow, NSWindowOrderingMode};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -107,7 +109,8 @@ impl MacPreviewHost {
 
     pub(crate) fn focus_gpui_view(&self) {
         unsafe {
-            let _: () = msg_send![self.parent_window.get(), makeFirstResponder: self.gpui_view.get()];
+            let _: () =
+                msg_send![self.parent_window.get(), makeFirstResponder: self.gpui_view.get()];
         }
     }
 

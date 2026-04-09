@@ -50,7 +50,8 @@ impl WindowsWindowInner {
                 unsafe { SetActiveWindow(handle).ok() };
                 None
             }
-            WM_ACTIVATE => self.handle_activate_msg(wparam),
+            WM_ACTIVATE => self.handle_activate_msg(handle, wparam),
+            WM_CAPTURECHANGED => self.handle_capture_changed_msg(handle),
             WM_CREATE => self.handle_create_msg(handle),
             WM_MOVE => self.handle_move_msg(handle, lparam),
             WM_SIZE => self.handle_size_msg(wparam, lparam),
@@ -365,6 +366,23 @@ impl WindowsWindowInner {
         }
 
         Some(0)
+    }
+
+    fn clear_webview_passthrough_capture_state(&self, handle: HWND, clear_hover: bool) {
+        if clear_hover {
+            send_webview_mouse_leave(&self.state.webview_hover_active, handle);
+        }
+        self.state.webview_input_captured.set(false);
+        unsafe {
+            if GetCapture() == handle {
+                ReleaseCapture().log_err();
+            }
+        }
+    }
+
+    fn handle_capture_changed_msg(&self, handle: HWND) -> Option<isize> {
+        self.clear_webview_passthrough_capture_state(handle, false);
+        None
     }
 
     fn handle_syskeyup_msg(&self, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
@@ -891,8 +909,11 @@ impl WindowsWindowInner {
         }
     }
 
-    fn handle_activate_msg(self: &Rc<Self>, wparam: WPARAM) -> Option<isize> {
+    fn handle_activate_msg(self: &Rc<Self>, handle: HWND, wparam: WPARAM) -> Option<isize> {
         let activated = wparam.loword() > 0;
+        if !activated {
+            self.clear_webview_passthrough_capture_state(handle, true);
+        }
         let this = self.clone();
         self.executor
             .spawn(async move {
@@ -1329,6 +1350,8 @@ impl WindowsWindowInner {
     fn handle_window_visibility_changed(&self, handle: HWND, wparam: WPARAM) -> Option<isize> {
         if wparam.0 == 1 {
             self.draw_window(handle, false);
+        } else {
+            self.clear_webview_passthrough_capture_state(handle, true);
         }
         None
     }

@@ -73,6 +73,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Restored Windows to the original `crates/web_preview` runtime wiring from `windows-webpreview`, while leaving macOS/Linux on separate backend crates, so the smooth proven Windows path is no longer routed through the split facade.
 
 ### Fixed
+- Cleared stale Windows web preview passthrough capture state on capture loss and host deactivation/hide without force-resetting the normal webview keyboard-focus path, so long-lived sessions stop latching dead input while normal interactions keep working.
 - Web preview toolbar action icons now stay muted at rest and only switch to the primary accent during hover and press states.
 - Web preview URL editing no longer forces focus away after navigation and avoids overwriting in-progress input while the page reports URL updates.
 - Web preview screenshots now copy the captured image to the clipboard and insert image plus URL attachments into the AI composer.

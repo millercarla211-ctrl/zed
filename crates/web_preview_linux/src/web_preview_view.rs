@@ -2639,7 +2639,8 @@ fn create_native_preview_for_linux_wayland_window(
 
 #[cfg(target_os = "linux")]
 fn should_retry_linux_native_preview_mount(message: &str) -> bool {
-    message.contains("The GPUI Wayland window does not have an exported xdg-foreign parent handle yet")
+    message
+        .contains("The GPUI Wayland window does not have an exported xdg-foreign parent handle yet")
 }
 
 #[cfg(target_os = "linux")]
@@ -3027,43 +3028,21 @@ fn scan_local_extensions() -> Result<Vec<DetectedExtension>> {
         let firefox_root = home.join(".mozilla").join("firefox");
 
         let chromium_sources = [
-            (
-                "Chrome",
-                config_home.join("google-chrome"),
-                true,
-            ),
-            (
-                "Chrome Beta",
-                config_home.join("google-chrome-beta"),
-                true,
-            ),
+            ("Chrome", config_home.join("google-chrome"), true),
+            ("Chrome Beta", config_home.join("google-chrome-beta"), true),
             (
                 "Chrome Dev",
                 config_home.join("google-chrome-unstable"),
                 true,
             ),
-            (
-                "Chromium",
-                config_home.join("chromium"),
-                true,
-            ),
-            (
-                "Edge",
-                config_home.join("microsoft-edge"),
-                true,
-            ),
+            ("Chromium", config_home.join("chromium"), true),
+            ("Edge", config_home.join("microsoft-edge"), true),
             (
                 "Brave",
-                config_home
-                    .join("BraveSoftware")
-                    .join("Brave-Browser"),
+                config_home.join("BraveSoftware").join("Brave-Browser"),
                 true,
             ),
-            (
-                "Vivaldi",
-                config_home.join("vivaldi"),
-                true,
-            ),
+            ("Vivaldi", config_home.join("vivaldi"), true),
             ("Opera", config_home.join("opera"), true),
             (
                 "Chrome (Flatpak)",

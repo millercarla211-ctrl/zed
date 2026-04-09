@@ -67,11 +67,7 @@ impl X11PreviewHost {
         &self.fixed
     }
 
-    pub(crate) fn set_layout(
-        &self,
-        window_bounds: Bounds<Pixels>,
-        webview_bounds: Bounds<Pixels>,
-    ) {
+    pub(crate) fn set_layout(&self, window_bounds: Bounds<Pixels>, webview_bounds: Bounds<Pixels>) {
         apply_window_bounds(&self.window, &self.fixed, Some(window_bounds));
         sync_webview_child_bounds(&self.fixed, webview_bounds);
         *self.webview_bounds.borrow_mut() = webview_bounds;

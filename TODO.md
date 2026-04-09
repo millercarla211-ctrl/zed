@@ -12,6 +12,7 @@
 - [x] Document any Windows-specific issues encountered
 
 ## Completed
+- [x] ~~Clear stale Windows web preview passthrough capture state on capture loss and host deactivation/hide without breaking the normal webview focus path~~ (completed: 2026-04-09)
 - [x] ~~Restore Windows web preview to the original monolithic `crates/web_preview` runtime wiring while keeping macOS/Linux on split backend crates~~ (completed: 2026-04-09)
 - [x] ~~Make Linux Wayland hosts track exported-parent attachment as explicit backend state and reapply underlay stacking after layout, visibility, and parent-handle retargets~~ (completed: 2026-04-09)
 - [x] ~~Make Linux X11 host retargeting reapply underlay stacking, bounds, and visibility so parent-window changes cannot leave stale placement or stale z-order~~ (completed: 2026-04-09)

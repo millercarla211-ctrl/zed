@@ -3,10 +3,7 @@ use gdkwayland::WaylandWindow;
 use gpui::{Bounds, Pixels, point, px, size};
 use gtk::{Fixed, Inhibit, Window, WindowType, cairo, glib::object::Cast, prelude::*};
 use image::{RgbaImage, imageops};
-use std::{
-    cell::RefCell,
-    rc::Rc,
-};
+use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone)]
 pub(crate) struct WaylandPreviewHost {
@@ -79,11 +76,7 @@ impl WaylandPreviewHost {
         &self.fixed
     }
 
-    pub(crate) fn set_layout(
-        &self,
-        window_bounds: Bounds<Pixels>,
-        webview_bounds: Bounds<Pixels>,
-    ) {
+    pub(crate) fn set_layout(&self, window_bounds: Bounds<Pixels>, webview_bounds: Bounds<Pixels>) {
         apply_window_bounds(&self.window, &self.fixed, Some(window_bounds));
         sync_webview_child_bounds(&self.fixed, webview_bounds);
         *self.webview_bounds.borrow_mut() = webview_bounds;
