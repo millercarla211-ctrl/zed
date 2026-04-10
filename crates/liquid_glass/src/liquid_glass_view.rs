@@ -2,14 +2,15 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use anyhow::Result;
 use gpui::{
-    App, Bounds, Context, Entity, EventEmitter, FocusHandle, Focusable, Half, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, Render, SharedString,
-    StatefulInteractiveElement, Task, WeakEntity, Window, canvas, fill, point, px, size,
+    App, AppContext as _, Bounds, ClipboardItem, Context, Entity, EventEmitter, FocusHandle,
+    Focusable, Half, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point,
+    Render, SharedString, StatefulInteractiveElement, Task, WeakEntity, Window, canvas, fill,
+    point, px, size,
 };
 use project::Project;
 use ui::{
-    Color, ContextMenu, Divider, DropdownMenu, DropdownStyle, IconName, IconPosition, Label,
-    SwitchField, ToggleState, prelude::*,
+    Button, ButtonStyle, Color, ContextMenu, Divider, DropdownMenu, DropdownStyle, Icon, IconName,
+    IconPosition, Label, SwitchField, TintColor, ToggleState, prelude::*,
 };
 use workspace::{Item, ItemId, SerializableItem, Workspace, WorkspaceId, item::ItemEvent};
 
@@ -218,7 +219,7 @@ impl LiquidGlassView {
             slider_bounds: Rc::new(RefCell::new(Vec::new())),
             active_slider: None,
             state: UiState::default(),
-            use_preview_center: true,
+            use_preview_center: false,
         }
     }
 
@@ -371,6 +372,59 @@ impl LiquidGlassView {
         self.set_preview_position_from_window(event.position, cx);
     }
 
+    fn copy_payload(&self) -> String {
+        format!(
+            r#"LiquidGlassConfig {{
+    background: "{background}",
+    glass_style: "{glass_style}",
+    mouse_control: {mouse_control},
+    use_preview_center: {use_preview_center},
+    position: [{position_x:.2}, {position_y:.2}],
+    glass_size: [{glass_width:.2}, {glass_height:.2}],
+    power_factor: {power_factor:.3},
+    chromatic_aberration: {chromatic_aberration:.4},
+    aberration_samples: {aberration_samples},
+    blur_iterations: {blur_iterations},
+    blur_radius: {blur_radius:.3},
+    blur_downscale: {blur_downscale:.3},
+    noise: {noise:.3},
+    f_power: {f_power:.3},
+    a: {a:.3},
+    b: {b:.3},
+    c: {c:.3},
+    d: {d:.3},
+    glow_weight: {glow_weight:.3},
+    glow_bias: {glow_bias:.3},
+    glow_edge0: {glow_edge0:.3},
+    glow_edge1: {glow_edge1:.3},
+}}"#,
+            background = self.backgrounds[self.state.current_bg].name,
+            glass_style = GLASS_VARIANTS[self.state.glass_variant],
+            mouse_control = self.state.mouse_control,
+            use_preview_center = self.use_preview_center,
+            position_x = self.state.position[0],
+            position_y = self.state.position[1],
+            glass_width = self.state.glass_width_px(),
+            glass_height = self.state.glass_height_px(),
+            power_factor = self.state.power_factor,
+            chromatic_aberration = self.state.chromatic_aberration,
+            aberration_samples = self.state.aberration_samples,
+            blur_iterations = self.state.blur_iterations,
+            blur_radius = self.state.blur_radius,
+            blur_downscale = self.state.blur_downscale,
+            noise = self.state.noise,
+            f_power = self.state.f_power,
+            a = self.state.a,
+            b = self.state.b,
+            c = self.state.c,
+            d = self.state.d,
+            glow_weight = self.state.glow_weight,
+            glow_bias = self.state.glow_bias,
+            glow_edge0 = self.state.glow_edge0,
+            glow_edge1 = self.state.glow_edge1,
+        )
+    }
+
     fn render_dropdowns(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let entity = cx.entity().clone();
 
@@ -506,16 +560,11 @@ impl LiquidGlassView {
         let slider_surface = colors
             .surface_background
             .blend(colors.element_active.opacity(0.55));
-        let slider_border = colors
-            .border_variant
-            .blend(colors.text_accent.opacity(0.18));
-        let track_color = colors
-            .border_variant
-            .blend(colors.element_background.opacity(0.35));
+        let track_color = colors.text_accent.opacity(0.28);
         let progress_color = colors.text_accent;
         let progress_glow = colors.text_accent.opacity(0.22);
-        let knob_color = colors.elevated_surface_background;
-        let knob_border = colors.text_accent;
+        let knob_color = colors.text_accent;
+        let knob_border = colors.surface_background;
 
         v_flex()
             .gap_1()
@@ -537,8 +586,6 @@ impl LiquidGlassView {
                     .w_full()
                     .rounded_md()
                     .bg(slider_surface)
-                    .border_1()
-                    .border_color(slider_border)
                     .cursor_pointer()
                     .child(
                         canvas(
@@ -818,8 +865,7 @@ impl SerializableItem for LiquidGlassView {
 impl Render for LiquidGlassView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.slider_bounds.borrow_mut().clear();
-
-        let background_credit = self.backgrounds[self.state.current_bg].credit.clone();
+        let copy_payload = self.copy_payload();
 
         h_flex()
             .size_full()
@@ -839,7 +885,26 @@ impl Render for LiquidGlassView {
                     .child(
                         v_flex()
                             .gap_1()
-                            .child(Headline::new("Liquid Glass").size(HeadlineSize::Small))
+                            .child(
+                                h_flex()
+                                    .justify_between()
+                                    .items_center()
+                                    .child(Headline::new("Liquid Glass").size(HeadlineSize::Small))
+                                    .child(
+                                        Button::new(
+                                            "liquid-glass-copy-config",
+                                            "Copy Config",
+                                        )
+                                        .style(ButtonStyle::Tinted(TintColor::Accent))
+                                        .label_size(LabelSize::Small)
+                                        .start_icon(Icon::new(IconName::Copy))
+                                        .on_click(move |_, _, cx| {
+                                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                                copy_payload.clone(),
+                                            ));
+                                        }),
+                                    ),
+                            )
                             .child(
                                 Label::new(
                                     "Native GPUI GPU element with platform renderer support and real editor controls.",
@@ -862,13 +927,7 @@ impl Render for LiquidGlassView {
                     .child(Divider::horizontal())
                     .child(self.render_slider_group("Refraction", REFRACTION_SLIDERS, cx))
                     .child(Divider::horizontal())
-                    .child(self.render_slider_group("Glow", GLOW_SLIDERS, cx))
-                    .children(background_credit.into_iter().map(|credit| {
-                        Label::new(credit)
-                            .size(LabelSize::Small)
-                            .color(Color::Muted)
-                            .into_any_element()
-                    })),
+                    .child(self.render_slider_group("Glow", GLOW_SLIDERS, cx)),
             )
             .child(
                 v_flex()
