@@ -42,6 +42,7 @@ See `MERGE_CONFLICT_ANALYSIS.md` for complete merge details and risk assessment.
 - Added a root-level Liquid Glass status report that documents the current native GPUI integration, current limitations, and the remaining renderer-level live-backdrop work.
 
 ### Changed
+- Moved Web Preview navigation and action controls into the main pane tab bar, removed the in-page toolbar, and made the active web tab switch between the page title and URL editor on click.
 - Began isolating non-Windows web preview work so macOS and Linux support can be developed without modifying the working Windows path.
 - Tidied the root directory by moving auxiliary web preview notes and logs into the `docs` tree, while keeping the canonical Windows implementation report in the repository root.
 - Updated `AGENTS.md` so future work treats the Windows web preview as frozen and develops macOS/Linux support in separate platform-specific paths.

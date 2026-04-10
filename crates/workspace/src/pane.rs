@@ -29,6 +29,7 @@ use gpui::{
 };
 use itertools::Itertools;
 use language::{Capability, DiagnosticSeverity};
+use menu::Confirm;
 use parking_lot::Mutex;
 use project::{DirectoryLister, Project, ProjectEntryId, ProjectPath, WorktreeId};
 use schemars::JsonSchema;
@@ -2754,16 +2755,14 @@ impl Pane {
             .map(|id| id == item.item_id())
             .unwrap_or(false);
 
-        let label = item.tab_content(
-            TabContentParams {
-                detail: Some(detail),
-                selected: is_active,
-                preview: is_preview,
-                deemphasized: !self.has_focus(window, cx),
-            },
-            window,
-            cx,
-        );
+        let tab_params = TabContentParams {
+            detail: Some(detail),
+            selected: is_active,
+            preview: is_preview,
+            deemphasized: !self.has_focus(window, cx),
+        };
+
+        let label = item.tab_content(tab_params, window, cx);
 
         let item_diagnostic = item
             .project_path(cx)
@@ -2870,6 +2869,10 @@ impl Pane {
             .on_click(cx.listener({
                 let item_handle = item.boxed_clone();
                 move |pane: &mut Self, event: &ClickEvent, window, cx| {
+                    if item_handle.on_tab_click(tab_params, event, window, cx) {
+                        return;
+                    }
+
                     if event.click_count() > 1 {
                         pane.unpreview_item_if_preview(item_id);
                         let extra_actions = item_handle.tab_extra_context_menu_actions(window, cx);
@@ -4467,6 +4470,15 @@ impl Render for Pane {
             .on_action(cx.listener(|_, _: &menu::Cancel, window, cx| {
                 if cx.stop_active_drag(window) {
                 } else {
+                    cx.propagate();
+                }
+            }))
+            .on_action(cx.listener(|pane: &mut Self, _: &Confirm, window, cx| {
+                let handled = pane
+                    .active_item()
+                    .is_some_and(|item| item.on_tab_confirm(window, cx));
+
+                if !handled {
                     cx.propagate();
                 }
             }))

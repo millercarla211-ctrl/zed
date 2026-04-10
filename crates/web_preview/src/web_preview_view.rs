@@ -4,9 +4,9 @@ use anyhow::{Context as _, Result, anyhow};
 use base64::Engine as _;
 use editor::Editor;
 use gpui::{
-    App, AppContext as _, Bounds, ClipboardItem, Context, Entity, EventEmitter, FocusHandle,
-    Focusable, Image as GpuiImage, MouseButton, Pixels, Render, SharedString, Subscription, Task,
-    WeakEntity, Window, canvas, svg,
+    Action, App, AppContext as _, Bounds, ClipboardItem, Context, Corner, Entity, EventEmitter,
+    FocusHandle, Focusable, Image as GpuiImage, Pixels, Render, SharedString, Subscription, Task,
+    WeakEntity, Window, canvas,
 };
 #[cfg(target_os = "windows")]
 use gpui::{AsyncApp, EntityId, ImageFormat as GpuiImageFormat};
@@ -24,10 +24,16 @@ use std::{
 };
 #[cfg(target_os = "windows")]
 use std::{io::Cursor, num::NonZeroIsize};
-use ui::{Color, IconButton, IconName, IconSize, Label, LabelSize, prelude::*};
-use workspace::item::{Item, ItemEvent, PaneTabBarControls};
+use ui::{
+    Color, ContextMenu, ContextMenuEntry, IconButton, IconName, IconSize, Label, LabelSize,
+    PopoverMenu, Tooltip, prelude::*,
+};
+use workspace::item::{Item, ItemEvent, PaneTabBarControls, TabContentParams};
 use workspace::notifications::NotificationId;
-use workspace::{NewWebPreview, Pane, Toast, Workspace, WorkspaceId};
+use workspace::{
+    DeploySearch, NewFile, NewLiquidGlass, NewTerminal, NewWebPreview, Pane, Toast,
+    ToggleFileFinder, ToggleProjectSymbols, Workspace, WorkspaceId,
+};
 
 #[cfg(target_os = "windows")]
 use crate::windows_visual_webview::WindowsVisualWebView;
@@ -393,6 +399,9 @@ impl WebPreviewView {
 
     fn confirm_navigation(&mut self, _: &Confirm, window: &mut Window, cx: &mut Context<Self>) {
         self.navigate_to_input(window, cx);
+        let preview_focus = self.focus_handle(cx);
+        window.focus(&preview_focus, cx);
+        cx.emit(ItemEvent::UpdateTab);
         cx.notify();
     }
 
@@ -440,15 +449,6 @@ impl WebPreviewView {
         });
     }
 
-    fn focus_url_editor(
-        &mut self,
-        _: &gpui::MouseUpEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.activate_url_editor(window, cx);
-    }
-
     fn navigate_to_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Ok(url) = normalized_url(&self.current_url_text(cx)) else {
             self.load_state = PreviewLoadState::Error("Enter a valid URL or search query.".into());
@@ -467,19 +467,14 @@ impl WebPreviewView {
         cx.notify();
     }
 
-    fn reload(&mut self, _: &gpui::ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+    fn reload_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Err(error) = self.reload_webview(window, cx) {
             self.load_state = PreviewLoadState::Error(error.to_string().into());
             cx.notify();
         }
     }
 
-    fn toggle_bookmark(
-        &mut self,
-        _: &gpui::ClickEvent,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn toggle_bookmark_for_active_url(&mut self, cx: &mut Context<Self>) {
         let url = self.active_url.to_string();
         if url.trim().is_empty() {
             return;
@@ -504,23 +499,23 @@ impl WebPreviewView {
         cx.notify();
     }
 
-    fn go_back(&mut self, _: &gpui::ClickEvent, _window: &mut Window, cx: &mut Context<Self>) {
+    fn go_back_in_history(&mut self, cx: &mut Context<Self>) {
         let _ = self.evaluate_script("history.back();");
         cx.notify();
     }
 
-    fn go_forward(&mut self, _: &gpui::ClickEvent, _window: &mut Window, cx: &mut Context<Self>) {
+    fn go_forward_in_history(&mut self, cx: &mut Context<Self>) {
         let _ = self.evaluate_script("history.forward();");
         cx.notify();
     }
 
-    fn zoom_in(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    fn zoom_in_step(&mut self, cx: &mut Context<Self>) {
         self.zoom_factor = (self.zoom_factor + 0.1).min(3.0);
         let _ = self.apply_zoom();
         cx.notify();
     }
 
-    fn zoom_out(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    fn zoom_out_step(&mut self, cx: &mut Context<Self>) {
         self.zoom_factor = (self.zoom_factor - 0.1).max(0.25);
         let _ = self.apply_zoom();
         cx.notify();
@@ -972,36 +967,6 @@ impl WebPreviewView {
         });
     }
 
-    fn open_extensions_root(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.ensure_extensions_scanned(cx);
-        let Some(path) = self
-            .detected_extensions
-            .first()
-            .and_then(|extension| extension.path.parent().map(Path::to_path_buf))
-            .or_else(|| {
-                let staging_root = self.workspace_context.profile_dir.join("wry_extensions");
-                staging_root.exists().then_some(staging_root)
-            })
-        else {
-            self.show_toast("No local browser extensions detected", cx);
-            return;
-        };
-
-        self.open_extension_location("Browser".into(), path, window, cx);
-    }
-
-    fn render_extensions_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        self.render_toolbar_action_button(
-            "web-preview-extensions-trigger",
-            IconName::Blocks,
-            true,
-            cx.listener(|this, _, window, cx| {
-                this.open_extensions_root(window, cx);
-            }),
-            cx,
-        )
-    }
-
     fn ensure_extensions_scanned(&mut self, cx: &mut Context<Self>) {
         if self.extensions_scanned {
             return;
@@ -1010,6 +975,244 @@ impl WebPreviewView {
         self.detected_extensions = scan_local_extensions().unwrap_or_default();
         self.extensions_scanned = true;
         cx.notify();
+    }
+
+    fn render_tab_bar_add_menu(&self) -> impl IntoElement {
+        PopoverMenu::new("web-preview-tab-bar-add-menu")
+            .trigger_with_tooltip(
+                IconButton::new("web-preview-tab-bar-add-trigger", IconName::Plus)
+                    .icon_size(IconSize::Small),
+                Tooltip::text("New..."),
+            )
+            .anchor(Corner::TopRight)
+            .menu(|window, cx| {
+                Some(ContextMenu::build(window, cx, |menu, _, _| {
+                    menu.action("New File", NewFile.boxed_clone())
+                        .action("New Terminal", NewTerminal::default().boxed_clone())
+                        .action("New Web Preview", NewWebPreview.boxed_clone())
+                        .action("New Liquid Glass", NewLiquidGlass.boxed_clone())
+                        .action("Open File", ToggleFileFinder::default().boxed_clone())
+                        .separator()
+                        .action("Search Project", DeploySearch::default().boxed_clone())
+                        .action("Search Symbols", ToggleProjectSymbols.boxed_clone())
+                }))
+            })
+    }
+
+    fn render_tab_bar_extensions_menu(&self, entity: Entity<Self>) -> impl IntoElement {
+        PopoverMenu::new("web-preview-tab-bar-extensions-menu")
+            .trigger_with_tooltip(
+                IconButton::new("web-preview-tab-bar-extensions-trigger", IconName::Blocks)
+                    .icon_size(IconSize::Small),
+                Tooltip::text("Extensions"),
+            )
+            .anchor(Corner::TopRight)
+            .menu(move |window, cx| {
+                let detected_extensions = entity
+                    .update(cx, |this, cx| {
+                        this.ensure_extensions_scanned(cx);
+                        this.detected_extensions.clone()
+                    });
+
+                Some(ContextMenu::build(window, cx, {
+                    let entity = entity.clone();
+                    move |menu, _, _| {
+                        if detected_extensions.is_empty() {
+                            menu.item(
+                                ContextMenuEntry::new("No local browser extensions detected")
+                                    .icon(IconName::Blocks)
+                                    .disabled(true),
+                            )
+                        } else {
+                            let mut menu = menu;
+                            for extension in detected_extensions.iter().cloned() {
+                                let label =
+                                    format!("{} ({})", extension.name, extension.browser);
+                                let entity = entity.clone();
+
+                                menu = menu.item(
+                                    ContextMenuEntry::new(label)
+                                        .icon(IconName::Blocks)
+                                        .handler(move |window, cx| {
+                                            let _ = entity.update(cx, |this, cx| {
+                                                this.open_extension_location(
+                                                    extension.name.clone(),
+                                                    extension.path.clone(),
+                                                    window,
+                                                    cx,
+                                                );
+                                            });
+                                        }),
+                                );
+                            }
+                            menu
+                        }
+                    }
+                }))
+            })
+    }
+
+    fn render_tab_bar_more_menu(&self, entity: Entity<Self>) -> impl IntoElement {
+        PopoverMenu::new("web-preview-tab-bar-more-menu")
+            .trigger_with_tooltip(
+                IconButton::new("web-preview-tab-bar-more-trigger", IconName::Ellipsis)
+                    .icon_size(IconSize::Small),
+                Tooltip::text("More"),
+            )
+            .anchor(Corner::TopRight)
+            .menu(move |window, cx| {
+                let (is_bookmarked, bookmark_icon, bookmark_label) =
+                    entity.read_with(cx, |this, _| {
+                        let is_bookmarked = this.is_active_url_bookmarked();
+                        let bookmark_icon = if is_bookmarked {
+                            IconName::StarFilled
+                        } else {
+                            IconName::Star
+                        };
+                        let bookmark_label = if is_bookmarked {
+                            "Remove Bookmark"
+                        } else {
+                            "Bookmark Page"
+                        };
+
+                        (is_bookmarked, bookmark_icon, bookmark_label)
+                    });
+
+                Some(ContextMenu::build(window, cx, {
+                    let entity = entity.clone();
+                    move |menu, _, _| {
+                        menu.item(
+                            ContextMenuEntry::new(bookmark_label)
+                                .icon(bookmark_icon)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.toggle_bookmark_for_active_url(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .separator()
+                        .item(
+                            ContextMenuEntry::new("Take Screenshot")
+                                .icon(IconName::Screen)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.take_screenshot(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Inspect Element")
+                                .icon(IconName::Code)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.inspect_element(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Open DevTools")
+                                .icon(IconName::Terminal)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.open_devtools(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .separator()
+                        .item(
+                            ContextMenuEntry::new("Zoom In")
+                                .icon(IconName::Plus)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.zoom_in_step(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Zoom Out")
+                                .icon(IconName::Dash)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.zoom_out_step(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .separator()
+                        .item(
+                            ContextMenuEntry::new("Clear Cache")
+                                .icon(IconName::Trash)
+                                .handler(move |window, cx| {
+                                    let _ = entity.update(cx, |this, cx| {
+                                        this.clear_cache(window, cx);
+                                    });
+                                }),
+                        )
+                    }
+                }))
+            })
+    }
+
+    fn render_tab_bar_start_controls(&self, cx: &mut Context<Self>) -> AnyElement {
+        h_flex()
+            .items_center()
+            .gap_1()
+            .child(
+                IconButton::new("web-preview-tab-bar-back", IconName::ArrowLeft)
+                    .icon_size(IconSize::Small)
+                    .tooltip(Tooltip::text("Back"))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.go_back_in_history(cx);
+                    })),
+            )
+            .child(
+                IconButton::new("web-preview-tab-bar-forward", IconName::ArrowRight)
+                    .icon_size(IconSize::Small)
+                    .tooltip(Tooltip::text("Forward"))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.go_forward_in_history(cx);
+                    })),
+            )
+            .child(
+                IconButton::new("web-preview-tab-bar-reload", IconName::RotateCw)
+                    .icon_size(IconSize::Small)
+                    .tooltip(Tooltip::text("Reload"))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.reload_page(window, cx);
+                    })),
+            )
+            .into_any_element()
+    }
+
+    fn render_tab_bar_end_controls(
+        &self,
+        entity: Entity<Self>,
+        _cx: &mut Context<Self>,
+    ) -> AnyElement {
+        h_flex()
+            .items_center()
+            .gap_1()
+            .child(self.render_tab_bar_add_menu())
+            .child(self.render_tab_bar_extensions_menu(entity.clone()))
+            .child(self.render_tab_bar_more_menu(entity))
+            .into_any_element()
     }
 
     #[cfg(target_os = "windows")]
@@ -1329,115 +1532,6 @@ impl WebPreviewView {
         ))
     }
 
-    fn render_more_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        h_flex()
-            .items_center()
-            .gap_1()
-            .child(self.render_toolbar_action_button(
-                "web-preview-screenshot",
-                IconName::Screen,
-                true,
-                cx.listener(|this, _, window, cx| {
-                    this.take_screenshot(window, cx);
-                }),
-                cx,
-            ))
-            .child(self.render_toolbar_action_button(
-                "web-preview-inspect",
-                IconName::Code,
-                true,
-                cx.listener(|this, _, window, cx| {
-                    this.inspect_element(window, cx);
-                }),
-                cx,
-            ))
-            .child(self.render_toolbar_action_button(
-                "web-preview-devtools",
-                IconName::Terminal,
-                true,
-                cx.listener(|this, _, window, cx| {
-                    this.open_devtools(window, cx);
-                }),
-                cx,
-            ))
-            .child(self.render_toolbar_action_button(
-                "web-preview-zoom-in",
-                IconName::Plus,
-                true,
-                cx.listener(|this, _, window, cx| {
-                    this.zoom_in(window, cx);
-                }),
-                cx,
-            ))
-            .child(self.render_toolbar_action_button(
-                "web-preview-zoom-out",
-                IconName::Dash,
-                true,
-                cx.listener(|this, _, window, cx| {
-                    this.zoom_out(window, cx);
-                }),
-                cx,
-            ))
-            .child(self.render_toolbar_action_button(
-                "web-preview-clear-cache",
-                IconName::Trash,
-                true,
-                cx.listener(|this, _, window, cx| {
-                    this.clear_cache(window, cx);
-                }),
-                cx,
-            ))
-    }
-
-    fn render_toolbar_action_button(
-        &self,
-        id: &'static str,
-        icon: IconName,
-        enabled: bool,
-        on_click: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let colors = cx.theme().colors();
-        let group_name = SharedString::from(format!("{id}-group"));
-
-        let icon = svg()
-            .size(IconSize::Small.rems())
-            .flex_none()
-            .path(icon.path())
-            .text_color(if enabled {
-                colors.icon_muted
-            } else {
-                colors.icon_disabled
-            })
-            .when(enabled, |this| {
-                this.group_hover(group_name.clone(), |style| {
-                    style.text_color(colors.icon_accent)
-                })
-            });
-
-        let button = h_flex()
-            .id(id)
-            .group(group_name)
-            .flex_none()
-            .w_6()
-            .h_6()
-            .items_center()
-            .justify_center()
-            .rounded_md()
-            .child(icon);
-
-        if enabled {
-            button
-                .cursor_pointer()
-                .hover(|style| style.bg(colors.ghost_element_hover))
-                .active(|style| style.bg(colors.ghost_element_active))
-                .on_click(on_click)
-                .into_any_element()
-        } else {
-            button.into_any_element()
-        }
-    }
-
     fn render_webview_body(&self, cx: &mut Context<Self>) -> AnyElement {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
@@ -1525,8 +1619,24 @@ impl Focusable for WebPreviewView {
 impl Item for WebPreviewView {
     type Event = ItemEvent;
 
+    fn tab_content(&self, params: TabContentParams, window: &Window, cx: &App) -> AnyElement {
+        let editor_focused = params.selected && self.url_editor.focus_handle(cx).is_focused(window);
+
+        if editor_focused {
+            return div()
+                .w(px(240.))
+                .min_w_0()
+                .child(self.url_editor.clone())
+                .into_any_element();
+        }
+
+        Label::new(self.current_tab_title())
+            .color(params.text_color())
+            .into_any_element()
+    }
+
     fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        format!("Web {}", self.current_tab_title()).into()
+        self.current_tab_title()
     }
 
     fn tab_icon(&self, _window: &Window, _cx: &App) -> Option<ui::Icon> {
@@ -1552,11 +1662,41 @@ impl Item for WebPreviewView {
     fn pane_tab_bar_controls(
         &self,
         _window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Option<PaneTabBarControls> {
-        // Return None to keep default tab navigation arrows
-        // Web navigation is handled in the preview's own toolbar
-        None
+        let entity = cx.entity();
+
+        Some(PaneTabBarControls::new(
+            Some(self.render_tab_bar_start_controls(cx)),
+            Some(self.render_tab_bar_end_controls(entity, cx)),
+        ))
+    }
+
+    fn on_tab_click(
+        &mut self,
+        params: TabContentParams,
+        event: &gpui::ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !params.selected || event.click_count() != 1 {
+            return false;
+        }
+
+        let editor_focus = self.url_editor.focus_handle(cx);
+        if !editor_focus.is_focused(window) {
+            self.activate_url_editor(window, cx);
+        }
+        true
+    }
+
+    fn on_tab_confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if !self.url_editor.focus_handle(cx).is_focused(window) {
+            return false;
+        }
+
+        self.confirm_navigation(&Confirm, window, cx);
+        true
     }
 
     fn can_split(&self) -> bool {
@@ -1631,8 +1771,19 @@ impl Item for WebPreviewView {
             },
         ));
 
-        // Defer focus to ensure webview doesn't interfere
-        let focus_handle = self.url_editor.focus_handle(cx);
+        let url_editor_focus = self.url_editor.focus_handle(cx);
+        self._subscriptions
+            .push(cx.on_focus(&url_editor_focus, window, |_, _, cx| {
+                cx.emit(ItemEvent::UpdateTab);
+                cx.notify();
+            }));
+        self._subscriptions
+            .push(cx.on_focus_out(&url_editor_focus, window, |_, _, _, cx| {
+                cx.emit(ItemEvent::UpdateTab);
+                cx.notify();
+            }));
+
+        let focus_handle = self.focus_handle(cx);
         cx.defer_in(window, move |_, window, cx| {
             focus_handle.focus(window, cx);
         });
@@ -1677,17 +1828,6 @@ impl Render for WebPreviewView {
             PreviewLoadState::Ready => None,
             PreviewLoadState::Error(error) => Some(error.clone()),
         };
-        let is_bookmarked = self.is_active_url_bookmarked();
-        let bookmark_icon = if is_bookmarked {
-            IconName::StarFilled
-        } else {
-            IconName::Star
-        };
-        let bookmark_color = if is_bookmarked {
-            Color::Accent
-        } else {
-            Color::Muted
-        };
         #[cfg(target_os = "windows")]
         let preview_surface_background = gpui::transparent_black().alpha(1.0 / 255.0);
         #[cfg(not(target_os = "windows"))]
@@ -1701,113 +1841,35 @@ impl Render for WebPreviewView {
             .size_full()
             .overflow_hidden()
             .child(
-                v_flex()
-                    .size_full()
-                    .child(
-                        h_flex()
-                            .id("web-preview-toolbar")
-                            .relative()
-                            .flex_none()
-                            .items_center()
-                            .gap_2()
-                            .px_3()
-                            .py_2()
-                            .border_b_1()
-                            .border_color(cx.theme().colors().border_variant)
-                            .bg(cx.theme().colors().surface_background)
-                            .child(
-                                IconButton::new("web-preview-back", IconName::ArrowLeft)
-                                    .icon_size(IconSize::Small)
-                                    .on_click(cx.listener(Self::go_back)),
-                            )
-                            .child(
-                                IconButton::new("web-preview-forward", IconName::ArrowRight)
-                                    .icon_size(IconSize::Small)
-                                    .on_click(cx.listener(Self::go_forward)),
-                            )
-                            .child(
-                                IconButton::new("web-preview-reload", IconName::RotateCw)
-                                    .icon_size(IconSize::Small)
-                                    .on_click(cx.listener(Self::reload)),
-                            )
-                            .child(
+                v_flex().size_full().child(
+                    div()
+                        .relative()
+                        .flex_1()
+                        .min_h_0()
+                        .w_full()
+                        .overflow_hidden()
+                        // Keep the Windows top GPUI window hit-testable over the underlay webview
+                        // without visibly obscuring the page.
+                        .bg(preview_surface_background)
+                        .child(body)
+                        .when_some(error_message, |this, error| {
+                            this.child(
                                 div()
-                                    .flex_1()
-                                    .h_8()
-                                    .min_w_0()
-                                    .px_3()
-                                    .occlude()
-                                    .rounded_full()
-                                    .bg(cx.theme().colors().editor_background)
-                                    .border_1()
-                                    .border_color(cx.theme().colors().border_variant)
-                                    .on_mouse_up(
-                                        MouseButton::Left,
-                                        cx.listener(Self::focus_url_editor),
-                                    )
+                                    .absolute()
+                                    .top_3()
+                                    .left_3()
+                                    .px_2()
+                                    .py_1()
+                                    .rounded_md()
+                                    .bg(Color::Error.color(cx).alpha(0.14))
                                     .child(
-                                        h_flex()
-                                            .size_full()
-                                            .items_center()
-                                            .gap_2()
-                                            .child(
-                                                div()
-                                                    .flex_1()
-                                                    .min_w_0()
-                                                    .child(self.url_editor.clone()),
-                                            )
-                                            .child(
-                                                IconButton::new(
-                                                    "web-preview-bookmark",
-                                                    bookmark_icon,
-                                                )
-                                                .icon_size(IconSize::Small)
-                                                .icon_color(Color::Muted)
-                                                .toggle_state(is_bookmarked)
-                                                .selected_icon_color(bookmark_color)
-                                                .on_click(cx.listener(Self::toggle_bookmark)),
-                                            ),
+                                        Label::new(error)
+                                            .size(LabelSize::Small)
+                                            .color(Color::Error),
                                     ),
                             )
-                            .child(
-                                h_flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .gap_1()
-                                    .flex_none()
-                                    .child(self.render_extensions_menu(cx))
-                                    .child(self.render_more_menu(cx)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .relative()
-                            .flex_1()
-                            .min_h_0()
-                            .w_full()
-                            .overflow_hidden()
-                            // Keep the Windows top GPUI window hit-testable over the underlay webview
-                            // without visibly obscuring the page.
-                            .bg(preview_surface_background)
-                            .child(body)
-                            .when_some(error_message, |this, error| {
-                                this.child(
-                                    div()
-                                        .absolute()
-                                        .top_3()
-                                        .left_3()
-                                        .px_2()
-                                        .py_1()
-                                        .rounded_md()
-                                        .bg(Color::Error.color(cx).alpha(0.14))
-                                        .child(
-                                            Label::new(error)
-                                                .size(LabelSize::Small)
-                                                .color(Color::Error),
-                                        ),
-                                )
-                            }),
-                    ),
+                        }),
+                ),
             )
     }
 }

@@ -11,7 +11,7 @@ use anyhow::Result;
 use client::{Client, proto};
 use futures::channel::mpsc;
 use gpui::{
-    Action, AnyElement, AnyEntity, AnyView, App, AppContext, Context, Entity, EntityId,
+    Action, AnyElement, AnyEntity, AnyView, App, AppContext, ClickEvent, Context, Entity, EntityId,
     EventEmitter, FocusHandle, Focusable, Font, Pixels, Point, Render, SharedString, Task,
     WeakEntity, Window,
 };
@@ -380,6 +380,24 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
         None
     }
 
+    /// Called when the item's tab is clicked.
+    /// Return `true` to consume the click and suppress the pane's default tab activation logic.
+    fn on_tab_click(
+        &mut self,
+        _params: TabContentParams,
+        _event: &ClickEvent,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> bool {
+        false
+    }
+
+    /// Called when the pane receives `menu::Confirm` while the item's tab content owns focus.
+    /// Return `true` to consume the action.
+    fn on_tab_confirm(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> bool {
+        false
+    }
+
     fn pixel_position_of_cursor(&self, _: &App) -> Option<Point<Pixels>> {
         None
     }
@@ -583,6 +601,14 @@ pub trait ItemHandle: 'static + Send {
         window: &mut Window,
         cx: &mut App,
     ) -> Option<PaneTabBarControls>;
+    fn on_tab_click(
+        &self,
+        params: TabContentParams,
+        event: &ClickEvent,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> bool;
+    fn on_tab_confirm(&self, window: &mut Window, cx: &mut App) -> bool;
     fn pixel_position_of_cursor(&self, cx: &App) -> Option<Point<Pixels>>;
     fn downgrade_item(&self) -> Box<dyn WeakItemHandle>;
     fn workspace_settings<'a>(&self, cx: &'a App) -> &'a WorkspaceSettings;
@@ -1159,6 +1185,20 @@ impl<T: Item> ItemHandle for Entity<T> {
         cx: &mut App,
     ) -> Option<PaneTabBarControls> {
         self.update(cx, |this, cx| this.pane_tab_bar_controls(window, cx))
+    }
+
+    fn on_tab_click(
+        &self,
+        params: TabContentParams,
+        event: &ClickEvent,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> bool {
+        self.update(cx, |this, cx| this.on_tab_click(params, event, window, cx))
+    }
+
+    fn on_tab_confirm(&self, window: &mut Window, cx: &mut App) -> bool {
+        self.update(cx, |this, cx| this.on_tab_confirm(window, cx))
     }
 
     fn pixel_position_of_cursor(&self, cx: &App) -> Option<Point<Pixels>> {
