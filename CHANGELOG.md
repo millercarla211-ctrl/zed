@@ -8,6 +8,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Upstream Sync - April 11, 2026
+**Merged upstream zed-industries/zed main (commit b15969086e)**
+
+Integrated 453 files from upstream with minimal conflicts. Our custom features (Liquid Glass, Web Preview, GPUI enhancements) remain isolated and unaffected.
+
+**Major Upstream Changes:**
+- **Agent/AI System Refactoring:** New thread branching system, worktree archive/picker, improved agent panel UI, better tool permission handling
+- **Language Model Architecture:** New `language_model_core` and `language_models_cloud` crates, provider refactoring (Anthropic, OpenAI, Google), completion API improvements
+- **Fuzzy Search:** New `fuzzy_nucleo` crate with better file/path matching
+- **Git Integration:** Enhanced repository handling, better blame support, improved worktree management
+- **Editor Enhancements:** Block comment tests, better semantic tokens, display map improvements
+- **Sidebar Refactoring:** Major UI/UX improvements (6746 lines in tests, 2054 in main code)
+- **Removed Features:** `crates/storybook/`, `crates/story/`, notification panel from collab_ui
+
+**Conflicts Resolved:**
+- `Cargo.lock` - Accepted upstream version (auto-regenerates with our dependencies)
+- `crates/agent_ui/src/conversation_view.rs` - Accepted upstream's improved `play_notification_sound` implementation
+
+**Custom Features Preserved:**
+- ✅ Liquid Glass (separate crate, no conflicts)
+- ✅ Web Preview (Windows complete, Linux/macOS in progress)
+- ✅ GPUI platform enhancements (Windows/Linux/macOS)
+- ✅ All documentation files
+
+See `MERGE_CONFLICT_ANALYSIS.md` for complete merge details and risk assessment.
+
 ### Added
 - Added a current cross-platform web preview status report that records the completed Windows implementation and the remaining macOS/Linux host work.
 - Added a root-level Windows web preview architecture report that documents the frozen rendering/input model and the "do not touch casually" policy for the working Windows path.
