@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added a root-level Windows web preview architecture report that documents the frozen rendering/input model and the "do not touch casually" policy for the working Windows path.
 - Added separate `web_preview_windows`, `web_preview_macos`, and `web_preview_linux` backend crates so platform work can continue without routing through the frozen Windows implementation.
 - Added a new native `Liquid Glass` workspace item entry point beside Web Preview, backed by a GPUI-rendered GPU primitive instead of the old standalone windowed demo.
+- Added a root-level Liquid Glass status report that documents the current native GPUI integration, current limitations, and the remaining renderer-level live-backdrop work.
 
 ### Changed
 - Began isolating non-Windows web preview work so macOS and Linux support can be developed without modifying the working Windows path.
@@ -73,8 +74,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Linux Wayland hosts now track their exported parent handle as explicit backend state and re-lower after layout churn, visibility restores, and parent-handle retargeting, so the Wayland underlay host stays attached and stacked correctly through compositor-side parent changes.
 - Restored Windows to the original `crates/web_preview` runtime wiring from `windows-webpreview`, while leaving macOS/Linux on separate backend crates, so the smooth proven Windows path is no longer routed through the split facade.
 - Began merging the old `crates/liquid_glass` standalone demo into Zed proper by moving Liquid Glass assets to the root asset pipeline, replacing imgui controls with native GPUI controls, and wiring the renderer through GPUI's shared primitive/back-end system.
+- Restored the Liquid Glass demo to the correct single-element model: a static preview image underlay with one glass shader pass above it, instead of treating the glass as a dragged miniature image panel.
+- Changed the floating Liquid Glass overlay to use a transparent source surface plus procedural shader highlights, so the moving glass element is no longer a sampled copy of the selected preview image.
+- Changed the Liquid Glass overlay renderer to capture the already-rendered editor frame in WGPU, DirectX, and Metal before each glass segment, so the moving glass now uses the real backdrop instead of a dummy transparent fallback.
 
 ### Fixed
+- Restored the whole-editor Liquid Glass overlay to the original tint/alpha/glow shader stack while keeping the live editor backdrop as its source, so the floating lens no longer uses the drifted gray-white look.
 - Cleared stale Windows web preview passthrough capture state on capture loss and host deactivation/hide without force-resetting the normal webview keyboard-focus path, so long-lived sessions stop latching dead input while normal interactions keep working.
 - Web preview toolbar action icons now stay muted at rest and only switch to the primary accent during hover and press states.
 - Web preview URL editing no longer forces focus away after navigation and avoids overwriting in-progress input while the page reports URL updates.

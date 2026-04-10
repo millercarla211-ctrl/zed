@@ -759,6 +759,7 @@ impl From<PolychromeSprite> for Primitive {
 #[expect(missing_docs)]
 pub struct LiquidGlassParams {
     pub glass_bounds: Bounds<Pixels>,
+    pub use_backdrop: bool,
     pub power_factor: f32,
     pub a: f32,
     pub b: f32,
@@ -784,7 +785,7 @@ pub struct LiquidGlass {
     pub order: DrawOrder,
     pub aberration_samples: u32,
     pub blur_iterations: u32,
-    pub pad: u32,
+    pub use_backdrop: u32,
     pub bounds: Bounds<ScaledPixels>,
     pub content_mask: ContentMask<ScaledPixels>,
     pub tile: AtlasTile,

@@ -1,7 +1,7 @@
 # Project TODO
 
 > Auto-managed by AI. Updated after every completed or failed task.
-> Last updated: 2026-04-09
+> Last updated: 2026-04-11
 
 ## In Progress
 - [ ] Finish integrating Liquid Glass as a native GPUI-rendered workspace item with platform renderer support and native controls
@@ -13,7 +13,9 @@
 - [x] Document any Windows-specific issues encountered
 
 ## Completed
+- [x] ~~Restore the whole-editor Liquid Glass overlay to the original panel shader stack while keeping the live editor backdrop as its source~~ ✅ (completed: 2026-04-11)
 - [x] ~~Clear stale Windows web preview passthrough capture state on capture loss and host deactivation/hide without breaking the normal webview focus path~~ (completed: 2026-04-09)
+- [x] ~~Add a true live-backdrop GPUI renderer path for Liquid Glass so the effect can refract real editor content instead of using the old transparent fallback~~ (completed: 2026-04-10)
 - [x] ~~Restore Windows web preview to the original monolithic `crates/web_preview` runtime wiring while keeping macOS/Linux on split backend crates~~ (completed: 2026-04-09)
 - [x] ~~Make Linux Wayland hosts track exported-parent attachment as explicit backend state and reapply underlay stacking after layout, visibility, and parent-handle retargets~~ (completed: 2026-04-09)
 - [x] ~~Make Linux X11 host retargeting reapply underlay stacking, bounds, and visibility so parent-window changes cannot leave stale placement or stale z-order~~ (completed: 2026-04-09)

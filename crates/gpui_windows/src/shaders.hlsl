@@ -8,6 +8,7 @@ cbuffer GlobalParams: register(b0) {
 };
 
 Texture2D<float4> t_sprite: register(t0);
+Texture2D<float4> t_backdrop: register(t2);
 SamplerState s_sprite: register(s0);
 
 struct SubpixelSpriteFragmentOutput {
@@ -1237,7 +1238,7 @@ struct LiquidGlass {
     uint order;
     uint aberration_samples;
     uint blur_iterations;
-    uint pad;
+    uint use_backdrop;
     Bounds bounds;
     Bounds content_mask;
     AtlasTile tile;
@@ -1286,7 +1287,15 @@ float2 liquid_tile_uv(float2 panel_uv, AtlasTile tile) {
     return (float2(tile.bounds.origin) + saturate(panel_uv) * float2(tile.bounds.size)) / atlas_size;
 }
 
+float2 liquid_backdrop_uv(float2 panel_uv, LiquidGlass instance) {
+    float2 position = instance.bounds.origin + panel_uv * instance.bounds.size;
+    return clamp(position / global_viewport_size, float2(0.001, 0.001), float2(0.999, 0.999));
+}
+
 float4 liquid_sample(float2 panel_uv, LiquidGlass instance) {
+    if (instance.use_backdrop != 0u) {
+        return t_backdrop.Sample(s_sprite, liquid_backdrop_uv(panel_uv, instance));
+    }
     return t_sprite.Sample(s_sprite, liquid_tile_uv(panel_uv, instance.tile));
 }
 
@@ -1354,7 +1363,6 @@ LiquidGlassVertexOutput liquid_glass_vertex(uint vertex_id : SV_VertexID, uint l
 
 float4 liquid_glass_fragment(LiquidGlassFragmentInput input) : SV_Target {
     LiquidGlass instance = liquid_glass[input.liquid_glass_id];
-    float4 base_color = liquid_sample(input.panel_uv, instance);
     float2 glass_origin_uv = (instance.glass_bounds.origin - instance.bounds.origin) / instance.bounds.size;
     float2 glass_size_uv = instance.glass_bounds.size / instance.bounds.size;
     float2 glass_center_uv = glass_origin_uv + glass_size_uv * 0.5;
@@ -1363,8 +1371,7 @@ float4 liquid_glass_fragment(LiquidGlassFragmentInput input) : SV_Target {
     float sdf = liquid_sd_superellipse(glass_local, max(instance.power_factor, 1.001), 1.0);
 
     if (sdf > 0.0) {
-        base_color.a *= instance.opacity;
-        return base_color;
+        return float4(0.0, 0.0, 0.0, 0.0);
     }
 
     float dist = -sdf;
@@ -1409,6 +1416,10 @@ float4 liquid_glass_fragment(LiquidGlassFragmentInput input) : SV_Target {
 
     float noise_val = (liquid_rand(input.position.xy * 0.001) - 0.5) * instance.noise;
     color.rgb += float3(noise_val, noise_val, noise_val);
+
+    float3 glass_tint = float3(0.93, 0.95, 0.99);
+    color.rgb = lerp(color.rgb, glass_tint, 0.28);
+    color.a = lerp(color.a, 0.18, 0.82);
 
     float glow_val = liquid_glow(input.panel_uv);
     float glow_mask = liquid_smoothstep(instance.glow_edge0, instance.glow_edge1, dist);

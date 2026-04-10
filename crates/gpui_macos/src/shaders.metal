@@ -744,11 +744,30 @@ fragment float4 polychrome_sprite_fragment(
            float2((float)atlas_size->width, (float)atlas_size->height);
   }
 
+  float2 liquid_backdrop_position(float2 panel_uv,
+                                  LiquidGlass instance,
+                                  constant Size_DevicePixels *viewport_size) {
+    float2 position =
+        float2(instance.bounds.origin.x, instance.bounds.origin.y) +
+        panel_uv * float2(instance.bounds.size.width, instance.bounds.size.height);
+    return clamp(
+        position / float2((float)viewport_size->width, (float)viewport_size->height),
+        float2(0.001),
+        float2(0.999));
+  }
+
   float4 liquid_sample(float2 panel_uv, LiquidGlass instance,
                        texture2d<float> atlas_texture,
-                       constant Size_DevicePixels *atlas_size) {
+                       texture2d<float> backdrop_texture,
+                       constant Size_DevicePixels *atlas_size,
+                       constant Size_DevicePixels *viewport_size) {
     constexpr sampler atlas_texture_sampler(mag_filter::linear,
                                             min_filter::linear);
+    if (instance.use_backdrop != 0u) {
+      return backdrop_texture.sample(
+          atlas_texture_sampler,
+          liquid_backdrop_position(panel_uv, instance, viewport_size));
+    }
     return atlas_texture.sample(
         atlas_texture_sampler,
         liquid_tile_position(panel_uv, instance.tile, atlas_size));
@@ -778,10 +797,12 @@ fragment float4 polychrome_sprite_fragment(
 
   float4 liquid_blur_sample(float2 panel_uv, LiquidGlass instance,
                             texture2d<float> atlas_texture,
-                            constant Size_DevicePixels *atlas_size) {
+                            texture2d<float> backdrop_texture,
+                            constant Size_DevicePixels *atlas_size,
+                            constant Size_DevicePixels *viewport_size) {
     uint steps = min(instance.blur_iterations, 8u);
     if (steps == 0u || instance.blur_radius <= 0.0) {
-      return liquid_sample(panel_uv, instance, atlas_texture, atlas_size);
+      return liquid_sample(panel_uv, instance, atlas_texture, backdrop_texture, atlas_size, viewport_size);
     }
 
     float2 texel = float2(
@@ -790,16 +811,16 @@ fragment float4 polychrome_sprite_fragment(
     );
     float blur_scale = max(instance.blur_downscale, 0.1);
 
-    float4 accum = liquid_sample(panel_uv, instance, atlas_texture, atlas_size);
+    float4 accum = liquid_sample(panel_uv, instance, atlas_texture, backdrop_texture, atlas_size, viewport_size);
     float total_weight = 1.0;
 
     for (uint i = 0u; i < steps; i += 1u) {
       float t = float(i + 1u) / float(steps);
       float2 offset = texel * instance.blur_radius * blur_scale * t;
-      accum += liquid_sample(panel_uv + float2(offset.x, 0.0), instance, atlas_texture, atlas_size);
-      accum += liquid_sample(panel_uv - float2(offset.x, 0.0), instance, atlas_texture, atlas_size);
-      accum += liquid_sample(panel_uv + float2(0.0, offset.y), instance, atlas_texture, atlas_size);
-      accum += liquid_sample(panel_uv - float2(0.0, offset.y), instance, atlas_texture, atlas_size);
+      accum += liquid_sample(panel_uv + float2(offset.x, 0.0), instance, atlas_texture, backdrop_texture, atlas_size, viewport_size);
+      accum += liquid_sample(panel_uv - float2(offset.x, 0.0), instance, atlas_texture, backdrop_texture, atlas_size, viewport_size);
+      accum += liquid_sample(panel_uv + float2(0.0, offset.y), instance, atlas_texture, backdrop_texture, atlas_size, viewport_size);
+      accum += liquid_sample(panel_uv - float2(0.0, offset.y), instance, atlas_texture, backdrop_texture, atlas_size, viewport_size);
       total_weight += 4.0;
     }
 
@@ -828,10 +849,11 @@ fragment float4 polychrome_sprite_fragment(
   fragment float4 liquid_glass_fragment(
       LiquidGlassFragmentInput input [[stage_in]],
       constant LiquidGlass *sprites [[buffer(SpriteInputIndex_Sprites)]],
+      constant Size_DevicePixels *viewport_size [[buffer(SpriteInputIndex_ViewportSize)]],
       constant Size_DevicePixels *atlas_size [[buffer(SpriteInputIndex_AtlasTextureSize)]],
-      texture2d<float> atlas_texture [[texture(SpriteInputIndex_AtlasTexture)]]) {
+      texture2d<float> atlas_texture [[texture(SpriteInputIndex_AtlasTexture)]],
+      texture2d<float> backdrop_texture [[texture(SpriteInputIndex_BackdropTexture)]]) {
     LiquidGlass sprite = sprites[input.liquid_glass_id];
-    float4 base_color = liquid_sample(input.panel_uv, sprite, atlas_texture, atlas_size);
     float2 glass_origin_uv =
         (float2(sprite.glass_bounds.origin.x, sprite.glass_bounds.origin.y) -
          float2(sprite.bounds.origin.x, sprite.bounds.origin.y)) /
@@ -845,8 +867,7 @@ fragment float4 polychrome_sprite_fragment(
     float sdf = liquid_sd_superellipse(glass_local, max(sprite.power_factor, 1.001), 1.0);
 
     if (sdf > 0.0) {
-      base_color.a *= sprite.opacity;
-      return base_color;
+      return float4(0.0);
     }
 
     float dist = -sdf;
@@ -857,7 +878,13 @@ fragment float4 polychrome_sprite_fragment(
         float2(0.001),
         float2(0.999));
 
-    float4 color = liquid_blur_sample(sample_panel_uv, sprite, atlas_texture, atlas_size);
+    float4 color = liquid_blur_sample(
+        sample_panel_uv,
+        sprite,
+        atlas_texture,
+        backdrop_texture,
+        atlas_size,
+        viewport_size);
 
     if (sprite.chromatic_aberration > 0.0001) {
       float edge_factor = 1.0 - liquid_smoothstep(0.0, 0.3, dist);
@@ -881,17 +908,23 @@ fragment float4 polychrome_sprite_fragment(
             sample_panel_uv + aberration_dir * offset * 2.0 + float2(texel.x, 0.0),
             sprite,
             atlas_texture,
-            atlas_size).r;
+            backdrop_texture,
+            atlas_size,
+            viewport_size).r;
         g_accum += liquid_blur_sample(
             sample_panel_uv + aberration_dir * offset * 0.8,
             sprite,
             atlas_texture,
-            atlas_size).g;
+            backdrop_texture,
+            atlas_size,
+            viewport_size).g;
         b_accum += liquid_blur_sample(
             sample_panel_uv - aberration_dir * offset * 1.5 - float2(texel.x, 0.0),
             sprite,
             atlas_texture,
-            atlas_size).b;
+            backdrop_texture,
+            atlas_size,
+            viewport_size).b;
       }
 
       color = float4(
@@ -903,6 +936,10 @@ fragment float4 polychrome_sprite_fragment(
 
     float noise_val = (liquid_rand(input.position.xy * 0.001) - 0.5) * sprite.noise;
     color.rgb += float3(noise_val);
+
+    float3 glass_tint = float3(0.93, 0.95, 0.99);
+    color.rgb = mix(color.rgb, glass_tint, 0.28);
+    color.a = mix(color.a, 0.18, 0.82);
 
     float glow_val = liquid_glow(input.panel_uv);
     float glow_mask = liquid_smoothstep(sprite.glow_edge0, sprite.glow_edge1, dist);

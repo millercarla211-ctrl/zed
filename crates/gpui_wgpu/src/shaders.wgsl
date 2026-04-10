@@ -94,6 +94,7 @@ struct GammaParams {
 @group(0) @binding(1) var<uniform> gamma_params: GammaParams;
 @group(1) @binding(1) var t_sprite: texture_2d<f32>;
 @group(1) @binding(2) var s_sprite: sampler;
+@group(1) @binding(3) var t_backdrop: texture_2d<f32>;
 
 const M_PI_F: f32 = 3.1415926;
 const GRAYSCALE_FACTORS: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
@@ -1289,7 +1290,7 @@ struct LiquidGlass {
     order: u32,
     aberration_samples: u32,
     blur_iterations: u32,
-    pad: u32,
+    use_backdrop: u32,
     bounds: Bounds,
     content_mask: Bounds,
     tile: AtlasTile,
@@ -1324,7 +1325,20 @@ fn liquid_tile_uv(panel_uv: vec2<f32>, tile: AtlasTile) -> vec2<f32> {
     return (vec2<f32>(tile.bounds.origin) + clamp(panel_uv, vec2<f32>(0.0), vec2<f32>(1.0)) * vec2<f32>(tile.bounds.size)) / atlas_size;
 }
 
+fn liquid_backdrop_uv(panel_uv: vec2<f32>, instance: LiquidGlass) -> vec2<f32> {
+    let position = instance.bounds.origin + panel_uv * instance.bounds.size;
+    return clamp(position / globals.viewport_size, vec2<f32>(0.001), vec2<f32>(0.999));
+}
+
+fn liquid_smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
+    let t = clamp((x - edge0) / max(edge1 - edge0, 0.00001), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+
 fn liquid_sample(panel_uv: vec2<f32>, instance: LiquidGlass) -> vec4<f32> {
+    if (instance.use_backdrop != 0u) {
+        return textureSample(t_backdrop, s_sprite, liquid_backdrop_uv(panel_uv, instance));
+    }
     return textureSample(t_sprite, s_sprite, liquid_tile_uv(panel_uv, instance.tile));
 }
 
@@ -1398,7 +1412,6 @@ fn fs_liquid_glass(input: LiquidGlassVarying) -> @location(0) vec4<f32> {
     }
 
     let instance = b_liquid_glass[input.instance_id];
-    let base_color = liquid_sample(input.panel_uv, instance);
     let glass_origin_uv = (instance.glass_bounds.origin - instance.bounds.origin) / instance.bounds.size;
     let glass_size_uv = instance.glass_bounds.size / instance.bounds.size;
     let glass_center_uv = glass_origin_uv + glass_size_uv * 0.5;
@@ -1407,7 +1420,7 @@ fn fs_liquid_glass(input: LiquidGlassVarying) -> @location(0) vec4<f32> {
     let sdf = liquid_sd_superellipse(glass_local, max(instance.power_factor, 1.001), 1.0);
 
     if (sdf > 0.0) {
-        return blend_color(base_color, instance.opacity);
+        return vec4<f32>(0.0);
     }
 
     let dist = -sdf;
@@ -1417,7 +1430,7 @@ fn fs_liquid_glass(input: LiquidGlassVarying) -> @location(0) vec4<f32> {
     var color = liquid_blur_sample(sample_panel_uv, instance);
 
     if (instance.chromatic_aberration > 0.0001) {
-        let edge_factor = 1.0 - smoothstep(0.0, 0.3, dist);
+        let edge_factor = 1.0 - liquid_smoothstep(0.0, 0.3, dist);
         let aberration_strength = instance.chromatic_aberration * edge_factor * 3.0;
         let base_dir = sample_panel_uv - glass_center_uv;
         let aberration_dir = select(vec2<f32>(1.0, 0.0), normalize(base_dir), length(base_dir) > 0.0001);
@@ -1449,8 +1462,14 @@ fn fs_liquid_glass(input: LiquidGlassVarying) -> @location(0) vec4<f32> {
     let noise_val = (liquid_rand(input.position.xy * 0.001) - 0.5) * instance.noise;
     color = vec4<f32>(color.rgb + vec3<f32>(noise_val), color.a);
 
+    let glass_tint = vec3<f32>(0.93, 0.95, 0.99);
+    color = vec4<f32>(
+        mix(color.rgb, glass_tint, 0.28),
+        mix(color.a, 0.18, 0.82),
+    );
+
     let glow_val = liquid_glow(input.panel_uv);
-    let glow_mask = smoothstep(instance.glow_edge0, instance.glow_edge1, dist);
+    let glow_mask = liquid_smoothstep(instance.glow_edge0, instance.glow_edge1, dist);
     let glow_mul = glow_val * instance.glow_weight * glow_mask + 1.0 + instance.glow_bias;
     color = vec4<f32>(color.rgb * glow_mul, color.a);
 

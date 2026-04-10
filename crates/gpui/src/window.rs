@@ -3817,7 +3817,7 @@ impl Window {
             order: 0,
             aberration_samples: params.aberration_samples.max(1),
             blur_iterations: params.blur_iterations,
-            pad: 0,
+            use_backdrop: u32::from(params.use_backdrop),
             bounds: bounds
                 .map_origin(|origin| origin.floor())
                 .map_size(|size| size.ceil()),

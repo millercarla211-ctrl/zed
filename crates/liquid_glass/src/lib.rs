@@ -1,10 +1,12 @@
 mod backgrounds;
+mod element;
 mod liquid_glass_view;
 mod ui_state;
 
 use gpui::App;
 use workspace::Workspace;
 
+pub use element::{LiquidGlassStyle, liquid_glass_layer, paint_liquid_glass_layer};
 pub use liquid_glass_view::LiquidGlassView;
 
 pub fn init(cx: &mut App) {

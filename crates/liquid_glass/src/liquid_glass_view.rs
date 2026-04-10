@@ -15,14 +15,16 @@ use ui::{
 use workspace::{Item, ItemId, SerializableItem, Workspace, WorkspaceId, item::ItemEvent};
 
 use crate::{
-    backgrounds::{BackgroundAsset, load_backgrounds},
+    backgrounds::{BackgroundAsset, load_backgrounds, load_glass_surface},
+    element::{LiquidGlassStyle, paint_liquid_glass_layer},
     ui_state::{GLASS_VARIANTS, UiState},
 };
 
 pub struct LiquidGlassView {
     backgrounds: Arc<[BackgroundAsset]>,
     focus_handle: FocusHandle,
-    preview_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
+    glass_surface: Arc<gpui::RenderImage>,
+    overlay_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
     slider_bounds: Rc<RefCell<Vec<(SliderKind, Bounds<Pixels>)>>>,
     active_slider: Option<SliderKind>,
     state: UiState,
@@ -215,7 +217,8 @@ impl LiquidGlassView {
         Self {
             backgrounds: load_backgrounds(cx),
             focus_handle: cx.focus_handle(),
-            preview_bounds: Rc::new(RefCell::new(None)),
+            glass_surface: load_glass_surface(),
+            overlay_bounds: Rc::new(RefCell::new(None)),
             slider_bounds: Rc::new(RefCell::new(Vec::new())),
             active_slider: None,
             state: UiState::default(),
@@ -238,21 +241,21 @@ impl LiquidGlassView {
         }
     }
 
-    fn set_preview_position_from_window(
+    fn set_overlay_position_from_window(
         &mut self,
         position: Point<Pixels>,
         cx: &mut Context<Self>,
     ) {
-        let Some(preview_bounds) = self.preview_bounds.borrow().clone() else {
+        let Some(overlay_bounds) = self.overlay_bounds.borrow().clone() else {
             return;
         };
 
-        let x = (position.x - preview_bounds.origin.x)
+        let x = (position.x - overlay_bounds.origin.x)
             .as_f32()
-            .clamp(0.0, preview_bounds.size.width.as_f32());
-        let y = (position.y - preview_bounds.origin.y)
+            .clamp(0.0, overlay_bounds.size.width.as_f32());
+        let y = (position.y - overlay_bounds.origin.y)
             .as_f32()
-            .clamp(0.0, preview_bounds.size.height.as_f32());
+            .clamp(0.0, overlay_bounds.size.height.as_f32());
         self.state.position = [x, y];
         self.use_preview_center = false;
         cx.notify();
@@ -338,7 +341,7 @@ impl LiquidGlassView {
         }
     }
 
-    fn on_control_mouse_move(
+    fn on_tab_mouse_move(
         &mut self,
         event: &MouseMoveEvent,
         _window: &mut Window,
@@ -358,18 +361,6 @@ impl LiquidGlassView {
         _cx: &mut Context<Self>,
     ) {
         self.active_slider = None;
-    }
-
-    fn on_preview_mouse_move(
-        &mut self,
-        event: &MouseMoveEvent,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if !self.state.mouse_control {
-            return;
-        }
-        self.set_preview_position_from_window(event.position, cx);
     }
 
     fn copy_payload(&self) -> String {
@@ -646,11 +637,30 @@ impl LiquidGlassView {
             .into_any_element()
     }
 
+    fn glass_style(&self) -> LiquidGlassStyle {
+        LiquidGlassStyle {
+            power_factor: self.state.power_factor,
+            a: self.state.a,
+            b: self.state.b,
+            c: self.state.c,
+            d: self.state.d,
+            f_power: self.state.f_power,
+            noise: self.state.noise,
+            glow_weight: self.state.glow_weight,
+            glow_edge0: self.state.glow_edge0,
+            glow_edge1: self.state.glow_edge1,
+            glow_bias: self.state.glow_bias,
+            chromatic_aberration: self.state.chromatic_aberration,
+            aberration_samples: self.state.aberration_samples,
+            blur_radius: self.state.blur_radius,
+            blur_iterations: self.state.blur_iterations,
+            blur_downscale: self.state.blur_downscale,
+        }
+    }
+
     fn render_preview(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let preview_bounds = self.preview_bounds.clone();
         let background = self.backgrounds[self.state.current_bg].clone();
-        let state = self.state.clone();
-        let use_preview_center = self.use_preview_center;
+        let preview_image = background.image.clone();
 
         div()
             .id("liquid-glass-preview")
@@ -664,17 +674,59 @@ impl LiquidGlassView {
             .bg(cx.theme().colors().editor_background)
             .child(
                 canvas(
+                    move |bounds, _, _| bounds,
+                    move |bounds, _, window, _cx| {
+                        let _ = window.paint_image(
+                            bounds,
+                            px(16.0).into(),
+                            preview_image.clone(),
+                            0,
+                            false,
+                        );
+                    },
+                )
+                .size_full(),
+            )
+    }
+
+    fn render_workspace_overlay(&self, cx: &mut Context<Self>) -> AnyElement {
+        let entity = cx.entity().clone();
+        let overlay_bounds = self.overlay_bounds.clone();
+        let glass_image = self.glass_surface.clone();
+        let glass_style = self.glass_style();
+        let state = self.state.clone();
+        let use_preview_center = self.use_preview_center;
+
+        div()
+            .absolute()
+            .inset_0()
+            .size_full()
+            .child(
+                canvas(
                     move |bounds, _, _| {
-                        *preview_bounds.borrow_mut() = Some(bounds);
+                        *overlay_bounds.borrow_mut() = Some(bounds);
                         bounds
                     },
                     move |bounds, _, window, _cx| {
+                        let entity = entity.clone();
+                        window.on_mouse_event(move |event: &MouseMoveEvent, _, _, cx| {
+                            if !entity.read(cx).state.mouse_control {
+                                return;
+                            }
+
+                            entity.update(cx, |this, cx| {
+                                this.set_overlay_position_from_window(event.position, cx);
+                            });
+                        });
+
                         let center = if use_preview_center {
                             bounds.center()
                         } else {
                             point(
-                                bounds.origin.x + px(state.position[0]),
-                                bounds.origin.y + px(state.position[1]),
+                                bounds.origin.x
+                                    + px(state.position[0].clamp(0.0, bounds.size.width.as_f32())),
+                                bounds.origin.y
+                                    + px(state.position[1].clamp(0.0, bounds.size.height.as_f32())),
                             )
                         };
                         let glass_size =
@@ -687,35 +739,18 @@ impl LiquidGlassView {
                             glass_size,
                         );
 
-                        let _ = window.paint_liquid_glass(
+                        paint_liquid_glass_layer(
+                            window,
                             bounds,
-                            background.image,
-                            gpui::LiquidGlassParams {
-                                glass_bounds,
-                                power_factor: state.power_factor,
-                                a: state.a,
-                                b: state.b,
-                                c: state.c,
-                                d: state.d,
-                                f_power: state.f_power,
-                                noise: state.noise,
-                                glow_weight: state.glow_weight,
-                                glow_edge0: state.glow_edge0,
-                                glow_edge1: state.glow_edge1,
-                                glow_bias: state.glow_bias,
-                                chromatic_aberration: state.chromatic_aberration,
-                                aberration_samples: state.aberration_samples,
-                                blur_radius: state.blur_radius,
-                                blur_iterations: state.blur_iterations,
-                                blur_downscale: state.blur_downscale,
-                            },
-                            0,
+                            glass_bounds,
+                            glass_image.clone(),
+                            &glass_style,
                         );
                     },
                 )
                 .size_full(),
             )
-            .on_mouse_move(cx.listener(Self::on_preview_mouse_move))
+            .into_any_element()
     }
 }
 
@@ -789,6 +824,14 @@ impl Item for LiquidGlassView {
         Some("Liquid Glass Opened")
     }
 
+    fn workspace_overlay(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        Some(self.render_workspace_overlay(cx))
+    }
+
     fn show_toolbar(&self) -> bool {
         false
     }
@@ -804,7 +847,8 @@ impl Item for LiquidGlassView {
         cx: &mut Context<Self>,
     ) -> Task<Option<Entity<Self>>> {
         let backgrounds = self.backgrounds.clone();
-        let preview_bounds = Rc::new(RefCell::new(None));
+        let glass_surface = self.glass_surface.clone();
+        let overlay_bounds = Rc::new(RefCell::new(None));
         let slider_bounds = Rc::new(RefCell::new(Vec::new()));
         let state = self.state.clone();
         let use_preview_center = self.use_preview_center;
@@ -812,7 +856,8 @@ impl Item for LiquidGlassView {
         Task::ready(Some(cx.new(|cx| Self {
             backgrounds,
             focus_handle: cx.focus_handle(),
-            preview_bounds,
+            glass_surface,
+            overlay_bounds,
             slider_bounds,
             active_slider: None,
             state,
@@ -870,7 +915,7 @@ impl Render for LiquidGlassView {
         h_flex()
             .size_full()
             .bg(cx.theme().colors().editor_background)
-            .on_mouse_move(cx.listener(Self::on_control_mouse_move))
+            .on_mouse_move(cx.listener(Self::on_tab_mouse_move))
             .capture_any_mouse_up(cx.listener(Self::end_slider_drag))
             .child(
                 v_flex()

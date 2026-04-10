@@ -133,6 +133,7 @@ pub(crate) struct MetalRenderer {
     core_video_texture_cache: core_video::metal_texture_cache::CVMetalTextureCache,
     path_intermediate_texture: Option<metal::Texture>,
     path_intermediate_msaa_texture: Option<metal::Texture>,
+    liquid_glass_backdrop_texture: Option<metal::Texture>,
     path_sample_count: u32,
 }
 
@@ -356,6 +357,7 @@ impl MetalRenderer {
             core_video_texture_cache,
             path_intermediate_texture: None,
             path_intermediate_msaa_texture: None,
+            liquid_glass_backdrop_texture: None,
             path_sample_count: PATH_SAMPLE_COUNT,
         }
     }
@@ -405,6 +407,7 @@ impl MetalRenderer {
         if size.width.0 <= 0 || size.height.0 <= 0 {
             self.path_intermediate_texture = None;
             self.path_intermediate_msaa_texture = None;
+            self.liquid_glass_backdrop_texture = None;
             return;
         }
 
@@ -416,6 +419,7 @@ impl MetalRenderer {
         texture_descriptor
             .set_usage(metal::MTLTextureUsage::RenderTarget | metal::MTLTextureUsage::ShaderRead);
         self.path_intermediate_texture = Some(self.device.new_texture(&texture_descriptor));
+        self.liquid_glass_backdrop_texture = Some(self.device.new_texture(&texture_descriptor));
 
         if self.path_sample_count > 1 {
             // https://developer.apple.com/documentation/metal/choosing-a-resource-storage-mode-for-apple-gpus
@@ -760,6 +764,7 @@ impl MetalRenderer {
         let command_buffer = command_queue.new_command_buffer();
         let alpha = if self.opaque { 1. } else { 0. };
         let mut instance_offset = 0;
+        let mut needs_backdrop_refresh = true;
 
         let mut command_encoder = new_command_encoder_for_texture(
             command_buffer,
@@ -809,13 +814,17 @@ impl MetalRenderer {
                     );
 
                     if did_draw {
-                        self.draw_paths_from_intermediate(
+                        let ok = self.draw_paths_from_intermediate(
                             paths,
                             instance_buffer,
                             &mut instance_offset,
                             viewport_size,
                             command_encoder,
-                        )
+                        );
+                        if ok {
+                            needs_backdrop_refresh = true;
+                        }
+                        ok
                     } else {
                         false
                     }
@@ -845,14 +854,53 @@ impl MetalRenderer {
                         viewport_size,
                         command_encoder,
                     ),
-                PrimitiveBatch::LiquidGlass { texture_id, range } => self.draw_liquid_glass(
-                    texture_id,
-                    &scene.liquid_glass[range],
-                    instance_buffer,
-                    &mut instance_offset,
-                    viewport_size,
-                    command_encoder,
-                ),
+                PrimitiveBatch::LiquidGlass { texture_id, range } => {
+                    if needs_backdrop_refresh {
+                        command_encoder.end_encoding();
+                        if !self.refresh_liquid_glass_backdrop(
+                            command_buffer,
+                            texture,
+                            viewport_size,
+                        ) {
+                            command_encoder = new_command_encoder_for_texture(
+                                command_buffer,
+                                texture,
+                                viewport_size,
+                                |color_attachment| {
+                                    color_attachment.set_load_action(metal::MTLLoadAction::Load);
+                                },
+                            );
+                            false
+                        } else {
+                            needs_backdrop_refresh = false;
+                            command_encoder = new_command_encoder_for_texture(
+                                command_buffer,
+                                texture,
+                                viewport_size,
+                                |color_attachment| {
+                                    color_attachment.set_load_action(metal::MTLLoadAction::Load);
+                                },
+                            );
+                            self.draw_liquid_glass(
+                                texture_id,
+                                &scene.liquid_glass[range],
+                                instance_buffer,
+                                &mut instance_offset,
+                                viewport_size,
+                                command_encoder,
+                            )
+                        }
+                    } else {
+                        self.draw_liquid_glass(
+                            texture_id,
+                            &scene.liquid_glass[range],
+                            instance_buffer,
+                            &mut instance_offset,
+                            viewport_size,
+                            command_encoder,
+                        )
+                    }
+                }
                 PrimitiveBatch::Surfaces(range) => self.draw_surfaces(
                     &scene.surfaces[range],
                     instance_buffer,
@@ -862,6 +910,13 @@ impl MetalRenderer {
                 ),
                 PrimitiveBatch::SubpixelSprites { .. } => unreachable!(),
             };
+            if ok {
+                match batch {
+                    PrimitiveBatch::LiquidGlass { .. } => {}
+                    PrimitiveBatch::Paths(_) => {}
+                    _ => needs_backdrop_refresh = true,
+                }
+            }
             if !ok {
                 command_encoder.end_encoding();
                 anyhow::bail!(
@@ -1415,6 +1470,9 @@ impl MetalRenderer {
         align_offset(instance_offset);
 
         let texture = self.sprite_atlas.metal_texture(texture_id);
+        let Some(backdrop_texture) = self.liquid_glass_backdrop_texture.as_ref() else {
+            return false;
+        };
         let texture_size = size(
             DevicePixels(texture.width() as i32),
             DevicePixels(texture.height() as i32),
@@ -1451,6 +1509,10 @@ impl MetalRenderer {
             &texture_size as *const Size<DevicePixels> as *const _,
         );
         command_encoder.set_fragment_texture(SpriteInputIndex::AtlasTexture as u64, Some(&texture));
+        command_encoder.set_fragment_texture(
+            SpriteInputIndex::BackdropTexture as u64,
+            Some(backdrop_texture),
+        );
 
         let sprite_bytes_len = mem::size_of_val(sprites);
         let buffer_contents =
@@ -1476,6 +1538,35 @@ impl MetalRenderer {
             sprites.len() as u64,
         );
         *instance_offset = next_offset;
+        true
+    }
+
+    fn refresh_liquid_glass_backdrop(
+        &self,
+        command_buffer: &metal::CommandBufferRef,
+        texture: &metal::TextureRef,
+        viewport_size: Size<DevicePixels>,
+    ) -> bool {
+        let Some(backdrop_texture) = self.liquid_glass_backdrop_texture.as_ref() else {
+            return false;
+        };
+        let blit = command_buffer.new_blit_command_encoder();
+        blit.copy_from_texture(
+            texture,
+            0,
+            0,
+            metal::MTLOrigin { x: 0, y: 0, z: 0 },
+            metal::MTLSize {
+                width: viewport_size.width.0.max(1) as u64,
+                height: viewport_size.height.0.max(1) as u64,
+                depth: 1,
+            },
+            backdrop_texture,
+            0,
+            0,
+            metal::MTLOrigin { x: 0, y: 0, z: 0 },
+        );
+        blit.end_encoding();
         true
     }
 
@@ -1746,6 +1837,7 @@ enum SpriteInputIndex {
     ViewportSize = 2,
     AtlasTextureSize = 3,
     AtlasTexture = 4,
+    BackdropTexture = 5,
 }
 
 #[repr(C)]

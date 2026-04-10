@@ -8053,6 +8053,9 @@ impl Render for Workspace {
         let transparent_workspace_background = self
             .active_item(cx)
             .is_some_and(|item| item.requires_transparent_workspace_background());
+        let active_workspace_overlay = self
+            .active_item(cx)
+            .and_then(|item| item.workspace_overlay(window, cx));
         let notification_entities = self
             .notifications
             .iter()
@@ -8461,7 +8464,8 @@ impl Render for Workspace {
                         .when(self.status_bar_visible(cx), |parent| {
                             parent.child(self.status_bar.clone())
                         })
-                        .child(self.toast_layer.clone()),
+                        .child(self.toast_layer.clone())
+                        .children(active_workspace_overlay),
                 )
     }
 }
