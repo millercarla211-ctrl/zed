@@ -10,7 +10,10 @@ use crate::{
         TabContentParams, TabTooltipContent, WeakItemHandle,
     },
     move_item,
-    notifications::NotifyResultExt,
+    notifications::{
+        NotificationId, NotifyResultExt, show_app_notification,
+        simple_message_notification::MessageNotification,
+    },
     toolbar::Toolbar,
     workspace_settings::{AutosaveSetting, FocusFollowsMouse, TabBarSettings, WorkspaceSettings},
 };
@@ -195,6 +198,16 @@ pub struct DeploySearch {
     pub included_files: Option<String>,
     #[serde(default)]
     pub excluded_files: Option<String>,
+    #[serde(default)]
+    pub query: Option<String>,
+    #[serde(default)]
+    pub regex: Option<bool>,
+    #[serde(default)]
+    pub case_sensitive: Option<bool>,
+    #[serde(default)]
+    pub whole_word: Option<bool>,
+    #[serde(default)]
+    pub include_ignored: Option<bool>,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug, Deserialize, JsonSchema, Default)]
@@ -305,16 +318,6 @@ actions!(
         UnpinAllTabs,
     ]
 );
-
-impl DeploySearch {
-    pub fn find() -> Self {
-        Self {
-            replace_enabled: false,
-            included_files: None,
-            excluded_files: None,
-        }
-    }
-}
 
 const MAX_NAVIGATION_HISTORY_LEN: usize = 1024;
 
@@ -4196,15 +4199,7 @@ fn default_render_tab_bar_buttons(
                             .action("New Liquid Glass", NewLiquidGlass.boxed_clone())
                             .action("Open File", ToggleFileFinder::default().boxed_clone())
                             .separator()
-                            .action(
-                                "Search Project",
-                                DeploySearch {
-                                    replace_enabled: false,
-                                    included_files: None,
-                                    excluded_files: None,
-                                }
-                                .boxed_clone(),
-                            )
+                            .action("Search Project", DeploySearch::default().boxed_clone())
                             .action("Search Symbols", ToggleProjectSymbols.boxed_clone())
                     }))
                 }),
@@ -4409,17 +4404,64 @@ impl Render for Pane {
             ))
             .on_action(
                 cx.listener(|pane: &mut Self, action: &RevealInProjectPanel, _, cx| {
+                    let Some(active_item) = pane.active_item() else {
+                        return;
+                    };
+
                     let entry_id = action
                         .entry_id
                         .map(ProjectEntryId::from_proto)
-                        .or_else(|| pane.active_item()?.project_entry_ids(cx).first().copied());
-                    if let Some(entry_id) = entry_id {
-                        pane.project
-                            .update(cx, |_, cx| {
-                                cx.emit(project::Event::RevealInProjectPanel(entry_id))
-                            })
-                            .ok();
+                        .or_else(|| active_item.project_entry_ids(cx).first().copied());
+
+                    let show_reveal_error_toast = |display_name: &str, cx: &mut App| {
+                        let notification_id = NotificationId::unique::<RevealInProjectPanel>();
+                        let message = SharedString::from(format!(
+                            "\"{display_name}\" is not part of any open projects."
+                        ));
+
+                        show_app_notification(notification_id, cx, move |cx| {
+                            let message = message.clone();
+                            cx.new(|cx| MessageNotification::new(message, cx))
+                        });
+                    };
+
+                    let Some(entry_id) = entry_id else {
+                        // When working with an unsaved buffer, display a toast
+                        // informing the user that the buffer is not present in
+                        // any of the open projects and stop execution, as we
+                        // don't want to open the project panel.
+                        let display_name = active_item
+                            .tab_tooltip_text(cx)
+                            .unwrap_or_else(|| active_item.tab_content_text(0, cx));
+
+                        return show_reveal_error_toast(&display_name, cx);
+                    };
+
+                    // We'll now check whether the entry belongs to a visible
+                    // worktree and, if that's not the case, it means the user
+                    // is interacting with a file that does not belong to any of
+                    // the open projects, so we'll show a toast informing them
+                    // of this and stop execution.
+                    let display_name = pane
+                        .project
+                        .read_with(cx, |project, cx| {
+                            project
+                                .worktree_for_entry(entry_id, cx)
+                                .filter(|worktree| !worktree.read(cx).is_visible())
+                                .map(|worktree| worktree.read(cx).root_name_str().to_string())
+                        })
+                        .ok()
+                        .flatten();
+
+                    if let Some(display_name) = display_name {
+                        return show_reveal_error_toast(&display_name, cx);
                     }
+
+                    pane.project
+                        .update(cx, |_, cx| {
+                            cx.emit(project::Event::RevealInProjectPanel(entry_id))
+                        })
+                        .log_err();
                 }),
             )
             .on_action(cx.listener(|_, _: &menu::Cancel, window, cx| {
@@ -4864,36 +4906,9 @@ fn dirty_message_for(buffer_path: Option<ProjectPath>, path_style: PathStyle) ->
 }
 
 pub fn tab_details(items: &[Box<dyn ItemHandle>], _window: &Window, cx: &App) -> Vec<usize> {
-    let mut tab_details = items.iter().map(|_| 0).collect::<Vec<_>>();
-    let mut tab_descriptions = HashMap::default();
-    let mut done = false;
-    while !done {
-        done = true;
-
-        // Store item indices by their tab description.
-        for (ix, (item, detail)) in items.iter().zip(&tab_details).enumerate() {
-            let description = item.tab_content_text(*detail, cx);
-            if *detail == 0 || description != item.tab_content_text(detail - 1, cx) {
-                tab_descriptions
-                    .entry(description)
-                    .or_insert(Vec::new())
-                    .push(ix);
-            }
-        }
-
-        // If two or more items have the same tab description, increase their level
-        // of detail and try again.
-        for (_, item_ixs) in tab_descriptions.drain() {
-            if item_ixs.len() > 1 {
-                done = false;
-                for ix in item_ixs {
-                    tab_details[ix] += 1;
-                }
-            }
-        }
-    }
-
-    tab_details
+    util::disambiguate::compute_disambiguation_details(items, |item, detail| {
+        item.tab_content_text(detail, cx)
+    })
 }
 
 pub fn render_item_indicator(item: Box<dyn ItemHandle>, cx: &App) -> Option<Indicator> {
