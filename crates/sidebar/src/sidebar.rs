@@ -40,7 +40,7 @@ use theme::ActiveTheme;
 use ui::{
     AgentThreadStatus, ButtonStyle, CommonAnimationExt, ContextMenu, Divider, HighlightedLabel,
     IconButtonShape, KeyBinding, PopoverMenu, PopoverMenuHandle, Tab, TabPosition, ThreadItem,
-    ThreadItemWorktreeInfo, TintColor, Tooltip, WithScrollbar, prelude::*, right_click_menu,
+    ThreadItemWorktreeInfo, TintColor, Tooltip, WithScrollbar, prelude::*,
 };
 use util::ResultExt as _;
 use util::path_list::PathList;
@@ -325,6 +325,7 @@ struct SidebarContents {
 #[derive(Clone)]
 struct SpaceEntry {
     key: ProjectGroupKey,
+    #[allow(dead_code)]
     label: SharedString,
 }
 
@@ -498,6 +499,15 @@ pub struct Sidebar {
     project_header_menu_ix: Option<usize>,
     _subscriptions: Vec<gpui::Subscription>,
     _draft_observation: Option<gpui::Subscription>,
+    dummy_spaces: Vec<DummySpace>,
+    active_dummy_space_index: usize,
+}
+
+#[derive(Clone)]
+struct DummySpace {
+    #[allow(dead_code)]
+    id: usize,
+    label: SharedString,
 }
 
 impl Sidebar {
@@ -617,6 +627,13 @@ impl Sidebar {
             project_header_menu_ix: None,
             _subscriptions: Vec::new(),
             _draft_observation: None,
+            dummy_spaces: (1..=12)
+                .map(|i| DummySpace {
+                    id: i,
+                    label: format!("Space {}", i).into(),
+                })
+                .collect(),
+            active_dummy_space_index: 0,
         }
     }
 
@@ -630,37 +647,43 @@ impl Sidebar {
         label.into()
     }
 
-    fn sync_space_state(&mut self, cx: &mut Context<Self>) {
-        let Some(multi_workspace) = self.multi_workspace.upgrade() else {
-            return;
-        };
+    fn sync_space_state(&mut self, _cx: &mut Context<Self>) {
+        // Disabled for dummy spaces - no need to sync with MultiWorkspace
+        return;
+        
+        #[allow(unreachable_code)]
+        {
+            let Some(multi_workspace) = self.multi_workspace.upgrade() else {
+                return;
+            };
 
-        let project_group_keys = multi_workspace
-            .read(cx)
-            .project_group_keys()
-            .cloned()
-            .collect::<Vec<_>>();
-        let project_group_key_set = project_group_keys.iter().cloned().collect::<HashSet<_>>();
+            let project_group_keys = multi_workspace
+                .read(_cx)
+                .project_group_keys()
+                .cloned()
+                .collect::<Vec<_>>();
+            let project_group_key_set = project_group_keys.iter().cloned().collect::<HashSet<_>>();
 
-        let mut changed = false;
-        self.space_labels.retain(|key, _| {
-            let keep = project_group_key_set.contains(key);
-            changed |= !keep;
-            keep
-        });
+            let mut changed = false;
+            self.space_labels.retain(|key, _| {
+                let keep = project_group_key_set.contains(key);
+                changed |= !keep;
+                keep
+            });
 
-        for key in project_group_keys {
-            if self.space_labels.contains_key(&key) {
-                continue;
+            for key in project_group_keys {
+                if self.space_labels.contains_key(&key) {
+                    continue;
+                }
+
+                let label = self.next_generated_space_label();
+                self.space_labels.insert(key, label);
+                changed = true;
             }
 
-            let label = self.next_generated_space_label();
-            self.space_labels.insert(key, label);
-            changed = true;
-        }
-
-        if changed {
-            self.serialize(cx);
+            if changed {
+                self.serialize(_cx);
+            }
         }
     }
 
@@ -684,6 +707,7 @@ impl Sidebar {
             .collect()
     }
 
+    #[allow(dead_code)]
     fn active_space_index(&self, cx: &App) -> Option<usize> {
         let active_key = self.active_project_group_key(cx)?;
         self.space_entries(cx)
@@ -706,17 +730,28 @@ impl Sidebar {
         start.min(max_start)
     }
 
-    fn create_new_space(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(multi_workspace) = self.multi_workspace.upgrade() else {
-            return;
-        };
-
-        let task = multi_workspace.update(cx, |multi_workspace, cx| {
-            multi_workspace.create_random_local_workspace(window, cx)
+    fn create_new_space(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let next_id = self.dummy_spaces.len() + 1;
+        self.dummy_spaces.push(DummySpace {
+            id: next_id,
+            label: format!("Space {}", next_id).into(),
         });
-        task.detach_and_log_err(cx);
+        cx.notify();
     }
 
+    fn activate_dummy_space(&mut self, index: usize, cx: &mut Context<Self>) {
+        if index < self.dummy_spaces.len() {
+            self.active_dummy_space_index = index;
+            
+            // Update page start to ensure active space is visible
+            let start = self.clamped_space_page_start(self.dummy_spaces.len(), Some(index));
+            self.space_page_start = start;
+            
+            cx.notify();
+        }
+    }
+
+    #[allow(dead_code)]
     fn activate_space(
         &mut self,
         key: &ProjectGroupKey,
@@ -746,16 +781,18 @@ impl Sidebar {
     }
 
     fn show_previous_space_page(&mut self, cx: &mut Context<Self>) {
-        let start = self
-            .clamped_space_page_start(self.space_entries(cx).len(), self.active_space_index(cx));
+        let start = self.clamped_space_page_start(
+            self.dummy_spaces.len(),
+            Some(self.active_dummy_space_index),
+        );
         self.space_page_start = start.saturating_sub(1);
         cx.notify();
     }
 
     fn show_next_space_page(&mut self, cx: &mut Context<Self>) {
-        let spaces = self.space_entries(cx);
-        let start = self.clamped_space_page_start(spaces.len(), self.active_space_index(cx));
-        let max_start = spaces.len().saturating_sub(MAX_VISIBLE_SPACE_DOTS);
+        let spaces_len = self.dummy_spaces.len();
+        let start = self.clamped_space_page_start(spaces_len, Some(self.active_dummy_space_index));
+        let max_start = spaces_len.saturating_sub(MAX_VISIBLE_SPACE_DOTS);
         self.space_page_start = (start + 1).min(max_start);
         cx.notify();
     }
@@ -4377,37 +4414,48 @@ impl Sidebar {
         };
 
         h_flex()
-            .gap_1()
-            .child(button(
-                "sidebar-toolbar-focus-search",
-                IconName::Blocks,
-                "Focus Search",
-                |this, _, window, cx| this.focus_sidebar_filter(&FocusSidebarFilter, window, cx),
-            ))
-            .child(button(
-                "sidebar-toolbar-prev-space",
-                IconName::ArrowLeft,
-                "Previous Space",
-                |this, _, window, cx| this.cycle_project_impl(false, window, cx),
-            ))
-            .child(button(
-                "sidebar-toolbar-next-space",
-                IconName::ArrowRight,
-                "Next Space",
-                |this, _, window, cx| this.cycle_project_impl(true, window, cx),
-            ))
-            .child(button(
-                "sidebar-toolbar-refresh",
-                IconName::RefreshTitle,
-                "Refresh Sidebar",
-                |this, _, _window, cx| this.update_entries(cx),
-            ))
-            .child(button(
-                "sidebar-toolbar-create-space",
-                IconName::Sparkle,
-                "Create New Space",
-                |this, _, window, cx| this.create_new_space(window, cx),
-            ))
+            .w_full()
+            .justify_between()
+            .child(
+                h_flex()
+                    .gap_1()
+                    .child(button(
+                        "sidebar-toolbar-focus-search",
+                        IconName::Blocks,
+                        "Focus Search",
+                        |this, _, window, cx| {
+                            this.focus_sidebar_filter(&FocusSidebarFilter, window, cx)
+                        },
+                    ))
+                    .child(button(
+                        "sidebar-toolbar-prev-space",
+                        IconName::ArrowLeft,
+                        "Previous Space",
+                        |this, _, window, cx| this.cycle_project_impl(false, window, cx),
+                    ))
+                    .child(button(
+                        "sidebar-toolbar-next-space",
+                        IconName::ArrowRight,
+                        "Next Space",
+                        |this, _, window, cx| this.cycle_project_impl(true, window, cx),
+                    )),
+            )
+            .child(
+                h_flex()
+                    .gap_1()
+                    .child(button(
+                        "sidebar-toolbar-refresh",
+                        IconName::RefreshTitle,
+                        "Refresh Sidebar",
+                        |this, _, _window, cx| this.update_entries(cx),
+                    ))
+                    .child(button(
+                        "sidebar-toolbar-create-space",
+                        IconName::Sparkle,
+                        "Create New Space",
+                        |this, _, window, cx| this.create_new_space(window, cx),
+                    )),
+            )
     }
 
     fn render_gen_search_row(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -4507,28 +4555,18 @@ impl Sidebar {
                     .color(Color::Muted),
             )
             .child(
-                h_flex()
+                v_flex()
                     .min_w_0()
-                    .gap_1()
-                    .child(
-                        Icon::new(IconName::Space)
-                            .size(IconSize::Small)
-                            .color(Color::Accent),
-                    )
-                    .child(
-                        v_flex()
-                            .min_w_0()
-                            .gap_0p5()
-                            .child(Label::new(self.active_space_label(cx)).truncate())
-                            .when(!active_space_path.is_empty(), |this| {
-                                this.child(
-                                    Label::new(active_space_path)
-                                        .size(LabelSize::XSmall)
-                                        .color(Color::Muted)
-                                        .truncate(),
-                                )
-                            }),
-                    ),
+                    .gap_0p5()
+                    .child(Label::new(self.active_space_label(cx)).truncate())
+                    .when(!active_space_path.is_empty(), |this| {
+                        this.child(
+                            Label::new(active_space_path)
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted)
+                                .truncate(),
+                        )
+                    }),
             )
     }
 
@@ -4666,16 +4704,12 @@ impl Sidebar {
             })
     }
 
-    fn render_space_carousel(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let spaces = self.space_entries(cx);
-        let active_key = self.active_project_group_key(cx);
-        let active_index = active_key
-            .as_ref()
-            .and_then(|key| spaces.iter().position(|space| &space.key == key));
-        let start = self.clamped_space_page_start(spaces.len(), active_index);
+    fn render_space_carousel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let spaces = self.dummy_spaces.clone();
+        let active_index = self.active_dummy_space_index;
+        let start = self.clamped_space_page_start(spaces.len(), Some(active_index));
         let show_left = start > 0;
         let show_right = start + MAX_VISIBLE_SPACE_DOTS < spaces.len();
-        let sidebar = cx.weak_entity();
 
         h_flex()
             .gap_1p5()
@@ -4702,90 +4736,27 @@ impl Sidebar {
                     .map(|(visible_ix, space)| {
                         let absolute_ix = start + visible_ix;
                         let space = space.clone();
-                        let is_active = active_key.as_ref() == Some(&space.key);
+                        let is_active = active_index == absolute_ix;
                         let dot_size = if is_active { px(10.0) } else { px(7.0) };
                         let tooltip_label = space.label.clone();
-                        let tooltip_summary = Self::space_path_summary_for_key(&space.key);
-                        let activate_space_key = space.key.clone();
-                        let menu_space_key = space.key.clone();
-                        let menu_space_label = space.label.clone();
-                        let menu_sidebar = sidebar.clone();
-                        let activate_space_listener = cx.listener(move |this, _, window, cx| {
-                            this.activate_space(&activate_space_key, window, cx);
-                        });
 
-                        right_click_menu(format!("space-dot-menu-{absolute_ix}"))
-                            .trigger(move |_is_open, _window, cx| {
-                                div()
-                                    .id(format!("space-dot-{absolute_ix}"))
-                                    .size(dot_size)
-                                    .rounded_full()
-                                    .cursor_pointer()
-                                    .border_1()
-                                    .border_color(
-                                        cx.theme().colors().border_variant.opacity(if is_active {
-                                            0.95
-                                        } else {
-                                            0.45
-                                        }),
-                                    )
-                                    .bg(if is_active {
-                                        cx.theme().colors().text_accent
-                                    } else {
-                                        cx.theme().colors().icon_muted.opacity(0.5)
-                                    })
-                                    .tooltip(move |_, cx| {
-                                        Tooltip::with_meta(
-                                            tooltip_label.clone(),
-                                            None,
-                                            tooltip_summary.clone(),
-                                            cx,
-                                        )
-                                    })
-                                    .on_click(activate_space_listener)
+                        div()
+                            .id(format!("space-dot-{absolute_ix}"))
+                            .size(dot_size)
+                            .rounded_full()
+                            .cursor_pointer()
+                            .when(is_active, |this| this.bg(cx.theme().colors().text))
+                            .when(!is_active, |this| {
+                                this.border_1()
+                                    .border_color(cx.theme().colors().border_variant)
+                                    .bg(gpui::transparent_black())
                             })
-                            .menu(move |window, cx| {
-                                let open_sidebar = menu_sidebar.clone();
-                                let delete_sidebar = menu_sidebar.clone();
-                                let open_key = menu_space_key.clone();
-                                let delete_key = menu_space_key.clone();
-                                let header_label = menu_space_label.clone();
-
-                                ContextMenu::build(window, cx, move |menu, _window, _cx| {
-                                    menu.header(header_label.to_string())
-                                        .entry("Open Space", None, move |window, cx| {
-                                            open_sidebar
-                                                .update(cx, |sidebar, cx| {
-                                                    sidebar.activate_space(&open_key, window, cx);
-                                                })
-                                                .ok();
-                                        })
-                                        .separator()
-                                        .entry("Delete Space", None, move |window, cx| {
-                                            delete_sidebar
-                                                .update(cx, |sidebar, cx| {
-                                                    if let Some(multi_workspace) =
-                                                        sidebar.multi_workspace.upgrade()
-                                                    {
-                                                        let task = multi_workspace.update(
-                                                            cx,
-                                                            |multi_workspace, cx| {
-                                                                multi_workspace
-                                                                    .remove_project_group(
-                                                                        &delete_key,
-                                                                        window,
-                                                                        cx,
-                                                                    )
-                                                            },
-                                                        );
-                                                        task.detach_and_log_err(cx);
-                                                    }
-                                                })
-                                                .ok();
-                                        })
-                                })
+                            .tooltip(move |window, cx| {
+                                Tooltip::text(tooltip_label.clone())(window, cx)
                             })
-                            .into_any_element()
+                            .on_click(cx.listener(move |this, _, _window, cx| {
+                                this.activate_dummy_space(absolute_ix, cx);
+                            }))
                     }),
             )
             .when(show_right, |this| {

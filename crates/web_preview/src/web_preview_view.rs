@@ -1008,11 +1008,10 @@ impl WebPreviewView {
             )
             .anchor(Corner::TopRight)
             .menu(move |window, cx| {
-                let detected_extensions = entity
-                    .update(cx, |this, cx| {
-                        this.ensure_extensions_scanned(cx);
-                        this.detected_extensions.clone()
-                    });
+                let detected_extensions = entity.update(cx, |this, cx| {
+                    this.ensure_extensions_scanned(cx);
+                    this.detected_extensions.clone()
+                });
 
                 Some(ContextMenu::build(window, cx, {
                     let entity = entity.clone();
@@ -1026,14 +1025,12 @@ impl WebPreviewView {
                         } else {
                             let mut menu = menu;
                             for extension in detected_extensions.iter().cloned() {
-                                let label =
-                                    format!("{} ({})", extension.name, extension.browser);
+                                let label = format!("{} ({})", extension.name, extension.browser);
                                 let entity = entity.clone();
 
                                 menu = menu.item(
-                                    ContextMenuEntry::new(label)
-                                        .icon(IconName::Blocks)
-                                        .handler(move |window, cx| {
+                                    ContextMenuEntry::new(label).icon(IconName::Blocks).handler(
+                                        move |window, cx| {
                                             let _ = entity.update(cx, |this, cx| {
                                                 this.open_extension_location(
                                                     extension.name.clone(),
@@ -1042,7 +1039,8 @@ impl WebPreviewView {
                                                     cx,
                                                 );
                                             });
-                                        }),
+                                        },
+                                    ),
                                 );
                             }
                             menu

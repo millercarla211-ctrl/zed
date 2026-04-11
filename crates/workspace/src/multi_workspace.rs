@@ -15,9 +15,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use ui::prelude::*;
+use util::path_list::PathList;
 use util::{ResultExt, paths::home_dir};
 use uuid::Uuid;
-use util::path_list::PathList;
 use zed_actions::agents_sidebar::ToggleThreadSwitcher;
 
 use agent_settings::AgentSettings;
@@ -339,14 +339,7 @@ fn is_space_candidate_name(name: &str) -> bool {
     !name.starts_with('.')
         && !matches!(
             name,
-            "AppData"
-                | "Library"
-                | "node_modules"
-                | ".cargo"
-                | ".git"
-                | ".rustup"
-                | "tmp"
-                | "Temp"
+            "AppData" | "Library" | "node_modules" | ".cargo" | ".git" | ".rustup" | "tmp" | "Temp"
         )
 }
 

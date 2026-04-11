@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### April 12, 2026 - Sidebar Space Dots Implementation
+**Implemented dummy space carousel system with navigation**
+
+- Added 12 dummy spaces by default to test horizontal scrolling
+- Implemented space dots carousel at sidebar bottom with left/right navigation
+- Split toolbar icons: left side (Focus Search, Previous/Next Space), right side (Refresh, Create New Space)
+- Fixed space dot colors: active uses primary text color, inactive uses bordered style
+- Removed icon background from "Current Space" heading
+- Fixed navigation arrows to properly show/hide and scroll through spaces
+- Disabled sync_space_state to avoid MultiWorkspace conflicts with dummy system
+- Fixed all compiler warnings with proper allow attributes
+
 ### Upstream Sync - April 11, 2026
 **Merged upstream zed-industries/zed main (commit b15969086e)**
 

@@ -18,3 +18,11 @@ Please make sure that the spaces tab is like the current Threads and Archive tab
 Also, I notice that in our Gen Code editor there is no text and create options, so please make sure to make text truncate UI so that if the text grows, it doesn't overflow and it shows an ellipsis (dot dot dot) truncate. Implement all these in our sidebar correctly. Don't ask me any questions at all; just implement it directly and do your best to do this autonomously.
 
 I get it that it's a pretty complex task, so before doing anything, you can ask me clarification questions so that we can implement this new web preview correctly. 
+
+Awesome you did really well. Now the top and center of our sidebar is looking pretty good. Please work on the bottom of our sidebar and make sure the "Creating New Space" works and it creates an empty space correctly. Make sure that space dots are the main pieces of our sidebar bottom. When we create new space make sure that it creates a new dot in the space dots correctly.
+Also only use the primary text color when we are active on the space. For other spaces please use a jet-themed color and use bordered not the whole color because that will be better. When we click or do a right click on the space dots, show options to delete and manage those spaces. Upon a left click please make that particular space dot screen space active.
+
+Please forgot the git changes stuffs and do these:
+And currently in our workspace sidebar we have a top bar that has items on the left side but I don't want that. I want that half of the items stay on the left side and half of the items go to the right side of our workspace sidebar top. The sidebar is correct and the numbered 1 to 12 grid icons are also correct but in the current space there is a shape with text accent besides the space text. Please remove that shape so that only the text remains
+
+Shamo subha tu mera
