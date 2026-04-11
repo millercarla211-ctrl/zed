@@ -39,22 +39,38 @@ use std::time::Duration;
 use theme::ActiveTheme;
 use title_bar_settings::TitleBarSettings;
 use ui::{
-    Avatar, ButtonLike, ContextMenu, IconWithIndicator, Indicator, PopoverMenu, PopoverMenuHandle,
-    TintColor, Tooltip, prelude::*, utils::platform_title_bar_height,
+    Avatar, ButtonLike, ContextMenu, ContextMenuEntry, Divider, IconWithIndicator, Indicator,
+    PopoverMenu, PopoverMenuHandle, TintColor, Tooltip, prelude::*,
+    utils::platform_title_bar_height,
 };
 use update_version::UpdateVersion;
-use util::ResultExt;
+use util::{ResultExt, paths::PathStyle};
 use workspace::{
-    MultiWorkspace, ToggleWorktreeSecurity, Workspace, notifications::NotifyResultExt,
+    MultiWorkspace, NewFile, NewLiquidGlass, NewTerminal, NewWebPreview,
+    ToggleWorktreeSecurity, Workspace,
+    item::{ItemHandle, WorkspaceScreenKind},
+    notifications::NotifyResultExt,
 };
 
 use zed_actions::OpenRemote;
 
 pub use onboarding_banner::restore_banner;
 
+#[allow(dead_code)]
 const MAX_PROJECT_NAME_LENGTH: usize = 40;
 const MAX_BRANCH_NAME_LENGTH: usize = 40;
 const MAX_SHORT_SHA_LENGTH: usize = 8;
+const MAX_DOCK_PATH_LENGTH: usize = 36;
+const MAX_DOCK_ITEM_LABEL_LENGTH: usize = 14;
+
+struct ActivePaneScreenEntry {
+    item: Box<dyn ItemHandle>,
+    kind: WorkspaceScreenKind,
+    title: SharedString,
+    subtitle: Option<SharedString>,
+    icon: IconName,
+    selected: bool,
+}
 
 actions!(
     collab,
@@ -176,8 +192,6 @@ impl Render for TitleBar {
 
         let show_menus = show_menus(cx);
 
-        let mut children = Vec::new();
-
         let mut project_name = None;
         let mut repository = None;
         let mut linked_worktree_name = None;
@@ -198,53 +212,34 @@ impl Render for TitleBar {
             });
         }
 
-        children.push(
-            h_flex()
-                .h_full()
-                .gap_0p5()
-                .map(|title_bar| {
-                    let mut render_project_items = title_bar_settings.show_branch_name
-                        || title_bar_settings.show_project_items;
-                    title_bar
-                        .when_some(
-                            self.application_menu.clone().filter(|_| !show_menus),
-                            |title_bar, menu| {
-                                render_project_items &=
-                                    !menu.update(cx, |menu, cx| menu.all_menus_shown(cx));
-                                title_bar.child(menu)
-                            },
-                        )
-                        .children(self.render_restricted_mode(cx))
-                        .when(render_project_items, |title_bar| {
-                            title_bar
-                                .when(title_bar_settings.show_project_items, |title_bar| {
-                                    title_bar
-                                        .children(self.render_project_host(cx))
-                                        .child(self.render_project_name(project_name, window, cx))
-                                })
-                                .when_some(
-                                    repository.filter(|_| title_bar_settings.show_branch_name),
-                                    |title_bar, repository| {
-                                        title_bar.children(self.render_project_branch(
-                                            repository,
-                                            linked_worktree_name,
-                                            cx,
-                                        ))
-                                    },
-                                )
-                        })
-                })
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .into_any_element(),
-        );
-
-        children.push(self.render_collaborator_list(window, cx).into_any_element());
-
-        if title_bar_settings.show_onboarding_banner {
-            if let Some(banner) = &self.banner {
-                children.push(banner.clone().into_any_element())
-            }
-        }
+        let left_content = h_flex()
+            .h_full()
+            .min_w_0()
+            .flex_grow()
+            .gap_1()
+            .items_center()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .map(|title_bar| {
+                title_bar
+                    .when_some(
+                        self.application_menu.clone().filter(|_| !show_menus),
+                        |title_bar, menu| title_bar.child(menu),
+                    )
+                    .children(self.render_restricted_mode(cx))
+                    .children(self.render_project_host(cx))
+                    .child(self.render_collaborator_list(window, cx))
+                    .when(
+                        title_bar_settings.show_onboarding_banner && self.banner.is_some(),
+                        |title_bar| {
+                            title_bar.child(
+                                self.banner
+                                    .clone()
+                                    .expect("banner presence checked")
+                                    .into_any_element(),
+                            )
+                        },
+                    )
+            });
 
         let status = self.client.status();
         let status = &*status.borrow();
@@ -264,27 +259,38 @@ impl Render for TitleBar {
                 client::Status::SignedOut | client::Status::AuthenticationError
             );
 
-        children.push(
-            h_flex()
-                .map(|this| {
-                    if signed_in {
-                        this.pr_1p5()
-                    } else {
-                        this.pr_1()
-                    }
-                })
-                .gap_1()
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .children(self.render_call_controls(window, cx))
-                .children(self.render_connection_status(status, cx))
-                .child(self.update_version.clone())
-                .when(
-                    user.is_none()
-                        && is_signed_out_or_auth_error
-                        && TitleBarSettings::get_global(cx).show_sign_in,
-                    |this| this.child(self.render_sign_in_button(cx)),
-                )
-                .when(is_signing_in, |this| {
+        let center_dock = self.render_screen_dock(
+            project_name.clone(),
+            repository.clone(),
+            linked_worktree_name.clone(),
+            window,
+            cx,
+        );
+
+        let right_content = h_flex()
+            .min_w_0()
+            .flex_grow()
+            .justify_end()
+            .map(|this| {
+                if signed_in {
+                    this.pr_1p5()
+                } else {
+                    this.pr_1()
+                }
+            })
+            .gap_1()
+            .items_center()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .children(self.render_call_controls(window, cx))
+            .children(self.render_connection_status(status, cx))
+            .child(self.update_version.clone())
+            .when(
+                user.is_none()
+                    && is_signed_out_or_auth_error
+                    && TitleBarSettings::get_global(cx).show_sign_in,
+                |this| this.child(self.render_sign_in_button(cx)),
+            )
+            .when(is_signing_in, |this| {
                     this.child(
                         Label::new("Signing in…")
                             .size(LabelSize::Small)
@@ -298,11 +304,19 @@ impl Render for TitleBar {
                             ),
                     )
                 })
-                .when(TitleBarSettings::get_global(cx).show_user_menu, |this| {
-                    this.child(self.render_user_menu_button(cx))
-                })
-                .into_any_element(),
-        );
+            .when(TitleBarSettings::get_global(cx).show_user_menu, |this| {
+                this.child(self.render_user_menu_button(cx))
+            });
+
+        let content_row = h_flex()
+            .w_full()
+            .h_full()
+            .items_center()
+            .gap_2()
+            .child(left_content)
+            .child(center_dock)
+            .child(right_content)
+            .into_any_element();
 
         if show_menus {
             self.platform_titlebar.update(cx, |this, _| {
@@ -327,15 +341,14 @@ impl Render for TitleBar {
                         .bg(title_bar_color)
                         .h(height)
                         .pl_2()
-                        .justify_between()
                         .w_full()
-                        .children(children),
+                        .child(content_row),
                 )
                 .into_any_element()
         } else {
             self.platform_titlebar.update(cx, |this, _| {
                 this.set_button_layout(button_layout);
-                this.set_children(children);
+                this.set_children([content_row]);
             });
             self.platform_titlebar.clone().into_any_element()
         }
@@ -425,6 +438,439 @@ impl TitleBar {
         this
     }
 
+    fn render_screen_dock(
+        &self,
+        project_name: Option<SharedString>,
+        repository: Option<Entity<project::git_store::Repository>>,
+        linked_worktree_name: Option<SharedString>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let path_segment = self.render_screen_dock_path(project_name, cx);
+        let branch_segment = repository.and_then(|repository| {
+            self.render_project_branch(repository, linked_worktree_name, cx)
+                .map(IntoElement::into_any_element)
+        });
+        let active_screen_kind = self.active_screen_kind(cx);
+        let active_pane_entries = self.collect_active_pane_screen_entries(window, cx);
+
+        let mut saw_editor = false;
+        let mut saw_browser = false;
+        let mut saw_terminal = false;
+        let extra_entries = active_pane_entries
+            .into_iter()
+            .filter(|entry| match entry.kind {
+                WorkspaceScreenKind::Editor => {
+                    if saw_editor {
+                        true
+                    } else {
+                        saw_editor = true;
+                        false
+                    }
+                }
+                WorkspaceScreenKind::Browser => {
+                    if saw_browser {
+                        true
+                    } else {
+                        saw_browser = true;
+                        false
+                    }
+                }
+                WorkspaceScreenKind::Terminal => {
+                    if saw_terminal {
+                        true
+                    } else {
+                        saw_terminal = true;
+                        false
+                    }
+                }
+                _ => true,
+            })
+            .collect::<Vec<_>>();
+
+        let has_left_segment = path_segment.is_some() || branch_segment.is_some();
+        let has_extra_entries = !extra_entries.is_empty();
+
+        h_flex()
+            .id("screen-dock")
+            .flex_none()
+            .items_center()
+            .gap_1()
+            .px_2()
+            .py_1()
+            .rounded_full()
+            .bg(cx.theme().colors().elevated_surface_background.opacity(0.96))
+            .border_1()
+            .border_color(cx.theme().colors().border_variant)
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .when(has_left_segment, |dock| {
+                dock.child(
+                    h_flex()
+                        .items_center()
+                        .gap_1()
+                        .children(path_segment)
+                        .children(branch_segment),
+                )
+            })
+            .when(has_left_segment, |dock| {
+                dock.child(Divider::vertical().color(ui::DividerColor::Border))
+            })
+            .child(
+                h_flex()
+                    .items_center()
+                    .gap_0p5()
+                    .child(self.render_screen_kind_button(
+                        WorkspaceScreenKind::Editor,
+                        active_screen_kind == WorkspaceScreenKind::Editor,
+                        cx,
+                    ))
+                    .child(self.render_screen_kind_button(
+                        WorkspaceScreenKind::Browser,
+                        active_screen_kind == WorkspaceScreenKind::Browser,
+                        cx,
+                    ))
+                    .child(self.render_screen_kind_button(
+                        WorkspaceScreenKind::Terminal,
+                        active_screen_kind == WorkspaceScreenKind::Terminal,
+                        cx,
+                    ))
+                    .children(
+                        extra_entries
+                            .into_iter()
+                            .map(|entry| self.render_screen_entry_button(entry, cx)),
+                    ),
+            )
+            .when(has_extra_entries, |dock| {
+                dock.child(Divider::vertical().color(ui::DividerColor::Border))
+            })
+            .child(
+                h_flex()
+                    .items_center()
+                    .gap_0p5()
+                    .child(self.render_screen_dock_add_menu(cx))
+                    .child(self.render_screen_dock_list_menu(window, cx)),
+            )
+            .into_any_element()
+    }
+
+    fn render_screen_dock_path(
+        &self,
+        project_name: Option<SharedString>,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let workspace = self.workspace.upgrade()?;
+        let active_item = workspace.read(cx).active_item(cx);
+
+        let label = if let Some(item) = active_item {
+            if let Some(project_path) = item.project_path(cx) {
+                project_path
+                    .path
+                    .display(PathStyle::local())
+                    .into_owned()
+            } else {
+                let fallback = project_name
+                    .clone()
+                    .unwrap_or_else(|| SharedString::from("Workspace"));
+                fallback.to_string()
+            }
+        } else {
+            let fallback = project_name.unwrap_or_else(|| SharedString::from("Workspace"));
+            fallback.to_string()
+        };
+
+        Some(
+            h_flex()
+                .items_center()
+                .gap_0p5()
+                .child(
+                    Icon::new(IconName::FileTree)
+                        .size(IconSize::XSmall)
+                        .color(Color::Muted),
+                )
+                .child(
+                    Label::new(util::truncate_and_trailoff(&label, MAX_DOCK_PATH_LENGTH))
+                        .size(LabelSize::Small)
+                        .color(Color::Muted),
+                )
+                .into_any_element(),
+        )
+    }
+
+    fn render_screen_kind_button(
+        &self,
+        kind: WorkspaceScreenKind,
+        selected: bool,
+        _cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let workspace = self.workspace.clone();
+        IconButton::new(
+            format!("screen-dock-kind-{}", Self::screen_kind_label(kind).to_lowercase()),
+            Self::screen_kind_icon(kind),
+        )
+        .icon_size(IconSize::Small)
+        .toggle_state(selected)
+        .tooltip(Tooltip::text(Self::screen_kind_label(kind)))
+        .on_click(move |_, window, cx| {
+            let Some(workspace) = workspace.upgrade() else {
+                return;
+            };
+
+            let target = workspace.read(cx).active_pane().read(cx).items().find_map(|item| {
+                (item.screen_kind(cx) == kind).then(|| item.boxed_clone())
+            });
+
+            if let Some(item) = target {
+                let _ = workspace.update(cx, |workspace, cx| {
+                    workspace.activate_item(&*item, true, true, window, cx);
+                });
+                return;
+            }
+
+            Self::dispatch_new_screen_action(kind, window, cx);
+        })
+        .into_any_element()
+    }
+
+    fn render_screen_entry_button(
+        &self,
+        entry: ActivePaneScreenEntry,
+        _cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let workspace = self.workspace.clone();
+        let tooltip = entry.subtitle.clone().unwrap_or_else(|| entry.title.clone());
+        let item = entry.item;
+        let button_id = format!(
+            "screen-dock-entry-{}-{:?}",
+            Self::screen_kind_label(entry.kind).to_lowercase(),
+            item.item_id()
+        );
+
+        ButtonLike::new(button_id)
+            .selected_style(ButtonStyle::Tinted(TintColor::Accent))
+            .toggle_state(entry.selected)
+            .child(
+                h_flex()
+                    .items_center()
+                    .gap_0p5()
+                    .child(
+                        Icon::new(entry.icon)
+                            .size(IconSize::XSmall)
+                            .color(if entry.selected {
+                                Color::Accent
+                            } else {
+                                Color::Muted
+                            }),
+                    )
+                    .child(
+                        Label::new(util::truncate_and_trailoff(
+                            entry.title.as_ref(),
+                            MAX_DOCK_ITEM_LABEL_LENGTH,
+                        ))
+                        .size(LabelSize::Small)
+                        .color(if entry.selected {
+                            Color::Default
+                        } else {
+                            Color::Muted
+                        }),
+                    ),
+            )
+            .tooltip(Tooltip::text(tooltip))
+            .on_click(move |_, window, cx| {
+                let Some(workspace) = workspace.upgrade() else {
+                    return;
+                };
+                let _ = workspace.update(cx, |workspace, cx| {
+                    workspace.activate_item(&*item, true, true, window, cx);
+                });
+            })
+            .into_any_element()
+    }
+
+    fn render_screen_dock_add_menu(&self, cx: &mut Context<Self>) -> AnyElement {
+        let active_screen_kind = self.active_screen_kind(cx);
+        IconButton::new("screen-dock-add-trigger", IconName::Plus)
+            .icon_size(IconSize::Small)
+            .tooltip(Tooltip::text(format!(
+                "New {}",
+                Self::screen_kind_label(active_screen_kind)
+            )))
+            .on_click(move |_, window, cx| {
+                Self::dispatch_new_screen_action(active_screen_kind, window, cx);
+            })
+            .into_any_element()
+    }
+
+    fn render_screen_dock_list_menu(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let workspace_handle = self.workspace.clone();
+        let initial_entries = self.collect_active_pane_screen_entries(window, cx);
+        let has_entries = !initial_entries.is_empty();
+
+        PopoverMenu::new("screen-dock-list-menu")
+            .trigger_with_tooltip(
+                IconButton::new("screen-dock-list-trigger", IconName::ListTree)
+                    .icon_size(IconSize::Small)
+                    .disabled(!has_entries),
+                Tooltip::text("Show Screens"),
+            )
+            .anchor(Corner::TopRight)
+            .menu(move |window, cx| {
+                let Some(workspace) = workspace_handle.upgrade() else {
+                    return Some(ContextMenu::build(window, cx, |menu, _, _| {
+                        menu.item(
+                            ContextMenuEntry::new("No active workspace")
+                                .icon(IconName::ListTree)
+                                .disabled(true),
+                        )
+                    }));
+                };
+
+                let active_item_id = workspace.read(cx).active_item(cx).map(|item| item.item_id());
+                let entries = workspace
+                    .read(cx)
+                    .active_pane()
+                    .read(cx)
+                    .items()
+                    .map(|item| ActivePaneScreenEntry {
+                        kind: item.screen_kind(cx),
+                        title: item.tab_content_text(0, cx),
+                        subtitle: item.tab_tooltip_text(cx),
+                        icon: Self::screen_kind_icon(item.screen_kind(cx)),
+                        selected: Some(item.item_id()) == active_item_id,
+                        item: item.boxed_clone(),
+                    })
+                    .collect::<Vec<_>>();
+
+                Some(ContextMenu::build(window, cx, {
+                    let workspace_handle = workspace_handle.clone();
+                    move |mut menu, _, _| {
+                        if entries.is_empty() {
+                            return menu.item(
+                                ContextMenuEntry::new("No screens in the active pane")
+                                    .icon(IconName::ListTree)
+                                    .disabled(true),
+                            );
+                        }
+
+                        for entry in entries {
+                            let label = format!(
+                                "{}: {}",
+                                Self::screen_kind_label(entry.kind),
+                                entry.title
+                            );
+                            let item = entry.item;
+                            let label = if entry.selected {
+                                format!("Current {}", label)
+                            } else {
+                                label
+                            };
+                            menu = menu.item(ContextMenuEntry::new(label).icon(entry.icon).handler({
+                                let workspace_handle = workspace_handle.clone();
+                                move |window, cx| {
+                                    let Some(workspace) = workspace_handle.upgrade() else {
+                                        return;
+                                    };
+                                    let _ = workspace.update(cx, |workspace, cx| {
+                                        workspace.activate_item(&*item, true, true, window, cx);
+                                    });
+                                }
+                            }));
+                        }
+                        menu
+                    }
+                }))
+            })
+            .into_any_element()
+    }
+
+    fn collect_active_pane_screen_entries(
+        &self,
+        _window: &Window,
+        cx: &App,
+    ) -> Vec<ActivePaneScreenEntry> {
+        let Some(workspace) = self.workspace.upgrade() else {
+            return Vec::new();
+        };
+        let active_item_id = workspace.read(cx).active_item(cx).map(|item| item.item_id());
+
+        workspace
+            .read(cx)
+            .active_pane()
+            .read(cx)
+            .items()
+            .map(|item| {
+                let kind = item.screen_kind(cx);
+                let title = item.tab_content_text(0, cx);
+                let title = if title.is_empty() {
+                    SharedString::from(Self::screen_kind_label(kind))
+                } else {
+                    title
+                };
+
+                ActivePaneScreenEntry {
+                    selected: Some(item.item_id()) == active_item_id,
+                    subtitle: item.tab_tooltip_text(cx),
+                    icon: Self::screen_kind_icon(kind),
+                    kind,
+                    title,
+                    item: item.boxed_clone(),
+                }
+            })
+            .collect()
+    }
+
+    fn active_screen_kind(&self, cx: &App) -> WorkspaceScreenKind {
+        self.workspace
+            .upgrade()
+            .and_then(|workspace| workspace.read(cx).active_item(cx))
+            .map(|item| item.screen_kind(cx))
+            .unwrap_or(WorkspaceScreenKind::Editor)
+    }
+
+    fn dispatch_new_screen_action(
+        kind: WorkspaceScreenKind,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        match kind {
+            WorkspaceScreenKind::Editor => window.dispatch_action(NewFile.boxed_clone(), cx),
+            WorkspaceScreenKind::Browser => {
+                window.dispatch_action(NewWebPreview.boxed_clone(), cx);
+            }
+            WorkspaceScreenKind::Terminal => {
+                window.dispatch_action(NewTerminal::default().boxed_clone(), cx);
+            }
+            WorkspaceScreenKind::LiquidGlass => {
+                window.dispatch_action(NewLiquidGlass.boxed_clone(), cx);
+            }
+            WorkspaceScreenKind::Other => window.dispatch_action(NewFile.boxed_clone(), cx),
+        }
+    }
+
+    fn screen_kind_label(kind: WorkspaceScreenKind) -> &'static str {
+        match kind {
+            WorkspaceScreenKind::Editor => "Editor",
+            WorkspaceScreenKind::Browser => "Browser",
+            WorkspaceScreenKind::Terminal => "Terminal",
+            WorkspaceScreenKind::LiquidGlass => "Glass",
+            WorkspaceScreenKind::Other => "Screen",
+        }
+    }
+
+    fn screen_kind_icon(kind: WorkspaceScreenKind) -> IconName {
+        match kind {
+            WorkspaceScreenKind::Editor => IconName::Code,
+            WorkspaceScreenKind::Browser => IconName::Public,
+            WorkspaceScreenKind::Terminal => IconName::Terminal,
+            WorkspaceScreenKind::LiquidGlass => IconName::Sparkle,
+            WorkspaceScreenKind::Other => IconName::Circle,
+        }
+    }
+
+    #[allow(dead_code)]
     fn worktree_count(&self, cx: &App) -> usize {
         self.project.read(cx).visible_worktrees(cx).count()
     }
@@ -669,6 +1115,7 @@ impl TitleBar {
         )
     }
 
+    #[allow(dead_code)]
     fn render_project_name(
         &self,
         name: Option<SharedString>,
@@ -755,6 +1202,7 @@ impl TitleBar {
             .into_any_element()
     }
 
+    #[allow(dead_code)]
     fn render_recent_projects_popover(
         &self,
         display_name: String,

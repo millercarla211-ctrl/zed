@@ -7,7 +7,7 @@ use crate::{
     item::{
         ActivateOnClose, ClosePosition, Item, ItemBufferKind, ItemHandle, ItemSettings,
         PreviewTabsSettings, ProjectItemKind, SaveOptions, ShowCloseButton, ShowDiagnostics,
-        TabContentParams, TabTooltipContent, WeakItemHandle,
+        TabContentParams, TabTooltipContent, WeakItemHandle, WorkspaceScreenKind,
     },
     move_item,
     notifications::{
@@ -4181,13 +4181,46 @@ fn default_render_tab_bar_buttons(
         Some(_) => (false, pane.items_len() > 1),
         None => (false, false),
     };
+    let active_screen_kind = pane
+        .active_item()
+        .map(|item| item.screen_kind(cx))
+        .unwrap_or(WorkspaceScreenKind::Other);
+
     // Ideally we would return a vec of elements here to pass directly to the [TabBar]'s
     // `end_slot`, but due to needing a view here that isn't possible.
     let right_children = h_flex()
         // Instead we need to replicate the spacing from the [TabBar]'s `end_slot` here.
         .gap(DynamicSpacing::Base04.rems(cx))
-        .child(
-            PopoverMenu::new("pane-tab-bar-popover-menu")
+        .child(match active_screen_kind {
+            WorkspaceScreenKind::Editor => IconButton::new("plus", IconName::Plus)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text("New File"))
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(Box::new(NewFile), cx);
+                })
+                .into_any_element(),
+            WorkspaceScreenKind::Browser => IconButton::new("plus", IconName::Plus)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text("New Web Preview"))
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(NewWebPreview.boxed_clone(), cx);
+                })
+                .into_any_element(),
+            WorkspaceScreenKind::Terminal => IconButton::new("plus", IconName::Plus)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text("New Terminal"))
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(NewTerminal::default().boxed_clone(), cx);
+                })
+                .into_any_element(),
+            WorkspaceScreenKind::LiquidGlass => IconButton::new("plus", IconName::Plus)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text("New Liquid Glass"))
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(NewLiquidGlass.boxed_clone(), cx);
+                })
+                .into_any_element(),
+            WorkspaceScreenKind::Other => PopoverMenu::new("pane-tab-bar-popover-menu")
                 .trigger_with_tooltip(
                     IconButton::new("plus", IconName::Plus).icon_size(IconSize::Small),
                     Tooltip::text("New..."),
@@ -4205,8 +4238,9 @@ fn default_render_tab_bar_buttons(
                             .action("Search Project", DeploySearch::default().boxed_clone())
                             .action("Search Symbols", ToggleProjectSymbols.boxed_clone())
                     }))
-                }),
-        )
+                })
+                .into_any_element(),
+        })
         .child(
             PopoverMenu::new("pane-tab-bar-split")
                 .trigger_with_tooltip(

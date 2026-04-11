@@ -28,12 +28,11 @@ use ui::{
     Color, ContextMenu, ContextMenuEntry, IconButton, IconName, IconSize, Label, LabelSize,
     PopoverMenu, Tooltip, prelude::*,
 };
-use workspace::item::{Item, ItemEvent, PaneTabBarControls, TabContentParams};
-use workspace::notifications::NotificationId;
-use workspace::{
-    DeploySearch, NewFile, NewLiquidGlass, NewTerminal, NewWebPreview, Pane, Toast,
-    ToggleFileFinder, ToggleProjectSymbols, Workspace, WorkspaceId,
+use workspace::item::{
+    Item, ItemEvent, PaneTabBarControls, TabContentParams, WorkspaceScreenKind,
 };
+use workspace::notifications::NotificationId;
+use workspace::{NewWebPreview, Pane, Toast, Workspace, WorkspaceId};
 
 #[cfg(target_os = "windows")]
 use crate::windows_visual_webview::WindowsVisualWebView;
@@ -978,24 +977,11 @@ impl WebPreviewView {
     }
 
     fn render_tab_bar_add_menu(&self) -> impl IntoElement {
-        PopoverMenu::new("web-preview-tab-bar-add-menu")
-            .trigger_with_tooltip(
-                IconButton::new("web-preview-tab-bar-add-trigger", IconName::Plus)
-                    .icon_size(IconSize::Small),
-                Tooltip::text("New..."),
-            )
-            .anchor(Corner::TopRight)
-            .menu(|window, cx| {
-                Some(ContextMenu::build(window, cx, |menu, _, _| {
-                    menu.action("New File", NewFile.boxed_clone())
-                        .action("New Terminal", NewTerminal::default().boxed_clone())
-                        .action("New Web Preview", NewWebPreview.boxed_clone())
-                        .action("New Liquid Glass", NewLiquidGlass.boxed_clone())
-                        .action("Open File", ToggleFileFinder::default().boxed_clone())
-                        .separator()
-                        .action("Search Project", DeploySearch::default().boxed_clone())
-                        .action("Search Symbols", ToggleProjectSymbols.boxed_clone())
-                }))
+        IconButton::new("web-preview-tab-bar-add-trigger", IconName::Plus)
+            .icon_size(IconSize::Small)
+            .tooltip(Tooltip::text("New Web Preview"))
+            .on_click(|_, window, cx| {
+                window.dispatch_action(NewWebPreview.boxed_clone(), cx);
             })
     }
 
@@ -1647,6 +1633,10 @@ impl Item for WebPreviewView {
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
         Some("Web Preview Opened")
+    }
+
+    fn screen_kind(&self) -> WorkspaceScreenKind {
+        WorkspaceScreenKind::Browser
     }
 
     fn requires_transparent_workspace_background() -> bool {

@@ -1,7 +1,7 @@
 # Project TODO
 
 > Auto-managed by AI. Updated after every completed or failed task.
-> Last updated: 2026-04-11
+> Last updated: 2026-04-12
 
 ## In Progress
 - [ ] Finish integrating Liquid Glass as a native GPUI-rendered workspace item with platform renderer support and native controls
@@ -13,6 +13,7 @@
 - [x] Document any Windows-specific issues encountered
 
 ## Completed
+- [x] ~~Move the workspace path, branch, and screen switching into a centered macOS-style title bar dock with screen-aware add/list controls~~ ✅ (completed: 2026-04-12)
 - [x] ~~Move Web Preview navigation and actions into the main pane tab bar, remove the in-page toolbar, and make the active web tab switch between page title and URL editor~~ ✅ (completed: 2026-04-11)
 - [x] ~~Restore the whole-editor Liquid Glass overlay to the original panel shader stack while keeping the live editor backdrop as its source~~ ✅ (completed: 2026-04-11)
 - [x] ~~Clear stale Windows web preview passthrough capture state on capture loss and host deactivation/hide without breaking the normal webview focus path~~ (completed: 2026-04-09)

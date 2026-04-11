@@ -1,4 +1,4 @@
-Today is 11th April 2026, and we are working on zed code editor. I have attached an image screenshot, so study that and do this the current task is updating our web preview tab. Study the code about our web preview tab and implement these new updates:
+Today is 12th April 2026, and we are working on zed code editor. I have attached an image screenshot, so study that and do this the current task is updating our web preview tab. Study the code about our web preview tab and implement these new updates:
 
 In our current gen co-editor, there is a status, and in the top bar, at the most top bar, there is space in the center. In there, please create a rounded pill rectangle like a macOS dock. In there, please put two items on the left side:
 1. Path

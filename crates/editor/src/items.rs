@@ -40,11 +40,15 @@ use std::{
 use text::{BufferId, BufferSnapshot, Selection};
 use ui::{IconDecorationKind, prelude::*};
 use util::{ResultExt, TryFutureExt, paths::PathExt, rel_path::RelPath};
-use workspace::item::{Dedup, ItemSettings, SerializableItem, TabContentParams};
+use workspace::item::{
+    Dedup, ItemSettings, SerializableItem, TabContentParams, WorkspaceScreenKind,
+};
 use workspace::{
     CollaboratorId, ItemId, ItemNavHistory, ToolbarItemLocation, ViewId, Workspace, WorkspaceId,
     invalid_item_view::InvalidItemView,
-    item::{FollowableItem, Item, ItemBufferKind, ItemEvent, ProjectItem, SaveOptions},
+    item::{
+        FollowableItem, Item, ItemBufferKind, ItemEvent, ProjectItem, SaveOptions,
+    },
     searchable::{
         Direction, FilteredSearchRange, SearchEvent, SearchToken, SearchableItem,
         SearchableItemHandle,
@@ -663,6 +667,10 @@ impl Item for Editor {
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
         None
+    }
+
+    fn screen_kind(&self) -> WorkspaceScreenKind {
+        WorkspaceScreenKind::Editor
     }
 
     fn tab_content_text(&self, detail: usize, cx: &App) -> SharedString {

@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### April 12, 2026 - Title Bar Screen Dock
+**Moved screen navigation and creation into a centered dock**
+
+- Added a centered rounded screen dock in the title bar and moved the active path and branch display into it
+- Added default screen switching buttons for Editor, Browser, and Terminal, plus dock entries for extra active-pane screens
+- Made the dock add menu context-aware so each screen type creates its own matching item instead of mixing file, browser, and terminal creation
+- Changed the web preview tab-bar add button to create only a new web preview
+
 ### April 12, 2026 - Fixed Space Carousel Navigation and Removed Gap Calculation
 **Fixed arrow navigation direction and simplified click handling**
 

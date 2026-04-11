@@ -161,6 +161,15 @@ impl PaneTabBarControls {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WorkspaceScreenKind {
+    Editor,
+    Browser,
+    Terminal,
+    LiquidGlass,
+    Other,
+}
+
 pub enum TabTooltipContent {
     Text(SharedString),
     Custom(Box<dyn Fn(&mut Window, &mut App) -> AnyView>),
@@ -234,6 +243,10 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
         None
+    }
+
+    fn screen_kind(&self) -> WorkspaceScreenKind {
+        WorkspaceScreenKind::Other
     }
 
     fn workspace_overlay(
@@ -518,6 +531,7 @@ pub trait ItemHandle: 'static + Send {
     fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString>;
     fn tab_tooltip_content(&self, cx: &App) -> Option<TabTooltipContent>;
     fn telemetry_event_text(&self, cx: &App) -> Option<&'static str>;
+    fn screen_kind(&self, cx: &App) -> WorkspaceScreenKind;
     fn workspace_overlay(&self, window: &mut Window, cx: &mut App) -> Option<AnyElement>;
     fn dragged_tab_content(
         &self,
@@ -669,6 +683,10 @@ impl<T: Item> ItemHandle for Entity<T> {
 
     fn telemetry_event_text(&self, cx: &App) -> Option<&'static str> {
         self.read(cx).telemetry_event_text()
+    }
+
+    fn screen_kind(&self, cx: &App) -> WorkspaceScreenKind {
+        self.read(cx).screen_kind()
     }
 
     fn workspace_overlay(&self, window: &mut Window, cx: &mut App) -> Option<AnyElement> {

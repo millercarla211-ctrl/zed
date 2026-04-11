@@ -12,7 +12,10 @@ use ui::{
     Button, ButtonStyle, Color, ContextMenu, Divider, DropdownMenu, DropdownStyle, Icon, IconName,
     IconPosition, Label, SwitchField, TintColor, ToggleState, prelude::*,
 };
-use workspace::{Item, ItemId, SerializableItem, Workspace, WorkspaceId, item::ItemEvent};
+use workspace::{
+    Item, ItemId, SerializableItem, Workspace, WorkspaceId,
+    item::{ItemEvent, WorkspaceScreenKind},
+};
 
 use crate::{
     backgrounds::{BackgroundAsset, load_backgrounds, load_glass_surface},
@@ -822,6 +825,10 @@ impl Item for LiquidGlassView {
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
         Some("Liquid Glass Opened")
+    }
+
+    fn screen_kind(&self) -> WorkspaceScreenKind {
+        WorkspaceScreenKind::LiquidGlass
     }
 
     fn workspace_overlay(

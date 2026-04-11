@@ -6,7 +6,9 @@ pub struct TitleBarSettings {
     pub show_branch_icon: bool,
     pub show_onboarding_banner: bool,
     pub show_user_picture: bool,
+    #[allow(dead_code)]
     pub show_branch_name: bool,
+    #[allow(dead_code)]
     pub show_project_items: bool,
     pub show_sign_in: bool,
     pub show_user_menu: bool,

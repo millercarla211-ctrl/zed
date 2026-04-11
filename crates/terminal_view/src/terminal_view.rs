@@ -56,6 +56,7 @@ use workspace::{
     ToolbarItemLocation, Workspace, WorkspaceId, delete_unloaded_items,
     item::{
         HighlightedText, Item, ItemEvent, SerializableItem, TabContentParams, TabTooltipContent,
+        WorkspaceScreenKind,
     },
     register_serializable_item,
     searchable::{
@@ -1431,6 +1432,10 @@ impl Item for TerminalView {
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
         None
+    }
+
+    fn screen_kind(&self) -> WorkspaceScreenKind {
+        WorkspaceScreenKind::Terminal
     }
 
     fn handle_drop(
