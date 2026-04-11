@@ -8,6 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### April 12, 2026 - Fixed Space Carousel Navigation and Removed Gap Calculation
+**Fixed arrow navigation direction and simplified click handling**
+
+- Swapped arrow navigation logic: LEFT arrow now scrolls right (shows later spaces), RIGHT arrow scrolls left (shows earlier spaces)
+- Removed gap calculation logic completely - dots now have direct click handlers only
+- Simplified mouse_up handler - no more gap detection, just clear drag state
+- Each dot has its own reliable click handler for activation
+
+### April 12, 2026 - Fixed Space Carousel Drag and Click
+**Improved carousel interaction and fixed drag range**
+
+- Restored left/right navigation arrows (they were correct, shouldn't have been removed)
+- Fixed drag sensitivity: changed from 30px to 20px per dot for smoother scrolling
+- Drag now properly scrolls through all 12 spaces (was limited before)
+- Clicking anywhere in carousel activates nearest visible space dot
+- Click detection works even in gaps between dots for better UX
+- Small drags (<5px) are treated as clicks to activate spaces
+- Carousel shows 7 dots at a time with proper skip/take logic
+
 ### April 12, 2026 - Draggable Space Carousel
 **Added drag-to-scroll functionality to space carousel**
 

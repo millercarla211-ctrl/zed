@@ -759,6 +759,43 @@ impl Sidebar {
         }
     }
 
+    fn activate_nearest_space(
+        &mut self,
+        click_position: gpui::Point<gpui::Pixels>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // This is called when user clicks in the carousel area (not directly on a dot)
+        // The click_position is relative to the carousel container
+        
+        let click_x: f32 = click_position.x.into();
+        
+        // Calculate how many dots are currently visible
+        let visible_count = MAX_VISIBLE_SPACE_DOTS.min(self.dummy_spaces.len() - self.space_page_start);
+        
+        if visible_count == 0 {
+            return;
+        }
+        
+        // Estimate spacing: gap_1p5 = 6px, dot size ~8px average, total ~14-16px per dot
+        let dot_spacing = 16.0;
+        
+        // Find which dot segment the click falls into
+        // We divide the carousel into equal segments
+        let segment_index = (click_x / dot_spacing).round() as i32;
+        
+        // Clamp to valid visible range [0, visible_count-1]
+        let visible_index = segment_index.max(0).min((visible_count - 1) as i32) as usize;
+        
+        // Convert to absolute space index
+        let absolute_index = self.space_page_start + visible_index;
+        
+        // Activate the space
+        if absolute_index < self.dummy_spaces.len() {
+            self.activate_dummy_space(absolute_index, cx);
+        }
+    }
+
     #[allow(dead_code)]
     fn activate_space(
         &mut self,
@@ -789,17 +826,19 @@ impl Sidebar {
     }
 
     fn show_previous_space_page(&mut self, cx: &mut Context<Self>) {
-        if self.space_page_start > 0 {
-            self.space_page_start -= 1;
+        // LEFT arrow clicked - scroll carousel RIGHT to show LATER/NEXT spaces
+        let spaces_len = self.dummy_spaces.len();
+        let max_start = spaces_len.saturating_sub(MAX_VISIBLE_SPACE_DOTS);
+        if self.space_page_start < max_start {
+            self.space_page_start += 1;
             cx.notify();
         }
     }
 
     fn show_next_space_page(&mut self, cx: &mut Context<Self>) {
-        let spaces_len = self.dummy_spaces.len();
-        let max_start = spaces_len.saturating_sub(MAX_VISIBLE_SPACE_DOTS);
-        if self.space_page_start < max_start {
-            self.space_page_start += 1;
+        // RIGHT arrow clicked - scroll carousel LEFT to show EARLIER/PREVIOUS spaces
+        if self.space_page_start > 0 {
+            self.space_page_start -= 1;
             cx.notify();
         }
     }
@@ -4728,10 +4767,11 @@ impl Sidebar {
                     .shape(IconButtonShape::Square)
                     .style(ButtonStyle::Transparent)
                     .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text("Show previous spaces"))
+                    .tooltip(Tooltip::text("Show previous spaces (scroll left)"))
                     .disabled(!can_go_left)
                     .when(can_go_left, |this| {
                         this.on_click(cx.listener(|this, _, _window, cx| {
+                            // Left arrow = show previous (lower index) spaces
                             this.show_previous_space_page(cx);
                         }))
                     }),
@@ -4740,28 +4780,31 @@ impl Sidebar {
                 h_flex()
                     .gap_1p5()
                     .items_center()
+                    .px_2()
+                    .py_1()
                     .cursor(gpui::CursorStyle::PointingHand)
                     .on_mouse_down(
                         gpui::MouseButton::Left,
-                        cx.listener(|this, event: &gpui::MouseDownEvent, _window, cx| {
+                        cx.listener(|this, event: &gpui::MouseDownEvent, _window, _cx| {
                             let x: f32 = event.position.x.into();
                             this.carousel_drag_start = Some((x, this.space_page_start));
-                            cx.notify();
                         }),
                     )
                     .on_mouse_up(
                         gpui::MouseButton::Left,
-                        cx.listener(|this, _event: &gpui::MouseUpEvent, _window, cx| {
+                        cx.listener(|this, _event: &gpui::MouseUpEvent, _window, _cx| {
+                            // Just clear drag state, dots have their own click handlers
                             this.carousel_drag_start = None;
-                            cx.notify();
                         }),
                     )
                     .on_mouse_move(cx.listener(|this, event: &gpui::MouseMoveEvent, _window, cx| {
                         if let Some((start_x, start_page)) = this.carousel_drag_start {
                             let current_x: f32 = event.position.x.into();
                             let delta_x = current_x - start_x;
-                            let dots_moved = (delta_x / 30.0).round() as i32;
+                            // Increase sensitivity: 20px per dot instead of 30px
+                            let dots_moved = (delta_x / 20.0).round() as i32;
                             
+                            // Calculate new page position
                             let new_page = (start_page as i32 - dots_moved).max(0) as usize;
                             let max_start = this.dummy_spaces.len().saturating_sub(MAX_VISIBLE_SPACE_DOTS);
                             this.space_page_start = new_page.min(max_start);
@@ -4780,13 +4823,13 @@ impl Sidebar {
                                 let is_active = active_index == absolute_ix;
                                 let dot_size = if is_active { px(10.0) } else { px(7.0) };
                                 let tooltip_label = space.label.clone();
-                                let _space_id = space.id;
 
                                 div()
                                     .id(format!("space-dot-{absolute_ix}"))
                                     .size(dot_size)
                                     .rounded_full()
-                                    .cursor_pointer()
+                                    .flex_shrink_0()
+                                    .cursor(gpui::CursorStyle::PointingHand)
                                     .when(is_active, |this| this.bg(cx.theme().colors().text))
                                     .when(!is_active, |this| {
                                         this.border_1()
@@ -4796,7 +4839,7 @@ impl Sidebar {
                                     .tooltip(move |window, cx| {
                                         Tooltip::text(tooltip_label.clone())(window, cx)
                                     })
-                                    .on_click(cx.listener(move |this, _, _window, cx| {
+                                    .on_click(cx.listener(move |this, _event, _window, cx| {
                                         this.activate_dummy_space(absolute_ix, cx);
                                     }))
                             }),
@@ -4807,10 +4850,11 @@ impl Sidebar {
                     .shape(IconButtonShape::Square)
                     .style(ButtonStyle::Transparent)
                     .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text("Show more spaces"))
+                    .tooltip(Tooltip::text("Show more spaces (scroll right)"))
                     .disabled(!can_go_right)
                     .when(can_go_right, |this| {
                         this.on_click(cx.listener(|this, _, _window, cx| {
+                            // Right arrow = show next (higher index) spaces
                             this.show_next_space_page(cx);
                         }))
                     }),
