@@ -501,6 +501,7 @@ pub struct Sidebar {
     _draft_observation: Option<gpui::Subscription>,
     dummy_spaces: Vec<DummySpace>,
     active_dummy_space_index: usize,
+    carousel_drag_start: Option<(f32, usize)>,
 }
 
 #[derive(Clone)]
@@ -634,6 +635,7 @@ impl Sidebar {
                 })
                 .collect(),
             active_dummy_space_index: 0,
+            carousel_drag_start: None,
         }
     }
 
@@ -715,6 +717,7 @@ impl Sidebar {
             .position(|space| space.key == active_key)
     }
 
+    #[allow(dead_code)]
     fn clamped_space_page_start(&self, total_spaces: usize, active_index: Option<usize>) -> usize {
         let max_start = total_spaces.saturating_sub(MAX_VISIBLE_SPACE_DOTS);
         let mut start = self.space_page_start.min(max_start);
@@ -743,9 +746,14 @@ impl Sidebar {
         if index < self.dummy_spaces.len() {
             self.active_dummy_space_index = index;
             
-            // Update page start to ensure active space is visible
-            let start = self.clamped_space_page_start(self.dummy_spaces.len(), Some(index));
-            self.space_page_start = start;
+            // Ensure active space is visible in the carousel
+            if index < self.space_page_start {
+                // Active space is before visible range, scroll left
+                self.space_page_start = index;
+            } else if index >= self.space_page_start + MAX_VISIBLE_SPACE_DOTS {
+                // Active space is after visible range, scroll right
+                self.space_page_start = index + 1 - MAX_VISIBLE_SPACE_DOTS;
+            }
             
             cx.notify();
         }
@@ -781,20 +789,19 @@ impl Sidebar {
     }
 
     fn show_previous_space_page(&mut self, cx: &mut Context<Self>) {
-        let start = self.clamped_space_page_start(
-            self.dummy_spaces.len(),
-            Some(self.active_dummy_space_index),
-        );
-        self.space_page_start = start.saturating_sub(1);
-        cx.notify();
+        if self.space_page_start > 0 {
+            self.space_page_start -= 1;
+            cx.notify();
+        }
     }
 
     fn show_next_space_page(&mut self, cx: &mut Context<Self>) {
         let spaces_len = self.dummy_spaces.len();
-        let start = self.clamped_space_page_start(spaces_len, Some(self.active_dummy_space_index));
         let max_start = spaces_len.saturating_sub(MAX_VISIBLE_SPACE_DOTS);
-        self.space_page_start = (start + 1).min(max_start);
-        cx.notify();
+        if self.space_page_start < max_start {
+            self.space_page_start += 1;
+            cx.notify();
+        }
     }
 
     fn active_space_label(&self, cx: &App) -> SharedString {
@@ -4416,6 +4423,7 @@ impl Sidebar {
         h_flex()
             .w_full()
             .justify_between()
+            .px_2()
             .child(
                 h_flex()
                     .gap_1()
@@ -4606,7 +4614,7 @@ impl Sidebar {
                             this
                         }
                     })
-                    .when(!right_window_controls, |this| this.pr_1p5())
+                    .when(!right_window_controls, |this| this)
                     .gap_1()
                     .when(traffic_lights, |this| {
                         this.child(Divider::vertical().color(ui::DividerColor::Border))
@@ -4707,70 +4715,106 @@ impl Sidebar {
     fn render_space_carousel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let spaces = self.dummy_spaces.clone();
         let active_index = self.active_dummy_space_index;
-        let start = self.clamped_space_page_start(spaces.len(), Some(active_index));
-        let show_left = start > 0;
-        let show_right = start + MAX_VISIBLE_SPACE_DOTS < spaces.len();
+        let start = self.space_page_start;
+        let can_go_left = start > 0;
+        let can_go_right = start + MAX_VISIBLE_SPACE_DOTS < spaces.len();
 
         h_flex()
             .gap_1p5()
             .items_center()
             .justify_center()
-            .when(show_left, |this| {
-                this.child(
-                    IconButton::new("space-carousel-left", IconName::ChevronLeft)
-                        .shape(IconButtonShape::Square)
-                        .style(ButtonStyle::Transparent)
-                        .icon_size(IconSize::Small)
-                        .tooltip(Tooltip::text("Show previous spaces"))
-                        .on_click(cx.listener(|this, _, _window, cx| {
+            .child(
+                IconButton::new("space-carousel-left", IconName::ChevronLeft)
+                    .shape(IconButtonShape::Square)
+                    .style(ButtonStyle::Transparent)
+                    .icon_size(IconSize::Small)
+                    .tooltip(Tooltip::text("Show previous spaces"))
+                    .disabled(!can_go_left)
+                    .when(can_go_left, |this| {
+                        this.on_click(cx.listener(|this, _, _window, cx| {
                             this.show_previous_space_page(cx);
-                        })),
-                )
-            })
-            .children(
-                spaces
-                    .iter()
-                    .skip(start)
-                    .take(MAX_VISIBLE_SPACE_DOTS)
-                    .enumerate()
-                    .map(|(visible_ix, space)| {
-                        let absolute_ix = start + visible_ix;
-                        let space = space.clone();
-                        let is_active = active_index == absolute_ix;
-                        let dot_size = if is_active { px(10.0) } else { px(7.0) };
-                        let tooltip_label = space.label.clone();
-
-                        div()
-                            .id(format!("space-dot-{absolute_ix}"))
-                            .size(dot_size)
-                            .rounded_full()
-                            .cursor_pointer()
-                            .when(is_active, |this| this.bg(cx.theme().colors().text))
-                            .when(!is_active, |this| {
-                                this.border_1()
-                                    .border_color(cx.theme().colors().border_variant)
-                                    .bg(gpui::transparent_black())
-                            })
-                            .tooltip(move |window, cx| {
-                                Tooltip::text(tooltip_label.clone())(window, cx)
-                            })
-                            .on_click(cx.listener(move |this, _, _window, cx| {
-                                this.activate_dummy_space(absolute_ix, cx);
-                            }))
+                        }))
                     }),
             )
-            .when(show_right, |this| {
-                this.child(
-                    IconButton::new("space-carousel-right", IconName::ChevronRight)
-                        .shape(IconButtonShape::Square)
-                        .style(ButtonStyle::Transparent)
-                        .icon_size(IconSize::Small)
-                        .tooltip(Tooltip::text("Show more spaces"))
-                        .on_click(cx.listener(|this, _, _window, cx| {
+            .child(
+                h_flex()
+                    .gap_1p5()
+                    .items_center()
+                    .cursor(gpui::CursorStyle::PointingHand)
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, event: &gpui::MouseDownEvent, _window, cx| {
+                            let x: f32 = event.position.x.into();
+                            this.carousel_drag_start = Some((x, this.space_page_start));
+                            cx.notify();
+                        }),
+                    )
+                    .on_mouse_up(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, _event: &gpui::MouseUpEvent, _window, cx| {
+                            this.carousel_drag_start = None;
+                            cx.notify();
+                        }),
+                    )
+                    .on_mouse_move(cx.listener(|this, event: &gpui::MouseMoveEvent, _window, cx| {
+                        if let Some((start_x, start_page)) = this.carousel_drag_start {
+                            let current_x: f32 = event.position.x.into();
+                            let delta_x = current_x - start_x;
+                            let dots_moved = (delta_x / 30.0).round() as i32;
+                            
+                            let new_page = (start_page as i32 - dots_moved).max(0) as usize;
+                            let max_start = this.dummy_spaces.len().saturating_sub(MAX_VISIBLE_SPACE_DOTS);
+                            this.space_page_start = new_page.min(max_start);
+                            cx.notify();
+                        }
+                    }))
+                    .children(
+                        spaces
+                            .iter()
+                            .skip(start)
+                            .take(MAX_VISIBLE_SPACE_DOTS)
+                            .enumerate()
+                            .map(|(visible_ix, space)| {
+                                let absolute_ix = start + visible_ix;
+                                let space = space.clone();
+                                let is_active = active_index == absolute_ix;
+                                let dot_size = if is_active { px(10.0) } else { px(7.0) };
+                                let tooltip_label = space.label.clone();
+                                let _space_id = space.id;
+
+                                div()
+                                    .id(format!("space-dot-{absolute_ix}"))
+                                    .size(dot_size)
+                                    .rounded_full()
+                                    .cursor_pointer()
+                                    .when(is_active, |this| this.bg(cx.theme().colors().text))
+                                    .when(!is_active, |this| {
+                                        this.border_1()
+                                            .border_color(cx.theme().colors().border_variant)
+                                            .bg(gpui::transparent_black())
+                                    })
+                                    .tooltip(move |window, cx| {
+                                        Tooltip::text(tooltip_label.clone())(window, cx)
+                                    })
+                                    .on_click(cx.listener(move |this, _, _window, cx| {
+                                        this.activate_dummy_space(absolute_ix, cx);
+                                    }))
+                            }),
+                    ),
+            )
+            .child(
+                IconButton::new("space-carousel-right", IconName::ChevronRight)
+                    .shape(IconButtonShape::Square)
+                    .style(ButtonStyle::Transparent)
+                    .icon_size(IconSize::Small)
+                    .tooltip(Tooltip::text("Show more spaces"))
+                    .disabled(!can_go_right)
+                    .when(can_go_right, |this| {
+                        this.on_click(cx.listener(|this, _, _window, cx| {
                             this.show_next_space_page(cx);
-                        })),
-                )
-            })
+                        }))
+                    }),
+            )
     }
 
     fn render_sidebar_footer_actions(

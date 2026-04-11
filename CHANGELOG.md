@@ -8,6 +8,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### April 12, 2026 - Draggable Space Carousel
+**Added drag-to-scroll functionality to space carousel**
+
+- Removed all right padding from top bar (no pr_1, completely flush)
+- Made space carousel draggable with mouse - drag left/right to scroll through spaces
+- Added pointing hand cursor to carousel to indicate draggability
+- Drag sensitivity: 30px of mouse movement = 1 space dot scroll
+- Drag state tracked with carousel_drag_start field
+- Works alongside existing arrow button navigation
+
+### April 12, 2026 - Sidebar Space Carousel Navigation Fix
+**Fixed space carousel scrolling behavior**
+
+- Fixed navigation arrows to properly scroll the carousel one position at a time
+- Arrows now directly manipulate scroll position instead of recalculating based on active space
+- Active space automatically scrolls into view when clicked
+- Reduced top header right padding from pr_1p5 to pr_1 for tighter spacing
+- Navigation now works smoothly: left arrow scrolls left, right arrow scrolls right
+
+### April 12, 2026 - Sidebar Space Dots UI Improvements
+**Enhanced space carousel with better UX**
+
+- Added horizontal padding (px_2) to toolbar for better spacing
+- Navigation arrows now always visible but disabled when can't navigate (no pop-in/pop-out)
+- Fixed space dot navigation logic to properly scroll through all 12 spaces
+- Active space automatically centers in visible range when activated
+- Removed drag-and-drop (will be added later with proper GPUI implementation)
+- Right-click menu temporarily disabled (will be added with proper context menu API)
+
 ### April 12, 2026 - Sidebar Space Dots Implementation
 **Implemented dummy space carousel system with navigation**
 
