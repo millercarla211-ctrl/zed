@@ -422,6 +422,22 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
                 .gap_1()
                 .border_t_1()
                 .border_color(cx.theme().colors().border_variant)
+                .child(
+                    Button::new("create_new_space", "Create New Space")
+                        .on_click(cx.listener(|_, _, window, cx| {
+                            if let Some(handle) = window.window_handle().downcast::<MultiWorkspace>()
+                                && let Some(task) = handle
+                                    .update(cx, |multi_workspace, window, cx| {
+                                        multi_workspace.create_random_local_workspace(window, cx)
+                                    })
+                                    .log_err()
+                            {
+                                task.detach_and_log_err(cx);
+                            }
+
+                            cx.emit(DismissEvent);
+                        })),
+                )
                 .child({
                     let open_action = workspace::Open {
                         create_new_window: false,

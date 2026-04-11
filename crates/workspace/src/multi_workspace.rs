@@ -13,8 +13,10 @@ use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 use ui::prelude::*;
-use util::ResultExt;
+use util::{ResultExt, paths::home_dir};
+use uuid::Uuid;
 use util::path_list::PathList;
 use zed_actions::agents_sidebar::ToggleThreadSwitcher;
 
@@ -23,6 +25,17 @@ use settings::SidebarDockPosition;
 use ui::{ContextMenu, right_click_menu};
 
 const SIDEBAR_RESIZE_HANDLE_SIZE: Pixels = px(6.0);
+const MAX_SPACE_SEED_CHILDREN: usize = 24;
+const COMMON_SPACE_FOLDER_NAMES: [&str; 8] = [
+    "Desktop",
+    "Documents",
+    "Downloads",
+    "Projects",
+    "Source",
+    "Code",
+    "Repos",
+    "Workspace",
+];
 
 use crate::open_remote_project_with_existing_connection;
 use crate::{
@@ -321,6 +334,67 @@ pub struct MultiWorkspace {
 }
 
 impl EventEmitter<MultiWorkspaceEvent> for MultiWorkspace {}
+
+fn is_space_candidate_name(name: &str) -> bool {
+    !name.starts_with('.')
+        && !matches!(
+            name,
+            "AppData"
+                | "Library"
+                | "node_modules"
+                | ".cargo"
+                | ".git"
+                | ".rustup"
+                | "tmp"
+                | "Temp"
+        )
+}
+
+fn push_space_candidate(
+    path: PathBuf,
+    existing_paths: &HashSet<PathBuf>,
+    seen: &mut HashSet<PathBuf>,
+    candidates: &mut Vec<PathBuf>,
+) {
+    if !path.is_dir() || existing_paths.contains(&path) || !seen.insert(path.clone()) {
+        return;
+    }
+
+    candidates.push(path);
+}
+
+fn collect_space_candidates_from_seed(
+    seed: &Path,
+    existing_paths: &HashSet<PathBuf>,
+    seen: &mut HashSet<PathBuf>,
+    candidates: &mut Vec<PathBuf>,
+) {
+    push_space_candidate(seed.to_path_buf(), existing_paths, seen, candidates);
+
+    for folder_name in COMMON_SPACE_FOLDER_NAMES {
+        push_space_candidate(seed.join(folder_name), existing_paths, seen, candidates);
+    }
+
+    let mut child_dirs = std::fs::read_dir(seed)
+        .ok()
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            let file_name = path.file_name()?.to_str()?;
+            if !entry.file_type().ok()?.is_dir() || !is_space_candidate_name(file_name) {
+                return None;
+            }
+            Some(path)
+        })
+        .collect::<Vec<_>>();
+    child_dirs.sort();
+
+    for child_dir in child_dirs.into_iter().take(MAX_SPACE_SEED_CHILDREN) {
+        push_space_candidate(child_dir, existing_paths, seen, candidates);
+    }
+}
 
 impl MultiWorkspace {
     pub fn sidebar_side(&self, cx: &App) -> SidebarSide {
@@ -1094,6 +1168,56 @@ impl MultiWorkspace {
                 .await?;
             Ok(result.workspace)
         })
+    }
+
+    pub fn create_random_local_workspace(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<Entity<Workspace>>> {
+        let existing_paths = self
+            .project_group_keys
+            .iter()
+            .flat_map(|key| key.path_list().paths().iter().cloned())
+            .collect::<HashSet<_>>();
+
+        let home = home_dir().clone();
+        let mut seeds = vec![home.clone()];
+        if let Some(users_root) = home.parent() {
+            let mut sibling_homes = std::fs::read_dir(users_root)
+                .ok()
+                .into_iter()
+                .flatten()
+                .flatten()
+                .filter_map(|entry| entry.file_type().ok()?.is_dir().then_some(entry.path()))
+                .collect::<Vec<_>>();
+            sibling_homes.sort();
+            seeds.extend(sibling_homes.into_iter().take(8));
+        }
+
+        let mut seen = HashSet::default();
+        let mut candidates = Vec::new();
+        for seed in seeds {
+            collect_space_candidates_from_seed(&seed, &existing_paths, &mut seen, &mut candidates);
+        }
+
+        let chosen_path = if candidates.is_empty() {
+            let fallback_root = home.join(".zed-generated-spaces");
+            let fallback = fallback_root.join(format!("space-{}", Uuid::new_v4()));
+            std::fs::create_dir_all(&fallback).log_err();
+            fallback
+        } else {
+            let salt = self.project_group_keys.len().saturating_mul(31)
+                + self.workspaces.len().saturating_mul(17);
+            let tick = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos() as usize;
+            let index = tick.wrapping_add(salt) % candidates.len();
+            candidates.swap_remove(index)
+        };
+
+        self.find_or_create_local_workspace(PathList::new(&[chosen_path]), window, cx)
     }
 
     pub fn workspace(&self) -> &Entity<Workspace> {

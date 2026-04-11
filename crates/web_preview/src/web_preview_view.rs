@@ -1061,7 +1061,7 @@ impl WebPreviewView {
             )
             .anchor(Corner::TopRight)
             .menu(move |window, cx| {
-                let (is_bookmarked, bookmark_icon, bookmark_label) =
+                let (_is_bookmarked, bookmark_icon, bookmark_label) =
                     entity.read_with(cx, |this, _| {
                         let is_bookmarked = this.is_active_url_bookmarked();
                         let bookmark_icon = if is_bookmarked {
