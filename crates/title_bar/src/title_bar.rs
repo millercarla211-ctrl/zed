@@ -46,7 +46,7 @@ use ui::{
 use update_version::UpdateVersion;
 use util::{ResultExt, paths::PathStyle};
 use workspace::{
-    MultiWorkspace, NewFile, NewLiquidGlass, NewTerminal, NewWebPreview,
+    MultiWorkspace, NewCenterTerminal, NewFile, NewLiquidGlass, NewWebPreview,
     ToggleWorktreeSecurity, Workspace,
     item::{ItemHandle, WorkspaceScreenKind},
     notifications::NotifyResultExt,
@@ -215,7 +215,8 @@ impl Render for TitleBar {
         let left_content = h_flex()
             .h_full()
             .min_w_0()
-            .flex_grow()
+            .flex_1()
+            .overflow_hidden()
             .gap_1()
             .items_center()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -269,7 +270,8 @@ impl Render for TitleBar {
 
         let right_content = h_flex()
             .min_w_0()
-            .flex_grow()
+            .flex_1()
+            .overflow_hidden()
             .justify_end()
             .map(|this| {
                 if signed_in {
@@ -312,7 +314,7 @@ impl Render for TitleBar {
             .w_full()
             .h_full()
             .items_center()
-            .gap_2()
+            .gap_1()
             .child(left_content)
             .child(center_dock)
             .child(right_content)
@@ -495,10 +497,10 @@ impl TitleBar {
             .id("screen-dock")
             .flex_none()
             .items_center()
-            .gap_1()
-            .px_2()
-            .py_1()
-            .rounded_full()
+            .gap_0p5()
+            .px_1()
+            .py(px(2.))
+            .rounded(px(5.))
             .bg(cx.theme().colors().elevated_surface_background.opacity(0.96))
             .border_1()
             .border_color(cx.theme().colors().border_variant)
@@ -507,7 +509,7 @@ impl TitleBar {
                 dock.child(
                     h_flex()
                         .items_center()
-                        .gap_1()
+                        .gap_0p5()
                         .children(path_segment)
                         .children(branch_segment),
                 )
@@ -589,7 +591,7 @@ impl TitleBar {
                 )
                 .child(
                     Label::new(util::truncate_and_trailoff(&label, MAX_DOCK_PATH_LENGTH))
-                        .size(LabelSize::Small)
+                        .size(LabelSize::XSmall)
                         .color(Color::Muted),
                 )
                 .into_any_element(),
@@ -607,7 +609,7 @@ impl TitleBar {
             format!("screen-dock-kind-{}", Self::screen_kind_label(kind).to_lowercase()),
             Self::screen_kind_icon(kind),
         )
-        .icon_size(IconSize::Small)
+        .icon_size(IconSize::XSmall)
         .toggle_state(selected)
         .tooltip(Tooltip::text(Self::screen_kind_label(kind)))
         .on_click(move |_, window, cx| {
@@ -623,10 +625,9 @@ impl TitleBar {
                 let _ = workspace.update(cx, |workspace, cx| {
                     workspace.activate_item(&*item, true, true, window, cx);
                 });
-                return;
+            } else {
+                Self::dispatch_new_screen_action(kind, window, cx);
             }
-
-            Self::dispatch_new_screen_action(kind, window, cx);
         })
         .into_any_element()
     }
@@ -666,7 +667,7 @@ impl TitleBar {
                             entry.title.as_ref(),
                             MAX_DOCK_ITEM_LABEL_LENGTH,
                         ))
-                        .size(LabelSize::Small)
+                        .size(LabelSize::XSmall)
                         .color(if entry.selected {
                             Color::Default
                         } else {
@@ -689,7 +690,7 @@ impl TitleBar {
     fn render_screen_dock_add_menu(&self, cx: &mut Context<Self>) -> AnyElement {
         let active_screen_kind = self.active_screen_kind(cx);
         IconButton::new("screen-dock-add-trigger", IconName::Plus)
-            .icon_size(IconSize::Small)
+            .icon_size(IconSize::XSmall)
             .tooltip(Tooltip::text(format!(
                 "New {}",
                 Self::screen_kind_label(active_screen_kind)
@@ -712,7 +713,7 @@ impl TitleBar {
         PopoverMenu::new("screen-dock-list-menu")
             .trigger_with_tooltip(
                 IconButton::new("screen-dock-list-trigger", IconName::ListTree)
-                    .icon_size(IconSize::Small)
+                    .icon_size(IconSize::XSmall)
                     .disabled(!has_entries),
                 Tooltip::text("Show Screens"),
             )
@@ -795,7 +796,6 @@ impl TitleBar {
             return Vec::new();
         };
         let active_item_id = workspace.read(cx).active_item(cx).map(|item| item.item_id());
-
         workspace
             .read(cx)
             .active_pane()
@@ -841,7 +841,7 @@ impl TitleBar {
                 window.dispatch_action(NewWebPreview.boxed_clone(), cx);
             }
             WorkspaceScreenKind::Terminal => {
-                window.dispatch_action(NewTerminal::default().boxed_clone(), cx);
+                window.dispatch_action(NewCenterTerminal::default().boxed_clone(), cx);
             }
             WorkspaceScreenKind::LiquidGlass => {
                 window.dispatch_action(NewLiquidGlass.boxed_clone(), cx);
@@ -1333,11 +1333,11 @@ impl TitleBar {
                                 .when_some(linked_worktree_name.as_ref(), |this, worktree_name| {
                                     this.child(
                                         Label::new(worktree_name)
-                                            .size(LabelSize::Small)
+                                            .size(LabelSize::XSmall)
                                             .color(Color::Muted),
                                     )
                                     .child(
-                                        Label::new("/").size(LabelSize::Small).color(
+                                        Label::new("/").size(LabelSize::XSmall).color(
                                             Color::Custom(
                                                 cx.theme().colors().text_muted.opacity(0.4),
                                             ),
@@ -1346,7 +1346,7 @@ impl TitleBar {
                                 })
                                 .child(
                                     Label::new(branch_name)
-                                        .size(LabelSize::Small)
+                                        .size(LabelSize::XSmall)
                                         .color(Color::Muted),
                                 ),
                         ),

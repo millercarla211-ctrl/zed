@@ -1,7 +1,7 @@
 use crate::{
-    CloseWindow, NewFile, NewLiquidGlass, NewTerminal, NewWebPreview, OpenInTerminal, OpenOptions,
-    OpenTerminal, OpenVisible, SplitDirection, ToggleFileFinder, ToggleProjectSymbols, ToggleZoom,
-    Workspace, WorkspaceItemBuilder, ZoomIn, ZoomOut,
+    CloseWindow, NewCenterTerminal, NewFile, NewLiquidGlass, NewTerminal, NewWebPreview,
+    OpenInTerminal, OpenOptions, OpenTerminal, OpenVisible, SplitDirection, ToggleFileFinder,
+    ToggleProjectSymbols, ToggleZoom, Workspace, WorkspaceItemBuilder, ZoomIn, ZoomOut,
     focus_follows_mouse::FocusFollowsMouse as _,
     invalid_item_view::InvalidItemView,
     item::{
@@ -1375,6 +1375,30 @@ impl Pane {
         self.items.get(self.active_item_index).cloned()
     }
 
+    fn visible_screen_kind(&self, cx: &App) -> Option<WorkspaceScreenKind> {
+        let kind = self.active_item().map(|item| item.screen_kind(cx))?;
+        (kind != WorkspaceScreenKind::Other).then_some(kind)
+    }
+
+    fn visible_item_indices(&self, cx: &App) -> Vec<usize> {
+        let Some(kind) = self.visible_screen_kind(cx) else {
+            return (0..self.items.len()).collect();
+        };
+
+        let visible_indices = self
+            .items
+            .iter()
+            .enumerate()
+            .filter_map(|(ix, item)| (item.screen_kind(cx) == kind).then_some(ix))
+            .collect::<Vec<_>>();
+
+        if visible_indices.is_empty() {
+            (0..self.items.len()).collect()
+        } else {
+            visible_indices
+        }
+    }
+
     fn active_item_id(&self) -> EntityId {
         self.items[self.active_item_index].item_id()
     }
@@ -2743,6 +2767,9 @@ impl Pane {
     fn render_tab(
         &self,
         ix: usize,
+        visible_ix: usize,
+        visible_count: usize,
+        active_visible_ix: usize,
         item: &dyn ItemHandle,
         detail: usize,
         focus_handle: &FocusHandle,
@@ -2819,10 +2846,10 @@ impl Pane {
         let indicator = render_item_indicator(item.boxed_clone(), cx);
         let tab_tooltip_content = item.tab_tooltip_content(cx);
         let item_id = item.item_id();
-        let is_first_item = ix == 0;
-        let is_last_item = ix == self.items.len() - 1;
+        let is_first_item = visible_ix == 0;
+        let is_last_item = visible_ix + 1 == visible_count;
         let is_pinned = self.is_tab_pinned(ix);
-        let position_relative_to_active_item = ix.cmp(&self.active_item_index);
+        let position_relative_to_active_item = visible_ix.cmp(&active_visible_ix);
 
         let read_only_toggle = |toggleable: bool| {
             IconButton::new("toggle_read_only", IconName::FileLock)
@@ -3413,28 +3440,51 @@ impl Pane {
                 }
             });
 
-        let mut tab_items = self
-            .items
+        let visible_indices = self.visible_item_indices(cx);
+        let visible_items = visible_indices
             .iter()
+            .map(|&ix| self.items[ix].boxed_clone())
+            .collect::<Vec<_>>();
+        let active_visible_ix = visible_indices
+            .iter()
+            .position(|&ix| ix == self.active_item_index)
+            .unwrap_or(0);
+        let mut tab_items = visible_indices
+            .iter()
+            .copied()
+            .zip(visible_items.iter())
+            .zip(tab_details(&visible_items, window, cx))
             .enumerate()
-            .zip(tab_details(&self.items, window, cx))
-            .map(|((ix, item), detail)| {
-                self.render_tab(ix, &**item, detail, &focus_handle, window, cx)
-                    .into_any_element()
+            .map(|(visible_ix, ((ix, item), detail))| {
+                self.render_tab(
+                    ix,
+                    visible_ix,
+                    visible_items.len(),
+                    active_visible_ix,
+                    &**item,
+                    detail,
+                    &focus_handle,
+                    window,
+                    cx,
+                )
+                .into_any_element()
             })
             .collect::<Vec<_>>();
         let tab_count = tab_items.len();
-        if self.is_tab_pinned(tab_count) {
+        let visible_pinned_count = visible_indices
+            .iter()
+            .filter(|&&ix| self.is_tab_pinned(ix))
+            .count();
+        if visible_pinned_count > tab_count {
             log::warn!(
-                "Pinned tab count ({}) exceeds actual tab count ({}). \
+                "Pinned tab count ({}) exceeds visible tab count ({}). \
                 This should not happen. If possible, add reproduction steps, \
                 in a comment, to https://github.com/zed-industries/zed/issues/33342",
-                self.pinned_tab_count,
+                visible_pinned_count,
                 tab_count
             );
-            self.pinned_tab_count = tab_count;
         }
-        let unpinned_tabs = tab_items.split_off(self.pinned_tab_count);
+        let unpinned_tabs = tab_items.split_off(visible_pinned_count);
         let pinned_tabs = tab_items;
 
         let tab_bar_settings = TabBarSettings::get_global(cx);
@@ -3444,6 +3494,7 @@ impl Pane {
             self.render_two_row_tab_bar(
                 pinned_tabs,
                 unpinned_tabs,
+                visible_pinned_count,
                 tab_count,
                 navigate_backward,
                 navigate_forward,
@@ -3454,6 +3505,8 @@ impl Pane {
             self.render_single_row_tab_bar(
                 pinned_tabs,
                 unpinned_tabs,
+                visible_pinned_count,
+                active_visible_ix,
                 tab_count,
                 navigate_backward,
                 navigate_forward,
@@ -3505,6 +3558,8 @@ impl Pane {
         &mut self,
         pinned_tabs: Vec<AnyElement>,
         unpinned_tabs: Vec<AnyElement>,
+        visible_pinned_count: usize,
+        active_visible_ix: usize,
         tab_count: usize,
         navigate_backward: IconButton,
         navigate_forward: IconButton,
@@ -3526,7 +3581,7 @@ impl Pane {
                 // Avoid flickering when max_offset is very small (< 2px).
                 // The border adds 1-2px which can push max_offset back to 0, creating a loop.
                 let is_scrollable = max_scroll > px(2.0);
-                let has_active_unpinned_tab = self.active_item_index >= self.pinned_tab_count;
+                let has_active_unpinned_tab = active_visible_ix >= visible_pinned_count;
                 h_flex()
                     .children(pinned_tabs)
                     .when(is_scrollable && is_scrolled, |this| {
@@ -3543,6 +3598,7 @@ impl Pane {
         &mut self,
         pinned_tabs: Vec<AnyElement>,
         unpinned_tabs: Vec<AnyElement>,
+        _visible_pinned_count: usize,
         tab_count: usize,
         navigate_backward: IconButton,
         navigate_forward: IconButton,
@@ -4210,7 +4266,7 @@ fn default_render_tab_bar_buttons(
                 .icon_size(IconSize::Small)
                 .tooltip(Tooltip::text("New Terminal"))
                 .on_click(|_, window, cx| {
-                    window.dispatch_action(NewTerminal::default().boxed_clone(), cx);
+                    window.dispatch_action(NewCenterTerminal::default().boxed_clone(), cx);
                 })
                 .into_any_element(),
             WorkspaceScreenKind::LiquidGlass => IconButton::new("plus", IconName::Plus)

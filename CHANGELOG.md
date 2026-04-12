@@ -15,6 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added default screen switching buttons for Editor, Browser, and Terminal, plus dock entries for extra active-pane screens
 - Made the dock add menu context-aware so each screen type creates its own matching item instead of mixing file, browser, and terminal creation
 - Changed the web preview tab-bar add button to create only a new web preview
+- Routed terminal creation from the dock and terminal screen add button through the center-terminal action instead of the bottom dock
+- Made browser and terminal screen mode reuse the existing center pane while showing only same-type tabs instead of leaking editor tabs into those screens
 
 ### April 12, 2026 - Fixed Space Carousel Navigation and Removed Gap Calculation
 **Fixed arrow navigation direction and simplified click handling**
