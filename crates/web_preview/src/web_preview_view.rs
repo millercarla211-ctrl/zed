@@ -208,7 +208,7 @@ pub struct WebPreviewView {
 impl WebPreviewView {
     pub fn register(workspace: &mut Workspace, _window: &mut Window, _cx: &mut Context<Workspace>) {
         workspace.register_action(move |workspace, _: &NewWebPreview, window, cx| {
-            Self::open_in_active_pane(workspace, window, cx);
+            Self::open_new_in_active_pane(workspace, window, cx);
         });
 
         workspace.register_action(move |workspace, _: &OpenPreview, window, cx| {
@@ -232,6 +232,18 @@ impl WebPreviewView {
             } else {
                 pane.add_item(Box::new(view.clone()), true, true, None, window, cx);
             }
+        });
+        cx.notify();
+    }
+
+    fn open_new_in_active_pane(
+        workspace: &mut Workspace,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) {
+        let view = Self::open_or_create(workspace, window, cx);
+        workspace.active_pane().update(cx, |pane, cx| {
+            pane.add_item(Box::new(view.clone()), true, true, None, window, cx);
         });
         cx.notify();
     }

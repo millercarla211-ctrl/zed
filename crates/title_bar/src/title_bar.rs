@@ -39,12 +39,12 @@ use std::time::Duration;
 use theme::ActiveTheme;
 use title_bar_settings::TitleBarSettings;
 use ui::{
-    Avatar, ButtonLike, ContextMenu, ContextMenuEntry, Divider, IconWithIndicator, Indicator,
+    Avatar, ButtonLike, ButtonSize, ContextMenu, ContextMenuEntry, IconWithIndicator, Indicator,
     PopoverMenu, PopoverMenuHandle, TintColor, Tooltip, prelude::*,
     utils::platform_title_bar_height,
 };
 use update_version::UpdateVersion;
-use util::{ResultExt, paths::PathStyle};
+use util::ResultExt;
 use workspace::{
     MultiWorkspace, NewCenterTerminal, NewFile, NewLiquidGlass, NewWebPreview,
     ToggleWorktreeSecurity, Workspace,
@@ -60,7 +60,6 @@ pub use onboarding_banner::restore_banner;
 const MAX_PROJECT_NAME_LENGTH: usize = 40;
 const MAX_BRANCH_NAME_LENGTH: usize = 40;
 const MAX_SHORT_SHA_LENGTH: usize = 8;
-const MAX_DOCK_PATH_LENGTH: usize = 36;
 const MAX_DOCK_ITEM_LABEL_LENGTH: usize = 14;
 
 struct ActivePaneScreenEntry {
@@ -222,10 +221,6 @@ impl Render for TitleBar {
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .map(|title_bar| {
                 title_bar
-                    .when_some(
-                        self.application_menu.clone().filter(|_| !show_menus),
-                        |title_bar, menu| title_bar.child(menu),
-                    )
                     .children(self.render_restricted_mode(cx))
                     .children(self.render_project_host(cx))
                     .child(self.render_collaborator_list(window, cx))
@@ -310,14 +305,27 @@ impl Render for TitleBar {
                 this.child(self.render_user_menu_button(cx))
             });
 
-        let content_row = h_flex()
+        let content_row = div()
+            .relative()
             .w_full()
             .h_full()
-            .items_center()
-            .gap_1()
-            .child(left_content)
-            .child(center_dock)
-            .child(right_content)
+            .child(
+                h_flex()
+                    .w_full()
+                    .h_full()
+                    .items_center()
+                    .gap_1()
+                    .child(left_content)
+                    .child(right_content),
+            )
+            .child(
+                h_flex()
+                    .absolute()
+                    .inset_0()
+                    .items_center()
+                    .justify_center()
+                    .child(center_dock),
+            )
             .into_any_element();
 
         if show_menus {
@@ -448,7 +456,10 @@ impl TitleBar {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let path_segment = self.render_screen_dock_path(project_name, cx);
+        let project_segment = Some(
+            self.render_project_name(project_name, window, cx)
+                .into_any_element(),
+        );
         let branch_segment = repository.and_then(|repository| {
             self.render_project_branch(repository, linked_worktree_name, cx)
                 .map(IntoElement::into_any_element)
@@ -456,50 +467,29 @@ impl TitleBar {
         let active_screen_kind = self.active_screen_kind(cx);
         let active_pane_entries = self.collect_active_pane_screen_entries(window, cx);
 
-        let mut saw_editor = false;
-        let mut saw_browser = false;
-        let mut saw_terminal = false;
         let extra_entries = active_pane_entries
             .into_iter()
-            .filter(|entry| match entry.kind {
-                WorkspaceScreenKind::Editor => {
-                    if saw_editor {
-                        true
-                    } else {
-                        saw_editor = true;
-                        false
-                    }
-                }
-                WorkspaceScreenKind::Browser => {
-                    if saw_browser {
-                        true
-                    } else {
-                        saw_browser = true;
-                        false
-                    }
-                }
-                WorkspaceScreenKind::Terminal => {
-                    if saw_terminal {
-                        true
-                    } else {
-                        saw_terminal = true;
-                        false
-                    }
-                }
-                _ => true,
+            .filter(|entry| {
+                !matches!(
+                    entry.kind,
+                    WorkspaceScreenKind::Editor
+                        | WorkspaceScreenKind::Browser
+                        | WorkspaceScreenKind::Terminal
+                )
             })
             .collect::<Vec<_>>();
 
-        let has_left_segment = path_segment.is_some() || branch_segment.is_some();
+        let has_left_segment = project_segment.is_some() || branch_segment.is_some();
         let has_extra_entries = !extra_entries.is_empty();
 
         h_flex()
             .id("screen-dock")
             .flex_none()
+            .h(px(28.))
             .items_center()
             .gap_0p5()
-            .px_1()
-            .py(px(2.))
+            .px_1p5()
+            .py(px(4.))
             .rounded(px(5.))
             .bg(cx.theme().colors().elevated_surface_background.opacity(0.96))
             .border_1()
@@ -510,12 +500,12 @@ impl TitleBar {
                     h_flex()
                         .items_center()
                         .gap_0p5()
-                        .children(path_segment)
+                        .children(project_segment)
                         .children(branch_segment),
                 )
             })
             .when(has_left_segment, |dock| {
-                dock.child(Divider::vertical().color(ui::DividerColor::Border))
+                dock.child(self.render_screen_dock_divider(cx))
             })
             .child(
                 h_flex()
@@ -543,7 +533,7 @@ impl TitleBar {
                     ),
             )
             .when(has_extra_entries, |dock| {
-                dock.child(Divider::vertical().color(ui::DividerColor::Border))
+                dock.child(self.render_screen_dock_divider(cx))
             })
             .child(
                 h_flex()
@@ -555,47 +545,13 @@ impl TitleBar {
             .into_any_element()
     }
 
-    fn render_screen_dock_path(
-        &self,
-        project_name: Option<SharedString>,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        let workspace = self.workspace.upgrade()?;
-        let active_item = workspace.read(cx).active_item(cx);
-
-        let label = if let Some(item) = active_item {
-            if let Some(project_path) = item.project_path(cx) {
-                project_path
-                    .path
-                    .display(PathStyle::local())
-                    .into_owned()
-            } else {
-                let fallback = project_name
-                    .clone()
-                    .unwrap_or_else(|| SharedString::from("Workspace"));
-                fallback.to_string()
-            }
-        } else {
-            let fallback = project_name.unwrap_or_else(|| SharedString::from("Workspace"));
-            fallback.to_string()
-        };
-
-        Some(
-            h_flex()
-                .items_center()
-                .gap_0p5()
-                .child(
-                    Icon::new(IconName::FileTree)
-                        .size(IconSize::XSmall)
-                        .color(Color::Muted),
-                )
-                .child(
-                    Label::new(util::truncate_and_trailoff(&label, MAX_DOCK_PATH_LENGTH))
-                        .size(LabelSize::XSmall)
-                        .color(Color::Muted),
-                )
-                .into_any_element(),
-        )
+    fn render_screen_dock_divider(&self, cx: &App) -> AnyElement {
+        div()
+            .flex_none()
+            .w(px(1.))
+            .h(px(16.))
+            .bg(cx.theme().colors().border_variant)
+            .into_any_element()
     }
 
     fn render_screen_kind_button(
@@ -609,7 +565,8 @@ impl TitleBar {
             format!("screen-dock-kind-{}", Self::screen_kind_label(kind).to_lowercase()),
             Self::screen_kind_icon(kind),
         )
-        .icon_size(IconSize::XSmall)
+        .size(ButtonSize::Compact)
+        .icon_size(IconSize::Small)
         .toggle_state(selected)
         .tooltip(Tooltip::text(Self::screen_kind_label(kind)))
         .on_click(move |_, window, cx| {
@@ -617,15 +574,9 @@ impl TitleBar {
                 return;
             };
 
-            let target = workspace.read(cx).active_pane().read(cx).items().find_map(|item| {
-                (item.screen_kind(cx) == kind).then(|| item.boxed_clone())
-            });
-
-            if let Some(item) = target {
-                let _ = workspace.update(cx, |workspace, cx| {
-                    workspace.activate_item(&*item, true, true, window, cx);
-                });
-            } else {
+            let activated =
+                workspace.update(cx, |workspace, cx| workspace.activate_screen_kind(kind, window, cx));
+            if !activated {
                 Self::dispatch_new_screen_action(kind, window, cx);
             }
         })
@@ -639,14 +590,16 @@ impl TitleBar {
     ) -> AnyElement {
         let workspace = self.workspace.clone();
         let tooltip = entry.subtitle.clone().unwrap_or_else(|| entry.title.clone());
+        let kind = entry.kind;
         let item = entry.item;
         let button_id = format!(
             "screen-dock-entry-{}-{:?}",
-            Self::screen_kind_label(entry.kind).to_lowercase(),
+            Self::screen_kind_label(kind).to_lowercase(),
             item.item_id()
         );
 
         ButtonLike::new(button_id)
+            .size(ButtonSize::Compact)
             .selected_style(ButtonStyle::Tinted(TintColor::Accent))
             .toggle_state(entry.selected)
             .child(
@@ -655,7 +608,7 @@ impl TitleBar {
                     .gap_0p5()
                     .child(
                         Icon::new(entry.icon)
-                            .size(IconSize::XSmall)
+                            .size(IconSize::Small)
                             .color(if entry.selected {
                                 Color::Accent
                             } else {
@@ -667,7 +620,7 @@ impl TitleBar {
                             entry.title.as_ref(),
                             MAX_DOCK_ITEM_LABEL_LENGTH,
                         ))
-                        .size(LabelSize::XSmall)
+                        .size(LabelSize::Small)
                         .color(if entry.selected {
                             Color::Default
                         } else {
@@ -681,7 +634,9 @@ impl TitleBar {
                     return;
                 };
                 let _ = workspace.update(cx, |workspace, cx| {
-                    workspace.activate_item(&*item, true, true, window, cx);
+                    if !workspace.activate_screen_kind(kind, window, cx) {
+                        workspace.activate_item(&*item, true, true, window, cx);
+                    }
                 });
             })
             .into_any_element()
@@ -690,11 +645,9 @@ impl TitleBar {
     fn render_screen_dock_add_menu(&self, cx: &mut Context<Self>) -> AnyElement {
         let active_screen_kind = self.active_screen_kind(cx);
         IconButton::new("screen-dock-add-trigger", IconName::Plus)
-            .icon_size(IconSize::XSmall)
-            .tooltip(Tooltip::text(format!(
-                "New {}",
-                Self::screen_kind_label(active_screen_kind)
-            )))
+            .size(ButtonSize::Compact)
+            .icon_size(IconSize::Small)
+            .tooltip(Tooltip::text(Self::screen_kind_create_label(active_screen_kind)))
             .on_click(move |_, window, cx| {
                 Self::dispatch_new_screen_action(active_screen_kind, window, cx);
             })
@@ -713,7 +666,8 @@ impl TitleBar {
         PopoverMenu::new("screen-dock-list-menu")
             .trigger_with_tooltip(
                 IconButton::new("screen-dock-list-trigger", IconName::ListTree)
-                    .icon_size(IconSize::XSmall)
+                    .size(ButtonSize::Compact)
+                    .icon_size(IconSize::Small)
                     .disabled(!has_entries),
                 Tooltip::text("Show Screens"),
             )
@@ -729,37 +683,24 @@ impl TitleBar {
                     }));
                 };
 
-                let active_item_id = workspace.read(cx).active_item(cx).map(|item| item.item_id());
-                let entries = workspace
-                    .read(cx)
-                    .active_pane()
-                    .read(cx)
-                    .items()
-                    .map(|item| ActivePaneScreenEntry {
-                        kind: item.screen_kind(cx),
-                        title: item.tab_content_text(0, cx),
-                        subtitle: item.tab_tooltip_text(cx),
-                        icon: Self::screen_kind_icon(item.screen_kind(cx)),
-                        selected: Some(item.item_id()) == active_item_id,
-                        item: item.boxed_clone(),
-                    })
-                    .collect::<Vec<_>>();
+                let entries = Self::collect_workspace_screen_entries(&workspace, cx);
 
                 Some(ContextMenu::build(window, cx, {
                     let workspace_handle = workspace_handle.clone();
                     move |mut menu, _, _| {
                         if entries.is_empty() {
                             return menu.item(
-                                ContextMenuEntry::new("No screens in the active pane")
+                                ContextMenuEntry::new("No screens in the workspace")
                                     .icon(IconName::ListTree)
                                     .disabled(true),
                             );
                         }
 
                         for entry in entries {
+                            let kind = entry.kind;
                             let label = format!(
                                 "{}: {}",
-                                Self::screen_kind_label(entry.kind),
+                                Self::screen_kind_label(kind),
                                 entry.title
                             );
                             let item = entry.item;
@@ -775,7 +716,9 @@ impl TitleBar {
                                         return;
                                     };
                                     let _ = workspace.update(cx, |workspace, cx| {
-                                        workspace.activate_item(&*item, true, true, window, cx);
+                                        if !workspace.activate_screen_kind(kind, window, cx) {
+                                            workspace.activate_item(&*item, true, true, window, cx);
+                                        }
                                     });
                                 }
                             }));
@@ -795,13 +738,18 @@ impl TitleBar {
         let Some(workspace) = self.workspace.upgrade() else {
             return Vec::new();
         };
+        Self::collect_workspace_screen_entries(&workspace, cx)
+    }
+
+    fn collect_workspace_screen_entries(
+        workspace: &Entity<Workspace>,
+        cx: &App,
+    ) -> Vec<ActivePaneScreenEntry> {
         let active_item_id = workspace.read(cx).active_item(cx).map(|item| item.item_id());
-        workspace
-            .read(cx)
-            .active_pane()
-            .read(cx)
-            .items()
-            .map(|item| {
+        let mut entries: Vec<ActivePaneScreenEntry> = Vec::new();
+
+        for pane in workspace.read(cx).panes().iter() {
+            for item in pane.read(cx).items() {
                 let kind = item.screen_kind(cx);
                 let title = item.tab_content_text(0, cx);
                 let title = if title.is_empty() {
@@ -810,16 +758,27 @@ impl TitleBar {
                     title
                 };
 
-                ActivePaneScreenEntry {
+                let entry = ActivePaneScreenEntry {
                     selected: Some(item.item_id()) == active_item_id,
                     subtitle: item.tab_tooltip_text(cx),
                     icon: Self::screen_kind_icon(kind),
                     kind,
                     title,
                     item: item.boxed_clone(),
+                };
+
+                if let Some(existing_ix) = entries.iter().position(|existing| existing.kind == kind)
+                {
+                    if entry.selected {
+                        entries[existing_ix] = entry;
+                    }
+                } else {
+                    entries.push(entry);
                 }
-            })
-            .collect()
+            }
+        }
+
+        entries
     }
 
     fn active_screen_kind(&self, cx: &App) -> WorkspaceScreenKind {
@@ -857,6 +816,16 @@ impl TitleBar {
             WorkspaceScreenKind::Terminal => "Terminal",
             WorkspaceScreenKind::LiquidGlass => "Glass",
             WorkspaceScreenKind::Other => "Screen",
+        }
+    }
+
+    fn screen_kind_create_label(kind: WorkspaceScreenKind) -> &'static str {
+        match kind {
+            WorkspaceScreenKind::Editor => "New Untitled File",
+            WorkspaceScreenKind::Browser => "New Browser Tab",
+            WorkspaceScreenKind::Terminal => "New Terminal",
+            WorkspaceScreenKind::LiquidGlass => "New Liquid Glass",
+            WorkspaceScreenKind::Other => "New Item",
         }
     }
 
@@ -1115,7 +1084,6 @@ impl TitleBar {
         )
     }
 
-    #[allow(dead_code)]
     fn render_project_name(
         &self,
         name: Option<SharedString>,
@@ -1178,11 +1146,12 @@ impl TitleBar {
             })
             .trigger_with_tooltip(
                 Button::new("project_name_trigger", display_name)
+                    .size(ButtonSize::Compact)
                     .label_size(LabelSize::Small)
                     .when(self.worktree_count(cx) > 1, |this| {
                         this.end_icon(
                             Icon::new(IconName::ChevronDown)
-                                .size(IconSize::XSmall)
+                                .size(IconSize::Small)
                                 .color(Color::Muted),
                         )
                     })
@@ -1236,11 +1205,12 @@ impl TitleBar {
             })
             .trigger_with_tooltip(
                 Button::new("project_name_trigger", display_name)
+                    .size(ButtonSize::Compact)
                     .label_size(LabelSize::Small)
                     .when(self.worktree_count(cx) > 1, |this| {
                         this.end_icon(
                             Icon::new(IconName::ChevronDown)
-                                .size(IconSize::XSmall)
+                                .size(IconSize::Small)
                                 .color(Color::Muted),
                         )
                     })
@@ -1320,6 +1290,7 @@ impl TitleBar {
                 })
                 .trigger_with_tooltip(
                     ButtonLike::new("project_branch_trigger")
+                        .size(ButtonSize::Compact)
                         .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                         .child(
                             h_flex()
@@ -1327,17 +1298,17 @@ impl TitleBar {
                                 .when(settings.show_branch_icon, |this| {
                                     let (icon, icon_color) = icon_info;
                                     this.child(
-                                        Icon::new(icon).size(IconSize::XSmall).color(icon_color),
+                                        Icon::new(icon).size(IconSize::Small).color(icon_color),
                                     )
                                 })
                                 .when_some(linked_worktree_name.as_ref(), |this, worktree_name| {
                                     this.child(
                                         Label::new(worktree_name)
-                                            .size(LabelSize::XSmall)
+                                            .size(LabelSize::Small)
                                             .color(Color::Muted),
                                     )
                                     .child(
-                                        Label::new("/").size(LabelSize::XSmall).color(
+                                        Label::new("/").size(LabelSize::Small).color(
                                             Color::Custom(
                                                 cx.theme().colors().text_muted.opacity(0.4),
                                             ),
@@ -1346,7 +1317,7 @@ impl TitleBar {
                                 })
                                 .child(
                                     Label::new(branch_name)
-                                        .size(LabelSize::XSmall)
+                                        .size(LabelSize::Small)
                                         .color(Color::Muted),
                                 ),
                         ),

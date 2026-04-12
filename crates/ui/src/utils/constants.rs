@@ -23,5 +23,5 @@ pub fn platform_title_bar_height(window: &Window) -> Pixels {
 #[cfg(target_os = "windows")]
 pub fn platform_title_bar_height(_window: &Window) -> Pixels {
     // todo(windows) instead of hard coded size report the actual size to the Windows platform API
-    px(32.)
+    px(44.)
 }

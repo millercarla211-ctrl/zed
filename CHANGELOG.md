@@ -17,6 +17,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Changed the web preview tab-bar add button to create only a new web preview
 - Routed terminal creation from the dock and terminal screen add button through the center-terminal action instead of the bottom dock
 - Made browser and terminal screen mode reuse the existing center pane while showing only same-type tabs instead of leaking editor tabs into those screens
+- Tightened the dock chrome with smaller controls, shorter separators, and a compact 5px radius
+- Deduplicated dock/list screen entries by screen kind so repeated terminal tabs do not create repeated dock items
+- Made the browser-screen add action create a real new browser tab instead of reactivating the existing workspace preview
+- Replaced the dock's placeholder path label with the real project selector and kept the full git branch switcher inside the centered dock
+- Hid the default hamburger title-bar menu button, raised the Windows title-bar height, and restored the dock to a normal compact control height
+- Centered the dock with an overlay layout so expanding left-side title-bar content no longer pushes it off center
+- Restored pane-based screen activation for editor, browser, and terminal so split borders become the actual resize handles and custom screen widths are remembered per screen kind
 
 ### April 12, 2026 - Fixed Space Carousel Navigation and Removed Gap Calculation
 **Fixed arrow navigation direction and simplified click handling**

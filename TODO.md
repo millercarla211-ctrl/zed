@@ -13,6 +13,7 @@
 - [x] Document any Windows-specific issues encountered
 
 ## Completed
+- [x] ~~Re-center the title bar screen dock, move the real project and branch controls into it, and restore pane-edge screen resizing~~ ✅ (completed: 2026-04-12)
 - [x] ~~Move the workspace path, branch, and screen switching into a centered macOS-style title bar dock with screen-aware add/list controls~~ ✅ (completed: 2026-04-12)
 - [x] ~~Move Web Preview navigation and actions into the main pane tab bar, remove the in-page toolbar, and make the active web tab switch between page title and URL editor~~ ✅ (completed: 2026-04-11)
 - [x] ~~Restore the whole-editor Liquid Glass overlay to the original panel shader stack while keeping the live editor backdrop as its source~~ ✅ (completed: 2026-04-11)

@@ -66,7 +66,7 @@ use gpui::{
 pub use history_manager::*;
 pub use item::{
     FollowableItem, FollowableItemHandle, Item, ItemHandle, ItemSettings, PreviewTabsSettings,
-    ProjectItem, SerializableItem, SerializableItemHandle, WeakItemHandle,
+    ProjectItem, SerializableItem, SerializableItemHandle, WeakItemHandle, WorkspaceScreenKind,
 };
 use itertools::Itertools;
 use language::{Buffer, LanguageRegistry, Rope, language_settings::all_language_settings};
@@ -1332,6 +1332,7 @@ pub struct Workspace {
     panes_by_item: HashMap<EntityId, WeakEntity<Pane>>,
     active_pane: Entity<Pane>,
     last_active_center_pane: Option<WeakEntity<Pane>>,
+    screen_kind_widths: HashMap<WorkspaceScreenKind, f32>,
     last_active_view_id: Option<proto::ViewId>,
     status_bar: Entity<StatusBar>,
     pub(crate) modal_layer: Entity<ModalLayer>,
@@ -1391,6 +1392,10 @@ pub struct FollowerState {
     active_view_id: Option<ViewId>,
     items_by_leader_view_id: HashMap<ViewId, FollowerView>,
 }
+
+const DEFAULT_ACTIVE_SCREEN_WEIGHT: f32 = 0.7;
+const DEFAULT_SIDE_SCREEN_WEIGHT: f32 = 0.15;
+const SCREEN_WIDTH_CUSTOMIZATION_EPSILON: f32 = 0.03;
 
 struct FollowerView {
     view: Box<dyn FollowableItemHandle>,
@@ -1756,6 +1761,7 @@ impl Workspace {
             panes_by_item: Default::default(),
             active_pane: center_pane.clone(),
             last_active_center_pane: Some(center_pane.downgrade()),
+            screen_kind_widths: Default::default(),
             last_active_view_id: None,
             status_bar,
             modal_layer,
@@ -5416,6 +5422,237 @@ impl Workspace {
 
     pub fn active_pane(&self) -> &Entity<Pane> {
         &self.active_pane
+    }
+
+    pub fn activate_screen_kind(
+        &mut self,
+        kind: WorkspaceScreenKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        self.capture_active_screen_width(cx);
+
+        let target_pane = self.ensure_screen_pane(kind, window, cx);
+        self.rebuild_screen_carousel(kind, &target_pane, cx);
+        self.set_active_pane(&target_pane, window, cx);
+
+        let target_item = target_pane.read(cx).items().find_map(|item| {
+            (item.screen_kind(cx) == kind).then(|| item.boxed_clone())
+        });
+
+        if let Some(item) = target_item {
+            self.activate_item(&*item, true, true, window, cx);
+            true
+        } else {
+            window.focus(&target_pane.focus_handle(cx), cx);
+            cx.notify();
+            false
+        }
+    }
+
+    pub fn pane_for_screen_kind(
+        &self,
+        kind: WorkspaceScreenKind,
+        cx: &App,
+    ) -> Option<Entity<Pane>> {
+        self.center
+            .panes()
+            .iter()
+            .find_map(|pane| {
+                self.screen_kind_for_pane(pane, cx)
+                    .is_some_and(|pane_kind| pane_kind == kind)
+                    .then(|| (*pane).clone())
+            })
+    }
+
+    fn screen_kind_for_pane(
+        &self,
+        pane: &Entity<Pane>,
+        cx: &App,
+    ) -> Option<WorkspaceScreenKind> {
+        let pane = pane.read(cx);
+        pane.active_item()
+            .map(|item| item.screen_kind(cx))
+            .or_else(|| pane.items().next().map(|item| item.screen_kind(cx)))
+    }
+
+    fn capture_active_screen_width(&mut self, cx: &App) {
+        let pane_count = self.center.panes().len();
+        if pane_count <= 1 {
+            return;
+        }
+
+        let Some(kind) = self
+            .active_item(cx)
+            .map(|item| item.screen_kind(cx))
+            .filter(|kind| *kind != WorkspaceScreenKind::Other)
+        else {
+            return;
+        };
+
+        let Some(current_fraction) = self.center.width_fraction_for_pane(&self.active_pane) else {
+            return;
+        };
+
+        let default_fraction = Self::default_active_screen_fraction(pane_count);
+        if (current_fraction - default_fraction).abs() <= SCREEN_WIDTH_CUSTOMIZATION_EPSILON {
+            self.screen_kind_widths.remove(&kind);
+            return;
+        }
+
+        let side_weight_total = DEFAULT_SIDE_SCREEN_WEIGHT * (pane_count.saturating_sub(1) as f32);
+        let current_fraction = current_fraction.clamp(0.05, 0.95);
+        let preferred_weight =
+            (current_fraction * side_weight_total / (1. - current_fraction)).clamp(0.05, 4.);
+        self.screen_kind_widths.insert(kind, preferred_weight);
+    }
+
+    fn default_active_screen_fraction(pane_count: usize) -> f32 {
+        if pane_count <= 1 {
+            return 1.;
+        }
+
+        DEFAULT_ACTIVE_SCREEN_WEIGHT
+            / (DEFAULT_ACTIVE_SCREEN_WEIGHT
+                + DEFAULT_SIDE_SCREEN_WEIGHT * (pane_count.saturating_sub(1) as f32))
+    }
+
+    fn screen_weight(&self, kind: WorkspaceScreenKind, active: bool) -> f32 {
+        self.screen_kind_widths
+            .get(&kind)
+            .copied()
+            .unwrap_or(if active {
+                DEFAULT_ACTIVE_SCREEN_WEIGHT
+            } else {
+                DEFAULT_SIDE_SCREEN_WEIGHT
+            })
+    }
+
+    fn ensure_screen_pane(
+        &mut self,
+        kind: WorkspaceScreenKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<Pane> {
+        if let Some(existing) = self.pane_for_screen_kind(kind, cx) {
+            return existing;
+        }
+
+        if kind == WorkspaceScreenKind::Editor {
+            return self
+                .last_active_center_pane
+                .clone()
+                .and_then(|pane| pane.upgrade())
+                .unwrap_or_else(|| self.active_pane.clone());
+        }
+
+        let anchor = self
+            .pane_for_screen_kind(WorkspaceScreenKind::Editor, cx)
+            .or_else(|| {
+                self.last_active_center_pane
+                    .clone()
+                    .and_then(|pane| pane.upgrade())
+            })
+            .unwrap_or_else(|| self.active_pane.clone());
+
+        let split_direction = match kind {
+            WorkspaceScreenKind::Terminal => SplitDirection::Left,
+            WorkspaceScreenKind::Browser | WorkspaceScreenKind::LiquidGlass => {
+                SplitDirection::Right
+            }
+            WorkspaceScreenKind::Editor | WorkspaceScreenKind::Other => SplitDirection::Right,
+        };
+
+        self.split_pane(anchor, split_direction, window, cx)
+    }
+
+    fn rebuild_screen_carousel(
+        &mut self,
+        active_kind: WorkspaceScreenKind,
+        active_pane: &Entity<Pane>,
+        cx: &mut Context<Self>,
+    ) {
+        let mut used_panes = HashSet::default();
+        let mut ordered_panes = Vec::new();
+        let mut push_pane = |pane: Entity<Pane>| {
+            if used_panes.insert(pane.entity_id()) {
+                ordered_panes.push(pane);
+            }
+        };
+
+        let previous_kind = match active_kind {
+            WorkspaceScreenKind::Browser => Some(WorkspaceScreenKind::Editor),
+            WorkspaceScreenKind::Terminal => Some(WorkspaceScreenKind::Browser),
+            WorkspaceScreenKind::Editor => Some(WorkspaceScreenKind::Terminal),
+            WorkspaceScreenKind::LiquidGlass | WorkspaceScreenKind::Other => None,
+        };
+        let next_kind = match active_kind {
+            WorkspaceScreenKind::Browser => Some(WorkspaceScreenKind::Terminal),
+            WorkspaceScreenKind::Terminal => Some(WorkspaceScreenKind::Editor),
+            WorkspaceScreenKind::Editor => Some(WorkspaceScreenKind::Browser),
+            WorkspaceScreenKind::LiquidGlass | WorkspaceScreenKind::Other => None,
+        };
+
+        if let Some(previous_kind) = previous_kind
+            && let Some(previous_pane) = self.pane_for_screen_kind(previous_kind, cx)
+        {
+            push_pane(previous_pane);
+        }
+
+        push_pane(active_pane.clone());
+
+        if let Some(next_kind) = next_kind
+            && let Some(next_pane) = self.pane_for_screen_kind(next_kind, cx)
+        {
+            push_pane(next_pane);
+        }
+
+        for pane in self.center.panes() {
+            push_pane(pane.clone());
+        }
+
+        if ordered_panes.is_empty() {
+            return;
+        }
+
+        let active_index = ordered_panes
+            .iter()
+            .position(|pane| pane == active_pane)
+            .unwrap_or(0);
+
+        let mut weights = ordered_panes
+            .iter()
+            .enumerate()
+            .map(|(index, pane)| {
+                let pane_kind = self
+                    .screen_kind_for_pane(pane, cx)
+                    .unwrap_or(WorkspaceScreenKind::Other);
+                self.screen_weight(pane_kind, index == active_index)
+            })
+            .collect::<Vec<_>>();
+
+        let weight_sum = weights.iter().copied().sum::<f32>();
+        if weight_sum > 0. {
+            let normalized_total = weights.len() as f32;
+            for weight in &mut weights {
+                *weight = *weight * normalized_total / weight_sum;
+            }
+        }
+
+        let root = match ordered_panes.len() {
+            1 => Member::Pane(ordered_panes[0].clone()),
+            _ => Member::Axis(PaneAxis::load(
+                Axis::Horizontal,
+                ordered_panes.into_iter().map(Member::Pane).collect::<Vec<_>>(),
+                Some(weights),
+            )),
+        };
+
+        let mut center = PaneGroup::with_root(root);
+        center.set_is_center(true);
+        center.mark_positions(cx);
+        self.center = center;
+        cx.notify();
     }
 
     pub fn focused_pane(&self, window: &Window, cx: &App) -> Entity<Pane> {
