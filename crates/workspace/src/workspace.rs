@@ -1332,6 +1332,7 @@ pub struct Workspace {
     panes_by_item: HashMap<EntityId, WeakEntity<Pane>>,
     active_pane: Entity<Pane>,
     last_active_center_pane: Option<WeakEntity<Pane>>,
+    #[allow(dead_code)]
     screen_kind_widths: HashMap<WorkspaceScreenKind, f32>,
     last_active_view_id: Option<proto::ViewId>,
     status_bar: Entity<StatusBar>,
@@ -1393,8 +1394,11 @@ pub struct FollowerState {
     items_by_leader_view_id: HashMap<ViewId, FollowerView>,
 }
 
+#[allow(dead_code)]
 const DEFAULT_ACTIVE_SCREEN_WEIGHT: f32 = 0.7;
+#[allow(dead_code)]
 const DEFAULT_SIDE_SCREEN_WEIGHT: f32 = 0.15;
+#[allow(dead_code)]
 const SCREEN_WIDTH_CUSTOMIZATION_EPSILON: f32 = 0.03;
 
 struct FollowerView {
@@ -5493,6 +5497,7 @@ impl Workspace {
         })
     }
 
+    #[allow(dead_code)]
     fn screen_kind_for_pane(&self, pane: &Entity<Pane>, cx: &App) -> Option<WorkspaceScreenKind> {
         let pane = pane.read(cx);
         pane.active_item()
@@ -5500,6 +5505,7 @@ impl Workspace {
             .or_else(|| pane.items().next().map(|item| item.screen_kind(cx)))
     }
 
+    #[allow(dead_code)]
     fn capture_active_screen_width(&mut self, cx: &App) {
         let pane_count = self.center.panes().len();
         if pane_count <= 1 {
@@ -5531,6 +5537,7 @@ impl Workspace {
         self.screen_kind_widths.insert(kind, preferred_weight);
     }
 
+    #[allow(dead_code)]
     fn default_active_screen_fraction(pane_count: usize) -> f32 {
         if pane_count <= 1 {
             return 1.;
@@ -5541,6 +5548,7 @@ impl Workspace {
                 + DEFAULT_SIDE_SCREEN_WEIGHT * (pane_count.saturating_sub(1) as f32))
     }
 
+    #[allow(dead_code)]
     fn screen_weight(&self, kind: WorkspaceScreenKind, active: bool) -> f32 {
         self.screen_kind_widths
             .get(&kind)
@@ -5552,10 +5560,11 @@ impl Workspace {
             })
     }
 
+    #[allow(dead_code)]
     fn ensure_screen_pane(
         &mut self,
         kind: WorkspaceScreenKind,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Entity<Pane> {
         if let Some(existing) = self.pane_for_screen_kind(kind, cx) {
@@ -5570,6 +5579,7 @@ impl Workspace {
             .unwrap_or_else(|| self.active_pane.clone())
     }
 
+    #[allow(dead_code)]
     fn rebuild_screen_carousel(
         &mut self,
         active_kind: WorkspaceScreenKind,

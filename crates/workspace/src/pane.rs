@@ -3534,7 +3534,8 @@ impl Pane {
 
         tab_bar
             .when(
-                self.display_nav_history_buttons.unwrap_or_default(),
+                self.display_nav_history_buttons.unwrap_or_default()
+                    && self.visible_screen_kind(cx).is_none(),
                 |tab_bar| {
                     tab_bar
                         .start_child(navigate_backward)

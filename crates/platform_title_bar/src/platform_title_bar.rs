@@ -285,10 +285,10 @@ impl Render for PlatformTitleBar {
                     .id(self.id.clone())
                     .flex()
                     .flex_row()
-                    .items_center()
                     .justify_between()
                     .overflow_x_hidden()
                     .w_full()
+                    .h_full()
                     .children(children),
             )
             .when(!window.is_fullscreen(), |title_bar| {

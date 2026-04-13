@@ -16,6 +16,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Kept the project selector, git branch selector, screen buttons, add button, and list menu inside the restored dock
 - Moved screen-entry collection back to the shared screen host pane instead of aggregating stale screen items from every pane
 - Simplified screen switching so Editor, Browser, and Terminal all stay on the same full-width host pane and only switch or create their own tab type there
+- Inset the centered dock overlay vertically inside the title bar so the dock frame no longer sits flush against the container edges
+- Moved the real pane-history back and forward buttons out of the pane tab bar and into the left side of the centered screen dock
+- Removed the separator between the dock history arrows and the project selector, and rebuilt the dock as a padded outer shell so its top and bottom frame edges render as true border pixels
 
 ### April 13, 2026 - Screen Switching Attempted Fix (CANNOT TEST)
 **Attempted to fix Terminal and Browser screens to use full-width center pane**

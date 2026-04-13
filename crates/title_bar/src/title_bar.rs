@@ -45,7 +45,7 @@ use ui::{
 use update_version::UpdateVersion;
 use util::ResultExt;
 use workspace::{
-    MultiWorkspace, NewCenterTerminal, NewFile, NewLiquidGlass, NewWebPreview,
+    GoBack, GoForward, MultiWorkspace, NewCenterTerminal, NewFile, NewLiquidGlass, NewWebPreview,
     ToggleWorktreeSecurity, Workspace,
     item::{ItemHandle, WorkspaceScreenKind},
     notifications::NotifyResultExt,
@@ -323,10 +323,8 @@ impl Render for TitleBar {
                     .absolute()
                     .left_0()
                     .right_0()
-                    .top_0()
-                    .bottom_0()
+                    .top(px(6.))
                     .flex()
-                    .items_center()
                     .justify_center()
                     .child(center_dock),
             )
@@ -431,6 +429,7 @@ impl TitleBar {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let navigation_segment = self.render_screen_dock_navigation(window, cx);
         let project_segment = Some(
             self.render_project_name(project_name, window, cx)
                 .into_any_element(),
@@ -453,18 +452,19 @@ impl TitleBar {
             })
             .collect::<Vec<_>>();
 
-        let has_left_segment = project_segment.is_some() || branch_segment.is_some();
+        let has_project_segment = project_segment.is_some() || branch_segment.is_some();
+        let has_left_segment = navigation_segment.is_some() || has_project_segment;
         let has_extra_entries = !extra_entries.is_empty();
         let border_color = cx.theme().colors().border;
 
         let dock_body = h_flex()
             .id("screen-dock-body")
             .flex_none()
-            .h(px(30.))
+            .h(px(25.))
             .items_center()
             .gap_0p5()
             .px_1p5()
-            .rounded(px(4.))
+            .rounded(px(3.))
             .bg(cx.theme().colors().elevated_surface_background)
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .when(has_left_segment, |dock| {
@@ -472,6 +472,7 @@ impl TitleBar {
                     h_flex()
                         .items_center()
                         .gap_0p5()
+                        .children(navigation_segment)
                         .children(project_segment)
                         .children(branch_segment),
                 )
@@ -519,54 +520,66 @@ impl TitleBar {
         div()
             .id("screen-dock")
             .flex_none()
-            .relative()
             .rounded(px(5.))
-            .bg(border_color)
-            .child(
-                dock_body
-                    .m(px(1.))
-                    .into_any_element(),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .top_0()
-                    .left(px(5.))
-                    .right(px(5.))
-                    .h(px(1.))
-                    .bg(border_color)
-                    .rounded_t(px(5.)),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .bottom_0()
-                    .left(px(5.))
-                    .right(px(5.))
-                    .h(px(1.))
-                    .bg(border_color)
-                    .rounded_b(px(5.)),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .top(px(5.))
-                    .bottom(px(5.))
-                    .left_0()
-                    .w(px(1.))
-                    .bg(border_color),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .top(px(5.))
-                    .bottom(px(5.))
-                    .right_0()
-                    .w(px(1.))
-                    .bg(border_color),
-            )
+            .border_1()
+            .border_color(border_color)
+            .child(dock_body.into_any_element())
             .shadow_sm()
             .into_any_element()
+    }
+
+    fn render_screen_dock_navigation(
+        &self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let workspace = self.workspace.upgrade()?;
+        let active_pane = workspace.read(cx).active_pane().clone();
+        let can_navigate_backward = active_pane.read(cx).can_navigate_backward();
+        let can_navigate_forward = active_pane.read(cx).can_navigate_forward();
+
+        Some(
+            h_flex()
+                .items_center()
+                .gap_0p5()
+                .child(
+                    IconButton::new("screen-dock-navigate-backward", IconName::ArrowLeft)
+                        .size(ButtonSize::Compact)
+                        .icon_size(IconSize::Small)
+                        .disabled(!can_navigate_backward)
+                        .tooltip(Tooltip::text("Go Back"))
+                        .on_click({
+                            let workspace = self.workspace.clone();
+                            move |_, window, cx| {
+                                let Some(workspace) = workspace.upgrade() else {
+                                    return;
+                                };
+                                let focus_handle =
+                                    workspace.read(cx).active_pane().focus_handle(cx);
+                                focus_handle.dispatch_action(&GoBack, window, cx);
+                            }
+                        }),
+                )
+                .child(
+                    IconButton::new("screen-dock-navigate-forward", IconName::ArrowRight)
+                        .size(ButtonSize::Compact)
+                        .icon_size(IconSize::Small)
+                        .disabled(!can_navigate_forward)
+                        .tooltip(Tooltip::text("Go Forward"))
+                        .on_click({
+                            let workspace = self.workspace.clone();
+                            move |_, window, cx| {
+                                let Some(workspace) = workspace.upgrade() else {
+                                    return;
+                                };
+                                let focus_handle =
+                                    workspace.read(cx).active_pane().focus_handle(cx);
+                                focus_handle.dispatch_action(&GoForward, window, cx);
+                            }
+                        }),
+                )
+                .into_any_element(),
+        )
     }
 
     fn render_screen_dock_divider(&self, cx: &App) -> AnyElement {

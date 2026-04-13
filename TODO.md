@@ -14,6 +14,8 @@
 - [x] Document any Windows-specific issues encountered
 
 ## Completed
+- [x] ~~Remove the separator between the dock history arrows and the project control, and rebuild the centered dock shell so its top and bottom frame edges can render as real border pixels~~ ✅ (completed: 2026-04-13)
+- [x] ~~Move the real back and forward pane-history buttons into the centered screen dock and inset the dock overlay so its top and bottom frame edges are not clipped~~ ✅ (completed: 2026-04-13)
 - [x] ~~Restore the real centered screen dock with a guaranteed four-sided border and keep Editor, Browser, and Terminal on the same full-width host pane with type-filtered tabs~~ ✅ (completed: 2026-04-13)
 - [x] ~~Fixed screen dock border to show on all four sides with minimal border radius (3px outer, 2px inner)~~ ✅ (completed: 2026-04-12)
 - [x] ~~Wrap the centered screen dock in a true full border and move browser and terminal screen creation into the selected pane after screen activation~~ ✅ (completed: 2026-04-12)
