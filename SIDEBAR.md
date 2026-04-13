@@ -38,6 +38,8 @@ The thing is, in the current sidebar footer the dots have a gap between them so 
 
 Now this doesn't seem like a hard job but in reality it is very hard to implement. Try to make a strategic plan fast and make it bulletproof so that it works correctly. 
 
-Now currently in our workspace sidebar start bar bottom grid, at least there should be 12 items. Now even if there are only 1 or 2 or 0 items possible, then just put the grids and put a default icon, like an add icon or things like that, on them. By default no matter what, 12 items will show there. There can be more but there can be less than 12 items for all screens. 
+Now currently in our workspace sidebar start bar bottom grid, at least there should be 12 items. Now even if there are only 1 or 2 or 0 items possible, then just put the grids and put a default icon, like an add icon or things like that, on them. By default no matter what, 12 items will show there. There can be more but there can be less than 12 items for all screens.
+
+now in our sidebar footer at our space dots. Please comment out the left and right arrow key and make sure that the space dot has a height and width so that when we hover over them it shows a hover on their height and width. Put some gap between them and we don't need to show the left and right arrow key until the space dots become so many in count that it doesn't fit on the sidebar width.
 
 Shamo subha tu mera

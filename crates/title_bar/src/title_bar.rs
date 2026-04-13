@@ -278,6 +278,12 @@ impl Render for TitleBar {
             .gap_1()
             .items_center()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            // Add invisible spacers to balance left side width
+            .child(div().w(px(32.)).h(px(1.))) // Spacer 1
+            .child(div().w(px(32.)).h(px(1.))) // Spacer 2
+            .child(div().w(px(32.)).h(px(1.))) // Spacer 3
+            .child(div().w(px(32.)).h(px(1.))) // Spacer 4
+            .child(div().w(px(32.)).h(px(1.))) // Spacer 5
             .children(self.render_call_controls(window, cx))
             .children(self.render_connection_status(status, cx))
             .child(self.update_version.clone())
