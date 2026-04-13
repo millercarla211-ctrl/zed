@@ -4048,6 +4048,7 @@ impl Sidebar {
             .unwrap_or_default();
 
         let popover_handle = self.recent_projects_popover_handle.clone();
+        let multi_workspace_for_popover = multi_workspace.as_ref().map(|mw| mw.downgrade());
 
         PopoverMenu::new("sidebar-recent-projects-menu")
             .with_handle(popover_handle)
@@ -4057,6 +4058,7 @@ impl Sidebar {
                         ws.clone(),
                         window_project_groups.clone(),
                         focus_handle.clone(),
+                        multi_workspace_for_popover.clone(),
                         window,
                         cx,
                     )
@@ -5296,7 +5298,7 @@ impl Sidebar {
         let show_carousel = spaces.len() > 1;
 
         h_flex()
-            .gap_1p5()
+            .gap_0() // No gap - dots should be as close as possible
             .items_center()
             .justify_center()
             .when(!show_carousel, |this| this.invisible()) // Hide when only 1 space

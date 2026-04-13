@@ -216,6 +216,24 @@ impl WebPreviewView {
         });
     }
 
+    /// Opens a web preview with a specific URL in the active pane
+    pub fn open_url_in_active_pane(
+        workspace: &mut Workspace,
+        url: &str,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) {
+        let view = Self::open_or_create_with_url(workspace, url, window, cx);
+        workspace.active_pane().update(cx, |pane, cx| {
+            if let Some(existing_view_idx) = Self::find_existing_preview_item_idx(pane, &view, cx) {
+                pane.activate_item(existing_view_idx, true, true, window, cx);
+            } else {
+                pane.add_item(Box::new(view.clone()), true, true, None, window, cx);
+            }
+        });
+        cx.notify();
+    }
+
     fn open_in_active_pane(
         workspace: &mut Workspace,
         window: &mut Window,
@@ -263,11 +281,20 @@ impl WebPreviewView {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) -> Entity<Self> {
+        Self::open_or_create_with_url(workspace, DEFAULT_WEB_PREVIEW_URL, window, cx)
+    }
+
+    fn open_or_create_with_url(
+        workspace: &mut Workspace,
+        url: &str,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) -> Entity<Self> {
         let workspace_context = Self::workspace_context(workspace, cx);
         let weak_workspace = workspace.weak_handle();
 
         cx.new(|cx| {
-            let current_url = DEFAULT_WEB_PREVIEW_URL.to_string();
+            let current_url = url.to_string();
             let url_editor = cx.new(|cx| {
                 let mut editor = Editor::single_line(window, cx);
                 editor.set_placeholder_text("Search Google or enter a URL", window, cx);
@@ -1445,18 +1472,8 @@ impl WebPreviewView {
     }
 
     fn render_webview_body(&self, cx: &mut Context<Self>) -> AnyElement {
-        let is_loading = matches!(self.load_state, PreviewLoadState::Loading);
-
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
-            // Don't render webview at all when loading - only show background
-            if is_loading {
-                return div()
-                    .size_full()
-                    .bg(cx.theme().colors().surface_background)
-                    .into_any_element();
-            }
-
             let host_bounds = self.host_bounds.clone();
             #[cfg(target_os = "macos")]
             let last_applied_bounds = self.last_applied_bounds.clone();
@@ -1543,6 +1560,21 @@ impl Item for WebPreviewView {
 
     fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
         format!("Web {}", self.current_tab_title()).into()
+    }
+
+    fn tab_content(&self, params: TabContentParams, _window: &Window, cx: &App) -> AnyElement {
+        let text = self.tab_content_text(params.detail.unwrap_or_default(), cx);
+
+        // For web preview, use a bottom border indicator for active tabs
+        // instead of the standard background color change
+        h_flex()
+            .pb(px(2.))
+            .child(Label::new(text).color(params.text_color()))
+            .when(params.selected, |this| {
+                this.border_b_2()
+                    .border_color(cx.theme().colors().element_active)
+            })
+            .into_any_element()
     }
 
     fn tab_icon(&self, _window: &Window, _cx: &App) -> Option<ui::Icon> {
@@ -1711,6 +1743,8 @@ impl Render for WebPreviewView {
         #[cfg(not(target_os = "windows"))]
         let preview_surface_background = gpui::transparent_black();
 
+        let has_focus = self.focus_handle(cx).contains_focused(window, cx);
+
         div()
             .id("web-preview")
             .key_context("WebPreview")
@@ -1807,6 +1841,11 @@ impl Render for WebPreviewView {
                             // Keep the Windows top GPUI window hit-testable over the underlay webview
                             // without visibly obscuring the page.
                             .bg(preview_surface_background)
+                            // Add border when not focused to indicate focus state
+                            .when(!has_focus, |this| {
+                                this.border_2()
+                                    .border_color(cx.theme().colors().element_active)
+                            })
                             .child(body)
                             // Glassmorphism loading overlay
                             .when(is_loading, |this| {
