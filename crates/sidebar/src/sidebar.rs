@@ -38,9 +38,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use theme::ActiveTheme;
 use ui::{
-    AgentThreadStatus, ButtonStyle, CommonAnimationExt, ContextMenu, Divider, HighlightedLabel,
-    IconButtonShape, KeyBinding, PopoverMenu, PopoverMenuHandle, Tab, TabPosition, ThreadItem,
-    ThreadItemWorktreeInfo, TintColor, Tooltip, WithScrollbar, prelude::*,
+    AgentThreadStatus, ButtonLike, ButtonStyle, CommonAnimationExt, ContextMenu, Divider,
+    HighlightedLabel, IconButtonShape, KeyBinding, PopoverMenu, PopoverMenuHandle, Tab, ThreadItem,
+    ThreadItemWorktreeInfo, TintColor, Tooltip, WithScrollbar, prelude::*, right_click_menu,
 };
 use util::ResultExt as _;
 use util::path_list::PathList;
@@ -493,22 +493,16 @@ pub struct Sidebar {
     view: SidebarView,
     restoring_tasks: HashMap<acp::SessionId, Task<()>>,
     space_labels: HashMap<ProjectGroupKey, SharedString>,
+    space_entries: Vec<SpaceEntry>,
+    active_space_key: Option<ProjectGroupKey>,
     next_space_number: usize,
     space_page_start: usize,
     recent_projects_popover_handle: PopoverMenuHandle<SidebarRecentProjects>,
     project_header_menu_ix: Option<usize>,
     _subscriptions: Vec<gpui::Subscription>,
     _draft_observation: Option<gpui::Subscription>,
-    dummy_spaces: Vec<DummySpace>,
-    active_dummy_space_index: usize,
     carousel_drag_start: Option<(f32, usize)>,
-}
-
-#[derive(Clone)]
-struct DummySpace {
-    #[allow(dead_code)]
-    id: usize,
-    label: SharedString,
+    carousel_did_drag: bool,
 }
 
 impl Sidebar {
@@ -622,20 +616,16 @@ impl Sidebar {
             view: SidebarView::default(),
             restoring_tasks: HashMap::new(),
             space_labels: HashMap::new(),
+            space_entries: Vec::new(),
+            active_space_key: None,
             next_space_number: default_next_space_number(),
             space_page_start: 0,
             recent_projects_popover_handle: PopoverMenuHandle::default(),
             project_header_menu_ix: None,
             _subscriptions: Vec::new(),
             _draft_observation: None,
-            dummy_spaces: (1..=12)
-                .map(|i| DummySpace {
-                    id: i,
-                    label: format!("Space {}", i).into(),
-                })
-                .collect(),
-            active_dummy_space_index: 0,
             carousel_drag_start: None,
+            carousel_did_drag: false,
         }
     }
 
@@ -649,52 +639,41 @@ impl Sidebar {
         label.into()
     }
 
-    fn sync_space_state(&mut self, _cx: &mut Context<Self>) {
-        // Disabled for dummy spaces - no need to sync with MultiWorkspace
-        return;
-
-        #[allow(unreachable_code)]
-        {
-            let Some(multi_workspace) = self.multi_workspace.upgrade() else {
-                return;
-            };
-
-            let project_group_keys = multi_workspace
-                .read(_cx)
-                .project_group_keys()
-                .cloned()
-                .collect::<Vec<_>>();
-            let project_group_key_set = project_group_keys.iter().cloned().collect::<HashSet<_>>();
-
-            let mut changed = false;
-            self.space_labels.retain(|key, _| {
-                let keep = project_group_key_set.contains(key);
-                changed |= !keep;
-                keep
-            });
-
-            for key in project_group_keys {
-                if self.space_labels.contains_key(&key) {
-                    continue;
-                }
-
-                let label = self.next_generated_space_label();
-                self.space_labels.insert(key, label);
-                changed = true;
-            }
-
-            if changed {
-                self.serialize(_cx);
-            }
-        }
-    }
-
-    fn space_entries(&self, cx: &App) -> Vec<SpaceEntry> {
+    fn sync_space_state(&mut self, cx: &mut Context<Self>) {
         let Some(multi_workspace) = self.multi_workspace.upgrade() else {
-            return Vec::new();
+            return;
         };
 
-        multi_workspace
+        let project_group_keys = multi_workspace
+            .read(cx)
+            .project_group_keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        let project_group_key_set = project_group_keys.iter().cloned().collect::<HashSet<_>>();
+
+        let mut changed = false;
+        self.space_labels.retain(|key, _| {
+            let keep = project_group_key_set.contains(key);
+            changed |= !keep;
+            keep
+        });
+
+        for key in project_group_keys {
+            if self.space_labels.contains_key(&key) {
+                continue;
+            }
+
+            let label = self.next_generated_space_label();
+            self.space_labels.insert(key, label);
+            changed = true;
+        }
+
+        let active_space_key = {
+            let multi_workspace = multi_workspace.read(cx);
+            Some(multi_workspace.project_group_key_for_workspace(multi_workspace.workspace(), cx))
+        };
+
+        let mut space_entries = multi_workspace
             .read(cx)
             .project_group_keys()
             .cloned()
@@ -706,13 +685,46 @@ impl Sidebar {
                     .unwrap_or_else(|| "New space".into()),
                 key,
             })
-            .collect()
+            .collect::<Vec<_>>();
+
+        if space_entries.is_empty()
+            && let Some(key) = active_space_key.clone()
+        {
+            space_entries.push(SpaceEntry {
+                label: self
+                    .space_labels
+                    .get(&key)
+                    .cloned()
+                    .unwrap_or_else(|| "New space".into()),
+                key,
+            });
+        }
+
+        self.active_space_key = active_space_key;
+        self.space_entries = space_entries;
+
+        let total_spaces = self.space_entries.len();
+        let max_start = total_spaces.saturating_sub(MAX_VISIBLE_SPACE_DOTS);
+        if changed {
+            self.space_page_start = self
+                .clamped_space_page_start(total_spaces, self.active_space_index(cx))
+                .min(max_start);
+            self.serialize(cx);
+        } else if self.space_page_start > max_start {
+            self.space_page_start = max_start;
+        }
     }
 
-    #[allow(dead_code)]
+    fn space_entries(&self, _cx: &App) -> Vec<SpaceEntry> {
+        self.space_entries.clone()
+    }
+
     fn active_space_index(&self, cx: &App) -> Option<usize> {
-        let active_key = self.active_project_group_key(cx)?;
-        self.space_entries(cx)
+        let active_key = self
+            .active_space_key
+            .clone()
+            .or_else(|| self.active_project_group_key(cx))?;
+        self.space_entries
             .iter()
             .position(|space| space.key == active_key)
     }
@@ -734,67 +746,25 @@ impl Sidebar {
     }
 
     fn create_new_space(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        let next_id = self.dummy_spaces.len() + 1;
-        self.dummy_spaces.push(DummySpace {
-            id: next_id,
-            label: format!("Space {}", next_id).into(),
-        });
-        cx.notify();
-    }
-
-    fn activate_dummy_space(&mut self, index: usize, cx: &mut Context<Self>) {
-        if index < self.dummy_spaces.len() {
-            self.active_dummy_space_index = index;
-
-            // Ensure active space is visible in the carousel
-            if index < self.space_page_start {
-                // Active space is before visible range, scroll left
-                self.space_page_start = index;
-            } else if index >= self.space_page_start + MAX_VISIBLE_SPACE_DOTS {
-                // Active space is after visible range, scroll right
-                self.space_page_start = index + 1 - MAX_VISIBLE_SPACE_DOTS;
-            }
-
-            cx.notify();
-        }
-    }
-
-    fn activate_nearest_space(
-        &mut self,
-        click_position: gpui::Point<gpui::Pixels>,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        // This is called when user clicks in the carousel area (not directly on a dot)
-        // The click_position is relative to the carousel container
-
-        let click_x: f32 = click_position.x.into();
-
-        // Calculate how many dots are currently visible
-        let visible_count =
-            MAX_VISIBLE_SPACE_DOTS.min(self.dummy_spaces.len() - self.space_page_start);
-
-        if visible_count == 0 {
+        let Some(multi_workspace) = self.multi_workspace.upgrade() else {
             return;
-        }
+        };
 
-        // Estimate spacing: gap_1p5 = 6px, dot size ~8px average, total ~14-16px per dot
-        let dot_spacing = 16.0;
+        self.show_thread_list(_window, cx);
 
-        // Find which dot segment the click falls into
-        // We divide the carousel into equal segments
-        let segment_index = (click_x / dot_spacing).round() as i32;
+        let task = multi_workspace.update(cx, |multi_workspace, cx| {
+            multi_workspace.create_random_local_workspace(_window, cx)
+        });
 
-        // Clamp to valid visible range [0, visible_count-1]
-        let visible_index = segment_index.max(0).min((visible_count - 1) as i32) as usize;
-
-        // Convert to absolute space index
-        let absolute_index = self.space_page_start + visible_index;
-
-        // Activate the space
-        if absolute_index < self.dummy_spaces.len() {
-            self.activate_dummy_space(absolute_index, cx);
-        }
+        cx.spawn_in(_window, async move |this, cx| {
+            task.await?;
+            this.update(cx, |this, cx| {
+                this.sync_space_state(cx);
+                cx.notify();
+            })?;
+            anyhow::Ok(())
+        })
+        .detach_and_log_err(cx);
     }
 
     #[allow(dead_code)]
@@ -820,6 +790,7 @@ impl Sidebar {
         {
             multi_workspace.update(cx, |multi_workspace, cx| {
                 multi_workspace.activate(workspace.clone(), window, cx);
+                multi_workspace.retain_active_workspace(cx);
             });
         } else {
             self.open_workspace_for_group(key, window, cx);
@@ -827,8 +798,14 @@ impl Sidebar {
     }
 
     fn show_previous_space_page(&mut self, cx: &mut Context<Self>) {
-        // LEFT arrow clicked - scroll carousel RIGHT to show LATER/NEXT spaces
-        let spaces_len = self.dummy_spaces.len();
+        if self.space_page_start > 0 {
+            self.space_page_start -= 1;
+            cx.notify();
+        }
+    }
+
+    fn show_next_space_page(&mut self, cx: &mut Context<Self>) {
+        let spaces_len = self.space_entries.len();
         let max_start = spaces_len.saturating_sub(MAX_VISIBLE_SPACE_DOTS);
         if self.space_page_start < max_start {
             self.space_page_start += 1;
@@ -836,22 +813,15 @@ impl Sidebar {
         }
     }
 
-    fn show_next_space_page(&mut self, cx: &mut Context<Self>) {
-        // RIGHT arrow clicked - scroll carousel LEFT to show EARLIER/PREVIOUS spaces
-        if self.space_page_start > 0 {
-            self.space_page_start -= 1;
-            cx.notify();
-        }
-    }
-
-    fn active_space_label(&self, cx: &App) -> SharedString {
-        self.active_project_group_key(cx)
+    fn active_space_label(&self, _cx: &App) -> SharedString {
+        self.active_space_key
+            .clone()
             .and_then(|key| self.space_labels.get(&key).cloned())
             .unwrap_or_else(|| "Current space".into())
     }
 
-    fn active_space_path_summary(&self, cx: &App) -> SharedString {
-        let Some(key) = self.active_project_group_key(cx) else {
+    fn active_space_path_summary(&self, _cx: &App) -> SharedString {
+        let Some(key) = self.active_space_key.clone() else {
             return SharedString::default();
         };
 
@@ -4417,32 +4387,9 @@ impl Sidebar {
             )
     }
 
-    fn render_view_switcher(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let is_thread_list = matches!(self.view, SidebarView::ThreadList);
-
-        h_flex()
-            .w_full()
-            .child(
-                Tab::new("sidebar-threads-tab")
-                    .position(TabPosition::First)
-                    .toggle_state(is_thread_list)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.show_thread_list(window, cx);
-                    }))
-                    .child(div().min_w_0().child(Label::new("Threads").truncate())),
-            )
-            .child(
-                Tab::new("sidebar-archive-tab")
-                    .position(TabPosition::Last)
-                    .toggle_state(!is_thread_list)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.show_archive(window, cx);
-                    }))
-                    .child(div().min_w_0().child(Label::new("Archive").truncate())),
-            )
-    }
-
     fn render_gen_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let is_archive = matches!(self.view, SidebarView::Archive(..));
+        let show_import_button = is_archive && !self.should_render_acp_import_onboarding(cx);
         let button = |id,
                       icon,
                       tooltip,
@@ -4497,6 +4444,37 @@ impl Sidebar {
                         "Refresh Sidebar",
                         |this, _, _window, cx| this.update_entries(cx),
                     ))
+                    .when(show_import_button, |this| {
+                        this.child(
+                            IconButton::new(
+                                "sidebar-toolbar-thread-import",
+                                IconName::ThreadImport,
+                            )
+                            .shape(IconButtonShape::Square)
+                            .style(ButtonStyle::Subtle)
+                            .icon_size(IconSize::Small)
+                            .tooltip(Tooltip::text("Import ACP Threads"))
+                            .on_click(cx.listener(
+                                |this, _, window, cx| {
+                                    this.show_archive(window, cx);
+                                    this.show_thread_import_modal(window, cx);
+                                },
+                            )),
+                        )
+                    })
+                    .child(
+                        IconButton::new("sidebar-toolbar-archive", IconName::Archive)
+                            .shape(IconButtonShape::Square)
+                            .style(ButtonStyle::Subtle)
+                            .icon_size(IconSize::Small)
+                            .toggle_state(is_archive)
+                            .tooltip(move |_, cx| {
+                                Tooltip::for_action("Toggle Archived Threads", &ToggleArchive, cx)
+                            })
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.toggle_archive(&ToggleArchive, window, cx);
+                            })),
+                    )
                     .child(button(
                         "sidebar-toolbar-create-space",
                         IconName::Sparkle,
@@ -4504,6 +4482,26 @@ impl Sidebar {
                         |this, _, window, cx| this.create_new_space(window, cx),
                     )),
             )
+    }
+
+    fn manage_space(&mut self, key: &ProjectGroupKey, window: &mut Window, cx: &mut Context<Self>) {
+        self.activate_space(key, window, cx);
+
+        if let Some(multi_workspace) = self.multi_workspace.upgrade() {
+            multi_workspace.update(cx, |multi_workspace, cx| {
+                multi_workspace.prompt_to_add_folders_to_project_group(key, window, cx);
+            });
+        }
+    }
+
+    fn delete_space(&mut self, key: &ProjectGroupKey, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(multi_workspace) = self.multi_workspace.upgrade() {
+            multi_workspace.update(cx, |multi_workspace, cx| {
+                multi_workspace
+                    .remove_project_group(key, window, cx)
+                    .detach_and_log_err(cx);
+            });
+        }
     }
 
     fn render_gen_search_row(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -4665,20 +4663,14 @@ impl Sidebar {
                     }),
             )
             .when(!no_open_projects, |this| {
-                this.child(
-                    v_flex()
-                        .px_2()
-                        .pb_2()
-                        .gap_2()
-                        .when(matches!(self.view, SidebarView::ThreadList), |this| {
-                            this.child(self.render_gen_search_row(window, cx))
-                                .child(self.render_space_grid(cx))
-                                .child(self.render_current_space_heading(cx))
-                        })
-                        .when(matches!(self.view, SidebarView::Archive(_)), |this| {
-                            this.child(self.render_view_switcher(cx))
-                        }),
-                )
+                this.child(v_flex().px_2().pb_2().gap_2().when(
+                    matches!(self.view, SidebarView::ThreadList),
+                    |this| {
+                        this.child(self.render_gen_search_row(window, cx))
+                            .child(self.render_space_grid(cx))
+                            .child(self.render_current_space_heading(cx))
+                    },
+                ))
             })
     }
 
@@ -4753,11 +4745,15 @@ impl Sidebar {
     }
 
     fn render_space_carousel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let spaces = self.dummy_spaces.clone();
-        let active_index = self.active_dummy_space_index;
-        let start = self.space_page_start;
+        let spaces = self.space_entries(cx);
+        let active_key = self.active_space_key.clone();
+        let start = self
+            .space_page_start
+            .min(spaces.len().saturating_sub(MAX_VISIBLE_SPACE_DOTS));
         let can_go_left = start > 0;
         let can_go_right = start + MAX_VISIBLE_SPACE_DOTS < spaces.len();
+        let is_dragging = self.carousel_drag_start.is_some();
+        let sidebar = cx.weak_entity();
 
         h_flex()
             .gap_1p5()
@@ -4783,19 +4779,25 @@ impl Sidebar {
                     .items_center()
                     .px_2()
                     .py_1()
-                    .cursor(gpui::CursorStyle::PointingHand)
+                    .cursor(if is_dragging {
+                        gpui::CursorStyle::ClosedHand
+                    } else {
+                        gpui::CursorStyle::OpenHand
+                    })
                     .on_mouse_down(
                         gpui::MouseButton::Left,
-                        cx.listener(|this, event: &gpui::MouseDownEvent, _window, _cx| {
+                        cx.listener(|this, event: &gpui::MouseDownEvent, _window, cx| {
                             let x: f32 = event.position.x.into();
                             this.carousel_drag_start = Some((x, this.space_page_start));
+                            this.carousel_did_drag = false;
+                            cx.notify();
                         }),
                     )
                     .on_mouse_up(
                         gpui::MouseButton::Left,
-                        cx.listener(|this, _event: &gpui::MouseUpEvent, _window, _cx| {
-                            // Just clear drag state, dots have their own click handlers
+                        cx.listener(|this, _event: &gpui::MouseUpEvent, _window, cx| {
                             this.carousel_drag_start = None;
+                            cx.notify();
                         }),
                     )
                     .on_mouse_move(cx.listener(
@@ -4803,51 +4805,151 @@ impl Sidebar {
                             if let Some((start_x, start_page)) = this.carousel_drag_start {
                                 let current_x: f32 = event.position.x.into();
                                 let delta_x = current_x - start_x;
-                                // Increase sensitivity: 20px per dot instead of 30px
                                 let dots_moved = (delta_x / 20.0).round() as i32;
-
-                                // Calculate new page position
-                                let new_page = (start_page as i32 - dots_moved).max(0) as usize;
                                 let max_start = this
-                                    .dummy_spaces
+                                    .space_entries
                                     .len()
                                     .saturating_sub(MAX_VISIBLE_SPACE_DOTS);
-                                this.space_page_start = new_page.min(max_start);
-                                cx.notify();
+                                let new_page = (start_page as i32 - dots_moved).max(0) as usize;
+                                let new_page = new_page.min(max_start);
+
+                                if delta_x.abs() > 3.0 {
+                                    this.carousel_did_drag = true;
+                                }
+                                if this.space_page_start != new_page {
+                                    this.space_page_start = new_page;
+                                    cx.notify();
+                                } else if delta_x.abs() > 3.0 {
+                                    cx.notify();
+                                }
                             }
                         },
                     ))
                     .children(
                         spaces
-                            .iter()
+                            .into_iter()
                             .skip(start)
                             .take(MAX_VISIBLE_SPACE_DOTS)
                             .enumerate()
                             .map(|(visible_ix, space)| {
                                 let absolute_ix = start + visible_ix;
-                                let space = space.clone();
-                                let is_active = active_index == absolute_ix;
+                                let is_active =
+                                    active_key.as_ref().is_some_and(|key| *key == space.key);
                                 let dot_size = if is_active { px(10.0) } else { px(7.0) };
                                 let tooltip_label = space.label.clone();
+                                let click_key = space.key.clone();
+                                let open_key = space.key.clone();
+                                let manage_key = space.key.clone();
+                                let delete_key = space.key.clone();
+                                let sidebar_for_menu = sidebar.clone();
+                                let sidebar_for_click = sidebar.clone();
 
-                                div()
-                                    .id(format!("space-dot-{absolute_ix}"))
-                                    .size(dot_size)
-                                    .rounded_full()
-                                    .flex_shrink_0()
-                                    .cursor(gpui::CursorStyle::PointingHand)
-                                    .when(is_active, |this| this.bg(cx.theme().colors().text))
-                                    .when(!is_active, |this| {
-                                        this.border_1()
-                                            .border_color(cx.theme().colors().border_variant)
-                                            .bg(gpui::transparent_black())
+                                right_click_menu::<ContextMenu>(format!(
+                                    "space-dot-menu-{absolute_ix}"
+                                ))
+                                .menu(move |window, cx| {
+                                    let sidebar_for_open = sidebar_for_menu.clone();
+                                    let sidebar_for_manage = sidebar_for_menu.clone();
+                                    let sidebar_for_delete = sidebar_for_menu.clone();
+                                    let open_key = open_key.clone();
+                                    let manage_key = manage_key.clone();
+                                    let delete_key = delete_key.clone();
+
+                                    ContextMenu::build(window, cx, move |menu, _window, _cx| {
+                                        let menu = menu
+                                            .entry("Open Space", None, {
+                                                let sidebar = sidebar_for_open.clone();
+                                                let open_key = open_key.clone();
+                                                move |window, cx| {
+                                                    sidebar
+                                                        .update(cx, |this, cx| {
+                                                            this.activate_space(
+                                                                &open_key, window, cx,
+                                                            );
+                                                        })
+                                                        .ok();
+                                                }
+                                            })
+                                            .entry("Manage Space", None, {
+                                                let sidebar = sidebar_for_manage.clone();
+                                                let manage_key = manage_key.clone();
+                                                move |window, cx| {
+                                                    sidebar
+                                                        .update(cx, |this, cx| {
+                                                            this.manage_space(
+                                                                &manage_key,
+                                                                window,
+                                                                cx,
+                                                            );
+                                                        })
+                                                        .ok();
+                                                }
+                                            });
+
+                                        menu.separator().entry("Delete Space", None, {
+                                            let sidebar = sidebar_for_delete.clone();
+                                            let delete_key = delete_key.clone();
+                                            move |window, cx| {
+                                                sidebar
+                                                    .update(cx, |this, cx| {
+                                                        this.delete_space(&delete_key, window, cx);
+                                                    })
+                                                    .ok();
+                                            }
+                                        })
                                     })
-                                    .tooltip(move |window, cx| {
-                                        Tooltip::text(tooltip_label.clone())(window, cx)
-                                    })
-                                    .on_click(cx.listener(move |this, _event, _window, cx| {
-                                        this.activate_dummy_space(absolute_ix, cx);
-                                    }))
+                                })
+                                .trigger(
+                                    move |is_menu_active, _window, cx| {
+                                        ButtonLike::new(format!("space-dot-{absolute_ix}"))
+                                            .style(ButtonStyle::Transparent)
+                                            .cursor_style(gpui::CursorStyle::OpenHand)
+                                            .tooltip(move |window, cx| {
+                                                Tooltip::text(tooltip_label.clone())(window, cx)
+                                            })
+                                            .on_click({
+                                                let sidebar = sidebar_for_click.clone();
+                                                let click_key = click_key.clone();
+                                                move |_, window, cx| {
+                                                    sidebar
+                                                        .update(cx, |this, cx| {
+                                                            if this.carousel_did_drag {
+                                                                this.carousel_did_drag = false;
+                                                                cx.notify();
+                                                                return;
+                                                            }
+
+                                                            this.activate_space(
+                                                                &click_key, window, cx,
+                                                            );
+                                                        })
+                                                        .ok();
+                                                }
+                                            })
+                                            .child(
+                                                div()
+                                                    .size(dot_size)
+                                                    .rounded_full()
+                                                    .flex_shrink_0()
+                                                    .when(is_active, |this| {
+                                                        this.bg(cx.theme().colors().text)
+                                                    })
+                                                    .when(!is_active, |this| {
+                                                        this.border_1()
+                                                            .border_color(
+                                                                cx.theme().colors().border_variant,
+                                                            )
+                                                            .bg(gpui::transparent_black())
+                                                    })
+                                                    .when(is_menu_active, |this| {
+                                                        this.border_1().border_color(
+                                                            cx.theme().colors().text_accent,
+                                                        )
+                                                    }),
+                                            )
+                                            .into_any_element()
+                                    },
+                                )
                             }),
                     ),
             )
@@ -4860,62 +4962,24 @@ impl Sidebar {
                     .disabled(!can_go_right)
                     .when(can_go_right, |this| {
                         this.on_click(cx.listener(|this, _, _window, cx| {
-                            // Right arrow = show next (higher index) spaces
                             this.show_next_space_page(cx);
                         }))
                     }),
             )
     }
 
-    fn render_sidebar_footer_actions(
-        &self,
-        is_archive: bool,
-        show_import_button: bool,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        h_flex()
-            .gap_1()
-            .when(show_import_button, |this| {
-                this.child(
-                    IconButton::new("thread-import", IconName::ThreadImport)
-                        .icon_size(IconSize::Small)
-                        .tooltip(Tooltip::text("Import ACP Threads"))
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.show_archive(window, cx);
-                            this.show_thread_import_modal(window, cx);
-                        })),
-                )
-            })
-            .child(
-                IconButton::new("archive", IconName::Archive)
-                    .icon_size(IconSize::Small)
-                    .toggle_state(is_archive)
-                    .tooltip(move |_, cx| {
-                        Tooltip::for_action("Toggle Archived Threads", &ToggleArchive, cx)
-                    })
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.toggle_archive(&ToggleArchive, window, cx);
-                    })),
-            )
-            .child(self.render_recent_projects_button(cx))
-    }
-
     fn render_sidebar_bottom_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let is_archive = matches!(self.view, SidebarView::Archive(..));
-        let show_import_button = is_archive && !self.should_render_acp_import_onboarding(cx);
         let on_right = self.side(cx) == SidebarSide::Right;
 
         let left_slot = if on_right {
-            self.render_sidebar_footer_actions(is_archive, show_import_button, cx)
-                .into_any_element()
+            self.render_recent_projects_button(cx).into_any_element()
         } else {
             self.render_sidebar_toggle_button(cx).into_any_element()
         };
         let right_slot = if on_right {
             self.render_sidebar_toggle_button(cx).into_any_element()
         } else {
-            self.render_sidebar_footer_actions(is_archive, show_import_button, cx)
-                .into_any_element()
+            self.render_recent_projects_button(cx).into_any_element()
         };
 
         h_flex()
