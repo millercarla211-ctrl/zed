@@ -25,4 +25,12 @@ Also only use the primary text color when we are active on the space. For other 
 Please forgot the git changes stuffs and do these:
 And currently in our workspace sidebar we have a top bar that has items on the left side but I don't want that. I want that half of the items stay on the left side and half of the items go to the right side of our workspace sidebar top. The sidebar is correct and the numbered 1 to 12 grid icons are also correct but in the current space there is a shape with text accent besides the space text. Please remove that shape so that only the text remains
 
+Please make our sidebar Bottom of the current workspace item in the bottom of our current workspace item draggable so it will make a better UX. Also in the workspace sidebar when we are clicking on the archive button, it is switching to the archive tab. In that archive tab there are threads and the archive tab in the top of the sidebar. Please remove that. Currently in the bottom of our workspace sidebar when we are on the archive tab, it's showing another icon. Please move the icon to that Top of our workspace sidebar and place then in the top right!!!
+
+And currently our space dots are just dummy 12 dots. Please now make it so that you remove these 12 dummy dots and connect it with our main actual functionality with multi words. Make sure that when we click "Create new space" it creates a new space dot and clears the sidebar with the new space dot item.
+
+Currently in our space dots carousel the next and previous icon is acting weird. They should work like this: no need to switch the active sidebar; they should only move the active sidebar's active space dots' position horizontally and the user will click on them to activate the space they like.
+
+Please implement right-click and left-click interaction and menus in our space dots. When we are clicking on the space dot, please update our cursor to be a click-and-grab cursor so that it will create a better UI and UX. 
+
 Shamo subha tu mera

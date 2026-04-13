@@ -5430,24 +5430,54 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        self.capture_active_screen_width(cx);
-
-        let target_pane = self.ensure_screen_pane(kind, window, cx);
-        self.rebuild_screen_carousel(kind, &target_pane, cx);
+        let target_pane = self.screen_host_pane();
         self.set_active_pane(&target_pane, window, cx);
 
-        let target_item = target_pane.read(cx).items().find_map(|item| {
-            (item.screen_kind(cx) == kind).then(|| item.boxed_clone())
-        });
+        let target_item = target_pane
+            .read(cx)
+            .items()
+            .find_map(|item| (item.screen_kind(cx) == kind).then(|| item.boxed_clone()));
 
         if let Some(item) = target_item {
             self.activate_item(&*item, true, true, window, cx);
             true
         } else {
             window.focus(&target_pane.focus_handle(cx), cx);
+            let target_pane = target_pane.downgrade();
+            cx.defer_in(window, move |workspace, window, cx| {
+                let Some(target_pane) = target_pane.upgrade() else {
+                    return;
+                };
+
+                workspace.set_active_pane(&target_pane, window, cx);
+                window.focus(&target_pane.focus_handle(cx), cx);
+
+                match kind {
+                    WorkspaceScreenKind::Editor => {
+                        window.dispatch_action(NewFile.boxed_clone(), cx);
+                    }
+                    WorkspaceScreenKind::Browser => {
+                        window.dispatch_action(NewWebPreview.boxed_clone(), cx);
+                    }
+                    WorkspaceScreenKind::Terminal => {
+                        window.dispatch_action(NewCenterTerminal::default().boxed_clone(), cx);
+                    }
+                    WorkspaceScreenKind::LiquidGlass => {
+                        window.dispatch_action(NewLiquidGlass.boxed_clone(), cx);
+                    }
+                    WorkspaceScreenKind::Other => {}
+                }
+            });
             cx.notify();
-            false
+            true
         }
+    }
+
+    pub fn screen_host_pane(&self) -> Entity<Pane> {
+        self.last_active_center_pane
+            .clone()
+            .and_then(|pane| pane.upgrade())
+            .unwrap_or_else(|| self.active_pane.clone())
     }
 
     pub fn pane_for_screen_kind(
@@ -5455,21 +5485,15 @@ impl Workspace {
         kind: WorkspaceScreenKind,
         cx: &App,
     ) -> Option<Entity<Pane>> {
-        self.center
-            .panes()
-            .iter()
-            .find_map(|pane| {
-                self.screen_kind_for_pane(pane, cx)
-                    .is_some_and(|pane_kind| pane_kind == kind)
-                    .then(|| (*pane).clone())
-            })
+        self.center.panes().iter().find_map(|pane| {
+            pane.read(cx)
+                .items()
+                .any(|item| item.screen_kind(cx) == kind)
+                .then(|| (*pane).clone())
+        })
     }
 
-    fn screen_kind_for_pane(
-        &self,
-        pane: &Entity<Pane>,
-        cx: &App,
-    ) -> Option<WorkspaceScreenKind> {
+    fn screen_kind_for_pane(&self, pane: &Entity<Pane>, cx: &App) -> Option<WorkspaceScreenKind> {
         let pane = pane.read(cx);
         pane.active_item()
             .map(|item| item.screen_kind(cx))
@@ -5538,32 +5562,12 @@ impl Workspace {
             return existing;
         }
 
-        if kind == WorkspaceScreenKind::Editor {
-            return self
-                .last_active_center_pane
-                .clone()
-                .and_then(|pane| pane.upgrade())
-                .unwrap_or_else(|| self.active_pane.clone());
-        }
-
-        let anchor = self
-            .pane_for_screen_kind(WorkspaceScreenKind::Editor, cx)
-            .or_else(|| {
-                self.last_active_center_pane
-                    .clone()
-                    .and_then(|pane| pane.upgrade())
-            })
-            .unwrap_or_else(|| self.active_pane.clone());
-
-        let split_direction = match kind {
-            WorkspaceScreenKind::Terminal => SplitDirection::Left,
-            WorkspaceScreenKind::Browser | WorkspaceScreenKind::LiquidGlass => {
-                SplitDirection::Right
-            }
-            WorkspaceScreenKind::Editor | WorkspaceScreenKind::Other => SplitDirection::Right,
-        };
-
-        self.split_pane(anchor, split_direction, window, cx)
+        // ALL screen kinds (Editor, Browser, Terminal) use the same center pane
+        // The pane's visible_item_indices() will filter tabs by screen kind
+        self.last_active_center_pane
+            .clone()
+            .and_then(|pane| pane.upgrade())
+            .unwrap_or_else(|| self.active_pane.clone())
     }
 
     fn rebuild_screen_carousel(
@@ -5643,7 +5647,10 @@ impl Workspace {
             1 => Member::Pane(ordered_panes[0].clone()),
             _ => Member::Axis(PaneAxis::load(
                 Axis::Horizontal,
-                ordered_panes.into_iter().map(Member::Pane).collect::<Vec<_>>(),
+                ordered_panes
+                    .into_iter()
+                    .map(Member::Pane)
+                    .collect::<Vec<_>>(),
                 Some(weights),
             )),
         };

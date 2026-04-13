@@ -5,7 +5,7 @@ mod plan_chip;
 mod title_bar_settings;
 mod update_version;
 
-use crate::application_menu::{ApplicationMenu, show_menus};
+use crate::application_menu::ApplicationMenu;
 use crate::plan_chip::PlanChip;
 pub use platform_title_bar::{
     self, DraggedWindowTab, MergeAllWindows, MoveTabToNewWindow, PlatformTitleBar,
@@ -41,7 +41,6 @@ use title_bar_settings::TitleBarSettings;
 use ui::{
     Avatar, ButtonLike, ButtonSize, ContextMenu, ContextMenuEntry, IconWithIndicator, Indicator,
     PopoverMenu, PopoverMenuHandle, TintColor, Tooltip, prelude::*,
-    utils::platform_title_bar_height,
 };
 use update_version::UpdateVersion;
 use util::ResultExt;
@@ -189,8 +188,6 @@ impl Render for TitleBar {
         let title_bar_settings = *TitleBarSettings::get_global(cx);
         let button_layout = title_bar_settings.button_layout;
 
-        let show_menus = show_menus(cx);
-
         let mut project_name = None;
         let mut repository = None;
         let mut linked_worktree_name = None;
@@ -221,6 +218,9 @@ impl Render for TitleBar {
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .map(|title_bar| {
                 title_bar
+                    .when_some(self.application_menu.clone(), |title_bar, menu| {
+                        title_bar.child(menu)
+                    })
                     .children(self.render_restricted_mode(cx))
                     .children(self.render_project_host(cx))
                     .child(self.render_collaborator_list(window, cx))
@@ -288,19 +288,19 @@ impl Render for TitleBar {
                 |this| this.child(self.render_sign_in_button(cx)),
             )
             .when(is_signing_in, |this| {
-                    this.child(
-                        Label::new("Signing in…")
-                            .size(LabelSize::Small)
-                            .color(Color::Muted)
-                            .with_animation(
-                                "signing-in",
-                                Animation::new(Duration::from_secs(2))
-                                    .repeat()
-                                    .with_easing(pulsating_between(0.4, 0.8)),
-                                |label, delta| label.alpha(delta),
-                            ),
-                    )
-                })
+                this.child(
+                    Label::new("Signing in…")
+                        .size(LabelSize::Small)
+                        .color(Color::Muted)
+                        .with_animation(
+                            "signing-in",
+                            Animation::new(Duration::from_secs(2))
+                                .repeat()
+                                .with_easing(pulsating_between(0.4, 0.8)),
+                            |label, delta| label.alpha(delta),
+                        ),
+                )
+            })
             .when(TitleBarSettings::get_global(cx).show_user_menu, |this| {
                 this.child(self.render_user_menu_button(cx))
             });
@@ -319,49 +319,24 @@ impl Render for TitleBar {
                     .child(right_content),
             )
             .child(
-                h_flex()
+                div()
                     .absolute()
-                    .inset_0()
+                    .left_0()
+                    .right_0()
+                    .top_0()
+                    .bottom_0()
+                    .flex()
                     .items_center()
                     .justify_center()
                     .child(center_dock),
             )
             .into_any_element();
 
-        if show_menus {
-            self.platform_titlebar.update(cx, |this, _| {
-                this.set_button_layout(button_layout);
-                this.set_children(
-                    self.application_menu
-                        .clone()
-                        .map(|menu| menu.into_any_element()),
-                );
-            });
-
-            let height = platform_title_bar_height(window);
-            let title_bar_color = self.platform_titlebar.update(cx, |platform_titlebar, cx| {
-                platform_titlebar.title_bar_color(window, cx)
-            });
-
-            v_flex()
-                .w_full()
-                .child(self.platform_titlebar.clone().into_any_element())
-                .child(
-                    h_flex()
-                        .bg(title_bar_color)
-                        .h(height)
-                        .pl_2()
-                        .w_full()
-                        .child(content_row),
-                )
-                .into_any_element()
-        } else {
-            self.platform_titlebar.update(cx, |this, _| {
-                this.set_button_layout(button_layout);
-                this.set_children([content_row]);
-            });
-            self.platform_titlebar.clone().into_any_element()
-        }
+        self.platform_titlebar.update(cx, |this, _| {
+            this.set_button_layout(button_layout);
+            this.set_children([content_row]);
+        });
+        self.platform_titlebar.clone().into_any_element()
     }
 }
 
@@ -466,7 +441,6 @@ impl TitleBar {
         });
         let active_screen_kind = self.active_screen_kind(cx);
         let active_pane_entries = self.collect_active_pane_screen_entries(window, cx);
-
         let extra_entries = active_pane_entries
             .into_iter()
             .filter(|entry| {
@@ -481,19 +455,17 @@ impl TitleBar {
 
         let has_left_segment = project_segment.is_some() || branch_segment.is_some();
         let has_extra_entries = !extra_entries.is_empty();
+        let border_color = cx.theme().colors().border;
 
-        h_flex()
-            .id("screen-dock")
+        let dock_body = h_flex()
+            .id("screen-dock-body")
             .flex_none()
-            .h(px(28.))
+            .h(px(30.))
             .items_center()
             .gap_0p5()
             .px_1p5()
-            .py(px(4.))
-            .rounded(px(5.))
-            .bg(cx.theme().colors().elevated_surface_background.opacity(0.96))
-            .border_1()
-            .border_color(cx.theme().colors().border_variant)
+            .rounded(px(4.))
+            .bg(cx.theme().colors().elevated_surface_background)
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .when(has_left_segment, |dock| {
                 dock.child(
@@ -539,9 +511,61 @@ impl TitleBar {
                 h_flex()
                     .items_center()
                     .gap_0p5()
+                    .child(self.render_screen_dock_divider(cx))
                     .child(self.render_screen_dock_add_menu(cx))
                     .child(self.render_screen_dock_list_menu(window, cx)),
+            );
+
+        div()
+            .id("screen-dock")
+            .flex_none()
+            .relative()
+            .rounded(px(5.))
+            .bg(border_color)
+            .child(
+                dock_body
+                    .m(px(1.))
+                    .into_any_element(),
             )
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left(px(5.))
+                    .right(px(5.))
+                    .h(px(1.))
+                    .bg(border_color)
+                    .rounded_t(px(5.)),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .bottom_0()
+                    .left(px(5.))
+                    .right(px(5.))
+                    .h(px(1.))
+                    .bg(border_color)
+                    .rounded_b(px(5.)),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .top(px(5.))
+                    .bottom(px(5.))
+                    .left_0()
+                    .w(px(1.))
+                    .bg(border_color),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .top(px(5.))
+                    .bottom(px(5.))
+                    .right_0()
+                    .w(px(1.))
+                    .bg(border_color),
+            )
+            .shadow_sm()
             .into_any_element()
     }
 
@@ -562,7 +586,10 @@ impl TitleBar {
     ) -> AnyElement {
         let workspace = self.workspace.clone();
         IconButton::new(
-            format!("screen-dock-kind-{}", Self::screen_kind_label(kind).to_lowercase()),
+            format!(
+                "screen-dock-kind-{}",
+                Self::screen_kind_label(kind).to_lowercase()
+            ),
             Self::screen_kind_icon(kind),
         )
         .size(ButtonSize::Compact)
@@ -574,11 +601,9 @@ impl TitleBar {
                 return;
             };
 
-            let activated =
-                workspace.update(cx, |workspace, cx| workspace.activate_screen_kind(kind, window, cx));
-            if !activated {
-                Self::dispatch_new_screen_action(kind, window, cx);
-            }
+            workspace.update(cx, |workspace, cx| {
+                workspace.activate_screen_kind(kind, window, cx);
+            });
         })
         .into_any_element()
     }
@@ -589,7 +614,10 @@ impl TitleBar {
         _cx: &mut Context<Self>,
     ) -> AnyElement {
         let workspace = self.workspace.clone();
-        let tooltip = entry.subtitle.clone().unwrap_or_else(|| entry.title.clone());
+        let tooltip = entry
+            .subtitle
+            .clone()
+            .unwrap_or_else(|| entry.title.clone());
         let kind = entry.kind;
         let item = entry.item;
         let button_id = format!(
@@ -647,7 +675,9 @@ impl TitleBar {
         IconButton::new("screen-dock-add-trigger", IconName::Plus)
             .size(ButtonSize::Compact)
             .icon_size(IconSize::Small)
-            .tooltip(Tooltip::text(Self::screen_kind_create_label(active_screen_kind)))
+            .tooltip(Tooltip::text(Self::screen_kind_create_label(
+                active_screen_kind,
+            )))
             .on_click(move |_, window, cx| {
                 Self::dispatch_new_screen_action(active_screen_kind, window, cx);
             })
@@ -698,30 +728,29 @@ impl TitleBar {
 
                         for entry in entries {
                             let kind = entry.kind;
-                            let label = format!(
-                                "{}: {}",
-                                Self::screen_kind_label(kind),
-                                entry.title
-                            );
+                            let label =
+                                format!("{}: {}", Self::screen_kind_label(kind), entry.title);
                             let item = entry.item;
                             let label = if entry.selected {
                                 format!("Current {}", label)
                             } else {
                                 label
                             };
-                            menu = menu.item(ContextMenuEntry::new(label).icon(entry.icon).handler({
-                                let workspace_handle = workspace_handle.clone();
-                                move |window, cx| {
-                                    let Some(workspace) = workspace_handle.upgrade() else {
-                                        return;
-                                    };
-                                    let _ = workspace.update(cx, |workspace, cx| {
-                                        if !workspace.activate_screen_kind(kind, window, cx) {
-                                            workspace.activate_item(&*item, true, true, window, cx);
-                                        }
-                                    });
-                                }
-                            }));
+                            menu =
+                                menu.item(ContextMenuEntry::new(label).icon(entry.icon).handler({
+                                    let workspace_handle = workspace_handle.clone();
+                                    move |window, cx| {
+                                        let Some(workspace) = workspace_handle.upgrade() else {
+                                            return;
+                                        };
+                                        let _ = workspace.update(cx, |workspace, cx| {
+                                            if !workspace.activate_screen_kind(kind, window, cx) {
+                                                workspace
+                                                    .activate_item(&*item, true, true, window, cx);
+                                            }
+                                        });
+                                    }
+                                }));
                         }
                         menu
                     }
@@ -745,36 +774,37 @@ impl TitleBar {
         workspace: &Entity<Workspace>,
         cx: &App,
     ) -> Vec<ActivePaneScreenEntry> {
-        let active_item_id = workspace.read(cx).active_item(cx).map(|item| item.item_id());
+        let active_item_id = workspace
+            .read(cx)
+            .active_item(cx)
+            .map(|item| item.item_id());
         let mut entries: Vec<ActivePaneScreenEntry> = Vec::new();
 
-        for pane in workspace.read(cx).panes().iter() {
-            for item in pane.read(cx).items() {
-                let kind = item.screen_kind(cx);
-                let title = item.tab_content_text(0, cx);
-                let title = if title.is_empty() {
-                    SharedString::from(Self::screen_kind_label(kind))
-                } else {
-                    title
-                };
+        let screen_host_pane = workspace.read(cx).screen_host_pane();
+        for item in screen_host_pane.read(cx).items() {
+            let kind = item.screen_kind(cx);
+            let title = item.tab_content_text(0, cx);
+            let title = if title.is_empty() {
+                SharedString::from(Self::screen_kind_label(kind))
+            } else {
+                title
+            };
 
-                let entry = ActivePaneScreenEntry {
-                    selected: Some(item.item_id()) == active_item_id,
-                    subtitle: item.tab_tooltip_text(cx),
-                    icon: Self::screen_kind_icon(kind),
-                    kind,
-                    title,
-                    item: item.boxed_clone(),
-                };
+            let entry = ActivePaneScreenEntry {
+                selected: Some(item.item_id()) == active_item_id,
+                subtitle: item.tab_tooltip_text(cx),
+                icon: Self::screen_kind_icon(kind),
+                kind,
+                title,
+                item: item.boxed_clone(),
+            };
 
-                if let Some(existing_ix) = entries.iter().position(|existing| existing.kind == kind)
-                {
-                    if entry.selected {
-                        entries[existing_ix] = entry;
-                    }
-                } else {
-                    entries.push(entry);
+            if let Some(existing_ix) = entries.iter().position(|existing| existing.kind == kind) {
+                if entry.selected {
+                    entries[existing_ix] = entry;
                 }
+            } else {
+                entries.push(entry);
             }
         }
 
@@ -789,11 +819,7 @@ impl TitleBar {
             .unwrap_or(WorkspaceScreenKind::Editor)
     }
 
-    fn dispatch_new_screen_action(
-        kind: WorkspaceScreenKind,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
+    fn dispatch_new_screen_action(kind: WorkspaceScreenKind, window: &mut Window, cx: &mut App) {
         match kind {
             WorkspaceScreenKind::Editor => window.dispatch_action(NewFile.boxed_clone(), cx),
             WorkspaceScreenKind::Browser => {

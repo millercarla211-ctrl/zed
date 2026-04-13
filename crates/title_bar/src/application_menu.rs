@@ -146,6 +146,7 @@ impl ApplicationMenu {
         })
     }
 
+    #[allow(dead_code)]
     fn render_application_menu(&self, entry: &MenuEntry) -> impl IntoElement {
         let handle = entry.handle.clone();
 
@@ -278,8 +279,6 @@ pub(crate) fn show_menus(cx: &mut App) -> bool {
 
 impl Render for ApplicationMenu {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let all_menus_shown = self.all_menus_shown(cx);
-
         if let Some(pending_menu_open) = self.pending_menu_open.take()
             && let Some(entry) = self
                 .entries
@@ -313,15 +312,10 @@ impl Render for ApplicationMenu {
             .flex()
             .flex_row()
             .gap_x_1()
-            .when(!all_menus_shown && !self.entries.is_empty(), |this| {
-                this.child(self.render_application_menu(&self.entries[0]))
-            })
-            .when(all_menus_shown, |this| {
-                this.children(
-                    self.entries
-                        .iter()
-                        .map(|entry| self.render_standard_menu(entry)),
-                )
-            })
+            .children(
+                self.entries
+                    .iter()
+                    .map(|entry| self.render_standard_menu(entry)),
+            )
     }
 }

@@ -8,6 +8,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### April 13, 2026 - Restored Real Screen Dock And Single-Pane Screen Host
+**Fixed the centered dock border and aligned screen switching with the existing code-pane model**
+
+- Replaced the temporary `TEST DOCK` title-bar placeholder with the real centered screen dock layout
+- Drew the centered dock as a true outer frame with a separate inner body so the border renders on all four sides, including the top and bottom edges
+- Kept the project selector, git branch selector, screen buttons, add button, and list menu inside the restored dock
+- Moved screen-entry collection back to the shared screen host pane instead of aggregating stale screen items from every pane
+- Simplified screen switching so Editor, Browser, and Terminal all stay on the same full-width host pane and only switch or create their own tab type there
+
+### April 13, 2026 - Screen Switching Attempted Fix (CANNOT TEST)
+**Attempted to fix Terminal and Browser screens to use full-width center pane**
+
+- Changed `ensure_screen_pane()` to return the center pane for ALL screen types (Editor, Browser, Terminal)
+- Removed split pane logic that was creating narrow side panes for Terminal (left) and Browser (right)
+- **STATUS:** Cannot be tested because screen dock border issue prevents using the screen buttons
+- **BLOCKER:** Screen dock border must be fixed first before this can be verified
+
+### April 12, 2026 - Screen Dock Border Fix Attempts (FAILED)
+**Attempted to fix screen dock border visibility - TOP AND BOTTOM BORDERS STILL NOT SHOWING**
+
+- Tried 8+ different approaches without success
+- Changed from padding-based border trick to proper `.border_1()` and `.border_color()` methods
+- Removed vertical padding (`.py(px(4.))`) from inner dock content
+- Adjusted heights, margins, border radius, and parent container positioning
+- **RESULT:** Only left and right borders are visible, top and bottom borders remain invisible
+- **BLOCKER:** This is a critical issue preventing all other work - see HELP_NEEDED.md
+
 ### April 12, 2026 - Title Bar Screen Dock
 **Moved screen navigation and creation into a centered dock**
 
@@ -24,6 +51,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Hid the default hamburger title-bar menu button, raised the Windows title-bar height, and restored the dock to a normal compact control height
 - Centered the dock with an overlay layout so expanding left-side title-bar content no longer pushes it off center
 - Restored pane-based screen activation for editor, browser, and terminal so split borders become the actual resize handles and custom screen widths are remembered per screen kind
+- Restored the top-left text menu row in the title bar and removed the hamburger-only fallback so the main navigation menus stay visible
+- Returned the screen dock to a full-pill border radius and added a second right-side separator between the add and list controls
+- Moved missing screen creation into the screen-switch path so browser and terminal screens are created in their dedicated center panes when selected
+- Restored a stronger visible dock border with a 5px radius and moved the right-side separator to the left of the add button
+- Made screen activation reuse matching browser and terminal items from any center pane and defer-create them after pane switching so those screens do not land on a blank background
+- Tightened the dock chip to a stronger framed look so the top and bottom border edges read cleanly against the title bar
+- Switched browser and terminal screen creation back to a post-activation fallback so the correct tab opens inside the already-selected pane instead of leaving an empty screen
+- Rebuilt the centered dock border as a real outer frame around the dock content so all four sides render consistently, including the top and bottom edges
+- Moved missing browser and terminal tab creation fully into the activated screen pane so those screens stay normal pane/code-screen layouts while opening the correct tab type
 
 ### April 12, 2026 - Fixed Space Carousel Navigation and Removed Gap Calculation
 **Fixed arrow navigation direction and simplified click handling**

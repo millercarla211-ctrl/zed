@@ -28,9 +28,7 @@ use ui::{
     Color, ContextMenu, ContextMenuEntry, IconButton, IconName, IconSize, Label, LabelSize,
     PopoverMenu, Tooltip, prelude::*,
 };
-use workspace::item::{
-    Item, ItemEvent, PaneTabBarControls, TabContentParams, WorkspaceScreenKind,
-};
+use workspace::item::{Item, ItemEvent, PaneTabBarControls, TabContentParams, WorkspaceScreenKind};
 use workspace::notifications::NotificationId;
 use workspace::{NewWebPreview, Pane, Toast, Workspace, WorkspaceId};
 

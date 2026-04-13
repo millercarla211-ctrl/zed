@@ -652,7 +652,7 @@ impl Sidebar {
     fn sync_space_state(&mut self, _cx: &mut Context<Self>) {
         // Disabled for dummy spaces - no need to sync with MultiWorkspace
         return;
-        
+
         #[allow(unreachable_code)]
         {
             let Some(multi_workspace) = self.multi_workspace.upgrade() else {
@@ -745,7 +745,7 @@ impl Sidebar {
     fn activate_dummy_space(&mut self, index: usize, cx: &mut Context<Self>) {
         if index < self.dummy_spaces.len() {
             self.active_dummy_space_index = index;
-            
+
             // Ensure active space is visible in the carousel
             if index < self.space_page_start {
                 // Active space is before visible range, scroll left
@@ -754,7 +754,7 @@ impl Sidebar {
                 // Active space is after visible range, scroll right
                 self.space_page_start = index + 1 - MAX_VISIBLE_SPACE_DOTS;
             }
-            
+
             cx.notify();
         }
     }
@@ -767,29 +767,30 @@ impl Sidebar {
     ) {
         // This is called when user clicks in the carousel area (not directly on a dot)
         // The click_position is relative to the carousel container
-        
+
         let click_x: f32 = click_position.x.into();
-        
+
         // Calculate how many dots are currently visible
-        let visible_count = MAX_VISIBLE_SPACE_DOTS.min(self.dummy_spaces.len() - self.space_page_start);
-        
+        let visible_count =
+            MAX_VISIBLE_SPACE_DOTS.min(self.dummy_spaces.len() - self.space_page_start);
+
         if visible_count == 0 {
             return;
         }
-        
+
         // Estimate spacing: gap_1p5 = 6px, dot size ~8px average, total ~14-16px per dot
         let dot_spacing = 16.0;
-        
+
         // Find which dot segment the click falls into
         // We divide the carousel into equal segments
         let segment_index = (click_x / dot_spacing).round() as i32;
-        
+
         // Clamp to valid visible range [0, visible_count-1]
         let visible_index = segment_index.max(0).min((visible_count - 1) as i32) as usize;
-        
+
         // Convert to absolute space index
         let absolute_index = self.space_page_start + visible_index;
-        
+
         // Activate the space
         if absolute_index < self.dummy_spaces.len() {
             self.activate_dummy_space(absolute_index, cx);
@@ -4797,20 +4798,25 @@ impl Sidebar {
                             this.carousel_drag_start = None;
                         }),
                     )
-                    .on_mouse_move(cx.listener(|this, event: &gpui::MouseMoveEvent, _window, cx| {
-                        if let Some((start_x, start_page)) = this.carousel_drag_start {
-                            let current_x: f32 = event.position.x.into();
-                            let delta_x = current_x - start_x;
-                            // Increase sensitivity: 20px per dot instead of 30px
-                            let dots_moved = (delta_x / 20.0).round() as i32;
-                            
-                            // Calculate new page position
-                            let new_page = (start_page as i32 - dots_moved).max(0) as usize;
-                            let max_start = this.dummy_spaces.len().saturating_sub(MAX_VISIBLE_SPACE_DOTS);
-                            this.space_page_start = new_page.min(max_start);
-                            cx.notify();
-                        }
-                    }))
+                    .on_mouse_move(cx.listener(
+                        |this, event: &gpui::MouseMoveEvent, _window, cx| {
+                            if let Some((start_x, start_page)) = this.carousel_drag_start {
+                                let current_x: f32 = event.position.x.into();
+                                let delta_x = current_x - start_x;
+                                // Increase sensitivity: 20px per dot instead of 30px
+                                let dots_moved = (delta_x / 20.0).round() as i32;
+
+                                // Calculate new page position
+                                let new_page = (start_page as i32 - dots_moved).max(0) as usize;
+                                let max_start = this
+                                    .dummy_spaces
+                                    .len()
+                                    .saturating_sub(MAX_VISIBLE_SPACE_DOTS);
+                                this.space_page_start = new_page.min(max_start);
+                                cx.notify();
+                            }
+                        },
+                    ))
                     .children(
                         spaces
                             .iter()

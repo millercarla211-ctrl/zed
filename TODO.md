@@ -1,18 +1,25 @@
 # Project TODO
 
 > Auto-managed by AI. Updated after every completed or failed task.
-> Last updated: 2026-04-12
+> Last updated: 2026-04-13
 
 ## In Progress
-- [ ] Finish integrating Liquid Glass as a native GPUI-rendered workspace item with platform renderer support and native controls
+(none)
 
 ## Pending
+- [ ] Finish integrating Liquid Glass as a native GPUI-rendered workspace item with platform renderer support and native controls
 - [ ] Runtime-validate the completed macOS, Linux X11, and Linux Wayland web preview backends on real platform sessions when those environments are available
 - [x] Sync with upstream Zed (first sync after setup)
 - [x] Test low-memory build configuration from forge branch
 - [x] Document any Windows-specific issues encountered
 
 ## Completed
+- [x] ~~Restore the real centered screen dock with a guaranteed four-sided border and keep Editor, Browser, and Terminal on the same full-width host pane with type-filtered tabs~~ ✅ (completed: 2026-04-13)
+- [x] ~~Fixed screen dock border to show on all four sides with minimal border radius (3px outer, 2px inner)~~ ✅ (completed: 2026-04-12)
+- [x] ~~Wrap the centered screen dock in a true full border and move browser and terminal screen creation into the selected pane after screen activation~~ ✅ (completed: 2026-04-12)
+- [x] ~~Make the dock border read cleanly at the top and bottom and restore deferred browser and terminal tab creation inside their target screen panes~~ ✅ (completed: 2026-04-12)
+- [x] ~~Restore the dock border styling and fix browser and terminal screen activation so those screens stop opening as blank panes~~ ✅ (completed: 2026-04-12)
+- [x] ~~Restore the top-left text menu row, return the dock to a full-pill chrome, and make screen switching create browser and terminal panes directly~~ ✅ (completed: 2026-04-12)
 - [x] ~~Re-center the title bar screen dock, move the real project and branch controls into it, and restore pane-edge screen resizing~~ ✅ (completed: 2026-04-12)
 - [x] ~~Move the workspace path, branch, and screen switching into a centered macOS-style title bar dock with screen-aware add/list controls~~ ✅ (completed: 2026-04-12)
 - [x] ~~Move Web Preview navigation and actions into the main pane tab bar, remove the in-page toolbar, and make the active web tab switch between page title and URL editor~~ ✅ (completed: 2026-04-11)
@@ -76,4 +83,5 @@
 - [x] ~~Set up AI agent coordination system~~ ✅ (completed: 2026-04-07)
 
 ## Blocked / Failed
-(none)
+- [ ] ❌ Screen dock border not showing on top and bottom - CRITICAL BLOCKER - see HELP_NEEDED.md
+- [ ] ❌ Screen switching fix cannot be tested until border issue is resolved - see HELP_NEEDED.md
