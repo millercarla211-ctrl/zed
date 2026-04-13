@@ -38,4 +38,6 @@ The thing is, in the current sidebar footer the dots have a gap between them so 
 
 Now this doesn't seem like a hard job but in reality it is very hard to implement. Try to make a strategic plan fast and make it bulletproof so that it works correctly. 
 
+Now currently in our workspace sidebar start bar bottom grid, at least there should be 12 items. Now even if there are only 1 or 2 or 0 items possible, then just put the grids and put a default icon, like an add icon or things like that, on them. By default no matter what, 12 items will show there. There can be more but there can be less than 12 items for all screens. 
+
 Shamo subha tu mera

@@ -12,6 +12,7 @@ pub struct TitleBarSettings {
     pub show_project_items: bool,
     pub show_sign_in: bool,
     pub show_user_menu: bool,
+    #[allow(dead_code)]
     pub show_menus: bool,
     pub button_layout: Option<WindowButtonLayout>,
 }

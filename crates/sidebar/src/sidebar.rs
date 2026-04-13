@@ -4813,20 +4813,25 @@ impl Sidebar {
     }
 
     fn editor_grid_entries(&self, cx: &App) -> Vec<SidebarGridEntry> {
+        const MIN_GRID_ITEMS: usize = 12;
+
         let Some(root_path) = self.project_root_path(cx) else {
-            return vec![SidebarGridEntry {
-                id: "sidebar-grid-open-project".into(),
-                icon: IconName::OpenFolder,
-                label: "Open Project".into(),
-                subtitle: Some("Add a folder to this space".into()),
-                action: SidebarGridAction::OpenProject,
-            }];
+            // No project - fill all 12 slots with "Open Project" placeholders
+            return (0..MIN_GRID_ITEMS)
+                .map(|i| SidebarGridEntry {
+                    id: format!("sidebar-grid-open-project-{i}").into(),
+                    icon: IconName::Plus,
+                    label: "Add File".into(),
+                    subtitle: None,
+                    action: SidebarGridAction::OpenProject,
+                })
+                .collect();
         };
 
         let mut files = Self::read_directory_entries(&root_path)
             .into_iter()
             .filter(|(_, is_dir)| !*is_dir)
-            .take(8)
+            .take(MIN_GRID_ITEMS)
             .map(|(path, _)| SidebarGridEntry {
                 id: SharedString::from(format!("sidebar-grid-file-{}", path.display())),
                 icon: Self::icon_for_path(&path),
@@ -4835,25 +4840,30 @@ impl Sidebar {
                     .map(|name| name.to_string_lossy().to_string())
                     .unwrap_or_else(|| path.display().to_string())
                     .into(),
-                subtitle: None, // Removed path subtitle - all files are in same directory
+                subtitle: None,
                 action: SidebarGridAction::OpenFile(path),
             })
             .collect::<Vec<_>>();
 
-        if files.is_empty() {
-            files.push(SidebarGridEntry {
-                id: "sidebar-grid-open-project".into(),
-                icon: IconName::OpenFolder,
-                label: "Open Project".into(),
-                subtitle: Some("No files found in the root".into()),
-                action: SidebarGridAction::OpenProject,
-            });
+        // Fill remaining slots with "Add File" placeholders
+        let current_count = files.len();
+        if current_count < MIN_GRID_ITEMS {
+            for i in current_count..MIN_GRID_ITEMS {
+                files.push(SidebarGridEntry {
+                    id: format!("sidebar-grid-add-file-{i}").into(),
+                    icon: IconName::Plus,
+                    label: "Add File".into(),
+                    subtitle: None,
+                    action: SidebarGridAction::OpenProject,
+                });
+            }
         }
 
         files
     }
 
     fn browser_grid_entries(&self) -> Vec<SidebarGridEntry> {
+        const MIN_GRID_ITEMS: usize = 12;
         const SITES: [(&str, &str, IconName); 8] = [
             ("Google", "https://www.google.com", IconName::AiGoogle),
             ("GitHub", "https://github.com", IconName::Github),
@@ -4865,31 +4875,58 @@ impl Sidebar {
             ("LinkedIn", "https://www.linkedin.com", IconName::Person),
         ];
 
-        SITES
+        let mut entries: Vec<SidebarGridEntry> = SITES
             .into_iter()
             .map(|(label, url, icon)| SidebarGridEntry {
                 id: SharedString::from(format!("sidebar-grid-site-{label}")),
                 icon,
                 label: label.into(),
-                subtitle: None, // Removed subtitle for cleaner look with centered icons
+                subtitle: None,
                 action: SidebarGridAction::OpenWebsite(url),
             })
-            .collect()
+            .collect();
+
+        // Fill remaining slots with "Add Website" placeholders
+        let current_count = entries.len();
+        if current_count < MIN_GRID_ITEMS {
+            for i in current_count..MIN_GRID_ITEMS {
+                entries.push(SidebarGridEntry {
+                    id: format!("sidebar-grid-add-website-{i}").into(),
+                    icon: IconName::Plus,
+                    label: "Add Website".into(),
+                    subtitle: None,
+                    action: SidebarGridAction::OpenProject,
+                });
+            }
+        }
+
+        entries
     }
 
     fn terminal_grid_entries(&self, cx: &App) -> Vec<SidebarGridEntry> {
+        const MIN_GRID_ITEMS: usize = 12;
+
         let root_path = self
             .project_root_path(cx)
             .or_else(|| std::env::current_dir().ok());
 
         let Some(root_path) = root_path else {
-            return Vec::new();
+            // No path - fill all 12 slots with "Add Folder" placeholders
+            return (0..MIN_GRID_ITEMS)
+                .map(|i| SidebarGridEntry {
+                    id: format!("sidebar-grid-add-folder-{i}").into(),
+                    icon: IconName::Plus,
+                    label: "Add Folder".into(),
+                    subtitle: None,
+                    action: SidebarGridAction::OpenProject,
+                })
+                .collect();
         };
 
         let mut folders = Self::read_directory_entries(&root_path)
             .into_iter()
             .filter(|(_, is_dir)| *is_dir)
-            .take(8)
+            .take(MIN_GRID_ITEMS)
             .map(|(path, _)| SidebarGridEntry {
                 id: SharedString::from(format!("sidebar-grid-folder-{}", path.display())),
                 icon: IconName::Folder,
@@ -4898,19 +4935,23 @@ impl Sidebar {
                     .map(|name| name.to_string_lossy().to_string())
                     .unwrap_or_else(|| path.display().to_string())
                     .into(),
-                subtitle: None, // Removed subtitle - just show folder name
+                subtitle: None,
                 action: SidebarGridAction::OpenTerminalFolder(path),
             })
             .collect::<Vec<_>>();
 
-        if folders.is_empty() {
-            folders.push(SidebarGridEntry {
-                id: "sidebar-grid-open-project".into(),
-                icon: IconName::OpenFolder,
-                label: "Open Project".into(),
-                subtitle: Some("Add a folder to browse terminals".into()),
-                action: SidebarGridAction::OpenProject,
-            });
+        // Fill remaining slots with "Add Folder" placeholders
+        let current_count = folders.len();
+        if current_count < MIN_GRID_ITEMS {
+            for i in current_count..MIN_GRID_ITEMS {
+                folders.push(SidebarGridEntry {
+                    id: format!("sidebar-grid-add-folder-{i}").into(),
+                    icon: IconName::Plus,
+                    label: "Add Folder".into(),
+                    subtitle: None,
+                    action: SidebarGridAction::OpenProject,
+                });
+            }
         }
 
         folders

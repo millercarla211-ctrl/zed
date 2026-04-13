@@ -316,17 +316,27 @@ impl Render for TitleBar {
                     .items_center()
                     .gap_1()
                     .child(left_content)
+                    .child(
+                        // Spacer to push right content to the end
+                        div().flex_1(),
+                    )
                     .child(right_content),
             )
             .child(
+                // Screen dock - absolutely centered on window
                 div()
                     .absolute()
-                    .left_0()
-                    .right_0()
-                    .top(px(3.))
+                    .left(relative(0.5)) // 50% from left
+                    .top_0()
+                    .h_full()
                     .flex()
-                    .justify_center()
-                    .child(center_dock),
+                    .items_center()
+                    .child(
+                        div()
+                            .relative()
+                            .left(relative(-0.5)) // Shift left by 50% of own width to center
+                            .child(center_dock),
+                    ),
             )
             .into_any_element();
 

@@ -265,6 +265,7 @@ impl ApplicationMenu {
         cx.defer_in(window, move |_, window, cx| next_handle.show(window, cx));
     }
 
+    #[allow(dead_code)]
     pub fn all_menus_shown(&self, cx: &mut Context<Self>) -> bool {
         show_menus(cx)
             || self.entries.iter().any(|entry| entry.handle.is_deployed())
@@ -272,6 +273,7 @@ impl ApplicationMenu {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn show_menus(cx: &mut App) -> bool {
     TitleBarSettings::get_global(cx).show_menus
         && (cfg!(not(target_os = "macos")) || option_env!("ZED_USE_CROSS_PLATFORM_MENU").is_some())
