@@ -42,4 +42,16 @@ Now currently in our workspace sidebar start bar bottom grid, at least there sho
 
 now in our sidebar footer at our space dots. Please comment out the left and right arrow key and make sure that the space dot has a height and width so that when we hover over them it shows a hover on their height and width. Put some gap between them and we don't need to show the left and right arrow key until the space dots become so many in count that it doesn't fit on the sidebar width.
 
+In our web preview we are using a hole punching system where we are showing what is behind the abs space but as what is behind is looking transparent, it's looking bad. We have to wrap that with a glassmorphism UI with a blur so that it looks good instead of being totally transparent. When we didn't render the web preview, when we render the web preview please make sure we make it transparent.
+
+Until now when we are just showing what is behind the apps, it is like showing what our current app software is without any filter or any glassmorphism effect. It is looking so bad on our theme. Please make sure to, if possible, then implement a glassmorphism UI and only show that when our web preview hasn't loaded. When it has loaded please remove that glassmorphism UI and render the web-preview transparently
+
+
+In our top bar title bar, as we added items on our right side, the screen drop is not centered in the available size. Please make sure it centers the screen drop with the available width. Currently in the left side there is more gap than in the right side. Also when there is only one space, in that time do not show the space dots. Kindly the space dots have so much horizontal padding so please decrease the padding and make it way closer. When hovered over, use a color like what we are using in our search bar bottom grid in our sidebar so it will be more visible on hover. 
+
+In our sidebar footer there is an add icon, right? Add or plus icon. When we are clicking it It's currently showing drop-down items but please make sure when we click it, it creates a new space like the sidebar top-right icon creating a new space. 
+
+From our space dots, please remove all kinds of gaps between the dots. In the sidebar footer there is a "Create New Space" option on fillet but it is not working. In the top right it is working so please call the right function in the sidebar footer "Create New Space" option two.
+In our title bar top right please add three more icons. The glass morphism is still not showing. Maybe we are not measuring the time of our loading of our web preview correctly so please load it correctly. And don't we even have to render the Glass Morphism effect just to make our background color show and only render the web preview when the web preview is loaded correctly so that we don't see any transparent space at all? When we will show the web preview it will not be loading; it will be loaded. 
+
 Shamo subha tu mera

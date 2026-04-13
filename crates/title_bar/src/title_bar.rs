@@ -278,12 +278,73 @@ impl Render for TitleBar {
             .gap_1()
             .items_center()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            // Add invisible spacers to balance left side width
-            .child(div().w(px(32.)).h(px(1.))) // Spacer 1
-            .child(div().w(px(32.)).h(px(1.))) // Spacer 2
-            .child(div().w(px(32.)).h(px(1.))) // Spacer 3
-            .child(div().w(px(32.)).h(px(1.))) // Spacer 4
-            .child(div().w(px(32.)).h(px(1.))) // Spacer 5
+            // Add visible icons to balance left side width
+            .child(
+                IconButton::new("titlebar-icon-1", IconName::Bell)
+                    .icon_size(IconSize::Small)
+                    .style(ButtonStyle::Subtle)
+                    .tooltip(Tooltip::text("Notifications")),
+            )
+            .child(
+                IconButton::new("titlebar-icon-2", IconName::Settings)
+                    .icon_size(IconSize::Small)
+                    .style(ButtonStyle::Subtle)
+                    .tooltip(Tooltip::text("Settings")),
+            )
+            .child(
+                IconButton::new("titlebar-icon-3", IconName::Download)
+                    .icon_size(IconSize::Small)
+                    .style(ButtonStyle::Subtle)
+                    .tooltip(Tooltip::text("Downloads")),
+            )
+            .child(
+                IconButton::new("titlebar-icon-4", IconName::Blocks)
+                    .icon_size(IconSize::Small)
+                    .style(ButtonStyle::Subtle)
+                    .tooltip(Tooltip::text("Extensions")),
+            )
+            .child(
+                IconButton::new("titlebar-icon-5", IconName::Ellipsis)
+                    .icon_size(IconSize::Small)
+                    .style(ButtonStyle::Subtle)
+                    .tooltip(Tooltip::text("More")),
+            )
+            .child(
+                IconButton::new("titlebar-icon-6", IconName::Code)
+                    .icon_size(IconSize::Small)
+                    .style(ButtonStyle::Subtle)
+                    .tooltip(Tooltip::text("Code")),
+            )
+            .child(
+                IconButton::new("titlebar-icon-7", IconName::Terminal)
+                    .icon_size(IconSize::Small)
+                    .style(ButtonStyle::Subtle)
+                    .tooltip(Tooltip::text("Terminal")),
+            )
+            .child(
+                IconButton::new("titlebar-icon-8", IconName::Public)
+                    .icon_size(IconSize::Small)
+                    .style(ButtonStyle::Subtle)
+                    .tooltip(Tooltip::text("Browser")),
+            )
+            .child(
+                IconButton::new("titlebar-icon-9", IconName::File)
+                    .icon_size(IconSize::Small)
+                    .style(ButtonStyle::Subtle)
+                    .tooltip(Tooltip::text("Files")),
+            )
+            .child(
+                IconButton::new("titlebar-icon-10", IconName::MagnifyingGlass)
+                    .icon_size(IconSize::Small)
+                    .style(ButtonStyle::Subtle)
+                    .tooltip(Tooltip::text("Search")),
+            )
+            .child(
+                IconButton::new("titlebar-icon-11", IconName::Book)
+                    .icon_size(IconSize::Small)
+                    .style(ButtonStyle::Subtle)
+                    .tooltip(Tooltip::text("Documentation")),
+            )
             .children(self.render_call_controls(window, cx))
             .children(self.render_connection_status(status, cx))
             .child(self.update_version.clone())
@@ -323,26 +384,16 @@ impl Render for TitleBar {
                     .gap_1()
                     .child(left_content)
                     .child(
-                        // Spacer to push right content to the end
-                        div().flex_1(),
+                        // Center dock - flex-1 takes remaining space and centers content
+                        div()
+                            .flex_1()
+                            .h_full()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(center_dock),
                     )
                     .child(right_content),
-            )
-            .child(
-                // Screen dock - absolutely centered on window
-                div()
-                    .absolute()
-                    .left(relative(0.5)) // 50% from left
-                    .top_0()
-                    .h_full()
-                    .flex()
-                    .items_center()
-                    .child(
-                        div()
-                            .relative()
-                            .left(relative(-0.5)) // Shift left by 50% of own width to center
-                            .child(center_dock),
-                    ),
             )
             .into_any_element();
 

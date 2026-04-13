@@ -5290,29 +5290,37 @@ impl Sidebar {
         let is_dragging = self.carousel_drag_start.is_some();
         let sidebar = cx.weak_entity();
 
+        // Show arrows only when there are more dots than can fit
+        let show_arrows = spaces.len() > MAX_VISIBLE_SPACE_DOTS;
+        // Hide entire carousel when there's only one space
+        let show_carousel = spaces.len() > 1;
+
         h_flex()
             .gap_1p5()
             .items_center()
             .justify_center()
-            .child(
-                IconButton::new("space-carousel-left", IconName::ChevronLeft)
-                    .shape(IconButtonShape::Square)
-                    .style(ButtonStyle::Transparent)
-                    .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text("Show previous spaces (scroll left)"))
-                    .disabled(!can_go_left)
-                    .when(can_go_left, |this| {
-                        this.on_click(cx.listener(|this, _, _window, cx| {
-                            // Left arrow = show previous (lower index) spaces
-                            this.show_previous_space_page(cx);
-                        }))
-                    }),
-            )
+            .when(!show_carousel, |this| this.invisible()) // Hide when only 1 space
+            // Left arrow - only show when needed
+            .when(show_arrows, |this| {
+                this.child(
+                    IconButton::new("space-carousel-left", IconName::ChevronLeft)
+                        .shape(IconButtonShape::Square)
+                        .style(ButtonStyle::Transparent)
+                        .icon_size(IconSize::Small)
+                        .tooltip(Tooltip::text("Show previous spaces (scroll left)"))
+                        .disabled(!can_go_left)
+                        .when(can_go_left, |btn| {
+                            btn.on_click(cx.listener(|this, _, _window, cx| {
+                                this.show_previous_space_page(cx);
+                            }))
+                        }),
+                )
+            })
             .child(
                 h_flex()
-                    .gap_0p5() // Reduced gap for easier clicking
+                    .gap_0() // No gap between dots
                     .items_center()
-                    .px_2()
+                    .px_1() // Keep horizontal padding
                     .cursor(if is_dragging {
                         gpui::CursorStyle::ClosedHand
                     } else {
@@ -5437,59 +5445,84 @@ impl Sidebar {
                                 })
                                 .trigger(
                                     move |is_menu_active, _window, cx| {
-                                        ButtonLike::new(format!("space-dot-{absolute_ix}"))
-                                            .style(ButtonStyle::Transparent)
-                                            .cursor_style(gpui::CursorStyle::OpenHand)
-                                            .tooltip(move |window, cx| {
-                                                Tooltip::text(tooltip_label.clone())(window, cx)
-                                            })
-                                            .on_click({
-                                                let sidebar = sidebar_for_click.clone();
-                                                let click_workspace_id = click_workspace_id;
-                                                move |_, window, cx| {
-                                                    sidebar
-                                                        .update(cx, |this, cx| {
-                                                            if this.carousel_did_drag {
-                                                                this.carousel_did_drag = false;
-                                                                cx.notify();
-                                                                return;
-                                                            }
-
-                                                            this.activate_space(
-                                                                click_workspace_id,
-                                                                window,
-                                                                cx,
-                                                            );
-                                                        })
-                                                        .ok();
-                                                }
-                                            })
+                                        div()
+                                            .group("") // Group wrapper for hover effect
                                             .child(
-                                                // Wrapper with expanded horizontal padding for easier clicking
-                                                div()
-                                                    .px(px(2.)) // Horizontal padding only for magnetic click
+                                                ButtonLike::new(format!("space-dot-{absolute_ix}"))
+                                                    .style(ButtonStyle::Transparent)
+                                                    .cursor_style(gpui::CursorStyle::OpenHand)
+                                                    .tooltip(move |window, cx| {
+                                                        Tooltip::text(tooltip_label.clone())(
+                                                            window, cx,
+                                                        )
+                                                    })
+                                                    .on_click({
+                                                        let sidebar = sidebar_for_click.clone();
+                                                        let click_workspace_id = click_workspace_id;
+                                                        move |_, window, cx| {
+                                                            sidebar
+                                                                .update(cx, |this, cx| {
+                                                                    if this.carousel_did_drag {
+                                                                        this.carousel_did_drag =
+                                                                            false;
+                                                                        cx.notify();
+                                                                        return;
+                                                                    }
+
+                                                                    this.activate_space(
+                                                                        click_workspace_id,
+                                                                        window,
+                                                                        cx,
+                                                                    );
+                                                                })
+                                                                .ok();
+                                                        }
+                                                    })
                                                     .child(
+                                                        // Wrapper with fixed size for better hover effect
                                                         div()
-                                                            .size(dot_size)
-                                                            .rounded_full()
-                                                            .flex_shrink_0()
-                                                            .when(is_active, |this| {
-                                                                this.bg(cx.theme().colors().text)
+                                                            .w(px(20.)) // Reduced width for closer spacing
+                                                            .h(px(20.)) // Reduced height
+                                                            .flex()
+                                                            .items_center()
+                                                            .justify_center()
+                                                            .rounded_md() // Rounded hover background
+                                                            .group_hover("", |this| {
+                                                                // Hover color like sidebar grid items
+                                                                this.bg(cx
+                                                                    .theme()
+                                                                    .colors()
+                                                                    .element_hover)
                                                             })
-                                                            .when(!is_active, |this| {
-                                                                this.border_1()
+                                                            .child(
+                                                                div()
+                                                                    .size(dot_size)
+                                                                    .rounded_full()
+                                                                    .flex_shrink_0()
+                                                                    .when(is_active, |this| {
+                                                                        this.bg(cx
+                                                                            .theme()
+                                                                            .colors()
+                                                                            .text)
+                                                                    })
+                                                                    .when(!is_active, |this| {
+                                                                        this.border_1()
                                                                     .border_color(
                                                                         cx.theme()
                                                                             .colors()
                                                                             .border_variant,
                                                                     )
                                                                     .bg(gpui::transparent_black())
-                                                            })
-                                                            .when(is_menu_active, |this| {
-                                                                this.border_1().border_color(
-                                                                    cx.theme().colors().text_accent,
-                                                                )
-                                                            }),
+                                                                    })
+                                                                    .when(is_menu_active, |this| {
+                                                                        this.border_1()
+                                                                            .border_color(
+                                                                                cx.theme()
+                                                                                    .colors()
+                                                                                    .text_accent,
+                                                                            )
+                                                                    }),
+                                                            ),
                                                     ),
                                             )
                                             .into_any_element()
@@ -5498,19 +5531,22 @@ impl Sidebar {
                             }),
                     ),
             )
-            .child(
-                IconButton::new("space-carousel-right", IconName::ChevronRight)
-                    .shape(IconButtonShape::Square)
-                    .style(ButtonStyle::Transparent)
-                    .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::text("Show more spaces (scroll right)"))
-                    .disabled(!can_go_right)
-                    .when(can_go_right, |this| {
-                        this.on_click(cx.listener(|this, _, _window, cx| {
-                            this.show_next_space_page(cx);
-                        }))
-                    }),
-            )
+            // Right arrow - only show when needed
+            .when(show_arrows, |this| {
+                this.child(
+                    IconButton::new("space-carousel-right", IconName::ChevronRight)
+                        .shape(IconButtonShape::Square)
+                        .style(ButtonStyle::Transparent)
+                        .icon_size(IconSize::Small)
+                        .tooltip(Tooltip::text("Show more spaces (scroll right)"))
+                        .disabled(!can_go_right)
+                        .when(can_go_right, |btn| {
+                            btn.on_click(cx.listener(|this, _, _window, cx| {
+                                this.show_next_space_page(cx);
+                            }))
+                        }),
+                )
+            })
     }
 
     fn render_sidebar_bottom_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {

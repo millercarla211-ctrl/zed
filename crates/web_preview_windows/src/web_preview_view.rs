@@ -81,6 +81,7 @@ struct DetectedExtension {
 
 #[derive(Clone, Debug)]
 enum PreviewLoadState {
+    Loading,
     Ready,
     Error(SharedString),
 }
@@ -285,7 +286,7 @@ impl WebPreviewView {
                 bookmarks: load_bookmarks(&workspace_context.profile_dir).unwrap_or_default(),
                 detected_extensions: Vec::new(),
                 extensions_scanned: false,
-                load_state: PreviewLoadState::Ready,
+                load_state: PreviewLoadState::Loading,
                 host_bounds: Rc::new(RefCell::new(None)),
                 #[cfg(target_os = "macos")]
                 last_applied_bounds: Rc::new(RefCell::new(None)),
@@ -458,10 +459,9 @@ impl WebPreviewView {
 
         self.active_url = url.to_string().into();
         self.page_title = None;
+        self.load_state = PreviewLoadState::Loading; // Set to loading when starting navigation
         if let Err(error) = self.load_url(url.as_str(), window, cx) {
             self.load_state = PreviewLoadState::Error(error.to_string().into());
-        } else {
-            self.load_state = PreviewLoadState::Ready;
         }
         cx.emit(ItemEvent::UpdateTab);
         cx.notify();
@@ -641,6 +641,12 @@ impl WebPreviewView {
                 BrowserEvent::UrlChanged(url) => {
                     let previous_url = self.active_url.to_string();
                     self.active_url = url.clone().into();
+
+                    // Transition from Loading to Ready when page loads
+                    if matches!(self.load_state, PreviewLoadState::Loading) {
+                        self.load_state = PreviewLoadState::Ready;
+                    }
+
                     let editor_focus = self.url_editor.focus_handle(cx);
                     let editor_text = self.current_url_text(cx);
                     let should_sync_editor = !editor_focus.is_focused(window)
@@ -1439,8 +1445,18 @@ impl WebPreviewView {
     }
 
     fn render_webview_body(&self, cx: &mut Context<Self>) -> AnyElement {
+        let is_loading = matches!(self.load_state, PreviewLoadState::Loading);
+
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
+            // Don't render webview at all when loading - only show background
+            if is_loading {
+                return div()
+                    .size_full()
+                    .bg(cx.theme().colors().surface_background)
+                    .into_any_element();
+            }
+
             let host_bounds = self.host_bounds.clone();
             #[cfg(target_os = "macos")]
             let last_applied_bounds = self.last_applied_bounds.clone();
@@ -1674,9 +1690,11 @@ impl Render for WebPreviewView {
 
         let body = self.render_webview_body(cx);
         let error_message = match &self.load_state {
+            PreviewLoadState::Loading => None,
             PreviewLoadState::Ready => None,
             PreviewLoadState::Error(error) => Some(error.clone()),
         };
+        let is_loading = matches!(self.load_state, PreviewLoadState::Loading);
         let is_bookmarked = self.is_active_url_bookmarked();
         let bookmark_icon = if is_bookmarked {
             IconName::StarFilled
@@ -1790,6 +1808,34 @@ impl Render for WebPreviewView {
                             // without visibly obscuring the page.
                             .bg(preview_surface_background)
                             .child(body)
+                            // Glassmorphism loading overlay
+                            .when(is_loading, |this| {
+                                this.child(
+                                    div()
+                                        .absolute()
+                                        .inset_0()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        // Glassmorphism effect with higher opacity
+                                        .bg(cx.theme().colors().surface_background.opacity(0.95))
+                                        .child(
+                                            div()
+                                                .px_8()
+                                                .py_6()
+                                                .rounded_xl()
+                                                .bg(cx.theme().colors().elevated_surface_background)
+                                                .border_2()
+                                                .border_color(cx.theme().colors().border)
+                                                .shadow_2xl()
+                                                .child(
+                                                    Label::new("Loading...")
+                                                        .size(LabelSize::Large)
+                                                        .color(Color::Default),
+                                                ),
+                                        ),
+                                )
+                            })
                             .when_some(error_message, |this, error| {
                                 this.child(
                                     div()
