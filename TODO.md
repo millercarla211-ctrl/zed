@@ -14,6 +14,8 @@
 - [x] Document any Windows-specific issues encountered
 
 ## Completed
+- [x] ~~Replace the dummy sidebar space grid with real reorderable spaces, filter the sidebar to the active space tab, and align the footer sizing with the status bar~~ ✅ (completed: 2026-04-13)
+- [x] ~~Make sidebar space creation activate and retain the new workspace immediately, and hide the current-space heading label~~ ✅ (completed: 2026-04-13)
 - [x] ~~Remove the separator between the dock history arrows and the project control, and rebuild the centered dock shell so its top and bottom frame edges can render as real border pixels~~ ✅ (completed: 2026-04-13)
 - [x] ~~Move the real back and forward pane-history buttons into the centered screen dock and inset the dock overlay so its top and bottom frame edges are not clipped~~ ✅ (completed: 2026-04-13)
 - [x] ~~Restore the real centered screen dock with a guaranteed four-sided border and keep Editor, Browser, and Terminal on the same full-width host pane with type-filtered tabs~~ ✅ (completed: 2026-04-13)

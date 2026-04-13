@@ -234,6 +234,25 @@ impl WebPreviewView {
         cx.notify();
     }
 
+    pub fn open_url_in_active_pane(
+        workspace: &mut Workspace,
+        url: &str,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) {
+        let view = Self::open_or_create(workspace, window, cx);
+        view.update(cx, |this, cx| {
+            this.url_editor.update(cx, |editor, cx| {
+                editor.set_text(url, window, cx);
+            });
+            let _ = this.load_url(url, window, cx);
+        });
+        workspace.active_pane().update(cx, |pane, cx| {
+            pane.add_item(Box::new(view.clone()), true, true, None, window, cx);
+        });
+        cx.notify();
+    }
+
     fn open_new_in_active_pane(
         workspace: &mut Workspace,
         window: &mut Window,

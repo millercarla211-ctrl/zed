@@ -16856,11 +16856,13 @@ dependencies = [
  "serde_json",
  "settings",
  "smol",
+ "terminal_view",
  "theme",
  "theme_settings",
  "ui",
  "util",
  "vim_mode_setting",
+ "web_preview",
  "workspace",
  "zed_actions",
 ]

@@ -835,6 +835,42 @@ impl MultiWorkspace {
         self.project_group_keys.iter()
     }
 
+    pub fn reorder_project_group(
+        &mut self,
+        dragged_key: &ProjectGroupKey,
+        target_key: &ProjectGroupKey,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(from_ix) = self
+            .project_group_keys
+            .iter()
+            .position(|key| key == dragged_key)
+        else {
+            return false;
+        };
+        let Some(target_ix) = self
+            .project_group_keys
+            .iter()
+            .position(|key| key == target_key)
+        else {
+            return false;
+        };
+        if from_ix == target_ix {
+            return false;
+        }
+
+        let dragged_key = self.project_group_keys.remove(from_ix);
+        let insert_ix = if from_ix < target_ix {
+            target_ix.saturating_sub(1)
+        } else {
+            target_ix
+        };
+        self.project_group_keys.insert(insert_ix, dragged_key);
+        self.serialize(cx);
+        cx.notify();
+        true
+    }
+
     /// Returns the project groups, ordered by most recently added.
     pub fn project_groups(
         &self,
@@ -1163,6 +1199,32 @@ impl MultiWorkspace {
         })
     }
 
+    pub fn create_empty_local_workspace(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<Entity<Workspace>>> {
+        let app_state = self.workspace().read(cx).app_state().clone();
+        let requesting_window = window.window_handle().downcast::<MultiWorkspace>();
+
+        cx.spawn(async move |_this, cx| {
+            let result = cx
+                .update(|cx| {
+                    Workspace::new_local(
+                        Vec::new(),
+                        app_state,
+                        requesting_window,
+                        None,
+                        None,
+                        OpenMode::Activate,
+                        cx,
+                    )
+                })
+                .await?;
+            Ok(result.workspace)
+        })
+    }
+
     pub fn create_random_local_workspace(
         &mut self,
         window: &mut Window,
@@ -1208,6 +1270,48 @@ impl MultiWorkspace {
                 .as_nanos() as usize;
             let index = tick.wrapping_add(salt) % candidates.len();
             candidates.swap_remove(index)
+        };
+
+        self.find_or_create_local_workspace(PathList::new(&[chosen_path]), window, cx)
+    }
+
+    pub fn create_generated_space_workspace(
+        &mut self,
+        name: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<Entity<Workspace>>> {
+        let generated_spaces_root = home_dir().join(".zed-generated-spaces");
+        std::fs::create_dir_all(&generated_spaces_root).log_err();
+
+        let sanitized_name = name
+            .chars()
+            .map(|ch| match ch {
+                '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '-',
+                _ if ch.is_control() => '-',
+                _ => ch,
+            })
+            .collect::<String>()
+            .trim()
+            .trim_matches('.')
+            .to_string();
+        let base_name = if sanitized_name.is_empty() {
+            format!("space-{}", Uuid::new_v4())
+        } else {
+            sanitized_name
+        };
+
+        let chosen_path = loop {
+            let candidate =
+                generated_spaces_root.join(if generated_spaces_root.join(&base_name).exists() {
+                    format!("{base_name}-{}", Uuid::new_v4())
+                } else {
+                    base_name.clone()
+                });
+            if !candidate.exists() {
+                std::fs::create_dir_all(&candidate).log_err();
+                break candidate;
+            }
         };
 
         self.find_or_create_local_workspace(PathList::new(&[chosen_path]), window, cx)
@@ -1521,6 +1625,16 @@ impl MultiWorkspace {
 
     pub fn database_id(&self, cx: &App) -> Option<WorkspaceId> {
         self.workspace().read(cx).database_id()
+    }
+
+    pub fn workspace_for_database_id(
+        &self,
+        workspace_id: WorkspaceId,
+        cx: &App,
+    ) -> Option<Entity<Workspace>> {
+        self.workspaces()
+            .find(|workspace| workspace.read(cx).database_id() == Some(workspace_id))
+            .cloned()
     }
 
     pub fn take_pending_removal_tasks(&mut self) -> Vec<Task<()>> {

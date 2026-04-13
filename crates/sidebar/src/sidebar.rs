@@ -24,7 +24,8 @@ use menu::{
     Cancel, Confirm, SelectChild, SelectFirst, SelectLast, SelectNext, SelectParent, SelectPrevious,
 };
 use project::{
-    AgentId, AgentRegistryStore, Event as ProjectEvent, ProjectGroupKey, linked_worktree_short_name,
+    AgentId, AgentRegistryStore, Event as ProjectEvent, Project, ProjectGroupKey,
+    linked_worktree_short_name,
 };
 use recent_projects::sidebar_recent_projects::SidebarRecentProjects;
 use remote::RemoteConnectionOptions;
@@ -34,8 +35,9 @@ use serde::{Deserialize, Serialize};
 use settings::Settings as _;
 use std::collections::{HashMap, HashSet};
 use std::mem;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use terminal_view::terminal_panel::TerminalPanel;
 use theme::ActiveTheme;
 use ui::{
     AgentThreadStatus, ButtonLike, ButtonStyle, CommonAnimationExt, ContextMenu, Divider,
@@ -46,10 +48,14 @@ use util::ResultExt as _;
 use util::path_list::PathList;
 use workspace::{
     AddFolderToProject, CloseWindow, FocusWorkspaceSidebar, MultiWorkspace, MultiWorkspaceEvent,
-    NextProject, NextThread, Open, PreviousProject, PreviousThread, SerializedProjectGroupKey,
-    ShowFewerThreads, ShowMoreThreads, Sidebar as WorkspaceSidebar, SidebarSide, Toast,
-    ToggleWorkspaceSidebar, Workspace, notifications::NotificationId, sidebar_side_context_menu,
+    NextProject, NextThread, Open, OpenOptions, OpenVisible, PreviousProject, PreviousThread,
+    SerializedProjectGroupKey, ShowFewerThreads, ShowMoreThreads, Sidebar as WorkspaceSidebar,
+    SidebarSide, Toast, ToggleWorkspaceSidebar, Workspace, WorkspaceId, WorkspaceScreenKind,
+    notifications::NotificationId, sidebar_side_context_menu,
 };
+
+#[cfg(target_os = "windows")]
+use web_preview::web_preview_view::WebPreviewView;
 
 use zed_actions::OpenRecent;
 use zed_actions::editor::{MoveDown, MoveUp};
@@ -84,12 +90,12 @@ const MIN_WIDTH: Pixels = px(200.0);
 const MAX_WIDTH: Pixels = px(800.0);
 const DEFAULT_THREADS_SHOWN: usize = 5;
 const SIDEBAR_SPACE_GRID_COLUMNS: usize = 4;
-const SIDEBAR_SPACE_GRID_ITEM_COUNT: usize = 12;
 const MAX_VISIBLE_SPACE_DOTS: usize = 7;
 
 #[derive(Clone, Serialize, Deserialize)]
 struct SerializedSpaceLabel {
-    key: SerializedProjectGroupKey,
+    #[serde(default)]
+    workspace_id: Option<i64>,
     name: String,
 }
 
@@ -110,6 +116,8 @@ struct SerializedSidebar {
     expanded_groups: Vec<(SerializedProjectGroupKey, usize)>,
     #[serde(default)]
     space_labels: Vec<SerializedSpaceLabel>,
+    #[serde(default)]
+    space_order: Vec<i64>,
     #[serde(default = "default_next_space_number")]
     next_space_number: usize,
     #[serde(default)]
@@ -324,9 +332,37 @@ struct SidebarContents {
 
 #[derive(Clone)]
 struct SpaceEntry {
-    key: ProjectGroupKey,
-    #[allow(dead_code)]
+    workspace_id: WorkspaceId,
     label: SharedString,
+    path_summary: SharedString,
+}
+
+#[derive(Clone)]
+struct DraggedSidebarSpace {
+    workspace_id: WorkspaceId,
+}
+
+impl Render for DraggedSidebarSpace {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        gpui::Empty
+    }
+}
+
+#[derive(Clone)]
+enum SidebarGridAction {
+    OpenProject,
+    OpenFile(PathBuf),
+    OpenWebsite(&'static str),
+    OpenTerminalFolder(PathBuf),
+}
+
+#[derive(Clone)]
+struct SidebarGridEntry {
+    id: SharedString,
+    icon: IconName,
+    label: SharedString,
+    subtitle: Option<SharedString>,
+    action: SidebarGridAction,
 }
 
 impl SidebarContents {
@@ -492,9 +528,10 @@ pub struct Sidebar {
     pending_remote_thread_activation: Option<acp::SessionId>,
     view: SidebarView,
     restoring_tasks: HashMap<acp::SessionId, Task<()>>,
-    space_labels: HashMap<ProjectGroupKey, SharedString>,
+    space_labels: HashMap<WorkspaceId, SharedString>,
+    space_order: Vec<WorkspaceId>,
     space_entries: Vec<SpaceEntry>,
-    active_space_key: Option<ProjectGroupKey>,
+    active_space_id: Option<WorkspaceId>,
     next_space_number: usize,
     space_page_start: usize,
     recent_projects_popover_handle: PopoverMenuHandle<SidebarRecentProjects>,
@@ -616,8 +653,9 @@ impl Sidebar {
             view: SidebarView::default(),
             restoring_tasks: HashMap::new(),
             space_labels: HashMap::new(),
+            space_order: Vec::new(),
             space_entries: Vec::new(),
-            active_space_key: None,
+            active_space_id: None,
             next_space_number: default_next_space_number(),
             space_page_start: 0,
             recent_projects_popover_handle: PopoverMenuHandle::default(),
@@ -639,68 +677,107 @@ impl Sidebar {
         label.into()
     }
 
+    fn default_space_label_for_workspace(workspace: &Entity<Workspace>, cx: &App) -> SharedString {
+        let root_paths = workspace.read(cx).root_paths(cx);
+        if let Some(root_path) = root_paths.first() {
+            return root_path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_else(|| root_path.display().to_string())
+                .into();
+        }
+
+        "Open Project".into()
+    }
+
+    fn space_label_for_workspace(&self, workspace: &Entity<Workspace>, cx: &App) -> SharedString {
+        workspace
+            .read(cx)
+            .database_id()
+            .and_then(|workspace_id| self.space_labels.get(&workspace_id).cloned())
+            .unwrap_or_else(|| Self::default_space_label_for_workspace(workspace, cx))
+    }
+
+    fn space_path_summary_for_workspace(workspace: &Entity<Workspace>, cx: &App) -> SharedString {
+        let paths = workspace.read(cx).root_paths(cx);
+        if paths.is_empty() {
+            return "No project opened".into();
+        }
+
+        paths
+            .iter()
+            .map(|path| {
+                path.file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string())
+            })
+            .collect::<Vec<_>>()
+            .join(" • ")
+            .into()
+    }
+
     fn sync_space_state(&mut self, cx: &mut Context<Self>) {
         let Some(multi_workspace) = self.multi_workspace.upgrade() else {
             return;
         };
 
-        let project_group_keys = multi_workspace
-            .read(cx)
-            .project_group_keys()
-            .cloned()
-            .collect::<Vec<_>>();
-        let project_group_key_set = project_group_keys.iter().cloned().collect::<HashSet<_>>();
+        let multi_workspace = multi_workspace.read(cx);
+        let workspaces: Vec<_> = multi_workspace.workspaces().cloned().collect();
+        let workspace_id_set = workspaces
+            .iter()
+            .filter_map(|workspace| workspace.read(cx).database_id())
+            .collect::<HashSet<_>>();
 
         let mut changed = false;
-        self.space_labels.retain(|key, _| {
-            let keep = project_group_key_set.contains(key);
+        self.space_labels.retain(|workspace_id, _| {
+            let keep = workspace_id_set.contains(workspace_id);
+            changed |= !keep;
+            keep
+        });
+        self.space_order.retain(|workspace_id| {
+            let keep = workspace_id_set.contains(workspace_id);
             changed |= !keep;
             keep
         });
 
-        for key in project_group_keys {
-            if self.space_labels.contains_key(&key) {
+        for workspace in &workspaces {
+            let Some(workspace_id) = workspace.read(cx).database_id() else {
                 continue;
+            };
+            if !self.space_order.contains(&workspace_id) {
+                self.space_order.push(workspace_id);
+                changed = true;
             }
-
-            let label = self.next_generated_space_label();
-            self.space_labels.insert(key, label);
-            changed = true;
         }
 
-        let active_space_key = {
-            let multi_workspace = multi_workspace.read(cx);
-            Some(multi_workspace.project_group_key_for_workspace(multi_workspace.workspace(), cx))
-        };
+        let order_index = self
+            .space_order
+            .iter()
+            .enumerate()
+            .map(|(ix, workspace_id)| (*workspace_id, ix))
+            .collect::<HashMap<_, _>>();
 
-        let mut space_entries = multi_workspace
-            .read(cx)
-            .project_group_keys()
-            .cloned()
-            .map(|key| SpaceEntry {
-                label: self
-                    .space_labels
-                    .get(&key)
-                    .cloned()
-                    .unwrap_or_else(|| "New space".into()),
-                key,
+        let mut space_entries = workspaces
+            .into_iter()
+            .filter_map(|workspace| {
+                let workspace_id = workspace.read(cx).database_id()?;
+                Some(SpaceEntry {
+                    workspace_id,
+                    label: self.space_label_for_workspace(&workspace, cx),
+                    path_summary: Self::space_path_summary_for_workspace(&workspace, cx),
+                })
             })
             .collect::<Vec<_>>();
+        space_entries.sort_by_key(|space| {
+            order_index
+                .get(&space.workspace_id)
+                .copied()
+                .unwrap_or(usize::MAX)
+        });
 
-        if space_entries.is_empty()
-            && let Some(key) = active_space_key.clone()
-        {
-            space_entries.push(SpaceEntry {
-                label: self
-                    .space_labels
-                    .get(&key)
-                    .cloned()
-                    .unwrap_or_else(|| "New space".into()),
-                key,
-            });
-        }
+        let active_space_id = multi_workspace.workspace().read(cx).database_id();
 
-        self.active_space_key = active_space_key;
+        self.active_space_id = active_space_id;
         self.space_entries = space_entries;
 
         let total_spaces = self.space_entries.len();
@@ -719,14 +796,18 @@ impl Sidebar {
         self.space_entries.clone()
     }
 
+    fn resolved_active_space_id(&self, cx: &App) -> Option<WorkspaceId> {
+        self.active_space_id.or_else(|| {
+            self.active_workspace(cx)
+                .and_then(|workspace| workspace.read(cx).database_id())
+        })
+    }
+
     fn active_space_index(&self, cx: &App) -> Option<usize> {
-        let active_key = self
-            .active_space_key
-            .clone()
-            .or_else(|| self.active_project_group_key(cx))?;
+        let active_space_id = self.resolved_active_space_id(cx)?;
         self.space_entries
             .iter()
-            .position(|space| space.key == active_key)
+            .position(|space| space.workspace_id == active_space_id)
     }
 
     #[allow(dead_code)]
@@ -745,20 +826,34 @@ impl Sidebar {
         start.min(max_start)
     }
 
-    fn create_new_space(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    fn create_new_space(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(multi_workspace) = self.multi_workspace.upgrade() else {
             return;
         };
 
-        self.show_thread_list(_window, cx);
+        self.show_thread_list(window, cx);
+        let new_space_label = self.next_generated_space_label();
 
         let task = multi_workspace.update(cx, |multi_workspace, cx| {
-            multi_workspace.create_random_local_workspace(_window, cx)
+            multi_workspace.create_empty_local_workspace(window, cx)
         });
 
-        cx.spawn_in(_window, async move |this, cx| {
-            task.await?;
-            this.update(cx, |this, cx| {
+        cx.spawn_in(window, async move |this, cx| {
+            let workspace = task.await?;
+            this.update_in(cx, |this, window, cx| {
+                if let Some(multi_workspace) = this.multi_workspace.upgrade() {
+                    multi_workspace.update(cx, |multi_workspace, cx| {
+                        multi_workspace.activate(workspace.clone(), window, cx);
+                        multi_workspace.retain_active_workspace(cx);
+                    });
+                }
+                if let Some(workspace_id) = workspace.read(cx).database_id() {
+                    this.space_labels
+                        .insert(workspace_id, new_space_label.clone());
+                    if !this.space_order.contains(&workspace_id) {
+                        this.space_order.push(workspace_id);
+                    }
+                }
                 this.sync_space_state(cx);
                 cx.notify();
             })?;
@@ -767,10 +862,50 @@ impl Sidebar {
         .detach_and_log_err(cx);
     }
 
+    fn reorder_space(
+        &mut self,
+        dragged_workspace_id: WorkspaceId,
+        target_workspace_id: WorkspaceId,
+        cx: &mut Context<Self>,
+    ) {
+        if dragged_workspace_id == target_workspace_id {
+            return;
+        }
+
+        let Some(from_ix) = self
+            .space_order
+            .iter()
+            .position(|workspace_id| *workspace_id == dragged_workspace_id)
+        else {
+            return;
+        };
+        let Some(target_ix) = self
+            .space_order
+            .iter()
+            .position(|workspace_id| *workspace_id == target_workspace_id)
+        else {
+            return;
+        };
+        if from_ix == target_ix {
+            return;
+        }
+
+        let dragged_workspace_id = self.space_order.remove(from_ix);
+        let insert_ix = if from_ix < target_ix {
+            target_ix.saturating_sub(1)
+        } else {
+            target_ix
+        };
+        self.space_order.insert(insert_ix, dragged_workspace_id);
+        self.sync_space_state(cx);
+        self.serialize(cx);
+        cx.notify();
+    }
+
     #[allow(dead_code)]
     fn activate_space(
         &mut self,
-        key: &ProjectGroupKey,
+        workspace_id: WorkspaceId,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -779,21 +914,21 @@ impl Sidebar {
         };
 
         let spaces = self.space_entries(cx);
-        if let Some(index) = spaces.iter().position(|space| &space.key == key) {
+        if let Some(index) = spaces
+            .iter()
+            .position(|space| space.workspace_id == workspace_id)
+        {
             self.space_page_start = index.saturating_sub(MAX_VISIBLE_SPACE_DOTS / 2);
         }
 
-        if let Some(workspace) =
-            multi_workspace
-                .read(cx)
-                .workspace_for_paths(key.path_list(), key.host().as_ref(), cx)
+        if let Some(workspace) = multi_workspace
+            .read(cx)
+            .workspace_for_database_id(workspace_id, cx)
         {
             multi_workspace.update(cx, |multi_workspace, cx| {
                 multi_workspace.activate(workspace.clone(), window, cx);
                 multi_workspace.retain_active_workspace(cx);
             });
-        } else {
-            self.open_workspace_for_group(key, window, cx);
         }
     }
 
@@ -813,21 +948,32 @@ impl Sidebar {
         }
     }
 
-    fn active_space_label(&self, _cx: &App) -> SharedString {
-        self.active_space_key
-            .clone()
-            .and_then(|key| self.space_labels.get(&key).cloned())
+    #[allow(dead_code)]
+    fn active_space_label(&self, cx: &App) -> SharedString {
+        self.resolved_active_space_id(cx)
+            .and_then(|workspace_id| {
+                self.space_entries
+                    .iter()
+                    .find(|space| space.workspace_id == workspace_id)
+                    .map(|space| space.label.clone())
+            })
             .unwrap_or_else(|| "Current space".into())
     }
 
-    fn active_space_path_summary(&self, _cx: &App) -> SharedString {
-        let Some(key) = self.active_space_key.clone() else {
+    #[allow(dead_code)]
+    fn active_space_path_summary(&self, cx: &App) -> SharedString {
+        let Some(workspace_id) = self.resolved_active_space_id(cx) else {
             return SharedString::default();
         };
 
-        Self::space_path_summary_for_key(&key)
+        self.space_entries
+            .iter()
+            .find(|space| space.workspace_id == workspace_id)
+            .map(|space| space.path_summary.clone())
+            .unwrap_or_default()
     }
 
+    #[allow(dead_code)]
     fn space_path_summary_for_key(key: &ProjectGroupKey) -> SharedString {
         key.path_list()
             .ordered_paths()
@@ -1075,20 +1221,20 @@ impl Sidebar {
         .detach_and_log_err(cx);
     }
 
-    /// Rebuilds the sidebar contents from current workspace and thread state.
+    /// Rebuilds the sidebar contents for the active space from current
+    /// workspace and thread state.
     ///
-    /// Iterates [`MultiWorkspace::project_group_keys`] to determine project
-    /// groups, then populates thread entries from the metadata store and
-    /// merges live thread info from active agent panels.
+    /// Iterates the active [`MultiWorkspace::project_group_keys`] entry,
+    /// then populates thread entries from the metadata store and merges
+    /// live thread info from active agent panels.
     ///
     /// Aim for a single forward pass over workspaces and threads plus an
     /// O(T log T) sort. Avoid adding extra scans over the data.
     ///
     /// Properties:
     ///
-    /// - Should always show every workspace in the multiworkspace
-    ///     - If you have no threads, and two workspaces for the worktree and the main workspace, make sure at least one is shown
-    /// - Should always show every thread, associated with each workspace in the multiworkspace
+    /// - Should always show the active space's project group
+    /// - Should always show every thread associated with the active space
     /// - After every build_contents, our "active" state should exactly match the current workspace's, current agent panel's current thread.
     fn rebuild_contents(&mut self, cx: &App) {
         let Some(multi_workspace) = self.multi_workspace.upgrade() else {
@@ -1174,9 +1320,9 @@ impl Sidebar {
         let mut current_session_ids: HashSet<acp::SessionId> = HashSet::new();
         let mut project_header_indices: Vec<usize> = Vec::new();
 
-        let has_open_projects = workspaces
-            .iter()
-            .any(|ws| !workspace_path_list(ws, cx).paths().is_empty());
+        let has_open_projects = active_workspace
+            .as_ref()
+            .is_some_and(|workspace| !workspace_path_list(workspace, cx).paths().is_empty());
 
         let resolve_agent_icon = |agent_id: &AgentId| -> (IconName, Option<SharedString>) {
             let agent = Agent::from(agent_id.clone());
@@ -1190,7 +1336,21 @@ impl Sidebar {
             (icon, icon_from_external_svg)
         };
 
-        let groups: Vec<_> = mw.project_groups(cx).collect();
+        let active_space_id = self.resolved_active_space_id(cx).or_else(|| {
+            active_workspace
+                .as_ref()
+                .and_then(|workspace| workspace.read(cx).database_id())
+        });
+        let groups: Vec<_> = mw
+            .project_groups(cx)
+            .filter(|(_, group_workspaces)| {
+                active_space_id.as_ref().is_none_or(|active_workspace_id| {
+                    group_workspaces.iter().any(|workspace| {
+                        workspace.read(cx).database_id() == Some(*active_workspace_id)
+                    })
+                })
+            })
+            .collect();
 
         let mut all_paths: Vec<PathBuf> = groups
             .iter()
@@ -1791,6 +1951,7 @@ impl Sidebar {
             mw.read(cx)
                 .workspace_for_paths(key.path_list(), key.host().as_ref(), cx)
         });
+        let drag_space_id = self.resolved_active_space_id(cx);
 
         let key_for_toggle = key.clone();
         let key_for_collapse = key.clone();
@@ -1810,6 +1971,8 @@ impl Sidebar {
         let hover_color = color
             .element_active
             .blend(color.element_background.opacity(0.2));
+        let drop_target_background = color.drop_target_background;
+        let drop_target_border = color.drop_target_border;
 
         let is_ellipsis_menu_open = self.project_header_menu_ix == Some(ix);
 
@@ -1976,6 +2139,32 @@ impl Sidebar {
                         }))
                 }
             })
+            .when_some(
+                drag_space_id.filter(|_| !is_sticky),
+                |this, drag_space_id| {
+                    this.cursor(gpui::CursorStyle::OpenHand)
+                        .on_drag(
+                            DraggedSidebarSpace {
+                                workspace_id: drag_space_id,
+                            },
+                            |dragged, _, _, cx| cx.new(|_| dragged.clone()),
+                        )
+                        .drag_over::<DraggedSidebarSpace>(move |header, dragged, _, _cx| {
+                            if dragged.workspace_id == drag_space_id {
+                                header
+                            } else {
+                                header
+                                    .bg(drop_target_background)
+                                    .border_color(drop_target_border)
+                            }
+                        })
+                        .on_drop(cx.listener(
+                            move |this, dragged: &DraggedSidebarSpace, _window, cx| {
+                                this.reorder_space(dragged.workspace_id, drag_space_id, cx);
+                            },
+                        ))
+                },
+            )
             .into_any_element()
     }
 
@@ -2153,8 +2342,8 @@ impl Sidebar {
             *has_running_threads,
             *waiting_thread_count,
             *is_active,
-            *has_threads,
             is_selected,
+            *has_threads,
             cx,
         );
 
@@ -3992,63 +4181,33 @@ impl Sidebar {
         Some(multi_workspace.project_group_key_for_workspace(multi_workspace.workspace(), cx))
     }
 
-    fn active_project_header_position(&self, cx: &App) -> Option<usize> {
-        let active_key = self.active_project_group_key(cx)?;
-        self.contents
-            .project_header_indices
-            .iter()
-            .position(|&entry_ix| {
-                matches!(
-                    &self.contents.entries[entry_ix],
-                    ListEntry::ProjectHeader { key, .. } if *key == active_key
-                )
-            })
-    }
-
     fn cycle_project_impl(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(multi_workspace) = self.multi_workspace.upgrade() else {
-            return;
-        };
-
-        let header_count = self.contents.project_header_indices.len();
-        if header_count == 0 {
+        let spaces = self.space_entries(cx);
+        if spaces.is_empty() {
             return;
         }
 
-        let current_pos = self.active_project_header_position(cx);
+        let current_pos = self
+            .resolved_active_space_id(cx)
+            .and_then(|active_space_id| {
+                spaces
+                    .iter()
+                    .position(|space| space.workspace_id == active_space_id)
+            });
 
         let next_pos = match current_pos {
             Some(pos) => {
                 if forward {
-                    (pos + 1) % header_count
+                    (pos + 1) % spaces.len()
                 } else {
-                    (pos + header_count - 1) % header_count
+                    (pos + spaces.len() - 1) % spaces.len()
                 }
             }
             None => 0,
         };
 
-        let header_entry_ix = self.contents.project_header_indices[next_pos];
-        let Some(ListEntry::ProjectHeader { key, .. }) = self.contents.entries.get(header_entry_ix)
-        else {
-            return;
-        };
-        let key = key.clone();
-
-        // Uncollapse the target group so that threads become visible.
-        self.collapsed_groups.remove(&key);
-
-        if let Some(workspace) = self.multi_workspace.upgrade().and_then(|mw| {
-            mw.read(cx)
-                .workspace_for_paths(key.path_list(), key.host().as_ref(), cx)
-        }) {
-            multi_workspace.update(cx, |multi_workspace, cx| {
-                multi_workspace.activate(workspace, window, cx);
-                multi_workspace.retain_active_workspace(cx);
-            });
-        } else {
-            self.open_workspace_for_group(&key, window, cx);
-        }
+        let workspace_id = spaces[next_pos].workspace_id;
+        self.activate_space(workspace_id, window, cx);
     }
 
     fn on_next_project(&mut self, _: &NextProject, window: &mut Window, cx: &mut Context<Self>) {
@@ -4484,24 +4643,78 @@ impl Sidebar {
             )
     }
 
-    fn manage_space(&mut self, key: &ProjectGroupKey, window: &mut Window, cx: &mut Context<Self>) {
-        self.activate_space(key, window, cx);
+    fn manage_space(
+        &mut self,
+        workspace_id: WorkspaceId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.activate_space(workspace_id, window, cx);
 
-        if let Some(multi_workspace) = self.multi_workspace.upgrade() {
-            multi_workspace.update(cx, |multi_workspace, cx| {
-                multi_workspace.prompt_to_add_folders_to_project_group(key, window, cx);
+        if let Some(multi_workspace) = self.multi_workspace.upgrade()
+            && let Some(workspace) = multi_workspace
+                .read(cx)
+                .workspace_for_database_id(workspace_id, cx)
+        {
+            workspace.update(cx, |workspace, cx| {
+                workspace.add_folder_to_project(&AddFolderToProject, window, cx);
             });
         }
     }
 
-    fn delete_space(&mut self, key: &ProjectGroupKey, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(multi_workspace) = self.multi_workspace.upgrade() {
-            multi_workspace.update(cx, |multi_workspace, cx| {
-                multi_workspace
-                    .remove_project_group(key, window, cx)
-                    .detach_and_log_err(cx);
+    fn delete_space(
+        &mut self,
+        workspace_id: WorkspaceId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(multi_workspace) = self.multi_workspace.upgrade() else {
+            return;
+        };
+
+        let neighbor_workspace_id = self
+            .space_entries(cx)
+            .iter()
+            .position(|space| space.workspace_id == workspace_id)
+            .and_then(|index| {
+                self.space_entries
+                    .get(index + 1)
+                    .or_else(|| {
+                        index
+                            .checked_sub(1)
+                            .and_then(|prev| self.space_entries.get(prev))
+                    })
+                    .map(|space| space.workspace_id)
             });
-        }
+
+        self.space_labels.remove(&workspace_id);
+        self.space_order
+            .retain(|space_id| *space_id != workspace_id);
+
+        multi_workspace.update(cx, |multi_workspace, cx| {
+            let Some(workspace) = multi_workspace.workspace_for_database_id(workspace_id, cx)
+            else {
+                return;
+            };
+
+            multi_workspace
+                .remove(
+                    [workspace],
+                    move |multi_workspace, window, cx| {
+                        if let Some(neighbor_workspace_id) = neighbor_workspace_id
+                            && let Some(neighbor_workspace) =
+                                multi_workspace.workspace_for_database_id(neighbor_workspace_id, cx)
+                        {
+                            return Task::ready(Ok(neighbor_workspace));
+                        }
+
+                        multi_workspace.create_empty_local_workspace(window, cx)
+                    },
+                    window,
+                    cx,
+                )
+                .detach_and_log_err(cx);
+        });
     }
 
     fn render_gen_search_row(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -4546,11 +4759,263 @@ impl Sidebar {
             )
     }
 
+    fn active_screen_kind(&self, cx: &App) -> WorkspaceScreenKind {
+        self.active_workspace(cx)
+            .and_then(|workspace| workspace.read(cx).active_item(cx))
+            .map(|item| item.screen_kind(cx))
+            .unwrap_or(WorkspaceScreenKind::Editor)
+    }
+
+    fn project_root_path(&self, cx: &App) -> Option<PathBuf> {
+        self.active_workspace(cx).and_then(|workspace| {
+            workspace
+                .read(cx)
+                .root_paths(cx)
+                .first()
+                .map(|path| path.as_ref().to_path_buf())
+        })
+    }
+
+    fn read_directory_entries(root: &Path) -> Vec<(PathBuf, bool)> {
+        let mut entries = std::fs::read_dir(root)
+            .ok()
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|entry| {
+                let file_type = entry.file_type().ok()?;
+                Some((entry.path(), file_type.is_dir()))
+            })
+            .collect::<Vec<_>>();
+        entries.sort_by(|(left_path, left_is_dir), (right_path, right_is_dir)| {
+            right_is_dir.cmp(left_is_dir).then_with(|| {
+                left_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .cmp(right_path.file_name().unwrap_or_default())
+            })
+        });
+        entries
+    }
+
+    fn icon_for_path(path: &Path) -> IconName {
+        match path.extension().and_then(|extension| extension.to_str()) {
+            Some("rs") => IconName::FileRust,
+            Some("md") => IconName::FileMarkdown,
+            Some("toml") => IconName::FileToml,
+            Some("json") => IconName::Json,
+            Some("js") | Some("ts") | Some("tsx") | Some("jsx") | Some("css") | Some("html") => {
+                IconName::FileCode
+            }
+            Some("txt") | Some("log") => IconName::FileTextOutlined,
+            _ => IconName::File,
+        }
+    }
+
+    fn editor_grid_entries(&self, cx: &App) -> Vec<SidebarGridEntry> {
+        let Some(root_path) = self.project_root_path(cx) else {
+            return vec![SidebarGridEntry {
+                id: "sidebar-grid-open-project".into(),
+                icon: IconName::OpenFolder,
+                label: "Open Project".into(),
+                subtitle: Some("Add a folder to this space".into()),
+                action: SidebarGridAction::OpenProject,
+            }];
+        };
+
+        let mut files = Self::read_directory_entries(&root_path)
+            .into_iter()
+            .filter(|(_, is_dir)| !*is_dir)
+            .take(8)
+            .map(|(path, _)| SidebarGridEntry {
+                id: SharedString::from(format!("sidebar-grid-file-{}", path.display())),
+                icon: Self::icon_for_path(&path),
+                label: path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path.display().to_string())
+                    .into(),
+                subtitle: path
+                    .parent()
+                    .and_then(|parent| parent.file_name())
+                    .map(|name| SharedString::from(name.to_string_lossy().to_string())),
+                action: SidebarGridAction::OpenFile(path),
+            })
+            .collect::<Vec<_>>();
+
+        if files.is_empty() {
+            files.push(SidebarGridEntry {
+                id: "sidebar-grid-open-project".into(),
+                icon: IconName::OpenFolder,
+                label: "Open Project".into(),
+                subtitle: Some("No files found in the root".into()),
+                action: SidebarGridAction::OpenProject,
+            });
+        }
+
+        files
+    }
+
+    fn browser_grid_entries(&self) -> Vec<SidebarGridEntry> {
+        const SITES: [(&str, &str, IconName); 8] = [
+            ("Google", "https://www.google.com", IconName::AiGoogle),
+            ("GitHub", "https://github.com", IconName::Github),
+            ("YouTube", "https://www.youtube.com", IconName::PlayFilled),
+            ("Wikipedia", "https://www.wikipedia.org", IconName::Book),
+            ("Reddit", "https://www.reddit.com", IconName::Chat),
+            ("Figma", "https://www.figma.com", IconName::Pencil),
+            ("ChatGPT", "https://chat.openai.com", IconName::AiOpenAi),
+            ("LinkedIn", "https://www.linkedin.com", IconName::Person),
+        ];
+
+        SITES
+            .into_iter()
+            .map(|(label, url, icon)| SidebarGridEntry {
+                id: SharedString::from(format!("sidebar-grid-site-{label}")),
+                icon,
+                label: label.into(),
+                subtitle: Some("Open in a new browser tab".into()),
+                action: SidebarGridAction::OpenWebsite(url),
+            })
+            .collect()
+    }
+
+    fn terminal_grid_entries(&self, cx: &App) -> Vec<SidebarGridEntry> {
+        let root_path = self
+            .project_root_path(cx)
+            .or_else(|| std::env::current_dir().ok());
+
+        let Some(root_path) = root_path else {
+            return Vec::new();
+        };
+
+        let mut folders = Self::read_directory_entries(&root_path)
+            .into_iter()
+            .filter(|(_, is_dir)| *is_dir)
+            .take(8)
+            .map(|(path, _)| SidebarGridEntry {
+                id: SharedString::from(format!("sidebar-grid-folder-{}", path.display())),
+                icon: IconName::Folder,
+                label: path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path.display().to_string())
+                    .into(),
+                subtitle: Some("Open terminal here".into()),
+                action: SidebarGridAction::OpenTerminalFolder(path),
+            })
+            .collect::<Vec<_>>();
+
+        if folders.is_empty() {
+            folders.push(SidebarGridEntry {
+                id: "sidebar-grid-open-project".into(),
+                icon: IconName::OpenFolder,
+                label: "Open Project".into(),
+                subtitle: Some("Add a folder to browse terminals".into()),
+                action: SidebarGridAction::OpenProject,
+            });
+        }
+
+        folders
+    }
+
+    fn grid_entries(&self, cx: &App) -> Vec<SidebarGridEntry> {
+        match self.active_screen_kind(cx) {
+            WorkspaceScreenKind::Editor | WorkspaceScreenKind::Other => {
+                self.editor_grid_entries(cx)
+            }
+            WorkspaceScreenKind::Browser => self.browser_grid_entries(),
+            WorkspaceScreenKind::Terminal => self.terminal_grid_entries(cx),
+            WorkspaceScreenKind::LiquidGlass => self.editor_grid_entries(cx),
+        }
+    }
+
+    fn open_browser_grid_url(
+        &mut self,
+        url: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        #[cfg(target_os = "windows")]
+        if let Some(workspace) = self.active_workspace(cx) {
+            workspace.update(cx, |workspace, cx| {
+                WebPreviewView::open_url_in_active_pane(workspace, url, window, cx);
+            });
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = (url, window, cx);
+        }
+    }
+
+    fn open_terminal_grid_folder(
+        &mut self,
+        path: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(workspace) = self.active_workspace(cx) {
+            workspace.update(cx, |workspace, cx| {
+                TerminalPanel::add_center_terminal(
+                    workspace,
+                    window,
+                    cx,
+                    move |project: &mut Project, cx| {
+                        project.create_terminal_shell(Some(path.clone()), cx)
+                    },
+                )
+                .detach_and_log_err(cx);
+            });
+        }
+    }
+
+    fn open_grid_entry(
+        &mut self,
+        action: SidebarGridAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match action {
+            SidebarGridAction::OpenProject => {
+                if let Some(workspace) = self.active_workspace(cx) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.add_folder_to_project(&AddFolderToProject, window, cx);
+                    });
+                }
+            }
+            SidebarGridAction::OpenFile(path) => {
+                if let Some(workspace) = self.active_workspace(cx) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace
+                            .open_abs_path(
+                                path,
+                                OpenOptions {
+                                    visible: Some(OpenVisible::All),
+                                    ..Default::default()
+                                },
+                                window,
+                                cx,
+                            )
+                            .detach_and_log_err(cx);
+                    });
+                }
+            }
+            SidebarGridAction::OpenWebsite(url) => self.open_browser_grid_url(url, window, cx),
+            SidebarGridAction::OpenTerminalFolder(path) => {
+                self.open_terminal_grid_folder(path, window, cx);
+            }
+        }
+    }
+
     fn render_space_grid(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let entries = self.grid_entries(cx);
         let chrome_width = f32::from(self.width).max(220.0);
         let horizontal_padding = 16.0;
-        let total_gap_width = horizontal_padding;
-        let available_width = chrome_width - total_gap_width;
+        let grid_gap = 8.0;
+        let total_gap_width =
+            horizontal_padding + grid_gap * SIDEBAR_SPACE_GRID_COLUMNS.saturating_sub(1) as f32;
+        let available_width = (chrome_width - total_gap_width).max(0.0);
         let item_width = (available_width / SIDEBAR_SPACE_GRID_COLUMNS as f32).max(48.0);
 
         let item_bg = cx.theme().colors().elevated_surface_background;
@@ -4558,36 +5023,73 @@ impl Sidebar {
         let hover_bg = cx.theme().colors().element_hover;
         let hover_border = cx.theme().colors().border;
 
-        v_flex().gap_1().children(
-            (1..=SIDEBAR_SPACE_GRID_ITEM_COUNT)
-                .collect::<Vec<_>>()
+        v_flex().w_full().gap_2().children(
+            entries
                 .chunks(SIDEBAR_SPACE_GRID_COLUMNS)
                 .enumerate()
                 .map(|(row_ix, row)| {
                     h_flex()
                         .id(format!("sidebar-space-grid-row-{row_ix}"))
                         .w_full()
-                        .justify_between()
-                        .children(row.iter().map(|number| {
+                        .gap_2()
+                        .children(row.iter().cloned().map(|entry| {
+                            let action = entry.action.clone();
+
                             div()
-                                .id(format!("sidebar-space-grid-item-{number}"))
-                                .flex()
+                                .id(entry.id)
                                 .w(px(item_width))
-                                .h(px(46.0))
+                                .h(px(52.0))
+                                .flex_shrink_0()
                                 .rounded_md()
                                 .border_1()
                                 .border_color(item_border)
                                 .bg(item_bg)
+                                .px_1p5()
+                                .gap_1()
                                 .items_center()
                                 .justify_center()
                                 .cursor_pointer()
+                                .tooltip(Tooltip::text(
+                                    entry
+                                        .subtitle
+                                        .clone()
+                                        .unwrap_or_else(|| entry.label.clone()),
+                                ))
                                 .hover(|style| style.bg(hover_bg).border_color(hover_border))
-                                .child(Label::new(number.to_string()).size(LabelSize::Small))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.open_grid_entry(action.clone(), window, cx);
+                                }))
+                                .child(
+                                    Icon::new(entry.icon)
+                                        .size(IconSize::Small)
+                                        .color(Color::Muted),
+                                )
+                                .child(
+                                    v_flex()
+                                        .min_w_0()
+                                        .items_center()
+                                        .child(
+                                            div().w_full().text_center().child(
+                                                Label::new(entry.label)
+                                                    .size(LabelSize::Small)
+                                                    .truncate(),
+                                            ),
+                                        )
+                                        .when_some(entry.subtitle, |this, subtitle| {
+                                            this.child(
+                                                Label::new(subtitle)
+                                                    .size(LabelSize::XSmall)
+                                                    .color(Color::Muted)
+                                                    .truncate(),
+                                            )
+                                        }),
+                                )
                         }))
                 }),
         )
     }
 
+    #[allow(dead_code)]
     fn render_current_space_heading(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let active_space_path = self.active_space_path_summary(cx);
 
@@ -4668,7 +5170,7 @@ impl Sidebar {
                     |this| {
                         this.child(self.render_gen_search_row(window, cx))
                             .child(self.render_space_grid(cx))
-                            .child(self.render_current_space_heading(cx))
+                        // .child(self.render_current_space_heading(cx))
                     },
                 ))
             })
@@ -4746,7 +5248,7 @@ impl Sidebar {
 
     fn render_space_carousel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let spaces = self.space_entries(cx);
-        let active_key = self.active_space_key.clone();
+        let active_space_id = self.active_space_id;
         let start = self
             .space_page_start
             .min(spaces.len().saturating_sub(MAX_VISIBLE_SPACE_DOTS));
@@ -4833,14 +5335,13 @@ impl Sidebar {
                             .enumerate()
                             .map(|(visible_ix, space)| {
                                 let absolute_ix = start + visible_ix;
-                                let is_active =
-                                    active_key.as_ref().is_some_and(|key| *key == space.key);
-                                let dot_size = if is_active { px(10.0) } else { px(7.0) };
+                                let is_active = active_space_id == Some(space.workspace_id);
+                                let dot_size = if is_active { px(7.0) } else { px(5.0) };
                                 let tooltip_label = space.label.clone();
-                                let click_key = space.key.clone();
-                                let open_key = space.key.clone();
-                                let manage_key = space.key.clone();
-                                let delete_key = space.key.clone();
+                                let click_workspace_id = space.workspace_id;
+                                let open_workspace_id = space.workspace_id;
+                                let manage_workspace_id = space.workspace_id;
+                                let delete_workspace_id = space.workspace_id;
                                 let sidebar_for_menu = sidebar.clone();
                                 let sidebar_for_click = sidebar.clone();
 
@@ -4851,20 +5352,21 @@ impl Sidebar {
                                     let sidebar_for_open = sidebar_for_menu.clone();
                                     let sidebar_for_manage = sidebar_for_menu.clone();
                                     let sidebar_for_delete = sidebar_for_menu.clone();
-                                    let open_key = open_key.clone();
-                                    let manage_key = manage_key.clone();
-                                    let delete_key = delete_key.clone();
+                                    let open_workspace_id = open_workspace_id;
+                                    let manage_workspace_id = manage_workspace_id;
+                                    let delete_workspace_id = delete_workspace_id;
 
                                     ContextMenu::build(window, cx, move |menu, _window, _cx| {
                                         let menu = menu
                                             .entry("Open Space", None, {
                                                 let sidebar = sidebar_for_open.clone();
-                                                let open_key = open_key.clone();
                                                 move |window, cx| {
                                                     sidebar
                                                         .update(cx, |this, cx| {
                                                             this.activate_space(
-                                                                &open_key, window, cx,
+                                                                open_workspace_id,
+                                                                window,
+                                                                cx,
                                                             );
                                                         })
                                                         .ok();
@@ -4872,12 +5374,11 @@ impl Sidebar {
                                             })
                                             .entry("Manage Space", None, {
                                                 let sidebar = sidebar_for_manage.clone();
-                                                let manage_key = manage_key.clone();
                                                 move |window, cx| {
                                                     sidebar
                                                         .update(cx, |this, cx| {
                                                             this.manage_space(
-                                                                &manage_key,
+                                                                manage_workspace_id,
                                                                 window,
                                                                 cx,
                                                             );
@@ -4888,11 +5389,14 @@ impl Sidebar {
 
                                         menu.separator().entry("Delete Space", None, {
                                             let sidebar = sidebar_for_delete.clone();
-                                            let delete_key = delete_key.clone();
                                             move |window, cx| {
                                                 sidebar
                                                     .update(cx, |this, cx| {
-                                                        this.delete_space(&delete_key, window, cx);
+                                                        this.delete_space(
+                                                            delete_workspace_id,
+                                                            window,
+                                                            cx,
+                                                        );
                                                     })
                                                     .ok();
                                             }
@@ -4909,7 +5413,7 @@ impl Sidebar {
                                             })
                                             .on_click({
                                                 let sidebar = sidebar_for_click.clone();
-                                                let click_key = click_key.clone();
+                                                let click_workspace_id = click_workspace_id;
                                                 move |_, window, cx| {
                                                     sidebar
                                                         .update(cx, |this, cx| {
@@ -4920,7 +5424,9 @@ impl Sidebar {
                                                             }
 
                                                             this.activate_space(
-                                                                &click_key, window, cx,
+                                                                click_workspace_id,
+                                                                window,
+                                                                cx,
                                                             );
                                                         })
                                                         .ok();
@@ -4983,11 +5489,13 @@ impl Sidebar {
         };
 
         h_flex()
-            .p_1()
-            .gap_1()
+            .gap(DynamicSpacing::Base08.rems(cx))
+            .px(DynamicSpacing::Base04.rems(cx))
+            .py(DynamicSpacing::Base04.rems(cx))
             .items_center()
             .border_t_1()
             .border_color(cx.theme().colors().border)
+            .bg(cx.theme().colors().status_bar_background)
             .child(left_slot)
             .child(
                 h_flex()
@@ -5234,14 +5742,19 @@ impl WorkspaceSidebar for Sidebar {
                 let mut labels = self
                     .space_labels
                     .iter()
-                    .map(|(key, label)| SerializedSpaceLabel {
-                        key: SerializedProjectGroupKey::from(key.clone()),
+                    .map(|(workspace_id, label)| SerializedSpaceLabel {
+                        workspace_id: Some(i64::from(*workspace_id)),
                         name: label.to_string(),
                     })
                     .collect::<Vec<_>>();
                 labels.sort_by(|a, b| a.name.cmp(&b.name));
                 labels
             },
+            space_order: self
+                .space_order
+                .iter()
+                .map(|workspace_id| i64::from(*workspace_id))
+                .collect(),
             next_space_number: self.next_space_number,
             active_view: match self.view {
                 SidebarView::ThreadList => SerializedSidebarView::ThreadList,
@@ -5274,12 +5787,17 @@ impl WorkspaceSidebar for Sidebar {
             self.space_labels = serialized
                 .space_labels
                 .into_iter()
-                .map(|space| {
-                    (
-                        ProjectGroupKey::from(space.key),
+                .filter_map(|space| {
+                    Some((
+                        WorkspaceId::from_i64(space.workspace_id?),
                         SharedString::from(space.name),
-                    )
+                    ))
                 })
+                .collect();
+            self.space_order = serialized
+                .space_order
+                .into_iter()
+                .map(WorkspaceId::from_i64)
                 .collect();
             self.next_space_number = serialized.next_space_number.max(1);
             if serialized.active_view == SerializedSidebarView::Archive {
@@ -5288,8 +5806,10 @@ impl WorkspaceSidebar for Sidebar {
                 });
             }
         }
-        self.sync_space_state(cx);
-        cx.notify();
+        cx.defer_in(window, |this, _window, cx| {
+            this.sync_space_state(cx);
+            cx.notify();
+        });
     }
 }
 

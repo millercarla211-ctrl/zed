@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### April 13, 2026 - Sidebar Space Tabs And Reordering
+**Replaced the dummy sidebar space UI with real active-space tabs and drag reordering**
+
+- Replaced the hardcoded 1-12 sidebar grid with the actual space entries, added visible spacing between cards, and wired drag-and-drop reordering to the shared `project_group_keys` order
+- Made `Create new space` create a dedicated generated workspace with a human-readable space name instead of reusing a random existing folder
+- Filtered the workspace sidebar list to the active space so clicking a space dot or creating a new space switches the visible sidebar content like a real tab
+- Made the visible project header draggable against the same space order and kept the hidden current-space heading disabled
+- Matched the sidebar footer styling more closely to the main status bar and reduced the footer space dot size
+
+### April 13, 2026 - Sidebar Space Creation Fix
+**Made sidebar spaces behave like real retained workspaces**
+
+- `Create new space` now activates the newly created workspace and retains it immediately, so the new space dot appears instead of silently discarding the async result
+- Hid the current-space heading block from the sidebar header so the space UI only shows the grid and carousel controls
+
 ### April 13, 2026 - Restored Real Screen Dock And Single-Pane Screen Host
 **Fixed the centered dock border and aligned screen switching with the existing code-pane model**
 
