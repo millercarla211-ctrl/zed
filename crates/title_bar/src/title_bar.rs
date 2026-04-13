@@ -323,7 +323,7 @@ impl Render for TitleBar {
                     .absolute()
                     .left_0()
                     .right_0()
-                    .top(px(6.))
+                    .top(px(3.))
                     .flex()
                     .justify_center()
                     .child(center_dock),
@@ -460,7 +460,7 @@ impl TitleBar {
         let dock_body = h_flex()
             .id("screen-dock-body")
             .flex_none()
-            .h(px(25.))
+            .h(px(33.))
             .items_center()
             .gap_0p5()
             .px_1p5()
@@ -544,8 +544,8 @@ impl TitleBar {
                 .gap_0p5()
                 .child(
                     IconButton::new("screen-dock-navigate-backward", IconName::ArrowLeft)
-                        .size(ButtonSize::Compact)
-                        .icon_size(IconSize::Small)
+                        .size(ButtonSize::Default)
+                        .icon_size(IconSize::Medium)
                         .disabled(!can_navigate_backward)
                         .tooltip(Tooltip::text("Go Back"))
                         .on_click({
@@ -562,8 +562,8 @@ impl TitleBar {
                 )
                 .child(
                     IconButton::new("screen-dock-navigate-forward", IconName::ArrowRight)
-                        .size(ButtonSize::Compact)
-                        .icon_size(IconSize::Small)
+                        .size(ButtonSize::Default)
+                        .icon_size(IconSize::Medium)
                         .disabled(!can_navigate_forward)
                         .tooltip(Tooltip::text("Go Forward"))
                         .on_click({
@@ -605,8 +605,8 @@ impl TitleBar {
             ),
             Self::screen_kind_icon(kind),
         )
-        .size(ButtonSize::Compact)
-        .icon_size(IconSize::Small)
+        .size(ButtonSize::Default)
+        .icon_size(IconSize::Medium)
         .toggle_state(selected)
         .tooltip(Tooltip::text(Self::screen_kind_label(kind)))
         .on_click(move |_, window, cx| {
@@ -640,7 +640,7 @@ impl TitleBar {
         );
 
         ButtonLike::new(button_id)
-            .size(ButtonSize::Compact)
+            .size(ButtonSize::Default)
             .selected_style(ButtonStyle::Tinted(TintColor::Accent))
             .toggle_state(entry.selected)
             .child(
@@ -649,7 +649,7 @@ impl TitleBar {
                     .gap_0p5()
                     .child(
                         Icon::new(entry.icon)
-                            .size(IconSize::Small)
+                            .size(IconSize::Medium)
                             .color(if entry.selected {
                                 Color::Accent
                             } else {
@@ -661,7 +661,7 @@ impl TitleBar {
                             entry.title.as_ref(),
                             MAX_DOCK_ITEM_LABEL_LENGTH,
                         ))
-                        .size(LabelSize::Small)
+                        .size(LabelSize::Default)
                         .color(if entry.selected {
                             Color::Default
                         } else {
@@ -686,8 +686,8 @@ impl TitleBar {
     fn render_screen_dock_add_menu(&self, cx: &mut Context<Self>) -> AnyElement {
         let active_screen_kind = self.active_screen_kind(cx);
         IconButton::new("screen-dock-add-trigger", IconName::Plus)
-            .size(ButtonSize::Compact)
-            .icon_size(IconSize::Small)
+            .size(ButtonSize::Default)
+            .icon_size(IconSize::Medium)
             .tooltip(Tooltip::text(Self::screen_kind_create_label(
                 active_screen_kind,
             )))
@@ -709,8 +709,8 @@ impl TitleBar {
         PopoverMenu::new("screen-dock-list-menu")
             .trigger_with_tooltip(
                 IconButton::new("screen-dock-list-trigger", IconName::ListTree)
-                    .size(ButtonSize::Compact)
-                    .icon_size(IconSize::Small)
+                    .size(ButtonSize::Default)
+                    .icon_size(IconSize::Medium)
                     .disabled(!has_entries),
                 Tooltip::text("Show Screens"),
             )

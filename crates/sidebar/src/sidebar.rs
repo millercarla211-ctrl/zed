@@ -4835,10 +4835,7 @@ impl Sidebar {
                     .map(|name| name.to_string_lossy().to_string())
                     .unwrap_or_else(|| path.display().to_string())
                     .into(),
-                subtitle: path
-                    .parent()
-                    .and_then(|parent| parent.file_name())
-                    .map(|name| SharedString::from(name.to_string_lossy().to_string())),
+                subtitle: None, // Removed path subtitle - all files are in same directory
                 action: SidebarGridAction::OpenFile(path),
             })
             .collect::<Vec<_>>();
@@ -4874,7 +4871,7 @@ impl Sidebar {
                 id: SharedString::from(format!("sidebar-grid-site-{label}")),
                 icon,
                 label: label.into(),
-                subtitle: Some("Open in a new browser tab".into()),
+                subtitle: None, // Removed subtitle for cleaner look with centered icons
                 action: SidebarGridAction::OpenWebsite(url),
             })
             .collect()
@@ -4901,7 +4898,7 @@ impl Sidebar {
                     .map(|name| name.to_string_lossy().to_string())
                     .unwrap_or_else(|| path.display().to_string())
                     .into(),
-                subtitle: Some("Open terminal here".into()),
+                subtitle: None, // Removed subtitle - just show folder name
                 action: SidebarGridAction::OpenTerminalFolder(path),
             })
             .collect::<Vec<_>>();
@@ -5044,6 +5041,8 @@ impl Sidebar {
                                 .border_1()
                                 .border_color(item_border)
                                 .bg(item_bg)
+                                .flex()
+                                .flex_col()
                                 .px_1p5()
                                 .gap_1()
                                 .items_center()
@@ -5061,29 +5060,22 @@ impl Sidebar {
                                 }))
                                 .child(
                                     Icon::new(entry.icon)
-                                        .size(IconSize::Small)
+                                        .size(IconSize::Medium)
                                         .color(Color::Muted),
                                 )
-                                .child(
-                                    v_flex()
-                                        .min_w_0()
-                                        .items_center()
-                                        .child(
-                                            div().w_full().text_center().child(
-                                                Label::new(entry.label)
-                                                    .size(LabelSize::Small)
-                                                    .truncate(),
-                                            ),
-                                        )
-                                        .when_some(entry.subtitle, |this, subtitle| {
-                                            this.child(
-                                                Label::new(subtitle)
-                                                    .size(LabelSize::XSmall)
-                                                    .color(Color::Muted)
-                                                    .truncate(),
-                                            )
-                                        }),
-                                )
+                                .child(div().w_full().text_center().child(
+                                    Label::new(entry.label).size(LabelSize::Small).truncate(),
+                                ))
+                                .when_some(entry.subtitle, |this, subtitle| {
+                                    this.child(
+                                        div().w_full().text_center().child(
+                                            Label::new(subtitle)
+                                                .size(LabelSize::XSmall)
+                                                .color(Color::Muted)
+                                                .truncate(),
+                                        ),
+                                    )
+                                })
                         }))
                 }),
         )
@@ -5277,10 +5269,9 @@ impl Sidebar {
             )
             .child(
                 h_flex()
-                    .gap_1p5()
+                    .gap_0p5() // Reduced gap for easier clicking
                     .items_center()
                     .px_2()
-                    .py_1()
                     .cursor(if is_dragging {
                         gpui::CursorStyle::ClosedHand
                     } else {
@@ -5433,25 +5424,32 @@ impl Sidebar {
                                                 }
                                             })
                                             .child(
+                                                // Wrapper with expanded horizontal padding for easier clicking
                                                 div()
-                                                    .size(dot_size)
-                                                    .rounded_full()
-                                                    .flex_shrink_0()
-                                                    .when(is_active, |this| {
-                                                        this.bg(cx.theme().colors().text)
-                                                    })
-                                                    .when(!is_active, |this| {
-                                                        this.border_1()
-                                                            .border_color(
-                                                                cx.theme().colors().border_variant,
-                                                            )
-                                                            .bg(gpui::transparent_black())
-                                                    })
-                                                    .when(is_menu_active, |this| {
-                                                        this.border_1().border_color(
-                                                            cx.theme().colors().text_accent,
-                                                        )
-                                                    }),
+                                                    .px(px(2.)) // Horizontal padding only for magnetic click
+                                                    .child(
+                                                        div()
+                                                            .size(dot_size)
+                                                            .rounded_full()
+                                                            .flex_shrink_0()
+                                                            .when(is_active, |this| {
+                                                                this.bg(cx.theme().colors().text)
+                                                            })
+                                                            .when(!is_active, |this| {
+                                                                this.border_1()
+                                                                    .border_color(
+                                                                        cx.theme()
+                                                                            .colors()
+                                                                            .border_variant,
+                                                                    )
+                                                                    .bg(gpui::transparent_black())
+                                                            })
+                                                            .when(is_menu_active, |this| {
+                                                                this.border_1().border_color(
+                                                                    cx.theme().colors().text_accent,
+                                                                )
+                                                            }),
+                                                    ),
                                             )
                                             .into_any_element()
                                     },
@@ -5490,9 +5488,7 @@ impl Sidebar {
 
         h_flex()
             .gap(DynamicSpacing::Base08.rems(cx))
-            .px(DynamicSpacing::Base04.rems(cx))
-            .py(DynamicSpacing::Base04.rems(cx))
-            .items_center()
+            .p(DynamicSpacing::Base04.rems(cx))
             .border_t_1()
             .border_color(cx.theme().colors().border)
             .bg(cx.theme().colors().status_bar_background)

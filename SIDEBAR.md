@@ -30,4 +30,12 @@ And currently our space dots are just dummy 12 dots. Please now make it so that 
 Currently in our space dots carousel the next and previous icon is acting weird. They should work like this: no need to switch the active sidebar; they should only move the active sidebar's active space dots' position horizontally and the user will click on them to activate the space they like.
 Please implement right-click and left-click interaction and menus in our space dots. When we are clicking on the space dot, please update our cursor to be a click-and-grab cursor so that it will create a better UI and UX. 
 
+And at the title bar top bar we have our screen dock. In the screen the screen dock is currently smaller and its items are smaller too. Please make the items as big as the other items and increase the height of the dock so that we can click on the items more correctly. Currently the screen dock is so small in height so we are mis-clicking. 
+
+Now please keep this in mind: you previously tried to do this again and again but failed miserably so only go ahead if you are more confident that you can do this time correctly.
+
+The thing is, in the current sidebar footer the dots have a gap between them so many times we are misclicking stuff. Your job is to create a system so that when we are inside the sidebar footer and near the string dot we click on something, it clicks even if it doesn't directly click on any specific dot. It even automatically clicks on the closest space dot possible.
+
+Now this doesn't seem like a hard job but in reality it is very hard to implement. Try to make a strategic plan fast and make it bulletproof so that it works correctly. 
+
 Shamo subha tu mera
