@@ -205,6 +205,7 @@ impl AgentConfiguration {
         let provider_id = provider.id().0;
         let provider_name = provider.name().0;
         let provider_id_string = SharedString::from(format!("provider-disclosure-{provider_id}"));
+        let model_count = provider.provided_models(cx).len();
 
         let configuration_view = self
             .configuration_views_by_provider
@@ -256,6 +257,7 @@ impl AgentConfiguration {
                     .child(
                         h_flex()
                             .id(provider_id_string.clone())
+                            .cursor_pointer()
                             .px_2()
                             .py_0p5()
                             .w_full()
@@ -300,9 +302,22 @@ impl AgentConfiguration {
                                     ),
                             )
                             .child(
-                                Disclosure::new(provider_id_string, is_expanded)
-                                    .opened_icon(IconName::ChevronUp)
-                                    .closed_icon(IconName::ChevronDown),
+                                h_flex()
+                                    .gap_1()
+                                    .items_center()
+                                    .child(
+                                        Chip::new(format!("A {model_count}"))
+                                            .height(px(18.))
+                                            .label_size(LabelSize::XSmall)
+                                            .tooltip(Tooltip::text(format!(
+                                                "{model_count} models supported by {provider_name}",
+                                            ))),
+                                    )
+                                    .child(
+                                        Disclosure::new(provider_id_string, is_expanded)
+                                            .opened_icon(IconName::ChevronDown)
+                                            .closed_icon(IconName::ChevronRight),
+                                    ),
                             )
                             .on_click(cx.listener({
                                 let provider_id = provider.id();

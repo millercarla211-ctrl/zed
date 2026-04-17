@@ -46,7 +46,7 @@ use update_version::UpdateVersion;
 use util::ResultExt;
 use workspace::{
     GoBack, GoForward, MultiWorkspace, NewCenterTerminal, NewFile, NewLiquidGlass, NewWebPreview,
-    ToggleWorktreeSecurity, Workspace,
+    OpenLog, ToggleFileFinder, ToggleProjectSymbols, ToggleWorktreeSecurity, Workspace,
     item::{ItemHandle, WorkspaceScreenKind},
     notifications::NotifyResultExt,
 };
@@ -278,73 +278,7 @@ impl Render for TitleBar {
             .gap_1()
             .items_center()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            // Add visible icons to balance left side width
-            .child(
-                IconButton::new("titlebar-icon-1", IconName::Bell)
-                    .icon_size(IconSize::Small)
-                    .style(ButtonStyle::Subtle)
-                    .tooltip(Tooltip::text("Notifications")),
-            )
-            .child(
-                IconButton::new("titlebar-icon-2", IconName::Settings)
-                    .icon_size(IconSize::Small)
-                    .style(ButtonStyle::Subtle)
-                    .tooltip(Tooltip::text("Settings")),
-            )
-            .child(
-                IconButton::new("titlebar-icon-3", IconName::Download)
-                    .icon_size(IconSize::Small)
-                    .style(ButtonStyle::Subtle)
-                    .tooltip(Tooltip::text("Downloads")),
-            )
-            .child(
-                IconButton::new("titlebar-icon-4", IconName::Blocks)
-                    .icon_size(IconSize::Small)
-                    .style(ButtonStyle::Subtle)
-                    .tooltip(Tooltip::text("Extensions")),
-            )
-            .child(
-                IconButton::new("titlebar-icon-5", IconName::Ellipsis)
-                    .icon_size(IconSize::Small)
-                    .style(ButtonStyle::Subtle)
-                    .tooltip(Tooltip::text("More")),
-            )
-            .child(
-                IconButton::new("titlebar-icon-6", IconName::Code)
-                    .icon_size(IconSize::Small)
-                    .style(ButtonStyle::Subtle)
-                    .tooltip(Tooltip::text("Code")),
-            )
-            .child(
-                IconButton::new("titlebar-icon-7", IconName::Terminal)
-                    .icon_size(IconSize::Small)
-                    .style(ButtonStyle::Subtle)
-                    .tooltip(Tooltip::text("Terminal")),
-            )
-            .child(
-                IconButton::new("titlebar-icon-8", IconName::Public)
-                    .icon_size(IconSize::Small)
-                    .style(ButtonStyle::Subtle)
-                    .tooltip(Tooltip::text("Browser")),
-            )
-            .child(
-                IconButton::new("titlebar-icon-9", IconName::File)
-                    .icon_size(IconSize::Small)
-                    .style(ButtonStyle::Subtle)
-                    .tooltip(Tooltip::text("Files")),
-            )
-            .child(
-                IconButton::new("titlebar-icon-10", IconName::MagnifyingGlass)
-                    .icon_size(IconSize::Small)
-                    .style(ButtonStyle::Subtle)
-                    .tooltip(Tooltip::text("Search")),
-            )
-            .child(
-                IconButton::new("titlebar-icon-11", IconName::Book)
-                    .icon_size(IconSize::Small)
-                    .style(ButtonStyle::Subtle)
-                    .tooltip(Tooltip::text("Documentation")),
-            )
+            .children(self.render_hidden_feature_buttons(cx))
             .children(self.render_call_controls(window, cx))
             .children(self.render_connection_status(status, cx))
             .child(self.update_version.clone())
@@ -943,6 +877,148 @@ impl TitleBar {
             WorkspaceScreenKind::LiquidGlass => IconName::Sparkle,
             WorkspaceScreenKind::Other => IconName::Circle,
         }
+    }
+
+    fn render_hidden_feature_buttons(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        vec![
+            self.render_title_action_button(
+                "titlebar-settings",
+                IconName::Settings,
+                "Open Settings",
+                zed_actions::OpenSettings.boxed_clone(),
+            ),
+            self.render_title_action_button(
+                "titlebar-keymap",
+                IconName::Keyboard,
+                "Open Keymap",
+                zed_actions::OpenKeymap.boxed_clone(),
+            ),
+            self.render_title_action_button(
+                "titlebar-extensions",
+                IconName::Blocks,
+                "Manage Extensions",
+                zed_actions::Extensions::default().boxed_clone(),
+            ),
+            self.render_title_action_button(
+                "titlebar-rules-library",
+                IconName::Book,
+                "Open Rules Library",
+                zed_actions::assistant::OpenRulesLibrary::default().boxed_clone(),
+            ),
+            self.render_title_action_button(
+                "titlebar-licenses",
+                IconName::Library,
+                "Open Dependency Licenses",
+                zed_actions::OpenLicenses.boxed_clone(),
+            ),
+            self.render_title_action_button(
+                "titlebar-activity-log",
+                IconName::Bell,
+                "Open Activity Log",
+                OpenLog.boxed_clone(),
+            ),
+            self.render_title_action_button(
+                "titlebar-docs",
+                IconName::Reader,
+                "Open Documentation",
+                zed_actions::OpenDocs.boxed_clone(),
+            ),
+            self.render_title_action_button(
+                "titlebar-file-finder",
+                IconName::File,
+                "Open File Finder",
+                ToggleFileFinder::default().boxed_clone(),
+            ),
+            self.render_title_action_button(
+                "titlebar-default-keymap",
+                IconName::BookCopy,
+                "Open Default Keymap",
+                zed_actions::OpenDefaultKeymap.boxed_clone(),
+            ),
+            self.render_title_action_button(
+                "titlebar-project-symbols",
+                IconName::Hash,
+                "Search Project Symbols",
+                ToggleProjectSymbols.boxed_clone(),
+            ),
+            self.render_title_action_button(
+                "titlebar-telemetry-log",
+                IconName::ToolDiagnostics,
+                "Open Telemetry Log",
+                zed_actions::OpenTelemetryLog.boxed_clone(),
+            ),
+            self.render_title_action_button(
+                "titlebar-profiler",
+                IconName::Flame,
+                "Open Performance Profiler",
+                zed_actions::OpenPerformanceProfiler.boxed_clone(),
+            ),
+            self.render_hidden_feature_menu(cx),
+        ]
+    }
+
+    fn render_title_action_button(
+        &self,
+        id: &'static str,
+        icon: IconName,
+        tooltip: &'static str,
+        action: Box<dyn Action>,
+    ) -> AnyElement {
+        IconButton::new(id, icon)
+            .icon_size(IconSize::Small)
+            .style(ButtonStyle::Subtle)
+            .tooltip(Tooltip::text(tooltip))
+            .on_click(move |_, window, cx| {
+                window.dispatch_action(action.boxed_clone(), cx);
+            })
+            .into_any_element()
+    }
+
+    fn render_hidden_feature_menu(&self, cx: &mut Context<Self>) -> AnyElement {
+        let is_remote = self.project.read(cx).is_via_remote_server();
+        PopoverMenu::new("titlebar-hidden-feature-menu")
+            .anchor(Corner::TopRight)
+            .trigger_with_tooltip(
+                IconButton::new("titlebar-hidden-feature-trigger", IconName::Ellipsis)
+                    .icon_size(IconSize::Small)
+                    .style(ButtonStyle::Subtle),
+                Tooltip::text("More Hidden Features"),
+            )
+            .menu(move |window, cx| {
+                Some(ContextMenu::build(window, cx, move |menu, _, _| {
+                    let menu = menu
+                        .action("Activity Log", OpenLog.boxed_clone())
+                        .action(
+                            "Rules Library",
+                            zed_actions::assistant::OpenRulesLibrary::default().boxed_clone(),
+                        )
+                        .action("ACP Registry", zed_actions::AcpRegistry.boxed_clone())
+                        .action(
+                            "Agent Panel",
+                            zed_actions::assistant::ToggleFocus.boxed_clone(),
+                        )
+                        .action("Documentation", zed_actions::OpenDocs.boxed_clone())
+                        .action("Onboarding", zed_actions::OpenOnboarding.boxed_clone())
+                        .action(
+                            "Dependency Licenses",
+                            zed_actions::OpenLicenses.boxed_clone(),
+                        )
+                        .action(
+                            "Account Settings",
+                            zed_actions::OpenAccountSettings.boxed_clone(),
+                        );
+
+                    if is_remote {
+                        menu.action(
+                            "Server Settings",
+                            zed_actions::OpenServerSettings.boxed_clone(),
+                        )
+                    } else {
+                        menu
+                    }
+                }))
+            })
+            .into_any_element()
     }
 
     #[allow(dead_code)]

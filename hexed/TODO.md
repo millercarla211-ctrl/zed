@@ -1,10 +1,10 @@
 # Project TODO
 
 > Auto-managed by AI. Updated after every completed or failed task.
-> Last updated: 2026-04-13
+> Last updated: 2026-04-14
 
 ## In Progress
-(none)
+- [ ] Fix the web preview render-mode toggle and focus recovery, restore correct browser bookmark URLs, add project panel hover metadata/truncation, and replace title bar placeholder icons with working hidden-feature actions
 
 ## Pending
 - [ ] Finish integrating Liquid Glass as a native GPUI-rendered workspace item with platform renderer support and native controls

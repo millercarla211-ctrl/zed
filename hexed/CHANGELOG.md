@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### April 14, 2026 - Web Preview, Project Panel, And Title Bar Improvements
+**Added a backup web preview mode, fixed URL routing, improved file tree metadata, and replaced placeholder title bar actions**
+
+- Added a persisted Web Preview render-mode toggle with a new simple `wry` child-webview fallback on Windows, plus activation-aware visibility and refocus handling for the native preview host
+- Fixed sidebar browser bookmarks to reuse or create the active Web Preview and immediately navigate it to the requested site URL instead of falling back to the default start page
+- Restored a visible active Web Preview tab indicator with a dedicated bottom-border treatment instead of relying on the shared selected-tab background
+- Added on-hover project panel metadata badges for files and folders, removed horizontal scrolling from the tree, and truncated long names while keeping file extensions readable
+- Replaced the placeholder title bar icon strip with real actions for hidden features including settings, keymap, extensions, agent panel, ACP registry, file finder, project search, project symbols, telemetry logs, profiler, and a more-actions menu
+
 ### April 13, 2026 - Sidebar Space Tabs And Reordering
 **Replaced the dummy sidebar space UI with real active-space tabs and drag reordering**
 

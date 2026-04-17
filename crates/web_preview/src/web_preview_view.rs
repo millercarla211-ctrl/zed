@@ -53,7 +53,9 @@ use windows::Win32::{
         GetDIBits, HBITMAP, HGDIOBJ, ReleaseDC, SRCCOPY, SelectObject,
     },
 };
-#[cfg(target_os = "macos")]
+#[cfg(target_os = "windows")]
+use wry::WebViewBuilderExtWindows;
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 use wry::{
     PageLoadEvent, Rect as WryRect, WebContext, WebView, WebViewBuilder,
     dpi::{LogicalPosition, LogicalSize, Position, Size},
@@ -62,6 +64,7 @@ use wry::{
 const DEFAULT_WEB_PREVIEW_URL: &str = "https://www.google.com/";
 const GOOGLE_SEARCH_URL: &str = "https://www.google.com/search";
 const BOOKMARKS_FILE_NAME: &str = "bookmarks.json";
+const RENDER_MODE_FILE_NAME: &str = "render_mode.txt";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
@@ -86,6 +89,43 @@ struct DetectedExtension {
 enum PreviewLoadState {
     Ready,
     Error(SharedString),
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum WebPreviewRenderMode {
+    #[default]
+    HolePunch,
+    Simple,
+}
+
+impl WebPreviewRenderMode {
+    fn from_persisted(value: &str) -> Self {
+        match value.trim() {
+            "simple" => Self::Simple,
+            _ => Self::HolePunch,
+        }
+    }
+
+    fn persisted_value(self) -> &'static str {
+        match self {
+            Self::HolePunch => "hole-punch",
+            Self::Simple => "simple",
+        }
+    }
+
+    fn toggle(self) -> Self {
+        match self {
+            Self::HolePunch => Self::Simple,
+            Self::Simple => Self::HolePunch,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::HolePunch => "Hole Punching",
+            Self::Simple => "Simple Wry",
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -123,8 +163,96 @@ struct BrowserRect {
 }
 
 #[cfg(target_os = "windows")]
-struct NativeWebPreview {
-    webview: WindowsVisualWebView,
+enum NativeWebPreview {
+    HolePunch {
+        webview: WindowsVisualWebView,
+    },
+    Simple {
+        _context: Box<WebContext>,
+        webview: WebView,
+    },
+}
+
+#[cfg(target_os = "windows")]
+impl NativeWebPreview {
+    fn render_mode(&self) -> WebPreviewRenderMode {
+        match self {
+            Self::HolePunch { .. } => WebPreviewRenderMode::HolePunch,
+            Self::Simple { .. } => WebPreviewRenderMode::Simple,
+        }
+    }
+
+    fn load_url(&self, url: &str) -> Result<()> {
+        match self {
+            Self::HolePunch { webview } => webview.load_url(url),
+            Self::Simple { webview, .. } => Ok(webview.load_url(url)?),
+        }
+    }
+
+    fn reload(&self) -> Result<()> {
+        match self {
+            Self::HolePunch { webview } => webview.reload(),
+            Self::Simple { webview, .. } => Ok(webview.reload()?),
+        }
+    }
+
+    fn evaluate_script(&self, script: &str) -> Result<()> {
+        match self {
+            Self::HolePunch { webview } => webview.evaluate_script(script),
+            Self::Simple { webview, .. } => Ok(webview.evaluate_script(script)?),
+        }
+    }
+
+    fn zoom(&self, zoom_factor: f64) -> Result<()> {
+        match self {
+            Self::HolePunch { webview } => webview.zoom(zoom_factor),
+            Self::Simple { webview, .. } => Ok(webview.zoom(zoom_factor)?),
+        }
+    }
+
+    fn clear_all_browsing_data(&self) -> Result<()> {
+        match self {
+            Self::HolePunch { webview } => webview.clear_all_browsing_data(),
+            Self::Simple { webview, .. } => Ok(webview.clear_all_browsing_data()?),
+        }
+    }
+
+    fn open_devtools(&self) {
+        match self {
+            Self::HolePunch { webview } => webview.open_devtools(),
+            Self::Simple { webview, .. } => webview.open_devtools(),
+        }
+    }
+
+    fn focus_parent(&self) -> Result<()> {
+        match self {
+            Self::HolePunch { webview } => webview.focus_parent(),
+            Self::Simple { webview, .. } => Ok(webview.focus_parent()?),
+        }
+    }
+
+    fn focus_page(&self) -> Result<()> {
+        match self {
+            Self::HolePunch { .. } => Ok(()),
+            Self::Simple { webview, .. } => Ok(webview.focus()?),
+        }
+    }
+
+    fn set_visible(&mut self, visible: bool) -> Result<()> {
+        match self {
+            Self::HolePunch { webview } => webview.set_visible(visible),
+            Self::Simple { webview, .. } => Ok(webview.set_visible(visible)?),
+        }
+    }
+
+    fn sync_bounds(&mut self, bounds: Bounds<Pixels>, scale_factor: f32) -> Result<()> {
+        match self {
+            Self::HolePunch { webview } => {
+                webview.set_bounds(client_rect_for_bounds(bounds, scale_factor), scale_factor)
+            }
+            Self::Simple { webview, .. } => Ok(webview.set_bounds(bounds_to_wry_rect(bounds))?),
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -173,8 +301,10 @@ struct NativePreviewMountRequest {
     initial_url: String,
     zoom_factor: f64,
     scale_factor: f32,
+    render_mode: WebPreviewRenderMode,
     host_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
     browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
+    native_mount_requested: Rc<Cell<bool>>,
     native_preview: Rc<RefCell<Option<NativeWebPreview>>>,
 }
 
@@ -183,9 +313,11 @@ pub struct WebPreviewView {
     workspace_context: PreviewWorkspaceContext,
     focus_handle: FocusHandle,
     url_editor: Entity<Editor>,
+    url_editor_focus_handle: FocusHandle,
     page_title: Option<SharedString>,
     active_url: SharedString,
     bookmarks: Vec<String>,
+    render_mode: WebPreviewRenderMode,
     detected_extensions: Vec<DetectedExtension>,
     extensions_scanned: bool,
     load_state: PreviewLoadState,
@@ -198,6 +330,7 @@ pub struct WebPreviewView {
     ipc_flush_scheduled: bool,
     event_pump_task: Option<Task<()>>,
     zoom_factor: f64,
+    is_active_item: bool,
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     native_preview: Rc<RefCell<Option<NativeWebPreview>>>,
     _subscriptions: Vec<Subscription>,
@@ -241,16 +374,36 @@ impl WebPreviewView {
         cx: &mut Context<Workspace>,
     ) {
         let view = Self::open_or_create(workspace, window, cx);
-        view.update(cx, |this, cx| {
-            this.url_editor.update(cx, |editor, cx| {
-                editor.set_text(url, window, cx);
-            });
-            let _ = this.load_url(url, window, cx);
-        });
         workspace.active_pane().update(cx, |pane, cx| {
-            pane.add_item(Box::new(view.clone()), true, true, None, window, cx);
+            let preview = Self::find_existing_preview_item(pane, &view, cx).unwrap_or_else(|| {
+                pane.add_item(Box::new(view.clone()), true, true, None, window, cx);
+                view.clone()
+            });
+            preview.update(cx, |this, cx| {
+                this.load_requested_url(url, window, cx);
+            });
+            if let Some(existing_view_idx) = pane.index_for_item(&preview) {
+                pane.activate_item(existing_view_idx, true, true, window, cx);
+            }
         });
         cx.notify();
+    }
+
+    pub fn ensure_startup_preview(
+        workspace: &mut Workspace,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) {
+        let has_preview = workspace.panes().iter().any(|pane| {
+            pane.read(cx)
+                .items_of_type::<WebPreviewView>()
+                .next()
+                .is_some()
+        });
+
+        if !has_preview {
+            Self::open_in_active_pane(workspace, window, cx);
+        }
     }
 
     fn open_new_in_active_pane(
@@ -307,6 +460,7 @@ impl WebPreviewView {
                 editor.set_text(current_url.as_str(), window, cx);
                 editor
             });
+            let url_editor_focus_handle = url_editor.focus_handle(cx);
 
             let browser_events = Arc::new(Mutex::new(Vec::new()));
             let mut this = Self {
@@ -314,9 +468,11 @@ impl WebPreviewView {
                 workspace_context: workspace_context.clone(),
                 focus_handle: cx.focus_handle(),
                 url_editor,
+                url_editor_focus_handle,
                 page_title: None,
                 active_url: current_url.into(),
                 bookmarks: load_bookmarks(&workspace_context.profile_dir).unwrap_or_default(),
+                render_mode: load_render_mode(&workspace_context.profile_dir),
                 detected_extensions: Vec::new(),
                 extensions_scanned: false,
                 load_state: PreviewLoadState::Ready,
@@ -329,6 +485,7 @@ impl WebPreviewView {
                 ipc_flush_scheduled: false,
                 event_pump_task: None,
                 zoom_factor: 1.0,
+                is_active_item: false,
                 #[cfg(any(target_os = "windows", target_os = "macos"))]
                 native_preview: Rc::new(RefCell::new(None)),
                 _subscriptions: vec![],
@@ -348,10 +505,18 @@ impl WebPreviewView {
         view: &Entity<WebPreviewView>,
         cx: &App,
     ) -> Option<usize> {
+        Self::find_existing_preview_item(pane, view, cx)
+            .and_then(|candidate| pane.index_for_item(&candidate))
+    }
+
+    fn find_existing_preview_item(
+        pane: &Pane,
+        view: &Entity<WebPreviewView>,
+        cx: &App,
+    ) -> Option<Entity<WebPreviewView>> {
         let preview_key = view.read(cx).workspace_context.preview_key.clone();
         pane.items_of_type::<WebPreviewView>()
             .find(|candidate| candidate.read(cx).workspace_context.preview_key == preview_key)
-            .and_then(|candidate| pane.index_for_item(&candidate))
     }
 
     fn workspace_context(workspace: &Workspace, cx: &App) -> PreviewWorkspaceContext {
@@ -405,6 +570,12 @@ impl WebPreviewView {
         self.workspace_context.profile_dir.join(BOOKMARKS_FILE_NAME)
     }
 
+    fn render_mode_path(&self) -> PathBuf {
+        self.workspace_context
+            .profile_dir
+            .join(RENDER_MODE_FILE_NAME)
+    }
+
     fn is_active_url_bookmarked(&self) -> bool {
         self.bookmarks
             .iter()
@@ -425,6 +596,18 @@ impl WebPreviewView {
         Ok(())
     }
 
+    fn persist_render_mode(&self) -> Result<()> {
+        fs::create_dir_all(&self.workspace_context.profile_dir).with_context(|| {
+            format!(
+                "Failed to prepare {}",
+                self.workspace_context.profile_dir.display()
+            )
+        })?;
+        fs::write(self.render_mode_path(), self.render_mode.persisted_value())
+            .with_context(|| "Failed to save the web preview rendering mode")?;
+        Ok(())
+    }
+
     fn confirm_navigation(&mut self, _: &Confirm, window: &mut Window, cx: &mut Context<Self>) {
         self.navigate_to_input(window, cx);
         let preview_focus = self.focus_handle(cx);
@@ -437,10 +620,10 @@ impl WebPreviewView {
     fn release_native_preview_focus(&self) {
         let borrow = self.native_preview.borrow();
         if let Some(preview) = borrow.as_ref() {
-            let _ = preview
-                .webview
-                .evaluate_script("window.__zedHostInput?.setTarget?.(null);");
-            let _ = preview.webview.focus_parent();
+            if let NativeWebPreview::HolePunch { .. } = preview {
+                let _ = preview.evaluate_script("window.__zedHostInput?.setTarget?.(null);");
+            }
+            let _ = preview.focus_parent();
         }
     }
 
@@ -455,8 +638,48 @@ impl WebPreviewView {
     #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     fn release_native_preview_focus(&self) {}
 
+    #[cfg(target_os = "windows")]
+    fn should_focus_native_preview_page(&self, window: &Window) -> bool {
+        self.render_mode == WebPreviewRenderMode::Simple
+            && self.is_active_item
+            && window.is_window_active()
+            && self.focus_handle.is_focused(window)
+            && !self.url_editor_focus_handle.is_focused(window)
+    }
+
+    #[cfg(target_os = "windows")]
+    fn focus_native_preview_page(&self) {
+        let borrow = self.native_preview.borrow();
+        if let Some(preview) = borrow.as_ref() {
+            let _ = preview.focus_page();
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn sync_native_preview_window_activation(&mut self, window: &mut Window) {
+        if self.native_preview.borrow().is_none() {
+            return;
+        }
+        {
+            let mut native_preview = self.native_preview.borrow_mut();
+            let Some(preview) = native_preview.as_mut() else {
+                return;
+            };
+
+            let should_be_visible = self.is_active_item && window.is_window_active();
+            let _ = preview.set_visible(should_be_visible);
+            if should_be_visible && let Some(bounds) = self.host_bounds.borrow().as_ref().copied() {
+                let _ = preview.sync_bounds(bounds, window.scale_factor());
+            }
+        }
+
+        if self.should_focus_native_preview_page(window) {
+            self.focus_native_preview_page();
+        }
+    }
+
     fn activate_url_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let focus_handle = self.url_editor.focus_handle(cx);
+        let focus_handle = self.url_editor_focus_handle.clone();
         #[cfg(target_os = "windows")]
         let should_select_all = RawParentWindow::from_window(window)
             .map(|parent_window| window_has_focused_webview(parent_window.as_hwnd()))
@@ -493,6 +716,54 @@ impl WebPreviewView {
         }
         cx.emit(ItemEvent::UpdateTab);
         cx.notify();
+    }
+
+    fn load_requested_url(&mut self, url: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let Ok(url) = normalized_url(url) else {
+            self.load_state = PreviewLoadState::Error("Enter a valid URL or search query.".into());
+            cx.notify();
+            return;
+        };
+
+        let url = url.to_string();
+        self.url_editor.update(cx, |editor, cx| {
+            editor.set_text(url.as_str(), window, cx);
+        });
+        self.active_url = url.clone().into();
+        self.page_title = None;
+        if let Err(error) = self.load_url(url.as_str(), window, cx) {
+            self.load_state = PreviewLoadState::Error(error.to_string().into());
+        } else {
+            self.load_state = PreviewLoadState::Ready;
+        }
+        cx.emit(ItemEvent::UpdateTab);
+        cx.notify();
+    }
+
+    fn toggle_render_mode(
+        &mut self,
+        _event: &gpui::ClickEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.render_mode = self.render_mode.toggle();
+        self.reset_native_preview();
+        if let Err(error) = self.persist_render_mode() {
+            self.load_state = PreviewLoadState::Error(error.to_string().into());
+        } else {
+            self.show_toast(
+                format!("Switched Web Preview to {} mode", self.render_mode.label()),
+                cx,
+            );
+        }
+        cx.notify();
+    }
+
+    fn reset_native_preview(&mut self) {
+        if let Some(mut preview) = self.native_preview.borrow_mut().take() {
+            let _ = preview.set_visible(false);
+        }
+        self.native_mount_requested.set(false);
     }
 
     fn reload_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -555,7 +826,7 @@ impl WebPreviewView {
             let opened = {
                 let borrow = self.native_preview.borrow();
                 if let Some(preview) = borrow.as_ref() {
-                    preview.webview.open_devtools();
+                    preview.open_devtools();
                     true
                 } else {
                     false
@@ -664,9 +935,8 @@ impl WebPreviewView {
                 BrowserEvent::UrlChanged(url) => {
                     let previous_url = self.active_url.to_string();
                     self.active_url = url.clone().into();
-                    let editor_focus = self.url_editor.focus_handle(cx);
                     let editor_text = self.current_url_text(cx);
-                    let should_sync_editor = !editor_focus.is_focused(window)
+                    let should_sync_editor = !self.url_editor_focus_handle.is_focused(window)
                         || editor_text.is_empty()
                         || editor_text == previous_url;
 
@@ -1217,12 +1487,22 @@ impl WebPreviewView {
     fn render_tab_bar_end_controls(
         &self,
         entity: Entity<Self>,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         h_flex()
             .items_center()
             .gap_1()
             .child(self.render_tab_bar_add_menu())
+            .child(
+                IconButton::new("web-preview-tab-bar-render-mode", IconName::SplitAlt)
+                    .icon_size(IconSize::Small)
+                    .toggle_state(self.render_mode == WebPreviewRenderMode::Simple)
+                    .tooltip(Tooltip::text(match self.render_mode {
+                        WebPreviewRenderMode::HolePunch => "Switch to Simple Wry mode",
+                        WebPreviewRenderMode::Simple => "Switch to Hole Punching mode",
+                    }))
+                    .on_click(cx.listener(Self::toggle_render_mode)),
+            )
             .child(self.render_tab_bar_extensions_menu(entity.clone()))
             .child(self.render_tab_bar_more_menu(entity))
             .into_any_element()
@@ -1230,6 +1510,14 @@ impl WebPreviewView {
 
     #[cfg(target_os = "windows")]
     fn ensure_native_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self
+            .native_preview
+            .borrow()
+            .as_ref()
+            .is_some_and(|preview| preview.render_mode() != self.render_mode)
+        {
+            self.reset_native_preview();
+        }
         if self.native_preview.borrow().is_some() || self.native_mount_requested.get() {
             return;
         }
@@ -1250,8 +1538,10 @@ impl WebPreviewView {
             initial_url: self.active_url.to_string(),
             zoom_factor: self.zoom_factor,
             scale_factor: window.scale_factor(),
+            render_mode: self.render_mode,
             host_bounds: self.host_bounds.clone(),
             browser_events: self.browser_events.clone(),
+            native_mount_requested: self.native_mount_requested.clone(),
             native_preview: self.native_preview.clone(),
         };
 
@@ -1299,7 +1589,7 @@ impl WebPreviewView {
         let preview = borrow
             .as_mut()
             .ok_or_else(|| anyhow!("The native web preview is not available"))?;
-        preview.webview.load_url(url)?;
+        preview.load_url(url)?;
         Ok(())
     }
 
@@ -1322,7 +1612,7 @@ impl WebPreviewView {
         let preview = borrow
             .as_ref()
             .ok_or_else(|| anyhow!("The native web preview is not available"))?;
-        preview.webview.reload()?;
+        preview.reload()?;
         Ok(())
     }
 
@@ -1339,7 +1629,7 @@ impl WebPreviewView {
         let preview = borrow
             .as_ref()
             .ok_or_else(|| anyhow!("The native web preview is not available"))?;
-        preview.webview.evaluate_script(script)?;
+        preview.evaluate_script(script)?;
         Ok(())
     }
 
@@ -1356,7 +1646,7 @@ impl WebPreviewView {
         let preview = borrow
             .as_ref()
             .ok_or_else(|| anyhow!("The native web preview is not available"))?;
-        preview.webview.zoom(self.zoom_factor)?;
+        preview.zoom(self.zoom_factor)?;
         Ok(())
     }
 
@@ -1373,7 +1663,7 @@ impl WebPreviewView {
         let preview = borrow
             .as_ref()
             .ok_or_else(|| anyhow!("The native web preview is not available"))?;
-        preview.webview.clear_all_browsing_data()?;
+        preview.clear_all_browsing_data()?;
         Ok(())
     }
 
@@ -1552,22 +1842,23 @@ impl WebPreviewView {
             #[cfg(target_os = "macos")]
             let last_applied_bounds = self.last_applied_bounds.clone();
             let native_preview = self.native_preview.clone();
+            #[cfg(target_os = "windows")]
+            let render_mode = self.render_mode;
 
             let canvas = canvas(
                 move |bounds, window, _cx| {
                     *host_bounds.borrow_mut() = Some(bounds);
                     #[cfg(target_os = "windows")]
-                    let preview_ready = native_preview.borrow().is_some();
+                    let preview_ready = native_preview.borrow().as_ref().is_some_and(|preview| {
+                        preview.render_mode() == WebPreviewRenderMode::HolePunch
+                    });
                     if let Some(preview) = native_preview.borrow_mut().as_mut() {
                         // Always keep webview visible
-                        let _ = preview.webview.set_visible(true);
+                        let _ = preview.set_visible(true);
 
                         #[cfg(target_os = "windows")]
                         {
-                            let _ = preview.webview.set_bounds(
-                                client_rect_for_bounds(bounds, window.scale_factor()),
-                                window.scale_factor(),
-                            );
+                            let _ = preview.sync_bounds(bounds, window.scale_factor());
                         }
 
                         #[cfg(target_os = "macos")]
@@ -1581,7 +1872,7 @@ impl WebPreviewView {
                         }
                     }
                     #[cfg(target_os = "windows")]
-                    if preview_ready {
+                    if preview_ready && render_mode == WebPreviewRenderMode::HolePunch {
                         let passthrough_hitbox =
                             window.insert_hitbox(bounds, gpui::HitboxBehavior::Normal);
                         window.insert_mouse_passthrough_region(&passthrough_hitbox);
@@ -1633,18 +1924,33 @@ impl Item for WebPreviewView {
     type Event = ItemEvent;
 
     fn tab_content(&self, params: TabContentParams, window: &Window, cx: &App) -> AnyElement {
-        let editor_focused = params.selected && self.url_editor.focus_handle(cx).is_focused(window);
+        let editor_focused = params.selected && self.url_editor_focus_handle.is_focused(window);
+        let border_color = if params.selected {
+            cx.theme().colors().element_active
+        } else {
+            gpui::transparent_black()
+        };
 
-        if editor_focused {
-            return div()
-                .w(px(240.))
-                .min_w_0()
-                .child(self.url_editor.clone())
-                .into_any_element();
-        }
-
-        Label::new(self.current_tab_title())
-            .color(params.text_color())
+        div()
+            .min_w_0()
+            .h_full()
+            .flex()
+            .items_center()
+            .border_b_2()
+            .border_color(border_color)
+            .child(if editor_focused {
+                div()
+                    .w(px(240.))
+                    .min_w_0()
+                    .child(self.url_editor.clone())
+                    .into_any_element()
+            } else {
+                Label::new(self.current_tab_title())
+                    .single_line()
+                    .truncate()
+                    .color(params.text_color())
+                    .into_any_element()
+            })
             .into_any_element()
     }
 
@@ -1700,15 +2006,14 @@ impl Item for WebPreviewView {
             return false;
         }
 
-        let editor_focus = self.url_editor.focus_handle(cx);
-        if !editor_focus.is_focused(window) {
+        if !self.url_editor_focus_handle.is_focused(window) {
             self.activate_url_editor(window, cx);
         }
         true
     }
 
     fn on_tab_confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        if !self.url_editor.focus_handle(cx).is_focused(window) {
+        if !self.url_editor_focus_handle.is_focused(window) {
             return false;
         }
 
@@ -1739,6 +2044,7 @@ impl Item for WebPreviewView {
                 editor.set_text(current_url.as_str(), window, cx);
                 editor
             });
+            let url_editor_focus_handle = url_editor.focus_handle(cx);
 
             let browser_events = Arc::new(Mutex::new(Vec::new()));
             let mut this = Self {
@@ -1746,9 +2052,11 @@ impl Item for WebPreviewView {
                 workspace_context,
                 focus_handle: cx.focus_handle(),
                 url_editor,
+                url_editor_focus_handle,
                 page_title: None,
                 active_url: current_url.clone().into(),
                 bookmarks,
+                render_mode: self.render_mode,
                 detected_extensions,
                 extensions_scanned: self.extensions_scanned,
                 load_state: PreviewLoadState::Ready,
@@ -1761,6 +2069,7 @@ impl Item for WebPreviewView {
                 ipc_flush_scheduled: false,
                 event_pump_task: None,
                 zoom_factor: 1.0,
+                is_active_item: false,
                 #[cfg(any(target_os = "windows", target_os = "macos"))]
                 native_preview: Rc::new(RefCell::new(None)),
                 _subscriptions: vec![],
@@ -1787,8 +2096,13 @@ impl Item for WebPreviewView {
                 this.release_native_preview_focus();
             },
         ));
+        #[cfg(target_os = "windows")]
+        self._subscriptions
+            .push(cx.observe_window_activation(window, |this, window, _cx| {
+                this.sync_native_preview_window_activation(window);
+            }));
 
-        let url_editor_focus = self.url_editor.focus_handle(cx);
+        let url_editor_focus = self.url_editor_focus_handle.clone();
         self._subscriptions
             .push(cx.on_focus(&url_editor_focus, window, |_, _, cx| {
                 cx.emit(ItemEvent::UpdateTab);
@@ -1807,22 +2121,25 @@ impl Item for WebPreviewView {
     }
 
     fn deactivated(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
+        self.is_active_item = false;
         // Hide webview when tab is deactivated
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         if let Some(preview) = self.native_preview.borrow_mut().as_mut() {
-            let _ = preview.webview.set_visible(false);
+            let _ = preview.set_visible(false);
         }
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         _window.set_background_appearance(gpui::WindowBackgroundAppearance::Opaque);
     }
 
     fn workspace_deactivated(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
+        self.is_active_item = false;
         let _ = (_window, _cx);
     }
 }
 
 impl Render for WebPreviewView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.is_active_item = true;
         let pending_events = {
             let mut events = self
                 .browser_events
@@ -1836,19 +2153,66 @@ impl Render for WebPreviewView {
 
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
-            window.set_background_appearance(gpui::WindowBackgroundAppearance::Transparent);
+            window.set_background_appearance(
+                if self.render_mode == WebPreviewRenderMode::HolePunch {
+                    gpui::WindowBackgroundAppearance::Transparent
+                } else {
+                    gpui::WindowBackgroundAppearance::Opaque
+                },
+            );
             self.ensure_native_preview(window, cx);
+            #[cfg(target_os = "windows")]
+            self.sync_native_preview_window_activation(window);
         }
 
         let body = self.render_webview_body(cx);
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        let preview_ready = self.native_preview.borrow().is_some();
         let error_message = match &self.load_state {
             PreviewLoadState::Ready => None,
             PreviewLoadState::Error(error) => Some(error.clone()),
         };
         #[cfg(target_os = "windows")]
-        let preview_surface_background = gpui::transparent_black().alpha(1.0 / 255.0);
+        let preview_surface_background = if !preview_ready {
+            cx.theme().colors().surface_background
+        } else if self.render_mode == WebPreviewRenderMode::HolePunch {
+            gpui::transparent_black().alpha(1.0 / 255.0)
+        } else {
+            cx.theme().colors().surface_background
+        };
         #[cfg(not(target_os = "windows"))]
         let preview_surface_background = gpui::transparent_black();
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        let loading_placeholder = (!preview_ready).then(|| {
+            div()
+                .absolute()
+                .inset_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(cx.theme().colors().surface_background.alpha(0.94))
+                .child(
+                    h_flex()
+                        .items_center()
+                        .gap_1p5()
+                        .px_3()
+                        .py_2()
+                        .rounded_xl()
+                        .border_1()
+                        .border_color(cx.theme().colors().border_variant)
+                        .bg(cx.theme().colors().surface_background)
+                        .child(
+                            ui::Icon::new(IconName::LoadCircle)
+                                .size(IconSize::Small)
+                                .color(Color::Muted),
+                        )
+                        .child(
+                            Label::new("Loading Web Preview")
+                                .size(LabelSize::Small)
+                                .color(Color::Muted),
+                        ),
+                )
+        });
 
         div()
             .id("web-preview")
@@ -1869,6 +2233,9 @@ impl Render for WebPreviewView {
                         // without visibly obscuring the page.
                         .bg(preview_surface_background)
                         .child(body)
+                        .when_some(loading_placeholder, |this, placeholder| {
+                            this.child(placeholder)
+                        })
                         .when_some(error_message, |this, error| {
                             this.child(
                                 div()
@@ -1901,9 +2268,11 @@ pub(crate) fn push_browser_event(event_queue: &Arc<Mutex<Vec<BrowserEvent>>>, ev
 #[cfg(target_os = "windows")]
 fn mount_native_preview(request: NativePreviewMountRequest) {
     eprintln!("[web-preview] deferred mount start");
-    let result = catch_unwind(AssertUnwindSafe(|| {
-        create_native_preview_for_request(&request)
+    let result = catch_unwind(AssertUnwindSafe(|| match request.render_mode {
+        WebPreviewRenderMode::HolePunch => create_native_preview_for_request(&request),
+        WebPreviewRenderMode::Simple => create_simple_native_preview_for_request(&request),
     }));
+    request.native_mount_requested.set(false);
 
     match result {
         Ok(Ok(())) => eprintln!("[web-preview] deferred mount ok"),
@@ -1957,8 +2326,74 @@ fn create_native_preview_for_request(request: &NativePreviewMountRequest) -> Res
     )
     .with_context(|| "Failed to build the embedded web preview")?;
 
-    *request.native_preview.borrow_mut() = Some(NativeWebPreview { webview });
+    *request.native_preview.borrow_mut() = Some(NativeWebPreview::HolePunch { webview });
     eprintln!("[web-preview] create request done");
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn create_simple_native_preview_for_request(request: &NativePreviewMountRequest) -> Result<()> {
+    if request.native_preview.borrow().is_some() {
+        return Ok(());
+    }
+
+    fs::create_dir_all(&request.profile_dir)
+        .with_context(|| "Failed to prepare the Web Preview profile directory")?;
+
+    let url = normalized_url(&request.initial_url)?;
+    let event_queue = request.browser_events.clone();
+    let mut web_context = Box::new(WebContext::new(Some(request.profile_dir.clone())));
+
+    let initial_bounds = request
+        .host_bounds
+        .borrow()
+        .as_ref()
+        .copied()
+        .map(bounds_to_wry_rect)
+        .unwrap_or_else(|| WryRect {
+            position: Position::Logical(LogicalPosition::new(0.0, 0.0)),
+            size: Size::Logical(LogicalSize::new(32.0, 32.0)),
+        });
+
+    let webview = WebViewBuilder::new_with_web_context(web_context.as_mut())
+        .with_bounds(initial_bounds)
+        .with_url(url.as_str())
+        .with_focused(false)
+        .with_clipboard(true)
+        .with_hotkeys_zoom(false)
+        .with_back_forward_navigation_gestures(true)
+        .with_default_context_menus(false)
+        .with_devtools(true)
+        .with_visible(true)
+        .with_initialization_script(WEB_PREVIEW_BRIDGE_SCRIPT)
+        .with_document_title_changed_handler({
+            let event_queue = event_queue.clone();
+            move |title| push_browser_event(&event_queue, BrowserEvent::TitleChanged(title))
+        })
+        .with_on_page_load_handler({
+            let event_queue = event_queue.clone();
+            move |event, url| {
+                if matches!(event, PageLoadEvent::Finished) {
+                    push_browser_event(&event_queue, BrowserEvent::UrlChanged(url));
+                }
+            }
+        })
+        .with_ipc_handler(move |request: wry::http::Request<String>| {
+            push_browser_event(
+                &event_queue,
+                BrowserEvent::IpcMessage(request.body().to_string()),
+            );
+        })
+        .build_as_child(&request.parent_window)
+        .with_context(|| "Failed to build the simple embedded web preview")?;
+
+    webview.zoom(request.zoom_factor)?;
+
+    *request.native_preview.borrow_mut() = Some(NativeWebPreview::Simple {
+        _context: web_context,
+        webview,
+    });
 
     Ok(())
 }
@@ -2173,6 +2608,12 @@ fn load_bookmarks(profile_dir: &Path) -> Result<Vec<String>> {
     serde_json::from_slice(&data).with_context(|| format!("Failed to parse {}", path.display()))
 }
 
+fn load_render_mode(profile_dir: &Path) -> WebPreviewRenderMode {
+    fs::read_to_string(profile_dir.join(RENDER_MODE_FILE_NAME))
+        .map(|value| WebPreviewRenderMode::from_persisted(&value))
+        .unwrap_or_default()
+}
+
 fn scan_local_extensions() -> Result<Vec<DetectedExtension>> {
     let mut extensions = Vec::new();
 
@@ -2364,7 +2805,7 @@ fn set_webview_bounds(webview: &WebView, bounds: Bounds<Pixels>) -> Result<()> {
     Ok(())
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn bounds_to_wry_rect(bounds: Bounds<Pixels>) -> WryRect {
     WryRect {
         position: Position::Logical(LogicalPosition::new(
