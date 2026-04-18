@@ -4906,6 +4906,7 @@ impl AgentPanel {
                 auto_submit: false,
             }),
             true,
+            "agent_panel",
             window,
             cx,
         );
