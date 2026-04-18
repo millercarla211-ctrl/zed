@@ -972,7 +972,8 @@ impl Sidebar {
 
     fn active_entry_workspace(&self) -> Option<&Entity<Workspace>> {
         self.active_entry.as_ref().map(|entry| entry.workspace())
-=======
+    }
+
     fn is_group_collapsed(&self, key: &ProjectGroupKey, cx: &App) -> bool {
         self.multi_workspace
             .upgrade()
@@ -993,7 +994,6 @@ impl Sidebar {
                 mw.serialize(cx);
             });
         }
->>>>>>> main
     }
 
     fn is_active_workspace(&self, workspace: &Entity<Workspace>, cx: &App) -> bool {
@@ -6197,7 +6197,6 @@ impl WorkspaceSidebar for Sidebar {
     fn serialized_state(&self, _cx: &App) -> Option<String> {
         let serialized = SerializedSidebar {
             width: Some(f32::from(self.width)),
-<<<<<<< HEAD
             collapsed_groups: self
                 .collapsed_groups
                 .iter()
