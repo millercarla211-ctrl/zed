@@ -31,7 +31,7 @@ use menu::{
 };
 use project::{
     AgentId, AgentRegistryStore, Event as ProjectEvent, Project, ProjectGroupKey,
-    WorktreeId, linked_worktree_short_name,
+    WorktreeId,
 };
 use recent_projects::sidebar_recent_projects::SidebarRecentProjects;
 use remote::{RemoteConnectionOptions, same_remote_connection_identity};
@@ -58,8 +58,8 @@ use util::path_list::PathList;
 use workspace::{
     AddFolderToProject, CloseWindow, FocusWorkspaceSidebar, MultiWorkspace, MultiWorkspaceEvent,
     NextProject, NextThread, Open, OpenMode, OpenOptions, OpenVisible, PreviousProject,
-    PreviousThread, ProjectGroupKey, SaveIntent, SerializedProjectGroupKey, ShowFewerThreads,
-    ShowMoreThreads, Sidebar as WorkspaceSidebar, SidebarSide, Toast, ToggleWorkspaceSidebar,
+    PreviousThread, SaveIntent,
+    Sidebar as WorkspaceSidebar, SidebarSide, Toast, ToggleWorkspaceSidebar,
     Workspace, WorkspaceId, WorkspaceScreenKind,
     notifications::NotificationId, sidebar_side_context_menu,
 };

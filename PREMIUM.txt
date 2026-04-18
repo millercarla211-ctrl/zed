@@ -2,3 +2,5 @@ whisperflow
 grammerly
 notebooklm
 perplexity
+claude
+genspark
