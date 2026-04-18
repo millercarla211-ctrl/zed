@@ -913,6 +913,7 @@ impl WindowsWindowInner {
         let activated = wparam.loword() > 0;
         if !activated {
             self.clear_webview_passthrough_capture_state(handle, true);
+            update_webview_passthrough_focus(handle, false);
         }
         let this = self.clone();
         self.executor

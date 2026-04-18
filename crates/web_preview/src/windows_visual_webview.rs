@@ -177,6 +177,49 @@ impl WindowsVisualWebView {
         bounds: RECT,
         browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
     ) -> Result<Self> {
+        Self::new_internal(
+            main_window,
+            profile_dir,
+            initial_url,
+            zoom_factor,
+            scale_factor,
+            bounds,
+            browser_events,
+            true,
+        )
+    }
+
+    pub(crate) fn new_hidden(
+        main_window: HWND,
+        profile_dir: PathBuf,
+        initial_url: &str,
+        zoom_factor: f64,
+        scale_factor: f32,
+        bounds: RECT,
+        browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
+    ) -> Result<Self> {
+        Self::new_internal(
+            main_window,
+            profile_dir,
+            initial_url,
+            zoom_factor,
+            scale_factor,
+            bounds,
+            browser_events,
+            false,
+        )
+    }
+
+    fn new_internal(
+        main_window: HWND,
+        profile_dir: PathBuf,
+        initial_url: &str,
+        zoom_factor: f64,
+        scale_factor: f32,
+        bounds: RECT,
+        browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
+        initially_visible: bool,
+    ) -> Result<Self> {
         let environment = create_environment(&profile_dir)?;
         let composition_controller = create_composition_controller(main_window, &environment)?;
         let controller: ICoreWebView2Controller = composition_controller.cast()?;
@@ -187,14 +230,13 @@ impl WindowsVisualWebView {
 
         unsafe {
             composition_controller.SetRootVisualTarget(&visual_unknown)?;
-            controller.SetIsVisible(true)?;
+            controller.SetIsVisible(initially_visible)?;
         }
 
         configure_webview_settings(&webview)?;
         attach_event_handlers(&webview, browser_events)?;
-        add_init_script(&webview, IPC_SHIM_SCRIPT)?;
-        add_init_script(&webview, WEB_PREVIEW_BRIDGE_SCRIPT)?;
-        add_init_script(&webview, HOST_INPUT_BRIDGE_SCRIPT)?;
+        let init_script = combined_init_script();
+        add_init_script(&webview, init_script.as_str())?;
 
         unsafe {
             controller.SetZoomFactor(zoom_factor)?;
@@ -210,7 +252,7 @@ impl WindowsVisualWebView {
             got_focus_token: 0,
             lost_focus_token: 0,
             last_bounds: None,
-            visible: true,
+            visible: initially_visible,
         };
         this.register_cursor_handler()?;
         this.register_focus_handlers()?;
@@ -365,7 +407,10 @@ impl WindowsVisualWebView {
             update_webview_passthrough_focus(main_window, true);
             Ok(())
         }));
-        let lost_focus = FocusChangedEventHandler::create(Box::new(move |_, _| Ok(())));
+        let lost_focus = FocusChangedEventHandler::create(Box::new(move |_, _| {
+            update_webview_passthrough_focus(main_window, false);
+            Ok(())
+        }));
         unsafe {
             self.controller
                 .add_GotFocus(&got_focus, &mut self.got_focus_token)?;
@@ -576,4 +621,13 @@ fn add_init_script(webview: &ICoreWebView2, script: &str) -> Result<()> {
 
     wait_with_pump(rx).map_err(|_| anyhow!("The WebView2 initialization script was cancelled"))?;
     Ok(())
+}
+
+fn combined_init_script() -> String {
+    format!(
+        "{ipc}\n{bridge}\n{host}",
+        ipc = IPC_SHIM_SCRIPT,
+        bridge = WEB_PREVIEW_BRIDGE_SCRIPT,
+        host = HOST_INPUT_BRIDGE_SCRIPT,
+    )
 }

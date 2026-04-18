@@ -5,8 +5,8 @@ use base64::Engine as _;
 use editor::Editor;
 use gpui::{
     Action, App, AppContext as _, Bounds, ClipboardItem, Context, Corner, Entity, EventEmitter,
-    FocusHandle, Focusable, Image as GpuiImage, Pixels, Render, SharedString, Subscription, Task,
-    WeakEntity, Window, canvas,
+    FocusHandle, Focusable, Global, Image as GpuiImage, Pixels, Render, SharedString, Subscription,
+    Task, WeakEntity, Window, canvas,
 };
 #[cfg(target_os = "windows")]
 use gpui::{AsyncApp, EntityId, ImageFormat as GpuiImageFormat};
@@ -15,12 +15,13 @@ use paths::data_dir;
 use serde_json::Value;
 use std::{
     cell::{Cell, RefCell},
+    collections::HashSet,
     fs,
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, Mutex},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 #[cfg(target_os = "windows")]
 use std::{io::Cursor, num::NonZeroIsize};
@@ -308,6 +309,15 @@ struct NativePreviewMountRequest {
     native_preview: Rc<RefCell<Option<NativeWebPreview>>>,
 }
 
+#[cfg(target_os = "windows")]
+#[derive(Default)]
+struct WebPreviewWarmupState {
+    warmed_preview_keys: HashSet<SharedString>,
+}
+
+#[cfg(target_os = "windows")]
+impl Global for WebPreviewWarmupState {}
+
 pub struct WebPreviewView {
     workspace: WeakEntity<Workspace>,
     workspace_context: PreviewWorkspaceContext,
@@ -394,16 +404,65 @@ impl WebPreviewView {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
-        let has_preview = workspace.panes().iter().any(|pane| {
-            pane.read(cx)
-                .items_of_type::<WebPreviewView>()
-                .next()
-                .is_some()
+        #[cfg(target_os = "windows")]
+        Self::schedule_background_hole_punch_warmup(workspace, window, cx);
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = (workspace, window, cx);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn schedule_background_hole_punch_warmup(
+        workspace: &mut Workspace,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) {
+        let workspace_context = Self::workspace_context(workspace, cx);
+        let preview_key = workspace_context.preview_key.clone();
+        let already_warmed = cx.update_default_global(|warmup: &mut WebPreviewWarmupState, _cx| {
+            !warmup.warmed_preview_keys.insert(preview_key.clone())
         });
 
-        if !has_preview {
-            Self::open_in_active_pane(workspace, window, cx);
+        if already_warmed {
+            return;
         }
+
+        let profile_dir = workspace_context.profile_dir.clone();
+
+        cx.spawn_in(window, async move |_workspace, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(700))
+                .await;
+
+            let hidden_preview = cx.update(|window, _cx| {
+                let parent_window = RawParentWindow::from_window(window)?;
+                let bounds = RECT {
+                    left: 0,
+                    top: 0,
+                    right: 32,
+                    bottom: 32,
+                };
+                let browser_events = Arc::new(Mutex::new(Vec::new()));
+                WindowsVisualWebView::new_hidden(
+                    parent_window.as_hwnd(),
+                    profile_dir.clone(),
+                    DEFAULT_WEB_PREVIEW_URL,
+                    1.0,
+                    window.scale_factor(),
+                    bounds,
+                    browser_events,
+                )
+            })??;
+
+            cx.background_executor()
+                .timer(Duration::from_secs(20))
+                .await;
+            drop(hidden_preview);
+            anyhow::Ok(())
+        })
+        .detach_and_log_err(cx);
     }
 
     fn open_new_in_active_pane(
@@ -1853,9 +1912,6 @@ impl WebPreviewView {
                         preview.render_mode() == WebPreviewRenderMode::HolePunch
                     });
                     if let Some(preview) = native_preview.borrow_mut().as_mut() {
-                        // Always keep webview visible
-                        let _ = preview.set_visible(true);
-
                         #[cfg(target_os = "windows")]
                         {
                             let _ = preview.sync_bounds(bounds, window.scale_factor());
@@ -1872,7 +1928,10 @@ impl WebPreviewView {
                         }
                     }
                     #[cfg(target_os = "windows")]
-                    if preview_ready && render_mode == WebPreviewRenderMode::HolePunch {
+                    if preview_ready
+                        && render_mode == WebPreviewRenderMode::HolePunch
+                        && window.is_window_active()
+                    {
                         let passthrough_hitbox =
                             window.insert_hitbox(bounds, gpui::HitboxBehavior::Normal);
                         window.insert_mouse_passthrough_region(&passthrough_hitbox);
@@ -2609,9 +2668,18 @@ fn load_bookmarks(profile_dir: &Path) -> Result<Vec<String>> {
 }
 
 fn load_render_mode(profile_dir: &Path) -> WebPreviewRenderMode {
-    fs::read_to_string(profile_dir.join(RENDER_MODE_FILE_NAME))
-        .map(|value| WebPreviewRenderMode::from_persisted(&value))
-        .unwrap_or_default()
+    #[cfg(target_os = "windows")]
+    {
+        let _ = profile_dir;
+        WebPreviewRenderMode::HolePunch
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        fs::read_to_string(profile_dir.join(RENDER_MODE_FILE_NAME))
+            .map(|value| WebPreviewRenderMode::from_persisted(&value))
+            .unwrap_or_default()
+    }
 }
 
 fn scan_local_extensions() -> Result<Vec<DetectedExtension>> {
