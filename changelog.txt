@@ -324,3 +324,98 @@ All conflicts resolved by keeping BOTH local (forge) and remote (main) changes w
 - Preserved functionality from both branches
 
 The goal was to ensure ALL features from both branches work together.
+
+
+================================================================================
+[2026-04-18 PM] - Compilation Error Fixes After Merge
+================================================================================
+
+FIXED ERRORS IN: crates/workspace/src/multi_workspace.rs
+-----------------------------------------------------------
+1. Missing imports:
+   - Added: use std::collections::HashSet;
+   - Added: use std::path::{Path, PathBuf};
+   - Removed duplicate PathBuf import
+
+2. Field access errors (methods were changed from fields to methods in remote):
+   - Line 1428: self.project_group_keys -> self.project_group_keys()
+   - Line 1459: self.project_group_keys -> self.project_group_keys()
+   - Line 1460: self.workspaces -> self.workspaces().count()
+   
+3. Method signature errors (remote added new parameters):
+   - Line 1469: find_or_create_local_workspace now requires 7 parameters
+     Added: None (project_group), &[] (excluding), None (init), OpenMode::default()
+   - Line 1511: Same fix for second call
+
+FIXED ERRORS IN: crates/workspace/src/pane_group.rs
+-----------------------------------------------------------
+MISSING METHOD: width_fraction_for_pane (LOCAL FEATURE)
+This method was in the backup branch but lost during merge.
+It's needed for screen width customization feature.
+
+Added to PaneGroup (line ~101):
+```rust
+pub fn width_fraction_for_pane(&self, pane: &Entity<Pane>) -> Option<f32> {
+    self.root.width_fraction_for_pane(pane)
+}
+```
+
+Added to Member enum (line ~320):
+```rust
+fn width_fraction_for_pane(&self, pane: &Entity<Pane>) -> Option<f32> {
+    match self {
+        Member::Pane(found) => (found == pane).then_some(1.0),
+        Member::Axis(axis) => axis.width_fraction_for_pane(pane),
+    }
+}
+```
+
+Added to PaneAxis (line ~930):
+```rust
+fn width_fraction_for_pane(&self, pane: &Entity<Pane>) -> Option<f32> {
+    let flexes = self.flexes.lock();
+    let total_flex = flexes.iter().copied().sum::<f32>();
+
+    for (index, member) in self.members.iter().enumerate() {
+        let child_fraction = if total_flex > 0.0 {
+            flexes[index] / total_flex
+        } else {
+            1.0 / self.members.len() as f32
+        };
+
+        match member {
+            Member::Pane(found) => {
+                if found == pane {
+                    return Some(match self.axis {
+                        Axis::Horizontal => child_fraction,
+                        Axis::Vertical => 1.0,
+                    });
+                }
+            }
+            Member::Axis(axis) => {
+                if let Some(descendant_fraction) = axis.width_fraction_for_pane(pane) {
+                    return Some(match self.axis {
+                        Axis::Horizontal => child_fraction * descendant_fraction,
+                        Axis::Vertical => descendant_fraction,
+                    });
+                }
+            }
+        }
+    }
+
+    None
+}
+```
+
+RESULT:
+-------
+✅ All compilation errors fixed
+✅ workspace crate compiled successfully
+✅ Build progressing through remaining crates
+✅ Both local and remote features preserved
+
+BRANCHES:
+---------
+- backup: Created at commit 238a8a19db (before merge) for safety
+- forge: Current branch with all fixes applied
+- main: Tracks upstream/main (Zed official)

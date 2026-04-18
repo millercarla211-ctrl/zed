@@ -1,19 +1,26 @@
 IN PROGRESS:
-- None
+- Build running with `just run` - compilation in progress (996/1637 crates)
 
 PENDING:
+- Wait for build to complete
 - Manual validation with `just run` for the merge
 - Test all custom features (space carousel, web preview, liquid glass)
 - Test upstream features (terminal actions, history toggle, bottom dock layouts)
+- Push fixes to remote
 
 COMPLETED:
+- ✅ Created backup branch at commit before merge (238a8a19db)
 - ✅ Renamed old main branch to deprecated-4
 - ✅ Created new main branch tracking upstream/main
 - ✅ Merged main (upstream) into forge with all conflicts resolved
 - ✅ Kept BOTH local and remote changes in all conflicts
 - ✅ Documented all merge resolutions in changelog.txt
 - ✅ Created git-workflow.md steering file documenting the branch workflow
-- ✅ Committed merge: "Merge main (upstream) into forge: resolved all conflicts keeping both changes"
+- ✅ Fixed all compilation errors:
+  * multi_workspace.rs: imports, method calls, function signatures
+  * pane_group.rs: restored width_fraction_for_pane method (local feature)
+- ✅ Committed fixes: "fix: resolve compilation errors after merge - keep both features"
+- ✅ workspace crate compiled successfully
 - ✅ Fixed Windows drag-drop compilation errors in gpui_windows crate
 - ✅ Removed the deprecated Windows simple-Wry web preview path and render-mode toggle
 - ✅ Restored native WebView2 focus, keyboard, and IME routing for the hole-punched Windows preview
