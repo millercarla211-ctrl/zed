@@ -98,6 +98,10 @@ impl PaneGroup {
         }
     }
 
+    pub fn width_fraction_for_pane(&self, pane: &Entity<Pane>) -> Option<f32> {
+        self.root.width_fraction_for_pane(pane)
+    }
+
     pub fn full_height_column_count(&self) -> usize {
         self.root.full_height_column_count()
     }
@@ -311,6 +315,13 @@ impl Member {
         match self {
             Member::Pane(_) => 1,
             Member::Axis(axis) => axis.full_height_column_count(),
+        }
+    }
+
+    fn width_fraction_for_pane(&self, pane: &Entity<Pane>) -> Option<f32> {
+        match self {
+            Member::Pane(found) => (found == pane).then_some(1.0),
+            Member::Axis(axis) => axis.width_fraction_for_pane(pane),
         }
     }
 }
@@ -916,6 +927,40 @@ impl PaneAxis {
                 .max()
                 .unwrap_or(1),
         }
+    }
+
+    fn width_fraction_for_pane(&self, pane: &Entity<Pane>) -> Option<f32> {
+        let flexes = self.flexes.lock();
+        let total_flex = flexes.iter().copied().sum::<f32>();
+
+        for (index, member) in self.members.iter().enumerate() {
+            let child_fraction = if total_flex > 0.0 {
+                flexes[index] / total_flex
+            } else {
+                1.0 / self.members.len() as f32
+            };
+
+            match member {
+                Member::Pane(found) => {
+                    if found == pane {
+                        return Some(match self.axis {
+                            Axis::Horizontal => child_fraction,
+                            Axis::Vertical => 1.0,
+                        });
+                    }
+                }
+                Member::Axis(axis) => {
+                    if let Some(descendant_fraction) = axis.width_fraction_for_pane(pane) {
+                        return Some(match self.axis {
+                            Axis::Horizontal => child_fraction * descendant_fraction,
+                            Axis::Vertical => descendant_fraction,
+                        });
+                    }
+                }
+            }
+        }
+
+        None
     }
 
     fn render(

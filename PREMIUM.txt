@@ -1,0 +1,4 @@
+whisperflow
+grammerly
+notebooklm
+perplexity

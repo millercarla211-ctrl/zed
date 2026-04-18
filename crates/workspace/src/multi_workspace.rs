@@ -12,9 +12,10 @@ use release_channel::ReleaseChannel;
 use remote::RemoteConnectionOptions;
 use settings::Settings;
 pub use settings::SidebarSide;
+use std::collections::HashSet;
 use std::future::Future;
+use std::path::{Path, PathBuf};
 
-use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use ui::prelude::*;
 use util::path_list::PathList;
@@ -1425,7 +1426,7 @@ impl MultiWorkspace {
         cx: &mut Context<Self>,
     ) -> Task<Result<Entity<Workspace>>> {
         let existing_paths = self
-            .project_group_keys
+            .project_group_keys()
             .iter()
             .flat_map(|key| key.path_list().paths().iter().cloned())
             .collect::<HashSet<_>>();
@@ -1456,8 +1457,8 @@ impl MultiWorkspace {
             std::fs::create_dir_all(&fallback).log_err();
             fallback
         } else {
-            let salt = self.project_group_keys.len().saturating_mul(31)
-                + self.workspaces.len().saturating_mul(17);
+            let salt = self.project_group_keys().len().saturating_mul(31)
+                + self.workspaces().count().saturating_mul(17);
             let tick = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
@@ -1466,7 +1467,15 @@ impl MultiWorkspace {
             candidates.swap_remove(index)
         };
 
-        self.find_or_create_local_workspace(PathList::new(&[chosen_path]), window, cx)
+        self.find_or_create_local_workspace(
+            PathList::new(&[chosen_path]),
+            None,
+            &[],
+            None,
+            OpenMode::default(),
+            window,
+            cx,
+        )
     }
 
     pub fn create_generated_space_workspace(
@@ -1508,7 +1517,15 @@ impl MultiWorkspace {
             }
         };
 
-        self.find_or_create_local_workspace(PathList::new(&[chosen_path]), window, cx)
+        self.find_or_create_local_workspace(
+            PathList::new(&[chosen_path]),
+            None,
+            &[],
+            None,
+            OpenMode::default(),
+            window,
+            cx,
+        )
     }
 
     pub fn workspace(&self) -> &Entity<Workspace> {
