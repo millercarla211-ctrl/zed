@@ -1,12 +1,13 @@
 IN PROGRESS:
-- Build running with `just run` - compilation in progress (996/1637 crates)
+- Fixing async-tungstenite version conflict in repl crate
 
 PENDING:
-- Wait for build to complete
+- Resolve WebSocketStream type mismatch between async-tungstenite@0.31.0 and @0.34.0
+- Complete build after fixing repl crate
 - Manual validation with `just run` for the merge
 - Test all custom features (space carousel, web preview, liquid glass)
 - Test upstream features (terminal actions, history toggle, bottom dock layouts)
-- Push fixes to remote
+- Push all fixes to remote
 
 COMPLETED:
 - ✅ Created backup branch at commit before merge (238a8a19db)
@@ -16,17 +17,20 @@ COMPLETED:
 - ✅ Kept BOTH local and remote changes in all conflicts
 - ✅ Documented all merge resolutions in changelog.txt
 - ✅ Created git-workflow.md steering file documenting the branch workflow
-- ✅ Fixed all compilation errors:
-  * multi_workspace.rs: imports, method calls, function signatures
-  * pane_group.rs: restored width_fraction_for_pane method (local feature)
-- ✅ Committed fixes: "fix: resolve compilation errors after merge - keep both features"
-- ✅ workspace crate compiled successfully
-- ✅ Fixed Windows drag-drop compilation errors in gpui_windows crate
-- ✅ Removed the deprecated Windows simple-Wry web preview path and render-mode toggle
-- ✅ Restored native WebView2 focus, keyboard, and IME routing for the hole-punched Windows preview
-- ✅ Forwarded Windows OLE drag-and-drop events into the composition-hosted WebView2 preview
-- ✅ Removed the unused `web_preview_windows` workspace crate and stale host-input shim references
-- ✅ Reviewed macOS/Linux host activation and focus paths for parity risks
+- ✅ Fixed compilation errors in multi_workspace.rs (imports, method calls, function signatures)
+- ✅ Fixed compilation errors in pane_group.rs (restored width_fraction_for_pane method)
+- ✅ Fixed compilation error in agent_panel.rs (added missing source parameter)
+- ✅ Partially fixed repl crate (added protocol_mode field)
+- ✅ workspace crate compiled successfully (984/1637)
+- ✅ agent_ui crate compiled successfully (1515/1637)
+- ✅ Build reached 1591/1637 crates (97% complete)
+
+KNOWN ISSUES:
+- repl crate: async-tungstenite version conflict
+  * client crate uses async-tungstenite@0.31.0
+  * jupyter-websocket-client uses async-tungstenite@0.34.0
+  * WebSocketStream types are incompatible between versions
+  * Need to either update client crate or find alternative connection method
 
 BLOCKED:
 - Windows touch/pen forwarding is still a larger follow-up because the current host layer has no `WM_POINTER` -> `SendPointerInput` bridge
