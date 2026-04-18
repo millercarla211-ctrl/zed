@@ -2465,6 +2465,26 @@ Example:
 
 `integer` values representing milliseconds
 
+## Hover Popover Sticky
+
+- Description: Whether the hover popover sticks when the mouse moves toward it, allowing interaction with its contents before it disappears.
+- Setting: `hover_popover_sticky`
+- Default: `true`
+
+**Options**
+
+`boolean` values
+
+## Hover Popover Hiding Delay
+
+- Description: Time to wait in milliseconds before hiding the hover popover after the mouse moves away from the hover target. Only applies when `hover_popover_sticky` is enabled.
+- Setting: `hover_popover_hiding_delay`
+- Default: `300`
+
+**Options**
+
+`integer` values representing milliseconds
+
 ## Icon Theme
 
 - Description: The icon theme setting can be specified in two forms - either as the name of an icon theme or as an object containing the `mode`, `dark`, and `light` icon themes for files/folders inside Zed.
@@ -2739,7 +2759,7 @@ To override settings for a language, add an entry for that languages name to the
     "C": {
       "format_on_save": "off",
       "preferred_line_length": 64,
-      "soft_wrap": "preferred_line_length"
+      "soft_wrap": "bounded"
     },
     "JSON": {
       "tab_size": 4
@@ -5474,7 +5494,7 @@ To preview and enable a settings profile, open the command palette via {#kb comm
       "format_on_save": "on",
       "formatter": "language_server",
       "preferred_line_length": 64,
-      "soft_wrap": "preferred_line_length"
+      "soft_wrap": "bounded"
     }
   }
 }
