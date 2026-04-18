@@ -469,9 +469,6 @@ impl WebPreviewView {
     fn release_native_preview_focus(&self) {
         let borrow = self.native_preview.borrow();
         if let Some(preview) = borrow.as_ref() {
-            let _ = preview
-                .webview
-                .evaluate_script("window.__zedHostInput?.setTarget?.(null);");
             let _ = preview.webview.focus_parent();
         }
     }

@@ -1,0 +1,17 @@
+IN PROGRESS:
+- None
+
+PENDING:
+- Touch/pen parity on Windows if full `WM_POINTER` -> WebView2 forwarding is required
+- Manual validation with `just run` for Windows wheel, hover, input, drag/drop, and focus restoration
+
+COMPLETED:
+- Fixed Windows drag-drop compilation errors in gpui_windows crate
+- Removed the deprecated Windows simple-Wry web preview path and render-mode toggle
+- Restored native WebView2 focus, keyboard, and IME routing for the hole-punched Windows preview
+- Forwarded Windows OLE drag-and-drop events into the composition-hosted WebView2 preview
+- Removed the unused `web_preview_windows` workspace crate and stale host-input shim references
+- Reviewed macOS/Linux host activation and focus paths for parity risks
+
+BLOCKED:
+- Windows touch/pen forwarding is still a larger follow-up because the current host layer has no `WM_POINTER` -> `SendPointerInput` bridge

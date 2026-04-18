@@ -1,0 +1,171 @@
+WEB PREVIEW IMPLEMENTATION GUIDE
+Date: 18 April 2026
+Project: Zed Code Editor - Web Preview Feature
+Target: GPT-5.4 xhigh (codex-cli)
+
+================================================================================
+IMPLEMENTATION METHOD - CRITICAL
+================================================================================
+
+CORRECT METHOD (USE THIS):
+- Web Preview with Hole Punching
+- This is the ONLY valid implementation
+- Must be set as DEFAULT
+- Remove any alternative web preview implementations
+
+DEPRECATED METHOD (REMOVE IF FOUND):
+- Web Preview with Wry Crate (direct rendering)
+- REASON FOR REMOVAL: Wry crate cannot render on top of native web preview correctly
+- PROBLEM: Airspace violation issue (z-index/layering conflict on native windows)
+- ACTION: Delete all code related to this method
+
+================================================================================
+CURRENT CRITICAL BUGS - HOLE PUNCHING METHOD
+================================================================================
+
+EVENT HANDLING ISSUES:
+
+1. MOUSE WHEEL & DRAG-AND-DROP
+   - STATUS: Not working correctly
+   - REQUIRED: Full mouse wheel event propagation to hole-punched web preview
+   - REQUIRED: Drag-and-drop events must pass through correctly
+
+2. FOCUS LOSS ON APP SWITCHING
+   - STATUS: Focus lost during fast app switching
+   - REQUIRED: Maintain focus state across application context switches
+   - REQUIRED: Implement focus restoration mechanism
+
+3. INPUT ELEMENTS MALFUNCTION
+   - STATUS: Input fields and form elements not working properly
+   - REQUIRED: All input events (keyboard, text, form) must work natively
+   - REQUIRED: Test text input, select dropdowns, checkboxes, radio buttons
+
+4. HOVER EVENTS BROKEN
+   - STATUS: Hover barely works, requires 4+ clicks to register
+   - PRIORITY: CRITICAL - this breaks UX completely
+   - REQUIRED: Single-pass hover event detection
+   - REQUIRED: Proper mouse enter/leave event propagation
+
+================================================================================
+IMPLEMENTATION REQUIREMENTS
+================================================================================
+
+CROSS-PLATFORM NATIVE EVENT BRIDGE:
+- ALL native events must pass through to hole-punched web preview
+- Must work professionally on: Windows, macOS, Linux
+- Platform-specific event handling where necessary
+
+COMPLETE EVENT TYPES TO HANDLE:
+
+MOUSE EVENTS:
+  * click, dblclick, mousedown, mouseup, mousemove
+  * mouseenter, mouseleave, mouseover, mouseout
+  * wheel, contextmenu
+
+KEYBOARD EVENTS:
+  * keydown, keyup, keypress
+  * input, beforeinput
+  * compositionstart, compositionupdate, compositionend (for IME)
+
+FOCUS EVENTS:
+  * focus, blur, focusin, focusout
+
+DRAG & DROP EVENTS:
+  * dragstart, drag, dragend
+  * dragenter, dragleave, dragover, drop
+
+TOUCH EVENTS (mobile/touchscreen):
+  * touchstart, touchmove, touchend, touchcancel
+
+POINTER EVENTS (unified):
+  * pointerdown, pointerup, pointermove
+  * pointerenter, pointerleave, pointerover, pointerout
+  * pointercancel, gotpointercapture, lostpointercapture
+
+CLIPBOARD EVENTS:
+  * copy, cut, paste
+
+FORM EVENTS:
+  * submit, reset, change, select
+
+WINDOW/FRAME EVENTS:
+  * resize, scroll
+
+EVENT COORDINATE TRANSLATION:
+- Translate coordinates from native window space to web preview viewport
+- Account for hole-punch offset and scaling
+- Handle DPI scaling correctly on Windows and Linux
+- Handle Retina displays correctly on macOS
+- Maintain pixel-perfect accuracy across all platforms
+
+FOCUS MANAGEMENT:
+- Track focus state across app switches
+- Restore focus to correct element on return
+- Handle focus ring rendering correctly per platform
+- Respect platform-specific focus behavior (Windows vs macOS vs Linux)
+
+Z-INDEX & LAYERING:
+- Ensure hole-punched region is properly transparent
+- No rendering artifacts or airspace issues
+- Correct stacking context for overlays/tooltips
+- Platform-specific compositing handled correctly
+
+PLATFORM-SPECIFIC CONSIDERATIONS:
+
+WINDOWS:
+- Handle Win32 message loop integration
+- DPI awareness (per-monitor DPI v2)
+- Windows 10/11 compositor integration
+
+MACOS:
+- NSView/NSWindow event handling
+- Retina display coordinate scaling
+- macOS window server integration
+
+LINUX:
+- X11 and Wayland support
+- GTK/Qt event system compatibility
+- Multiple window manager support
+
+================================================================================
+VALIDATION CHECKLIST
+================================================================================
+
+Before marking complete, verify:
+[ ] Only hole-punching method exists in codebase
+[ ] Wry crate direct rendering method completely removed
+[ ] Mouse wheel scrolls smoothly in web preview
+[ ] Drag-and-drop works from/to web preview
+[ ] App switching preserves focus correctly
+[ ] All input elements work on first interaction
+[ ] Hover effects work on first hover (no multi-click needed)
+[ ] ALL native events propagate correctly
+[ ] No console errors related to event handling
+[ ] Performance is acceptable (no lag on event processing)
+
+CROSS-PLATFORM CODE REVIEW (DO NOT TEST ON MULTIPLE OS):
+[ ] Code reviewed for Windows compatibility (Win32, DPI handling)
+[ ] Code reviewed for macOS compatibility (NSView/NSWindow, Retina)
+[ ] Code reviewed for Linux compatibility (X11/Wayland, GTK/Qt)
+[ ] Platform-specific code paths are correct and complete
+[ ] Coordinate translation handles DPI/scaling for all platforms
+[ ] Event handling uses platform-agnostic abstractions where possible
+[ ] Platform-specific event handling is properly conditional
+[ ] No hardcoded platform assumptions in shared code
+
+**NOTE: You do NOT need to actually test on Windows, macOS, and Linux.**
+**Instead, REVIEW the code thoroughly to ensure it will work correctly on all platforms.**
+**Use your reasoning and knowledge of platform differences to verify correctness.**
+
+================================================================================
+TECHNICAL NOTES
+================================================================================
+
+- Use GPT-5.4's 1M context window to analyze entire event handling pipeline
+- Leverage xhigh reasoning for architectural decisions on event bridge design
+- Web search for latest Wry crate and hole-punching best practices if needed
+- Check Zed editor's existing platform abstraction layer
+- Document all changes in changelog.txt
+- Update todo.txt with progress on each bug fix
+
+GOAL: Professional, production-ready web preview that works flawlessly on Windows, macOS, and Linux with ALL native events properly handled through hole-punching.

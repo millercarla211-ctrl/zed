@@ -1,0 +1,32 @@
+[2026-04-18] - Web preview hole-punch stabilization and Windows event bridge cleanup
+
+ADDED:
+- `todo.txt` to track the current web preview task state
+- `changelog.txt` to record this implementation session
+
+CHANGED:
+- `crates/web_preview/src/web_preview_view.rs` to remove the Windows render-mode toggle and deprecated simple-Wry fallback so hole-punching is the only active Windows preview path
+- `crates/web_preview/src/windows_visual_webview.rs` to remove the injected host-input bridge script, enable external drops, and expose native WebView2 focus restoration
+- `crates/gpui_windows/src/events.rs` to stop synthesizing DOM keyboard/text input and let native WebView2 focus, keyboard, and IME handling take over
+- `crates/gpui_windows/src/window.rs` to forward OLE drag/drop events into `ICoreWebView2CompositionController3` and harden drop-effect handling
+- `Cargo.toml` and `Cargo.lock` to remove the unused `web_preview_windows` workspace crate
+- `crates/web_preview_macos/src/web_preview_view.rs` and `crates/web_preview_linux/src/web_preview_view.rs` to remove stale host-input shim cleanup references
+
+FIXED:
+- Windows mouse-wheel routing now stays on the composition-hosted preview path
+- Windows left-click focus now restores native WebView2 focus instead of relying on the deprecated JavaScript host-input shim
+- Windows drag-and-drop can now reach the composition-hosted preview through forwarded `DragEnter`, `DragOver`, `DragLeave`, and `Drop` events
+- The deprecated Windows simple-Wry preview implementation no longer exists in the active workspace build graph
+- **[2026-04-18 PM]** Fixed 4 compilation errors in `crates/gpui_windows/src/window.rs`:
+  - Fixed type mismatch: `ExternalPaths` now receives `SmallVec` directly instead of converting to `Vec`
+  - Fixed method call: `read_file_drop_paths` now called on `WindowsDragDropHandler` instead of `Self`
+  - Fixed trait bound errors: Removed `.clone()` calls on `idata_obj` in `DragEnter` and `Drop` methods to pass `&IDataObject` directly
+- **[2026-04-18 PM]** Fixed 2 compiler warnings in `crates/web_preview/src/web_preview_view.rs`:
+  - Prefixed unused `cx` parameter with underscore in `render_tab_bar_end_controls`
+  - Added `#[allow(dead_code)]` to `reset_native_preview` method (kept for potential future use)
+
+NOTES:
+- Goal was to keep hole-punching as the only Windows web preview path and restore native event/focus behavior.
+- No heavy build/test commands were run; manual verification is still expected through `just run`.
+- Cross-platform review found the main remaining Windows gap is touch/pen forwarding because the host layer still lacks a `WM_POINTER` -> `SendPointerInput` bridge.
+- **[2026-04-18 PM]** Compilation errors were caused by API mismatches after Windows crate updates. All fixes applied through code inspection without running tests.

@@ -34,126 +34,6 @@ use crate::web_preview_view::{BrowserEvent, WEB_PREVIEW_BRIDGE_SCRIPT, push_brow
 
 const IPC_SHIM_SCRIPT: &str = r#"Object.defineProperty(window, 'ipc', { value: Object.freeze({ postMessage: s => window.chrome.webview.postMessage(s) }) });"#;
 const DEFAULT_BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection";
-const HOST_INPUT_BRIDGE_SCRIPT: &str = r#"
-(() => {
-  if (window.__zedHostInput) return;
-
-  const resolveTarget = () => {
-    const explicit = window.__zedHostInputTarget;
-    if (explicit && explicit.isConnected) return explicit;
-    if (document.activeElement && document.activeElement !== document.body) {
-      return document.activeElement;
-    }
-    return null;
-  };
-
-  const fireInput = (element, data, inputType) => {
-    element.dispatchEvent(new InputEvent('input', {
-      bubbles: true,
-      data,
-      inputType,
-    }));
-  };
-
-  const insertIntoEditable = (text) => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return false;
-    selection.deleteFromDocument();
-    const range = selection.getRangeAt(0);
-    const node = document.createTextNode(text);
-    range.insertNode(node);
-    range.setStartAfter(node);
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
-    return true;
-  };
-
-  window.__zedHostInput = {
-    setTarget(element) {
-      window.__zedHostInputTarget = element;
-    },
-    insertText(text) {
-      const element = resolveTarget();
-      if (!element) return false;
-
-      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-        const start = element.selectionStart ?? element.value.length;
-        const end = element.selectionEnd ?? start;
-        element.setRangeText(text, start, end, 'end');
-        fireInput(element, text, 'insertText');
-        return true;
-      }
-
-      if (element instanceof HTMLElement && element.isContentEditable) {
-        const inserted = insertIntoEditable(text);
-        if (inserted) fireInput(element, text, 'insertText');
-        return inserted;
-      }
-
-      return false;
-    },
-    keyDown(key) {
-      const element = resolveTarget();
-      if (!element) return false;
-
-      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-        const value = element.value;
-        let start = element.selectionStart ?? value.length;
-        let end = element.selectionEnd ?? start;
-
-        if (key === 'Backspace') {
-          if (start === end) start = Math.max(0, start - 1);
-          element.setRangeText('', start, end, 'end');
-          fireInput(element, null, 'deleteContentBackward');
-          return true;
-        }
-
-        if (key === 'Delete') {
-          if (start === end) end = Math.min(value.length, end + 1);
-          element.setRangeText('', start, end, 'end');
-          fireInput(element, null, 'deleteContentForward');
-          return true;
-        }
-
-        if (key === 'Enter') {
-          if (element instanceof HTMLTextAreaElement) {
-            element.setRangeText('\n', start, end, 'end');
-            fireInput(element, '\n', 'insertLineBreak');
-            return true;
-          }
-
-          element.form?.requestSubmit?.();
-          return true;
-        }
-      }
-
-      if (element instanceof HTMLElement && element.isContentEditable) {
-        if (key === 'Backspace') {
-          document.execCommand('delete');
-          fireInput(element, null, 'deleteContentBackward');
-          return true;
-        }
-
-        if (key === 'Delete') {
-          document.execCommand('forwardDelete');
-          fireInput(element, null, 'deleteContentForward');
-          return true;
-        }
-
-        if (key === 'Enter') {
-          const inserted = insertIntoEditable('\n');
-          if (inserted) fireInput(element, '\n', 'insertLineBreak');
-          return inserted;
-        }
-      }
-
-      return false;
-    },
-  };
-})();
-"#;
-
 pub(crate) struct WindowsVisualWebView {
     main_window: HWND,
     controller: ICoreWebView2Controller,
@@ -235,11 +115,14 @@ impl WindowsVisualWebView {
 
         configure_webview_settings(&webview)?;
         attach_event_handlers(&webview, browser_events)?;
-        let init_script = combined_init_script();
-        add_init_script(&webview, init_script.as_str())?;
+        add_init_script(&webview, IPC_SHIM_SCRIPT)?;
+        add_init_script(&webview, WEB_PREVIEW_BRIDGE_SCRIPT)?;
 
         unsafe {
             controller.SetZoomFactor(zoom_factor)?;
+            if let Ok(controller4) = controller.cast::<ICoreWebView2Controller4>() {
+                let _ = controller4.SetAllowExternalDrop(true);
+            }
         }
 
         let mut this = Self {
@@ -308,6 +191,15 @@ impl WindowsVisualWebView {
     pub(crate) fn focus_parent(&self) -> Result<()> {
         update_webview_passthrough_focus(self.main_window, false);
         unsafe { SetFocus(Some(self.main_window))? };
+        Ok(())
+    }
+
+    pub(crate) fn focus_page(&self) -> Result<()> {
+        unsafe {
+            self.controller
+                .MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)?;
+        }
+        update_webview_passthrough_focus(self.main_window, true);
         Ok(())
     }
 
@@ -621,13 +513,4 @@ fn add_init_script(webview: &ICoreWebView2, script: &str) -> Result<()> {
 
     wait_with_pump(rx).map_err(|_| anyhow!("The WebView2 initialization script was cancelled"))?;
     Ok(())
-}
-
-fn combined_init_script() -> String {
-    format!(
-        "{ipc}\n{bridge}\n{host}",
-        ipc = IPC_SHIM_SCRIPT,
-        bridge = WEB_PREVIEW_BRIDGE_SCRIPT,
-        host = HOST_INPUT_BRIDGE_SCRIPT,
-    )
 }

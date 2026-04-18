@@ -16,7 +16,9 @@ use anyhow::{Context as _, Result};
 use futures::channel::oneshot::{self, Receiver};
 use raw_window_handle as rwh;
 use smallvec::SmallVec;
-use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2CompositionController;
+use webview2_com::Microsoft::Web::WebView2::Win32::{
+    ICoreWebView2CompositionController, ICoreWebView2CompositionController3,
+};
 use windows::{
     Win32::{
         Foundation::*,
@@ -1150,14 +1152,279 @@ impl PlatformWindow for WindowsWindow {
 }
 
 #[implement(IDropTarget)]
-struct WindowsDragDropHandler(pub Rc<WindowsWindowInner>);
+struct WindowsDragDropHandler {
+    window: Rc<WindowsWindowInner>,
+    drag_data_object: RefCell<Option<IDataObject>>,
+    drag_paths: RefCell<SmallVec<[PathBuf; 2]>>,
+    gpui_drag_active: Cell<bool>,
+    webview_drag_active: Cell<bool>,
+}
 
 impl WindowsDragDropHandler {
-    fn handle_drag_drop(&self, input: PlatformInput) {
-        if let Some(mut func) = self.0.state.callbacks.input.take() {
-            func(input);
-            self.0.state.callbacks.input.set(Some(func));
+    fn new(window: Rc<WindowsWindowInner>) -> Self {
+        Self {
+            window,
+            drag_data_object: RefCell::default(),
+            drag_paths: RefCell::default(),
+            gpui_drag_active: Cell::new(false),
+            webview_drag_active: Cell::new(false),
         }
+    }
+
+    fn handle_drag_drop(&self, input: PlatformInput) {
+        if let Some(mut func) = self.window.state.callbacks.input.take() {
+            func(input);
+            self.window.state.callbacks.input.set(Some(func));
+        }
+    }
+
+    fn client_point(&self, pt: &POINTL) -> POINT {
+        let mut client_point = POINT { x: pt.x, y: pt.y };
+        unsafe {
+            ScreenToClient(self.window.hwnd, &mut client_point)
+                .ok()
+                .log_err();
+        }
+        client_point
+    }
+
+    fn webview_drag_target(
+        &self,
+        client_point: POINT,
+    ) -> Option<(WebviewPassthroughTarget, POINT)> {
+        let position = logical_point(
+            client_point.x as f32,
+            client_point.y as f32,
+            self.window.state.scale_factor.get(),
+        );
+        if !self
+            .window
+            .state
+            .mouse_passthrough_snapshot
+            .borrow()
+            .should_mouse_passthrough(position)
+        {
+            return None;
+        }
+
+        let target = lookup_webview_passthrough_target(self.window.hwnd, client_point)?;
+        let relative_point = POINT {
+            x: client_point.x - target.bounds.left,
+            y: client_point.y - target.bounds.top,
+        };
+        Some((target, relative_point))
+    }
+
+    fn set_drop_effect(&self, pdweffect: *mut DROPEFFECT, effect: DROPEFFECT) {
+        unsafe {
+            if !pdweffect.is_null() {
+                *pdweffect = effect;
+            }
+        }
+    }
+
+    fn requested_drop_effect(&self, pdweffect: *mut DROPEFFECT) -> DROPEFFECT {
+        unsafe {
+            if pdweffect.is_null() {
+                DROPEFFECT_COPY
+            } else {
+                *pdweffect
+            }
+        }
+    }
+
+    fn enter_gpui_drag(&self, client_point: POINT, paths: SmallVec<[PathBuf; 2]>) {
+        let scale_factor = self.window.state.scale_factor.get();
+        self.gpui_drag_active.set(true);
+        self.handle_drag_drop(PlatformInput::FileDrop(FileDropEvent::Entered {
+            position: logical_point(client_point.x as f32, client_point.y as f32, scale_factor),
+            paths: ExternalPaths(paths),
+        }));
+    }
+
+    fn pending_gpui_drag(&self, client_point: POINT) {
+        let scale_factor = self.window.state.scale_factor.get();
+        self.handle_drag_drop(PlatformInput::FileDrop(FileDropEvent::Pending {
+            position: logical_point(client_point.x as f32, client_point.y as f32, scale_factor),
+        }));
+    }
+
+    fn submit_gpui_drag(&self, client_point: POINT) {
+        let scale_factor = self.window.state.scale_factor.get();
+        self.handle_drag_drop(PlatformInput::FileDrop(FileDropEvent::Submit {
+            position: logical_point(client_point.x as f32, client_point.y as f32, scale_factor),
+        }));
+    }
+
+    fn exit_gpui_drag(&self) {
+        if self.gpui_drag_active.replace(false) {
+            self.handle_drag_drop(PlatformInput::FileDrop(FileDropEvent::Exited));
+        }
+    }
+
+    fn clear_drag_state(&self) {
+        self.drag_data_object.borrow_mut().take();
+        self.drag_paths.borrow_mut().clear();
+        self.gpui_drag_active.set(false);
+        self.webview_drag_active.set(false);
+    }
+
+    fn forward_webview_drag_enter(
+        &self,
+        idata_obj: &IDataObject,
+        grfkeystate: MODIFIERKEYS_FLAGS,
+        client_point: POINT,
+        pdweffect: *mut DROPEFFECT,
+    ) -> bool {
+        let Some((target, relative_point)) = self.webview_drag_target(client_point) else {
+            return false;
+        };
+        let Ok(controller3) = target
+            .controller
+            .cast::<ICoreWebView2CompositionController3>()
+        else {
+            return false;
+        };
+
+        let mut effect = unsafe {
+            if pdweffect.is_null() {
+                DROPEFFECT_COPY.0
+            } else {
+                (*pdweffect).0
+            }
+        };
+        unsafe {
+            if controller3
+                .DragEnter(idata_obj, grfkeystate.0, relative_point, &mut effect)
+                .is_err()
+            {
+                return false;
+            }
+        }
+        self.webview_drag_active.set(true);
+        self.set_drop_effect(pdweffect, DROPEFFECT(effect));
+        true
+    }
+
+    fn forward_webview_drag_over(
+        &self,
+        grfkeystate: MODIFIERKEYS_FLAGS,
+        client_point: POINT,
+        pdweffect: *mut DROPEFFECT,
+    ) -> bool {
+        let Some((target, relative_point)) = self.webview_drag_target(client_point) else {
+            return false;
+        };
+        let Ok(controller3) = target
+            .controller
+            .cast::<ICoreWebView2CompositionController3>()
+        else {
+            return false;
+        };
+
+        let mut effect = unsafe {
+            if pdweffect.is_null() {
+                DROPEFFECT_COPY.0
+            } else {
+                (*pdweffect).0
+            }
+        };
+        unsafe {
+            if controller3
+                .DragOver(grfkeystate.0, relative_point, &mut effect)
+                .is_err()
+            {
+                return false;
+            }
+        }
+        self.webview_drag_active.set(true);
+        self.set_drop_effect(pdweffect, DROPEFFECT(effect));
+        true
+    }
+
+    fn forward_webview_drag_leave(&self) {
+        if !self.webview_drag_active.replace(false) {
+            return;
+        }
+        if let Some(target) = webview_passthrough_target(self.window.hwnd)
+            && let Ok(controller3) = target
+                .controller
+                .cast::<ICoreWebView2CompositionController3>()
+        {
+            unsafe {
+                controller3.DragLeave().log_err();
+            }
+        }
+    }
+
+    fn forward_webview_drop(
+        &self,
+        idata_obj: &IDataObject,
+        grfkeystate: MODIFIERKEYS_FLAGS,
+        client_point: POINT,
+        pdweffect: *mut DROPEFFECT,
+    ) -> bool {
+        let Some((target, relative_point)) = self.webview_drag_target(client_point) else {
+            return false;
+        };
+        let Ok(controller3) = target
+            .controller
+            .cast::<ICoreWebView2CompositionController3>()
+        else {
+            return false;
+        };
+
+        let mut effect = unsafe {
+            if pdweffect.is_null() {
+                DROPEFFECT_COPY.0
+            } else {
+                (*pdweffect).0
+            }
+        };
+        unsafe {
+            if controller3
+                .Drop(idata_obj, grfkeystate.0, relative_point, &mut effect)
+                .is_err()
+            {
+                return false;
+            }
+        }
+        self.webview_drag_active.set(false);
+        self.set_drop_effect(pdweffect, DROPEFFECT(effect));
+        true
+    }
+
+    fn read_file_drop_paths(idata_obj: &IDataObject) -> SmallVec<[PathBuf; 2]> {
+        let config = FORMATETC {
+            cfFormat: CF_HDROP.0,
+            ptd: std::ptr::null_mut() as _,
+            dwAspect: DVASPECT_CONTENT.0,
+            lindex: -1,
+            tymed: TYMED_HGLOBAL.0 as _,
+        };
+        let mut paths = SmallVec::<[PathBuf; 2]>::new();
+
+        unsafe {
+            if idata_obj.QueryGetData(&config as _) != S_OK {
+                return paths;
+            }
+            let Some(mut idata) = idata_obj.GetData(&config as _).log_err() else {
+                return paths;
+            };
+            if idata.u.hGlobal.is_invalid() {
+                return paths;
+            }
+
+            let hdrop = HDROP(idata.u.hGlobal.0);
+            with_file_names(hdrop, |file_name| {
+                if let Some(path) = PathBuf::from_str(&file_name).log_err() {
+                    paths.push(path);
+                }
+            });
+            ReleaseStgMedium(&mut idata);
+        }
+
+        paths
     }
 }
 
@@ -1166,97 +1433,103 @@ impl IDropTarget_Impl for WindowsDragDropHandler_Impl {
     fn DragEnter(
         &self,
         pdataobj: windows::core::Ref<IDataObject>,
-        _grfkeystate: MODIFIERKEYS_FLAGS,
+        grfkeystate: MODIFIERKEYS_FLAGS,
         pt: &POINTL,
         pdweffect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
         unsafe {
             let idata_obj = pdataobj.ok()?;
-            let config = FORMATETC {
-                cfFormat: CF_HDROP.0,
-                ptd: std::ptr::null_mut() as _,
-                dwAspect: DVASPECT_CONTENT.0,
-                lindex: -1,
-                tymed: TYMED_HGLOBAL.0 as _,
-            };
+            *self.drag_data_object.borrow_mut() = Some(idata_obj.clone());
+            let paths = WindowsDragDropHandler::read_file_drop_paths(&idata_obj);
+            *self.drag_paths.borrow_mut() = paths.clone();
+
             let cursor_position = POINT { x: pt.x, y: pt.y };
-            if idata_obj.QueryGetData(&config as _) == S_OK {
-                *pdweffect = DROPEFFECT_COPY;
-                let Some(mut idata) = idata_obj.GetData(&config as _).log_err() else {
-                    return Ok(());
-                };
-                if idata.u.hGlobal.is_invalid() {
-                    return Ok(());
-                }
-                let hdrop = HDROP(idata.u.hGlobal.0);
-                let mut paths = SmallVec::<[PathBuf; 2]>::new();
-                with_file_names(hdrop, |file_name| {
-                    if let Some(path) = PathBuf::from_str(&file_name).log_err() {
-                        paths.push(path);
-                    }
-                });
-                ReleaseStgMedium(&mut idata);
-                let mut cursor_position = cursor_position;
-                ScreenToClient(self.0.hwnd, &mut cursor_position)
-                    .ok()
-                    .log_err();
-                let scale_factor = self.0.state.scale_factor.get();
-                let input = PlatformInput::FileDrop(FileDropEvent::Entered {
-                    position: logical_point(
-                        cursor_position.x as f32,
-                        cursor_position.y as f32,
-                        scale_factor,
-                    ),
-                    paths: ExternalPaths(paths),
-                });
-                self.handle_drag_drop(input);
-            } else {
-                *pdweffect = DROPEFFECT_NONE;
-            }
-            self.0
+            let drop_effect = self.requested_drop_effect(pdweffect);
+            self.window
                 .drop_target_helper
-                .DragEnter(self.0.hwnd, idata_obj, &cursor_position, *pdweffect)
+                .DragEnter(
+                    self.window.hwnd,
+                    idata_obj,
+                    &cursor_position,
+                    drop_effect,
+                )
                 .log_err();
+
+            let client_point = self.client_point(pt);
+            if self.forward_webview_drag_enter(&idata_obj, grfkeystate, client_point, pdweffect) {
+                self.exit_gpui_drag();
+                return Ok(());
+            }
+
+            self.forward_webview_drag_leave();
+            if paths.is_empty() {
+                self.set_drop_effect(pdweffect, DROPEFFECT_NONE);
+                self.exit_gpui_drag();
+                return Ok(());
+            }
+
+            self.set_drop_effect(pdweffect, DROPEFFECT_COPY);
+            self.enter_gpui_drag(client_point, paths);
         }
         Ok(())
     }
 
     fn DragOver(
         &self,
-        _grfkeystate: MODIFIERKEYS_FLAGS,
+        grfkeystate: MODIFIERKEYS_FLAGS,
         pt: &POINTL,
         pdweffect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
-        let mut cursor_position = POINT { x: pt.x, y: pt.y };
+        let cursor_position = POINT { x: pt.x, y: pt.y };
         unsafe {
-            *pdweffect = DROPEFFECT_COPY;
-            self.0
+            let drop_effect = self.requested_drop_effect(pdweffect);
+            self.window
                 .drop_target_helper
-                .DragOver(&cursor_position, *pdweffect)
-                .log_err();
-            ScreenToClient(self.0.hwnd, &mut cursor_position)
-                .ok()
+                .DragOver(&cursor_position, drop_effect)
                 .log_err();
         }
-        let scale_factor = self.0.state.scale_factor.get();
-        let input = PlatformInput::FileDrop(FileDropEvent::Pending {
-            position: logical_point(
-                cursor_position.x as f32,
-                cursor_position.y as f32,
-                scale_factor,
-            ),
-        });
-        self.handle_drag_drop(input);
+
+        let client_point = self.client_point(pt);
+        if self.webview_drag_active.get() {
+            if self.forward_webview_drag_over(grfkeystate, client_point, pdweffect) {
+                self.exit_gpui_drag();
+                return Ok(());
+            }
+            self.forward_webview_drag_leave();
+        }
+
+        if let Some(idata_obj) = self.drag_data_object.borrow().clone()
+            && self.forward_webview_drag_enter(&idata_obj, grfkeystate, client_point, pdweffect)
+        {
+            self.exit_gpui_drag();
+            return Ok(());
+        }
+
+        let paths = self.drag_paths.borrow().clone();
+        if paths.is_empty() {
+            self.set_drop_effect(pdweffect, DROPEFFECT_NONE);
+            self.exit_gpui_drag();
+            return Ok(());
+        }
+
+        self.forward_webview_drag_leave();
+        self.set_drop_effect(pdweffect, DROPEFFECT_COPY);
+        if self.gpui_drag_active.get() {
+            self.pending_gpui_drag(client_point);
+        } else {
+            self.enter_gpui_drag(client_point, paths);
+        }
 
         Ok(())
     }
 
     fn DragLeave(&self) -> windows::core::Result<()> {
         unsafe {
-            self.0.drop_target_helper.DragLeave().log_err();
+            self.window.drop_target_helper.DragLeave().log_err();
         }
-        let input = PlatformInput::FileDrop(FileDropEvent::Exited);
-        self.handle_drag_drop(input);
+        self.forward_webview_drag_leave();
+        self.exit_gpui_drag();
+        self.clear_drag_state();
 
         Ok(())
     }
@@ -1264,31 +1537,39 @@ impl IDropTarget_Impl for WindowsDragDropHandler_Impl {
     fn Drop(
         &self,
         pdataobj: windows::core::Ref<IDataObject>,
-        _grfkeystate: MODIFIERKEYS_FLAGS,
+        grfkeystate: MODIFIERKEYS_FLAGS,
         pt: &POINTL,
         pdweffect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
         let idata_obj = pdataobj.ok()?;
-        let mut cursor_position = POINT { x: pt.x, y: pt.y };
+        *self.drag_data_object.borrow_mut() = Some(idata_obj.clone());
+        let cursor_position = POINT { x: pt.x, y: pt.y };
         unsafe {
-            *pdweffect = DROPEFFECT_COPY;
-            self.0
+            let drop_effect = self.requested_drop_effect(pdweffect);
+            self.window
                 .drop_target_helper
-                .Drop(idata_obj, &cursor_position, *pdweffect)
-                .log_err();
-            ScreenToClient(self.0.hwnd, &mut cursor_position)
-                .ok()
+                .Drop(idata_obj, &cursor_position, drop_effect)
                 .log_err();
         }
-        let scale_factor = self.0.state.scale_factor.get();
-        let input = PlatformInput::FileDrop(FileDropEvent::Submit {
-            position: logical_point(
-                cursor_position.x as f32,
-                cursor_position.y as f32,
-                scale_factor,
-            ),
-        });
-        self.handle_drag_drop(input);
+        let client_point = self.client_point(pt);
+        if self.forward_webview_drop(&idata_obj, grfkeystate, client_point, pdweffect) {
+            self.exit_gpui_drag();
+            self.clear_drag_state();
+            return Ok(());
+        }
+
+        self.forward_webview_drag_leave();
+        if self.drag_paths.borrow().is_empty() {
+            self.set_drop_effect(pdweffect, DROPEFFECT_NONE);
+            self.exit_gpui_drag();
+            self.clear_drag_state();
+            return Ok(());
+        }
+
+        self.set_drop_effect(pdweffect, DROPEFFECT_COPY);
+        self.submit_gpui_drag(client_point);
+        self.gpui_drag_active.set(false);
+        self.clear_drag_state();
 
         Ok(())
     }
@@ -1520,7 +1801,7 @@ fn get_module_handle() -> HMODULE {
 
 fn register_drag_drop(window: &Rc<WindowsWindowInner>) -> Result<()> {
     let window_handle = window.hwnd;
-    let handler = WindowsDragDropHandler(window.clone());
+    let handler = WindowsDragDropHandler::new(window.clone());
     // The lifetime of `IDropTarget` is handled by Windows, it won't release until
     // we call `RevokeDragDrop`.
     // So, it's safe to drop it here.

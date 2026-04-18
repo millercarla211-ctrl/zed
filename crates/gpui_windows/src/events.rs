@@ -2,11 +2,7 @@ use std::{cell::Cell, rc::Rc};
 
 use ::util::ResultExt;
 use anyhow::Context as _;
-use serde_json::{Map as JsonMap, Value as JsonValue};
-use webview2_com::{
-    CallDevToolsProtocolMethodCompletedHandler, ExecuteScriptCompletedHandler,
-    Microsoft::Web::WebView2::Win32::*,
-};
+use webview2_com::Microsoft::Web::WebView2::Win32::*;
 use windows::{
     Win32::{
         Foundation::*,
@@ -19,7 +15,7 @@ use windows::{
             WindowsAndMessaging::*,
         },
     },
-    core::{HSTRING, Interface, PCWSTR},
+    core::{Interface, PCWSTR},
 };
 
 use crate::*;
@@ -387,9 +383,6 @@ impl WindowsWindowInner {
 
     fn handle_syskeyup_msg(&self, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
         if self.webview_keyboard_focused() {
-            if dispatch_webview_key_event(self.hwnd(), "keyUp", wparam, lparam, None) {
-                return Some(0);
-            }
             return None;
         }
 
@@ -411,9 +404,6 @@ impl WindowsWindowInner {
     // https://superuser.com/questions/1455762/ctrl-shift-number-key-combination-has-stopped-working-for-a-few-numbers
     fn handle_keydown_msg(&self, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
         if self.webview_keyboard_focused() {
-            if dispatch_webview_key_event(self.hwnd(), "rawKeyDown", wparam, lparam, None) {
-                return Some(0);
-            }
             return None;
         }
 
@@ -447,9 +437,6 @@ impl WindowsWindowInner {
 
     fn handle_keyup_msg(&self, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
         if self.webview_keyboard_focused() {
-            if dispatch_webview_key_event(self.hwnd(), "keyUp", wparam, lparam, None) {
-                return Some(0);
-            }
             return None;
         }
 
@@ -473,12 +460,6 @@ impl WindowsWindowInner {
 
     fn handle_char_msg(&self, wparam: WPARAM) -> Option<isize> {
         if self.webview_keyboard_focused() {
-            let input = self.parse_char_message(wparam)?;
-            if !input.chars().any(char::is_control)
-                && dispatch_webview_text_input(self.hwnd(), &input)
-            {
-                return Some(0);
-            }
             return None;
         }
 
@@ -590,8 +571,7 @@ impl WindowsWindowInner {
                 webview_mouse_virtual_keys(current_modifiers(), None),
             );
             if button == MouseButton::Left {
-                focus_webview_element_at_point(&target, relative_point);
-                update_webview_passthrough_focus(handle, true);
+                focus_webview_controller(handle, &target);
             }
             return Some(0);
         }
@@ -774,6 +754,9 @@ impl WindowsWindowInner {
     }
 
     fn handle_ime_position(&self, handle: HWND) -> Option<isize> {
+        if self.webview_keyboard_focused() {
+            return None;
+        }
         if let Some(caret_position) = self.retrieve_caret_position() {
             self.update_ime_position(handle, caret_position);
         }
@@ -810,9 +793,10 @@ impl WindowsWindowInner {
     }
 
     fn update_ime_enabled(&self, handle: HWND) {
-        let ime_enabled = self
-            .with_input_handler(|input_handler| input_handler.query_accepts_text_input())
-            .unwrap_or(false);
+        let ime_enabled = self.webview_keyboard_focused()
+            || self
+                .with_input_handler(|input_handler| input_handler.query_accepts_text_input())
+                .unwrap_or(false);
         if ime_enabled == self.state.ime_enabled.get() {
             return;
         }
@@ -836,6 +820,9 @@ impl WindowsWindowInner {
     }
 
     fn handle_ime_composition(&self, handle: HWND, lparam: LPARAM) -> Option<isize> {
+        if self.webview_keyboard_focused() {
+            return None;
+        }
         let ctx = ImeContext::get(handle)?;
         self.handle_ime_composition_inner(*ctx, lparam)
     }
@@ -1580,243 +1567,15 @@ fn notify_webview_parent_window_position_changed(handle: HWND) {
     }
 }
 
-fn focus_webview_element_at_point(target: &WebviewPassthroughTarget, relative_point: POINT) {
-    let script = format!(
-        "(() => {{\
-            const x = {x} / (window.devicePixelRatio || 1);\
-            const y = {y} / (window.devicePixelRatio || 1);\
-            let element = document.elementFromPoint(x, y);\
-            if (!element) return;\
-            if (element instanceof HTMLLabelElement && element.control) element = element.control;\
-            const editable = element.closest('input, textarea, select, [contenteditable=\"\"], [contenteditable=\"true\"]');\
-            if (!(editable instanceof HTMLElement)) {{\
-                window.__zedHostInput?.setTarget?.(null);\
-                return;\
-            }}\
-            editable.focus({{ preventScroll: true }});\
-            window.__zedHostInput?.setTarget?.(editable);\
-            if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {{\
-                const end = editable.value?.length ?? 0;\
-                editable.setSelectionRange?.(end, end);\
-            }} else if (editable.isContentEditable) {{\
-                const selection = window.getSelection?.();\
-                const range = document.createRange();\
-                range.selectNodeContents(editable);\
-                range.collapse(false);\
-                selection?.removeAllRanges?.();\
-                selection?.addRange?.(range);\
-            }}\
-            if (editable instanceof HTMLInputElement && !['text', 'search', 'url', 'tel', 'email', 'password', 'number'].includes(editable.type)) {{\
-                window.__zedHostInput?.setTarget?.(null);\
-            }}\
-        }})();",
-        x = relative_point.x,
-        y = relative_point.y
-    );
-
+fn focus_webview_controller(handle: HWND, target: &WebviewPassthroughTarget) {
     unsafe {
         if let Ok(controller) = target.controller.cast::<ICoreWebView2Controller>()
-            && let Ok(webview) = controller.CoreWebView2()
+            && controller
+                .MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)
+                .is_ok()
         {
-            let script = HSTRING::from(script);
-            let _ = webview.ExecuteScript(
-                &script,
-                &ExecuteScriptCompletedHandler::create(Box::new(|_, _| Ok(()))),
-            );
+            update_webview_passthrough_focus(handle, true);
         }
-    }
-}
-
-fn dispatch_webview_text_input(handle: HWND, text: &str) -> bool {
-    let Ok(text_json) = serde_json::to_string(text) else {
-        return false;
-    };
-    execute_webview_script(
-        handle,
-        &format!("window.__zedHostInput?.insertText?.({text_json}) ?? false;"),
-    )
-}
-
-fn dispatch_webview_key_event(
-    handle: HWND,
-    event_type: &str,
-    wparam: WPARAM,
-    lparam: LPARAM,
-    text: Option<&str>,
-) -> bool {
-    let vkey = VIRTUAL_KEY(wparam.loword());
-    if event_type == "rawKeyDown"
-        && let Some(key) = webview_editing_key(vkey)
-        && execute_webview_script(
-            handle,
-            &format!("window.__zedHostInput?.keyDown?.({key:?}) ?? false;"),
-        )
-    {
-        return true;
-    }
-
-    let mut params = JsonMap::new();
-    params.insert("type".into(), JsonValue::String(event_type.to_string()));
-    params.insert(
-        "modifiers".into(),
-        JsonValue::from(webview_cdp_modifiers(current_modifiers())),
-    );
-    params.insert(
-        "windowsVirtualKeyCode".into(),
-        JsonValue::from(vkey.0 as u32),
-    );
-    params.insert(
-        "nativeVirtualKeyCode".into(),
-        JsonValue::from(vkey.0 as u32),
-    );
-    params.insert(
-        "autoRepeat".into(),
-        JsonValue::Bool(lparam.0 & (0x1 << 30) > 0),
-    );
-
-    if let Some(key) = webview_dom_key(vkey, lparam) {
-        params.insert("key".into(), JsonValue::String(key));
-    }
-    if let Some(code) = webview_dom_code(vkey) {
-        params.insert("code".into(), JsonValue::String(code));
-    }
-    if let Some(text) = text {
-        params.insert("text".into(), JsonValue::String(text.to_string()));
-        params.insert("unmodifiedText".into(), JsonValue::String(text.to_string()));
-    }
-
-    call_webview_devtools_method(handle, "Input.dispatchKeyEvent", JsonValue::Object(params))
-}
-
-fn execute_webview_script(handle: HWND, script: &str) -> bool {
-    let Some(target) = webview_passthrough_target(handle) else {
-        return false;
-    };
-    let Ok(controller) = target.controller.cast::<ICoreWebView2Controller>() else {
-        return false;
-    };
-    let Ok(webview) = (unsafe { controller.CoreWebView2() }) else {
-        return false;
-    };
-    let script = HSTRING::from(script);
-    let handler = ExecuteScriptCompletedHandler::create(Box::new(|_, _| Ok(())));
-    unsafe { webview.ExecuteScript(&script, &handler).is_ok() }
-}
-
-fn call_webview_devtools_method(handle: HWND, method: &str, params: JsonValue) -> bool {
-    let Some(target) = webview_passthrough_target(handle) else {
-        return false;
-    };
-    let Ok(controller) = target.controller.cast::<ICoreWebView2Controller>() else {
-        return false;
-    };
-    let Ok(webview) = (unsafe { controller.CoreWebView2() }) else {
-        return false;
-    };
-
-    let method = HSTRING::from(method);
-    let params = HSTRING::from(params.to_string());
-    let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(|_, _| Ok(())));
-
-    unsafe {
-        webview
-            .CallDevToolsProtocolMethod(&method, &params, &handler)
-            .is_ok()
-    }
-}
-
-fn webview_cdp_modifiers(modifiers: Modifiers) -> u32 {
-    let mut cdp_modifiers = 0;
-    if modifiers.alt {
-        cdp_modifiers |= 1;
-    }
-    if modifiers.control {
-        cdp_modifiers |= 2;
-    }
-    if modifiers.platform {
-        cdp_modifiers |= 4;
-    }
-    if modifiers.shift {
-        cdp_modifiers |= 8;
-    }
-    cdp_modifiers
-}
-
-fn webview_editing_key(vkey: VIRTUAL_KEY) -> Option<&'static str> {
-    match vkey {
-        VK_BACK => Some("Backspace"),
-        VK_DELETE => Some("Delete"),
-        VK_RETURN => Some("Enter"),
-        _ => None,
-    }
-}
-
-fn webview_dom_key(vkey: VIRTUAL_KEY, lparam: LPARAM) -> Option<String> {
-    let key = parse_normal_key(vkey, lparam, current_modifiers())?.0.key;
-    Some(match key.as_str() {
-        "left" => "ArrowLeft".to_string(),
-        "right" => "ArrowRight".to_string(),
-        "up" => "ArrowUp".to_string(),
-        "down" => "ArrowDown".to_string(),
-        "pageup" => "PageUp".to_string(),
-        "pagedown" => "PageDown".to_string(),
-        "backspace" => "Backspace".to_string(),
-        "enter" => "Enter".to_string(),
-        "tab" => "Tab".to_string(),
-        "escape" => "Escape".to_string(),
-        "delete" => "Delete".to_string(),
-        "insert" => "Insert".to_string(),
-        "home" => "Home".to_string(),
-        "end" => "End".to_string(),
-        "space" => " ".to_string(),
-        other if other.starts_with('f') => other.to_ascii_uppercase(),
-        other => other.to_string(),
-    })
-}
-
-fn webview_dom_code(vkey: VIRTUAL_KEY) -> Option<String> {
-    match vkey {
-        VIRTUAL_KEY(0x41..=0x5A) => Some(format!("Key{}", char::from(vkey.0 as u8))),
-        VIRTUAL_KEY(0x30..=0x39) => Some(format!("Digit{}", char::from(vkey.0 as u8))),
-        VK_SPACE => Some("Space".to_string()),
-        VK_RETURN => Some("Enter".to_string()),
-        VK_TAB => Some("Tab".to_string()),
-        VK_BACK => Some("Backspace".to_string()),
-        VK_DELETE => Some("Delete".to_string()),
-        VK_INSERT => Some("Insert".to_string()),
-        VK_ESCAPE => Some("Escape".to_string()),
-        VK_LEFT => Some("ArrowLeft".to_string()),
-        VK_RIGHT => Some("ArrowRight".to_string()),
-        VK_UP => Some("ArrowUp".to_string()),
-        VK_DOWN => Some("ArrowDown".to_string()),
-        VK_HOME => Some("Home".to_string()),
-        VK_END => Some("End".to_string()),
-        VK_PRIOR => Some("PageUp".to_string()),
-        VK_NEXT => Some("PageDown".to_string()),
-        VK_OEM_3 => Some("Backquote".to_string()),
-        VK_OEM_MINUS => Some("Minus".to_string()),
-        VK_OEM_PLUS => Some("Equal".to_string()),
-        VK_OEM_4 => Some("BracketLeft".to_string()),
-        VK_OEM_5 => Some("Backslash".to_string()),
-        VK_OEM_6 => Some("BracketRight".to_string()),
-        VK_OEM_1 => Some("Semicolon".to_string()),
-        VK_OEM_7 => Some("Quote".to_string()),
-        VK_OEM_COMMA => Some("Comma".to_string()),
-        VK_OEM_PERIOD => Some("Period".to_string()),
-        VK_OEM_2 => Some("Slash".to_string()),
-        VK_F1 => Some("F1".to_string()),
-        VK_F2 => Some("F2".to_string()),
-        VK_F3 => Some("F3".to_string()),
-        VK_F4 => Some("F4".to_string()),
-        VK_F5 => Some("F5".to_string()),
-        VK_F6 => Some("F6".to_string()),
-        VK_F7 => Some("F7".to_string()),
-        VK_F8 => Some("F8".to_string()),
-        VK_F9 => Some("F9".to_string()),
-        VK_F10 => Some("F10".to_string()),
-        VK_F11 => Some("F11".to_string()),
-        VK_F12 => Some("F12".to_string()),
-        _ => None,
     }
 }
 

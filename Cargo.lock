@@ -21173,36 +21173,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "web_preview_windows"
-version = "0.1.0"
-dependencies = [
- "acp_thread",
- "agent-client-protocol",
- "agent_ui",
- "anyhow",
- "base64 0.22.1",
- "editor",
- "fs",
- "futures 0.3.32",
- "gpui",
- "gpui_windows",
- "html_to_markdown",
- "http_client",
- "image",
- "markdown",
- "menu",
- "paths",
- "raw-window-handle",
- "serde_json",
- "ui",
- "url",
- "webview2-com",
- "windows 0.61.3",
- "workspace",
- "wry",
-]
-
-[[package]]
 name = "web_search"
 version = "0.1.0"
 dependencies = [
