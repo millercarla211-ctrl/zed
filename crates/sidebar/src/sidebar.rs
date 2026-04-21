@@ -117,6 +117,11 @@ enum SerializedSidebarView {
     History,
 }
 
+// Placeholder for ProjectGroupKey serialization
+// TODO: Implement proper serialization when MultiWorkspace state management is finalized
+#[derive(Default, Clone, Serialize, Deserialize)]
+struct SerializedProjectGroupKey;
+
 #[derive(Default, Serialize, Deserialize)]
 struct SerializedSidebar {
     #[serde(default)]
@@ -527,7 +532,7 @@ pub struct Sidebar {
     _thread_switcher_subscriptions: Vec<gpui::Subscription>,
     pending_thread_activation: Option<agent_ui::ThreadId>,
     view: SidebarView,
-    restoring_tasks: HashMap<acp::SessionId, Task<()>>,
+    restoring_tasks: HashMap<ThreadId, Task<()>>,
     space_labels: HashMap<WorkspaceId, SharedString>,
     space_order: Vec<WorkspaceId>,
     space_entries: Vec<SpaceEntry>,
@@ -1940,11 +1945,8 @@ impl Sidebar {
             IconName::ChevronDown
         };
 
-        let has_new_thread_entry = self
-            .contents
-            .entries
-            .get(ix + 1)
-            .is_some_and(|entry| matches!(entry, ListEntry::DraftThread { .. }));
+        // Draft thread feature was removed in upstream
+        let has_new_thread_entry = false;
         let show_new_thread_button = !has_new_thread_entry && !self.has_filter_query(cx);
         let workspace = self.multi_workspace.upgrade().and_then(|mw| {
             mw.read(cx)
@@ -2113,7 +2115,7 @@ impl Sidebar {
                 } else {
                     let key = key.clone();
                     this.cursor_pointer()
-                        .when(!is_active, |this| this.hover(|s| s.bg(hover_color)))
+                        .when(!is_active, |this| this.hover(|s| s.bg(hover_solid)))
                         .tooltip(Tooltip::text("Open Workspace"))
                         .on_click(cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
                             if event.modifiers().secondary() {
@@ -2127,7 +2129,7 @@ impl Sidebar {
                                     cx,
                                 )
                             }) {
-                                this.active_entry = Some(ActiveEntry::Draft(workspace.clone()));
+                                // Activate workspace without setting active_entry (no specific thread)
                                 if let Some(multi_workspace) = this.multi_workspace.upgrade() {
                                     multi_workspace.update(cx, |multi_workspace, cx| {
                                         multi_workspace.activate(workspace.clone(), window, cx);
@@ -4668,7 +4670,7 @@ impl Sidebar {
             mw.read(cx)
                 .workspace_for_paths(key.path_list(), key.host().as_ref(), cx)
         }) {
-            multi_workspace.update(cx, |multi_workspace, cx| {
+            self.multi_workspace.update(cx, |multi_workspace, cx| {
                 multi_workspace.activate(workspace, window, cx);
                 multi_workspace.retain_active_workspace(cx);
             });
@@ -4892,7 +4894,7 @@ impl Sidebar {
                         this.child(
                             IconButton::new(
                                 "sidebar-toolbar-thread-import",
-                                IconName::ThreadImport,
+                                IconName::Download,
                             )
                             .shape(IconButtonShape::Square)
                             .style(ButtonStyle::Subtle)
@@ -4912,11 +4914,11 @@ impl Sidebar {
                             .style(ButtonStyle::Subtle)
                             .icon_size(IconSize::Small)
                             .toggle_state(is_archive)
-                            .tooltip(move |_, cx| {
-                                Tooltip::for_action("Toggle Archived Threads", &ToggleArchive, cx)
+                            .tooltip(move |window, cx| {
+                                Tooltip::text("Toggle Archived Threads")(window, cx)
                             })
                             .on_click(cx.listener(|this, _, window, cx| {
-                                this.toggle_archive(&ToggleArchive, window, cx);
+                                this.toggle_archive(&ToggleThreadHistory, window, cx);
                             })),
                     )
                     .child(button(
@@ -6194,20 +6196,22 @@ impl WorkspaceSidebar for Sidebar {
         self.cycle_thread_impl(forward, window, cx);
     }
 
-    fn serialized_state(&self, _cx: &App) -> Option<String> {
+    fn serialized_state(&self, cx: &App) -> Option<String> {
+        // Get collapsed/expanded groups from MultiWorkspace
+        let (collapsed_groups, expanded_groups) = self.multi_workspace
+            .upgrade()
+            .map(|mw| {
+                let mw = mw.read(cx);
+                // For now, return empty vecs as the state is managed by MultiWorkspace
+                // TODO: Properly serialize MultiWorkspace state
+                (Vec::new(), Vec::new())
+            })
+            .unwrap_or_default();
+
         let serialized = SerializedSidebar {
             width: Some(f32::from(self.width)),
-            collapsed_groups: self
-                .collapsed_groups
-                .iter()
-                .cloned()
-                .map(SerializedProjectGroupKey::from)
-                .collect(),
-            expanded_groups: self
-                .expanded_groups
-                .iter()
-                .map(|(key, count)| (SerializedProjectGroupKey::from(key.clone()), *count))
-                .collect(),
+            collapsed_groups,
+            expanded_groups,
             space_labels: {
                 let mut labels = self
                     .space_labels
@@ -6244,16 +6248,9 @@ impl WorkspaceSidebar for Sidebar {
             if let Some(width) = serialized.width {
                 self.width = px(width).clamp(MIN_WIDTH, MAX_WIDTH);
             }
-            self.collapsed_groups = serialized
-                .collapsed_groups
-                .into_iter()
-                .map(ProjectGroupKey::from)
-                .collect();
-            self.expanded_groups = serialized
-                .expanded_groups
-                .into_iter()
-                .map(|(s, count)| (ProjectGroupKey::from(s), count))
-                .collect();
+            // collapsed_groups and expanded_groups are now managed by MultiWorkspace
+            // TODO: Restore them to MultiWorkspace if needed
+            
             self.space_labels = serialized
                 .space_labels
                 .into_iter()
