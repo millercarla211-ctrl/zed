@@ -3,7 +3,7 @@ use std::{
     ffi::c_void,
     ptr::NonNull,
     rc::Rc,
-    sync::Arc,
+    sync::{Arc, Mutex, OnceLock},
 };
 
 use collections::{FxHashSet, HashMap};
@@ -18,6 +18,7 @@ use wayland_client::{
 };
 use wayland_protocols::wp::viewporter::client::wp_viewport;
 use wayland_protocols::xdg::decoration::zv1::client::zxdg_toplevel_decoration_v1;
+use wayland_protocols::xdg::foreign::zv2::client::zxdg_exported_v2;
 use wayland_protocols::xdg::shell::client::xdg_surface;
 use wayland_protocols::xdg::shell::client::xdg_toplevel::{self};
 use wayland_protocols::{
@@ -30,12 +31,12 @@ use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1;
 use crate::linux::wayland::{display::WaylandDisplay, serial::SerialKind};
 use crate::linux::{Globals, Output, WaylandClientStatePtr, get_window};
 use gpui::{
-    AnyWindowHandle, Bounds, Capslock, Decorations, DevicePixels, GpuSpecs, Modifiers, Pixels,
-    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
-    PromptButton, PromptLevel, RequestFrameOptions, ResizeEdge, Scene, Size, Tiling,
-    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowControls,
-    WindowDecorations, WindowKind, WindowParams, layer_shell::LayerShellNotSupportedError, px,
-    size,
+    AnyWindowHandle, Bounds, Capslock, Decorations, DevicePixels, GpuSpecs, Modifiers,
+    MousePassthroughSnapshot, Pixels, PlatformAtlas, PlatformDisplay, PlatformInput,
+    PlatformInputHandler, PlatformWindow, Point, PromptButton, PromptLevel, RequestFrameOptions,
+    ResizeEdge, Scene, Size, Tiling, WindowAppearance, WindowBackgroundAppearance, WindowBounds,
+    WindowControlArea, WindowControls, WindowDecorations, WindowKind, WindowParams,
+    layer_shell::LayerShellNotSupportedError, px, size,
 };
 use gpui_wgpu::{CompositorGpuHint, WgpuRenderer, WgpuSurfaceConfig};
 
@@ -57,6 +58,34 @@ pub(crate) struct Callbacks {
 struct RawWindow {
     window: *mut c_void,
     display: *mut c_void,
+}
+
+fn exported_handle_registry() -> &'static Mutex<HashMap<usize, String>> {
+    static REGISTRY: OnceLock<Mutex<HashMap<usize, String>>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(HashMap::default()))
+}
+
+fn surface_registry_key(surface_ptr: *mut c_void) -> usize {
+    surface_ptr as usize
+}
+
+fn register_exported_handle(surface: &wl_surface::WlSurface, handle: String) {
+    if let Ok(mut registry) = exported_handle_registry().lock() {
+        registry.insert(surface_registry_key(surface.id().as_ptr().cast()), handle);
+    }
+}
+
+fn unregister_exported_handle(surface: &wl_surface::WlSurface) {
+    if let Ok(mut registry) = exported_handle_registry().lock() {
+        registry.remove(&surface_registry_key(surface.id().as_ptr().cast()));
+    }
+}
+
+pub fn exported_wayland_window_handle_from_surface_ptr(surface: *mut c_void) -> Option<String> {
+    exported_handle_registry()
+        .lock()
+        .ok()
+        .and_then(|registry| registry.get(&surface_registry_key(surface)).cloned())
 }
 
 // Safety: The raw pointers in RawWindow point to Wayland surface/display
@@ -108,6 +137,7 @@ pub struct WaylandWindowState {
     input_handler: Option<PlatformInputHandler>,
     decorations: WindowDecorations,
     background_appearance: WindowBackgroundAppearance,
+    mouse_passthrough_snapshot: MousePassthroughSnapshot,
     fullscreen: bool,
     maximized: bool,
     tiling: Tiling,
@@ -122,6 +152,8 @@ pub struct WaylandWindowState {
     in_progress_window_controls: Option<WindowControls>,
     window_controls: WindowControls,
     client_inset: Option<Pixels>,
+    exported_surface: Option<zxdg_exported_v2::ZxdgExportedV2>,
+    exported_handle: Option<String>,
 }
 
 pub enum WaylandSurfaceState {
@@ -380,6 +412,7 @@ impl WaylandWindowState {
             input_handler: None,
             decorations: WindowDecorations::Client,
             background_appearance: WindowBackgroundAppearance::Opaque,
+            mouse_passthrough_snapshot: MousePassthroughSnapshot::default(),
             fullscreen: false,
             maximized: false,
             tiling: Tiling::default(),
@@ -395,6 +428,8 @@ impl WaylandWindowState {
             in_progress_window_controls: None,
             window_controls: WindowControls::default(),
             client_inset: None,
+            exported_surface: None,
+            exported_handle: None,
         })
     }
 
@@ -458,6 +493,11 @@ impl Drop for WaylandWindow {
         if let Some(decoration) = &state.surface_state.decoration() {
             decoration.destroy();
         }
+
+        if let Some(exported_surface) = state.exported_surface.take() {
+            exported_surface.destroy();
+        }
+        unregister_exported_handle(&state.surface);
 
         // Surface state might contain xdg_toplevel/xdg_surface which can be destroyed now that
         // decorations are gone. layer_surface has no dependencies.
@@ -535,6 +575,22 @@ impl WaylandWindow {
             callbacks: Rc::new(RefCell::new(Callbacks::default())),
         });
 
+        let exported_surface = {
+            let state = this.0.state.borrow();
+            if let Some(exporter) = state.globals.xdg_exporter.as_ref() {
+                if state.surface_state.toplevel().is_some() {
+                    Some(exporter.export_toplevel(&surface, &state.globals.qh, surface.id()))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+        if let Some(exported_surface) = exported_surface {
+            this.0.state.borrow_mut().exported_surface = Some(exported_surface);
+        }
+
         // Kick things off
         surface.commit();
 
@@ -549,6 +605,19 @@ impl WaylandWindowStatePtr {
 
     pub fn surface(&self) -> wl_surface::WlSurface {
         self.state.borrow().surface.clone()
+    }
+
+    pub fn exported_handle(&self) -> Option<String> {
+        self.state.borrow().exported_handle.clone()
+    }
+
+    pub fn set_exported_handle(&self, handle: String) {
+        let surface = {
+            let mut state = self.state.borrow_mut();
+            state.exported_handle = Some(handle.clone());
+            state.surface.clone()
+        };
+        register_exported_handle(&surface, handle);
     }
 
     pub fn toplevel(&self) -> Option<xdg_toplevel::XdgToplevel> {
@@ -1271,6 +1340,12 @@ impl PlatformWindow for WaylandWindow {
         self.borrow().background_appearance
     }
 
+    fn set_mouse_passthrough_snapshot(&self, snapshot: MousePassthroughSnapshot) {
+        let mut state = self.borrow_mut();
+        state.mouse_passthrough_snapshot = snapshot;
+        update_window(state);
+    }
+
     fn is_subpixel_rendering_supported(&self) -> bool {
         let client = self.borrow().client.get_client();
         let state = client.borrow();
@@ -1527,6 +1602,57 @@ fn update_window(mut state: RefMut<WaylandWindowState>) {
     } else {
         state.surface.set_opaque_region(None);
     }
+
+    let input_region = state
+        .globals
+        .compositor
+        .create_region(&state.globals.qh, ());
+    input_region.add(
+        0,
+        0,
+        (f32::from(state.window_bounds.size.width) * state.scale)
+            .ceil()
+            .max(1.0) as i32,
+        (f32::from(state.window_bounds.size.height) * state.scale)
+            .ceil()
+            .max(1.0) as i32,
+    );
+
+    if state.background_appearance != WindowBackgroundAppearance::Opaque {
+        for region in state.mouse_passthrough_snapshot.regions.iter() {
+            input_region.subtract(
+                (f32::from(region.bounds.origin.x) * state.scale).floor() as i32,
+                (f32::from(region.bounds.origin.y) * state.scale).floor() as i32,
+                (f32::from(region.bounds.size.width) * state.scale)
+                    .ceil()
+                    .max(1.0) as i32,
+                (f32::from(region.bounds.size.height) * state.scale)
+                    .ceil()
+                    .max(1.0) as i32,
+            );
+        }
+
+        for hitbox in state.mouse_passthrough_snapshot.hitboxes.iter() {
+            if !state
+                .mouse_passthrough_snapshot
+                .interactive_hitbox_ids
+                .contains(&hitbox.id)
+            {
+                continue;
+            }
+            let bounds = hitbox.bounds.intersect(&hitbox.content_mask.bounds);
+            input_region.add(
+                (f32::from(bounds.origin.x) * state.scale).floor() as i32,
+                (f32::from(bounds.origin.y) * state.scale).floor() as i32,
+                (f32::from(bounds.size.width) * state.scale).ceil().max(1.0) as i32,
+                (f32::from(bounds.size.height) * state.scale)
+                    .ceil()
+                    .max(1.0) as i32,
+            );
+        }
+    }
+    state.surface.set_input_region(Some(&input_region));
+    input_region.destroy();
 
     if let Some(ref blur_manager) = state.globals.blur_manager {
         if state.background_appearance == WindowBackgroundAppearance::Blurred {

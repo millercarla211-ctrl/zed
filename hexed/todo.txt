@@ -1,0 +1,36 @@
+IN PROGRESS:
+- Fixing async-tungstenite version conflict in repl crate
+
+PENDING:
+- Resolve WebSocketStream type mismatch between async-tungstenite@0.31.0 and @0.34.0
+- Complete build after fixing repl crate
+- Manual validation with `just run` for the merge
+- Test all custom features (space carousel, web preview, liquid glass)
+- Test upstream features (terminal actions, history toggle, bottom dock layouts)
+- Push all fixes to remote
+
+COMPLETED:
+- ✅ Created backup branch at commit before merge (238a8a19db)
+- ✅ Renamed old main branch to deprecated-4
+- ✅ Created new main branch tracking upstream/main
+- ✅ Merged main (upstream) into forge with all conflicts resolved
+- ✅ Kept BOTH local and remote changes in all conflicts
+- ✅ Documented all merge resolutions in changelog.txt
+- ✅ Created git-workflow.md steering file documenting the branch workflow
+- ✅ Fixed compilation errors in multi_workspace.rs (imports, method calls, function signatures)
+- ✅ Fixed compilation errors in pane_group.rs (restored width_fraction_for_pane method)
+- ✅ Fixed compilation error in agent_panel.rs (added missing source parameter)
+- ✅ Partially fixed repl crate (added protocol_mode field)
+- ✅ workspace crate compiled successfully (984/1637)
+- ✅ agent_ui crate compiled successfully (1515/1637)
+- ✅ Build reached 1591/1637 crates (97% complete)
+
+KNOWN ISSUES:
+- repl crate: async-tungstenite version conflict
+  * client crate uses async-tungstenite@0.31.0
+  * jupyter-websocket-client uses async-tungstenite@0.34.0
+  * WebSocketStream types are incompatible between versions
+  * Need to either update client crate or find alternative connection method
+
+BLOCKED:
+- Windows touch/pen forwarding is still a larger follow-up because the current host layer has no `WM_POINTER` -> `SendPointerInput` bridge

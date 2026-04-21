@@ -15,6 +15,7 @@ use editor::{
 };
 use feature_flags::{FeatureFlagAppExt, ProjectPanelUndoRedoFeatureFlag};
 use file_icons::FileIcons;
+use futures::StreamExt;
 use git;
 use git::status::GitSummary;
 use git_ui;
@@ -158,6 +159,7 @@ pub struct ProjectPanel {
     mouse_down: bool,
     hover_expand_task: Option<Task<()>>,
     previous_drag_position: Option<Point<Pixels>>,
+    entry_hover_info: HashMap<PathBuf, EntryHoverInfoState>,
     sticky_items_count: usize,
     last_reported_update: Instant,
     update_visible_entries_task: UpdateVisibleEntriesTask,
@@ -268,6 +270,7 @@ struct EntryDetails {
     filename: String,
     icon: Option<SharedString>,
     path: Arc<RelPath>,
+    absolute_path: PathBuf,
     depth: usize,
     kind: EntryKind,
     is_ignored: bool,
@@ -285,6 +288,13 @@ struct EntryDetails {
     is_private: bool,
     worktree_id: WorktreeId,
     canonical_path: Option<Arc<Path>>,
+}
+
+#[derive(Clone, Debug)]
+enum EntryHoverInfoState {
+    Loading,
+    Ready(String),
+    Failed,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -726,6 +736,7 @@ impl ProjectPanel {
                         }
                     }
                     project::Event::WorktreeRemoved(id) => {
+                        this.entry_hover_info.clear();
                         this.state.expanded_dir_ids.remove(id);
                         this.update_visible_entries(None, false, false, window, cx);
                         cx.notify();
@@ -733,6 +744,7 @@ impl ProjectPanel {
                     project::Event::WorktreeUpdatedEntries(_, _)
                     | project::Event::WorktreeAdded(_)
                     | project::Event::WorktreeOrderChanged => {
+                        this.entry_hover_info.clear();
                         this.update_visible_entries(None, false, false, window, cx);
                         cx.notify();
                     }
@@ -886,6 +898,7 @@ impl ProjectPanel {
                 mouse_down: false,
                 hover_expand_task: None,
                 previous_drag_position: None,
+                entry_hover_info: Default::default(),
                 sticky_items_count: 0,
                 last_reported_update: Instant::now(),
                 state: State {
@@ -5258,6 +5271,80 @@ impl ProjectPanel {
         false
     }
 
+    fn request_entry_hover_info(
+        &mut self,
+        absolute_path: PathBuf,
+        kind: EntryKind,
+        cx: &mut Context<Self>,
+    ) {
+        if absolute_path.as_os_str().is_empty()
+            || self.entry_hover_info.contains_key(&absolute_path)
+        {
+            return;
+        }
+
+        self.entry_hover_info
+            .insert(absolute_path.clone(), EntryHoverInfoState::Loading);
+
+        let fs = self.fs.clone();
+        cx.spawn(async move |this, cx| {
+            let state = compute_entry_hover_info(fs, absolute_path.clone(), kind)
+                .await
+                .map(EntryHoverInfoState::Ready)
+                .unwrap_or(EntryHoverInfoState::Failed);
+
+            this.update(cx, |this, cx| {
+                this.entry_hover_info.insert(absolute_path, state);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn render_hover_info_badge(&self, absolute_path: &Path, cx: &App) -> Option<AnyElement> {
+        let label = match self.entry_hover_info.get(absolute_path) {
+            Some(EntryHoverInfoState::Loading) => "Loading...".to_string(),
+            Some(EntryHoverInfoState::Ready(summary)) => summary.clone(),
+            Some(EntryHoverInfoState::Failed) | None => return None,
+        };
+
+        Some(
+            div()
+                .visible_on_hover("list_item")
+                .flex_none()
+                .px_1p5()
+                .py_0p5()
+                .rounded_full()
+                .bg(cx.theme().colors().element_background)
+                .child(
+                    Label::new(label)
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted),
+                )
+                .into_any_element(),
+        )
+    }
+
+    fn render_entry_label(
+        &self,
+        file_name: String,
+        kind: EntryKind,
+        filename_text_color: Color,
+        bold_folder_labels: bool,
+    ) -> AnyElement {
+        if kind.is_file() {
+            render_file_label(file_name, filename_text_color)
+        } else {
+            Label::new(file_name)
+                .single_line()
+                .truncate()
+                .color(filename_text_color)
+                .when(bold_folder_labels, |this| this.weight(FontWeight::SEMIBOLD))
+                .into_any_element()
+        }
+    }
+
     fn render_entry(
         &self,
         entry_id: ProjectEntryId,
@@ -5302,6 +5389,8 @@ impl ProjectPanel {
             .canonical_path
             .as_ref()
             .map(|f| f.to_string_lossy().into_owned());
+        let hover_info_path = details.absolute_path.clone();
+        let hover_badge = self.render_hover_info_badge(&hover_info_path, cx);
         let path_style = self.project.read(cx).path_style(cx);
         let path = details.path.clone();
         let path_for_external_paths = path.clone();
@@ -5729,6 +5818,11 @@ impl ProjectPanel {
                     }
                 }),
             )
+            .on_hover(cx.listener(move |this, hovered, _, cx| {
+                if *hovered {
+                    this.request_entry_hover_info(hover_info_path.clone(), kind, cx);
+                }
+            }))
             .child(
                 ListItem::new(id)
                     .indent_level(depth)
@@ -5741,7 +5835,8 @@ impl ProjectPanel {
                     .when(
                         canonical_path.is_some()
                             || diagnostic_count.is_some()
-                            || git_indicator.is_some(),
+                            || git_indicator.is_some()
+                            || hover_badge.is_some(),
                         |this| {
                             let symlink_element = canonical_path.map(|path| {
                                 div()
@@ -5799,6 +5894,7 @@ impl ProjectPanel {
                                         this.child(git_indicator)
                                     })
                                     .when_some(symlink_element, |this, el| this.child(el))
+                                    .when_some(hover_badge, |this, badge| this.child(badge))
                                     .into_any_element(),
                             )
                         },
@@ -5854,11 +5950,14 @@ impl ProjectPanel {
                             .flex_none()
                     })
                     .child(if show_editor {
-                        h_flex().h_6().w_full().child(self.filename_editor.clone())
-                    } else {
                         h_flex()
                             .h_6()
-                            .map(|this| match self.state.ancestors.get(&entry_id) {
+                            .w_full()
+                            .min_w_0()
+                            .child(self.filename_editor.clone())
+                    } else {
+                        h_flex().h_6().w_full().min_w_0().map(|this| {
+                            match self.state.ancestors.get(&entry_id) {
                                 Some(folded_ancestors) => {
                                     this.children(self.render_folder_elements(
                                         folded_ancestors,
@@ -5877,17 +5976,14 @@ impl ProjectPanel {
                                     ))
                                 }
 
-                                None => this.child(
-                                    Label::new(file_name)
-                                        .single_line()
-                                        .color(filename_text_color)
-                                        .when(
-                                            settings.bold_folder_labels && kind.is_dir(),
-                                            |this| this.weight(FontWeight::SEMIBOLD),
-                                        )
-                                        .into_any_element(),
-                                ),
-                            })
+                                None => this.child(self.render_entry_label(
+                                    file_name,
+                                    kind,
+                                    filename_text_color,
+                                    settings.bold_folder_labels && kind.is_dir(),
+                                )),
+                            }
+                        })
                     })
                     .on_secondary_mouse_down(cx.listener(
                         move |this, event: &MouseDownEvent, window, cx| {
@@ -5903,8 +5999,7 @@ impl ProjectPanel {
                             }
                             this.deploy_context_menu(event.position, entry_id, window, cx);
                         },
-                    ))
-                    .overflow_x(),
+                    )),
             )
             .when_some(validation_color_and_message, |this, (color, message)| {
                 this.relative().child(deferred(
@@ -6048,6 +6143,7 @@ impl ProjectPanel {
                         .child(
                             Label::new(component)
                                 .single_line()
+                                .truncate()
                                 .color(filename_text_color)
                                 .when(bold_folder_labels && !is_file, |this| {
                                     this.weight(FontWeight::SEMIBOLD)
@@ -6224,11 +6320,23 @@ impl ProjectPanel {
             .clipboard
             .as_ref()
             .is_some_and(|e| e.is_cut() && e.items().contains(&selection));
+        let absolute_path = entry
+            .canonical_path
+            .as_ref()
+            .map(|path| path.to_path_buf())
+            .unwrap_or_else(|| {
+                self.project
+                    .read(cx)
+                    .worktree_for_id(worktree_id, cx)
+                    .map(|worktree| worktree.read(cx).absolutize(&entry.path))
+                    .unwrap_or_default()
+            });
 
         EntryDetails {
             filename,
             icon,
             path: entry.path.clone(),
+            absolute_path,
             depth,
             kind: entry.kind,
             is_ignored: entry.is_ignored,
@@ -6525,6 +6633,148 @@ fn item_width_estimate(depth: usize, item_text_chars: usize, is_symlink: bool) -
     item_width
 }
 
+fn render_file_label(file_name: String, color: Color) -> AnyElement {
+    let path = Path::new(&file_name);
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .filter(|extension| !extension.is_empty())
+        .map(|extension| format!(".{extension}"));
+    let stem = path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .filter(|stem| !stem.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or(file_name.clone());
+
+    if let Some(extension) = extension {
+        return h_flex()
+            .w_full()
+            .min_w_0()
+            .items_center()
+            .child(
+                Label::new(stem)
+                    .single_line()
+                    .truncate()
+                    .color(color)
+                    .flex_1(),
+            )
+            .child(Label::new(extension).single_line().color(color).flex_none())
+            .into_any_element();
+    }
+
+    Label::new(file_name)
+        .single_line()
+        .truncate()
+        .color(color)
+        .into_any_element()
+}
+
+async fn compute_entry_hover_info(
+    fs: Arc<dyn Fs>,
+    absolute_path: PathBuf,
+    kind: EntryKind,
+) -> Result<String> {
+    if kind.is_dir() {
+        let (item_count, total_size) = collect_directory_stats(fs, &absolute_path).await?;
+        return Ok(format!(
+            "{} items | {}",
+            format_compact_count(item_count),
+            format_file_size(total_size),
+        ));
+    }
+
+    let metadata = fs
+        .metadata(&absolute_path)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Missing metadata for {}", absolute_path.display()))?;
+
+    const MAX_TEXT_PREVIEW_BYTES: u64 = 1024 * 1024;
+    if metadata.len <= MAX_TEXT_PREVIEW_BYTES
+        && let Ok(contents) = fs.load(&absolute_path).await
+    {
+        let lines = contents.lines().count();
+        let token_count = estimate_token_count(contents.as_str());
+        return Ok(format!(
+            "{} lines | {} tokens",
+            format_compact_count(lines),
+            format_compact_count(token_count),
+        ));
+    }
+
+    Ok(format_file_size(metadata.len))
+}
+
+async fn collect_directory_stats(fs: Arc<dyn Fs>, root: &Path) -> Result<(usize, u64)> {
+    let mut item_count = 0usize;
+    let mut total_size = 0u64;
+    let mut pending = vec![root.to_path_buf()];
+
+    while let Some(path) = pending.pop() {
+        let mut entries = fs.read_dir(&path).await?;
+        while let Some(entry) = entries.next().await {
+            let entry_path = entry?;
+            let Some(metadata) = fs.metadata(&entry_path).await? else {
+                continue;
+            };
+
+            item_count += 1;
+            if metadata.is_dir && !metadata.is_symlink {
+                pending.push(entry_path);
+            } else {
+                total_size = total_size.saturating_add(metadata.len);
+            }
+        }
+    }
+
+    Ok((item_count, total_size))
+}
+
+fn estimate_token_count(text: &str) -> usize {
+    let chars = text.chars().count();
+    chars.saturating_add(3) / 4
+}
+
+fn format_compact_count(value: usize) -> String {
+    format_compact_number(value as u64)
+}
+
+fn format_file_size(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    let mut value = bytes as f64;
+    let mut unit_ix = 0usize;
+    while value >= 1024.0 && unit_ix < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit_ix += 1;
+    }
+
+    if unit_ix == 0 {
+        format!("{} {}", bytes, UNITS[unit_ix])
+    } else if value >= 10.0 {
+        format!("{value:.0} {}", UNITS[unit_ix])
+    } else {
+        format!("{value:.1} {}", UNITS[unit_ix])
+    }
+}
+
+fn format_compact_number(value: u64) -> String {
+    const UNITS: [&str; 4] = ["", "K", "M", "B"];
+    let mut scaled = value as f64;
+    let mut unit_ix = 0usize;
+    while scaled >= 1000.0 && unit_ix < UNITS.len() - 1 {
+        scaled /= 1000.0;
+        unit_ix += 1;
+    }
+
+    if unit_ix == 0 {
+        value.to_string()
+    } else if scaled >= 10.0 {
+        format!("{scaled:.0}{}", UNITS[unit_ix])
+    } else {
+        format!("{scaled:.1}{}", UNITS[unit_ix])
+    }
+}
+
 impl Render for ProjectPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let has_worktree = !self.state.visible_entries.is_empty();
@@ -6532,7 +6782,8 @@ impl Render for ProjectPanel {
         let panel_settings = ProjectPanelSettings::get_global(cx);
         let indent_size = panel_settings.indent_size;
         let show_indent_guides = panel_settings.indent_guides.show == ShowIndentGuides::Always;
-        let horizontal_scroll = panel_settings.scrollbar.horizontal_scroll;
+        let _horizontal_scroll_setting = panel_settings.scrollbar.horizontal_scroll;
+        let horizontal_scroll = false;
         let show_sticky_entries = {
             if panel_settings.sticky_scroll {
                 let is_scrollable = self.scroll_handle.is_scrollable();

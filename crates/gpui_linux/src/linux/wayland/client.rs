@@ -57,6 +57,7 @@ use wayland_protocols::xdg::activation::v1::client::{xdg_activation_token_v1, xd
 use wayland_protocols::xdg::decoration::zv1::client::{
     zxdg_decoration_manager_v1, zxdg_toplevel_decoration_v1,
 };
+use wayland_protocols::xdg::foreign::zv2::client::{zxdg_exported_v2, zxdg_exporter_v2};
 use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
 use wayland_protocols::xdg::system_bell::v1::client::xdg_system_bell_v1;
 use wayland_protocols::{
@@ -119,6 +120,7 @@ pub struct Globals {
     pub primary_selection_manager:
         Option<zwp_primary_selection_device_manager_v1::ZwpPrimarySelectionDeviceManagerV1>,
     pub wm_base: xdg_wm_base::XdgWmBase,
+    pub xdg_exporter: Option<zxdg_exporter_v2::ZxdgExporterV2>,
     pub shm: wl_shm::WlShm,
     pub seat: wl_seat::WlSeat,
     pub viewporter: Option<wp_viewporter::WpViewporter>,
@@ -164,6 +166,7 @@ impl Globals {
             shm: globals.bind(&qh, 1..=1, ()).unwrap(),
             seat,
             wm_base: globals.bind(&qh, 1..=5, ()).unwrap(),
+            xdg_exporter: globals.bind(&qh, 1..=1, ()).ok(),
             viewporter: globals.bind(&qh, 1..=1, ()).ok(),
             fractional_scale_manager: globals.bind(&qh, 1..=1, ()).ok(),
             decoration_manager: globals.bind(&qh, 1..=1, ()).ok(),
@@ -1082,6 +1085,7 @@ delegate_noop!(WaylandClientStatePtr: ignore wl_shm::WlShm);
 delegate_noop!(WaylandClientStatePtr: ignore wl_shm_pool::WlShmPool);
 delegate_noop!(WaylandClientStatePtr: ignore wl_buffer::WlBuffer);
 delegate_noop!(WaylandClientStatePtr: ignore wl_region::WlRegion);
+delegate_noop!(WaylandClientStatePtr: ignore zxdg_exporter_v2::ZxdgExporterV2);
 delegate_noop!(WaylandClientStatePtr: ignore wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1);
 delegate_noop!(WaylandClientStatePtr: ignore zxdg_decoration_manager_v1::ZxdgDecorationManagerV1);
 delegate_noop!(WaylandClientStatePtr: ignore zwlr_layer_shell_v1::ZwlrLayerShellV1);
@@ -1298,6 +1302,27 @@ impl Dispatch<xdg_activation_token_v1::XdgActivationTokenV1, ()> for WaylandClie
         }
 
         token.destroy();
+    }
+}
+
+impl Dispatch<zxdg_exported_v2::ZxdgExportedV2, ObjectId> for WaylandClientStatePtr {
+    fn event(
+        this: &mut Self,
+        _: &zxdg_exported_v2::ZxdgExportedV2,
+        event: <zxdg_exported_v2::ZxdgExportedV2 as Proxy>::Event,
+        surface_id: &ObjectId,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        let client = this.get_client();
+        let mut state = client.borrow_mut();
+        let Some(window) = get_window(&mut state, surface_id) else {
+            return;
+        };
+
+        if let zxdg_exported_v2::Event::Handle { handle } = event {
+            window.set_exported_handle(handle);
+        }
     }
 }
 

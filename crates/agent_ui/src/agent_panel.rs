@@ -3512,10 +3512,28 @@ impl AgentPanel {
             .on_drop(cx.listener(move |this, tab: &DraggedTab, window, cx| {
                 let item = tab.pane.read(cx).item_for_index(tab.ix);
                 let project_paths = item
+                    .as_ref()
                     .and_then(|item| item.project_path(cx))
                     .into_iter()
                     .collect::<Vec<_>>();
-                this.handle_drop(project_paths, vec![], window, cx);
+                if !project_paths.is_empty() {
+                    this.handle_drop(project_paths, vec![], window, cx);
+                    return;
+                }
+
+                if let Some(url) = item
+                    .as_ref()
+                    .and_then(|item| dropped_web_preview_url(*item, cx))
+                {
+                    this.insert_content_blocks(
+                        vec![acp::ContentBlock::ResourceLink(acp::ResourceLink::new(
+                            url.clone(),
+                            url,
+                        ))],
+                        window,
+                        cx,
+                    );
+                }
             }))
             .on_drop(
                 cx.listener(move |this, selection: &DraggedSelection, window, cx| {
@@ -3570,6 +3588,41 @@ impl AgentPanel {
         }
     }
 
+    pub fn insert_content_blocks(
+        &mut self,
+        blocks: Vec<acp::ContentBlock>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if blocks.is_empty() {
+            return;
+        }
+
+        if let Some(conversation_view) = self.active_conversation_view()
+            && conversation_view.read(cx).active_thread().is_some()
+        {
+            conversation_view.update(cx, |conversation_view, cx| {
+                conversation_view.insert_content_blocks(blocks, window, cx);
+            });
+            return;
+        }
+
+        self.external_thread(
+            None,
+            None,
+            None,
+            None,
+            Some(AgentInitialContent::ContentBlock {
+                blocks,
+                auto_submit: false,
+            }),
+            true,
+            "agent_panel",
+            window,
+            cx,
+        );
+    }
+
     fn render_workspace_trust_message(&self, cx: &Context<Self>) -> Option<impl IntoElement> {
         if !self.show_trust_workspace_message {
             return None;
@@ -3610,6 +3663,19 @@ impl AgentPanel {
             BaseView::Uninitialized => {}
         }
         key_context
+    }
+}
+
+fn dropped_web_preview_url(item: &dyn workspace::ItemHandle, cx: &App) -> Option<String> {
+    if item.telemetry_event_text(cx) != Some("Web Preview Opened") {
+        return None;
+    }
+
+    let url = item.tab_tooltip_text(cx)?.to_string();
+    let parsed = url::Url::parse(&url).ok()?;
+    match parsed.scheme() {
+        "http" | "https" => Some(url),
+        _ => None,
     }
 }
 

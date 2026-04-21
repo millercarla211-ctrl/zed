@@ -1,0 +1,57 @@
+Today is 11th April 2026, and we are working on zed code editor. I have attached an image screenshot, so study that and do this the current task is updating our web preview tab. Study the code about our web preview tab and implement these new updates:
+The image I gave you is a Gen Code editor sidebar, and currently in our Gen Code editor we also have a workspace sidebar. In that sidebar we have to make the sidebar UI like the Gen browser sidebar.
+
+Now, here are some stuff. This time don't ask me any clarification questions at all; you have to do it autonomously by yourself. Just understand what I am trying to say, and if you don't understand anything, just do your wish; that's fine.
+
+Let's do the first thing. On the sidebar at the screenshot I gave you about the Gen sidebar, it has a couple of icons, and in our workspace sidebar too, if you can, then you implement those icons. In our Gen Code editor currently there is a search bar. Make the top part of the sidebar and the tab bar of the or switch sidebar like the Gen browser, and then there will be four columns like the Gen browser feature that I give you. In those four column items, those are grid items, so as the sidebar grows and changes, the columns get calculated. For now, in the screenshot, you don't need to put any kind of images or items there; just put 1 to 12 numbers in those 12 containers, and then goes the current workspace UI. Make sure that you don't change the workspace UI, as it is very, very complicated.
+
+In the current Zed workspace sidebar there is an Archive and Main Thread tab switcher. In the current Zed workspace sidebar footer, please create a center layout where there are dots (small circles), and put logic there so that if there are many circles, then we have a left and right arrow that will cause left and right more items to show. When we click on the dots, it will move us like a tab into a new workspace thing.
+
+Now, currently in our workspace sidebar bottom right at the right icon, when we click it, please show another dropdown about "Create space", and the "Create space" means that create a new dot. In that dot, please, like the top sidebar content, will be updated to a new sidebar tab item, so we will see another tab instead of the current tab, like it will show the Gen browser spaces-like UI. Please make sure Zed codigators, theds, and archivers are very complex, so you please don't mess it up. Anyway, just implement the spaces switcher in the footer bottom center with the rules of carousel nix and previous icons that I told you.
+
+In the WordPress sidebar bottom right icon, currently there is an icon to create a new workspace, and in that place, on the top of it, please create a new item called "Create new space". When we click on that, it will create a new space and choose a random path, as our current Gen Code editor workspace needs a path to render it. Please make a data system so that it can see all the users' directories and pick a random path. If nothing is specified, as for now we will just do it to see the things rapidly and change it rapidly, and we will fix it to be more professional later.
+
+When we click on the spaces, it will create a new space called "New space" with a slug number counter. When we right-click on the spaces, it will show some options to delete and manage that exact same space. When we left-click on the spaces dots, it will move our tab to that specific space's contents.
+
+Please make sure that the spaces tab is like the current Threads and Archive tab in our workspace sidebar, just the difference is that the current Main Threads and Archive sidebar just shows zed-specific stuff, but now we are implementing a new way to have multiple workspaces to make the sidebar more customizable. In our sidebar there can be some places where there can be more items in the sidebar, so make sure that if there are not already shown, a scroll bar is shown. If there are many items in the sidebar center, we can scroll it to view the other items in the sidebar.
+
+Also, I notice that in our Gen Code editor there is no text and create options, so please make sure to make text truncate UI so that if the text grows, it doesn't overflow and it shows an ellipsis (dot dot dot) truncate. Implement all these in our sidebar correctly. Don't ask me any questions at all; just implement it directly and do your best to do this autonomously.
+
+I get it that it's a pretty complex task, so before doing anything, you can ask me clarification questions so that we can implement this new web preview correctly. 
+
+Awesome you did really well. Now the top and center of our sidebar is looking pretty good. Please work on the bottom of our sidebar and make sure the "Creating New Space" works and it creates an empty space correctly. Make sure that space dots are the main pieces of our sidebar bottom. When we create new space make sure that it creates a new dot in the space dots correctly.
+Also only use the primary text color when we are active on the space. For other spaces please use a jet-themed color and use bordered not the whole color because that will be better. When we click or do a right click on the space dots, show options to delete and manage those spaces. Upon a left click please make that particular space dot screen space active.
+
+Please forgot the git changes stuffs and do these:
+And currently in our workspace sidebar we have a top bar that has items on the left side but I don't want that. I want that half of the items stay on the left side and half of the items go to the right side of our workspace sidebar top. The sidebar is correct and the numbered 1 to 12 grid icons are also correct but in the current space there is a shape with text accent besides the space text. Please remove that shape so that only the text remains
+
+Please make our sidebar Bottom of the current workspace item in the bottom of our current workspace item draggable so it will make a better UX. Also in the workspace sidebar when we are clicking on the archive button, it is switching to the archive tab. In that archive tab there are threads and the archive tab in the top of the sidebar. Please remove that. Currently in the bottom of our workspace sidebar when we are on the archive tab, it's showing another icon. Please move the icon to that Top of our workspace sidebar and place then in the top right!!!
+And currently our space dots are just dummy 12 dots. Please now make it so that you remove these 12 dummy dots and connect it with our main actual functionality with multi words. Make sure that when we click "Create new space" it creates a new space dot and clears the sidebar with the new space dot item.
+Currently in our space dots carousel the next and previous icon is acting weird. They should work like this: no need to switch the active sidebar; they should only move the active sidebar's active space dots' position horizontally and the user will click on them to activate the space they like.
+Please implement right-click and left-click interaction and menus in our space dots. When we are clicking on the space dot, please update our cursor to be a click-and-grab cursor so that it will create a better UI and UX. 
+
+And at the title bar top bar we have our screen dock. In the screen the screen dock is currently smaller and its items are smaller too. Please make the items as big as the other items and increase the height of the dock so that we can click on the items more correctly. Currently the screen dock is so small in height so we are mis-clicking. 
+
+Now please keep this in mind: you previously tried to do this again and again but failed miserably so only go ahead if you are more confident that you can do this time correctly.
+
+The thing is, in the current sidebar footer the dots have a gap between them so many times we are misclicking stuff. Your job is to create a system so that when we are inside the sidebar footer and near the string dot we click on something, it clicks even if it doesn't directly click on any specific dot. It even automatically clicks on the closest space dot possible.
+
+Now this doesn't seem like a hard job but in reality it is very hard to implement. Try to make a strategic plan fast and make it bulletproof so that it works correctly. 
+
+Now currently in our workspace sidebar start bar bottom grid, at least there should be 12 items. Now even if there are only 1 or 2 or 0 items possible, then just put the grids and put a default icon, like an add icon or things like that, on them. By default no matter what, 12 items will show there. There can be more but there can be less than 12 items for all screens.
+
+now in our sidebar footer at our space dots. Please comment out the left and right arrow key and make sure that the space dot has a height and width so that when we hover over them it shows a hover on their height and width. Put some gap between them and we don't need to show the left and right arrow key until the space dots become so many in count that it doesn't fit on the sidebar width.
+
+In our web preview we are using a hole punching system where we are showing what is behind the abs space but as what is behind is looking transparent, it's looking bad. We have to wrap that with a glassmorphism UI with a blur so that it looks good instead of being totally transparent. When we didn't render the web preview, when we render the web preview please make sure we make it transparent.
+
+Until now when we are just showing what is behind the apps, it is like showing what our current app software is without any filter or any glassmorphism effect. It is looking so bad on our theme. Please make sure to, if possible, then implement a glassmorphism UI and only show that when our web preview hasn't loaded. When it has loaded please remove that glassmorphism UI and render the web-preview transparently
+
+
+In our top bar title bar, as we added items on our right side, the screen drop is not centered in the available size. Please make sure it centers the screen drop with the available width. Currently in the left side there is more gap than in the right side. Also when there is only one space, in that time do not show the space dots. Kindly the space dots have so much horizontal padding so please decrease the padding and make it way closer. When hovered over, use a color like what we are using in our search bar bottom grid in our sidebar so it will be more visible on hover. 
+
+In our sidebar footer there is an add icon, right? Add or plus icon. When we are clicking it It's currently showing drop-down items but please make sure when we click it, it creates a new space like the sidebar top-right icon creating a new space. 
+
+From our space dots, please remove all kinds of gaps between the dots. In the sidebar footer there is a "Create New Space" option on fillet but it is not working. In the top right it is working so please call the right function in the sidebar footer "Create New Space" option two.
+In our title bar top right please add three more icons. The glass morphism is still not showing. Maybe we are not measuring the time of our loading of our web preview correctly so please load it correctly. And don't we even have to render the Glass Morphism effect just to make our background color show and only render the web preview when the web preview is loaded correctly so that we don't see any transparent space at all? When we will show the web preview it will not be loading; it will be loaded. 
+
+Shamo subha tu mera

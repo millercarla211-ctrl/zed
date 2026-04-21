@@ -1,0 +1,18 @@
+[package]
+name = "liquid_glass"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+gpui.workspace = true
+image.workspace = true
+log.workspace = true
+project.workspace = true
+smallvec.workspace = true
+ui.workspace = true
+workspace.workspace = true

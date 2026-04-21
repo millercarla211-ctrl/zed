@@ -34,6 +34,7 @@ impl SidebarRecentProjects {
         workspace: WeakEntity<Workspace>,
         window_project_groups: Vec<ProjectGroupKey>,
         _focus_handle: FocusHandle,
+        _multi_workspace: Option<WeakEntity<MultiWorkspace>>,
         window: &mut Window,
         cx: &mut App,
     ) -> Entity<Self> {

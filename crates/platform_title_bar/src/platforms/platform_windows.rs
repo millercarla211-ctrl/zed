@@ -3,13 +3,11 @@ use gpui::{Hsla, Rgba, WindowControlArea, prelude::*};
 use ui::prelude::*;
 
 #[derive(IntoElement)]
-pub struct WindowsWindowControls {
-    button_height: Pixels,
-}
+pub struct WindowsWindowControls {}
 
 impl WindowsWindowControls {
-    pub fn new(button_height: Pixels) -> Self {
-        Self { button_height }
+    pub fn new(_button_height: Pixels) -> Self {
+        Self {}
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -40,18 +38,23 @@ impl RenderOnce for WindowsWindowControls {
             .flex()
             .flex_row()
             .justify_center()
-            .content_stretch()
-            .max_h(self.button_height)
-            .min_h(self.button_height)
-            .child(WindowsCaptionButton::Minimize)
-            .map(|this| {
-                this.child(if window.is_maximized() {
-                    WindowsCaptionButton::Restore
-                } else {
-                    WindowsCaptionButton::Maximize
-                })
-            })
-            .child(WindowsCaptionButton::Close)
+            .items_center() // Center vertically
+            .h_full() // Take full height of parent
+            .child(
+                // Wrapper with fixed height for buttons
+                h_flex()
+                    .h(px(32.)) // Fixed height for buttons
+                    .flex_row()
+                    .child(WindowsCaptionButton::Minimize)
+                    .map(|this| {
+                        this.child(if window.is_maximized() {
+                            WindowsCaptionButton::Restore
+                        } else {
+                            WindowsCaptionButton::Maximize
+                        })
+                    })
+                    .child(WindowsCaptionButton::Close),
+            )
     }
 }
 
@@ -124,10 +127,10 @@ impl RenderOnce for WindowsCaptionButton {
         h_flex()
             .id(self.id())
             .justify_center()
-            .content_center()
+            .items_center() // Center content vertically
             .occlude()
             .w(px(36.))
-            .h_full()
+            .h(px(32.)) // Fixed height instead of h_full
             .text_size(px(10.0))
             .hover(|style| style.bg(hover_bg).text_color(hover_fg))
             .active(|style| style.bg(active_bg).text_color(active_fg))

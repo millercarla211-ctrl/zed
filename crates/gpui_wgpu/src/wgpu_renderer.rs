@@ -1,9 +1,9 @@
 use crate::{CompositorGpuHint, WgpuAtlas, WgpuContext};
 use bytemuck::{Pod, Zeroable};
 use gpui::{
-    AtlasTextureId, Background, Bounds, DevicePixels, GpuSpecs, MonochromeSprite, Path, Point,
-    PolychromeSprite, PrimitiveBatch, Quad, ScaledPixels, Scene, Shadow, Size, SubpixelSprite,
-    Underline, get_gamma_correction_ratios,
+    AtlasTextureId, Background, Bounds, DevicePixels, GpuSpecs, LiquidGlass, MonochromeSprite,
+    Path, Point, PolychromeSprite, PrimitiveBatch, Quad, ScaledPixels, Scene, Shadow, Size,
+    SubpixelSprite, Underline, get_gamma_correction_ratios,
 };
 use log::warn;
 #[cfg(not(target_family = "wasm"))]
@@ -89,6 +89,7 @@ struct WgpuPipelines {
     mono_sprites: wgpu::RenderPipeline,
     subpixel_sprites: Option<wgpu::RenderPipeline>,
     poly_sprites: wgpu::RenderPipeline,
+    liquid_glass: wgpu::RenderPipeline,
     #[allow(dead_code)]
     surfaces: wgpu::RenderPipeline,
 }
@@ -97,6 +98,7 @@ struct WgpuBindGroupLayouts {
     globals: wgpu::BindGroupLayout,
     instances: wgpu::BindGroupLayout,
     instances_with_texture: wgpu::BindGroupLayout,
+    instances_with_backdrop: wgpu::BindGroupLayout,
     surfaces: wgpu::BindGroupLayout,
 }
 
@@ -119,15 +121,8 @@ struct WgpuResources {
     path_intermediate_view: Option<wgpu::TextureView>,
     path_msaa_texture: Option<wgpu::Texture>,
     path_msaa_view: Option<wgpu::TextureView>,
-}
-
-impl WgpuResources {
-    fn invalidate_intermediate_textures(&mut self) {
-        self.path_intermediate_texture = None;
-        self.path_intermediate_view = None;
-        self.path_msaa_texture = None;
-        self.path_msaa_view = None;
-    }
+    liquid_glass_backdrop_texture: Option<wgpu::Texture>,
+    liquid_glass_backdrop_view: Option<wgpu::TextureView>,
 }
 
 pub struct WgpuRenderer {
@@ -155,7 +150,6 @@ pub struct WgpuRenderer {
     failed_frame_count: u32,
     device_lost: std::sync::Arc<std::sync::atomic::AtomicBool>,
     surface_configured: bool,
-    needs_redraw: bool,
 }
 
 impl WgpuRenderer {
@@ -329,7 +323,7 @@ impl WgpuRenderer {
         }
 
         let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             format: surface_format,
             width: clamped_width.max(1),
             height: clamped_height.max(1),
@@ -461,6 +455,8 @@ impl WgpuRenderer {
             path_intermediate_view: None,
             path_msaa_texture: None,
             path_msaa_view: None,
+            liquid_glass_backdrop_texture: None,
+            liquid_glass_backdrop_view: None,
         };
 
         Ok(Self {
@@ -484,7 +480,6 @@ impl WgpuRenderer {
             failed_frame_count: 0,
             device_lost: context.device_lost_flag(),
             surface_configured: true,
-            needs_redraw: false,
         })
     }
 
@@ -560,6 +555,40 @@ impl WgpuRenderer {
                 ],
             });
 
+        let instances_with_backdrop =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("instances_with_backdrop_layout"),
+                entries: &[
+                    storage_buffer_entry(0),
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
         let surfaces = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("surfaces_layout"),
             entries: &[
@@ -608,6 +637,7 @@ impl WgpuRenderer {
             globals,
             instances,
             instances_with_texture,
+            instances_with_backdrop,
             surfaces,
         }
     }
@@ -862,6 +892,18 @@ impl WgpuRenderer {
             &shader_module,
         );
 
+        let liquid_glass = create_pipeline(
+            "liquid_glass",
+            "vs_liquid_glass",
+            "fs_liquid_glass",
+            &layouts.globals,
+            &layouts.instances_with_backdrop,
+            wgpu::PrimitiveTopology::TriangleStrip,
+            &[Some(color_target.clone())],
+            1,
+            &shader_module,
+        );
+
         let surfaces = create_pipeline(
             "surfaces",
             "vs_surface",
@@ -883,6 +925,7 @@ impl WgpuRenderer {
             mono_sprites,
             subpixel_sprites,
             poly_sprites,
+            liquid_glass,
             surfaces,
         }
     }
@@ -939,6 +982,30 @@ impl WgpuRenderer {
         Some((texture, view))
     }
 
+    fn create_liquid_glass_backdrop(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        width: u32,
+        height: u32,
+    ) -> (wgpu::Texture, wgpu::TextureView) {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("liquid_glass_backdrop"),
+            size: wgpu::Extent3d {
+                width: width.max(1),
+                height: height.max(1),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        (texture, view)
+    }
+
     pub fn update_drawable_size(&mut self, size: Size<DevicePixels>) {
         let width = size.width.0 as u32;
         let height = size.height.0 as u32;
@@ -976,6 +1043,9 @@ impl WgpuRenderer {
             if let Some(ref texture) = resources.path_msaa_texture {
                 texture.destroy();
             }
+            if let Some(ref texture) = resources.liquid_glass_backdrop_texture {
+                texture.destroy();
+            }
 
             resources
                 .surface
@@ -984,7 +1054,12 @@ impl WgpuRenderer {
             // Invalidate intermediate textures - they will be lazily recreated
             // in draw() after we confirm the surface is healthy. This avoids
             // panics when the device/surface is in an invalid state during resize.
-            resources.invalidate_intermediate_textures();
+            resources.path_intermediate_texture = None;
+            resources.path_intermediate_view = None;
+            resources.path_msaa_texture = None;
+            resources.path_msaa_view = None;
+            resources.liquid_glass_backdrop_texture = None;
+            resources.liquid_glass_backdrop_view = None;
         }
     }
 
@@ -1014,6 +1089,11 @@ impl WgpuRenderer {
         .unwrap_or((None, None));
         resources.path_msaa_texture = path_msaa_texture;
         resources.path_msaa_view = path_msaa_view;
+
+        let (backdrop_texture, backdrop_view) =
+            Self::create_liquid_glass_backdrop(&resources.device, format, width, height);
+        resources.liquid_glass_backdrop_texture = Some(backdrop_texture);
+        resources.liquid_glass_backdrop_view = Some(backdrop_view);
     }
 
     pub fn update_transparency(&mut self, transparent: bool) {
@@ -1085,19 +1165,10 @@ impl WgpuRenderer {
         if let Some(error) = last_error {
             self.failed_frame_count += 1;
             log::error!(
-                "GPU error during frame (failure {} of 10): {error}",
+                "GPU error during frame (failure {} of 20): {error}",
                 self.failed_frame_count
             );
-
-            // TBD. Does retrying more actually help?
-            if self.failed_frame_count > 5 {
-                if let Some(res) = self.resources.as_mut() {
-                    res.invalidate_intermediate_textures();
-                }
-                self.atlas.clear();
-                self.needs_redraw = true;
-                return;
-            } else if self.failed_frame_count > 10 {
+            if self.failed_frame_count > 20 {
                 panic!("Too many consecutive GPU errors. Last error: {error}");
             }
         } else {
@@ -1192,6 +1263,7 @@ impl WgpuRenderer {
         loop {
             let mut instance_offset: u64 = 0;
             let mut overflow = false;
+            let mut needs_backdrop_refresh = true;
 
             let mut encoder =
                 self.resources()
@@ -1219,13 +1291,27 @@ impl WgpuRenderer {
                 for batch in scene.batches() {
                     let ok = match batch {
                         PrimitiveBatch::Quads(range) => {
-                            self.draw_quads(&scene.quads[range], &mut instance_offset, &mut pass)
+                            let ok = self.draw_quads(
+                                &scene.quads[range],
+                                &mut instance_offset,
+                                &mut pass,
+                            );
+                            if ok {
+                                needs_backdrop_refresh = true;
+                            }
+                            ok
                         }
-                        PrimitiveBatch::Shadows(range) => self.draw_shadows(
-                            &scene.shadows[range],
-                            &mut instance_offset,
-                            &mut pass,
-                        ),
+                        PrimitiveBatch::Shadows(range) => {
+                            let ok = self.draw_shadows(
+                                &scene.shadows[range],
+                                &mut instance_offset,
+                                &mut pass,
+                            );
+                            if ok {
+                                needs_backdrop_refresh = true;
+                            }
+                            ok
+                        }
                         PrimitiveBatch::Paths(range) => {
                             let paths = &scene.paths[range];
                             if paths.is_empty() {
@@ -1256,41 +1342,109 @@ impl WgpuRenderer {
                             });
 
                             if did_draw {
-                                self.draw_paths_from_intermediate(
+                                let ok = self.draw_paths_from_intermediate(
                                     paths,
                                     &mut instance_offset,
                                     &mut pass,
-                                )
+                                );
+                                if ok {
+                                    needs_backdrop_refresh = true;
+                                }
+                                ok
                             } else {
                                 false
                             }
                         }
-                        PrimitiveBatch::Underlines(range) => self.draw_underlines(
-                            &scene.underlines[range],
-                            &mut instance_offset,
-                            &mut pass,
-                        ),
-                        PrimitiveBatch::MonochromeSprites { texture_id, range } => self
-                            .draw_monochrome_sprites(
+                        PrimitiveBatch::Underlines(range) => {
+                            let ok = self.draw_underlines(
+                                &scene.underlines[range],
+                                &mut instance_offset,
+                                &mut pass,
+                            );
+                            if ok {
+                                needs_backdrop_refresh = true;
+                            }
+                            ok
+                        }
+                        PrimitiveBatch::MonochromeSprites { texture_id, range } => {
+                            let ok = self.draw_monochrome_sprites(
                                 &scene.monochrome_sprites[range],
                                 texture_id,
                                 &mut instance_offset,
                                 &mut pass,
-                            ),
-                        PrimitiveBatch::SubpixelSprites { texture_id, range } => self
-                            .draw_subpixel_sprites(
+                            );
+                            if ok {
+                                needs_backdrop_refresh = true;
+                            }
+                            ok
+                        }
+                        PrimitiveBatch::SubpixelSprites { texture_id, range } => {
+                            let ok = self.draw_subpixel_sprites(
                                 &scene.subpixel_sprites[range],
                                 texture_id,
                                 &mut instance_offset,
                                 &mut pass,
-                            ),
-                        PrimitiveBatch::PolychromeSprites { texture_id, range } => self
-                            .draw_polychrome_sprites(
+                            );
+                            if ok {
+                                needs_backdrop_refresh = true;
+                            }
+                            ok
+                        }
+                        PrimitiveBatch::PolychromeSprites { texture_id, range } => {
+                            let ok = self.draw_polychrome_sprites(
                                 &scene.polychrome_sprites[range],
                                 texture_id,
                                 &mut instance_offset,
                                 &mut pass,
-                            ),
+                            );
+                            if ok {
+                                needs_backdrop_refresh = true;
+                            }
+                            ok
+                        }
+                        PrimitiveBatch::LiquidGlass { texture_id, range } => {
+                            if needs_backdrop_refresh {
+                                drop(pass);
+                                let captured = self.refresh_liquid_glass_backdrop(
+                                    &mut encoder,
+                                    &frame.texture,
+                                    self.surface_config.width,
+                                    self.surface_config.height,
+                                );
+                                pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                    label: Some("main_pass_after_liquid_glass_backdrop"),
+                                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                        view: &frame_view,
+                                        resolve_target: None,
+                                        ops: wgpu::Operations {
+                                            load: wgpu::LoadOp::Load,
+                                            store: wgpu::StoreOp::Store,
+                                        },
+                                        depth_slice: None,
+                                    })],
+                                    depth_stencil_attachment: None,
+                                    ..Default::default()
+                                });
+                                if !captured {
+                                    false
+                                } else {
+                                    needs_backdrop_refresh = false;
+                                    self.draw_liquid_glass(
+                                        &scene.liquid_glass[range],
+                                        texture_id,
+                                        &mut instance_offset,
+                                        &mut pass,
+                                    )
+                                }
+                            } else {
+                                self.draw_liquid_glass(
+                                    &scene.liquid_glass[range],
+                                    texture_id,
+                                    &mut instance_offset,
+                                    &mut pass,
+                                )
+                            }
+                        }
                         PrimitiveBatch::Surfaces(_surfaces) => {
                             // Surfaces are macOS-only for video playback
                             // Not implemented for Linux/wgpu
@@ -1437,6 +1591,29 @@ impl WgpuRenderer {
         )
     }
 
+    fn draw_liquid_glass(
+        &self,
+        primitives: &[LiquidGlass],
+        texture_id: AtlasTextureId,
+        instance_offset: &mut u64,
+        pass: &mut wgpu::RenderPass<'_>,
+    ) -> bool {
+        let tex_info = self.atlas.get_texture_info(texture_id);
+        let data = unsafe { Self::instance_bytes(primitives) };
+        let Some(backdrop_view) = self.resources().liquid_glass_backdrop_view.as_ref() else {
+            return false;
+        };
+        self.draw_instances_with_backdrop(
+            data,
+            primitives.len() as u32,
+            &tex_info.view,
+            backdrop_view,
+            &self.resources().pipelines.liquid_glass,
+            instance_offset,
+            pass,
+        )
+    }
+
     fn draw_instances(
         &self,
         data: &[u8],
@@ -1509,6 +1686,86 @@ impl WgpuRenderer {
         pass.set_bind_group(0, &resources.globals_bind_group, &[]);
         pass.set_bind_group(1, &bind_group, &[]);
         pass.draw(0..4, 0..instance_count);
+        true
+    }
+
+    fn draw_instances_with_backdrop(
+        &self,
+        data: &[u8],
+        instance_count: u32,
+        texture_view: &wgpu::TextureView,
+        backdrop_view: &wgpu::TextureView,
+        pipeline: &wgpu::RenderPipeline,
+        instance_offset: &mut u64,
+        pass: &mut wgpu::RenderPass<'_>,
+    ) -> bool {
+        if instance_count == 0 {
+            return true;
+        }
+        let Some((offset, size)) = self.write_to_instance_buffer(instance_offset, data) else {
+            return false;
+        };
+        let resources = self.resources();
+        let bind_group = resources
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: None,
+                layout: &resources.bind_group_layouts.instances_with_backdrop,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.instance_binding(offset, size),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(backdrop_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::Sampler(&resources.atlas_sampler),
+                    },
+                ],
+            });
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(0, &resources.globals_bind_group, &[]);
+        pass.set_bind_group(1, &bind_group, &[]);
+        pass.draw(0..4, 0..instance_count);
+        true
+    }
+
+    fn refresh_liquid_glass_backdrop(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        frame_texture: &wgpu::Texture,
+        width: u32,
+        height: u32,
+    ) -> bool {
+        let Some(backdrop_texture) = self.resources().liquid_glass_backdrop_texture.as_ref() else {
+            return false;
+        };
+        encoder.copy_texture_to_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: frame_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyTextureInfo {
+                texture: backdrop_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::Extent3d {
+                width: width.max(1),
+                height: height.max(1),
+                depth_or_array_layers: 1,
+            },
+        );
         true
     }
 
@@ -1685,7 +1942,10 @@ impl WgpuRenderer {
         self.surface_configured = false;
         // Drop intermediate textures since they reference the old surface size.
         if let Some(res) = self.resources.as_mut() {
-            res.invalidate_intermediate_textures();
+            res.path_intermediate_texture = None;
+            res.path_intermediate_view = None;
+            res.path_msaa_texture = None;
+            res.path_msaa_view = None;
         }
     }
 
@@ -1735,7 +1995,10 @@ impl WgpuRenderer {
             res.surface = surface;
 
             // Invalidate intermediate textures — they'll be recreated lazily.
-            res.invalidate_intermediate_textures();
+            res.path_intermediate_texture = None;
+            res.path_intermediate_view = None;
+            res.path_msaa_texture = None;
+            res.path_msaa_view = None;
         }
 
         self.surface_configured = true;
@@ -1752,12 +2015,6 @@ impl WgpuRenderer {
     /// Returns true if the GPU device was lost and recovery is needed.
     pub fn device_lost(&self) -> bool {
         self.device_lost.load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    /// Returns true if a redraw is needed because GPU state was cleared.
-    /// Calling this method clears the flag.
-    pub fn needs_redraw(&mut self) -> bool {
-        std::mem::take(&mut self.needs_redraw)
     }
 
     /// Recovers from a lost GPU device by recreating the renderer with a new context.

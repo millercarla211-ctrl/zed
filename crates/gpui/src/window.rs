@@ -7,17 +7,18 @@ use crate::{
     DispatchNodeId, DispatchTree, DisplayId, Edges, Effect, Entity, EntityId, EventEmitter,
     FileDropEvent, FontId, Global, GlobalElementId, GlyphId, GpuSpecs, Hsla, InputHandler, IsZero,
     KeyBinding, KeyContext, KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId,
-    LineLayoutIndex, Modifiers, ModifiersChangedEvent, MonochromeSprite, MouseButton, MouseEvent,
-    MouseMoveEvent, MouseUpEvent, Path, Pixels, PlatformAtlas, PlatformDisplay, PlatformInput,
-    PlatformInputHandler, PlatformWindow, Point, PolychromeSprite, Priority, PromptButton,
-    PromptLevel, Quad, Render, RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams,
-    Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y,
-    ScaledPixels, Scene, Shadow, SharedString, Size, StrikethroughStyle, Style, SubpixelSprite,
-    SubscriberSet, Subscription, SystemWindowTab, SystemWindowTabController, TabStopMap,
-    TaffyLayoutEngine, Task, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
-    TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
-    WindowBounds, WindowControls, WindowDecorations, WindowOptions, WindowParams, WindowTextSystem,
-    point, prelude::*, px, rems, size, transparent_black,
+    LineLayoutIndex, LiquidGlass, LiquidGlassParams, Modifiers, ModifiersChangedEvent,
+    MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, Path, Pixels,
+    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
+    PolychromeSprite, Priority, PromptButton, PromptLevel, Quad, Render, RenderGlyphParams,
+    RenderImage, RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
+    SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Scene, Shadow, SharedString, Size,
+    StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab,
+    SystemWindowTabController, TabStopMap, TaffyLayoutEngine, Task, TextRenderingMode, TextStyle,
+    TextStyleRefinement, ThermalState, TransformationMatrix, Underline, UnderlineStyle,
+    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControls, WindowDecorations,
+    WindowOptions, WindowParams, WindowTextSystem, point, prelude::*, px, rems, size,
+    transparent_black,
 };
 use anyhow::{Context as _, Result, anyhow};
 use collections::{FxHashMap, FxHashSet};
@@ -754,6 +755,73 @@ pub(crate) struct TooltipRequest {
     tooltip: AnyTooltip,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct MousePassthroughRegion {
+    pub(crate) bounds: Bounds<Pixels>,
+    pub(crate) hitbox_id: HitboxId,
+}
+
+/// A serialized mouse passthrough region for platform hit-testing.
+#[derive(Clone, Copy, Debug)]
+pub struct MousePassthroughRegionSnapshot {
+    /// The region bounds in window coordinates.
+    pub bounds: Bounds<Pixels>,
+    /// The hitbox that owns this region.
+    pub hitbox_id: HitboxId,
+}
+
+/// The hit-test data needed by a platform window to yield mouse input to content underneath GPUI.
+#[derive(Clone, Debug, Default)]
+pub struct MousePassthroughSnapshot {
+    /// The frame's hitboxes in paint order.
+    pub hitboxes: Vec<Hitbox>,
+    /// The regions where mouse input may pass through GPUI.
+    pub regions: Vec<MousePassthroughRegionSnapshot>,
+    /// The hitboxes that should continue to block mouse input above passthrough regions.
+    pub interactive_hitbox_ids: Vec<HitboxId>,
+    /// Whether GPUI currently has pointer capture.
+    pub has_captured_hitbox: bool,
+}
+
+impl MousePassthroughSnapshot {
+    /// Returns whether the point falls inside any passthrough region, ignoring overlay hitboxes.
+    pub fn contains_passthrough_region(&self, position: Point<Pixels>) -> bool {
+        self.regions
+            .iter()
+            .any(|region| region.bounds.contains(&position))
+    }
+
+    /// Returns whether the platform window should yield mouse input at the given point.
+    /// Returns whether the platform window should yield mouse hit-testing at the given point.
+    pub fn should_mouse_passthrough(&self, position: Point<Pixels>) -> bool {
+        if self.has_captured_hitbox {
+            return false;
+        }
+
+        if !self.contains_passthrough_region(position) {
+            return false;
+        }
+
+        for hitbox in self.hitboxes.iter().rev() {
+            let bounds = hitbox.bounds.intersect(&hitbox.content_mask.bounds);
+            if bounds.contains(&position) {
+                if self.interactive_hitbox_ids.contains(&hitbox.id) {
+                    return false;
+                }
+                if self.regions.iter().any(|region| {
+                    region.hitbox_id == hitbox.id && region.bounds.contains(&position)
+                }) {
+                    return true;
+                }
+                if hitbox.behavior == HitboxBehavior::BlockMouse {
+                    break;
+                }
+            }
+        }
+        false
+    }
+}
+
 pub(crate) struct DeferredDraw {
     current_view: EntityId,
     priority: usize,
@@ -777,6 +845,8 @@ pub(crate) struct Frame {
     pub(crate) dispatch_tree: DispatchTree,
     pub(crate) scene: Scene,
     pub(crate) hitboxes: Vec<Hitbox>,
+    pub(crate) mouse_passthrough_regions: Vec<MousePassthroughRegion>,
+    pub(crate) interactive_hitbox_ids: Vec<HitboxId>,
     pub(crate) window_control_hitboxes: Vec<(WindowControlArea, Hitbox)>,
     pub(crate) deferred_draws: Vec<DeferredDraw>,
     pub(crate) input_handlers: Vec<Option<PlatformInputHandler>>,
@@ -823,6 +893,8 @@ impl Frame {
             dispatch_tree,
             scene: Scene::default(),
             hitboxes: Vec::new(),
+            mouse_passthrough_regions: Vec::new(),
+            interactive_hitbox_ids: Vec::new(),
             window_control_hitboxes: Vec::new(),
             deferred_draws: Vec::new(),
             input_handlers: Vec::new(),
@@ -851,6 +923,8 @@ impl Frame {
         self.tooltip_requests.clear();
         self.cursor_styles.clear();
         self.hitboxes.clear();
+        self.mouse_passthrough_regions.clear();
+        self.interactive_hitbox_ids.clear();
         self.window_control_hitboxes.clear();
         self.deferred_draws.clear();
         self.tab_stops.clear();
@@ -2415,6 +2489,21 @@ impl Window {
         let previous_window_active = self.rendered_frame.window_active;
         mem::swap(&mut self.rendered_frame, &mut self.next_frame);
         self.next_frame.clear();
+        self.platform_window
+            .set_mouse_passthrough_snapshot(MousePassthroughSnapshot {
+                hitboxes: self.rendered_frame.hitboxes.clone(),
+                regions: self
+                    .rendered_frame
+                    .mouse_passthrough_regions
+                    .iter()
+                    .map(|region| MousePassthroughRegionSnapshot {
+                        bounds: region.bounds,
+                        hitbox_id: region.hitbox_id,
+                    })
+                    .collect(),
+                interactive_hitbox_ids: self.rendered_frame.interactive_hitbox_ids.clone(),
+                has_captured_hitbox: self.captured_hitbox.is_some(),
+            });
         let current_focus_path = self.rendered_frame.focus_path();
         let current_window_active = self.rendered_frame.window_active;
 
@@ -3833,6 +3922,73 @@ impl Window {
         Ok(())
     }
 
+    /// Paint a Liquid Glass scene into the next frame using a sprite-atlas background texture.
+    ///
+    /// This method should only be called as part of the paint phase of element drawing.
+    pub fn paint_liquid_glass(
+        &mut self,
+        bounds: Bounds<Pixels>,
+        data: Arc<RenderImage>,
+        params: LiquidGlassParams,
+        frame_index: usize,
+    ) -> Result<()> {
+        self.invalidator.debug_assert_paint();
+
+        let scale_factor = self.scale_factor();
+        let bounds = bounds.scale(scale_factor);
+        let glass_bounds = params.glass_bounds.scale(scale_factor);
+        let atlas_params = RenderImageParams {
+            image_id: data.id,
+            frame_index,
+        };
+
+        let tile = self
+            .sprite_atlas
+            .get_or_insert_with(&atlas_params.into(), &mut || {
+                Ok(Some((
+                    data.size(frame_index),
+                    Cow::Borrowed(
+                        data.as_bytes(frame_index)
+                            .expect("It's the caller's job to pass a valid frame index"),
+                    ),
+                )))
+            })?
+            .expect("Callback above only returns Some");
+        let content_mask = self.content_mask().scale(scale_factor);
+        let opacity = self.element_opacity();
+
+        self.next_frame.scene.insert_primitive(LiquidGlass {
+            order: 0,
+            aberration_samples: params.aberration_samples.max(1),
+            blur_iterations: params.blur_iterations,
+            use_backdrop: u32::from(params.use_backdrop),
+            bounds: bounds
+                .map_origin(|origin| origin.floor())
+                .map_size(|size| size.ceil()),
+            content_mask,
+            tile,
+            glass_bounds: glass_bounds
+                .map_origin(|origin| origin.floor())
+                .map_size(|size| size.ceil()),
+            power_factor: params.power_factor,
+            opacity,
+            a: params.a,
+            b: params.b,
+            c: params.c,
+            d: params.d,
+            f_power: params.f_power,
+            noise: params.noise,
+            glow_weight: params.glow_weight,
+            glow_edge0: params.glow_edge0,
+            glow_edge1: params.glow_edge1,
+            glow_bias: params.glow_bias,
+            chromatic_aberration: params.chromatic_aberration,
+            blur_radius: params.blur_radius,
+            blur_downscale: params.blur_downscale,
+        });
+        Ok(())
+    }
+
     /// Paint a surface into the scene for the next frame at the current z-index.
     ///
     /// This method should only be called as part of the paint phase of element drawing.
@@ -3962,7 +4118,7 @@ impl Window {
         self.invalidator.debug_assert_prepaint();
 
         let content_mask = self.content_mask();
-        let mut id = self.next_hitbox_id;
+        let id = self.next_hitbox_id;
         self.next_hitbox_id = self.next_hitbox_id.next();
         let hitbox = Hitbox {
             id,
@@ -3974,12 +4130,80 @@ impl Window {
         hitbox
     }
 
+    /// Mark a region where the platform window may yield mouse hit-testing to content rendered
+    /// underneath this window when GPUI has no interactive hitbox above that point.
+    ///
+    /// This method should only be called as part of the prepaint phase of element drawing.
+    pub fn insert_mouse_passthrough_region(&mut self, hitbox: &Hitbox) {
+        self.invalidator.debug_assert_prepaint();
+        self.next_frame
+            .mouse_passthrough_regions
+            .push(MousePassthroughRegion {
+                bounds: hitbox.bounds.intersect(&hitbox.content_mask.bounds),
+                hitbox_id: hitbox.id,
+            });
+    }
+
     /// Set a hitbox which will act as a control area of the platform window.
     ///
     /// This method should only be called as part of the paint phase of element drawing.
     pub fn insert_window_control_hitbox(&mut self, area: WindowControlArea, hitbox: Hitbox) {
         self.invalidator.debug_assert_paint();
         self.next_frame.window_control_hitboxes.push((area, hitbox));
+    }
+
+    /// Marks a hitbox as an interactive overlay that should continue to block mouse passthrough.
+    ///
+    /// This method should only be called as part of the paint phase of element drawing.
+    pub fn mark_hitbox_interactive(&mut self, hitbox: &Hitbox) {
+        self.invalidator.debug_assert_paint();
+        if !self.next_frame.interactive_hitbox_ids.contains(&hitbox.id) {
+            self.next_frame.interactive_hitbox_ids.push(hitbox.id);
+        }
+    }
+
+    /// Returns whether the platform window should yield mouse hit-testing at the given point to
+    /// content rendered underneath the current window.
+    pub fn should_mouse_passthrough(&self, position: Point<Pixels>) -> bool {
+        if self.captured_hitbox.is_some() {
+            return false;
+        }
+
+        if !self
+            .rendered_frame
+            .mouse_passthrough_regions
+            .iter()
+            .any(|region| region.bounds.contains(&position))
+        {
+            return false;
+        }
+
+        for hitbox in self.rendered_frame.hitboxes.iter().rev() {
+            let bounds = hitbox.bounds.intersect(&hitbox.content_mask.bounds);
+            if bounds.contains(&position) {
+                if self
+                    .rendered_frame
+                    .interactive_hitbox_ids
+                    .contains(&hitbox.id)
+                {
+                    return false;
+                }
+                if self
+                    .rendered_frame
+                    .mouse_passthrough_regions
+                    .iter()
+                    .any(|region| {
+                        region.hitbox_id == hitbox.id && region.bounds.contains(&position)
+                    })
+                {
+                    return true;
+                }
+                if hitbox.behavior == HitboxBehavior::BlockMouse {
+                    break;
+                }
+            }
+        }
+        false
     }
 
     /// Sets the key context for the current element. This context will be used to translate
@@ -4184,6 +4408,9 @@ impl Window {
     fn reset_cursor_style(&self, cx: &mut App) {
         // Set the cursor only if we're the active window.
         if self.is_window_hovered() {
+            if self.should_mouse_passthrough(self.mouse_position()) {
+                return;
+            }
             let style = self
                 .rendered_frame
                 .cursor_style(self)

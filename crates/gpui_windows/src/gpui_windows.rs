@@ -36,5 +36,12 @@ pub(crate) use window::*;
 pub(crate) use wrapper::*;
 
 pub use platform::WindowsPlatform;
+pub use window::{
+    any_window_has_focused_webview, clear_webview_passthrough_target,
+    create_webview_composition_visual, register_webview_passthrough_target,
+    remove_webview_composition_visual, set_webview_composition_visual_offset,
+    update_webview_passthrough_cursor, update_webview_passthrough_focus,
+    window_has_focused_webview,
+};
 
 pub(crate) use windows::Win32::Foundation::HWND;

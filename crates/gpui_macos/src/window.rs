@@ -27,9 +27,9 @@ use dispatch2::DispatchQueue;
 use gpui::{
     AnyWindowHandle, BackgroundExecutor, Bounds, Capslock, ExternalPaths, FileDropEvent,
     ForegroundExecutor, KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, PlatformAtlas, PlatformDisplay,
-    PlatformInput, PlatformInputHandler, PlatformWindow, Point, PromptButton, PromptLevel,
-    RequestFrameOptions, SharedString, Size, SystemWindowTab, WindowAppearance,
+    MouseDownEvent, MouseMoveEvent, MousePassthroughSnapshot, MouseUpEvent, Pixels, PlatformAtlas,
+    PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point, PromptButton,
+    PromptLevel, RequestFrameOptions, SharedString, Size, SystemWindowTab, WindowAppearance,
     WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowKind, WindowParams, point,
     px, size,
 };
@@ -285,6 +285,10 @@ unsafe fn build_classes() {
                     sel!(characterIndexForPoint:),
                     character_index_for_point as extern "C" fn(&Object, Sel, NSPoint) -> u64,
                 );
+                decl.add_method(
+                    sel!(hitTest:),
+                    hit_test as extern "C" fn(&Object, Sel, NSPoint) -> id,
+                );
             }
             decl.register()
         };
@@ -433,6 +437,7 @@ struct MacWindowState {
     renderer: renderer::Renderer,
     request_frame_callback: Option<Box<dyn FnMut(RequestFrameOptions)>>,
     event_callback: Option<Box<dyn FnMut(PlatformInput) -> gpui::DispatchEventResult>>,
+    mouse_passthrough_snapshot: MousePassthroughSnapshot,
     activate_callback: Option<Box<dyn FnMut(bool)>>,
     resize_callback: Option<Box<dyn FnMut(Size<Pixels>, f32)>>,
     moved_callback: Option<Box<dyn FnMut()>>,
@@ -756,6 +761,7 @@ impl MacWindow {
                 ),
                 request_frame_callback: None,
                 event_callback: None,
+                mouse_passthrough_snapshot: MousePassthroughSnapshot::default(),
                 activate_callback: None,
                 resize_callback: None,
                 moved_callback: None,
@@ -1422,6 +1428,10 @@ impl PlatformWindow for MacWindow {
 
     fn background_appearance(&self) -> WindowBackgroundAppearance {
         self.0.as_ref().lock().background_appearance
+    }
+
+    fn set_mouse_passthrough_snapshot(&self, snapshot: MousePassthroughSnapshot) {
+        self.0.as_ref().lock().mouse_passthrough_snapshot = snapshot;
     }
 
     fn is_subpixel_rendering_supported(&self) -> bool {
@@ -2565,6 +2575,22 @@ extern "C" fn accepts_first_mouse(this: &Object, _: Sel, _: id) -> BOOL {
     YES
 }
 
+extern "C" fn hit_test(this: &Object, _: Sel, point: NSPoint) -> id {
+    let window_state = unsafe { get_window_state(this) };
+    let should_passthrough = {
+        let lock = window_state.as_ref().lock();
+        let position = gpui_point_from_view_point(&lock, point);
+        lock.mouse_passthrough_snapshot
+            .should_mouse_passthrough(position)
+    };
+
+    if should_passthrough {
+        return nil;
+    }
+
+    unsafe { msg_send![super(this, class!(NSView)), hitTest: point] }
+}
+
 extern "C" fn character_index_for_point(this: &Object, _: Sel, position: NSPoint) -> u64 {
     let position = screen_point_to_gpui_point(this, position);
     with_input_handler(this, |input_handler| {
@@ -2581,6 +2607,13 @@ fn screen_point_to_gpui_point(this: &Object, position: NSPoint) -> Point<Pixels>
     let window_y = frame.size.height - (position.y - frame.origin.y);
 
     point(px(window_x as f32), px(window_y as f32))
+}
+
+fn gpui_point_from_view_point(window_state: &MacWindowState, position: NSPoint) -> Point<Pixels> {
+    point(
+        px(position.x as f32),
+        window_state.content_size().height - px(position.y as f32),
+    )
 }
 
 extern "C" fn dragging_entered(this: &Object, _: Sel, dragging_info: id) -> NSDragOperation {

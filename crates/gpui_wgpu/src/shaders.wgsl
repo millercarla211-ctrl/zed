@@ -94,6 +94,7 @@ struct GammaParams {
 @group(0) @binding(1) var<uniform> gamma_params: GammaParams;
 @group(1) @binding(1) var t_sprite: texture_2d<f32>;
 @group(1) @binding(2) var s_sprite: sampler;
+@group(1) @binding(3) var t_backdrop: texture_2d<f32>;
 
 const M_PI_F: f32 = 3.1415926;
 const GRAYSCALE_FACTORS: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
@@ -1281,6 +1282,198 @@ fn fs_poly_sprite(input: PolySpriteVarying) -> @location(0) vec4<f32> {
         color = vec4<f32>(vec3<f32>(grayscale), sample.a);
     }
     return blend_color(color, sprite.opacity * saturate(0.5 - distance));
+}
+
+// --- liquid glass --- //
+
+struct LiquidGlass {
+    order: u32,
+    aberration_samples: u32,
+    blur_iterations: u32,
+    use_backdrop: u32,
+    bounds: Bounds,
+    content_mask: Bounds,
+    tile: AtlasTile,
+    glass_bounds: Bounds,
+    power_factor: f32,
+    opacity: f32,
+    a: f32,
+    b: f32,
+    c: f32,
+    d: f32,
+    f_power: f32,
+    noise: f32,
+    glow_weight: f32,
+    glow_edge0: f32,
+    glow_edge1: f32,
+    glow_bias: f32,
+    chromatic_aberration: f32,
+    blur_radius: f32,
+    blur_downscale: f32,
+}
+@group(1) @binding(0) var<storage, read> b_liquid_glass: array<LiquidGlass>;
+
+struct LiquidGlassVarying {
+    @builtin(position) position: vec4<f32>,
+    @location(0) panel_uv: vec2<f32>,
+    @location(1) @interpolate(flat) instance_id: u32,
+    @location(3) clip_distances: vec4<f32>,
+}
+
+fn liquid_tile_uv(panel_uv: vec2<f32>, tile: AtlasTile) -> vec2<f32> {
+    let atlas_size = vec2<f32>(textureDimensions(t_sprite, 0));
+    return (vec2<f32>(tile.bounds.origin) + clamp(panel_uv, vec2<f32>(0.0), vec2<f32>(1.0)) * vec2<f32>(tile.bounds.size)) / atlas_size;
+}
+
+fn liquid_backdrop_uv(panel_uv: vec2<f32>, instance: LiquidGlass) -> vec2<f32> {
+    let position = instance.bounds.origin + panel_uv * instance.bounds.size;
+    return clamp(position / globals.viewport_size, vec2<f32>(0.001), vec2<f32>(0.999));
+}
+
+fn liquid_smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
+    let t = clamp((x - edge0) / max(edge1 - edge0, 0.00001), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+
+fn liquid_sample(panel_uv: vec2<f32>, instance: LiquidGlass) -> vec4<f32> {
+    if (instance.use_backdrop != 0u) {
+        return textureSample(t_backdrop, s_sprite, liquid_backdrop_uv(panel_uv, instance));
+    }
+    return textureSample(t_sprite, s_sprite, liquid_tile_uv(panel_uv, instance.tile));
+}
+
+fn liquid_sd_superellipse(p: vec2<f32>, n: f32, r: f32) -> f32 {
+    let p_abs = abs(p);
+    let numerator = pow(p_abs.x, n) + pow(p_abs.y, n) - pow(r, n);
+    let den_x = pow(p_abs.x, 2.0 * n - 2.0);
+    let den_y = pow(p_abs.y, 2.0 * n - 2.0);
+    let denominator = n * sqrt(den_x + den_y) + 0.00001;
+    return numerator / denominator;
+}
+
+fn liquid_f_dist(instance: LiquidGlass, x: f32) -> f32 {
+    let base = max(instance.c * 2.718281828459045, 0.0001);
+    return 1.0 - instance.b * pow(base, -instance.d * x - instance.a);
+}
+
+fn liquid_rand(co: vec2<f32>) -> f32 {
+    return fract(sin(dot(co, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+}
+
+fn liquid_glow(panel_uv: vec2<f32>) -> f32 {
+    return sin(atan2(panel_uv.y * 2.0 - 1.0, panel_uv.x * 2.0 - 1.0) - 0.5);
+}
+
+fn liquid_blur_sample(panel_uv: vec2<f32>, instance: LiquidGlass) -> vec4<f32> {
+    let steps = min(instance.blur_iterations, 8u);
+    if (steps == 0u || instance.blur_radius <= 0.0) {
+        return liquid_sample(panel_uv, instance);
+    }
+
+    let texel = vec2<f32>(
+        1.0 / max(instance.bounds.size.x, 1.0),
+        1.0 / max(instance.bounds.size.y, 1.0),
+    );
+    let blur_scale = max(instance.blur_downscale, 0.1);
+
+    var accum = liquid_sample(panel_uv, instance);
+    var total_weight = 1.0;
+
+    for (var i = 0u; i < steps; i += 1u) {
+        let t = f32(i + 1u) / f32(steps);
+        let offset = texel * instance.blur_radius * blur_scale * t;
+        accum += liquid_sample(panel_uv + vec2<f32>(offset.x, 0.0), instance);
+        accum += liquid_sample(panel_uv - vec2<f32>(offset.x, 0.0), instance);
+        accum += liquid_sample(panel_uv + vec2<f32>(0.0, offset.y), instance);
+        accum += liquid_sample(panel_uv - vec2<f32>(0.0, offset.y), instance);
+        total_weight += 4.0;
+    }
+
+    return accum / total_weight;
+}
+
+@vertex
+fn vs_liquid_glass(@builtin(vertex_index) vertex_id: u32, @builtin(instance_index) instance_id: u32) -> LiquidGlassVarying {
+    let unit_vertex = vec2<f32>(f32(vertex_id & 1u), 0.5 * f32(vertex_id & 2u));
+    let instance = b_liquid_glass[instance_id];
+
+    var out = LiquidGlassVarying();
+    out.position = to_device_position(unit_vertex, instance.bounds);
+    out.panel_uv = unit_vertex;
+    out.instance_id = instance_id;
+    out.clip_distances = distance_from_clip_rect(unit_vertex, instance.bounds, instance.content_mask);
+    return out;
+}
+
+@fragment
+fn fs_liquid_glass(input: LiquidGlassVarying) -> @location(0) vec4<f32> {
+    if (any(input.clip_distances < vec4<f32>(0.0))) {
+        return vec4<f32>(0.0);
+    }
+
+    let instance = b_liquid_glass[input.instance_id];
+    let glass_origin_uv = (instance.glass_bounds.origin - instance.bounds.origin) / instance.bounds.size;
+    let glass_size_uv = instance.glass_bounds.size / instance.bounds.size;
+    let glass_center_uv = glass_origin_uv + glass_size_uv * 0.5;
+    let glass_half_uv = max(glass_size_uv * 0.5, vec2<f32>(0.0001));
+    let glass_local = (input.panel_uv - glass_center_uv) / glass_half_uv;
+    let sdf = liquid_sd_superellipse(glass_local, max(instance.power_factor, 1.001), 1.0);
+
+    if (sdf > 0.0) {
+        return vec4<f32>(0.0);
+    }
+
+    let dist = -sdf;
+    let refraction_amount = pow(max(liquid_f_dist(instance, dist), 0.0), instance.f_power);
+    let sample_panel_uv = clamp(glass_local * refraction_amount * glass_half_uv + glass_center_uv, vec2<f32>(0.001), vec2<f32>(0.999));
+
+    var color = liquid_blur_sample(sample_panel_uv, instance);
+
+    if (instance.chromatic_aberration > 0.0001) {
+        let edge_factor = 1.0 - liquid_smoothstep(0.0, 0.3, dist);
+        let aberration_strength = instance.chromatic_aberration * edge_factor * 3.0;
+        let base_dir = sample_panel_uv - glass_center_uv;
+        let aberration_dir = select(vec2<f32>(1.0, 0.0), normalize(base_dir), length(base_dir) > 0.0001);
+        let samples = max(1u, min(instance.aberration_samples, 8u));
+        let texel = vec2<f32>(
+            1.0 / max(instance.bounds.size.x, 1.0),
+            1.0 / max(instance.bounds.size.y, 1.0),
+        );
+
+        var r_accum = 0.0;
+        var g_accum = 0.0;
+        var b_accum = 0.0;
+        for (var i = 0u; i < samples; i += 1u) {
+            let t = select(0.0, f32(i) / f32(samples - 1u), samples > 1u);
+            let offset = (t - 0.5) * aberration_strength;
+            r_accum += liquid_blur_sample(sample_panel_uv + aberration_dir * offset * 2.0 + vec2<f32>(texel.x, 0.0), instance).r;
+            g_accum += liquid_blur_sample(sample_panel_uv + aberration_dir * offset * 0.8, instance).g;
+            b_accum += liquid_blur_sample(sample_panel_uv - aberration_dir * offset * 1.5 - vec2<f32>(texel.x, 0.0), instance).b;
+        }
+
+        color = vec4<f32>(
+            r_accum / f32(samples),
+            g_accum / f32(samples),
+            b_accum / f32(samples),
+            color.a,
+        );
+    }
+
+    let noise_val = (liquid_rand(input.position.xy * 0.001) - 0.5) * instance.noise;
+    color = vec4<f32>(color.rgb + vec3<f32>(noise_val), color.a);
+
+    let glass_tint = vec3<f32>(0.93, 0.95, 0.99);
+    color = vec4<f32>(
+        mix(color.rgb, glass_tint, 0.28),
+        mix(color.a, 0.18, 0.82),
+    );
+
+    let glow_val = liquid_glow(input.panel_uv);
+    let glow_mask = liquid_smoothstep(instance.glow_edge0, instance.glow_edge1, dist);
+    let glow_mul = glow_val * instance.glow_weight * glow_mask + 1.0 + instance.glow_bias;
+    color = vec4<f32>(color.rgb * glow_mul, color.a);
+
+    return blend_color(color, instance.opacity);
 }
 
 // --- surfaces --- //

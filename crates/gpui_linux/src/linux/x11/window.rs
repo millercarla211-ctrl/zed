@@ -4,10 +4,10 @@ use x11rb::connection::RequestConnection;
 use crate::linux::X11ClientStatePtr;
 use gpui::{
     AnyWindowHandle, Bounds, Decorations, DevicePixels, ForegroundExecutor, GpuSpecs, Modifiers,
-    Pixels, PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow,
-    Point, PromptButton, PromptLevel, RequestFrameOptions, ResizeEdge, ScaledPixels, Scene, Size,
-    Tiling, WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea,
-    WindowDecorations, WindowKind, WindowParams, px,
+    MousePassthroughSnapshot, Pixels, PlatformAtlas, PlatformDisplay, PlatformInput,
+    PlatformInputHandler, PlatformWindow, Point, PromptButton, PromptLevel, RequestFrameOptions,
+    ResizeEdge, ScaledPixels, Scene, Size, Tiling, WindowAppearance, WindowBackgroundAppearance,
+    WindowBounds, WindowControlArea, WindowDecorations, WindowKind, WindowParams, px,
 };
 use gpui_wgpu::{CompositorGpuHint, WgpuRenderer, WgpuSurfaceConfig};
 
@@ -20,6 +20,7 @@ use x11rb::{
     errors::ConnectionError,
     properties::WmSizeHints,
     protocol::{
+        shape::{ConnectionExt as _, SK, SO},
         sync,
         xinput::{self, ConnectionExt as _},
         xproto::{self, ClientMessageEvent, ConnectionExt, TranslateCoordinatesReply},
@@ -273,6 +274,7 @@ pub struct X11WindowState {
     input_handler: Option<PlatformInputHandler>,
     appearance: WindowAppearance,
     background_appearance: WindowBackgroundAppearance,
+    mouse_passthrough_snapshot: MousePassthroughSnapshot,
     maximized_vertical: bool,
     maximized_horizontal: bool,
     hidden: bool,
@@ -291,6 +293,100 @@ impl X11WindowState {
     fn is_transparent(&self) -> bool {
         self.background_appearance != WindowBackgroundAppearance::Opaque
     }
+}
+
+fn x11_rectangle_from_bounds(bounds: Bounds<Pixels>, scale_factor: f32) -> xproto::Rectangle {
+    let x = (f32::from(bounds.origin.x) * scale_factor).floor() as i16;
+    let y = (f32::from(bounds.origin.y) * scale_factor).floor() as i16;
+    let width = (f32::from(bounds.size.width) * scale_factor)
+        .ceil()
+        .max(1.0) as u16;
+    let height = (f32::from(bounds.size.height) * scale_factor)
+        .ceil()
+        .max(1.0) as u16;
+    xproto::Rectangle {
+        x,
+        y,
+        width,
+        height,
+    }
+}
+
+fn update_input_shape(window: &X11WindowStatePtr) {
+    let (background, scale_factor, window_bounds, passthrough_regions, blocker_rects) = {
+        let state = window.state.borrow();
+        let blocker_rects = state
+            .mouse_passthrough_snapshot
+            .hitboxes
+            .iter()
+            .filter(|hitbox| {
+                state
+                    .mouse_passthrough_snapshot
+                    .interactive_hitbox_ids
+                    .contains(&hitbox.id)
+            })
+            .map(|hitbox| hitbox.bounds.intersect(&hitbox.content_mask.bounds))
+            .collect::<Vec<_>>();
+
+        (
+            state.background_appearance,
+            state.scale_factor,
+            state.bounds,
+            state.mouse_passthrough_snapshot.regions.clone(),
+            blocker_rects,
+        )
+    };
+
+    let full_rect = xproto::Rectangle {
+        x: 0,
+        y: 0,
+        width: (f32::from(window_bounds.size.width) * scale_factor)
+            .ceil()
+            .max(1.0) as u16,
+        height: (f32::from(window_bounds.size.height) * scale_factor)
+            .ceil()
+            .max(1.0) as u16,
+    };
+
+    let _ = window.xcb.shape_rectangles(
+        SO::SET,
+        SK::INPUT,
+        xproto::ClipOrdering::UNSORTED,
+        window.x_window,
+        0,
+        0,
+        &[full_rect],
+    );
+
+    if background != WindowBackgroundAppearance::Opaque {
+        for region in passthrough_regions {
+            let rect = x11_rectangle_from_bounds(region.bounds, scale_factor);
+            let _ = window.xcb.shape_rectangles(
+                SO::SUBTRACT,
+                SK::INPUT,
+                xproto::ClipOrdering::UNSORTED,
+                window.x_window,
+                0,
+                0,
+                &[rect],
+            );
+        }
+
+        for bounds in blocker_rects {
+            let rect = x11_rectangle_from_bounds(bounds, scale_factor);
+            let _ = window.xcb.shape_rectangles(
+                SO::UNION,
+                SK::INPUT,
+                xproto::ClipOrdering::UNSORTED,
+                window.x_window,
+                0,
+                0,
+                &[rect],
+            );
+        }
+    }
+
+    xcb_flush(&window.xcb);
 }
 
 #[derive(Clone)]
@@ -793,6 +889,7 @@ impl X11WindowState {
                 appearance,
                 handle,
                 background_appearance: WindowBackgroundAppearance::Opaque,
+                mouse_passthrough_snapshot: MousePassthroughSnapshot::default(),
                 destroyed: false,
                 client_side_decorations_supported,
                 decorations: WindowDecorations::Server,
@@ -1263,6 +1360,8 @@ impl X11WindowStatePtr {
             fun();
         }
 
+        update_input_shape(self);
+
         Ok(())
     }
 
@@ -1539,10 +1638,17 @@ impl PlatformWindow for X11Window {
         state.background_appearance = background_appearance;
         let transparent = state.is_transparent();
         state.renderer.update_transparency(transparent);
+        drop(state);
+        update_input_shape(&self.0);
     }
 
     fn background_appearance(&self) -> WindowBackgroundAppearance {
         self.0.state.borrow().background_appearance
+    }
+
+    fn set_mouse_passthrough_snapshot(&self, snapshot: MousePassthroughSnapshot) {
+        self.0.state.borrow_mut().mouse_passthrough_snapshot = snapshot;
+        update_input_shape(&self.0);
     }
 
     fn is_subpixel_rendering_supported(&self) -> bool {

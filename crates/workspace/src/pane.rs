@@ -1,13 +1,13 @@
 use crate::{
-    CloseWindow, NewCenterTerminal, NewFile, NewTerminal, OpenInTerminal, OpenOptions,
-    OpenTerminal, OpenVisible, SplitDirection, ToggleFileFinder, ToggleProjectSymbols, ToggleZoom,
-    Workspace, WorkspaceItemBuilder, ZoomIn, ZoomOut,
+    CloseWindow, NewCenterTerminal, NewFile, NewLiquidGlass, NewTerminal, NewWebPreview,
+    OpenInTerminal, OpenOptions, OpenTerminal, OpenVisible, SplitDirection, ToggleFileFinder,
+    ToggleProjectSymbols, ToggleZoom, Workspace, WorkspaceItemBuilder, ZoomIn, ZoomOut,
     focus_follows_mouse::FocusFollowsMouse as _,
     invalid_item_view::InvalidItemView,
     item::{
         ActivateOnClose, ClosePosition, Item, ItemBufferKind, ItemHandle, ItemSettings,
         PreviewTabsSettings, ProjectItemKind, SaveOptions, ShowCloseButton, ShowDiagnostics,
-        TabContentParams, TabTooltipContent, WeakItemHandle,
+        TabContentParams, TabTooltipContent, WeakItemHandle, WorkspaceScreenKind,
     },
     move_item,
     notifications::NotifyResultExt,
@@ -26,6 +26,7 @@ use gpui::{
 };
 use itertools::Itertools;
 use language::{Capability, DiagnosticSeverity};
+use menu::Confirm;
 use parking_lot::Mutex;
 use project::{DirectoryLister, Project, ProjectEntryId, ProjectPath, WorktreeId};
 use schemars::JsonSchema;
@@ -1371,6 +1372,30 @@ impl Pane {
 
     pub fn active_item(&self) -> Option<Box<dyn ItemHandle>> {
         self.items.get(self.active_item_index).cloned()
+    }
+
+    fn visible_screen_kind(&self, cx: &App) -> Option<WorkspaceScreenKind> {
+        let kind = self.active_item().map(|item| item.screen_kind(cx))?;
+        (kind != WorkspaceScreenKind::Other).then_some(kind)
+    }
+
+    fn visible_item_indices(&self, cx: &App) -> Vec<usize> {
+        let Some(kind) = self.visible_screen_kind(cx) else {
+            return (0..self.items.len()).collect();
+        };
+
+        let visible_indices = self
+            .items
+            .iter()
+            .enumerate()
+            .filter_map(|(ix, item)| (item.screen_kind(cx) == kind).then_some(ix))
+            .collect::<Vec<_>>();
+
+        if visible_indices.is_empty() {
+            (0..self.items.len()).collect()
+        } else {
+            visible_indices
+        }
     }
 
     fn active_item_id(&self) -> EntityId {
@@ -2749,6 +2774,9 @@ impl Pane {
     fn render_tab(
         &self,
         ix: usize,
+        visible_ix: usize,
+        visible_count: usize,
+        active_visible_ix: usize,
         item: &dyn ItemHandle,
         detail: usize,
         focus_handle: &FocusHandle,
@@ -2761,16 +2789,14 @@ impl Pane {
             .map(|id| id == item.item_id())
             .unwrap_or(false);
 
-        let label = item.tab_content(
-            TabContentParams {
-                detail: Some(detail),
-                selected: is_active,
-                preview: is_preview,
-                deemphasized: !self.has_focus(window, cx),
-            },
-            window,
-            cx,
-        );
+        let tab_params = TabContentParams {
+            detail: Some(detail),
+            selected: is_active,
+            preview: is_preview,
+            deemphasized: !self.has_focus(window, cx),
+        };
+
+        let label = item.tab_content(tab_params, window, cx);
 
         let item_diagnostic = item
             .project_path(cx)
@@ -2827,10 +2853,10 @@ impl Pane {
         let indicator = render_item_indicator(item.boxed_clone(), cx);
         let tab_tooltip_content = item.tab_tooltip_content(cx);
         let item_id = item.item_id();
-        let is_first_item = ix == 0;
-        let is_last_item = ix == self.items.len() - 1;
+        let is_first_item = visible_ix == 0;
+        let is_last_item = visible_ix + 1 == visible_count;
         let is_pinned = self.is_tab_pinned(ix);
-        let position_relative_to_active_item = ix.cmp(&self.active_item_index);
+        let position_relative_to_active_item = visible_ix.cmp(&active_visible_ix);
 
         let read_only_toggle = |toggleable: bool| {
             IconButton::new("toggle_read_only", IconName::FileLock)
@@ -2877,6 +2903,10 @@ impl Pane {
             .on_click(cx.listener({
                 let item_handle = item.boxed_clone();
                 move |pane: &mut Self, event: &ClickEvent, window, cx| {
+                    if item_handle.on_tab_click(tab_params, event, window, cx) {
+                        return;
+                    }
+
                     if event.click_count() > 1 {
                         pane.unpreview_item_if_preview(item_id);
                         let extra_actions = item_handle.tab_extra_context_menu_actions(window, cx);
@@ -3417,28 +3447,51 @@ impl Pane {
                 }
             });
 
-        let mut tab_items = self
-            .items
+        let visible_indices = self.visible_item_indices(cx);
+        let visible_items = visible_indices
             .iter()
+            .map(|&ix| self.items[ix].boxed_clone())
+            .collect::<Vec<_>>();
+        let active_visible_ix = visible_indices
+            .iter()
+            .position(|&ix| ix == self.active_item_index)
+            .unwrap_or(0);
+        let mut tab_items = visible_indices
+            .iter()
+            .copied()
+            .zip(visible_items.iter())
+            .zip(tab_details(&visible_items, window, cx))
             .enumerate()
-            .zip(tab_details(&self.items, window, cx))
-            .map(|((ix, item), detail)| {
-                self.render_tab(ix, &**item, detail, &focus_handle, window, cx)
-                    .into_any_element()
+            .map(|(visible_ix, ((ix, item), detail))| {
+                self.render_tab(
+                    ix,
+                    visible_ix,
+                    visible_items.len(),
+                    active_visible_ix,
+                    &**item,
+                    detail,
+                    &focus_handle,
+                    window,
+                    cx,
+                )
+                .into_any_element()
             })
             .collect::<Vec<_>>();
         let tab_count = tab_items.len();
-        if self.is_tab_pinned(tab_count) {
+        let visible_pinned_count = visible_indices
+            .iter()
+            .filter(|&&ix| self.is_tab_pinned(ix))
+            .count();
+        if visible_pinned_count > tab_count {
             log::warn!(
-                "Pinned tab count ({}) exceeds actual tab count ({}). \
+                "Pinned tab count ({}) exceeds visible tab count ({}). \
                 This should not happen. If possible, add reproduction steps, \
                 in a comment, to https://github.com/zed-industries/zed/issues/33342",
-                self.pinned_tab_count,
+                visible_pinned_count,
                 tab_count
             );
-            self.pinned_tab_count = tab_count;
         }
-        let unpinned_tabs = tab_items.split_off(self.pinned_tab_count);
+        let unpinned_tabs = tab_items.split_off(visible_pinned_count);
         let pinned_tabs = tab_items;
 
         let tab_bar_settings = TabBarSettings::get_global(cx);
@@ -3448,6 +3501,7 @@ impl Pane {
             self.render_two_row_tab_bar(
                 pinned_tabs,
                 unpinned_tabs,
+                visible_pinned_count,
                 tab_count,
                 navigate_backward,
                 navigate_forward,
@@ -3458,6 +3512,8 @@ impl Pane {
             self.render_single_row_tab_bar(
                 pinned_tabs,
                 unpinned_tabs,
+                visible_pinned_count,
+                active_visible_ix,
                 tab_count,
                 navigate_backward,
                 navigate_forward,
@@ -3475,9 +3531,18 @@ impl Pane {
         window: &mut Window,
         cx: &mut Context<Pane>,
     ) -> TabBar {
+        if let Some(active_item) = self.active_item()
+            && let Some(custom_controls) = active_item.pane_tab_bar_controls(window, cx)
+        {
+            return tab_bar
+                .start_children(custom_controls.start)
+                .end_children(custom_controls.end);
+        }
+
         tab_bar
             .when(
-                self.display_nav_history_buttons.unwrap_or_default(),
+                self.display_nav_history_buttons.unwrap_or_default()
+                    && self.visible_screen_kind(cx).is_none(),
                 |tab_bar| {
                     tab_bar
                         .start_child(navigate_backward)
@@ -3501,6 +3566,8 @@ impl Pane {
         &mut self,
         pinned_tabs: Vec<AnyElement>,
         unpinned_tabs: Vec<AnyElement>,
+        visible_pinned_count: usize,
+        active_visible_ix: usize,
         tab_count: usize,
         navigate_backward: IconButton,
         navigate_forward: IconButton,
@@ -3522,7 +3589,7 @@ impl Pane {
                 // Avoid flickering when max_offset is very small (< 2px).
                 // The border adds 1-2px which can push max_offset back to 0, creating a loop.
                 let is_scrollable = max_scroll > px(2.0);
-                let has_active_unpinned_tab = self.active_item_index >= self.pinned_tab_count;
+                let has_active_unpinned_tab = active_visible_ix >= visible_pinned_count;
                 h_flex()
                     .children(pinned_tabs)
                     .when(is_scrollable && is_scrolled, |this| {
@@ -3539,6 +3606,7 @@ impl Pane {
         &mut self,
         pinned_tabs: Vec<AnyElement>,
         unpinned_tabs: Vec<AnyElement>,
+        _visible_pinned_count: usize,
         tab_count: usize,
         navigate_backward: IconButton,
         navigate_forward: IconButton,
@@ -4177,13 +4245,46 @@ fn default_render_tab_bar_buttons(
         Some(_) => (false, pane.items_len() > 1),
         None => (false, false),
     };
+    let active_screen_kind = pane
+        .active_item()
+        .map(|item| item.screen_kind(cx))
+        .unwrap_or(WorkspaceScreenKind::Other);
+
     // Ideally we would return a vec of elements here to pass directly to the [TabBar]'s
     // `end_slot`, but due to needing a view here that isn't possible.
     let right_children = h_flex()
         // Instead we need to replicate the spacing from the [TabBar]'s `end_slot` here.
         .gap(DynamicSpacing::Base04.rems(cx))
-        .child(
-            PopoverMenu::new("pane-tab-bar-popover-menu")
+        .child(match active_screen_kind {
+            WorkspaceScreenKind::Editor => IconButton::new("plus", IconName::Plus)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text("New File"))
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(Box::new(NewFile), cx);
+                })
+                .into_any_element(),
+            WorkspaceScreenKind::Browser => IconButton::new("plus", IconName::Plus)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text("New Web Preview"))
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(NewWebPreview.boxed_clone(), cx);
+                })
+                .into_any_element(),
+            WorkspaceScreenKind::Terminal => IconButton::new("plus", IconName::Plus)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text("New Terminal"))
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(NewCenterTerminal::default().boxed_clone(), cx);
+                })
+                .into_any_element(),
+            WorkspaceScreenKind::LiquidGlass => IconButton::new("plus", IconName::Plus)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text("New Liquid Glass"))
+                .on_click(|_, window, cx| {
+                    window.dispatch_action(NewLiquidGlass.boxed_clone(), cx);
+                })
+                .into_any_element(),
+            WorkspaceScreenKind::Other => PopoverMenu::new("pane-tab-bar-popover-menu")
                 .trigger_with_tooltip(
                     IconButton::new("plus", IconName::Plus).icon_size(IconSize::Small),
                     Tooltip::text("New..."),
@@ -4193,6 +4294,9 @@ fn default_render_tab_bar_buttons(
                 .menu(move |window, cx| {
                     Some(ContextMenu::build(window, cx, |menu, _, _| {
                         menu.action("New File", NewFile.boxed_clone())
+                            .action("New Terminal", NewTerminal::default().boxed_clone())
+                            .action("New Web Preview", NewWebPreview.boxed_clone())
+                            .action("New Liquid Glass", NewLiquidGlass.boxed_clone())
                             .action("Open File", ToggleFileFinder::default().boxed_clone())
                             .separator()
                             .action("Search Project", DeploySearch::default().boxed_clone())
@@ -4204,8 +4308,9 @@ fn default_render_tab_bar_buttons(
                                 NewCenterTerminal::default().boxed_clone(),
                             )
                     }))
-                }),
-        )
+                })
+                .into_any_element(),
+        })
         .child(
             PopoverMenu::new("pane-tab-bar-split")
                 .trigger_with_tooltip(
@@ -4438,6 +4543,15 @@ impl Render for Pane {
             .on_action(cx.listener(|_, _: &menu::Cancel, window, cx| {
                 if cx.stop_active_drag(window) {
                 } else {
+                    cx.propagate();
+                }
+            }))
+            .on_action(cx.listener(|pane: &mut Self, _: &Confirm, window, cx| {
+                let handled = pane
+                    .active_item()
+                    .is_some_and(|item| item.on_tab_confirm(window, cx));
+
+                if !handled {
                     cx.propagate();
                 }
             }))

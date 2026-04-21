@@ -31,6 +31,7 @@ parking_lot.workspace = true
 rand.workspace = true
 raw-window-handle = "0.6"
 smallvec.workspace = true
+serde_json.workspace = true
 util.workspace = true
 uuid.workspace = true
 windows.workspace = true
@@ -44,3 +45,6 @@ optional = true
 
 [target.'cfg(target_os = "windows")'.build-dependencies]
 windows-registry = "0.5"
+
+[target."cfg(windows)".dependencies]
+webview2-com = "0.38"

@@ -11,7 +11,7 @@ use anyhow::Result;
 use client::{Client, proto};
 use futures::channel::mpsc;
 use gpui::{
-    Action, AnyElement, AnyEntity, AnyView, App, AppContext, Context, Entity, EntityId,
+    Action, AnyElement, AnyEntity, AnyView, App, AppContext, ClickEvent, Context, Entity, EntityId,
     EventEmitter, FocusHandle, Focusable, Font, Pixels, Point, Render, SharedString, Task,
     WeakEntity, Window,
 };
@@ -152,6 +152,26 @@ impl TabContentParams {
     }
 }
 
+pub struct PaneTabBarControls {
+    pub start: Option<AnyElement>,
+    pub end: Option<AnyElement>,
+}
+
+impl PaneTabBarControls {
+    pub fn new(start: Option<AnyElement>, end: Option<AnyElement>) -> Self {
+        Self { start, end }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WorkspaceScreenKind {
+    Editor,
+    Browser,
+    Terminal,
+    LiquidGlass,
+    Other,
+}
+
 pub enum TabTooltipContent {
     Text(SharedString),
     Custom(Box<dyn Fn(&mut Window, &mut App) -> AnyView>),
@@ -225,6 +245,25 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
 
     fn telemetry_event_text(&self) -> Option<&'static str> {
         None
+    }
+
+    fn screen_kind(&self) -> WorkspaceScreenKind {
+        WorkspaceScreenKind::Other
+    }
+
+    fn workspace_overlay(
+        &mut self,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        None
+    }
+
+    fn requires_transparent_workspace_background() -> bool
+    where
+        Self: Sized,
+    {
+        false
     }
 
     /// (model id, Item)
@@ -348,6 +387,32 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
         true
     }
 
+    fn pane_tab_bar_controls(
+        &self,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<PaneTabBarControls> {
+        None
+    }
+
+    /// Called when the item's tab is clicked.
+    /// Return `true` to consume the click and suppress the pane's default tab activation logic.
+    fn on_tab_click(
+        &mut self,
+        _params: TabContentParams,
+        _event: &ClickEvent,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> bool {
+        false
+    }
+
+    /// Called when the pane receives `menu::Confirm` while the item's tab content owns focus.
+    /// Return `true` to consume the action.
+    fn on_tab_confirm(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> bool {
+        false
+    }
+
     fn pixel_position_of_cursor(&self, _: &App) -> Option<Point<Pixels>> {
         None
     }
@@ -468,6 +533,8 @@ pub trait ItemHandle: 'static + Send {
     fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString>;
     fn tab_tooltip_content(&self, cx: &App) -> Option<TabTooltipContent>;
     fn telemetry_event_text(&self, cx: &App) -> Option<&'static str>;
+    fn screen_kind(&self, cx: &App) -> WorkspaceScreenKind;
+    fn workspace_overlay(&self, window: &mut Window, cx: &mut App) -> Option<AnyElement>;
     fn dragged_tab_content(
         &self,
         params: TabContentParams,
@@ -545,6 +612,19 @@ pub trait ItemHandle: 'static + Send {
     fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)>;
     fn breadcrumb_prefix(&self, window: &mut Window, cx: &mut App) -> Option<gpui::AnyElement>;
     fn show_toolbar(&self, cx: &App) -> bool;
+    fn pane_tab_bar_controls(
+        &self,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Option<PaneTabBarControls>;
+    fn on_tab_click(
+        &self,
+        params: TabContentParams,
+        event: &ClickEvent,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> bool;
+    fn on_tab_confirm(&self, window: &mut Window, cx: &mut App) -> bool;
     fn pixel_position_of_cursor(&self, cx: &App) -> Option<Point<Pixels>>;
     fn downgrade_item(&self) -> Box<dyn WeakItemHandle>;
     fn workspace_settings<'a>(&self, cx: &'a App) -> &'a WorkspaceSettings;
@@ -563,6 +643,7 @@ pub trait ItemHandle: 'static + Send {
         window: &mut Window,
         cx: &mut App,
     ) -> Vec<(SharedString, Box<dyn Action>)>;
+    fn requires_transparent_workspace_background(&self) -> bool;
     fn can_autosave(&self, cx: &App) -> bool {
         let is_deleted = self.project_entry_ids(cx).is_empty();
         self.is_dirty(cx) && !self.has_conflict(cx) && self.can_save(cx) && !is_deleted
@@ -604,6 +685,14 @@ impl<T: Item> ItemHandle for Entity<T> {
 
     fn telemetry_event_text(&self, cx: &App) -> Option<&'static str> {
         self.read(cx).telemetry_event_text()
+    }
+
+    fn screen_kind(&self, cx: &App) -> WorkspaceScreenKind {
+        self.read(cx).screen_kind()
+    }
+
+    fn workspace_overlay(&self, window: &mut Window, cx: &mut App) -> Option<AnyElement> {
+        self.update(cx, |this, cx| this.workspace_overlay(window, cx))
     }
 
     fn tab_content(&self, params: TabContentParams, window: &Window, cx: &App) -> AnyElement {
@@ -1110,6 +1199,28 @@ impl<T: Item> ItemHandle for Entity<T> {
         self.read(cx).show_toolbar()
     }
 
+    fn pane_tab_bar_controls(
+        &self,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Option<PaneTabBarControls> {
+        self.update(cx, |this, cx| this.pane_tab_bar_controls(window, cx))
+    }
+
+    fn on_tab_click(
+        &self,
+        params: TabContentParams,
+        event: &ClickEvent,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> bool {
+        self.update(cx, |this, cx| this.on_tab_click(params, event, window, cx))
+    }
+
+    fn on_tab_confirm(&self, window: &mut Window, cx: &mut App) -> bool {
+        self.update(cx, |this, cx| this.on_tab_confirm(window, cx))
+    }
+
     fn pixel_position_of_cursor(&self, cx: &App) -> Option<Point<Pixels>> {
         self.read(cx).pixel_position_of_cursor(cx)
     }
@@ -1159,6 +1270,10 @@ impl<T: Item> ItemHandle for Entity<T> {
         self.update(cx, |this, cx| {
             this.tab_extra_context_menu_actions(window, cx)
         })
+    }
+
+    fn requires_transparent_workspace_background(&self) -> bool {
+        T::requires_transparent_workspace_background()
     }
 }
 

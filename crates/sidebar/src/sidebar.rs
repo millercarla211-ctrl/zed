@@ -12,8 +12,8 @@ use agent_ui::threads_archive_view::{
     ThreadsArchiveView, ThreadsArchiveViewEvent, format_history_entry_timestamp,
 };
 use agent_ui::{
-    AcpThreadImportOnboarding, Agent, AgentPanel, AgentPanelEvent, ArchiveSelectedThread,
-    CrossChannelImportOnboarding, DEFAULT_THREAD_TITLE, NewThread, ThreadId, ThreadImportModal,
+    AcpThreadImportOnboarding, Agent, AgentPanel, AgentPanelEvent, CrossChannelImportOnboarding,
+    DEFAULT_THREAD_TITLE, NewThread, RemoveSelectedThread, ThreadId, ThreadImportModal,
     channels_with_threads, import_threads_from_other_channels,
 };
 use chrono::{DateTime, Utc};
@@ -29,7 +29,10 @@ use gpui::{
 use menu::{
     Cancel, Confirm, SelectChild, SelectFirst, SelectLast, SelectNext, SelectParent, SelectPrevious,
 };
-use project::{AgentId, AgentRegistryStore, Event as ProjectEvent, WorktreeId};
+use project::{
+    AgentId, AgentRegistryStore, Event as ProjectEvent, Project, ProjectGroupKey,
+    WorktreeId,
+};
 use recent_projects::sidebar_recent_projects::SidebarRecentProjects;
 use remote::{RemoteConnectionOptions, same_remote_connection_identity};
 use ui::utils::platform_title_bar_height;
@@ -42,20 +45,27 @@ use std::mem;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
+use terminal_view::terminal_panel::TerminalPanel;
 use theme::ActiveTheme;
 use ui::{
-    AgentThreadStatus, CommonAnimationExt, ContextMenu, Divider, GradientFade, HighlightedLabel,
-    KeyBinding, PopoverMenu, PopoverMenuHandle, Tab, ThreadItem, ThreadItemWorktreeInfo, TintColor,
-    Tooltip, WithScrollbar, prelude::*, render_modifiers,
+    AgentThreadStatus, ButtonLike, ButtonStyle, CommonAnimationExt, ContextMenu, Divider,
+    GradientFade, HighlightedLabel, IconButtonShape, KeyBinding, PopoverMenu, PopoverMenuHandle,
+    Tab, ThreadItem, ThreadItemWorktreeInfo, TintColor, Tooltip, WithScrollbar, prelude::*,
+    render_modifiers, right_click_menu,
 };
 use util::ResultExt as _;
 use util::path_list::PathList;
 use workspace::{
-    CloseWindow, FocusWorkspaceSidebar, MultiWorkspace, MultiWorkspaceEvent, NextProject,
-    NextThread, Open, OpenMode, PreviousProject, PreviousThread, ProjectGroupKey, SaveIntent,
-    Sidebar as WorkspaceSidebar, SidebarSide, Toast, ToggleWorkspaceSidebar, Workspace,
+    AddFolderToProject, CloseWindow, FocusWorkspaceSidebar, MultiWorkspace, MultiWorkspaceEvent,
+    NextProject, NextThread, Open, OpenMode, OpenOptions, OpenVisible, PreviousProject,
+    PreviousThread, SaveIntent,
+    Sidebar as WorkspaceSidebar, SidebarSide, Toast, ToggleWorkspaceSidebar,
+    Workspace, WorkspaceId, WorkspaceScreenKind,
     notifications::NotificationId, sidebar_side_context_menu,
 };
+
+#[cfg(target_os = "windows")]
+use web_preview::web_preview_view::WebPreviewView;
 
 use zed_actions::OpenRecent;
 use zed_actions::editor::{MoveDown, MoveUp};
@@ -88,6 +98,16 @@ gpui::actions!(
 const DEFAULT_WIDTH: Pixels = px(300.0);
 const MIN_WIDTH: Pixels = px(200.0);
 const MAX_WIDTH: Pixels = px(800.0);
+const DEFAULT_THREADS_SHOWN: usize = 5;
+const SIDEBAR_SPACE_GRID_COLUMNS: usize = 4;
+const MAX_VISIBLE_SPACE_DOTS: usize = 7;
+
+#[derive(Clone, Serialize, Deserialize)]
+struct SerializedSpaceLabel {
+    #[serde(default)]
+    workspace_id: Option<i64>,
+    name: String,
+}
 
 #[derive(Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 enum SerializedSidebarView {
@@ -97,12 +117,31 @@ enum SerializedSidebarView {
     History,
 }
 
+// Placeholder for ProjectGroupKey serialization
+// TODO: Implement proper serialization when MultiWorkspace state management is finalized
+#[derive(Default, Clone, Serialize, Deserialize)]
+struct SerializedProjectGroupKey;
+
 #[derive(Default, Serialize, Deserialize)]
 struct SerializedSidebar {
     #[serde(default)]
     width: Option<f32>,
     #[serde(default)]
+    collapsed_groups: Vec<SerializedProjectGroupKey>,
+    #[serde(default)]
+    expanded_groups: Vec<(SerializedProjectGroupKey, usize)>,
+    #[serde(default)]
+    space_labels: Vec<SerializedSpaceLabel>,
+    #[serde(default)]
+    space_order: Vec<i64>,
+    #[serde(default = "default_next_space_number")]
+    next_space_number: usize,
+    #[serde(default)]
     active_view: SerializedSidebarView,
+}
+
+fn default_next_space_number() -> usize {
+    1
 }
 
 #[derive(Debug, Default)]
@@ -274,6 +313,41 @@ struct SidebarContents {
     has_open_projects: bool,
 }
 
+#[derive(Clone)]
+struct SpaceEntry {
+    workspace_id: WorkspaceId,
+    label: SharedString,
+    path_summary: SharedString,
+}
+
+#[derive(Clone)]
+struct DraggedSidebarSpace {
+    workspace_id: WorkspaceId,
+}
+
+impl Render for DraggedSidebarSpace {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        gpui::Empty
+    }
+}
+
+#[derive(Clone)]
+enum SidebarGridAction {
+    OpenProject,
+    OpenFile(PathBuf),
+    OpenWebsite(&'static str),
+    OpenTerminalFolder(PathBuf),
+}
+
+#[derive(Clone)]
+struct SidebarGridEntry {
+    id: SharedString,
+    icon: IconName,
+    label: SharedString,
+    subtitle: Option<SharedString>,
+    action: SidebarGridAction,
+}
+
 impl SidebarContents {
     fn is_thread_notified(&self, thread_id: &agent_ui::ThreadId) -> bool {
         self.notified_threads.contains(thread_id)
@@ -333,26 +407,6 @@ struct WorkspaceMenuWorktreeLabel {
     icon: Option<IconName>,
     primary_name: SharedString,
     secondary_name: Option<SharedString>,
-}
-
-impl WorkspaceMenuWorktreeLabel {
-    fn render(&self, color: Color) -> impl IntoElement {
-        h_flex()
-            .min_w_0()
-            .gap_0p5()
-            .when_some(self.icon, |this, icon| {
-                this.child(Icon::new(icon).size(IconSize::XSmall).color(color))
-            })
-            .child(
-                Label::new(self.primary_name.clone())
-                    .color(color)
-                    .truncate(),
-            )
-            .when_some(self.secondary_name.clone(), |this, secondary_name| {
-                this.child(Label::new(":").color(color).alpha(0.5))
-                    .child(Label::new(secondary_name).color(color).truncate())
-            })
-    }
 }
 
 fn workspace_menu_worktree_labels(
@@ -478,11 +532,20 @@ pub struct Sidebar {
     _thread_switcher_subscriptions: Vec<gpui::Subscription>,
     pending_thread_activation: Option<agent_ui::ThreadId>,
     view: SidebarView,
-    restoring_tasks: HashMap<agent_ui::ThreadId, Task<()>>,
+    restoring_tasks: HashMap<ThreadId, Task<()>>,
+    space_labels: HashMap<WorkspaceId, SharedString>,
+    space_order: Vec<WorkspaceId>,
+    space_entries: Vec<SpaceEntry>,
+    active_space_id: Option<WorkspaceId>,
+    next_space_number: usize,
+    space_page_start: usize,
     recent_projects_popover_handle: PopoverMenuHandle<SidebarRecentProjects>,
     project_header_menu_handles: HashMap<usize, PopoverMenuHandle<ContextMenu>>,
     project_header_menu_ix: Option<usize>,
     _subscriptions: Vec<gpui::Subscription>,
+    _draft_observation: Option<gpui::Subscription>,
+    carousel_drag_start: Option<(f32, usize)>,
+    carousel_did_drag: bool,
     /// For the thread import banners, if there is just one we show "Import
     /// Threads" but if we are showing both the external agents and other
     /// channels import banners then we change the text to disambiguate the
@@ -505,7 +568,8 @@ impl Sidebar {
 
         let filter_editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
-            editor.set_placeholder_text("Search…", window, cx);
+            editor.set_use_modal_editing(true);
+            editor.set_placeholder_text("Search...", window, cx);
             editor
         });
 
@@ -513,7 +577,7 @@ impl Sidebar {
             &multi_workspace,
             window,
             |this, _multi_workspace, event: &MultiWorkspaceEvent, window, cx| match event {
-                MultiWorkspaceEvent::ActiveWorkspaceChanged { .. } => {
+                MultiWorkspaceEvent::ActiveWorkspaceChanged => {
                     this.sync_active_entry_from_active_workspace(cx);
                     this.replace_archived_panel_thread(window, cx);
                     this.update_entries(cx);
@@ -574,16 +638,345 @@ impl Sidebar {
             pending_thread_activation: None,
             view: SidebarView::default(),
             restoring_tasks: HashMap::new(),
+            space_labels: HashMap::new(),
+            space_order: Vec::new(),
+            space_entries: Vec::new(),
+            active_space_id: None,
+            next_space_number: default_next_space_number(),
+            space_page_start: 0,
             recent_projects_popover_handle: PopoverMenuHandle::default(),
             project_header_menu_handles: HashMap::new(),
             project_header_menu_ix: None,
             _subscriptions: Vec::new(),
+            _draft_observation: None,
+            carousel_drag_start: None,
+            carousel_did_drag: false,
             import_banners_use_verbose_labels: None,
         }
     }
 
     fn serialize(&mut self, cx: &mut Context<Self>) {
         cx.emit(workspace::SidebarEvent::SerializeNeeded);
+    }
+
+    fn next_generated_space_label(&mut self) -> SharedString {
+        let label = format!("New space {}", self.next_space_number);
+        self.next_space_number += 1;
+        label.into()
+    }
+
+    fn default_space_label_for_workspace(workspace: &Entity<Workspace>, cx: &App) -> SharedString {
+        let root_paths = workspace.read(cx).root_paths(cx);
+        if let Some(root_path) = root_paths.first() {
+            return root_path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_else(|| root_path.display().to_string())
+                .into();
+        }
+
+        "Open Project".into()
+    }
+
+    fn space_label_for_workspace(&self, workspace: &Entity<Workspace>, cx: &App) -> SharedString {
+        workspace
+            .read(cx)
+            .database_id()
+            .and_then(|workspace_id| self.space_labels.get(&workspace_id).cloned())
+            .unwrap_or_else(|| Self::default_space_label_for_workspace(workspace, cx))
+    }
+
+    fn space_path_summary_for_workspace(workspace: &Entity<Workspace>, cx: &App) -> SharedString {
+        let paths = workspace.read(cx).root_paths(cx);
+        if paths.is_empty() {
+            return "No project opened".into();
+        }
+
+        paths
+            .iter()
+            .map(|path| {
+                path.file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string())
+            })
+            .collect::<Vec<_>>()
+            .join(" • ")
+            .into()
+    }
+
+    fn sync_space_state(&mut self, cx: &mut Context<Self>) {
+        let Some(multi_workspace) = self.multi_workspace.upgrade() else {
+            return;
+        };
+
+        let multi_workspace = multi_workspace.read(cx);
+        let workspaces: Vec<_> = multi_workspace.workspaces().cloned().collect();
+        let workspace_id_set = workspaces
+            .iter()
+            .filter_map(|workspace| workspace.read(cx).database_id())
+            .collect::<HashSet<_>>();
+
+        let mut changed = false;
+        self.space_labels.retain(|workspace_id, _| {
+            let keep = workspace_id_set.contains(workspace_id);
+            changed |= !keep;
+            keep
+        });
+        self.space_order.retain(|workspace_id| {
+            let keep = workspace_id_set.contains(workspace_id);
+            changed |= !keep;
+            keep
+        });
+
+        for workspace in &workspaces {
+            let Some(workspace_id) = workspace.read(cx).database_id() else {
+                continue;
+            };
+            if !self.space_order.contains(&workspace_id) {
+                self.space_order.push(workspace_id);
+                changed = true;
+            }
+        }
+
+        let order_index = self
+            .space_order
+            .iter()
+            .enumerate()
+            .map(|(ix, workspace_id)| (*workspace_id, ix))
+            .collect::<HashMap<_, _>>();
+
+        let mut space_entries = workspaces
+            .into_iter()
+            .filter_map(|workspace| {
+                let workspace_id = workspace.read(cx).database_id()?;
+                Some(SpaceEntry {
+                    workspace_id,
+                    label: self.space_label_for_workspace(&workspace, cx),
+                    path_summary: Self::space_path_summary_for_workspace(&workspace, cx),
+                })
+            })
+            .collect::<Vec<_>>();
+        space_entries.sort_by_key(|space| {
+            order_index
+                .get(&space.workspace_id)
+                .copied()
+                .unwrap_or(usize::MAX)
+        });
+
+        let active_space_id = multi_workspace.workspace().read(cx).database_id();
+
+        self.active_space_id = active_space_id;
+        self.space_entries = space_entries;
+
+        let total_spaces = self.space_entries.len();
+        let max_start = total_spaces.saturating_sub(MAX_VISIBLE_SPACE_DOTS);
+        if changed {
+            self.space_page_start = self
+                .clamped_space_page_start(total_spaces, self.active_space_index(cx))
+                .min(max_start);
+            self.serialize(cx);
+        } else if self.space_page_start > max_start {
+            self.space_page_start = max_start;
+        }
+    }
+
+    fn space_entries(&self, _cx: &App) -> Vec<SpaceEntry> {
+        self.space_entries.clone()
+    }
+
+    fn resolved_active_space_id(&self, cx: &App) -> Option<WorkspaceId> {
+        self.active_space_id.or_else(|| {
+            self.active_workspace(cx)
+                .and_then(|workspace| workspace.read(cx).database_id())
+        })
+    }
+
+    fn active_space_index(&self, cx: &App) -> Option<usize> {
+        let active_space_id = self.resolved_active_space_id(cx)?;
+        self.space_entries
+            .iter()
+            .position(|space| space.workspace_id == active_space_id)
+    }
+
+    #[allow(dead_code)]
+    fn clamped_space_page_start(&self, total_spaces: usize, active_index: Option<usize>) -> usize {
+        let max_start = total_spaces.saturating_sub(MAX_VISIBLE_SPACE_DOTS);
+        let mut start = self.space_page_start.min(max_start);
+
+        if let Some(active_index) = active_index {
+            if active_index < start {
+                start = active_index;
+            } else if active_index >= start + MAX_VISIBLE_SPACE_DOTS {
+                start = active_index + 1 - MAX_VISIBLE_SPACE_DOTS;
+            }
+        }
+
+        start.min(max_start)
+    }
+
+    fn create_new_space(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(multi_workspace) = self.multi_workspace.upgrade() else {
+            return;
+        };
+
+        self.show_thread_list(window, cx);
+        let new_space_label = self.next_generated_space_label();
+
+        let task = multi_workspace.update(cx, |multi_workspace, cx| {
+            multi_workspace.create_empty_local_workspace(window, cx)
+        });
+
+        cx.spawn_in(window, async move |this, cx| {
+            let workspace = task.await?;
+            this.update_in(cx, |this, window, cx| {
+                if let Some(multi_workspace) = this.multi_workspace.upgrade() {
+                    multi_workspace.update(cx, |multi_workspace, cx| {
+                        multi_workspace.activate(workspace.clone(), window, cx);
+                        multi_workspace.retain_active_workspace(cx);
+                    });
+                }
+                if let Some(workspace_id) = workspace.read(cx).database_id() {
+                    this.space_labels
+                        .insert(workspace_id, new_space_label.clone());
+                    if !this.space_order.contains(&workspace_id) {
+                        this.space_order.push(workspace_id);
+                    }
+                }
+                this.sync_space_state(cx);
+                cx.notify();
+            })?;
+            anyhow::Ok(())
+        })
+        .detach_and_log_err(cx);
+    }
+
+    fn reorder_space(
+        &mut self,
+        dragged_workspace_id: WorkspaceId,
+        target_workspace_id: WorkspaceId,
+        cx: &mut Context<Self>,
+    ) {
+        if dragged_workspace_id == target_workspace_id {
+            return;
+        }
+
+        let Some(from_ix) = self
+            .space_order
+            .iter()
+            .position(|workspace_id| *workspace_id == dragged_workspace_id)
+        else {
+            return;
+        };
+        let Some(target_ix) = self
+            .space_order
+            .iter()
+            .position(|workspace_id| *workspace_id == target_workspace_id)
+        else {
+            return;
+        };
+        if from_ix == target_ix {
+            return;
+        }
+
+        let dragged_workspace_id = self.space_order.remove(from_ix);
+        let insert_ix = if from_ix < target_ix {
+            target_ix.saturating_sub(1)
+        } else {
+            target_ix
+        };
+        self.space_order.insert(insert_ix, dragged_workspace_id);
+        self.sync_space_state(cx);
+        self.serialize(cx);
+        cx.notify();
+    }
+
+    #[allow(dead_code)]
+    fn activate_space(
+        &mut self,
+        workspace_id: WorkspaceId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(multi_workspace) = self.multi_workspace.upgrade() else {
+            return;
+        };
+
+        let spaces = self.space_entries(cx);
+        if let Some(index) = spaces
+            .iter()
+            .position(|space| space.workspace_id == workspace_id)
+        {
+            self.space_page_start = index.saturating_sub(MAX_VISIBLE_SPACE_DOTS / 2);
+        }
+
+        if let Some(workspace) = multi_workspace
+            .read(cx)
+            .workspace_for_database_id(workspace_id, cx)
+        {
+            multi_workspace.update(cx, |multi_workspace, cx| {
+                multi_workspace.activate(workspace.clone(), window, cx);
+                multi_workspace.retain_active_workspace(cx);
+            });
+        }
+    }
+
+    fn show_previous_space_page(&mut self, cx: &mut Context<Self>) {
+        if self.space_page_start > 0 {
+            self.space_page_start -= 1;
+            cx.notify();
+        }
+    }
+
+    fn show_next_space_page(&mut self, cx: &mut Context<Self>) {
+        let spaces_len = self.space_entries.len();
+        let max_start = spaces_len.saturating_sub(MAX_VISIBLE_SPACE_DOTS);
+        if self.space_page_start < max_start {
+            self.space_page_start += 1;
+            cx.notify();
+        }
+    }
+
+    #[allow(dead_code)]
+    fn active_space_label(&self, cx: &App) -> SharedString {
+        self.resolved_active_space_id(cx)
+            .and_then(|workspace_id| {
+                self.space_entries
+                    .iter()
+                    .find(|space| space.workspace_id == workspace_id)
+                    .map(|space| space.label.clone())
+            })
+            .unwrap_or_else(|| "Current space".into())
+    }
+
+    #[allow(dead_code)]
+    fn active_space_path_summary(&self, cx: &App) -> SharedString {
+        let Some(workspace_id) = self.resolved_active_space_id(cx) else {
+            return SharedString::default();
+        };
+
+        self.space_entries
+            .iter()
+            .find(|space| space.workspace_id == workspace_id)
+            .map(|space| space.path_summary.clone())
+            .unwrap_or_default()
+    }
+
+    #[allow(dead_code)]
+    fn space_path_summary_for_key(key: &ProjectGroupKey) -> SharedString {
+        key.path_list()
+            .ordered_paths()
+            .map(|path| {
+                path.file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string())
+            })
+            .collect::<Vec<_>>()
+            .join(" • ")
+            .into()
+    }
+
+    fn active_entry_workspace(&self) -> Option<&Entity<Workspace>> {
+        self.active_entry.as_ref().map(|entry| entry.workspace())
     }
 
     fn is_group_collapsed(&self, key: &ProjectGroupKey, cx: &App) -> bool {
@@ -755,8 +1148,8 @@ impl Sidebar {
                     this.sync_active_entry_from_panel(_agent_panel, cx);
                     this.update_entries(cx);
                 }
-                AgentPanelEvent::ThreadInteracted { thread_id } => {
-                    this.record_thread_interacted(thread_id, cx);
+                AgentPanelEvent::MessageSentOrQueued { thread_id } => {
+                    this.record_thread_message_sent_or_queued(thread_id, cx);
                     this.update_entries(cx);
                 }
             },
@@ -961,20 +1354,20 @@ impl Sidebar {
         .detach_and_log_err(cx);
     }
 
-    /// Rebuilds the sidebar contents from current workspace and thread state.
+    /// Rebuilds the sidebar contents for the active space from current
+    /// workspace and thread state.
     ///
-    /// Iterates [`MultiWorkspace::project_group_keys`] to determine project
-    /// groups, then populates thread entries from the metadata store and
-    /// merges live thread info from active agent panels.
+    /// Iterates the active [`MultiWorkspace::project_group_keys`] entry,
+    /// then populates thread entries from the metadata store and merges
+    /// live thread info from active agent panels.
     ///
     /// Aim for a single forward pass over workspaces and threads plus an
     /// O(T log T) sort. Avoid adding extra scans over the data.
     ///
     /// Properties:
     ///
-    /// - Should always show every workspace in the multiworkspace
-    ///     - If you have no threads, and two workspaces for the worktree and the main workspace, make sure at least one is shown
-    /// - Should always show every thread, associated with each workspace in the multiworkspace
+    /// - Should always show the active space's project group
+    /// - Should always show every thread associated with the active space
     /// - After every build_contents, our "active" state should exactly match the current workspace's, current agent panel's current thread.
     fn rebuild_contents(&mut self, cx: &App) {
         let Some(multi_workspace) = self.multi_workspace.upgrade() else {
@@ -1011,9 +1404,9 @@ impl Sidebar {
         let mut project_header_indices: Vec<usize> = Vec::new();
         let mut seen_thread_ids: HashSet<agent_ui::ThreadId> = HashSet::new();
 
-        let has_open_projects = workspaces
-            .iter()
-            .any(|ws| !workspace_path_list(ws, cx).paths().is_empty());
+        let has_open_projects = active_workspace
+            .as_ref()
+            .is_some_and(|workspace| !workspace_path_list(workspace, cx).paths().is_empty());
 
         let resolve_agent_icon = |agent_id: &AgentId| -> (IconName, Option<SharedString>) {
             let agent = Agent::from(agent_id.clone());
@@ -1029,7 +1422,22 @@ impl Sidebar {
             (icon, icon_from_external_svg)
         };
 
-        let groups = mw.project_groups(cx);
+        let active_space_id = self.resolved_active_space_id(cx).or_else(|| {
+            active_workspace
+                .as_ref()
+                .and_then(|workspace| workspace.read(cx).database_id())
+        });
+        let groups: Vec<_> = mw
+            .project_groups(cx)
+            .into_iter()
+            .filter(|group| {
+                active_space_id.as_ref().is_none_or(|active_workspace_id| {
+                    group.workspaces.iter().any(|workspace| {
+                        workspace.read(cx).database_id() == Some(*active_workspace_id)
+                    })
+                })
+            })
+            .collect();
 
         let mut all_paths: Vec<PathBuf> = groups
             .iter()
@@ -1169,37 +1577,6 @@ impl Sidebar {
                     }
                     let workspace = resolve_workspace(&row);
                     threads.push(make_thread_entry(row, workspace));
-                }
-
-                // Also surface any thread whose `folder_paths` equals
-                // one of this group's open workspaces' root paths.
-                // The three lookups above can all miss when the
-                // thread's stored `main_worktree_paths` disagree with
-                // the group key (for example, a stale row whose main
-                // paths equal its folder paths for a linked-worktree
-                // workspace). The thread will be rewritten into the
-                // correct shape the next time `handle_conversation_event`
-                // fires, but until then the sidebar should still show
-                // it under the group whose workspace it actually
-                // belongs to.
-                for ws in group_workspaces {
-                    let ws_paths = workspace_path_list(ws, cx);
-                    if ws_paths.paths().is_empty() {
-                        continue;
-                    }
-                    for row in thread_store
-                        .read(cx)
-                        .entries_for_path(&ws_paths, group_host.as_ref())
-                        .cloned()
-                    {
-                        if !seen_thread_ids.insert(row.thread_id) {
-                            continue;
-                        }
-                        threads.push(make_thread_entry(
-                            row,
-                            ThreadEntryWorkspace::Open(ws.clone()),
-                        ));
-                    }
                 }
 
                 // Load any legacy threads for any single linked wortree of this project group.
@@ -1411,6 +1788,8 @@ impl Sidebar {
             return;
         }
 
+        self.sync_space_state(cx);
+
         let had_notifications = self.has_notifications(cx);
         let scroll_position = self.list_state.logical_scroll_top();
 
@@ -1566,6 +1945,15 @@ impl Sidebar {
             IconName::ChevronDown
         };
 
+        // Draft thread feature was removed in upstream
+        let has_new_thread_entry = false;
+        let show_new_thread_button = !has_new_thread_entry && !self.has_filter_query(cx);
+        let workspace = self.multi_workspace.upgrade().and_then(|mw| {
+            mw.read(cx)
+                .workspace_for_paths(key.path_list(), key.host().as_ref(), cx)
+        });
+        let drag_space_id = self.resolved_active_space_id(cx);
+
         let key_for_toggle = key.clone();
         let key_for_focus = key.clone();
 
@@ -1589,6 +1977,8 @@ impl Sidebar {
         let hover_base = color
             .element_active
             .blend(color.element_background.opacity(0.2));
+        let drop_target_background = color.drop_target_background;
+        let drop_target_border = color.drop_target_border;
         let hover_solid = base_bg.blend(hover_base);
 
         let group_name_for_gradient = group_name.clone();
@@ -1719,25 +2109,68 @@ impl Sidebar {
                         cx,
                     )),
             )
-            .on_mouse_down(gpui::MouseButton::Right, {
-                let menu_handle = self
-                    .project_header_menu_handles
-                    .get(&ix)
-                    .cloned()
-                    .unwrap_or_default();
-                move |_, window, cx| {
-                    cx.stop_propagation();
-                    menu_handle.toggle(window, cx);
+            .map(|this| {
+                if !has_threads && is_active {
+                    this
+                } else {
+                    let key = key.clone();
+                    this.cursor_pointer()
+                        .when(!is_active, |this| this.hover(|s| s.bg(hover_solid)))
+                        .tooltip(Tooltip::text("Open Workspace"))
+                        .on_click(cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
+                            if event.modifiers().secondary() {
+                                this.activate_or_open_workspace_for_group(&key_for_focus, window, cx);
+                            } else if !is_collapsed {
+                                this.toggle_collapse(&key_for_toggle, window, cx);
+                            } else if let Some(workspace) = this.multi_workspace.upgrade().and_then(|mw| {
+                                mw.read(cx).workspace_for_paths(
+                                    key.path_list(),
+                                    key.host().as_ref(),
+                                    cx,
+                                )
+                            }) {
+                                // Activate workspace without setting active_entry (no specific thread)
+                                if let Some(multi_workspace) = this.multi_workspace.upgrade() {
+                                    multi_workspace.update(cx, |multi_workspace, cx| {
+                                        multi_workspace.activate(workspace.clone(), window, cx);
+                                    });
+                                }
+                                if AgentPanel::is_visible(&workspace, cx) {
+                                    workspace.update(cx, |workspace, cx| {
+                                        workspace.focus_panel::<AgentPanel>(window, cx);
+                                    });
+                                }
+                            } else {
+                                this.open_workspace_for_group(&key, window, cx);
+                            }
+                        }))
                 }
             })
-            .on_click(
-                cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
-                    if event.modifiers().secondary() {
-                        this.activate_or_open_workspace_for_group(&key_for_focus, window, cx);
-                    } else {
-                        this.toggle_collapse(&key_for_toggle, window, cx);
-                    }
-                }),
+            .when_some(
+                drag_space_id.filter(|_| !is_sticky),
+                |this, drag_space_id| {
+                    this.cursor(gpui::CursorStyle::OpenHand)
+                        .on_drag(
+                            DraggedSidebarSpace {
+                                workspace_id: drag_space_id,
+                            },
+                            |dragged, _, _, cx| cx.new(|_| dragged.clone()),
+                        )
+                        .drag_over::<DraggedSidebarSpace>(move |header, dragged, _, _cx| {
+                            if dragged.workspace_id == drag_space_id {
+                                header
+                            } else {
+                                header
+                                    .bg(drop_target_background)
+                                    .border_color(drop_target_border)
+                            }
+                        })
+                        .on_drop(cx.listener(
+                            move |this, dragged: &DraggedSidebarSpace, _window, cx| {
+                                this.reorder_space(dragged.workspace_id, drag_space_id, cx);
+                            },
+                        ))
+                },
             );
 
         if !is_collapsed && !has_threads {
@@ -1959,68 +2392,79 @@ impl Sidebar {
                                         let label_color = if is_active_workspace {
                                             Color::Accent
                                         } else {
-                                            Color::Default
+                                            Color::Muted
                                         };
                                         let row_group_name = SharedString::from(format!(
                                             "workspace-menu-row-{workspace_index}"
                                         ));
 
                                         h_flex()
-                                            .group(&row_group_name)
                                             .w_full()
-                                            .gap_2()
+                                            .group(&row_group_name)
                                             .justify_between()
-                                            .child(h_flex().min_w_0().gap_1().children(
-                                                workspace_label.iter().enumerate().map(
-                                                    |(label_ix, label)| {
-                                                        h_flex()
-                                                            .gap_1()
-                                                            .when(label_ix > 0, |this| {
+                                            .gap_2()
+                                            .child(h_flex().min_w_0().gap_3().children(
+                                                workspace_label.iter().map(|label| {
+                                                    h_flex()
+                                                        .min_w_0()
+                                                        .gap_0p5()
+                                                        .when_some(label.icon, |this, icon| {
+                                                            this.child(
+                                                                Icon::new(icon)
+                                                                    .size(IconSize::XSmall)
+                                                                    .color(label_color),
+                                                            )
+                                                        })
+                                                        .child(
+                                                            Label::new(label.primary_name.clone())
+                                                                .color(label_color)
+                                                                .truncate(),
+                                                        )
+                                                        .when_some(
+                                                            label.secondary_name.clone(),
+                                                            |this, secondary_name| {
                                                                 this.child(
-                                                                    Label::new("•").alpha(0.25),
+                                                                    Label::new(":")
+                                                                        .color(label_color),
                                                                 )
-                                                            })
-                                                            .child(label.render(label_color))
-                                                            .into_any_element()
-                                                    },
-                                                ),
+                                                                .child(
+                                                                    Label::new(secondary_name)
+                                                                        .color(label_color)
+                                                                        .truncate(),
+                                                                )
+                                                            },
+                                                        )
+                                                        .into_any_element()
+                                                }),
                                             ))
-                                            .when(!is_active_workspace, |this| {
-                                                let close_multi_workspace =
-                                                    close_multi_workspace.clone();
-                                                let close_weak_menu = close_weak_menu.clone();
-                                                let close_workspace = close_workspace.clone();
-
-                                                this.child(
-                                                    IconButton::new(
-                                                        ("close-workspace", workspace_index),
-                                                        IconName::Close,
-                                                    )
-                                                    .icon_size(IconSize::Small)
-                                                    .visible_on_hover(&row_group_name)
-                                                    .tooltip(Tooltip::text("Close Workspace"))
-                                                    .on_click(move |_, window, cx| {
-                                                        cx.stop_propagation();
-                                                        window.prevent_default();
-                                                        close_multi_workspace
-                                                            .update(cx, |multi_workspace, cx| {
-                                                                multi_workspace
-                                                                    .close_workspace(
-                                                                        &close_workspace,
-                                                                        window,
-                                                                        cx,
-                                                                    )
-                                                                    .detach_and_log_err(cx);
-                                                            })
-                                                            .ok();
-                                                        close_weak_menu
-                                                            .update(cx, |_, cx| {
-                                                                cx.emit(DismissEvent)
-                                                            })
-                                                            .ok();
-                                                    }),
+                                            .child(
+                                                IconButton::new(
+                                                    ("close-workspace", workspace_index),
+                                                    IconName::Close,
                                                 )
-                                            })
+                                                .shape(ui::IconButtonShape::Square)
+                                                .style(ButtonStyle::Subtle)
+                                                .visible_on_hover(&row_group_name)
+                                                .tooltip(Tooltip::text("Close Workspace"))
+                                                .on_click(move |_, window, cx| {
+                                                    cx.stop_propagation();
+                                                    window.prevent_default();
+                                                    close_multi_workspace
+                                                        .update(cx, |multi_workspace, cx| {
+                                                            multi_workspace
+                                                                .close_workspace(
+                                                                    &close_workspace,
+                                                                    window,
+                                                                    cx,
+                                                                )
+                                                                .detach_and_log_err(cx);
+                                                        })
+                                                        .ok();
+                                                    close_weak_menu
+                                                        .update(cx, |_, cx| cx.emit(DismissEvent))
+                                                        .ok();
+                                                }),
+                                            )
                                             .into_any_element()
                                     },
                                     move |window, cx| {
@@ -2028,7 +2472,6 @@ impl Sidebar {
                                             .update(cx, |multi_workspace, cx| {
                                                 multi_workspace.activate(
                                                     activate_workspace.clone(),
-                                                    None,
                                                     window,
                                                     cx,
                                                 );
@@ -2073,7 +2516,7 @@ impl Sidebar {
 
                 Some(menu)
             })
-            .anchor(gpui::Anchor::TopRight)
+            .anchor(gpui::Corner::TopRight)
             .offset(gpui::Point {
                 x: px(0.),
                 y: px(1.),
@@ -2221,23 +2664,6 @@ impl Sidebar {
     }
 
     fn cancel(&mut self, _: &Cancel, window: &mut Window, cx: &mut Context<Self>) {
-        if self.filter_editor.read(cx).is_focused(window) {
-            if self.reset_filter_editor_text(window, cx) {
-                self.selection = None;
-                self.update_entries(cx);
-                return;
-            }
-
-            if self.selection.is_none() {
-                self.select_first_entry();
-            }
-            if self.selection.is_some() {
-                self.focus_handle.focus(window, cx);
-                cx.notify();
-            }
-            return;
-        }
-
         if self.reset_filter_editor_text(window, cx) {
             self.update_entries(cx);
         } else {
@@ -2261,6 +2687,15 @@ impl Sidebar {
             });
         } else {
             self.filter_editor.focus_handle(cx).focus(window, cx);
+        }
+
+        // When vim mode is active, the editor defaults to normal mode which
+        // blocks text input. Switch to insert mode so the user can type
+        // immediately.
+        if vim_mode_setting::VimModeSetting::get_global(cx).0 {
+            if let Ok(action) = cx.build_action("vim::SwitchToInsertMode", None) {
+                window.dispatch_action(action, cx);
+            }
         }
 
         cx.notify();
@@ -2523,7 +2958,7 @@ impl Sidebar {
         }
 
         multi_workspace.update(cx, |multi_workspace, cx| {
-            multi_workspace.activate(workspace.clone(), None, window, cx);
+            multi_workspace.activate(workspace.clone(), window, cx);
             if retain {
                 multi_workspace.retain_active_workspace(cx);
             }
@@ -2563,7 +2998,7 @@ impl Sidebar {
         let activated = target_window
             .update(cx, |multi_workspace, window, cx| {
                 window.activate_window();
-                multi_workspace.activate(workspace.clone(), None, window, cx);
+                multi_workspace.activate(workspace.clone(), window, cx);
                 Self::load_agent_thread_in_workspace(&workspace, &metadata, true, window, cx);
             })
             .log_err()
@@ -3585,14 +4020,14 @@ impl Sidebar {
     ) {
         if let Some(multi_workspace) = self.multi_workspace.upgrade() {
             multi_workspace.update(cx, |mw, cx| {
-                mw.activate(workspace.clone(), None, window, cx);
+                mw.activate(workspace.clone(), window, cx);
             });
         }
     }
 
-    fn archive_selected_thread(
+    fn remove_selected_thread(
         &mut self,
-        _: &ArchiveSelectedThread,
+        _: &RemoveSelectedThread,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -3619,7 +4054,11 @@ impl Sidebar {
         self.thread_last_accessed.insert(*id, Utc::now());
     }
 
-    fn record_thread_interacted(&mut self, thread_id: &agent_ui::ThreadId, cx: &mut App) {
+    fn record_thread_message_sent_or_queued(
+        &mut self,
+        thread_id: &agent_ui::ThreadId,
+        cx: &mut App,
+    ) {
         let store = ThreadMetadataStore::global(cx);
         store.update(cx, |store, cx| {
             store.update_interacted_at(thread_id, Utc::now(), cx);
@@ -3777,7 +4216,7 @@ impl Sidebar {
                 } => {
                     if let Some(mw) = weak_multi_workspace.upgrade() {
                         mw.update(cx, |mw, cx| {
-                            mw.activate(workspace.clone(), None, window, cx);
+                            mw.activate(workspace.clone(), window, cx);
                         });
                     }
                     this.active_entry = Some(ActiveEntry {
@@ -3796,7 +4235,7 @@ impl Sidebar {
                 } => {
                     if let Some(mw) = weak_multi_workspace.upgrade() {
                         mw.update(cx, |mw, cx| {
-                            mw.activate(workspace.clone(), None, window, cx);
+                            mw.activate(workspace.clone(), window, cx);
                             mw.retain_active_workspace(cx);
                         });
                     }
@@ -3814,7 +4253,7 @@ impl Sidebar {
                     if let Some(mw) = weak_multi_workspace.upgrade() {
                         if let Some(original_ws) = &original_workspace {
                             mw.update(cx, |mw, cx| {
-                                mw.activate(original_ws.clone(), None, window, cx);
+                                mw.activate(original_ws.clone(), window, cx);
                             });
                         }
                     }
@@ -3871,7 +4310,7 @@ impl Sidebar {
         if let Some((metadata, workspace)) = initial_preview {
             if let Some(mw) = self.multi_workspace.upgrade() {
                 mw.update(cx, |mw, cx| {
-                    mw.activate(workspace.clone(), None, window, cx);
+                    mw.activate(workspace.clone(), window, cx);
                 });
             }
             self.active_entry = Some(ActiveEntry {
@@ -3981,7 +4420,7 @@ impl Sidebar {
                             move |_window, cx| {
                                 Tooltip::for_action_in(
                                     "Archive Thread",
-                                    &ArchiveSelectedThread,
+                                    &RemoveSelectedThread,
                                     &focus_handle,
                                     cx,
                                 )
@@ -4053,6 +4492,7 @@ impl Sidebar {
             .unwrap_or_default();
 
         let popover_handle = self.recent_projects_popover_handle.clone();
+        let multi_workspace_for_popover = multi_workspace.as_ref().map(|mw| mw.downgrade());
 
         PopoverMenu::new("sidebar-recent-projects-menu")
             .with_handle(popover_handle)
@@ -4062,30 +4502,24 @@ impl Sidebar {
                         ws.clone(),
                         window_project_groups.clone(),
                         focus_handle.clone(),
+                        multi_workspace_for_popover.clone(),
                         window,
                         cx,
                     )
                 })
             })
             .trigger_with_tooltip(
-                IconButton::new("open-project", IconName::OpenFolder)
+                IconButton::new("open-project", IconName::Plus)
                     .icon_size(IconSize::Small)
+                    .shape(IconButtonShape::Square)
                     .selected_style(ButtonStyle::Tinted(TintColor::Accent)),
-                |_window, cx| {
-                    Tooltip::for_action(
-                        "Add Project",
-                        &OpenRecent {
-                            create_new_window: false,
-                        },
-                        cx,
-                    )
-                },
+                Tooltip::text("Create Space or Add Project"),
             )
             .offset(gpui::Point {
                 x: px(-2.0),
                 y: px(-2.0),
             })
-            .anchor(gpui::Anchor::BottomRight)
+            .anchor(gpui::Corner::BottomRight)
     }
 
     fn new_thread_in_group(
@@ -4118,7 +4552,7 @@ impl Sidebar {
         };
 
         multi_workspace.update(cx, |multi_workspace, cx| {
-            multi_workspace.activate(workspace.clone(), None, window, cx);
+            multi_workspace.activate(workspace.clone(), window, cx);
         });
 
         let draft_id = workspace.update(cx, |workspace, cx| {
@@ -4194,41 +4628,33 @@ impl Sidebar {
         Some(multi_workspace.project_group_key_for_workspace(multi_workspace.workspace(), cx))
     }
 
-    fn active_project_header_position(&self, cx: &App) -> Option<usize> {
-        let active_key = self.active_project_group_key(cx)?;
-        self.contents
-            .project_header_indices
-            .iter()
-            .position(|&entry_ix| {
-                matches!(
-                    &self.contents.entries[entry_ix],
-                    ListEntry::ProjectHeader { key, .. } if *key == active_key
-                )
-            })
-    }
-
     fn cycle_project_impl(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(multi_workspace) = self.multi_workspace.upgrade() else {
-            return;
-        };
-
-        let header_count = self.contents.project_header_indices.len();
-        if header_count == 0 {
+        let spaces = self.space_entries(cx);
+        if spaces.is_empty() {
             return;
         }
 
-        let current_pos = self.active_project_header_position(cx);
+        let current_pos = self
+            .resolved_active_space_id(cx)
+            .and_then(|active_space_id| {
+                spaces
+                    .iter()
+                    .position(|space| space.workspace_id == active_space_id)
+            });
 
         let next_pos = match current_pos {
             Some(pos) => {
                 if forward {
-                    (pos + 1) % header_count
+                    (pos + 1) % spaces.len()
                 } else {
-                    (pos + header_count - 1) % header_count
+                    (pos + spaces.len() - 1) % spaces.len()
                 }
             }
             None => 0,
         };
+
+        let workspace_id = spaces[next_pos].workspace_id;
+        self.activate_space(workspace_id, window, cx);
 
         let header_entry_ix = self.contents.project_header_indices[next_pos];
         let Some(ListEntry::ProjectHeader { key, .. }) = self.contents.entries.get(header_entry_ix)
@@ -4244,8 +4670,8 @@ impl Sidebar {
             mw.read(cx)
                 .workspace_for_paths(key.path_list(), key.host().as_ref(), cx)
         }) {
-            multi_workspace.update(cx, |multi_workspace, cx| {
-                multi_workspace.activate(workspace, None, window, cx);
+            self.multi_workspace.update(cx, |multi_workspace, cx| {
+                multi_workspace.activate(workspace, window, cx);
                 multi_workspace.retain_active_workspace(cx);
             });
         } else {
@@ -4407,13 +4833,617 @@ impl Sidebar {
             )
     }
 
+    fn render_gen_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let is_archive = matches!(self.view, SidebarView::Archive(..));
+        let show_import_button = is_archive && !self.should_render_acp_import_onboarding(cx);
+        let button = |id,
+                      icon,
+                      tooltip,
+                      on_click: fn(
+            &mut Self,
+            &gpui::ClickEvent,
+            &mut Window,
+            &mut Context<Self>,
+        )| {
+            IconButton::new(id, icon)
+                .shape(IconButtonShape::Square)
+                .style(ButtonStyle::Subtle)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text(tooltip))
+                .on_click(cx.listener(on_click))
+        };
+
+        h_flex()
+            .w_full()
+            .justify_between()
+            .px_2()
+            .child(
+                h_flex()
+                    .gap_1()
+                    .child(button(
+                        "sidebar-toolbar-focus-search",
+                        IconName::Blocks,
+                        "Focus Search",
+                        |this, _, window, cx| {
+                            this.focus_sidebar_filter(&FocusSidebarFilter, window, cx)
+                        },
+                    ))
+                    .child(button(
+                        "sidebar-toolbar-prev-space",
+                        IconName::ArrowLeft,
+                        "Previous Space",
+                        |this, _, window, cx| this.cycle_project_impl(false, window, cx),
+                    ))
+                    .child(button(
+                        "sidebar-toolbar-next-space",
+                        IconName::ArrowRight,
+                        "Next Space",
+                        |this, _, window, cx| this.cycle_project_impl(true, window, cx),
+                    )),
+            )
+            .child(
+                h_flex()
+                    .gap_1()
+                    .child(button(
+                        "sidebar-toolbar-refresh",
+                        IconName::RefreshTitle,
+                        "Refresh Sidebar",
+                        |this, _, _window, cx| this.update_entries(cx),
+                    ))
+                    .when(show_import_button, |this| {
+                        this.child(
+                            IconButton::new(
+                                "sidebar-toolbar-thread-import",
+                                IconName::Download,
+                            )
+                            .shape(IconButtonShape::Square)
+                            .style(ButtonStyle::Subtle)
+                            .icon_size(IconSize::Small)
+                            .tooltip(Tooltip::text("Import ACP Threads"))
+                            .on_click(cx.listener(
+                                |this, _, window, cx| {
+                                    this.show_archive(window, cx);
+                                    this.show_thread_import_modal(window, cx);
+                                },
+                            )),
+                        )
+                    })
+                    .child(
+                        IconButton::new("sidebar-toolbar-archive", IconName::Archive)
+                            .shape(IconButtonShape::Square)
+                            .style(ButtonStyle::Subtle)
+                            .icon_size(IconSize::Small)
+                            .toggle_state(is_archive)
+                            .tooltip(move |window, cx| {
+                                Tooltip::text("Toggle Archived Threads")(window, cx)
+                            })
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.toggle_archive(&ToggleThreadHistory, window, cx);
+                            })),
+                    )
+                    .child(button(
+                        "sidebar-toolbar-create-space",
+                        IconName::Sparkle,
+                        "Create New Space",
+                        |this, _, window, cx| this.create_new_space(window, cx),
+                    )),
+            )
+    }
+
+    fn manage_space(
+        &mut self,
+        workspace_id: WorkspaceId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.activate_space(workspace_id, window, cx);
+
+        if let Some(multi_workspace) = self.multi_workspace.upgrade()
+            && let Some(workspace) = multi_workspace
+                .read(cx)
+                .workspace_for_database_id(workspace_id, cx)
+        {
+            workspace.update(cx, |workspace, cx| {
+                workspace.add_folder_to_project(&AddFolderToProject, window, cx);
+            });
+        }
+    }
+
+    fn delete_space(
+        &mut self,
+        workspace_id: WorkspaceId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(multi_workspace) = self.multi_workspace.upgrade() else {
+            return;
+        };
+
+        let neighbor_workspace_id = self
+            .space_entries(cx)
+            .iter()
+            .position(|space| space.workspace_id == workspace_id)
+            .and_then(|index| {
+                self.space_entries
+                    .get(index + 1)
+                    .or_else(|| {
+                        index
+                            .checked_sub(1)
+                            .and_then(|prev| self.space_entries.get(prev))
+                    })
+                    .map(|space| space.workspace_id)
+            });
+
+        self.space_labels.remove(&workspace_id);
+        self.space_order
+            .retain(|space_id| *space_id != workspace_id);
+
+        multi_workspace.update(cx, |multi_workspace, cx| {
+            let Some(workspace) = multi_workspace.workspace_for_database_id(workspace_id, cx)
+            else {
+                return;
+            };
+
+            multi_workspace
+                .remove(
+                    [workspace],
+                    move |multi_workspace, window, cx| {
+                        if let Some(neighbor_workspace_id) = neighbor_workspace_id
+                            && let Some(neighbor_workspace) =
+                                multi_workspace.workspace_for_database_id(neighbor_workspace_id, cx)
+                        {
+                            return Task::ready(Ok(neighbor_workspace));
+                        }
+
+                        multi_workspace.create_empty_local_workspace(window, cx)
+                    },
+                    window,
+                    cx,
+                )
+                .detach_and_log_err(cx);
+        });
+    }
+
+    fn render_gen_search_row(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let has_query = self.has_filter_query(cx);
+
+        h_flex()
+            .w_full()
+            .gap_1()
+            .px_2()
+            .py_1p5()
+            .rounded_md()
+            .bg(cx.theme().colors().elevated_surface_background)
+            .border_1()
+            .border_color(cx.theme().colors().border_variant)
+            .child(
+                Icon::new(IconName::MagnifyingGlass)
+                    .size(IconSize::Small)
+                    .color(Color::Muted),
+            )
+            .child(self.render_filter_input(cx))
+            .child(
+                h_flex()
+                    .gap_1()
+                    .when(
+                        self.selection.is_some()
+                            && !self.filter_editor.focus_handle(cx).is_focused(window),
+                        |this| this.child(KeyBinding::for_action(&FocusSidebarFilter, cx)),
+                    )
+                    .when(has_query, |this| {
+                        this.child(
+                            IconButton::new("clear_filter", IconName::Close)
+                                .icon_size(IconSize::Small)
+                                .shape(IconButtonShape::Square)
+                                .style(ButtonStyle::Transparent)
+                                .tooltip(Tooltip::text("Clear Search"))
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.reset_filter_editor_text(window, cx);
+                                    this.update_entries(cx);
+                                })),
+                        )
+                    }),
+            )
+    }
+
+    fn active_screen_kind(&self, cx: &App) -> WorkspaceScreenKind {
+        self.active_workspace(cx)
+            .and_then(|workspace| workspace.read(cx).active_item(cx))
+            .map(|item| item.screen_kind(cx))
+            .unwrap_or(WorkspaceScreenKind::Editor)
+    }
+
+    fn project_root_path(&self, cx: &App) -> Option<PathBuf> {
+        self.active_workspace(cx).and_then(|workspace| {
+            workspace
+                .read(cx)
+                .root_paths(cx)
+                .first()
+                .map(|path| path.as_ref().to_path_buf())
+        })
+    }
+
+    fn read_directory_entries(root: &Path) -> Vec<(PathBuf, bool)> {
+        let mut entries = std::fs::read_dir(root)
+            .ok()
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|entry| {
+                let file_type = entry.file_type().ok()?;
+                Some((entry.path(), file_type.is_dir()))
+            })
+            .collect::<Vec<_>>();
+        entries.sort_by(|(left_path, left_is_dir), (right_path, right_is_dir)| {
+            right_is_dir.cmp(left_is_dir).then_with(|| {
+                left_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .cmp(right_path.file_name().unwrap_or_default())
+            })
+        });
+        entries
+    }
+
+    fn icon_for_path(path: &Path) -> IconName {
+        match path.extension().and_then(|extension| extension.to_str()) {
+            Some("rs") => IconName::FileRust,
+            Some("md") => IconName::FileMarkdown,
+            Some("toml") => IconName::FileToml,
+            Some("json") => IconName::Json,
+            Some("js") | Some("ts") | Some("tsx") | Some("jsx") | Some("css") | Some("html") => {
+                IconName::FileCode
+            }
+            Some("txt") | Some("log") => IconName::FileTextOutlined,
+            _ => IconName::File,
+        }
+    }
+
+    fn editor_grid_entries(&self, cx: &App) -> Vec<SidebarGridEntry> {
+        const MIN_GRID_ITEMS: usize = 12;
+
+        let Some(root_path) = self.project_root_path(cx) else {
+            // No project - fill all 12 slots with "Open Project" placeholders
+            return (0..MIN_GRID_ITEMS)
+                .map(|i| SidebarGridEntry {
+                    id: format!("sidebar-grid-open-project-{i}").into(),
+                    icon: IconName::Plus,
+                    label: "Add File".into(),
+                    subtitle: None,
+                    action: SidebarGridAction::OpenProject,
+                })
+                .collect();
+        };
+
+        let mut files = Self::read_directory_entries(&root_path)
+            .into_iter()
+            .filter(|(_, is_dir)| !*is_dir)
+            .take(MIN_GRID_ITEMS)
+            .map(|(path, _)| SidebarGridEntry {
+                id: SharedString::from(format!("sidebar-grid-file-{}", path.display())),
+                icon: Self::icon_for_path(&path),
+                label: path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path.display().to_string())
+                    .into(),
+                subtitle: None,
+                action: SidebarGridAction::OpenFile(path),
+            })
+            .collect::<Vec<_>>();
+
+        // Fill remaining slots with "Add File" placeholders
+        let current_count = files.len();
+        if current_count < MIN_GRID_ITEMS {
+            for i in current_count..MIN_GRID_ITEMS {
+                files.push(SidebarGridEntry {
+                    id: format!("sidebar-grid-add-file-{i}").into(),
+                    icon: IconName::Plus,
+                    label: "Add File".into(),
+                    subtitle: None,
+                    action: SidebarGridAction::OpenProject,
+                });
+            }
+        }
+
+        files
+    }
+
+    fn browser_grid_entries(&self) -> Vec<SidebarGridEntry> {
+        const MIN_GRID_ITEMS: usize = 12;
+        const SITES: [(&str, &str, IconName); 8] = [
+            ("Google", "https://www.google.com", IconName::AiGoogle),
+            ("GitHub", "https://github.com", IconName::Github),
+            ("YouTube", "https://www.youtube.com", IconName::PlayFilled),
+            ("Wikipedia", "https://www.wikipedia.org", IconName::Book),
+            ("Reddit", "https://www.reddit.com", IconName::Chat),
+            ("Figma", "https://www.figma.com", IconName::Pencil),
+            ("ChatGPT", "https://chat.openai.com", IconName::AiOpenAi),
+            ("LinkedIn", "https://www.linkedin.com", IconName::Person),
+        ];
+
+        let mut entries: Vec<SidebarGridEntry> = SITES
+            .into_iter()
+            .map(|(label, url, icon)| SidebarGridEntry {
+                id: SharedString::from(format!("sidebar-grid-site-{label}")),
+                icon,
+                label: label.into(),
+                subtitle: None,
+                action: SidebarGridAction::OpenWebsite(url),
+            })
+            .collect();
+
+        // Fill remaining slots with "Add Website" placeholders
+        let current_count = entries.len();
+        if current_count < MIN_GRID_ITEMS {
+            for i in current_count..MIN_GRID_ITEMS {
+                entries.push(SidebarGridEntry {
+                    id: format!("sidebar-grid-add-website-{i}").into(),
+                    icon: IconName::Plus,
+                    label: "Add Website".into(),
+                    subtitle: None,
+                    action: SidebarGridAction::OpenProject,
+                });
+            }
+        }
+
+        entries
+    }
+
+    fn terminal_grid_entries(&self, cx: &App) -> Vec<SidebarGridEntry> {
+        const MIN_GRID_ITEMS: usize = 12;
+
+        let root_path = self
+            .project_root_path(cx)
+            .or_else(|| std::env::current_dir().ok());
+
+        let Some(root_path) = root_path else {
+            // No path - fill all 12 slots with "Add Folder" placeholders
+            return (0..MIN_GRID_ITEMS)
+                .map(|i| SidebarGridEntry {
+                    id: format!("sidebar-grid-add-folder-{i}").into(),
+                    icon: IconName::Plus,
+                    label: "Add Folder".into(),
+                    subtitle: None,
+                    action: SidebarGridAction::OpenProject,
+                })
+                .collect();
+        };
+
+        let mut folders = Self::read_directory_entries(&root_path)
+            .into_iter()
+            .filter(|(_, is_dir)| *is_dir)
+            .take(MIN_GRID_ITEMS)
+            .map(|(path, _)| SidebarGridEntry {
+                id: SharedString::from(format!("sidebar-grid-folder-{}", path.display())),
+                icon: IconName::Folder,
+                label: path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path.display().to_string())
+                    .into(),
+                subtitle: None,
+                action: SidebarGridAction::OpenTerminalFolder(path),
+            })
+            .collect::<Vec<_>>();
+
+        // Fill remaining slots with "Add Folder" placeholders
+        let current_count = folders.len();
+        if current_count < MIN_GRID_ITEMS {
+            for i in current_count..MIN_GRID_ITEMS {
+                folders.push(SidebarGridEntry {
+                    id: format!("sidebar-grid-add-folder-{i}").into(),
+                    icon: IconName::Plus,
+                    label: "Add Folder".into(),
+                    subtitle: None,
+                    action: SidebarGridAction::OpenProject,
+                });
+            }
+        }
+
+        folders
+    }
+
+    fn grid_entries(&self, cx: &App) -> Vec<SidebarGridEntry> {
+        match self.active_screen_kind(cx) {
+            WorkspaceScreenKind::Editor | WorkspaceScreenKind::Other => {
+                self.editor_grid_entries(cx)
+            }
+            WorkspaceScreenKind::Browser => self.browser_grid_entries(),
+            WorkspaceScreenKind::Terminal => self.terminal_grid_entries(cx),
+            WorkspaceScreenKind::LiquidGlass => self.editor_grid_entries(cx),
+        }
+    }
+
+    fn open_browser_grid_url(
+        &mut self,
+        url: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        #[cfg(target_os = "windows")]
+        if let Some(workspace) = self.active_workspace(cx) {
+            workspace.update(cx, |workspace, cx| {
+                WebPreviewView::open_url_in_active_pane(workspace, url, window, cx);
+            });
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = (url, window, cx);
+        }
+    }
+
+    fn open_terminal_grid_folder(
+        &mut self,
+        path: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(workspace) = self.active_workspace(cx) {
+            workspace.update(cx, |workspace, cx| {
+                TerminalPanel::add_center_terminal(
+                    workspace,
+                    window,
+                    cx,
+                    move |project: &mut Project, cx| {
+                        project.create_terminal_shell(Some(path.clone()), cx)
+                    },
+                )
+                .detach_and_log_err(cx);
+            });
+        }
+    }
+
+    fn open_grid_entry(
+        &mut self,
+        action: SidebarGridAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match action {
+            SidebarGridAction::OpenProject => {
+                if let Some(workspace) = self.active_workspace(cx) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.add_folder_to_project(&AddFolderToProject, window, cx);
+                    });
+                }
+            }
+            SidebarGridAction::OpenFile(path) => {
+                if let Some(workspace) = self.active_workspace(cx) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace
+                            .open_abs_path(
+                                path,
+                                OpenOptions {
+                                    visible: Some(OpenVisible::All),
+                                    ..Default::default()
+                                },
+                                window,
+                                cx,
+                            )
+                            .detach_and_log_err(cx);
+                    });
+                }
+            }
+            SidebarGridAction::OpenWebsite(url) => self.open_browser_grid_url(url, window, cx),
+            SidebarGridAction::OpenTerminalFolder(path) => {
+                self.open_terminal_grid_folder(path, window, cx);
+            }
+        }
+    }
+
+    fn render_space_grid(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let entries = self.grid_entries(cx);
+        let chrome_width = f32::from(self.width).max(220.0);
+        let horizontal_padding = 16.0;
+        let grid_gap = 8.0;
+        let total_gap_width =
+            horizontal_padding + grid_gap * SIDEBAR_SPACE_GRID_COLUMNS.saturating_sub(1) as f32;
+        let available_width = (chrome_width - total_gap_width).max(0.0);
+        let item_width = (available_width / SIDEBAR_SPACE_GRID_COLUMNS as f32).max(48.0);
+
+        let item_bg = cx.theme().colors().elevated_surface_background;
+        let item_border = cx.theme().colors().border_variant;
+        let hover_bg = cx.theme().colors().element_hover;
+        let hover_border = cx.theme().colors().border;
+
+        v_flex().w_full().gap_2().children(
+            entries
+                .chunks(SIDEBAR_SPACE_GRID_COLUMNS)
+                .enumerate()
+                .map(|(row_ix, row)| {
+                    h_flex()
+                        .id(format!("sidebar-space-grid-row-{row_ix}"))
+                        .w_full()
+                        .gap_2()
+                        .children(row.iter().cloned().map(|entry| {
+                            let action = entry.action.clone();
+
+                            div()
+                                .id(entry.id)
+                                .w(px(item_width))
+                                .h(px(52.0))
+                                .flex_shrink_0()
+                                .rounded_md()
+                                .border_1()
+                                .border_color(item_border)
+                                .bg(item_bg)
+                                .flex()
+                                .flex_col()
+                                .px_1p5()
+                                .gap_1()
+                                .items_center()
+                                .justify_center()
+                                .cursor_pointer()
+                                .tooltip(Tooltip::text(
+                                    entry
+                                        .subtitle
+                                        .clone()
+                                        .unwrap_or_else(|| entry.label.clone()),
+                                ))
+                                .hover(|style| style.bg(hover_bg).border_color(hover_border))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.open_grid_entry(action.clone(), window, cx);
+                                }))
+                                .child(
+                                    Icon::new(entry.icon)
+                                        .size(IconSize::Medium)
+                                        .color(Color::Muted),
+                                )
+                                .child(div().w_full().text_center().child(
+                                    Label::new(entry.label).size(LabelSize::Small).truncate(),
+                                ))
+                                .when_some(entry.subtitle, |this, subtitle| {
+                                    this.child(
+                                        div().w_full().text_center().child(
+                                            Label::new(subtitle)
+                                                .size(LabelSize::XSmall)
+                                                .color(Color::Muted)
+                                                .truncate(),
+                                        ),
+                                    )
+                                })
+                        }))
+                }),
+        )
+    }
+
+    #[allow(dead_code)]
+    fn render_current_space_heading(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let active_space_path = self.active_space_path_summary(cx);
+
+        v_flex()
+            .w_full()
+            .gap_0p5()
+            .pt_1()
+            .child(
+                Label::new("Current Space")
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted),
+            )
+            .child(
+                v_flex()
+                    .min_w_0()
+                    .gap_0p5()
+                    .child(Label::new(self.active_space_label(cx)).truncate())
+                    .when(!active_space_path.is_empty(), |this| {
+                        this.child(
+                            Label::new(active_space_path)
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted)
+                                .truncate(),
+                        )
+                    }),
+            )
+    }
+
     fn render_sidebar_header(
         &self,
         no_open_projects: bool,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let has_query = self.has_filter_query(cx);
         let sidebar_on_left = self.side(cx) == SidebarSide::Left;
         let sidebar_on_right = self.side(cx) == SidebarSide::Right;
         let not_fullscreen = !window.is_fullscreen();
@@ -4423,61 +5453,46 @@ impl Sidebar {
             !cfg!(target_os = "macos") && not_fullscreen && sidebar_on_right;
         let header_height = platform_title_bar_height(window);
 
-        h_flex()
-            .h(header_height)
-            .mt_px()
-            .pb_px()
-            .when(left_window_controls, |this| {
-                this.children(Self::render_left_window_controls(window, cx))
-            })
-            .map(|this| {
-                if traffic_lights {
-                    this.pl(px(ui::utils::TRAFFIC_LIGHT_PADDING))
-                } else if !left_window_controls {
-                    this.pl_1p5()
-                } else {
-                    this
-                }
-            })
-            .when(!right_window_controls, |this| this.pr_1p5())
-            .gap_1()
+        v_flex()
             .when(!no_open_projects, |this| {
-                this.border_b_1()
-                    .border_color(cx.theme().colors().border)
+                this.border_b_1().border_color(cx.theme().colors().border)
+            })
+            .child(
+                h_flex()
+                    .h(header_height)
+                    .mt_px()
+                    .pb_px()
+                    .when(left_window_controls, |this| {
+                        this.children(Self::render_left_window_controls(window, cx))
+                    })
+                    .map(|this| {
+                        if traffic_lights {
+                            this.pl(px(ui::utils::TRAFFIC_LIGHT_PADDING))
+                        } else if !left_window_controls {
+                            this.pl_1p5()
+                        } else {
+                            this
+                        }
+                    })
+                    .when(!right_window_controls, |this| this)
+                    .gap_1()
                     .when(traffic_lights, |this| {
                         this.child(Divider::vertical().color(ui::DividerColor::Border))
                     })
-                    .child(
-                        div().ml_1().child(
-                            Icon::new(IconName::MagnifyingGlass)
-                                .size(IconSize::Small)
-                                .color(Color::Muted),
-                        ),
-                    )
-                    .child(self.render_filter_input(cx))
-                    .child(
-                        h_flex()
-                            .gap_1()
-                            .when(
-                                self.selection.is_some()
-                                    && !self.filter_editor.focus_handle(cx).is_focused(window),
-                                |this| this.child(KeyBinding::for_action(&FocusSidebarFilter, cx)),
-                            )
-                            .when(has_query, |this| {
-                                this.child(
-                                    IconButton::new("clear_filter", IconName::Close)
-                                        .icon_size(IconSize::Small)
-                                        .tooltip(Tooltip::text("Clear Search"))
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.reset_filter_editor_text(window, cx);
-                                            this.update_entries(cx);
-                                        })),
-                                )
-                            }),
-                    )
-            })
-            .when(right_window_controls, |this| {
-                this.children(Self::render_right_window_controls(window, cx))
+                    .child(self.render_gen_toolbar(cx))
+                    .when(right_window_controls, |this| {
+                        this.children(Self::render_right_window_controls(window, cx))
+                    }),
+            )
+            .when(!no_open_projects, |this| {
+                this.child(v_flex().px_2().pb_2().gap_2().when(
+                    matches!(self.view, SidebarView::ThreadList),
+                    |this| {
+                        this.child(self.render_gen_search_row(window, cx))
+                            .child(self.render_space_grid(cx))
+                        // .child(self.render_current_space_heading(cx))
+                    },
+                ))
             })
     }
 
@@ -4502,14 +5517,14 @@ impl Sidebar {
 
         sidebar_side_context_menu("sidebar-toggle-menu", _cx)
             .anchor(if on_right {
-                gpui::Anchor::BottomRight
+                gpui::Corner::BottomRight
             } else {
-                gpui::Anchor::BottomLeft
+                gpui::Corner::BottomLeft
             })
             .attach(if on_right {
-                gpui::Anchor::TopRight
+                gpui::Corner::TopRight
             } else {
-                gpui::Anchor::TopLeft
+                gpui::Corner::TopLeft
             })
             .trigger(move |_is_active, _window, _cx| {
                 let icon = if on_right {
@@ -4551,17 +5566,298 @@ impl Sidebar {
             })
     }
 
+    fn render_space_carousel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let spaces = self.space_entries(cx);
+        let active_space_id = self.active_space_id;
+        let start = self
+            .space_page_start
+            .min(spaces.len().saturating_sub(MAX_VISIBLE_SPACE_DOTS));
+        let can_go_left = start > 0;
+        let can_go_right = start + MAX_VISIBLE_SPACE_DOTS < spaces.len();
+        let is_dragging = self.carousel_drag_start.is_some();
+        let sidebar = cx.weak_entity();
+
+        // Show arrows only when there are more dots than can fit
+        let show_arrows = spaces.len() > MAX_VISIBLE_SPACE_DOTS;
+        // Hide entire carousel when there's only one space
+        let show_carousel = spaces.len() > 1;
+
+        h_flex()
+            .gap_0() // No gap - dots should be as close as possible
+            .items_center()
+            .justify_center()
+            .when(!show_carousel, |this| this.invisible()) // Hide when only 1 space
+            // Left arrow - only show when needed
+            .when(show_arrows, |this| {
+                this.child(
+                    IconButton::new("space-carousel-left", IconName::ChevronLeft)
+                        .shape(IconButtonShape::Square)
+                        .style(ButtonStyle::Transparent)
+                        .icon_size(IconSize::Small)
+                        .tooltip(Tooltip::text("Show previous spaces (scroll left)"))
+                        .disabled(!can_go_left)
+                        .when(can_go_left, |btn| {
+                            btn.on_click(cx.listener(|this, _, _window, cx| {
+                                this.show_previous_space_page(cx);
+                            }))
+                        }),
+                )
+            })
+            .child(
+                h_flex()
+                    .gap_0() // No gap between dots
+                    .items_center()
+                    .px_1() // Keep horizontal padding
+                    .cursor(if is_dragging {
+                        gpui::CursorStyle::ClosedHand
+                    } else {
+                        gpui::CursorStyle::OpenHand
+                    })
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, event: &gpui::MouseDownEvent, _window, cx| {
+                            let x: f32 = event.position.x.into();
+                            this.carousel_drag_start = Some((x, this.space_page_start));
+                            this.carousel_did_drag = false;
+                            cx.notify();
+                        }),
+                    )
+                    .on_mouse_up(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, _event: &gpui::MouseUpEvent, _window, cx| {
+                            this.carousel_drag_start = None;
+                            cx.notify();
+                        }),
+                    )
+                    .on_mouse_move(cx.listener(
+                        |this, event: &gpui::MouseMoveEvent, _window, cx| {
+                            if let Some((start_x, start_page)) = this.carousel_drag_start {
+                                let current_x: f32 = event.position.x.into();
+                                let delta_x = current_x - start_x;
+                                let dots_moved = (delta_x / 20.0).round() as i32;
+                                let max_start = this
+                                    .space_entries
+                                    .len()
+                                    .saturating_sub(MAX_VISIBLE_SPACE_DOTS);
+                                let new_page = (start_page as i32 - dots_moved).max(0) as usize;
+                                let new_page = new_page.min(max_start);
+
+                                if delta_x.abs() > 3.0 {
+                                    this.carousel_did_drag = true;
+                                }
+                                if this.space_page_start != new_page {
+                                    this.space_page_start = new_page;
+                                    cx.notify();
+                                } else if delta_x.abs() > 3.0 {
+                                    cx.notify();
+                                }
+                            }
+                        },
+                    ))
+                    .children(
+                        spaces
+                            .into_iter()
+                            .skip(start)
+                            .take(MAX_VISIBLE_SPACE_DOTS)
+                            .enumerate()
+                            .map(|(visible_ix, space)| {
+                                let absolute_ix = start + visible_ix;
+                                let is_active = active_space_id == Some(space.workspace_id);
+                                let dot_size = if is_active { px(7.0) } else { px(5.0) };
+                                let tooltip_label = space.label.clone();
+                                let click_workspace_id = space.workspace_id;
+                                let open_workspace_id = space.workspace_id;
+                                let manage_workspace_id = space.workspace_id;
+                                let delete_workspace_id = space.workspace_id;
+                                let sidebar_for_menu = sidebar.clone();
+                                let sidebar_for_click = sidebar.clone();
+
+                                right_click_menu::<ContextMenu>(format!(
+                                    "space-dot-menu-{absolute_ix}"
+                                ))
+                                .menu(move |window, cx| {
+                                    let sidebar_for_open = sidebar_for_menu.clone();
+                                    let sidebar_for_manage = sidebar_for_menu.clone();
+                                    let sidebar_for_delete = sidebar_for_menu.clone();
+                                    let open_workspace_id = open_workspace_id;
+                                    let manage_workspace_id = manage_workspace_id;
+                                    let delete_workspace_id = delete_workspace_id;
+
+                                    ContextMenu::build(window, cx, move |menu, _window, _cx| {
+                                        let menu = menu
+                                            .entry("Open Space", None, {
+                                                let sidebar = sidebar_for_open.clone();
+                                                move |window, cx| {
+                                                    sidebar
+                                                        .update(cx, |this, cx| {
+                                                            this.activate_space(
+                                                                open_workspace_id,
+                                                                window,
+                                                                cx,
+                                                            );
+                                                        })
+                                                        .ok();
+                                                }
+                                            })
+                                            .entry("Manage Space", None, {
+                                                let sidebar = sidebar_for_manage.clone();
+                                                move |window, cx| {
+                                                    sidebar
+                                                        .update(cx, |this, cx| {
+                                                            this.manage_space(
+                                                                manage_workspace_id,
+                                                                window,
+                                                                cx,
+                                                            );
+                                                        })
+                                                        .ok();
+                                                }
+                                            });
+
+                                        menu.separator().entry("Delete Space", None, {
+                                            let sidebar = sidebar_for_delete.clone();
+                                            move |window, cx| {
+                                                sidebar
+                                                    .update(cx, |this, cx| {
+                                                        this.delete_space(
+                                                            delete_workspace_id,
+                                                            window,
+                                                            cx,
+                                                        );
+                                                    })
+                                                    .ok();
+                                            }
+                                        })
+                                    })
+                                })
+                                .trigger(
+                                    move |is_menu_active, _window, cx| {
+                                        div()
+                                            .group("") // Group wrapper for hover effect
+                                            .child(
+                                                ButtonLike::new(format!("space-dot-{absolute_ix}"))
+                                                    .style(ButtonStyle::Transparent)
+                                                    .cursor_style(gpui::CursorStyle::OpenHand)
+                                                    .tooltip(move |window, cx| {
+                                                        Tooltip::text(tooltip_label.clone())(
+                                                            window, cx,
+                                                        )
+                                                    })
+                                                    .on_click({
+                                                        let sidebar = sidebar_for_click.clone();
+                                                        let click_workspace_id = click_workspace_id;
+                                                        move |_, window, cx| {
+                                                            sidebar
+                                                                .update(cx, |this, cx| {
+                                                                    if this.carousel_did_drag {
+                                                                        this.carousel_did_drag =
+                                                                            false;
+                                                                        cx.notify();
+                                                                        return;
+                                                                    }
+
+                                                                    this.activate_space(
+                                                                        click_workspace_id,
+                                                                        window,
+                                                                        cx,
+                                                                    );
+                                                                })
+                                                                .ok();
+                                                        }
+                                                    })
+                                                    .child(
+                                                        // Wrapper with fixed size for better hover effect
+                                                        div()
+                                                            .w(px(20.)) // Reduced width for closer spacing
+                                                            .h(px(20.)) // Reduced height
+                                                            .flex()
+                                                            .items_center()
+                                                            .justify_center()
+                                                            .rounded_md() // Rounded hover background
+                                                            .group_hover("", |this| {
+                                                                // Hover color like sidebar grid items
+                                                                this.bg(cx
+                                                                    .theme()
+                                                                    .colors()
+                                                                    .element_hover)
+                                                            })
+                                                            .child(
+                                                                div()
+                                                                    .size(dot_size)
+                                                                    .rounded_full()
+                                                                    .flex_shrink_0()
+                                                                    .when(is_active, |this| {
+                                                                        this.bg(cx
+                                                                            .theme()
+                                                                            .colors()
+                                                                            .text)
+                                                                    })
+                                                                    .when(!is_active, |this| {
+                                                                        this.border_1()
+                                                                    .border_color(
+                                                                        cx.theme()
+                                                                            .colors()
+                                                                            .border_variant,
+                                                                    )
+                                                                    .bg(gpui::transparent_black())
+                                                                    })
+                                                                    .when(is_menu_active, |this| {
+                                                                        this.border_1()
+                                                                            .border_color(
+                                                                                cx.theme()
+                                                                                    .colors()
+                                                                                    .text_accent,
+                                                                            )
+                                                                    }),
+                                                            ),
+                                                    ),
+                                            )
+                                            .into_any_element()
+                                    },
+                                )
+                            }),
+                    ),
+            )
+            // Right arrow - only show when needed
+            .when(show_arrows, |this| {
+                this.child(
+                    IconButton::new("space-carousel-right", IconName::ChevronRight)
+                        .shape(IconButtonShape::Square)
+                        .style(ButtonStyle::Transparent)
+                        .icon_size(IconSize::Small)
+                        .tooltip(Tooltip::text("Show more spaces (scroll right)"))
+                        .disabled(!can_go_right)
+                        .when(can_go_right, |btn| {
+                            btn.on_click(cx.listener(|this, _, _window, cx| {
+                                this.show_next_space_page(cx);
+                            }))
+                        }),
+                )
+            })
+    }
+
     fn render_sidebar_bottom_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let is_archive = matches!(self.view, SidebarView::Archive(..));
         let on_right = self.side(cx) == SidebarSide::Right;
 
+        let left_slot = if on_right {
+            self.render_recent_projects_button(cx).into_any_element()
+        } else {
+            self.render_sidebar_toggle_button(cx).into_any_element()
+        };
+        let right_slot = if on_right {
+            self.render_sidebar_toggle_button(cx).into_any_element()
+        } else {
+            self.render_recent_projects_button(cx).into_any_element()
+        };
+
         h_flex()
-            .p_1()
-            .gap_1()
-            .when(on_right, |this| this.flex_row_reverse())
+            .gap(DynamicSpacing::Base08.rems(cx))
+            .p(DynamicSpacing::Base04.rems(cx))
             .border_t_1()
             .border_color(cx.theme().colors().border)
-            .child(self.render_sidebar_toggle_button(cx))
+            .bg(cx.theme().colors().status_bar_background)
+            .child(left_slot)
             .child(
                 IconButton::new("history", IconName::Clock)
                     .icon_size(IconSize::Small)
@@ -4578,8 +5874,13 @@ impl Sidebar {
                         this.toggle_archive(&ToggleThreadHistory, window, cx);
                     })),
             )
-            .child(div().flex_1())
-            .child(self.render_recent_projects_button(cx))
+            .child(
+                h_flex()
+                    .flex_1()
+                    .justify_center()
+                    .child(self.render_space_carousel(cx)),
+            )
+            .child(right_slot)
     }
 
     fn active_workspace(&self, cx: &App) -> Option<Entity<Workspace>> {
@@ -4895,9 +6196,40 @@ impl WorkspaceSidebar for Sidebar {
         self.cycle_thread_impl(forward, window, cx);
     }
 
-    fn serialized_state(&self, _cx: &App) -> Option<String> {
+    fn serialized_state(&self, cx: &App) -> Option<String> {
+        // Get collapsed/expanded groups from MultiWorkspace
+        let (collapsed_groups, expanded_groups) = self.multi_workspace
+            .upgrade()
+            .map(|mw| {
+                let mw = mw.read(cx);
+                // For now, return empty vecs as the state is managed by MultiWorkspace
+                // TODO: Properly serialize MultiWorkspace state
+                (Vec::new(), Vec::new())
+            })
+            .unwrap_or_default();
+
         let serialized = SerializedSidebar {
             width: Some(f32::from(self.width)),
+            collapsed_groups,
+            expanded_groups,
+            space_labels: {
+                let mut labels = self
+                    .space_labels
+                    .iter()
+                    .map(|(workspace_id, label)| SerializedSpaceLabel {
+                        workspace_id: Some(i64::from(*workspace_id)),
+                        name: label.to_string(),
+                    })
+                    .collect::<Vec<_>>();
+                labels.sort_by(|a, b| a.name.cmp(&b.name));
+                labels
+            },
+            space_order: self
+                .space_order
+                .iter()
+                .map(|workspace_id| i64::from(*workspace_id))
+                .collect(),
+            next_space_number: self.next_space_number,
             active_view: match self.view {
                 SidebarView::ThreadList => SerializedSidebarView::ThreadList,
                 SidebarView::Archive(_) => SerializedSidebarView::History,
@@ -4916,13 +6248,35 @@ impl WorkspaceSidebar for Sidebar {
             if let Some(width) = serialized.width {
                 self.width = px(width).clamp(MIN_WIDTH, MAX_WIDTH);
             }
+            // collapsed_groups and expanded_groups are now managed by MultiWorkspace
+            // TODO: Restore them to MultiWorkspace if needed
+            
+            self.space_labels = serialized
+                .space_labels
+                .into_iter()
+                .filter_map(|space| {
+                    Some((
+                        WorkspaceId::from_i64(space.workspace_id?),
+                        SharedString::from(space.name),
+                    ))
+                })
+                .collect();
+            self.space_order = serialized
+                .space_order
+                .into_iter()
+                .map(WorkspaceId::from_i64)
+                .collect();
+            self.next_space_number = serialized.next_space_number.max(1);
             if serialized.active_view == SerializedSidebarView::History {
                 cx.defer_in(window, |this, window, cx| {
                     this.show_archive(window, cx);
                 });
             }
         }
-        cx.notify();
+        cx.defer_in(window, |this, _window, cx| {
+            this.sync_space_state(cx);
+            cx.notify();
+        });
     }
 }
 
@@ -4965,7 +6319,7 @@ impl Render for Sidebar {
             .on_action(cx.listener(Self::fold_all))
             .on_action(cx.listener(Self::unfold_all))
             .on_action(cx.listener(Self::cancel))
-            .on_action(cx.listener(Self::archive_selected_thread))
+            .on_action(cx.listener(Self::remove_selected_thread))
             .on_action(cx.listener(Self::new_thread_in_group))
             .on_action(cx.listener(Self::toggle_archive))
             .on_action(cx.listener(Self::focus_sidebar_filter))
@@ -4984,34 +6338,33 @@ impl Render for Sidebar {
             .when(self.side(cx) == SidebarSide::Left, |el| el.border_r_1())
             .when(self.side(cx) == SidebarSide::Right, |el| el.border_l_1())
             .border_color(color.border)
+            .child(self.render_sidebar_header(no_open_projects, window, cx))
             .map(|this| match &self.view {
-                SidebarView::ThreadList => this
-                    .child(self.render_sidebar_header(no_open_projects, window, cx))
-                    .map(|this| {
-                        if no_open_projects {
-                            this.child(self.render_empty_state(cx))
-                        } else {
-                            this.child(
-                                v_flex()
-                                    .relative()
-                                    .flex_1()
-                                    .overflow_hidden()
-                                    .child(
-                                        list(
-                                            self.list_state.clone(),
-                                            cx.processor(Self::render_list_entry),
-                                        )
-                                        .flex_1()
-                                        .size_full(),
+                SidebarView::ThreadList => this.map(|this| {
+                    if no_open_projects {
+                        this.child(self.render_empty_state(cx))
+                    } else {
+                        this.child(
+                            v_flex()
+                                .relative()
+                                .flex_1()
+                                .overflow_hidden()
+                                .child(
+                                    list(
+                                        self.list_state.clone(),
+                                        cx.processor(Self::render_list_entry),
                                     )
-                                    .when(no_search_results, |this| {
-                                        this.child(self.render_no_results(cx))
-                                    })
-                                    .when_some(sticky_header, |this, header| this.child(header))
-                                    .vertical_scrollbar_for(&self.list_state, window, cx),
-                            )
-                        }
-                    }),
+                                    .flex_1()
+                                    .size_full(),
+                                )
+                                .when(no_search_results, |this| {
+                                    this.child(self.render_no_results(cx))
+                                })
+                                .when_some(sticky_header, |this, header| this.child(header))
+                                .vertical_scrollbar_for(&self.list_state, window, cx),
+                        )
+                    }
+                }),
                 SidebarView::Archive(archive_view) => this.child(archive_view.clone()),
             })
             .map(|this| {

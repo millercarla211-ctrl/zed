@@ -121,6 +121,7 @@ members = [
     "crates/language_selector",
     "crates/language_tools",
     "crates/languages",
+    "crates/liquid_glass",
     "crates/line_ending_selector",
     "crates/livekit_api",
     "crates/livekit_client",
@@ -217,6 +218,9 @@ members = [
     "crates/vim",
     "crates/vim_mode_setting",
     "crates/watch",
+    "crates/web_preview",
+    "crates/web_preview_linux",
+    "crates/web_preview_macos",
     "crates/web_search",
     "crates/web_search_providers",
     "crates/which_key",
@@ -384,6 +388,10 @@ lmstudio = { path = "crates/lmstudio" }
 lsp = { path = "crates/lsp" }
 markdown = { path = "crates/markdown" }
 markdown_preview = { path = "crates/markdown_preview" }
+liquid_glass = { path = "crates/liquid_glass" }
+web_preview = { path = "crates/web_preview" }
+web_preview_linux = { path = "crates/web_preview_linux" }
+web_preview_macos = { path = "crates/web_preview_macos" }
 svg_preview = { path = "crates/svg_preview" }
 media = { path = "crates/media" }
 menu = { path = "crates/menu" }
@@ -883,14 +891,25 @@ webrtc-sys = { git = "https://github.com/zed-industries/livekit-rust-sdks", rev 
 [profile.dev]
 split-debuginfo = "unpacked"
 incremental = true
-codegen-units = 16
+codegen-units = 256  # MORE units = SMALLER object files (better for low memory)
+opt-level = 0
+debug = 0  # No debug info to save memory
+strip = "symbols"  # Strip symbols from binary
+lto = "off"  # Completely disable LTO
 
 # mirror configuration for crates compiled for the build platform
 # (without this cargo will compile ~400 crates twice)
 [profile.dev.build-override]
-codegen-units = 16
+codegen-units = 256
 split-debuginfo = "unpacked"
-debug = true
+debug = 0
+strip = "symbols"
+
+# Disable debug info for ALL dependencies to save memory
+[profile.dev.package."*"]
+debug = 0
+strip = "symbols"
+opt-level = 0
 
 [profile.dev.package]
 # proc-macros start
@@ -961,6 +980,16 @@ inherits = "release"
 debug = "full"
 lto = false
 codegen-units = 16
+
+# Low-memory profile for devices with <8GB RAM
+# Use with: cargo build --profile low-memory
+[profile.low-memory]
+inherits = "release"
+debug = false
+lto = false
+codegen-units = 1
+opt-level = 2
+incremental = true
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "allow" }

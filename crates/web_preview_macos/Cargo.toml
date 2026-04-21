@@ -1,0 +1,38 @@
+[package]
+name = "web_preview_macos"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "GPL-3.0-or-later"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+agent-client-protocol.workspace = true
+agent_ui.workspace = true
+base64.workspace = true
+acp_thread.workspace = true
+cocoa.workspace = true
+editor.workspace = true
+fs.workspace = true
+futures.workspace = true
+gpui.workspace = true
+html_to_markdown.workspace = true
+http_client.workspace = true
+image.workspace = true
+markdown.workspace = true
+menu.workspace = true
+objc.workspace = true
+objc2-app-kit.workspace = true
+paths.workspace = true
+raw-window-handle = "0.6"
+serde_json.workspace = true
+ui.workspace = true
+url.workspace = true
+workspace.workspace = true
+wry = "0.53"

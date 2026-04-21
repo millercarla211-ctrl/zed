@@ -58,6 +58,7 @@ mod macos_build {
             "SpriteInputIndex".into(),
             "MonochromeSprite".into(),
             "PolychromeSprite".into(),
+            "LiquidGlass".into(),
             "PathSprite".into(),
             "SurfaceInputIndex".into(),
             "SurfaceBounds".into(),

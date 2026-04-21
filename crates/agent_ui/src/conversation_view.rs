@@ -2652,6 +2652,26 @@ impl ConversationView {
         }
     }
 
+    pub(crate) fn insert_content_blocks(
+        &self,
+        blocks: Vec<acp::ContentBlock>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if blocks.is_empty() {
+            return;
+        }
+
+        if let Some(active_thread) = self.active_thread() {
+            active_thread.update(cx, |thread, cx| {
+                thread.message_editor.update(cx, |editor, cx| {
+                    editor.append_message(blocks, Some("\n\n"), window, cx);
+                    editor.focus_handle(cx).focus(window, cx);
+                })
+            });
+        }
+    }
+
     /// Inserts the selected text into the message editor or the message being
     /// edited, if any.
     pub(crate) fn insert_selections(&self, window: &mut Window, cx: &mut Context<Self>) {

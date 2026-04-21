@@ -1,0 +1,45 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Debug
+*.dSYM/
+
+# Profiling
+*.profraw
+*.profdata
+
+# Testing
+*.gcda
+*.gcno
+
+# Documentation
+/doc/
+
+# Backup files
+*.bak
+*.tmp
+*.temp
+
+# OS
+Thumbs.db
+.Spotlight-V100
+.Trashes
