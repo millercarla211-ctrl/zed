@@ -10,6 +10,8 @@ CHANGED:
 - `justfile` now describes the upgraded G-drive build profile instead of the old <8GB low-memory profile.
 - Local `main` now matches `upstream/main` at `de14e3fcad`.
 - Local `dev` is now the active working branch and includes a merge from refreshed `main`.
+- `origin/main` was fast-forwarded to match upstream `main`.
+- `origin/dev` was created from local `dev` and local `dev` now tracks it.
 
 FIXED:
 - Resolved merge conflicts in `Cargo.lock`, agent UI, GPUI, Windows event handling, sidebar, title bar, REPL remote kernels, and workspace files.
