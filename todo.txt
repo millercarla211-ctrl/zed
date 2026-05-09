@@ -17,6 +17,9 @@ COMPLETED:
 - Verified `dev` includes live-fetched `upstream/main` at `de14e3fcad`.
 - Ran `cargo check -p zed --bin zed --keep-going` after the user's explicit request for a batch error pass.
 - Ran `just run`; the Zed editor launched successfully on the upgraded PC.
+- Made the Windows titlebar controls fill the full topbar height.
+- Removed the duplicate screen-dock separator before the add/list actions.
+- Ran `just run` again after the topbar fixes; the editor launched successfully.
 
 BLOCKED:
 - None

@@ -490,7 +490,6 @@ impl TitleBar {
 
         let has_project_segment = project_segment.is_some() || branch_segment.is_some();
         let has_left_segment = navigation_segment.is_some() || has_project_segment;
-        let has_extra_entries = !extra_entries.is_empty();
         let border_color = cx.theme().colors().border;
 
         let dock_body = h_flex()
@@ -541,9 +540,6 @@ impl TitleBar {
                             .map(|entry| self.render_screen_entry_button(entry, cx)),
                     ),
             )
-            .when(has_extra_entries, |dock| {
-                dock.child(self.render_screen_dock_divider(cx))
-            })
             .child(
                 h_flex()
                     .items_center()

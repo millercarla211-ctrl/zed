@@ -40,3 +40,14 @@ NOTES:
 - `just run` built and launched the Zed editor successfully on the upgraded G-drive machine.
 - The run still prints non-blocking warnings, including a missing `zed-cli` lookup message after launch.
 - The pre-existing `hexed/CHESS.md` edit remains preserved and intentionally unstaged.
+
+[2026-05-09] - Titlebar Polish
+
+CHANGED:
+- `crates/platform_title_bar/src/platforms/platform_windows.rs` now stretches Windows caption buttons to the full titlebar height instead of a fixed 32px strip.
+- `crates/title_bar/src/title_bar.rs` no longer renders the duplicate screen-dock separator before the add/list action group.
+- `todo.txt` now records the successful topbar polish run.
+
+NOTES:
+- `just run` completed and launched Zed again after the titlebar changes.
+- Existing non-blocking warnings and the post-launch `zed-cli` lookup message remain.
