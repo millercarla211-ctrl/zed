@@ -1,24 +1,24 @@
-# Justfile for running Zed on low-end devices with <8GB RAM
-# Based on expert recommendations for memory-constrained systems
+# Justfile for running Zed on this upgraded Windows dev machine.
+# Cargo output is pinned to G:/Zed/target in .cargo/config.toml.
 set shell := ["powershell.exe", "-NoLogo", "-Command"]
 
 # Default recipe - shows available commands
 default:
     @just --list
 
-# RECOMMENDED: Run Zed with expert-optimized low-memory settings
+# RECOMMENDED: Run Zed with balanced local settings
 run:
-    @echo "Running Zed with EXPERT-OPTIMIZED low-memory settings..."
+    @echo "Running Zed with balanced G-drive build settings..."
     @echo "Building only the zed binary (not all workspace targets)"
-    @echo "Using: 1 job, 256 codegen units, rust-lld linker, no debug info"
+    @echo "Using Cargo config: 4 jobs, G:/Zed/target, rust-lld linker, no debug info"
     cargo run -p zed --bin zed
     @echo "Build complete! Running Zed..."
     ./target/debug/zed.exe
 
-# Try with Cranelift backend (requires nightly Rust) - BEST for low memory
+# Try with Cranelift backend (requires nightly Rust)
 run-cranelift:
     @echo "Building with Cranelift backend (nightly required)..."
-    @echo "Cranelift produces smaller object files = less linker memory"
+    @echo "Cranelift can reduce linker pressure on very large Rust builds"
     cargo +nightly build -p zed --bin zed -Z codegen-backend
     @echo "Build complete! Running Zed..."
     ./target/debug/zed.exe
@@ -32,24 +32,24 @@ continue:
 
 # Build only (no run)
 build:
-    @echo "Building Zed with expert-optimized settings..."
+    @echo "Building Zed with balanced G-drive settings..."
     cargo build -p zed --bin zed
 
-# Check code without building (uses minimal memory)
+# Check code without building
 check:
     @echo "Checking code (no build)..."
     cargo check -p zed
 
-# Format code with rustfmt (low memory)
+# Format code with rustfmt
 fmt:
-    @echo "Formatting workspace with rustfmt (low memory)..."
+    @echo "Formatting workspace with rustfmt..."
     cargo fmt --all
 
-# Lint a single package with clippy using minimal parallelism
+# Lint a single package with clippy using the local 4-worker profile
 lint package="web_preview":
-    @echo "Linting package '{{package}}' with low-memory clippy settings..."
+    @echo "Linting package '{{package}}' with balanced clippy settings..."
     @echo "Tip: run 'just lint zed' for the main app or 'just lint web_preview' for the preview crate"
-    cargo clippy -p {{package}} --all-targets -j 1 -- -D warnings
+    cargo clippy -p {{package}} --all-targets -j 4 -- -D warnings
 
 # Clean build artifacts
 clean:
@@ -72,39 +72,37 @@ setup-cranelift:
 
 # Show memory info and recommendations
 show-memory-guide:
-    @echo "=== MEMORY CONFIGURATION RECOMMENDATIONS ==="
+    @echo "=== LOCAL ZED BUILD CONFIGURATION ==="
     @echo ""
-    @echo "For best results, configure Windows virtual memory:"
+    @echo "Current verified machine profile:"
+    @echo "  CPU: Ryzen 5 5600G, 6 cores / 12 logical processors"
+    @echo "  RAM: 24 GB installed"
+    @echo "  Build output: G:/Zed/target"
+    @echo "  Cargo workers: 4"
+    @echo ""
+    @echo "If builds still hit memory pressure, configure Windows virtual memory:"
     @echo "1. Open System Properties > Advanced > Performance Settings"
     @echo "2. Advanced tab > Virtual Memory > Change"
     @echo "3. Uncheck 'Automatically manage'"
     @echo "4. Set Custom size:"
-    @echo "   Initial size: 16384 MB (16 GB)"
-    @echo "   Maximum size: 32768 MB (32 GB)"
+    @echo "   Initial size: 24576 MB (24 GB)"
+    @echo "   Maximum size: 49152 MB (48 GB)"
     @echo "5. Click Set, OK, and RESTART your computer"
     @echo ""
-    @echo "Ensure you have 35-40GB free disk space on an SSD!"
-    @echo ""
-    @echo "See SETUP_VIRTUAL_MEMORY.md for detailed instructions"
+    @echo "G: currently has enough SSD headroom for this checkout."
 
 # Help - show all important information
 help:
-    @echo "=== ZED LOW-MEMORY BUILD GUIDE ==="
-    @echo ""
-    @echo "CRITICAL FIRST STEP:"
-    @echo "  just show-memory-guide - Configure virtual memory to 16-32GB"
-    @echo "  Then RESTART your computer!"
+    @echo "=== ZED LOCAL BUILD GUIDE ==="
     @echo ""
     @echo "RECOMMENDED BUILD COMMANDS:"
-    @echo "  just run           - Build and run with optimized settings"
-    @echo "  just run-cranelift - Use Cranelift backend (BEST for low memory)"
+    @echo "  just run           - Build and run with balanced G-drive settings"
+    @echo "  just run-cranelift - Use Cranelift backend"
     @echo "  just continue      - Resume interrupted build"
     @echo "  just fmt           - Format the workspace with rustfmt"
-    @echo "  just lint          - Lint web_preview with low-memory clippy"
-    @echo "  just lint zed      - Lint the main app with low-memory clippy"
+    @echo "  just lint          - Lint web_preview with 4 workers"
+    @echo "  just lint zed      - Lint the main app with 4 workers"
     @echo ""
     @echo "SETUP:"
     @echo "  just setup-cranelift   - Install nightly Rust + Cranelift (one-time)"
-    @echo "  just show-memory-guide - Show virtual memory setup instructions"
-    @echo ""
-    @echo "See BUILD_LOW_MEMORY.md and SETUP_VIRTUAL_MEMORY.md for details"
+    @echo "  just show-memory-guide - Show local CPU/RAM/output configuration"

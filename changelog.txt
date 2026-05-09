@@ -1,0 +1,19 @@
+[2026-05-09] - Branch and Build Environment Setup
+
+ADDED:
+- `todo.txt` to track the current Zed branch/setup state.
+- `changelog.txt` to document branch, merge, and local build-environment changes.
+
+CHANGED:
+- `.cargo/config.toml` now pins Cargo build output to `G:/Zed/target`.
+- `.cargo/config.toml` now uses 4 Cargo jobs for the verified 12-logical-CPU, 24GB RAM machine.
+- `justfile` now describes the upgraded G-drive build profile instead of the old <8GB low-memory profile.
+- Local `main` now matches `upstream/main` at `de14e3fcad`.
+- Local `dev` is now the active working branch and includes a merge from refreshed `main`.
+
+FIXED:
+- Resolved merge conflicts in `Cargo.lock`, agent UI, GPUI, Windows event handling, sidebar, title bar, REPL remote kernels, and workspace files.
+
+NOTES:
+- No full local build/test was run because this repo's instructions reserve that for `just run`, and the user will run it when ready.
+- The pre-existing `hexed/CHESS.md` working-tree edit was preserved and restored after the branch merge.

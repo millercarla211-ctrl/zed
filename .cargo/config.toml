@@ -1,8 +1,10 @@
 [build]
 # v0 mangling scheme provides more detailed backtraces around closures
 rustflags = ["-C", "symbol-mangling-version=v0", "--cfg", "tokio_unstable"]
-# Limit parallel jobs for low-memory systems (<8GB RAM)
-jobs = 1
+# Keep Zed build artifacts on the G: SSD for this checkout.
+target-dir = "G:/Zed/target"
+# Ryzen 5 5600G: 12 logical CPUs, 24GB RAM. Keep this moderate for Zed-sized builds.
+jobs = 4
 
 [alias]
 xtask = "run --package xtask --"

@@ -1,0 +1,18 @@
+IN PROGRESS:
+- None
+
+PENDING:
+- User can run `just run` when ready to do the full local Zed build/run.
+- Decide later whether to push `dev` as the default working branch on the remote fork.
+
+COMPLETED:
+- Verified `origin` points to `https://github.com/millercarla211-ctrl/zed`.
+- Verified `upstream` points to `https://github.com/zed-industries/zed.git`.
+- Created `dev` from the previous custom `main` tip.
+- Repointed local `main` to `upstream/main`.
+- Merged refreshed `main` into `dev` and resolved source conflicts.
+- Restored the pre-existing local `hexed/CHESS.md` edit after the merge.
+- Updated Cargo and Justfile settings for the upgraded G: drive Zed workflow.
+
+BLOCKED:
+- None
