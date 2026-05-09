@@ -59,6 +59,7 @@ use ui::{
 };
 use util::ResultExt as _;
 use util::path_list::PathList;
+use vim_mode_setting::VimModeSetting;
 use workspace::{
     AddFolderToProject, CloseWindow, FocusWorkspaceSidebar, MultiWorkspace, MultiWorkspaceEvent,
     NextProject, NextThread, Open, OpenMode, OpenOptions, OpenVisible, PreviousProject,
@@ -686,7 +687,7 @@ impl Sidebar {
             &multi_workspace,
             window,
             |this, _multi_workspace, event: &MultiWorkspaceEvent, window, cx| match event {
-                MultiWorkspaceEvent::ActiveWorkspaceChanged => {
+                MultiWorkspaceEvent::ActiveWorkspaceChanged { .. } => {
                     this.sync_active_entry_from_active_workspace(cx);
                     this.replace_archived_panel_thread(window, cx);
                     this.update_entries(cx);
@@ -940,7 +941,7 @@ impl Sidebar {
             this.update_in(cx, |this, window, cx| {
                 if let Some(multi_workspace) = this.multi_workspace.upgrade() {
                     multi_workspace.update(cx, |multi_workspace, cx| {
-                        multi_workspace.activate(workspace.clone(), window, cx);
+                        multi_workspace.activate(workspace.clone(), None, window, cx);
                         multi_workspace.retain_active_workspace(cx);
                     });
                 }
@@ -1023,7 +1024,7 @@ impl Sidebar {
             .workspace_for_database_id(workspace_id, cx)
         {
             multi_workspace.update(cx, |multi_workspace, cx| {
-                multi_workspace.activate(workspace.clone(), window, cx);
+                multi_workspace.activate(workspace.clone(), None, window, cx);
                 multi_workspace.retain_active_workspace(cx);
             });
         }
@@ -1255,7 +1256,7 @@ impl Sidebar {
                     this.sync_active_entry_from_panel(agent_panel, cx);
                     this.update_entries(cx);
                 }
-                AgentPanelEvent::MessageSentOrQueued { thread_id } => {
+                AgentPanelEvent::ThreadInteracted { thread_id } => {
                     this.record_thread_message_sent_or_queued(thread_id, cx);
                     this.update_entries(cx);
                 }
@@ -2275,7 +2276,7 @@ impl Sidebar {
                                 // Activate workspace without setting active_entry (no specific thread)
                                 if let Some(multi_workspace) = this.multi_workspace.upgrade() {
                                     multi_workspace.update(cx, |multi_workspace, cx| {
-                                        multi_workspace.activate(workspace.clone(), window, cx);
+                                        multi_workspace.activate(workspace.clone(), None, window, cx);
                                     });
                                 }
                                 if AgentPanel::is_visible(&workspace, cx) {
@@ -2615,6 +2616,7 @@ impl Sidebar {
                                             .update(cx, |multi_workspace, cx| {
                                                 multi_workspace.activate(
                                                     activate_workspace.clone(),
+                                                    None,
                                                     window,
                                                     cx,
                                                 );
@@ -2659,7 +2661,7 @@ impl Sidebar {
 
                 Some(menu)
             })
-            .anchor(gpui::Corner::TopRight)
+            .anchor(gpui::Anchor::TopRight)
             .offset(gpui::Point {
                 x: px(0.),
                 y: px(1.),
@@ -2838,7 +2840,7 @@ impl Sidebar {
         // When vim mode is active, the editor defaults to normal mode which
         // blocks text input. Switch to insert mode so the user can type
         // immediately.
-        if vim_mode_setting::VimModeSetting::get_global(cx).0 {
+        if VimModeSetting::get_global(cx).0 {
             if let Ok(action) = cx.build_action("vim::SwitchToInsertMode", None) {
                 window.dispatch_action(action, cx);
             }
@@ -3108,7 +3110,7 @@ impl Sidebar {
         }
 
         multi_workspace.update(cx, |multi_workspace, cx| {
-            multi_workspace.activate(workspace.clone(), window, cx);
+            multi_workspace.activate(workspace.clone(), None, window, cx);
             if retain {
                 multi_workspace.retain_active_workspace(cx);
             }
@@ -3148,7 +3150,7 @@ impl Sidebar {
         let activated = target_window
             .update(cx, |multi_workspace, window, cx| {
                 window.activate_window();
-                multi_workspace.activate(workspace.clone(), window, cx);
+                multi_workspace.activate(workspace.clone(), None, window, cx);
                 Self::load_agent_thread_in_workspace(&workspace, &metadata, true, window, cx);
             })
             .log_err()
@@ -4282,7 +4284,7 @@ impl Sidebar {
     ) {
         if let Some(multi_workspace) = self.multi_workspace.upgrade() {
             multi_workspace.update(cx, |mw, cx| {
-                mw.activate(workspace.clone(), window, cx);
+                mw.activate(workspace.clone(), None, window, cx);
             });
         }
     }
@@ -4514,7 +4516,7 @@ impl Sidebar {
                 } => {
                     if let Some(mw) = weak_multi_workspace.upgrade() {
                         mw.update(cx, |mw, cx| {
-                            mw.activate(workspace.clone(), window, cx);
+                            mw.activate(workspace.clone(), None, window, cx);
                         });
                     }
                     this.active_entry = Some(ActiveEntry::Thread {
@@ -4533,7 +4535,7 @@ impl Sidebar {
                 } => {
                     if let Some(mw) = weak_multi_workspace.upgrade() {
                         mw.update(cx, |mw, cx| {
-                            mw.activate(workspace.clone(), window, cx);
+                            mw.activate(workspace.clone(), None, window, cx);
                             mw.retain_active_workspace(cx);
                         });
                     }
@@ -4551,7 +4553,7 @@ impl Sidebar {
                     if let Some(mw) = weak_multi_workspace.upgrade() {
                         if let Some(original_ws) = &original_workspace {
                             mw.update(cx, |mw, cx| {
-                                mw.activate(original_ws.clone(), window, cx);
+                                mw.activate(original_ws.clone(), None, window, cx);
                             });
                         }
                     }
@@ -4630,7 +4632,7 @@ impl Sidebar {
         if let Some((metadata, workspace)) = initial_preview {
             if let Some(mw) = self.multi_workspace.upgrade() {
                 mw.update(cx, |mw, cx| {
-                    mw.activate(workspace.clone(), window, cx);
+                    mw.activate(workspace.clone(), None, window, cx);
                 });
             }
             self.active_entry = Some(ActiveEntry::Thread {
@@ -4894,7 +4896,7 @@ impl Sidebar {
                 x: px(-2.0),
                 y: px(-2.0),
             })
-            .anchor(gpui::Corner::BottomRight)
+            .anchor(gpui::Anchor::BottomRight)
     }
 
     fn new_thread_in_group(
@@ -4951,7 +4953,7 @@ impl Sidebar {
         };
 
         multi_workspace.update(cx, |multi_workspace, cx| {
-            multi_workspace.activate(workspace.clone(), window, cx);
+            multi_workspace.activate(workspace.clone(), None, window, cx);
         });
 
         let draft_id = workspace.update(cx, |workspace, cx| {
@@ -5097,7 +5099,7 @@ impl Sidebar {
                 .workspace_for_paths(key.path_list(), key.host().as_ref(), cx)
         }) {
             self.multi_workspace.update(cx, |multi_workspace, cx| {
-                multi_workspace.activate(workspace, window, cx);
+                multi_workspace.activate(workspace, None, window, cx);
                 multi_workspace.retain_active_workspace(cx);
             });
         } else {
@@ -5948,14 +5950,14 @@ impl Sidebar {
 
         sidebar_side_context_menu("sidebar-toggle-menu", _cx)
             .anchor(if on_right {
-                gpui::Corner::BottomRight
+                gpui::Anchor::BottomRight
             } else {
-                gpui::Corner::BottomLeft
+                gpui::Anchor::BottomLeft
             })
             .attach(if on_right {
-                gpui::Corner::TopRight
+                gpui::Anchor::TopRight
             } else {
-                gpui::Corner::TopLeft
+                gpui::Anchor::TopLeft
             })
             .trigger(move |_is_active, _window, _cx| {
                 let icon = if on_right {
@@ -6786,20 +6788,21 @@ impl Render for Sidebar {
                                         cx.processor(Self::render_list_entry),
                                     )
                                     .flex_1()
-                                    .size_full()
-                                    .when(no_search_results, |this| {
-                                        this.child(self.render_no_results(cx))
-                                    })
-                                    .when_some(sticky_header, |this, header| this.child(header))
-                                    .custom_scrollbars(
-                                        Scrollbars::new(ScrollAxes::Vertical)
-                                            .tracked_scroll_handle(&self.list_state),
-                                        window,
-                                        cx,
-                                    ),
-                            )
-                        }
-                    }),
+                                    .size_full(),
+                                )
+                                .when(no_search_results, |this| {
+                                    this.child(self.render_no_results(cx))
+                                })
+                                .when_some(sticky_header, |this, header| this.child(header))
+                                .custom_scrollbars(
+                                    Scrollbars::new(ScrollAxes::Vertical)
+                                        .tracked_scroll_handle(&self.list_state),
+                                    window,
+                                    cx,
+                                )
+                        )
+                    }
+                }),
                 SidebarView::Archive(archive_view) => this.child(archive_view.clone()),
             })
             .map(|this| {

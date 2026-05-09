@@ -76,7 +76,7 @@ use terminal::{Event as TerminalEvent, terminal_settings::TerminalSettings};
 use terminal_view::{TerminalView, terminal_panel::TerminalPanel};
 use theme_settings::ThemeSettings;
 use ui::{
-    Button, ContextMenu, ContextMenuEntry, IconButton, PopoverMenu, PopoverMenuHandle, Tab,
+    Button, Callout, ContextMenu, ContextMenuEntry, IconButton, PopoverMenu, PopoverMenuHandle, Tab,
     Tooltip, prelude::*, utils::WithRemSize,
 };
 use util::ResultExt as _;
@@ -816,6 +816,7 @@ pub struct AgentPanel {
     _draft_editor_observation: Option<Subscription>,
     _thread_metadata_store_subscription: Subscription,
     last_context_source: Option<AgentContextSource>,
+    show_trust_workspace_message: bool,
 }
 
 impl AgentPanel {
@@ -1180,6 +1181,7 @@ impl AgentPanel {
             _draft_editor_observation: None,
             _thread_metadata_store_subscription,
             last_context_source: None,
+            show_trust_workspace_message: false,
         };
 
         // Initial sync of agent servers from extensions

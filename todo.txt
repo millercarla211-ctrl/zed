@@ -2,7 +2,7 @@ IN PROGRESS:
 - None
 
 PENDING:
-- User can run `just run` when ready to do the full local Zed build/run.
+- Clean up non-blocking warnings in sidebar and agent UI when convenient.
 
 COMPLETED:
 - Verified `origin` points to `https://github.com/millercarla211-ctrl/zed`.
@@ -14,6 +14,9 @@ COMPLETED:
 - Updated Cargo and Justfile settings for the upgraded G: drive Zed workflow.
 - Pushed `main` to the fork as a fast-forward to upstream `main`.
 - Pushed `dev` to the fork and set local `dev` to track `origin/dev`.
+- Verified `dev` includes live-fetched `upstream/main` at `de14e3fcad`.
+- Ran `cargo check -p zed --bin zed --keep-going` after the user's explicit request for a batch error pass.
+- Ran `just run`; the Zed editor launched successfully on the upgraded PC.
 
 BLOCKED:
 - None

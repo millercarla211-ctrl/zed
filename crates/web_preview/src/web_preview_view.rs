@@ -1,10 +1,10 @@
-use agent_client_protocol as acp;
+use agent_client_protocol::schema as acp;
 use agent_ui::AgentPanel;
 use anyhow::{Context as _, Result, anyhow};
 use base64::Engine as _;
 use editor::Editor;
 use gpui::{
-    Action, App, AppContext as _, Bounds, ClipboardItem, Context, Corner, Entity, EventEmitter,
+    Action, Anchor, App, AppContext as _, Bounds, ClipboardItem, Context, Entity, EventEmitter,
     FocusHandle, Focusable, Global, Image as GpuiImage, Pixels, Render, SharedString, Subscription,
     Task, WeakEntity, Window, canvas,
 };
@@ -1211,7 +1211,7 @@ impl WebPreviewView {
                     .icon_size(IconSize::Small),
                 Tooltip::text("Extensions"),
             )
-            .anchor(Corner::TopRight)
+            .anchor(Anchor::TopRight)
             .menu(move |window, cx| {
                 let detected_extensions = entity.update(cx, |this, cx| {
                     this.ensure_extensions_scanned(cx);
@@ -1262,7 +1262,7 @@ impl WebPreviewView {
                     .icon_size(IconSize::Small),
                 Tooltip::text("More"),
             )
-            .anchor(Corner::TopRight)
+            .anchor(Anchor::TopRight)
             .menu(move |window, cx| {
                 let (_is_bookmarked, bookmark_icon, bookmark_label) =
                     entity.read_with(cx, |this, _| {

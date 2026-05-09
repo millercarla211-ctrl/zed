@@ -19,3 +19,24 @@ FIXED:
 NOTES:
 - No full local build/test was run because this repo's instructions reserve that for `just run`, and the user will run it when ready.
 - The pre-existing `hexed/CHESS.md` working-tree edit was preserved and restored after the branch merge.
+
+[2026-05-09] - Local Zed Run Fixes
+
+CHANGED:
+- Updated GPUI/title bar/sidebar/web preview compatibility code paths after merging current upstream `main`.
+- Updated REPL remote kernel websocket imports for the current async-tungstenite API.
+- Added the missing sidebar dependency on `vim_mode_setting`.
+- Updated `todo.txt` to reflect the successful local run.
+
+FIXED:
+- Fixed compile errors from stale `Corner` anchors by moving affected call sites to `Anchor`.
+- Fixed ACP content references in web preview crates by using the protocol schema module.
+- Fixed sidebar activation calls for the current `MultiWorkspace::activate` signature.
+- Fixed sidebar event matching for the current multi-workspace and agent-panel event shapes.
+- Fixed the sidebar render tree around the list container and scrollbars.
+
+NOTES:
+- `cargo check -p zed --bin zed --keep-going` finished successfully after the batch fixes, with warnings only.
+- `just run` built and launched the Zed editor successfully on the upgraded G-drive machine.
+- The run still prints non-blocking warnings, including a missing `zed-cli` lookup message after launch.
+- The pre-existing `hexed/CHESS.md` edit remains preserved and intentionally unstaged.

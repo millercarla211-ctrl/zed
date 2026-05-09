@@ -25,7 +25,7 @@ use client::{Client, UserStore, zed_urls};
 use cloud_api_types::Plan;
 
 use gpui::{
-    Action, Animation, AnimationExt, AnyElement, App, Context, Corner, Element, Entity, Focusable,
+    Action, Animation, AnimationExt, Anchor, AnyElement, App, Context, Element, Entity, Focusable,
     InteractiveElement, IntoElement, MouseButton, ParentElement, Render,
     StatefulInteractiveElement, Styled, Subscription, TaskExt, WeakEntity, Window, actions, div,
     pulsating_between,
@@ -471,7 +471,7 @@ impl TitleBar {
                 .into_any_element(),
         );
         let branch_segment = repository.and_then(|repository| {
-            self.render_project_branch(repository, linked_worktree_name, cx)
+            self.render_worktree_and_branch(repository, linked_worktree_name, cx)
                 .map(IntoElement::into_any_element)
         });
         let active_screen_kind = self.active_screen_kind(cx);
@@ -750,7 +750,7 @@ impl TitleBar {
                     .disabled(!has_entries),
                 Tooltip::text("Show Screens"),
             )
-            .anchor(Corner::TopRight)
+            .anchor(Anchor::TopRight)
             .menu(move |window, cx| {
                 let Some(workspace) = workspace_handle.upgrade() else {
                     return Some(ContextMenu::build(window, cx, |menu, _, _| {
@@ -1012,7 +1012,7 @@ impl TitleBar {
     fn render_hidden_feature_menu(&self, cx: &mut Context<Self>) -> AnyElement {
         let is_remote = self.project.read(cx).is_via_remote_server();
         PopoverMenu::new("titlebar-hidden-feature-menu")
-            .anchor(Corner::TopRight)
+            .anchor(Anchor::TopRight)
             .trigger_with_tooltip(
                 IconButton::new("titlebar-hidden-feature-trigger", IconName::Ellipsis)
                     .icon_size(IconSize::Small)
@@ -1200,7 +1200,7 @@ impl TitleBar {
                         )
                     },
                 )
-                .anchor(gpui::Corner::TopLeft)
+                .anchor(gpui::Anchor::TopLeft)
                 .into_any_element(),
         )
     }
@@ -1384,7 +1384,7 @@ impl TitleBar {
                     )
                 },
             )
-            .anchor(gpui::Corner::TopLeft)
+            .anchor(gpui::Anchor::TopLeft)
             .into_any_element()
     }
 
@@ -1443,7 +1443,7 @@ impl TitleBar {
                     )
                 },
             )
-            .anchor(gpui::Corner::TopLeft)
+            .anchor(gpui::Anchor::TopLeft)
     }
 
     fn render_worktree_and_branch(
@@ -1488,6 +1488,7 @@ impl TitleBar {
 
             (branch_name, icon_info)
         };
+        let branch_name = branch_name?;
 
         let settings = TitleBarSettings::get_global(cx);
         let effective_repository = Some(repository);
@@ -1511,7 +1512,7 @@ impl TitleBar {
                         .child(
                             h_flex()
                                 .gap_0p5()
-                                .when(settings.show_branch_icon, |this| {
+                                .when(settings.show_branch_status_icon, |this| {
                                     let (icon, icon_color) = icon_info;
                                     this.child(
                                         Icon::new(icon).size(IconSize::Small).color(icon_color),
@@ -1546,7 +1547,7 @@ impl TitleBar {
                         )
                     },
                 )
-                .anchor(gpui::Corner::TopLeft),
+                .anchor(gpui::Anchor::TopLeft),
         )
     }
 
@@ -1902,6 +1903,6 @@ impl TitleBar {
                 })
                 .into()
             })
-            .anchor(Corner::TopRight)
+            .anchor(Anchor::TopRight)
     }
 }
