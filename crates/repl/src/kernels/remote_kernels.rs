@@ -9,8 +9,8 @@ use smol::io::AsyncReadExt as _;
 use super::{KernelSession, RunningKernel};
 use anyhow::Result;
 use jupyter_websocket_client::{
-    JupyterWebSocketReader, JupyterWebSocketWriter, KernelLaunchRequest,
-    KernelSpecsResponse, RemoteServer,
+    JupyterWebSocket, JupyterWebSocketReader, JupyterWebSocketWriter, KernelLaunchRequest,
+    KernelSpecsResponse, ProtocolMode, RemoteServer,
 };
 use std::{fmt::Debug, sync::Arc};
 
@@ -146,10 +146,34 @@ impl RemoteRunningKernel {
             )
             .await?;
 
-            // Use jupyter-websocket-client's connect_to_kernel method
-            // This ensures we use the correct async-tungstenite version (0.34.0)
-            let (kernel_socket, _response) = remote_server.connect_to_kernel(&kernel_id).await?;
+            let ws_url = format!(
+                "{}/api/kernels/{}/channels?token={}",
+                remote_server.base_url.replace("http", "ws"),
+                kernel_id,
+                remote_server.token
+            );
 
+            let mut req: Request<()> = ws_url.into_client_request()?;
+            let headers = req.headers_mut();
+
+            headers.insert(
+                "User-Agent",
+                HeaderValue::from_str(&format!(
+                    "Zed/{} ({}; {})",
+                    "repl",
+                    std::env::consts::OS,
+                    std::env::consts::ARCH
+                ))?,
+            );
+
+            let response = connect_async(req).await;
+
+            let (ws_stream, _response) = response?;
+
+            let kernel_socket = JupyterWebSocket {
+                inner: ws_stream,
+                protocol_mode: ProtocolMode::Json,
+            };
             let (mut w, mut r): (JupyterWebSocketWriter, JupyterWebSocketReader) =
                 kernel_socket.split();
 

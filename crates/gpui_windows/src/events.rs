@@ -1,4 +1,4 @@
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, rc::Rc, sync::atomic::Ordering};
 
 use ::util::ResultExt;
 use anyhow::Context as _;
@@ -147,9 +147,9 @@ impl WindowsWindowInner {
             // monitor is invalid, we do nothing.
             if !monitor.is_invalid() && self.state.display.get().handle != monitor {
                 // we will get the same monitor if we only have one
-                self.state
-                    .display
-                    .set(WindowsDisplay::new_with_handle(monitor).log_err()?);
+                self.state.display.set(WindowsDisplay::new(
+                    WindowsDisplay::display_id_for_monitor(monitor),
+                )?);
             }
         }
         notify_webview_parent_window_position_changed(handle);
@@ -302,6 +302,7 @@ impl WindowsWindowInner {
 
     fn handle_mouse_move_msg(&self, handle: HWND, lparam: LPARAM, wparam: WPARAM) -> Option<isize> {
         self.start_tracking_mouse(handle, TME_LEAVE);
+        self.restore_cursor_after_hide();
 
         let client_point = POINT {
             x: lparam.signed_loword().into(),
@@ -353,6 +354,9 @@ impl WindowsWindowInner {
     fn handle_mouse_leave_msg(&self, handle: HWND) -> Option<isize> {
         send_webview_mouse_leave(&self.state.webview_hover_active, handle);
         self.state.hovered.set(false);
+        // The next window's `WM_SETCURSOR` picks its own cursor, so we just clear
+        // the flag for tight `is_cursor_visible()` semantics.
+        self.state.cursor_visible.store(true, Ordering::Relaxed);
         if let Some(mut callback) = self.state.callbacks.hovered_status_change.take() {
             callback(false);
             self.state
@@ -904,6 +908,10 @@ impl WindowsWindowInner {
         }
         let this = self.clone();
 
+        if !activated {
+            this.state.cursor_visible.store(true, Ordering::Relaxed);
+        }
+
         // When the window is activated (gains focus), reset the modifier tracking state.
         // This fixes the issue where Alt-Tab away and back leaves stale modifier state
         // (especially the Alt key) because Windows doesn't always send key-up events to
@@ -1023,7 +1031,7 @@ impl WindowsWindowInner {
             log::error!("No monitor detected!");
             return None;
         }
-        let new_display = WindowsDisplay::new_with_handle(new_monitor).log_err()?;
+        let new_display = WindowsDisplay::new(WindowsDisplay::display_id_for_monitor(new_monitor))?;
         self.state.display.set(new_display);
         Some(0)
     }
@@ -1092,6 +1100,7 @@ impl WindowsWindowInner {
 
     fn handle_nc_mouse_move_msg(&self, handle: HWND, lparam: LPARAM) -> Option<isize> {
         self.start_tracking_mouse(handle, TME_LEAVE | TME_NONCLIENT);
+        self.restore_cursor_after_hide();
 
         let mut func = self.state.callbacks.input.take()?;
         let scale_factor = self.state.scale_factor.get();
@@ -1277,8 +1286,14 @@ impl WindowsWindowInner {
             }
             return Some(1);
         }
+
+        let cursor = if self.state.cursor_visible.load(Ordering::Relaxed) {
+            self.state.current_cursor.get()
+        } else {
+            None
+        };
         unsafe {
-            SetCursor(self.state.current_cursor.get());
+            SetCursor(cursor);
         };
         Some(0)
     }
@@ -1374,6 +1389,11 @@ impl WindowsWindowInner {
         {
             panic!("Device lost: {err}");
         }
+        // Make sure the first `draw_window` after recovery (whether it comes
+        // from the forced WM_GPUI_FORCE_UPDATE_WINDOW or a stray WM_PAINT in
+        // between) is treated as a forced render so it both clears
+        // `skip_draws` and bypasses the view cache.
+        self.state.force_render_after_recovery.set(true);
         Some(0)
     }
 
@@ -1398,6 +1418,7 @@ impl WindowsWindowInner {
             }
         }
 
+        let force_render = force_render || self.state.force_render_after_recovery.take();
         if force_render {
             // Re-enable drawing after a device loss recovery. The forced render
             // will rebuild the scene with fresh atlas textures.
@@ -1443,6 +1464,15 @@ impl WindowsWindowInner {
                 char::from_u32(code_point as u32)
                     .filter(|c| !c.is_control())
                     .map(|c| c.to_string())
+            }
+        }
+    }
+
+    /// Clear the hidden flag and restore the cursor immediately
+    fn restore_cursor_after_hide(&self) {
+        if !self.state.cursor_visible.swap(true, Ordering::Relaxed) {
+            unsafe {
+                SetCursor(self.state.current_cursor.get());
             }
         }
     }

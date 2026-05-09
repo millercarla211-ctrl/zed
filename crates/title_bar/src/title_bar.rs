@@ -7,11 +7,12 @@ mod update_version;
 
 use crate::application_menu::ApplicationMenu;
 use crate::plan_chip::PlanChip;
+use agent_settings::{AgentSettings, WindowLayout};
 pub use platform_title_bar::{
     self, DraggedWindowTab, MergeAllWindows, MoveTabToNewWindow, PlatformTitleBar,
     ShowNextWindowTab, ShowPreviousWindowTab,
 };
-use project::linked_worktree_short_name;
+use project::{linked_worktree_short_name, repo_identity_path};
 
 #[cfg(not(target_os = "macos"))]
 use crate::application_menu::{
@@ -26,13 +27,13 @@ use cloud_api_types::Plan;
 use gpui::{
     Action, Animation, AnimationExt, AnyElement, App, Context, Corner, Element, Entity, Focusable,
     InteractiveElement, IntoElement, MouseButton, ParentElement, Render,
-    StatefulInteractiveElement, Styled, Subscription, WeakEntity, Window, actions, div,
+    StatefulInteractiveElement, Styled, Subscription, TaskExt, WeakEntity, Window, actions, div,
     pulsating_between,
 };
 use onboarding_banner::OnboardingBanner;
 use project::{Project, git_store::GitStoreEvent, trusted_worktrees::TrustedWorktrees};
 use remote::RemoteConnectionOptions;
-use settings::Settings;
+use settings::Settings as _;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -193,18 +194,52 @@ impl Render for TitleBar {
         let mut linked_worktree_name = None;
         if let Some(worktree) = self.effective_active_worktree(cx) {
             repository = self.get_repository_for_worktree(&worktree, cx);
-            let worktree = worktree.read(cx);
+            let worktree_abs_path = worktree.read(cx).abs_path();
             project_name = worktree
+                .read(cx)
                 .root_name()
                 .file_name()
                 .map(|name| SharedString::from(name.to_string()));
             linked_worktree_name = repository.as_ref().and_then(|repo| {
                 let repo = repo.read(cx);
-                linked_worktree_short_name(
-                    repo.original_repo_abs_path.as_ref(),
-                    repo.work_directory_abs_path.as_ref(),
-                )
-                .filter(|name| Some(name) != project_name.as_ref())
+                let linked_name = repo
+                    .main_worktree_abs_path()
+                    .and_then(|main_worktree_path| {
+                        linked_worktree_short_name(
+                            main_worktree_path,
+                            repo.work_directory_abs_path.as_ref(),
+                        )
+                    })
+                    .or_else(|| {
+                        repo.is_linked_worktree()
+                            .then_some(project_name.clone())
+                            .flatten()
+                    });
+
+                let identity = repo_identity_path(&repo.common_dir_abs_path);
+
+                let display_name = if identity.extension() == Some(std::ffi::OsStr::new("git")) {
+                    identity.file_stem()
+                } else {
+                    identity.file_name()
+                };
+
+                if let Some(repo_name) = display_name.and_then(|n| n.to_str()) {
+                    let name = if let Ok(relative) =
+                        worktree_abs_path.strip_prefix(&*repo.work_directory_abs_path)
+                    {
+                        if relative.as_os_str().is_empty() {
+                            repo_name.to_string()
+                        } else {
+                            format!("{}/{}", repo_name, relative.display())
+                        }
+                    } else {
+                        repo_name.to_string()
+                    };
+                    project_name = Some(SharedString::from(name));
+                }
+
+                linked_name.filter(|name| Some(name) != project_name.as_ref())
             });
         }
 
@@ -1238,7 +1273,7 @@ impl TitleBar {
             .user_store
             .read(cx)
             .participant_indices()
-            .get(&host_user.id)?;
+            .get(&host_user.legacy_id)?;
 
         Some(
             Button::new("project_owner_trigger", host_user.github_login.clone())
@@ -1411,7 +1446,7 @@ impl TitleBar {
             .anchor(gpui::Corner::TopLeft)
     }
 
-    fn render_project_branch(
+    fn render_worktree_and_branch(
         &self,
         repository: Entity<project::git_store::Repository>,
         linked_worktree_name: Option<SharedString>,
@@ -1454,7 +1489,6 @@ impl TitleBar {
             (branch_name, icon_info)
         };
 
-        let branch_name = branch_name?;
         let settings = TitleBarSettings::get_global(cx);
         let effective_repository = Some(repository);
 
@@ -1705,6 +1739,13 @@ impl TitleBar {
                 let organizations = organizations.clone();
                 let user_store = user_store.clone();
 
+                let ai_enabled = !project::DisableAiSettings::get_global(cx).disable_ai;
+                let current_layout = AgentSettings::get_layout(cx);
+                let is_editor = matches!(current_layout, WindowLayout::Editor(_));
+                let is_agent = matches!(current_layout, WindowLayout::Agent(_));
+                let is_custom = matches!(current_layout, WindowLayout::Custom(_));
+                let fs = <dyn fs::Fs>::global(cx);
+
                 ContextMenu::build(window, cx, |menu, _, _cx| {
                     menu.when(is_signed_in, |this| {
                         let user_login = user_login.clone();
@@ -1814,6 +1855,46 @@ impl TitleBar {
                         "Extensions",
                         zed_actions::Extensions::default().boxed_clone(),
                     )
+                    .when(ai_enabled, |menu| {
+                        let fs = fs.clone();
+                        menu.separator()
+                            .submenu("Panel Layout", move |menu, _window, _cx| {
+                                let fs = fs.clone();
+                                menu.toggleable_entry(
+                                    "Classic",
+                                    is_editor,
+                                    IconPosition::Start,
+                                    None,
+                                    {
+                                        let fs = fs.clone();
+                                        move |_window, cx| {
+                                            drop(AgentSettings::set_layout(
+                                                WindowLayout::Editor(None),
+                                                fs.clone(),
+                                                cx,
+                                            ));
+                                        }
+                                    },
+                                )
+                                .toggleable_entry("Agentic", is_agent, IconPosition::Start, None, {
+                                    let fs = fs.clone();
+                                    move |_window, cx| {
+                                        drop(AgentSettings::set_layout(
+                                            WindowLayout::Agent(None),
+                                            fs.clone(),
+                                            cx,
+                                        ));
+                                    }
+                                })
+                                .when(is_custom, |menu| {
+                                    menu.item(
+                                        ContextMenuEntry::new("Custom")
+                                            .toggleable(IconPosition::Start, true)
+                                            .disabled(true),
+                                    )
+                                })
+                            })
+                    })
                     .when(is_signed_in, |this| {
                         this.separator()
                             .action("Sign Out", client::SignOut.boxed_clone())
