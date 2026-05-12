@@ -6,7 +6,13 @@ CHANGED:
 - Created a fresh local `dev` branch from the synced `main`.
 - Restored the local Windows/G-drive `just run` workflow on the fresh `dev` branch.
 - `.cargo/config.toml` now keeps build output at `G:/Zed/target`, uses 6 Cargo jobs, uses `rust-lld` on Windows, and disables debug-info/linker PDB output for faster local iteration.
+- Deleted deprecated local branches `backup`, `deprecated-1`, `deprecated-2`, `deprecated-3`, `deprecated-4`, `forge`, and `speed`.
+- Deleted deprecated remote branches `origin/backup`, `origin/deprecated-1`, `origin/deprecated-2`, `origin/deprecated-3`, `origin/deprecated-4`, and `origin/forge`.
+- Pushed `web-preivew` to `origin/web-preivew` and force-updated `origin/dev` to the fresh upstream-based branch.
 
 NOTES:
 - The old WebPreview/local-AI work is kept on `web-preivew`.
 - Local model/tool artifacts under `models/` and `tools/` remain untracked G-drive runtime artifacts.
+- The first `just run` attempts found stale target-cache artifacts pointing at deleted `G:\Zed-speed`; only those rebuildable target artifacts were removed.
+- Final `just run` rebuilt successfully in 5m 11s and launched `target/debug/zed.exe`.
+- The known post-launch `zed-cli` lookup message remains after Zed exits.

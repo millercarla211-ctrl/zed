@@ -1,5 +1,5 @@
 IN PROGRESS:
-- Fresh upstream-based dev branch validation with `just run`.
+- None
 
 PENDING:
 - Manual user feedback on the clean upstream-based dev branch runtime.
@@ -11,3 +11,9 @@ COMPLETED:
 - Pushed synced `main` to `origin/main`.
 - Created a fresh local `dev` branch from synced `main`.
 - Restored the local Windows/G-drive `just run` workflow on the fresh `dev`.
+- Deleted deprecated local branches `backup`, `deprecated-1`, `deprecated-2`, `deprecated-3`, `deprecated-4`, `forge`, and `speed`.
+- Deleted deprecated remote branches `origin/backup`, `origin/deprecated-1`, `origin/deprecated-2`, `origin/deprecated-3`, `origin/deprecated-4`, and `origin/forge`.
+- Pushed `web-preivew` to `origin/web-preivew`.
+- Force-updated `origin/dev` to the fresh upstream-based `dev`.
+- Removed stale target-cache artifacts that referenced the deleted `G:\Zed-speed` worktree.
+- Ran `just run` successfully on the fresh upstream-based `dev` branch.
