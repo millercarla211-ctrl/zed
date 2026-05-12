@@ -2811,6 +2811,8 @@ impl Pane {
         cx: &mut Context<Pane>,
     ) -> impl IntoElement + use<> {
         let is_active = ix == self.active_item_index;
+        let selected_bottom_border =
+            is_active && item.screen_kind(cx) == WorkspaceScreenKind::Browser;
         let is_preview = self
             .preview_item_id
             .map(|id| id == item.item_id())
@@ -2927,6 +2929,7 @@ impl Pane {
                 ClosePosition::Right => ui::TabCloseSide::End,
             })
             .toggle_state(is_active)
+            .selected_bottom_border(selected_bottom_border)
             .on_click(cx.listener({
                 let item_handle = item.boxed_clone();
                 move |pane: &mut Self, event: &ClickEvent, window, cx| {
@@ -3559,6 +3562,7 @@ impl Pane {
         cx: &mut Context<Pane>,
     ) -> TabBar {
         if let Some(active_item) = self.active_item()
+            && active_item.screen_kind(cx) == WorkspaceScreenKind::Browser
             && let Some(custom_controls) = active_item.pane_tab_bar_controls(window, cx)
         {
             return tab_bar

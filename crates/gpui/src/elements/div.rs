@@ -2058,7 +2058,9 @@ impl Interactivity {
                                                     hitbox.clone(),
                                                 );
                                             }
-                                            if self.should_block_mouse_passthrough(&style) {
+                                            if window.has_mouse_passthrough_regions()
+                                                && self.should_block_mouse_passthrough(&style)
+                                            {
                                                 window.mark_hitbox_interactive(hitbox);
                                             }
 

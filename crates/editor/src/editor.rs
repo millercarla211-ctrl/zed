@@ -16663,8 +16663,10 @@ impl Editor {
     }
 
     pub fn show_local_cursors(&self, window: &mut Window, cx: &mut App) -> bool {
-        (self.read_only(cx) || self.blink_manager.read(cx).visible())
-            && self.focus_handle.is_focused(window)
+        (self.read_only(cx)
+            || !EditorSettings::get_global(cx).cursor_blink
+            || self.blink_manager.read(cx).visible())
+            && self.focus_handle.contains_focused(window, cx)
     }
 
     pub fn set_show_cursor_when_unfocused(&mut self, is_enabled: bool, cx: &mut Context<Self>) {

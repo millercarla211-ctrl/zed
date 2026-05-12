@@ -1,3 +1,20 @@
+[2026-05-13] - Editor Tab Hot Path and WebPreview Event Pump
+
+CHANGED:
+- `crates/workspace/src/pane.rs` now only asks for a tab's `WorkspaceScreenKind` when that tab is active, so normal code tabs do not pay for WebPreview-specific active-tab styling during every tab render.
+- `crates/title_bar/src/title_bar.rs` now reuses the already-computed active screen kind for the screen-dock add action instead of querying active workspace state again in the same render.
+- `crates/web_preview/src/web_preview_view.rs` now keeps a separate native mount task and a lightweight browser-event pump, so queued WebView2 URL/title/navigation events wake the preview promptly without replacing the pump during mount.
+
+FIXED:
+- Reduced the custom tab/titlebar work that could make code-editor tab rendering and typing feedback feel delayed.
+- Fixed a WebPreview focus recovery gap where navigation-completed events could remain queued until an unrelated render, making page inputs feel unfocused after moving to a new page until reload.
+
+NOTES:
+- Ran `rustfmt` on the touched Rust files.
+- Ran `git diff --check` on the touched files; only the repository's LF/CRLF checkout warnings were reported.
+- Ran `just run`; Cargo rebuilt the affected crates in 3m 12s and launched Zed once.
+- The latest runtime log shows only the recurring AMD AGS driver-info lookup, the known Windows events line, and close-time `window not found` messages after the app exited.
+
 [2026-05-09] - Branch and Build Environment Setup
 
 ADDED:
@@ -51,3 +68,347 @@ CHANGED:
 NOTES:
 - `just run` completed and launched Zed again after the titlebar changes.
 - Existing non-blocking warnings and the post-launch `zed-cli` lookup message remain.
+
+[2026-05-09] - Faster Single-Launch Local Run
+
+CHANGED:
+- `justfile` now builds `zed.exe` with `cargo build -p zed --bin zed` before launching the debug binary once.
+- `.cargo/config.toml` now uses 6 Cargo jobs for the upgraded 12-logical-CPU, 24GB RAM machine.
+- `justfile` help/status text now reports the 6-worker local build profile.
+
+FIXED:
+- Fixed the `just run` double-launch behavior caused by `cargo run` launching Zed once and the recipe launching `target/debug/zed.exe` again after the first close.
+
+NOTES:
+- This is a local build/run workflow change only; no Zed source code was changed.
+- First `just run` after the fix built and launched Zed once, then exited after the window was closed.
+- Second no-change `just run` finished Cargo's build step in 2.53 seconds and launched Zed once.
+- The existing non-blocking `zed-cli` lookup message and sidebar/agent UI warnings still remain.
+
+[2026-05-09] - Web Preview Input and Tab Chrome Hardening
+
+CHANGED:
+- `crates/ui/src/components/tab.rs` now supports keeping a bottom border on selected tabs when a caller requests it.
+- `crates/workspace/src/pane.rs` enables that selected bottom border for active Browser-screen tabs so web preview tabs stay visually separated from colorful pages.
+- `crates/web_preview/src/web_preview_view.rs` now tracks URL-editor focus intent separately from native WebView keyboard focus so tab URL input does not get stuck mixing with WebView input.
+- `crates/gpui_windows/src/events.rs` now forwards client-area double-clicks into the WebView2 composition controller and focuses WebView2 on mouse down.
+
+FIXED:
+- Reduced cursor/hover lag by removing redundant WebView2 mouse-move forwarding from `WM_SETCURSOR`.
+- Prevented browser right-click context messages over the preview from falling back into Zed chrome handling.
+
+NOTES:
+- This is the first reliability slice from the larger web preview plan; DevTools, profiles, responsive mode, and agent browser tools remain future work.
+- `just run` initially caught one Windows API result-handling typo in the new context-menu path; that was fixed before final verification.
+- `just run` then completed successfully and launched Zed after rebuilding the affected crates.
+
+[2026-05-09] - Project Panel Hover and WebView Focus Responsiveness
+
+CHANGED:
+- `crates/project_panel/src/project_panel.rs` now shows direct folder file counts from the in-memory worktree snapshot in the hover badge.
+- `crates/project_panel/src/project_panel.rs` now keeps the hover badge lighter and offset to the right while still showing file sizes for files.
+- `crates/web_preview/src/windows_visual_webview.rs` now skips redundant WebView2 visibility and bounds sync calls when the native preview has not changed.
+
+FIXED:
+- `crates/gpui_windows/src/events.rs` now clears stale WebView keyboard focus when GPUI has a real text input handler, preventing browser focus from intercepting normal editor typing.
+
+NOTES:
+- The folder hover path remains instant and does not perform recursive filesystem scans.
+- `just run` completed successfully and launched Zed after rebuilding `gpui_windows`, `project_panel`, `web_preview`, and dependents.
+- Existing non-blocking sidebar/agent UI warnings and the known post-launch `zed-cli` lookup message remain.
+
+[2026-05-09] - Warning Cleanup and Web Preview Passthrough Fix
+
+CHANGED:
+- `crates/agent_ui/src/agent_panel.rs` now renders the workspace trust message path again so its field and renderer are not dead code.
+- `crates/sidebar/src/sidebar.rs` now removes unused helper code, uses the header new-thread visibility flag, and handles the multi-workspace update result.
+- `crates/project_panel/src/project_panel.rs` now caches direct folder file counts and clears that cache on worktree or relevant visibility-setting changes.
+- `crates/web_preview/src/web_preview_view.rs` now keeps the native WebView mouse passthrough region registered while the preview is ready instead of depending on GPUI active-window state.
+- `crates/web_preview/src/web_preview_view.rs` now hides the native preview on workspace deactivation and removes temporary mount debug logging.
+- `crates/web_preview/src/windows_visual_webview.rs` now keeps the passthrough registry consistent even when visibility did not change.
+
+FIXED:
+- Removed the Rust warnings that were printed by `agent_ui` and `sidebar` during `just run`.
+- Fixed a stale/fragile WebView2 mouse passthrough path that could leave hover, click, right-click, and wheel events routed to GPUI instead of the native page.
+- Reduced editor typing lag risk by caching folder count badges and keeping hidden/inactive native preview state from lingering.
+
+NOTES:
+- `just run` completed successfully with no Rust warnings in the Cargo output.
+- The known post-launch `zed-cli` lookup message remains, but it is not a Rust warning and did not stop Zed from launching.
+
+[2026-05-10] - Editor Typing Hot Path and Caret Visibility
+
+CHANGED:
+- `crates/editor/src/editor.rs` now keeps local editor cursors visible when focus is inside an editor descendant, matching how input can be mediated through child focus handles.
+- `crates/gpui_windows/src/platform.rs` now sends keydown/syskeydown messages for GPUI-owned windows through the GPUI accelerator first, even if a WebView focus flag is set.
+- `crates/gpui_windows/src/events.rs` now treats WebView keyboard focus as inactive whenever GPUI currently has a text input handler.
+- `crates/title_bar/src/title_bar.rs` now avoids collecting active pane screen entries during normal Editor, Browser, and Terminal renders; it only builds that list for non-standard screen kinds or when the screen-list menu opens.
+- `crates/editor/src/blink_manager.rs` now skips blink-resume timer scheduling while `cursor_blink` is disabled.
+- `assets/settings/default.json` now disables caret blinking by default so the insertion caret remains visible during active typing without a custom blink scheduler.
+- `assets/settings/default.json` keeps the main-Zed mouse-pointer hiding behavior while disabling hosted edit predictions by default for this local development fork.
+
+FIXED:
+- Fixed a caret visibility edge case where a focused editor descendant could make local cursors disappear even though the user was still interacting with the editor.
+- Fixed a stale WebView-focus path that could force normal editor keystrokes off GPUI's fast accelerated route, causing delayed text paint and missing local caret feedback.
+- Reverted the custom `crates/editor/src/blink_manager.rs` scheduling experiment back to the upstream/main implementation after it made text input feel slower.
+- Removed unnecessary caret blink timer work from the no-blink local default, keeping typing paint work closer to the fast path.
+- Removed the default per-keystroke hosted edit-prediction path that was producing rate-limited prediction requests during local typing.
+
+NOTES:
+- The caret fix now uses settings plus the upstream blink manager instead of adding new editor render timers.
+- Ran `just run`; Cargo rebuilt the editor dependency chain in 2m 58s and launched Zed once.
+- The fresh log after this run did not show new edit-prediction rate-limit errors; only the existing AMD GPU-driver-info lookup warning and close-time window-not-found noise appeared.
+- Ran `just run` again after the Windows keyboard fast-path fix; Cargo rebuilt `editor`, `gpui_windows`, and dependents in 3m 22s and launched Zed once.
+- The fresh log after this run still showed no new edit-prediction rate-limit errors after the older 06:17 entries.
+
+[2026-05-10] - Dev Editor Input Lag Investigation
+
+CHANGED:
+- `crates/gpui_windows/src/platform.rs` now only runs the synthetic GPUI accelerator bridge for HWNDs owned by GPUI, so WebView2 internal/child key messages are dispatched normally.
+- `crates/web_preview/src/windows_visual_webview.rs` now focuses the parent Zed HWND before moving focus from the URL editor back into the WebView2 page.
+- `crates/web_preview/src/web_preview_view.rs` no longer creates a hidden startup WebView2 warmup surface for every workspace.
+- `crates/gpui_windows/src/events.rs` now treats the native WebView passthrough registry as the source of truth for WebView keyboard focus, instead of cancelling it from stale GPUI text-input state.
+- `crates/gpui_windows/src/events.rs` now focuses the parent HWND before moving focus into the WebView2 controller in composition mode.
+- `crates/gpui/src/window.rs` now exposes whether the current frame actually painted a mouse-passthrough region.
+- `crates/gpui/src/elements/div.rs` now skips interactive mouse-passthrough hitbox bookkeeping on ordinary editor frames that have no native passthrough surface.
+- `crates/gpui_windows/src/events.rs` now forwards mouse, wheel, and context-menu input directly to a registered native WebView target whenever the pointer is inside its bounds.
+- `crates/gpui/src/window.rs` now lets the preview body's own passthrough hitbox win unless a top hitbox was explicitly marked as an interactive overlay.
+- `crates/workspace/src/workspace.rs` now only asks active items for workspace overlays when the active screen kind is `LiquidGlass`, avoiding a mutable no-op item update on every editor frame.
+- `crates/gpui/src/window.rs` now sends an empty mouse-passthrough snapshot when no passthrough region was painted, avoiding a full hitbox clone on ordinary editor frames.
+- `crates/gpui_windows/src/window.rs` no longer calls `SetWindowRgn(hwnd, None, true)` when updating the mouse-passthrough snapshot.
+- `crates/gpui_windows/src/window.rs` now skips redundant empty mouse-passthrough snapshot writes during normal editor frames.
+- `crates/gpui_windows/src/window.rs` no longer toggles `WS_EX_LAYERED` for transparent backgrounds and now skips repeated same-value background appearance updates.
+- `crates/gpui_windows/src/platform.rs` now always sends keydown messages through the normal GPUI accelerator bridge before the lower-level window handlers decide whether WebView owns keyboard focus.
+- `crates/gpui_windows/src/events.rs` no longer handles `WM_KEYDOWN` and `WM_SYSKEYDOWN` directly; those messages now follow the same single accelerator route as the fast main/speed branch.
+- `crates/gpui_windows/src/events.rs` returns an unhandled result from the synthetic accelerator when WebView2 truly owns keyboard focus, allowing the original Windows key message to reach the native preview.
+
+FIXED:
+- Fixed the deeper WebPreview keyboard failure where the global accelerator loop could swallow WebView2 key messages before WebView2 received them.
+- Removed a startup-time editor lag source caused by creating a hidden native WebView2 composition controller shortly after every workspace opened.
+- Fixed the remaining WebPreview keyboard-input handoff where a stale editor input handler could clear browser focus right after a preview click.
+- Removed another normal editor-frame cost by avoiding per-hitbox passthrough overlay tracking unless a native preview passthrough region exists in that frame.
+- Fixed the dead WebPreview interaction path where ordinary GPUI pane/container hitboxes could prevent hover, click, right-click, and wheel messages from ever reaching WebView2.
+- Made the native WebView registered bounds the source of truth for Windows mouse forwarding so the browser surface is not visible-but-dead.
+- Removed another ordinary editor-frame overhead path where code-edit renders were querying an overlay hook that only Liquid Glass uses.
+- Fixed another Windows-only editor lag and invisible-cursor risk by restoring main-style background composition instead of using layered-window alpha for the Zed window.
+- Avoided reapplying background composition from web preview renders when the requested background appearance did not change.
+- Fixed the deeper per-edit cursor flashing and typing lag risk caused by forcing Windows to refresh the native window region after every rendered frame.
+- Removed unnecessary per-frame hitbox snapshot cloning for normal code editor frames.
+- Fixed a dev-only editor typing lag path where a stale native WebView focus flag could bypass GPUI's fast editor key handling even after focus had moved back to code files.
+- Fixed the remaining dev-only typing lag/caret flashing path caused by duplicate editor keydown dispatch on normal text input.
+
+NOTES:
+- The fast `speed` branch did not have this platform-level WebView focus shortcut; the dev branch did.
+- The web preview still receives passthrough hit-testing when a preview actually paints a passthrough region.
+- WebView keyboard ownership now follows the native preview registry; outside-preview mouse input still clears the registry focus before GPUI receives the event.
+- `just run` rebuilt `gpui_windows`, `web_preview`, `gpui_platform`, `sidebar`, and `zed` in 1m 15s and launched Zed after the deeper keyboard/startup-lag fix; the recipe still returned the known post-close `zed-cli` lookup exit code.
+- `just run` rebuilt `gpui_windows`, `web_preview`, `gpui_platform`, `sidebar`, and `zed` in 1m 13s and launched Zed successfully with no Rust warnings after the keyboard/editor-frame fix.
+- `just run` rebuilt the affected crates in 22.60 seconds and launched Zed successfully after the duplicate-keydown fix.
+- `just run` rebuilt the broader GPUI dependency chain in 3m 30s and launched Zed successfully after the frame-time fix.
+- `just run` rebuilt the Windows/WebView side in 2m 10s and launched Zed successfully after restoring main-style background composition.
+- `just run` rebuilt the workspace dependency chain in 2m 22s and launched Zed successfully after the editor-frame overlay gate.
+
+[2026-05-10] - Temporary Worktree Cleanup
+
+CHANGED:
+- Removed the temporary `G:\Zed-speed` worktree.
+- Removed the temporary `G:\Zed-forge-run` worktree folder using a long-path-safe Windows path after Git hit a filename-too-long deletion error.
+- Pruned Git worktree metadata so only the active `G:\Zed` checkout remains.
+
+NOTES:
+- The lightweight `speed` and `forge` branch refs were not deleted; only the disk-heavy worktree folders were removed.
+
+[2026-05-10] - Local Llama.cpp AI Provider
+
+ADDED:
+- `crates/language_models/src/provider/llama_cpp.rs` adds a built-in `Llama.cpp` provider for Zed's AI panel.
+- `crates/settings_content/src/language_model.rs` adds `language_models.llama_cpp` settings for server paths, G-drive model/cache/tool directories, runtime toggles, and local GGUF model metadata.
+- `assets/settings/default.json` configures Gemma 4 E4B Q4_K_M as the normal local default and Qwen 3.5 0.8B Q4_0 as the low-spec default.
+
+CHANGED:
+- `crates/language_models/src/language_models.rs` registers the local llama.cpp provider immediately after Zed Cloud so default signed-out setups can choose local AI before remote API providers.
+- `crates/language_models/Cargo.toml` now includes the lightweight runtime dependencies needed for local server startup and system-memory detection.
+- `todo.txt` now tracks first manual local-agent feedback for the llama.cpp provider.
+
+FIXED:
+- Local model selection no longer waits on a remote provider or model list; the AI panel can show the configured local model immediately.
+- The local runtime uses `G:/Zed/models/huggingface`, `G:/Zed/models/llama.cpp`, and `G:/Zed/tools/llama.cpp` by default on this Windows/G-drive setup.
+
+NOTES:
+- The provider starts `llama-server` on first use, finding it from settings, G-drive tools, PATH, or downloading the latest matching llama.cpp release asset.
+- The provider starts models through llama.cpp's Hugging Face `-hf` flow, so model downloads are handled by llama.cpp into the G-drive cache instead of buffering large GGUF files in Zed.
+- `just run` rebuilt successfully and launched Zed; the only nonzero exit was the known post-close `zed-cli` lookup message from the local recipe.
+
+[2026-05-10] - Direct Llama.cpp Qwen Default
+
+ADDED:
+- Downloaded `G:\Zed\models\llama.cpp\Qwen3.5-0.8B-Q4_0.gguf` for fast local default testing.
+
+CHANGED:
+- `assets/settings/default.json` now makes Qwen 3.5 0.8B Q4_0 the normal and low-spec local default, with Gemma 4 E4B retained as an optional configured model.
+- `assets/settings/default.json` raises the default local llama.cpp context window to 32768 tokens for Qwen.
+- `crates/language_models/src/provider/llama_cpp.rs` now sends local requests through llama.cpp native `/apply-template` and `/completion` endpoints instead of the OpenAI-compatible chat-completions wrapper.
+- `crates/language_models/src/provider/llama_cpp.rs` disables local tool-schema support by default so the agent does not send huge tool definitions to small local models.
+- `crates/language_models/src/provider/llama_cpp.rs` disables Qwen thinking in the llama.cpp chat template kwargs for faster direct answers.
+
+FIXED:
+- Avoided the 8192-token prompt overflow path caused by sending full agent/tool-heavy requests to a small local model.
+- Avoided the external-looking OpenAI-compatible local request path; the local provider now uses llama.cpp's native server API.
+
+NOTES:
+- Verified `llama-server` running Qwen 3.5 0.8B on `127.0.0.1:8080` with `/v1/health`, `/v1/models`, `/apply-template`, and `/completion`.
+
+[2026-05-10] - Local Model Discovery and Switching
+
+ADDED:
+- `crates/language_models/src/provider/llama_cpp.rs` now auto-discovers local `.gguf` files from the configured model directory and G-drive model folders for the AI panel.
+- `crates/settings_content/src/language_model.rs` and `crates/language_models/src/settings.rs` add `auto_discover_local_models`.
+
+CHANGED:
+- `crates/language_models/src/provider/llama_cpp.rs` now checks the loaded llama.cpp model list before reusing a running server.
+- `crates/language_models/src/provider/llama_cpp.rs` restarts its owned llama.cpp child when the selected model/signature changes.
+- `assets/settings/default.json` enables local GGUF discovery by default and sets Gemma 4 E4B to a 32768-token configured context.
+
+FIXED:
+- Fixed the Gemma selection bug where a healthy Qwen server on port 8080 could be reused even though Gemma was selected in the AI panel.
+
+NOTES:
+- Verified Gemma 4 E4B Q4_K_M from `G:\Zed\models\llama.cpp\gemma-4-E4B-it-Q4_K_M.gguf` at 32768 context with llama.cpp native `/apply-template` and `/completion`.
+
+[2026-05-10] - Gemma Local Runtime Handoff
+
+CHANGED:
+- `crates/language_models/src/provider/llama_cpp.rs` now treats provider authentication as a no-op because local llama.cpp models do not have credentials.
+- `crates/language_models/src/provider/llama_cpp.rs` now launches the exact selected model only when a completion request starts, instead of preloading the provider fallback model during background authentication.
+- `C:\Users\Computer\AppData\Roaming\Zed\settings.json` now defaults the agent back to `Qwen3.5-0.8B-GGUF` as requested, while Gemma remains available in the picker.
+
+FIXED:
+- Avoided the startup path where background provider authentication could load Qwen on port 8080 before a Gemma-selected thread sent its request.
+- Added llama.cpp startup/request log lines so future Qwen/Gemma switching issues show which model the provider is actually launching.
+
+NOTES:
+- Direct smoke testing confirmed Gemma 4 E4B Q4_K_M accepts `/apply-template` and streamed `/completion` requests at 32768 context.
+
+[2026-05-10] - Drop-In Local GGUF Models
+
+CHANGED:
+- `crates/language_models/src/provider/llama_cpp.rs` now caches discovered local GGUF models on provider state and refreshes that cache when llama.cpp settings change, instead of rescanning model folders on every model-picker render.
+- `crates/language_models/src/provider/llama_cpp.rs` now launches `llama-server` with the selected model's `max_tokens` as the context window, so configured and discovered models can use their own limits.
+- `crates/language_models/src/provider/llama_cpp.rs` now performs a quick GGUF metadata sniff for discovered model context length, capped by the default local context window unless a sidecar override says otherwise.
+
+ADDED:
+- Optional sidecar overrides next to a local model file: `<model>.gguf.json` or `<model>.json` can set `name`, `display_name`, `max_tokens`, `max_output_tokens`, `supports_tools`, `supports_images`, and Hugging Face metadata without editing Rust source.
+- The Llama.cpp configuration view now tells users to drop GGUF files into the configured G-drive model folder and optionally add a sidecar for custom names or limits.
+
+FIXED:
+- New local models no longer require source edits just to appear in the AI panel or launch with a model-specific context window.
+
+[2026-05-10] - WebPreview Keyboard and Editor Typing Lag Follow-up
+
+CHANGED:
+- `crates/gpui_windows/src/platform.rs` now leaves keydown/syskeydown messages addressed to non-GPUI HWNDs alone, so WebView2-owned child/internal windows do not get routed through GPUI's synthetic accelerator.
+- `crates/web_preview/src/web_preview_view.rs` now avoids repeating `MoveFocus` into the native WebView2 preview when the preview already owns keyboard focus.
+- `crates/sidebar/src/sidebar.rs` now caches sidebar screen-grid entries by screen kind and root path, and clears that cache when sidebar entries refresh.
+
+FIXED:
+- WebPreview page inputs should now receive keyboard input after the user clicks into the native preview instead of having those key messages swallowed by the editor window accelerator path.
+- Normal editor typing should no longer reread and sort the workspace root through the sidebar grid on every render, which was a plausible cause of delayed text/caret paint in a large `G:\Zed` checkout.
+
+NOTES:
+- Microsoft WebView2 composition hosting exposes mouse input forwarding but not a direct `SendKeyEvent` path in the current bindings; keyboard delivery depends on `MoveFocus` plus normal Windows key-message routing.
+- Ran `rustfmt` on the touched Rust files and `git diff --check`; only existing LF/CRLF checkout warnings were reported.
+- Did not run `just run` in this pass because the repo instruction says to reserve it for final/manual validation unless needed.
+
+[2026-05-10] - Sidebar Cache Import Fix
+
+FIXED:
+- `crates/sidebar/src/sidebar.rs` now imports `std::cell::RefCell`, fixing the compile error from the sidebar screen-grid cache field.
+
+NOTES:
+- Ran `rustfmt` on `crates/sidebar/src/sidebar.rs` and `git diff --check -- crates/sidebar/src/sidebar.rs todo.txt changelog.txt`; only LF/CRLF checkout warnings were reported.
+- Ran `just run` after the import fix; the build finished in 1m 32s and launched `target/debug/zed.exe`.
+
+[2026-05-10] - Titlebar Screen Dock Render Hot Path Fix
+
+CHANGED:
+- `crates/title_bar/src/title_bar.rs` now collects active screen-dock entries once per titlebar render instead of scanning the active pane twice.
+- `crates/title_bar/src/title_bar.rs` now builds title/tooltip metadata only for the first item of each screen kind and the selected item, instead of materializing metadata for every editor tab on every keystroke-driven render.
+- `crates/title_bar/src/title_bar.rs` now skips active-pane screen entry collection entirely for normal Editor, Browser, and Terminal renders; the full list is collected only for non-standard screen buttons or when the list menu is opened.
+- `assets/settings/default.json` disables caret blinking by default so the text caret stays visible without adding custom blink scheduling.
+- `assets/settings/default.json` keeps main-Zed's `hide_mouse` default so the mouse pointer can still be hidden during typing for performance.
+- `assets/settings/default.json` disables automatic edit predictions by default for this local dev fork so typing does not enqueue hosted/rate-limited prediction work on every keystroke.
+
+FIXED:
+- Reduced the remaining normal editor typing/caret lag from the custom screen dock doing unnecessary per-tab metadata work during ordinary code editor refreshes.
+- Fixed the remaining cursor-visibility complaint through default settings while keeping the editor blink manager on the upstream/main path.
+- Removed a per-keystroke AI prediction source from the default local setup; the AI panel/local llama provider remains available, but normal text input now stays editor-first.
+- Removed the new unused-parameter warning in the optimized titlebar menu helper.
+
+NOTES:
+- Ran `just run`; the build completed in 49.63s and launched `target/debug/zed.exe` for manual typing validation.
+- The warning fix was applied immediately after that successful run and validated with `rustfmt` plus `git diff --check -- crates/title_bar/src/title_bar.rs todo.txt changelog.txt`.
+
+[2026-05-10] - Editor Caret Paint Follow-up
+
+CHANGED:
+- `assets/settings/default.json` now sets `hide_mouse` to `never` for this local dev fork, so the mouse pointer is not hidden during typing while caret behavior is being stabilized.
+- `crates/editor/src/editor.rs` now treats disabled cursor blinking as an always-visible local caret state while editor focus is inside the editor.
+- `crates/gpui/src/window.rs` now treats only explicitly marked interactive overlays as blockers for WebPreview mouse passthrough.
+- `crates/gpui_windows/src/events.rs` now checks the native WebView focus registry before querying the GPUI text input handler, keeping normal editor key/char/IME paths cheap unless a WebView is actually focused.
+- `crates/title_bar/src/title_bar.rs` now keeps hidden-feature actions in the More menu instead of rendering a long row of icon buttons on every titlebar repaint.
+- `crates/workspace/src/pane.rs` now only asks Browser items for custom tab-bar controls, avoiding a mutable active-item update during normal editor tab-bar renders.
+
+FIXED:
+- Removed the remaining default setting that could make the pointer appear to disappear during code typing.
+- Fixed the path where a stale blink-manager `visible=false` state could hide the caret even though local settings had cursor blinking disabled.
+- Fixed a WebPreview passthrough fragility where ordinary pane/container hitboxes could still block hover, click, right-click, and wheel even when they were not overlay controls.
+- Removed an unnecessary editor-input hot-path query that ran on normal code typing even when no native WebView owned keyboard focus.
+- Reduced custom titlebar work during normal editor typing without removing the hidden-feature commands.
+- Removed an editor hot-path cost where every code-editor redraw still called the WebPreview custom-tab-control hook on the active editor item.
+
+NOTES:
+- Ran `just run` after these fixes. The tool timed out because the Zed GUI remained open.
+- Ran `just run` again after the WebPreview passthrough/titlebar-cost fixes. Zed launched and later exited; no Rust compile errors were reported through the run result.
+- The current log shows the normal AMD AGS driver-info lookup warning and no new edit-prediction rate-limit errors after this launch.
+
+[2026-05-10] - WebPreview Keyboard Focus and Qwen Local Speed Fix
+
+CHANGED:
+- `crates/web_preview/src/windows_visual_webview.rs` now treats `SetFocus` as best-effort and always still calls WebView2 `MoveFocus`, avoiding a Windows null-previous-focus return from blocking browser keyboard ownership.
+- `crates/gpui_windows/src/window.rs` now adds `WS_EX_CONTROLPARENT` to normal/dialog GPUI windows, matching the WebView2 Win32 focus pattern needed around embedded controllers.
+- `assets/settings/default.json` now launches local Qwen with a 16k context, 768 output tokens, and 8 CPU threads instead of the previous 32k/default slot-heavy setup.
+- `crates/language_models/src/provider/llama_cpp.rs` now launches llama-server with one parallel slot and matching generation/batch thread counts for the local single-user AI panel.
+- `crates/language_models/src/provider/llama_cpp.rs` now includes context, thread, GPU-layer, and parallel-slot settings in the local server signature.
+
+FIXED:
+- WebPreview keyboard focus should no longer fail just because Windows reports no previous focus handle when moving focus from GPUI into WebView2.
+- Zed no longer silently reuses a same-model llama-server if it was launched with stale settings like `32768` context and `4` slots.
+- Qwen 3.5 0.8B should spend less CPU/RAM on oversized server slots and long default generations.
+
+NOTES:
+- Stopped the stale `G:\Zed\tools\llama.cpp\b9090\llama-server.exe` that was still using the old `32768` context and `4` slots.
+- Smoke-tested the tuned Qwen launch directly: `/props` reported `16384` context and `1` slot, and a tiny native `/apply-template` + `/completion` request answered `OK` in 165 ms.
+- Did not run `just run` yet; this pass used code inspection, local WebView2 docs/source research, `rustfmt`, `git diff --check`, and targeted llama.cpp smoke testing.
+
+[2026-05-11] - WebPreview Keyboard Ownership and Editor Speed Fix
+
+CHANGED:
+- `assets/settings/default.json` restores main-style cursor blinking and mouse hiding defaults, while leaving hosted edit predictions disabled for local typing speed.
+- `crates/gpui_windows/src/window.rs` now tracks WebView passthrough keyboard focus by the active WebView2 composition controller instead of inheriting a sticky per-window focus flag.
+- `crates/gpui_windows/src/platform.rs` now skips the GPUI synthetic key accelerator only when the focused native WebView currently owns keyboard input.
+- `crates/web_preview/src/windows_visual_webview.rs` now updates focus, cursor, and target cleanup through controller-specific registry helpers so stale hidden previews cannot overwrite the active target.
+- `crates/web_preview/src/web_preview_view.rs` now tracks focus on the preview body without blocking passthrough, so page clicks update GPUI focus and then move focus into WebView2.
+- `crates/web_preview/src/windows_visual_webview.rs` now emits a navigation-completed event that lets the active preview refocus the WebView2 page after navigation commits.
+
+FIXED:
+- WebPreview page inputs should receive keyboard messages again after clicking inside the native preview.
+- WebPreview page inputs should keep keyboard focus after link/search navigation instead of only recovering after reload.
+- Normal code editor typing should stay on GPUI's fast key path after switching away from WebPreview, because stale WebView focus is cleared or ignored unless it belongs to the active controller.
+- Browser overlay controls, URL input, tabs, hover, click, right-click, and wheel routing keep GPUI/WebView priority separated through the passthrough snapshot.
+
+NOTES:
+- Ran `rustfmt` on the touched Windows/WebPreview files.
+- Ran `git diff --check` on the touched files; only the repository's existing LF/CRLF checkout warnings were reported.
+- Ran `just run`; Cargo built successfully in 4m 57s and Zed launched once, with only the known close-time `zed-cli` lookup message after the app exited.
+- Ran `just run` again after the navigation refocus and cursor default follow-up; Cargo rebuilt `web_preview`, `sidebar`, and `zed` in 4m 44s and launched Zed once. The recipe returned the known post-launch `zed-cli` lookup exit code.
+- The latest runtime log did not show a new Zed-side panic during the user test; system CPU was very high during follow-up inspection, led by the external `flow`/Codex processes.

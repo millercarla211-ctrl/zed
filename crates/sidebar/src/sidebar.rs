@@ -34,8 +34,7 @@ use menu::{
     Cancel, Confirm, SelectChild, SelectFirst, SelectLast, SelectNext, SelectParent, SelectPrevious,
 };
 use project::{
-    AgentId, AgentRegistryStore, Event as ProjectEvent, Project, ProjectGroupKey,
-    WorktreeId,
+    AgentId, AgentRegistryStore, Event as ProjectEvent, Project, ProjectGroupKey, WorktreeId,
 };
 use recent_projects::sidebar_recent_projects::SidebarRecentProjects;
 use remote::{RemoteConnectionOptions, same_remote_connection_identity};
@@ -43,6 +42,7 @@ use ui::utils::platform_title_bar_height;
 
 use serde::{Deserialize, Serialize};
 use settings::Settings as _;
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::mem;
@@ -63,9 +63,8 @@ use vim_mode_setting::VimModeSetting;
 use workspace::{
     AddFolderToProject, CloseWindow, FocusWorkspaceSidebar, MultiWorkspace, MultiWorkspaceEvent,
     NextProject, NextThread, Open, OpenMode, OpenOptions, OpenVisible, PreviousProject,
-    PreviousThread, SaveIntent,
-    Sidebar as WorkspaceSidebar, SidebarSide, Toast, ToggleWorkspaceSidebar,
-    Workspace, WorkspaceId, WorkspaceScreenKind,
+    PreviousThread, SaveIntent, Sidebar as WorkspaceSidebar, SidebarSide, Toast,
+    ToggleWorkspaceSidebar, Workspace, WorkspaceId, WorkspaceScreenKind,
     notifications::NotificationId, sidebar_side_context_menu,
 };
 
@@ -103,7 +102,6 @@ gpui::actions!(
 const DEFAULT_WIDTH: Pixels = px(300.0);
 const MIN_WIDTH: Pixels = px(200.0);
 const MAX_WIDTH: Pixels = px(800.0);
-const DEFAULT_THREADS_SHOWN: usize = 5;
 const SIDEBAR_SPACE_GRID_COLUMNS: usize = 4;
 const MAX_VISIBLE_SPACE_DOTS: usize = 7;
 
@@ -638,6 +636,8 @@ pub struct Sidebar {
     active_space_id: Option<WorkspaceId>,
     next_space_number: usize,
     space_page_start: usize,
+    grid_entry_cache:
+        RefCell<HashMap<(WorkspaceScreenKind, Option<PathBuf>), Vec<SidebarGridEntry>>>,
     recent_projects_popover_handle: PopoverMenuHandle<SidebarRecentProjects>,
     project_header_menu_handles: HashMap<usize, PopoverMenuHandle<ContextMenu>>,
     project_header_menu_ix: Option<usize>,
@@ -754,6 +754,7 @@ impl Sidebar {
             active_space_id: None,
             next_space_number: default_next_space_number(),
             space_page_start: 0,
+            grid_entry_cache: RefCell::default(),
             recent_projects_popover_handle: PopoverMenuHandle::default(),
             project_header_menu_handles: HashMap::new(),
             project_header_menu_ix: None,
@@ -1083,10 +1084,6 @@ impl Sidebar {
             .collect::<Vec<_>>()
             .join(" • ")
             .into()
-    }
-
-    fn active_entry_workspace(&self) -> Option<&Entity<Workspace>> {
-        self.active_entry.as_ref().map(|entry| entry.workspace())
     }
 
     fn is_group_collapsed(&self, key: &ProjectGroupKey, cx: &App) -> bool {
@@ -1927,6 +1924,7 @@ impl Sidebar {
             return;
         }
 
+        self.grid_entry_cache.borrow_mut().clear();
         self.sync_space_state(cx);
 
         let had_notifications = self.has_notifications(cx);
@@ -2092,10 +2090,6 @@ impl Sidebar {
         // Draft thread feature was removed in upstream
         let has_new_thread_entry = false;
         let show_new_thread_button = !has_new_thread_entry && !self.has_filter_query(cx);
-        let workspace = self.multi_workspace.upgrade().and_then(|mw| {
-            mw.read(cx)
-                .workspace_for_paths(key.path_list(), key.host().as_ref(), cx)
-        });
         let drag_space_id = self.resolved_active_space_id(cx);
 
         let key_for_toggle = key.clone();
@@ -2210,38 +2204,40 @@ impl Sidebar {
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
                         cx.stop_propagation();
                     })
-                    .child({
-                        let key = key.clone();
-                        let focus_handle = self.focus_handle.clone();
+                    .when(show_new_thread_button, |this| {
+                        this.child({
+                            let key = key.clone();
+                            let focus_handle = self.focus_handle.clone();
 
-                        IconButton::new(
-                            SharedString::from(format!(
-                                "{id_prefix}project-header-new-thread-{ix}",
-                            )),
-                            IconName::Plus,
-                        )
-                        .icon_size(IconSize::Small)
-                        .when(has_active_draft, |this| this.icon_color(Color::Accent))
-                        .when(!has_active_draft, |this| this.visible_on_hover(&group_name))
-                        .tooltip(move |_, cx| {
-                            Tooltip::for_action_in(
-                                "Start New Agent Thread",
-                                &NewThread,
-                                &focus_handle,
-                                cx,
+                            IconButton::new(
+                                SharedString::from(format!(
+                                    "{id_prefix}project-header-new-thread-{ix}",
+                                )),
+                                IconName::Plus,
                             )
+                            .icon_size(IconSize::Small)
+                            .when(has_active_draft, |this| this.icon_color(Color::Accent))
+                            .when(!has_active_draft, |this| this.visible_on_hover(&group_name))
+                            .tooltip(move |_, cx| {
+                                Tooltip::for_action_in(
+                                    "Start New Agent Thread",
+                                    &NewThread,
+                                    &focus_handle,
+                                    cx,
+                                )
+                            })
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| {
+                                    this.set_group_expanded(&key, true, cx);
+                                    this.selection = None;
+                                    if let Some(workspace) = this.workspace_for_group(&key, cx) {
+                                        this.create_new_entry(&workspace, window, cx);
+                                    } else {
+                                        this.open_workspace_and_create_entry(&key, window, cx);
+                                    }
+                                },
+                            ))
                         })
-                        .on_click(cx.listener(
-                            move |this, _, window, cx| {
-                                this.set_group_expanded(&key, true, cx);
-                                this.selection = None;
-                                if let Some(workspace) = this.workspace_for_group(&key, cx) {
-                                    this.create_new_entry(&workspace, window, cx);
-                                } else {
-                                    this.open_workspace_and_create_entry(&key, window, cx);
-                                }
-                            },
-                        ))
                     })
                     .child(self.render_project_header_ellipsis_menu(
                         ix,
@@ -2261,33 +2257,46 @@ impl Sidebar {
                     this.cursor_pointer()
                         .when(!is_active, |this| this.hover(|s| s.bg(hover_solid)))
                         .tooltip(Tooltip::text("Open Workspace"))
-                        .on_click(cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
-                            if event.modifiers().secondary() {
-                                this.activate_or_open_workspace_for_group(&key_for_focus, window, cx);
-                            } else if !is_collapsed {
-                                this.toggle_collapse(&key_for_toggle, window, cx);
-                            } else if let Some(workspace) = this.multi_workspace.upgrade().and_then(|mw| {
-                                mw.read(cx).workspace_for_paths(
-                                    key.path_list(),
-                                    key.host().as_ref(),
-                                    cx,
-                                )
-                            }) {
-                                // Activate workspace without setting active_entry (no specific thread)
-                                if let Some(multi_workspace) = this.multi_workspace.upgrade() {
-                                    multi_workspace.update(cx, |multi_workspace, cx| {
-                                        multi_workspace.activate(workspace.clone(), None, window, cx);
-                                    });
+                        .on_click(
+                            cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
+                                if event.modifiers().secondary() {
+                                    this.activate_or_open_workspace_for_group(
+                                        &key_for_focus,
+                                        window,
+                                        cx,
+                                    );
+                                } else if !is_collapsed {
+                                    this.toggle_collapse(&key_for_toggle, window, cx);
+                                } else if let Some(workspace) =
+                                    this.multi_workspace.upgrade().and_then(|mw| {
+                                        mw.read(cx).workspace_for_paths(
+                                            key.path_list(),
+                                            key.host().as_ref(),
+                                            cx,
+                                        )
+                                    })
+                                {
+                                    // Activate workspace without setting active_entry (no specific thread)
+                                    if let Some(multi_workspace) = this.multi_workspace.upgrade() {
+                                        multi_workspace.update(cx, |multi_workspace, cx| {
+                                            multi_workspace.activate(
+                                                workspace.clone(),
+                                                None,
+                                                window,
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                    if AgentPanel::is_visible(&workspace, cx) {
+                                        workspace.update(cx, |workspace, cx| {
+                                            workspace.focus_panel::<AgentPanel>(window, cx);
+                                        });
+                                    }
+                                } else {
+                                    this.open_workspace_for_group(&key, window, cx);
                                 }
-                                if AgentPanel::is_visible(&workspace, cx) {
-                                    workspace.update(cx, |workspace, cx| {
-                                        workspace.focus_panel::<AgentPanel>(window, cx);
-                                    });
-                                }
-                            } else {
-                                this.open_workspace_for_group(&key, window, cx);
-                            }
-                        }))
+                            }),
+                        )
                 }
             })
             .when_some(
@@ -5050,12 +5059,6 @@ impl Sidebar {
         self.active_entry = None;
     }
 
-    fn active_project_group_key(&self, cx: &App) -> Option<ProjectGroupKey> {
-        let multi_workspace = self.multi_workspace.upgrade()?;
-        let multi_workspace = multi_workspace.read(cx);
-        Some(multi_workspace.project_group_key_for_workspace(multi_workspace.workspace(), cx))
-    }
-
     fn cycle_project_impl(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
         let spaces = self.space_entries(cx);
         if spaces.is_empty() {
@@ -5098,7 +5101,7 @@ impl Sidebar {
             mw.read(cx)
                 .workspace_for_paths(key.path_list(), key.host().as_ref(), cx)
         }) {
-            self.multi_workspace.update(cx, |multi_workspace, cx| {
+            let _ = self.multi_workspace.update(cx, |multi_workspace, cx| {
                 multi_workspace.activate(workspace, None, window, cx);
                 multi_workspace.retain_active_workspace(cx);
             });
@@ -5325,20 +5328,15 @@ impl Sidebar {
                     ))
                     .when(show_import_button, |this| {
                         this.child(
-                            IconButton::new(
-                                "sidebar-toolbar-thread-import",
-                                IconName::Download,
-                            )
-                            .shape(IconButtonShape::Square)
-                            .style(ButtonStyle::Subtle)
-                            .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::text("Import ACP Threads"))
-                            .on_click(cx.listener(
-                                |this, _, window, cx| {
+                            IconButton::new("sidebar-toolbar-thread-import", IconName::Download)
+                                .shape(IconButtonShape::Square)
+                                .style(ButtonStyle::Subtle)
+                                .icon_size(IconSize::Small)
+                                .tooltip(Tooltip::text("Import ACP Threads"))
+                                .on_click(cx.listener(|this, _, window, cx| {
                                     this.show_archive(window, cx);
                                     this.show_thread_import_modal(window, cx);
-                                },
-                            )),
+                                })),
                         )
                     })
                     .child(
@@ -5678,14 +5676,34 @@ impl Sidebar {
     }
 
     fn grid_entries(&self, cx: &App) -> Vec<SidebarGridEntry> {
-        match self.active_screen_kind(cx) {
+        let kind = self.active_screen_kind(cx);
+        let root_path = match kind {
+            WorkspaceScreenKind::Browser => None,
+            WorkspaceScreenKind::Terminal => self
+                .project_root_path(cx)
+                .or_else(|| std::env::current_dir().ok()),
+            WorkspaceScreenKind::Editor
+            | WorkspaceScreenKind::LiquidGlass
+            | WorkspaceScreenKind::Other => self.project_root_path(cx),
+        };
+        let cache_key = (kind, root_path);
+        if let Some(entries) = self.grid_entry_cache.borrow().get(&cache_key).cloned() {
+            return entries;
+        }
+
+        let entries = match kind {
             WorkspaceScreenKind::Editor | WorkspaceScreenKind::Other => {
                 self.editor_grid_entries(cx)
             }
             WorkspaceScreenKind::Browser => self.browser_grid_entries(),
             WorkspaceScreenKind::Terminal => self.terminal_grid_entries(cx),
             WorkspaceScreenKind::LiquidGlass => self.editor_grid_entries(cx),
-        }
+        };
+
+        self.grid_entry_cache
+            .borrow_mut()
+            .insert(cache_key, entries.clone());
+        entries
     }
 
     fn open_browser_grid_url(
@@ -6629,12 +6647,12 @@ impl WorkspaceSidebar for Sidebar {
         self.cycle_thread_impl(forward, window, cx);
     }
 
-    fn serialized_state(&self, cx: &App) -> Option<String> {
+    fn serialized_state(&self, _cx: &App) -> Option<String> {
         // Get collapsed/expanded groups from MultiWorkspace
-        let (collapsed_groups, expanded_groups) = self.multi_workspace
+        let (collapsed_groups, expanded_groups) = self
+            .multi_workspace
             .upgrade()
-            .map(|mw| {
-                let mw = mw.read(cx);
+            .map(|_| {
                 // For now, return empty vecs as the state is managed by MultiWorkspace
                 // TODO: Properly serialize MultiWorkspace state
                 (Vec::new(), Vec::new())
@@ -6683,7 +6701,7 @@ impl WorkspaceSidebar for Sidebar {
             }
             // collapsed_groups and expanded_groups are now managed by MultiWorkspace
             // TODO: Restore them to MultiWorkspace if needed
-            
+
             self.space_labels = serialized
                 .space_labels
                 .into_iter()
@@ -6799,7 +6817,7 @@ impl Render for Sidebar {
                                         .tracked_scroll_handle(&self.list_state),
                                     window,
                                     cx,
-                                )
+                                ),
                         )
                     }
                 }),

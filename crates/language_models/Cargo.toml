@@ -13,6 +13,8 @@ path = "src/language_models.rs"
 
 [dependencies]
 ai_onboarding.workspace = true
+async-fs.workspace = true
+async-io.workspace = true
 async-lock.workspace = true
 anthropic = { workspace = true, features = ["schemars"] }
 anyhow.workspace = true
@@ -57,6 +59,7 @@ serde.workspace = true
 serde_json.workspace = true
 settings.workspace = true
 strum.workspace = true
+sysinfo.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
 ui.workspace = true
 ui_input.workspace = true

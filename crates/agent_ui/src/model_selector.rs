@@ -119,6 +119,7 @@ impl ModelPickerDelegate {
                 }
             });
         let favorites = agent_server.favorite_model_ids(cx);
+        let selected_model = selector.selected_model_hint(cx);
 
         Self {
             selector,
@@ -126,7 +127,7 @@ impl ModelPickerDelegate {
             fs,
             filtered_entries: Vec::new(),
             models: None,
-            selected_model: None,
+            selected_model,
             selected_index: 0,
             selected_description: None,
             favorites,

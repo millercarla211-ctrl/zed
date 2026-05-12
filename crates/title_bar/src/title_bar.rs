@@ -25,7 +25,7 @@ use client::{Client, UserStore, zed_urls};
 use cloud_api_types::Plan;
 
 use gpui::{
-    Action, Animation, AnimationExt, Anchor, AnyElement, App, Context, Element, Entity, Focusable,
+    Action, Anchor, Animation, AnimationExt, AnyElement, App, Context, Element, Entity, Focusable,
     InteractiveElement, IntoElement, MouseButton, ParentElement, Render,
     StatefulInteractiveElement, Styled, Subscription, TaskExt, WeakEntity, Window, actions, div,
     pulsating_between,
@@ -475,18 +475,28 @@ impl TitleBar {
                 .map(IntoElement::into_any_element)
         });
         let active_screen_kind = self.active_screen_kind(cx);
-        let active_pane_entries = self.collect_active_pane_screen_entries(window, cx);
-        let extra_entries = active_pane_entries
-            .into_iter()
-            .filter(|entry| {
-                !matches!(
-                    entry.kind,
-                    WorkspaceScreenKind::Editor
-                        | WorkspaceScreenKind::Browser
-                        | WorkspaceScreenKind::Terminal
-                )
-            })
-            .collect::<Vec<_>>();
+        let should_show_extra_entries = !matches!(
+            active_screen_kind,
+            WorkspaceScreenKind::Editor
+                | WorkspaceScreenKind::Browser
+                | WorkspaceScreenKind::Terminal
+        );
+        let extra_entries = if should_show_extra_entries {
+            self.collect_active_pane_screen_entries(cx)
+                .into_iter()
+                .filter(|entry| {
+                    !matches!(
+                        entry.kind,
+                        WorkspaceScreenKind::Editor
+                            | WorkspaceScreenKind::Browser
+                            | WorkspaceScreenKind::Terminal
+                    )
+                })
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+        let has_screen_entries = self.workspace.upgrade().is_some();
 
         let has_project_segment = project_segment.is_some() || branch_segment.is_some();
         let has_left_segment = navigation_segment.is_some() || has_project_segment;
@@ -545,8 +555,8 @@ impl TitleBar {
                     .items_center()
                     .gap_0p5()
                     .child(self.render_screen_dock_divider(cx))
-                    .child(self.render_screen_dock_add_menu(cx))
-                    .child(self.render_screen_dock_list_menu(window, cx)),
+                    .child(self.render_screen_dock_add_menu(active_screen_kind, cx))
+                    .child(self.render_screen_dock_list_menu(has_screen_entries, cx)),
             );
 
         div()
@@ -715,8 +725,11 @@ impl TitleBar {
             .into_any_element()
     }
 
-    fn render_screen_dock_add_menu(&self, cx: &mut Context<Self>) -> AnyElement {
-        let active_screen_kind = self.active_screen_kind(cx);
+    fn render_screen_dock_add_menu(
+        &self,
+        active_screen_kind: WorkspaceScreenKind,
+        _cx: &mut Context<Self>,
+    ) -> AnyElement {
         IconButton::new("screen-dock-add-trigger", IconName::Plus)
             .size(ButtonSize::Default)
             .icon_size(IconSize::Medium)
@@ -731,12 +744,10 @@ impl TitleBar {
 
     fn render_screen_dock_list_menu(
         &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
+        has_entries: bool,
+        _cx: &mut Context<Self>,
     ) -> AnyElement {
         let workspace_handle = self.workspace.clone();
-        let initial_entries = self.collect_active_pane_screen_entries(window, cx);
-        let has_entries = !initial_entries.is_empty();
 
         PopoverMenu::new("screen-dock-list-menu")
             .trigger_with_tooltip(
@@ -804,11 +815,7 @@ impl TitleBar {
             .into_any_element()
     }
 
-    fn collect_active_pane_screen_entries(
-        &self,
-        _window: &Window,
-        cx: &App,
-    ) -> Vec<ActivePaneScreenEntry> {
+    fn collect_active_pane_screen_entries(&self, cx: &App) -> Vec<ActivePaneScreenEntry> {
         let Some(workspace) = self.workspace.upgrade() else {
             return Vec::new();
         };
@@ -828,32 +835,42 @@ impl TitleBar {
         let screen_host_pane = workspace.read(cx).screen_host_pane();
         for item in screen_host_pane.read(cx).items() {
             let kind = item.screen_kind(cx);
-            let title = item.tab_content_text(0, cx);
-            let title = if title.is_empty() {
-                SharedString::from(Self::screen_kind_label(kind))
-            } else {
-                title
-            };
-
-            let entry = ActivePaneScreenEntry {
-                selected: Some(item.item_id()) == active_item_id,
-                subtitle: item.tab_tooltip_text(cx),
-                icon: Self::screen_kind_icon(kind),
-                kind,
-                title,
-                item: item.boxed_clone(),
-            };
-
+            let selected = Some(item.item_id()) == active_item_id;
             if let Some(existing_ix) = entries.iter().position(|existing| existing.kind == kind) {
-                if entry.selected {
-                    entries[existing_ix] = entry;
+                if !selected {
+                    continue;
                 }
+
+                entries[existing_ix] = Self::screen_entry_from_item(kind, selected, &**item, cx);
             } else {
-                entries.push(entry);
+                entries.push(Self::screen_entry_from_item(kind, selected, &**item, cx));
             }
         }
 
         entries
+    }
+
+    fn screen_entry_from_item(
+        kind: WorkspaceScreenKind,
+        selected: bool,
+        item: &dyn ItemHandle,
+        cx: &App,
+    ) -> ActivePaneScreenEntry {
+        let title = item.tab_content_text(0, cx);
+        let title = if title.is_empty() {
+            SharedString::from(Self::screen_kind_label(kind))
+        } else {
+            title
+        };
+
+        ActivePaneScreenEntry {
+            selected,
+            subtitle: item.tab_tooltip_text(cx),
+            icon: Self::screen_kind_icon(kind),
+            kind,
+            title,
+            item: item.boxed_clone(),
+        }
     }
 
     fn active_screen_kind(&self, cx: &App) -> WorkspaceScreenKind {
@@ -911,83 +928,10 @@ impl TitleBar {
     }
 
     fn render_hidden_feature_buttons(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        vec![
-            self.render_title_action_button(
-                "titlebar-settings",
-                IconName::Settings,
-                "Open Settings",
-                zed_actions::OpenSettings.boxed_clone(),
-            ),
-            self.render_title_action_button(
-                "titlebar-keymap",
-                IconName::Keyboard,
-                "Open Keymap",
-                zed_actions::OpenKeymap.boxed_clone(),
-            ),
-            self.render_title_action_button(
-                "titlebar-extensions",
-                IconName::Blocks,
-                "Manage Extensions",
-                zed_actions::Extensions::default().boxed_clone(),
-            ),
-            self.render_title_action_button(
-                "titlebar-rules-library",
-                IconName::Book,
-                "Open Rules Library",
-                zed_actions::assistant::OpenRulesLibrary::default().boxed_clone(),
-            ),
-            self.render_title_action_button(
-                "titlebar-licenses",
-                IconName::Library,
-                "Open Dependency Licenses",
-                zed_actions::OpenLicenses.boxed_clone(),
-            ),
-            self.render_title_action_button(
-                "titlebar-activity-log",
-                IconName::Bell,
-                "Open Activity Log",
-                OpenLog.boxed_clone(),
-            ),
-            self.render_title_action_button(
-                "titlebar-docs",
-                IconName::Reader,
-                "Open Documentation",
-                zed_actions::OpenDocs.boxed_clone(),
-            ),
-            self.render_title_action_button(
-                "titlebar-file-finder",
-                IconName::File,
-                "Open File Finder",
-                ToggleFileFinder::default().boxed_clone(),
-            ),
-            self.render_title_action_button(
-                "titlebar-default-keymap",
-                IconName::BookCopy,
-                "Open Default Keymap",
-                zed_actions::OpenDefaultKeymap.boxed_clone(),
-            ),
-            self.render_title_action_button(
-                "titlebar-project-symbols",
-                IconName::Hash,
-                "Search Project Symbols",
-                ToggleProjectSymbols.boxed_clone(),
-            ),
-            self.render_title_action_button(
-                "titlebar-telemetry-log",
-                IconName::ToolDiagnostics,
-                "Open Telemetry Log",
-                zed_actions::OpenTelemetryLog.boxed_clone(),
-            ),
-            self.render_title_action_button(
-                "titlebar-profiler",
-                IconName::Flame,
-                "Open Performance Profiler",
-                zed_actions::OpenPerformanceProfiler.boxed_clone(),
-            ),
-            self.render_hidden_feature_menu(cx),
-        ]
+        vec![self.render_hidden_feature_menu(cx)]
     }
 
+    #[allow(dead_code)]
     fn render_title_action_button(
         &self,
         id: &'static str,
@@ -1018,6 +962,18 @@ impl TitleBar {
             .menu(move |window, cx| {
                 Some(ContextMenu::build(window, cx, move |menu, _, _| {
                     let menu = menu
+                        .action("Settings", zed_actions::OpenSettings.boxed_clone())
+                        .action("Keymap", zed_actions::OpenKeymap.boxed_clone())
+                        .action(
+                            "Extensions",
+                            zed_actions::Extensions::default().boxed_clone(),
+                        )
+                        .action("File Finder", ToggleFileFinder::default().boxed_clone())
+                        .action("Project Symbols", ToggleProjectSymbols.boxed_clone())
+                        .action(
+                            "Default Keymap",
+                            zed_actions::OpenDefaultKeymap.boxed_clone(),
+                        )
                         .action("Activity Log", OpenLog.boxed_clone())
                         .action(
                             "Rules Library",
@@ -1033,6 +989,11 @@ impl TitleBar {
                         .action(
                             "Dependency Licenses",
                             zed_actions::OpenLicenses.boxed_clone(),
+                        )
+                        .action("Telemetry Log", zed_actions::OpenTelemetryLog.boxed_clone())
+                        .action(
+                            "Performance Profiler",
+                            zed_actions::OpenPerformanceProfiler.boxed_clone(),
                         )
                         .action(
                             "Account Settings",

@@ -14,6 +14,7 @@ pub struct AllLanguageModelSettingsContent {
     pub bedrock: Option<AmazonBedrockSettingsContent>,
     pub deepseek: Option<DeepseekSettingsContent>,
     pub google: Option<GoogleSettingsContent>,
+    pub llama_cpp: Option<LlamaCppSettingsContent>,
     pub lmstudio: Option<LmStudioSettingsContent>,
     pub mistral: Option<MistralSettingsContent>,
     pub ollama: Option<OllamaSettingsContent>,
@@ -199,6 +200,43 @@ pub struct LmStudioAvailableModel {
     pub display_name: Option<String>,
     pub max_tokens: u64,
     pub supports_tool_calls: bool,
+    pub supports_images: bool,
+}
+
+#[with_fallible_options]
+#[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema, MergeFrom)]
+pub struct LlamaCppSettingsContent {
+    pub api_url: Option<String>,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub server_path: Option<String>,
+    pub models_dir: Option<String>,
+    pub cache_dir: Option<String>,
+    pub tools_dir: Option<String>,
+    pub auto_start: Option<bool>,
+    pub auto_download_models: Option<bool>,
+    pub auto_install_server: Option<bool>,
+    pub auto_discover_local_models: Option<bool>,
+    pub context_window: Option<u64>,
+    pub threads: Option<u64>,
+    pub gpu_layers: Option<i64>,
+    pub normal_model: Option<LlamaCppAvailableModel>,
+    pub low_spec_model: Option<LlamaCppAvailableModel>,
+    pub available_models: Option<Vec<LlamaCppAvailableModel>>,
+}
+
+#[with_fallible_options]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+pub struct LlamaCppAvailableModel {
+    pub name: String,
+    pub display_name: Option<String>,
+    pub max_tokens: u64,
+    pub max_output_tokens: Option<u64>,
+    pub hf_repo: Option<String>,
+    pub hf_quant: Option<String>,
+    pub hf_file: Option<String>,
+    pub local_path: Option<String>,
+    pub supports_tools: bool,
     pub supports_images: bool,
 }
 

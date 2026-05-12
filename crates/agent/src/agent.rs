@@ -310,10 +310,7 @@ impl NativeAgent {
         let available_count = registry.available_models(cx).count();
         log::debug!("Total available models: {}", available_count);
 
-        let default_model = registry.default_model().and_then(|default_model| {
-            self.models
-                .model_from_id(&LanguageModels::model_id(&default_model.model))
-        });
+        let default_model = registry.default_model().map(|default_model| default_model.model);
         let thread = cx.new(|cx| {
             Thread::new(
                 project,
@@ -1481,26 +1478,23 @@ impl acp_thread::AgentModelSelector for NativeAgentModelSelector {
     }
 
     fn selected_model(&self, cx: &mut App) -> Task<Result<acp_thread::AgentModelInfo>> {
-        let Some(thread) = self
+        Task::ready(
+            self.selected_model_hint(cx)
+                .ok_or_else(|| anyhow!("Model not found")),
+        )
+    }
+
+    fn selected_model_hint(&self, cx: &App) -> Option<acp_thread::AgentModelInfo> {
+        let thread = self
             .connection
             .0
             .read(cx)
             .sessions
             .get(&self.session_id)
-            .map(|session| session.thread.clone())
-        else {
-            return Task::ready(Err(anyhow!("Session not found")));
-        };
-        let Some(model) = thread.read(cx).model() else {
-            return Task::ready(Err(anyhow!("Model not found")));
-        };
-        let Some(provider) = LanguageModelRegistry::read_global(cx).provider(&model.provider_id())
-        else {
-            return Task::ready(Err(anyhow!("Provider not found")));
-        };
-        Task::ready(Ok(LanguageModels::map_language_model_to_info(
-            model, &provider,
-        )))
+            .map(|session| session.thread.clone())?;
+        let model = thread.read(cx).model()?;
+        let provider = LanguageModelRegistry::read_global(cx).provider(&model.provider_id())?;
+        Some(LanguageModels::map_language_model_to_info(model, &provider))
     }
 
     fn watch(&self, cx: &mut App) -> Option<watch::Receiver<()>> {

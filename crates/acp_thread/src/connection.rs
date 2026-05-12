@@ -404,6 +404,11 @@ pub trait AgentModelSelector: 'static {
     /// A task resolving to the selected model (always set) or an error (e.g., session not found).
     fn selected_model(&self, cx: &mut App) -> Task<Result<AgentModelInfo>>;
 
+    /// Returns a synchronous best-effort selected model for first paint.
+    fn selected_model_hint(&self, _cx: &App) -> Option<AgentModelInfo> {
+        None
+    }
+
     /// Whenever the model list is updated the receiver will be notified.
     /// Optional for agents that don't update their model list.
     fn watch(&self, _cx: &mut App) -> Option<watch::Receiver<()>> {

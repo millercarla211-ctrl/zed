@@ -10,9 +10,9 @@ default:
 run:
     @echo "Running Zed with balanced G-drive build settings..."
     @echo "Building only the zed binary (not all workspace targets)"
-    @echo "Using Cargo config: 4 jobs, G:/Zed/target, rust-lld linker, no debug info"
-    cargo run -p zed --bin zed
-    @echo "Build complete! Running Zed..."
+    @echo "Using Cargo config: 6 jobs, G:/Zed/target, rust-lld linker, no debug info"
+    cargo build -p zed --bin zed
+    @echo "Build complete! Launching Zed once..."
     ./target/debug/zed.exe
 
 # Try with Cranelift backend (requires nightly Rust)
@@ -45,11 +45,11 @@ fmt:
     @echo "Formatting workspace with rustfmt..."
     cargo fmt --all
 
-# Lint a single package with clippy using the local 4-worker profile
+# Lint a single package with clippy using the local 6-worker profile
 lint package="web_preview":
     @echo "Linting package '{{package}}' with balanced clippy settings..."
     @echo "Tip: run 'just lint zed' for the main app or 'just lint web_preview' for the preview crate"
-    cargo clippy -p {{package}} --all-targets -j 4 -- -D warnings
+    cargo clippy -p {{package}} --all-targets -j 6 -- -D warnings
 
 # Clean build artifacts
 clean:
@@ -78,7 +78,7 @@ show-memory-guide:
     @echo "  CPU: Ryzen 5 5600G, 6 cores / 12 logical processors"
     @echo "  RAM: 24 GB installed"
     @echo "  Build output: G:/Zed/target"
-    @echo "  Cargo workers: 4"
+    @echo "  Cargo workers: 6"
     @echo ""
     @echo "If builds still hit memory pressure, configure Windows virtual memory:"
     @echo "1. Open System Properties > Advanced > Performance Settings"
@@ -100,8 +100,8 @@ help:
     @echo "  just run-cranelift - Use Cranelift backend"
     @echo "  just continue      - Resume interrupted build"
     @echo "  just fmt           - Format the workspace with rustfmt"
-    @echo "  just lint          - Lint web_preview with 4 workers"
-    @echo "  just lint zed      - Lint the main app with 4 workers"
+    @echo "  just lint          - Lint web_preview with 6 workers"
+    @echo "  just lint zed      - Lint the main app with 6 workers"
     @echo ""
     @echo "SETUP:"
     @echo "  just setup-cranelift   - Install nightly Rust + Cranelift (one-time)"

@@ -345,6 +345,7 @@ fn translate_accelerator(msg: &MSG) -> Option<()> {
     if msg.message != WM_KEYDOWN && msg.message != WM_SYSKEYDOWN {
         return None;
     }
+
     let root_window = unsafe { GetAncestor(msg.hwnd, GA_ROOT) };
     if window_has_focused_webview(msg.hwnd)
         || (!root_window.is_invalid() && window_has_focused_webview(root_window))
@@ -352,6 +353,9 @@ fn translate_accelerator(msg: &MSG) -> Option<()> {
         return None;
     }
 
+    if window_from_hwnd(msg.hwnd).is_none() {
+        return None;
+    }
     let result = unsafe {
         SendMessageW(
             msg.hwnd,

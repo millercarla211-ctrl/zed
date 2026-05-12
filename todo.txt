@@ -2,9 +2,105 @@ IN PROGRESS:
 - None
 
 PENDING:
-- Clean up non-blocking warnings in sidebar and agent UI when convenient.
+- User manual feedback on WebPreview typing inside page inputs after the WebView2 focus/style fix.
+- User manual feedback on normal code-editor typing responsiveness and caret/pointer visibility after the latest Windows input hot-path fix.
+- User manual feedback on switching between Qwen 3.5 0.8B, Gemma 4 E4B, and any newly dropped GGUF files from the AI panel.
 
 COMPLETED:
+- Kept normal code editor tabs off the WebPreview browser screen-kind lookup unless the tab is actually active.
+- Reused the already-computed titlebar screen kind for the screen-dock add menu instead of querying active workspace state again.
+- Added a lightweight WebPreview browser-event pump so WebView2 navigation-completed focus repair is applied promptly instead of waiting for an unrelated render/reload.
+- Ran `just run` after the editor tab hot-path and WebPreview event-pump fixes; Rust built successfully and Zed launched once.
+- Restored main-style editor caret blinking and mouse hiding defaults while keeping hosted edit predictions disabled for local typing speed.
+- Added a WebPreview navigation-completed refocus event so page inputs keep keyboard focus after normal page navigation instead of only recovering after reload.
+- Added controller-specific WebView2 keyboard-focus ownership so stale hidden previews cannot keep normal code editor typing off GPUI's fast key path.
+- Restored WebView2 keyboard delivery only while the active native preview owns focus, and made preview body clicks update GPUI focus before moving focus into WebView2.
+- Restored passthrough snapshot gating so WebPreview page input receives hover/click/wheel/right-click while URL editor, tabs, and overlays keep GPUI priority.
+- Ran `just run` after the controller-specific WebPreview keyboard/editor-speed fix; Rust built successfully and Zed launched once.
+- Restored WebPreview keyboard focus resilience by making Windows `SetFocus` best-effort before WebView2 `MoveFocus`.
+- Added `WS_EX_CONTROLPARENT` to GPUI windows so WebView2 controller focus follows the Win32 composition-hosting pattern.
+- Retuned local Qwen defaults to 16k context, 768 output tokens, and 8 CPU threads.
+- Made llama.cpp launch with one server slot and matching generation/batch threads for smoother local single-user use.
+- Added llama.cpp server props checking so stale same-model servers with old context/slot settings are not silently reused.
+- Stopped the stale old-shape llama-server process and smoke-tested the tuned Qwen server at 16k context/1 slot with a 165 ms tiny completion.
+- Ran `just run` after the WebPreview passthrough and titlebar render-cost fixes; Zed launched and later exited, with only the known post-close/non-blocking warnings in the log.
+- Made WebPreview mouse passthrough ignore ordinary pane/container `BlockMouse` hitboxes unless they were explicitly marked as interactive overlays.
+- Reduced normal editor repaint work by collapsing the titlebar hidden-feature icon row into the existing menu while preserving the actions there.
+- Ran `just run` after the caret/input hot-path fixes; the command stayed attached to the launched GUI and timed out in the tool while Zed was open.
+- Made the Windows WebView-focus check cheap for normal editor typing by checking the native WebView registry before querying the GPUI text input handler.
+- Set the local dev default `hide_mouse` mode to `never` so the mouse pointer is not hidden during typing while we separately keep the editor caret visible.
+- Kept normal editor tab-bar rendering off the custom Browser tab-control path, avoiding a mutable active-editor update during every code-editor redraw.
+- Made editor caret painting ignore the blink-manager visible bit when cursor blinking is disabled, so a stale blink state cannot hide the caret during typing.
+- Ran `just run` after the stale-WebView-focus keyboard fix; Zed rebuilt and launched once.
+- Kept local editor cursors visible while focus is inside an editor descendant, not only when the editor root focus handle is the exact focused node.
+- Restored the GPUI accelerated key path for normal editor typing even if the WebView focus registry has stale keyboard focus.
+- Made WebView keyboard ownership yield whenever GPUI currently has a text input handler, so code editor input stays fast and caret-capable.
+- Avoided scheduling caret blink-resume timers while caret blinking is disabled, so every local cursor move does less background work.
+- Ran `just run` after restoring the upstream/main blink manager path and disabling caret blinking by default; Zed built and launched once.
+- Reverted the custom BlinkManager scheduling change back to the upstream/main code path so typing does not pay for extra cursor timer work.
+- Disabled caret blinking by default so the editor caret remains visible during active typing without custom render scheduling.
+- Disabled hosted automatic edit predictions by default for this local dev fork so every keystroke does not enqueue rate-limited AI prediction work.
+- Kept main-Zed's mouse-pointer hiding behavior for typing performance while fixing the editor text caret visibility separately.
+- Stopped the titlebar screen dock from scanning active pane tabs at all during normal Editor/Browser/Terminal renders; it now only collects extra screen entries for non-standard screens or when the list menu opens.
+- Reduced the remaining editor typing/caret lag by making the titlebar screen dock stop materializing tab title/tooltip metadata for every editor tab on every render.
+- Ran `just run` after the titlebar screen-dock optimization; the build finished and launched Zed successfully.
+- Removed the new titlebar unused-parameter warning after the successful run.
+- Ran `just run` after the sidebar import fix; the build finished and launched Zed successfully.
+- Fixed the sidebar build failure by importing `RefCell` for the screen-grid cache.
+- Deep-fixed the WebPreview keyboard path by keeping WebView2-focused key messages out of the GPUI synthetic accelerator path.
+- Reduced WebPreview focus churn by avoiding repeated `MoveFocus` calls while the native preview already owns keyboard focus.
+- Reduced normal editor typing/caret lag risk by caching sidebar screen-grid filesystem entries instead of reading/sorting the project root during render.
+- Made local llama.cpp model discovery cached on provider state so the AI panel does not rescan model folders on every render.
+- Made llama.cpp server launch context follow the selected model's `max_tokens` instead of one global context window.
+- Added fast GGUF metadata sniffing for discovered local models plus optional `.gguf.json`/`.json` sidecar overrides for names, limits, and capabilities.
+- Changed the local llama.cpp provider authentication path to avoid starting Qwen in the background before a Gemma-selected thread sends its first request.
+- Reset the local Windows user settings default agent model to Qwen 3.5 0.8B while keeping Gemma selectable.
+- Verified Gemma 4 E4B receives `/apply-template` and `/completion` requests successfully through direct llama.cpp streaming smoke testing.
+- Added model-aware llama.cpp readiness checks so selecting Gemma does not silently reuse a running Qwen server.
+- Added automatic local GGUF model discovery from the configured/G-drive model folders for AI panel model listing.
+- Verified Gemma 4 E4B Q4_K_M answers through the native llama.cpp endpoint at 32768 context.
+- Switched the built-in local llama.cpp default from Gemma 4 E4B to Qwen 3.5 0.8B Q4_0 for faster local answers.
+- Changed the local llama.cpp provider to use llama.cpp native `/apply-template` plus `/completion` endpoints instead of the OpenAI-compatible chat-completions wrapper.
+- Disabled local tool-schema advertising for now so small local models do not receive huge agent tool prompts by default.
+- Raised the default local Qwen context window to 32768 tokens.
+- Downloaded Qwen 3.5 0.8B Q4_0 to `G:\Zed\models\llama.cpp\Qwen3.5-0.8B-Q4_0.gguf`.
+- Verified the local Qwen server listens on `127.0.0.1:8080` and responds through llama.cpp native endpoints.
+- Added a first-class built-in `Llama.cpp` language model provider for the AI panel.
+- Registered the provider before remote API providers so signed-out/default setups can pick local AI immediately.
+- Added settings schema/defaults for Gemma 4 E4B and Qwen 3.5 0.8B GGUF models.
+- Added G-drive defaults for local models, Hugging Face cache, and llama.cpp tools.
+- Added automatic `llama-server` discovery from settings, G-drive tools, PATH, or latest llama.cpp GitHub release.
+- Added automatic model startup through llama.cpp `-hf` with Gemma 4 as the normal default and Qwen as the low-spec default.
+- Ran `just run`; Rust build finished successfully and Zed launched, with only the known post-close `zed-cli` lookup exit.
+- Removed the temporary `G:\Zed-forge-run` worktree folder after Windows long-path deletion needed a `\\?\` path.
+- Removed the temporary `G:\Zed-speed` worktree.
+- Pruned Git worktree metadata and verified only `G:\Zed` remains checked out.
+- Ran `just run` after the deeper fix; Rust build finished and Zed launched, but the recipe still returned the known post-close `zed-cli` lookup exit code.
+- Prevented the global Windows accelerator bridge from swallowing key messages addressed to non-GPUI WebView2 child/internal windows.
+- Focused the parent Zed HWND before returning from the URL editor into the WebView2 page.
+- Removed the hidden startup WebView warmup so normal editor sessions do not create a background WebView2 composition surface after launch.
+- Ran `just run` after the WebPreview keyboard/editor-frame fix; Zed launched successfully with no Rust warnings.
+- Routed WebView keyboard ownership from the native preview registry instead of cancelling it from stale GPUI text-input state.
+- Focused the parent HWND before moving focus into the WebView2 controller so composition-mode keyboard messages have the right Windows focus owner.
+- Skipped interactive mouse-passthrough hitbox bookkeeping on ordinary editor frames that do not paint a native preview passthrough region.
+- Made WebView2 mouse forwarding use the registered native preview bounds as the source of truth, instead of depending on generic pane hitbox passthrough.
+- Stopped ordinary block-mouse hitboxes from hiding the preview body's own passthrough region unless they are explicitly marked interactive.
+- Ran `just run` after the deterministic WebView2 forwarding fix; Zed launched successfully.
+- Avoided a mutable active-item overlay update on every editor render; only Liquid Glass asks for workspace overlays now.
+- Ran `just run` after the workspace overlay gate; Zed launched successfully.
+- Restored main-style Windows transparent background handling by removing the dev-only `WS_EX_LAYERED` toggle.
+- Added a guard so repeated background appearance updates do not reapply Windows composition on every render.
+- Skipped redundant empty mouse-passthrough snapshot writes during ordinary editor frames.
+- Ran `just run` after the Windows composition cleanup; Zed launched successfully.
+- Removed the Windows `SetWindowRgn` call that forced a native window-region redraw on every GPUI frame.
+- Avoided cloning every hitbox into the platform passthrough snapshot when no mouse-passthrough region is present.
+- Ran `just run` after the frame-time fix; Zed launched successfully.
+- Removed the dev-only direct `WM_KEYDOWN`/`WM_SYSKEYDOWN` editor handlers so normal code typing is not processed twice.
+- Kept WebView keyboard focus support by making the synthetic accelerator return unhandled when the native preview truly owns focus.
+- Ran `just run` on `dev` after the duplicate-keydown fix; Zed launched successfully.
+- Compared the fast `speed`/main worktree against `dev` and isolated the dev-only Windows keyboard accelerator shortcut.
+- Removed the stale WebView-focus shortcut from the platform accelerator path so normal editor typing can stay on GPUI's fast key path.
+- Ran `just run` on `dev`; Zed launched successfully after rebuilding the affected crates.
 - Verified `origin` points to `https://github.com/millercarla211-ctrl/zed`.
 - Verified `upstream` points to `https://github.com/zed-industries/zed.git`.
 - Created `dev` from the previous custom `main` tip.
@@ -20,6 +116,27 @@ COMPLETED:
 - Made the Windows titlebar controls fill the full topbar height.
 - Removed the duplicate screen-dock separator before the add/list actions.
 - Ran `just run` again after the topbar fixes; the editor launched successfully.
+- Fixed the local `just run` recipe so it builds once and launches Zed once.
+- Increased the local Cargo worker count from 4 to 6 for the upgraded PC.
+- Verified `just run` no longer relaunches Zed after the first close.
+- Verified a second no-change `just run` reused the Cargo cache and finished the build step in 2.53 seconds.
+- Kept active browser tabs visually separated with a bottom border.
+- Hardened Windows web preview mouse/focus routing for cursor, double-click, context-menu, and URL editor focus handoff.
+- Verified the web preview input and tab chrome patch with `just run`.
+- Restored project panel file labels so extensions stay attached to filenames.
+- Replaced slow hover metadata scans with instant worktree-backed file size/folder badges.
+- Made ACP agent model selector show the selected model from synchronous thread/settings state on first paint.
+- Hardened WebView2 focus ownership so preview clicks update GPUI focus bookkeeping and browser focus is not lost by spurious composition LostFocus events.
+- Verified the project panel, model selector, and WebView focus patch with `just run`.
+- Added instant folder hover file counts from the loaded worktree snapshot.
+- Prevented stale native WebView keyboard focus from intercepting normal text-editor input.
+- Avoided redundant WebView2 visibility and bounds COM calls when the preview did not move or resize.
+- Verified the folder-count, text-input, and WebView interaction patch with `just run`.
+- Removed the current Rust warnings from `agent_ui` and `sidebar`.
+- Kept WebView mouse passthrough active while the native preview is visible, even when WebView2 focus changes GPUI active-window bookkeeping.
+- Cached folder hover counts so the project panel does not recount folder children during unrelated editor redraws.
+- Removed web preview mount debug logs from normal `just run` output.
+- Verified the warning cleanup and interaction/lag patch with `just run`.
 
 BLOCKED:
 - None

@@ -5,10 +5,11 @@ use settings::RegisterSetting;
 
 use crate::provider::{
     anthropic::AnthropicSettings, bedrock::AmazonBedrockSettings, cloud::ZedDotDevSettings,
-    deepseek::DeepSeekSettings, google::GoogleSettings, lmstudio::LmStudioSettings,
-    mistral::MistralSettings, ollama::OllamaSettings, open_ai::OpenAiSettings,
-    open_ai_compatible::OpenAiCompatibleSettings, open_router::OpenRouterSettings,
-    opencode::OpenCodeSettings, vercel_ai_gateway::VercelAiGatewaySettings, x_ai::XAiSettings,
+    deepseek::DeepSeekSettings, google::GoogleSettings, llama_cpp::LlamaCppSettings,
+    lmstudio::LmStudioSettings, mistral::MistralSettings, ollama::OllamaSettings,
+    open_ai::OpenAiSettings, open_ai_compatible::OpenAiCompatibleSettings,
+    open_router::OpenRouterSettings, opencode::OpenCodeSettings,
+    vercel_ai_gateway::VercelAiGatewaySettings, x_ai::XAiSettings,
 };
 
 #[derive(Debug, RegisterSetting)]
@@ -17,6 +18,7 @@ pub struct AllLanguageModelSettings {
     pub bedrock: AmazonBedrockSettings,
     pub deepseek: DeepSeekSettings,
     pub google: GoogleSettings,
+    pub llama_cpp: LlamaCppSettings,
     pub lmstudio: LmStudioSettings,
     pub mistral: MistralSettings,
     pub ollama: OllamaSettings,
@@ -38,6 +40,7 @@ impl settings::Settings for AllLanguageModelSettings {
         let bedrock = language_models.bedrock.unwrap();
         let deepseek = language_models.deepseek.unwrap();
         let google = language_models.google.unwrap();
+        let llama_cpp = language_models.llama_cpp.unwrap();
         let lmstudio = language_models.lmstudio.unwrap();
         let mistral = language_models.mistral.unwrap();
         let ollama = language_models.ollama.unwrap();
@@ -69,6 +72,25 @@ impl settings::Settings for AllLanguageModelSettings {
             google: GoogleSettings {
                 api_url: google.api_url.unwrap(),
                 available_models: google.available_models.unwrap_or_default(),
+            },
+            llama_cpp: LlamaCppSettings {
+                api_url: llama_cpp.api_url.unwrap(),
+                host: llama_cpp.host.unwrap(),
+                port: llama_cpp.port.unwrap(),
+                server_path: llama_cpp.server_path,
+                models_dir: llama_cpp.models_dir,
+                cache_dir: llama_cpp.cache_dir,
+                tools_dir: llama_cpp.tools_dir,
+                auto_start: llama_cpp.auto_start.unwrap_or(true),
+                auto_download_models: llama_cpp.auto_download_models.unwrap_or(true),
+                auto_install_server: llama_cpp.auto_install_server.unwrap_or(true),
+                auto_discover_local_models: llama_cpp.auto_discover_local_models.unwrap_or(true),
+                context_window: llama_cpp.context_window.unwrap_or(8192),
+                threads: llama_cpp.threads,
+                gpu_layers: llama_cpp.gpu_layers,
+                normal_model: llama_cpp.normal_model.unwrap(),
+                low_spec_model: llama_cpp.low_spec_model.unwrap(),
+                available_models: llama_cpp.available_models.unwrap_or_default(),
             },
             lmstudio: LmStudioSettings {
                 api_url: lmstudio.api_url.unwrap(),

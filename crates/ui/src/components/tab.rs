@@ -33,6 +33,7 @@ pub enum TabCloseSide {
 pub struct Tab {
     div: Stateful<Div>,
     selected: bool,
+    selected_bottom_border: bool,
     position: TabPosition,
     close_side: TabCloseSide,
     start_slot: Option<AnyElement>,
@@ -48,6 +49,7 @@ impl Tab {
                 .id(id.clone())
                 .debug_selector(|| format!("TAB-{}", id)),
             selected: false,
+            selected_bottom_border: false,
             position: TabPosition::First,
             close_side: TabCloseSide::End,
             start_slot: None,
@@ -82,6 +84,11 @@ impl Tab {
 
     pub fn container_height(cx: &App) -> Pixels {
         DynamicSpacing::Base32.px(cx)
+    }
+
+    pub fn selected_bottom_border(mut self, selected_bottom_border: bool) -> Self {
+        self.selected_bottom_border = selected_bottom_border;
+        self
     }
 }
 
@@ -148,19 +155,36 @@ impl RenderOnce for Tab {
             .map(|this| match self.position {
                 TabPosition::First => {
                     if self.selected {
-                        this.pl_px().border_r_1().pb_px()
+                        let this = this.pl_px().border_r_1();
+                        if self.selected_bottom_border {
+                            this.border_b_1()
+                        } else {
+                            this.pb_px()
+                        }
                     } else {
                         this.pl_px().pr_px().border_b_1()
                     }
                 }
                 TabPosition::Last => {
                     if self.selected {
-                        this.border_l_1().border_r_1().pb_px()
+                        let this = this.border_l_1().border_r_1();
+                        if self.selected_bottom_border {
+                            this.border_b_1()
+                        } else {
+                            this.pb_px()
+                        }
                     } else {
                         this.pl_px().border_b_1().border_r_1()
                     }
                 }
-                TabPosition::Middle(Ordering::Equal) => this.border_l_1().border_r_1().pb_px(),
+                TabPosition::Middle(Ordering::Equal) => {
+                    let this = this.border_l_1().border_r_1();
+                    if self.selected_bottom_border {
+                        this.border_b_1()
+                    } else {
+                        this.pb_px()
+                    }
+                }
                 TabPosition::Middle(Ordering::Less) => this.border_l_1().pr_px().border_b_1(),
                 TabPosition::Middle(Ordering::Greater) => this.border_r_1().pl_px().border_b_1(),
             })

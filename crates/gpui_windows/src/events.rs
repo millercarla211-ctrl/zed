@@ -86,10 +86,16 @@ impl WindowsWindowInner {
             WM_NCMBUTTONUP => {
                 self.handle_nc_mouse_up_msg(handle, MouseButton::Middle, wparam, lparam)
             }
-            WM_LBUTTONDOWN => self.handle_mouse_down_msg(handle, MouseButton::Left, lparam),
-            WM_RBUTTONDOWN => self.handle_mouse_down_msg(handle, MouseButton::Right, lparam),
-            WM_MBUTTONDOWN => self.handle_mouse_down_msg(handle, MouseButton::Middle, lparam),
-            WM_XBUTTONDOWN => {
+            WM_LBUTTONDOWN | WM_LBUTTONDBLCLK => {
+                self.handle_mouse_down_msg(handle, MouseButton::Left, lparam)
+            }
+            WM_RBUTTONDOWN | WM_RBUTTONDBLCLK => {
+                self.handle_mouse_down_msg(handle, MouseButton::Right, lparam)
+            }
+            WM_MBUTTONDOWN | WM_MBUTTONDBLCLK => {
+                self.handle_mouse_down_msg(handle, MouseButton::Middle, lparam)
+            }
+            WM_XBUTTONDOWN | WM_XBUTTONDBLCLK => {
                 self.handle_xbutton_msg(handle, wparam, lparam, Self::handle_mouse_down_msg)
             }
             WM_LBUTTONUP => self.handle_mouse_up_msg(handle, MouseButton::Left, lparam),
@@ -98,13 +104,12 @@ impl WindowsWindowInner {
             WM_XBUTTONUP => {
                 self.handle_xbutton_msg(handle, wparam, lparam, Self::handle_mouse_up_msg)
             }
+            WM_CONTEXTMENU => self.handle_context_menu_msg(handle, lparam),
             WM_MOUSEWHEEL => self.handle_mouse_wheel_msg(handle, wparam, lparam),
             WM_MOUSEHWHEEL => self.handle_mouse_horizontal_wheel_msg(handle, wparam, lparam),
-            WM_SYSKEYDOWN => self.handle_keydown_msg(wparam, lparam),
             WM_SYSKEYUP => self.handle_syskeyup_msg(wparam, lparam),
-            WM_KEYDOWN => self.handle_keydown_msg(wparam, lparam),
             WM_KEYUP => self.handle_keyup_msg(wparam, lparam),
-            WM_GPUI_KEYDOWN => self.handle_keydown_msg(wparam, lparam),
+            WM_GPUI_KEYDOWN => self.handle_accelerated_keydown_msg(wparam, lparam),
             WM_CHAR => self.handle_char_msg(wparam),
             WM_IME_STARTCOMPOSITION => self.handle_ime_position(handle),
             WM_IME_COMPOSITION => self.handle_ime_composition(handle, lparam),
@@ -406,6 +411,14 @@ impl WindowsWindowInner {
 
     // It's a known bug that you can't trigger `ctrl-shift-0`. See:
     // https://superuser.com/questions/1455762/ctrl-shift-number-key-combination-has-stopped-working-for-a-few-numbers
+    fn handle_accelerated_keydown_msg(&self, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
+        if self.webview_keyboard_focused() {
+            return Some(1);
+        }
+
+        self.handle_keydown_msg(wparam, lparam)
+    }
+
     fn handle_keydown_msg(&self, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
         if self.webview_keyboard_focused() {
             return None;
@@ -496,8 +509,9 @@ impl WindowsWindowInner {
             webview_passthrough_target_for_point(&self.state, handle, client_point)
             && let Some(event_kind) = webview_mouse_button_down_kind(button)
         {
+            let _ = self.dispatch_gpui_mouse_down(button, x.into(), y.into(), click_count);
             self.state.webview_input_captured.set(true);
-            update_webview_passthrough_focus(handle, true);
+            focus_webview_controller(handle, &target);
             unsafe {
                 let _ = SetCapture(handle);
             }
@@ -521,6 +535,16 @@ impl WindowsWindowInner {
 
         unsafe { SetCapture(handle) };
 
+        self.dispatch_gpui_mouse_down(button, x.into(), y.into(), click_count)
+    }
+
+    fn dispatch_gpui_mouse_down(
+        &self,
+        button: MouseButton,
+        x: i32,
+        y: i32,
+        click_count: usize,
+    ) -> Option<isize> {
         let Some(mut func) = self.state.callbacks.input.take() else {
             return Some(1);
         };
@@ -577,22 +601,25 @@ impl WindowsWindowInner {
             if button == MouseButton::Left {
                 focus_webview_controller(handle, &target);
             }
+            let _ = self.dispatch_gpui_mouse_up(button, client_point.x, client_point.y);
             return Some(0);
         }
 
         unsafe { ReleaseCapture().log_err() };
 
+        self.dispatch_gpui_mouse_up(button, client_point.x, client_point.y)
+    }
+
+    fn dispatch_gpui_mouse_up(&self, button: MouseButton, x: i32, y: i32) -> Option<isize> {
         let Some(mut func) = self.state.callbacks.input.take() else {
             return Some(1);
         };
-        let x = lparam.signed_loword() as f32;
-        let y = lparam.signed_hiword() as f32;
         let click_count = self.state.click_state.current_count.get();
         let scale_factor = self.state.scale_factor.get();
 
         let input = PlatformInput::MouseUp(MouseUpEvent {
             button,
-            position: logical_point(x, y, scale_factor),
+            position: logical_point(x as f32, y as f32, scale_factor),
             modifiers: current_modifiers(),
             click_count,
         });
@@ -615,6 +642,32 @@ impl WindowsWindowInner {
             _ => return Some(1),
         };
         handler(self, handle, MouseButton::Navigate(nav_dir), lparam)
+    }
+
+    fn handle_context_menu_msg(&self, handle: HWND, lparam: LPARAM) -> Option<isize> {
+        let client_point = if lparam.0 == -1 {
+            let mut cursor_point = POINT::default();
+            unsafe {
+                GetCursorPos(&mut cursor_point).log_err();
+                ScreenToClient(handle, &mut cursor_point).ok().log_err();
+            }
+            cursor_point
+        } else {
+            let mut point = POINT {
+                x: lparam.signed_loword().into(),
+                y: lparam.signed_hiword().into(),
+            };
+            unsafe {
+                ScreenToClient(handle, &mut point).ok().log_err();
+            }
+            point
+        };
+
+        if webview_passthrough_target_for_point(&self.state, handle, client_point).is_some() {
+            Some(0)
+        } else {
+            None
+        }
     }
 
     fn handle_mouse_wheel_msg(
@@ -1264,22 +1317,6 @@ impl WindowsWindowInner {
         {
             return None;
         }
-        let mut cursor_point = POINT::default();
-        unsafe {
-            if GetCursorPos(&mut cursor_point).is_ok() {
-                ScreenToClient(handle, &mut cursor_point).ok().log_err();
-                if let Some((target, relative_point)) =
-                    webview_passthrough_target_for_point(&self.state, handle, cursor_point)
-                {
-                    send_webview_mouse_move(
-                        &self.state.webview_hover_active,
-                        &target,
-                        relative_point,
-                        webview_mouse_virtual_keys(current_modifiers(), None),
-                    );
-                }
-            }
-        }
         if let Some(cursor) = self.webview_cursor(handle) {
             unsafe {
                 SetCursor(Some(cursor));
@@ -1550,7 +1587,6 @@ fn webview_passthrough_target_for_point(
     } else {
         lookup_webview_passthrough_target(handle, client_point)?
     };
-
     Some((
         target.clone(),
         POINT {
@@ -1618,12 +1654,13 @@ fn notify_webview_parent_window_position_changed(handle: HWND) {
 
 fn focus_webview_controller(handle: HWND, target: &WebviewPassthroughTarget) {
     unsafe {
+        let _ = SetFocus(Some(handle));
         if let Ok(controller) = target.controller.cast::<ICoreWebView2Controller>()
             && controller
                 .MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)
                 .is_ok()
         {
-            update_webview_passthrough_focus(handle, true);
+            update_webview_passthrough_focus_for_controller(handle, &target.controller, true);
         }
     }
 }

@@ -40,6 +40,7 @@ use gpui::*;
 #[derive(Clone)]
 pub struct WebviewPassthroughTarget {
     pub controller: ICoreWebView2CompositionController,
+    pub controller_key: usize,
     pub bounds: RECT,
     pub cursor: Option<HCURSOR>,
     pub keyboard_focused: bool,
@@ -48,6 +49,10 @@ pub struct WebviewPassthroughTarget {
 thread_local! {
     static WEBVIEW_PASSTHROUGH_REGISTRY: RefCell<HashMap<isize, WebviewPassthroughTarget>> =
         RefCell::new(HashMap::new());
+}
+
+fn webview_controller_key(controller: &ICoreWebView2CompositionController) -> usize {
+    controller.as_raw().addr()
 }
 
 pub fn register_webview_passthrough_target(
@@ -61,14 +66,23 @@ pub fn register_webview_passthrough_target(
 
     WEBVIEW_PASSTHROUGH_REGISTRY.with(|registry| {
         let mut registry = registry.borrow_mut();
+        let controller_key = webview_controller_key(&controller);
         let existing = registry.get(&(main_window.0 as isize)).cloned();
+        let same_controller = existing
+            .as_ref()
+            .is_some_and(|target| target.controller_key == controller_key);
         registry.insert(
             main_window.0 as isize,
             WebviewPassthroughTarget {
                 controller,
+                controller_key,
                 bounds,
-                cursor: existing.as_ref().and_then(|target| target.cursor),
-                keyboard_focused: existing.is_some_and(|target| target.keyboard_focused),
+                cursor: existing
+                    .as_ref()
+                    .and_then(|target| same_controller.then_some(target.cursor).flatten()),
+                keyboard_focused: existing
+                    .as_ref()
+                    .is_some_and(|target| same_controller && target.keyboard_focused),
             },
         );
     });
@@ -86,6 +100,25 @@ pub fn update_webview_passthrough_cursor(main_window: HWND, cursor: Option<HCURS
     });
 }
 
+pub fn update_webview_passthrough_cursor_for_controller(
+    main_window: HWND,
+    controller: &ICoreWebView2CompositionController,
+    cursor: Option<HCURSOR>,
+) {
+    if main_window.0.is_null() {
+        return;
+    }
+
+    let controller_key = webview_controller_key(controller);
+    WEBVIEW_PASSTHROUGH_REGISTRY.with(|registry| {
+        if let Some(target) = registry.borrow_mut().get_mut(&(main_window.0 as isize))
+            && target.controller_key == controller_key
+        {
+            target.cursor = cursor;
+        }
+    });
+}
+
 pub fn update_webview_passthrough_focus(main_window: HWND, keyboard_focused: bool) {
     if main_window.0.is_null() {
         return;
@@ -98,6 +131,25 @@ pub fn update_webview_passthrough_focus(main_window: HWND, keyboard_focused: boo
     });
 }
 
+pub fn update_webview_passthrough_focus_for_controller(
+    main_window: HWND,
+    controller: &ICoreWebView2CompositionController,
+    keyboard_focused: bool,
+) {
+    if main_window.0.is_null() {
+        return;
+    }
+
+    let controller_key = webview_controller_key(controller);
+    WEBVIEW_PASSTHROUGH_REGISTRY.with(|registry| {
+        if let Some(target) = registry.borrow_mut().get_mut(&(main_window.0 as isize))
+            && target.controller_key == controller_key
+        {
+            target.keyboard_focused = keyboard_focused;
+        }
+    });
+}
+
 pub fn clear_webview_passthrough_target(main_window: HWND) {
     if main_window.0.is_null() {
         return;
@@ -105,6 +157,26 @@ pub fn clear_webview_passthrough_target(main_window: HWND) {
 
     WEBVIEW_PASSTHROUGH_REGISTRY.with(|registry| {
         registry.borrow_mut().remove(&(main_window.0 as isize));
+    });
+}
+
+pub fn clear_webview_passthrough_target_for_controller(
+    main_window: HWND,
+    controller: &ICoreWebView2CompositionController,
+) {
+    if main_window.0.is_null() {
+        return;
+    }
+
+    let controller_key = webview_controller_key(controller);
+    WEBVIEW_PASSTHROUGH_REGISTRY.with(|registry| {
+        let mut registry = registry.borrow_mut();
+        if registry
+            .get(&(main_window.0 as isize))
+            .is_some_and(|target| target.controller_key == controller_key)
+        {
+            registry.remove(&(main_window.0 as isize));
+        }
     });
 }
 
@@ -607,9 +679,9 @@ impl WindowsWindow {
             }
             let dwexstyle = if params.kind == WindowKind::Dialog {
                 dwstyle |= WS_POPUP | WS_CAPTION;
-                WS_EX_DLGMODALFRAME
+                WS_EX_DLGMODALFRAME | WS_EX_CONTROLPARENT
             } else {
-                WS_EX_APPWINDOW
+                WS_EX_APPWINDOW | WS_EX_CONTROLPARENT
             };
 
             (dwexstyle, dwstyle)
@@ -975,38 +1047,15 @@ impl PlatformWindow for WindowsWindow {
     }
 
     fn set_background_appearance(&self, background_appearance: WindowBackgroundAppearance) {
-        self.state.background_appearance.set(background_appearance);
-        let hwnd = self.0.hwnd;
-        let use_layered_alpha = background_appearance == WindowBackgroundAppearance::Transparent;
-
-        unsafe {
-            let exstyle = WINDOW_EX_STYLE(get_window_long(hwnd, GWL_EXSTYLE) as u32);
-            let layered_exstyle = if use_layered_alpha {
-                exstyle | WS_EX_LAYERED
-            } else {
-                exstyle & !WS_EX_LAYERED
-            };
-            if layered_exstyle != exstyle {
-                set_window_long(hwnd, GWL_EXSTYLE, layered_exstyle.0 as isize);
-                SetWindowPos(
-                    hwnd,
-                    None,
-                    0,
-                    0,
-                    0,
-                    0,
-                    SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER,
-                )
-                .inspect_err(|error| log::error!("SetWindowPos for layered alpha failed: {error}"))
-                .ok();
-            }
-
-            if use_layered_alpha {
-                SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA)
-                    .inspect_err(|error| log::error!("SetLayeredWindowAttributes failed: {error}"))
-                    .ok();
-            }
+        if self
+            .state
+            .background_appearance
+            .replace(background_appearance)
+            == background_appearance
+        {
+            return;
         }
+        let hwnd = self.0.hwnd;
 
         // using Dwm APIs for Mica and MicaAlt backdrops.
         // others follow the set_window_composition_attribute approach
@@ -1108,10 +1157,15 @@ impl PlatformWindow for WindowsWindow {
     }
 
     fn set_mouse_passthrough_snapshot(&self, snapshot: MousePassthroughSnapshot) {
-        *self.0.state.mouse_passthrough_snapshot.borrow_mut() = snapshot;
-        unsafe {
-            SetWindowRgn(self.0.hwnd, None, true);
+        let mut current = self.0.state.mouse_passthrough_snapshot.borrow_mut();
+        if snapshot.regions.is_empty()
+            && current.regions.is_empty()
+            && snapshot.has_captured_hitbox == current.has_captured_hitbox
+        {
+            return;
         }
+
+        *current = snapshot;
     }
 
     fn on_hit_test_passthrough(&self, callback: Box<dyn FnMut(Point<Pixels>) -> bool>) {
@@ -1463,12 +1517,7 @@ impl IDropTarget_Impl for WindowsDragDropHandler_Impl {
             let drop_effect = self.requested_drop_effect(pdweffect);
             self.window
                 .drop_target_helper
-                .DragEnter(
-                    self.window.hwnd,
-                    idata_obj,
-                    &cursor_position,
-                    drop_effect,
-                )
+                .DragEnter(self.window.hwnd, idata_obj, &cursor_position, drop_effect)
                 .log_err();
 
             let client_point = self.client_point(pt);

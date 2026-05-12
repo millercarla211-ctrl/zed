@@ -46,6 +46,10 @@ impl BlinkManager {
     pub fn pause_blinking(&mut self, cx: &mut Context<Self>) {
         self.show_cursor(cx);
 
+        if !(self.blink_enabled_in_settings)(cx) {
+            return;
+        }
+
         let epoch = self.next_blink_epoch();
         let interval = Duration::from_millis(500);
         cx.spawn(async move |this, cx| {

@@ -833,9 +833,6 @@ impl MousePassthroughSnapshot {
                 }) {
                     return true;
                 }
-                if hitbox.behavior == HitboxBehavior::BlockMouse {
-                    break;
-                }
             }
         }
         false
@@ -2592,8 +2589,14 @@ impl Window {
         let previous_window_active = self.rendered_frame.window_active;
         mem::swap(&mut self.rendered_frame, &mut self.next_frame);
         self.next_frame.clear();
-        self.platform_window
-            .set_mouse_passthrough_snapshot(MousePassthroughSnapshot {
+        let mouse_passthrough_snapshot = if self.rendered_frame.mouse_passthrough_regions.is_empty()
+        {
+            MousePassthroughSnapshot {
+                has_captured_hitbox: self.captured_hitbox.is_some(),
+                ..Default::default()
+            }
+        } else {
+            MousePassthroughSnapshot {
                 hitboxes: self.rendered_frame.hitboxes.clone(),
                 regions: self
                     .rendered_frame
@@ -2606,7 +2609,10 @@ impl Window {
                     .collect(),
                 interactive_hitbox_ids: self.rendered_frame.interactive_hitbox_ids.clone(),
                 has_captured_hitbox: self.captured_hitbox.is_some(),
-            });
+            }
+        };
+        self.platform_window
+            .set_mouse_passthrough_snapshot(mouse_passthrough_snapshot);
         let current_focus_path = self.rendered_frame.focus_path();
         let current_window_active = self.rendered_frame.window_active;
 
@@ -4173,6 +4179,15 @@ impl Window {
         }
     }
 
+    /// Returns whether this frame has an active mouse-passthrough region.
+    ///
+    /// Ordinary editor frames do not paint native passthrough content, so they can skip the
+    /// per-hitbox interactive-overlay bookkeeping used by native WebView previews.
+    pub fn has_mouse_passthrough_regions(&self) -> bool {
+        self.invalidator.debug_assert_paint();
+        !self.next_frame.mouse_passthrough_regions.is_empty()
+    }
+
     /// Returns whether the platform window should yield mouse hit-testing at the given point to
     /// content rendered underneath the current window.
     pub fn should_mouse_passthrough(&self, position: Point<Pixels>) -> bool {
@@ -4208,9 +4223,6 @@ impl Window {
                     })
                 {
                     return true;
-                }
-                if hitbox.behavior == HitboxBehavior::BlockMouse {
-                    break;
                 }
             }
         }

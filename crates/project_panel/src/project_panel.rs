@@ -15,7 +15,6 @@ use editor::{
 };
 use feature_flags::{FeatureFlagAppExt, ProjectPanelUndoRedoFeatureFlag};
 use file_icons::FileIcons;
-use futures::StreamExt;
 use git;
 use git::status::GitSummary;
 use git_ui;
@@ -50,7 +49,7 @@ use settings::{
 use smallvec::SmallVec;
 use std::{
     any::TypeId,
-    cell::OnceCell,
+    cell::{OnceCell, RefCell},
     cmp,
     collections::HashSet,
     ops::Neg,
@@ -79,7 +78,7 @@ use workspace::{
     dock::{DockPosition, Panel, PanelEvent},
     notifications::{DetachAndPromptErr, NotifyResultExt, NotifyTaskExt},
 };
-use worktree::CreatedEntry;
+use worktree::{ChildEntriesOptions, CreatedEntry};
 use zed_actions::{
     project_panel::{Toggle, ToggleFocus},
     workspace::OpenWithSystem,
@@ -161,7 +160,7 @@ pub struct ProjectPanel {
     mouse_down: bool,
     hover_expand_task: Option<Task<()>>,
     previous_drag_position: Option<Point<Pixels>>,
-    entry_hover_info: HashMap<PathBuf, EntryHoverInfoState>,
+    folder_file_counts: RefCell<HashMap<(WorktreeId, ProjectEntryId), usize>>,
     sticky_items_count: usize,
     last_reported_update: Instant,
     update_visible_entries_task: UpdateVisibleEntriesTask,
@@ -270,6 +269,8 @@ impl DiagnosticCount {
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct EntryDetails {
     filename: String,
+    size: u64,
+    folder_file_count: Option<usize>,
     icon: Option<SharedString>,
     path: Arc<RelPath>,
     absolute_path: PathBuf,
@@ -290,13 +291,6 @@ struct EntryDetails {
     is_private: bool,
     worktree_id: WorktreeId,
     canonical_path: Option<Arc<Path>>,
-}
-
-#[derive(Clone, Debug)]
-enum EntryHoverInfoState {
-    Loading,
-    Ready(String),
-    Failed,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -672,7 +666,9 @@ impl ProjectPanel {
                         }
                     }
                     project::Event::WorktreeRemoved(id) => {
-                        this.entry_hover_info.clear();
+                        this.folder_file_counts
+                            .borrow_mut()
+                            .retain(|(worktree_id, _), _| *worktree_id != *id);
                         this.state.expanded_dir_ids.remove(id);
                         this.update_visible_entries(None, false, false, window, cx);
                         cx.notify();
@@ -680,7 +676,7 @@ impl ProjectPanel {
                     project::Event::WorktreeUpdatedEntries(_, _)
                     | project::Event::WorktreeAdded(_)
                     | project::Event::WorktreeOrderChanged => {
-                        this.entry_hover_info.clear();
+                        this.folder_file_counts.borrow_mut().clear();
                         this.update_visible_entries(None, false, false, window, cx);
                         cx.notify();
                     }
@@ -786,12 +782,14 @@ impl ProjectPanel {
                 let new_settings = *ProjectPanelSettings::get_global(cx);
                 if project_panel_settings != new_settings {
                     if project_panel_settings.hide_gitignore != new_settings.hide_gitignore {
+                        this.folder_file_counts.borrow_mut().clear();
                         this.update_visible_entries(None, false, false, window, cx);
                     }
                     if project_panel_settings.hide_root != new_settings.hide_root {
                         this.update_visible_entries(None, false, false, window, cx);
                     }
                     if project_panel_settings.hide_hidden != new_settings.hide_hidden {
+                        this.folder_file_counts.borrow_mut().clear();
                         this.update_visible_entries(None, false, false, window, cx);
                     }
                     if project_panel_settings.sort_mode != new_settings.sort_mode {
@@ -834,7 +832,7 @@ impl ProjectPanel {
                 mouse_down: false,
                 hover_expand_task: None,
                 previous_drag_position: None,
-                entry_hover_info: Default::default(),
+                folder_file_counts: Default::default(),
                 sticky_items_count: 0,
                 last_reported_update: Instant::now(),
                 state: State {
@@ -5279,59 +5277,40 @@ impl ProjectPanel {
         false
     }
 
-    fn request_entry_hover_info(
-        &mut self,
-        absolute_path: PathBuf,
+    fn render_entry_info_badge(
+        &self,
         kind: EntryKind,
-        cx: &mut Context<Self>,
-    ) {
-        if absolute_path.as_os_str().is_empty()
-            || self.entry_hover_info.contains_key(&absolute_path)
-        {
-            return;
-        }
-
-        self.entry_hover_info
-            .insert(absolute_path.clone(), EntryHoverInfoState::Loading);
-
-        let fs = self.fs.clone();
-        cx.spawn(async move |this, cx| {
-            let state = compute_entry_hover_info(fs, absolute_path.clone(), kind)
-                .await
-                .map(EntryHoverInfoState::Ready)
-                .unwrap_or(EntryHoverInfoState::Failed);
-
-            this.update(cx, |this, cx| {
-                this.entry_hover_info.insert(absolute_path, state);
-                cx.notify();
+        size: u64,
+        folder_file_count: Option<usize>,
+        _absolute_path: &Path,
+        cx: &App,
+    ) -> AnyElement {
+        let label = if kind.is_dir() {
+            let count = folder_file_count.unwrap_or_default();
+            SharedString::from(if count == 1 {
+                "1 file".to_string()
+            } else {
+                format!("{count} files")
             })
-            .ok();
-        })
-        .detach();
-    }
-
-    fn render_hover_info_badge(&self, absolute_path: &Path, cx: &App) -> Option<AnyElement> {
-        let label = match self.entry_hover_info.get(absolute_path) {
-            Some(EntryHoverInfoState::Loading) => "Loading...".to_string(),
-            Some(EntryHoverInfoState::Ready(summary)) => summary.clone(),
-            Some(EntryHoverInfoState::Failed) | None => return None,
+        } else {
+            SharedString::from(format_file_size(size))
         };
-
-        Some(
-            div()
-                .visible_on_hover("list_item")
-                .flex_none()
-                .px_1p5()
-                .py_0p5()
-                .rounded_full()
-                .bg(cx.theme().colors().element_background)
-                .child(
-                    Label::new(label)
-                        .size(LabelSize::XSmall)
-                        .color(Color::Muted),
-                )
-                .into_any_element(),
-        )
+        div()
+            .visible_on_hover("list_item")
+            .flex_none()
+            .ml_1()
+            .border_1()
+            .border_color(cx.theme().colors().border_variant.opacity(0.55))
+            .px_1()
+            .py_0p5()
+            .rounded_sm()
+            .bg(cx.theme().colors().element_background.opacity(0.45))
+            .child(
+                Label::new(label)
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted),
+            )
+            .into_any_element()
     }
 
     fn render_entry_label(
@@ -5397,8 +5376,14 @@ impl ProjectPanel {
             .canonical_path
             .as_ref()
             .map(|f| f.to_string_lossy().into_owned());
-        let hover_info_path = details.absolute_path.clone();
-        let hover_badge = self.render_hover_info_badge(&hover_info_path, cx);
+        let hover_badge =
+            self.render_entry_info_badge(
+                kind,
+                details.size,
+                details.folder_file_count,
+                &details.absolute_path,
+                cx,
+            );
         let path_style = self.project.read(cx).path_style(cx);
         let path = details.path.clone();
         let path_for_external_paths = path.clone();
@@ -5826,11 +5811,6 @@ impl ProjectPanel {
                     }
                 }),
             )
-            .on_hover(cx.listener(move |this, hovered, _, cx| {
-                if *hovered {
-                    this.request_entry_hover_info(hover_info_path.clone(), kind, cx);
-                }
-            }))
             .child(
                 ListItem::new(id)
                     .indent_level(depth)
@@ -5840,72 +5820,62 @@ impl ProjectPanel {
                         ProjectPanelEntrySpacing::Standard => ListItemSpacing::ExtraDense,
                     })
                     .selectable(false)
-                    .when(
-                        canonical_path.is_some()
-                            || diagnostic_count.is_some()
-                            || git_indicator.is_some()
-                            || hover_badge.is_some(),
-                        |this| {
-                            let symlink_element = canonical_path.map(|path| {
-                                div()
-                                    .id("symlink_icon")
-                                    .tooltip(move |_window, cx| {
-                                        Tooltip::with_meta(
-                                            path.to_string(),
-                                            None,
-                                            "Symbolic Link",
-                                            cx,
-                                        )
-                                    })
-                                    .child(
-                                        Icon::new(IconName::ArrowUpRight)
-                                            .size(IconSize::Indicator)
-                                            .color(filename_text_color),
+                    .end_slot::<AnyElement>(
+                        h_flex()
+                            .gap_1()
+                            .flex_none()
+                            .pr_3()
+                            .when_some(diagnostic_count, |this, count| {
+                                this.when(count.error_count > 0, |this| {
+                                    this.child(
+                                        Label::new(count.capped_error_count())
+                                            .size(LabelSize::Small)
+                                            .color(Color::Error),
                                     )
-                            });
-                            this.end_slot::<AnyElement>(
-                                h_flex()
-                                    .gap_1()
-                                    .flex_none()
-                                    .pr_3()
-                                    .when_some(diagnostic_count, |this, count| {
-                                        this.when(count.error_count > 0, |this| {
-                                            this.child(
-                                                Label::new(count.capped_error_count())
-                                                    .size(LabelSize::Small)
-                                                    .color(Color::Error),
+                                })
+                                .when(count.warning_count > 0, |this| {
+                                    this.child(
+                                        Label::new(count.capped_warning_count())
+                                            .size(LabelSize::Small)
+                                            .color(Color::Warning),
+                                    )
+                                })
+                            })
+                            .when_some(git_indicator, |this, (label, color)| {
+                                let git_indicator = if kind.is_dir() {
+                                    Indicator::dot()
+                                        .color(Color::Custom(color.color(cx).opacity(0.5)))
+                                        .into_any_element()
+                                } else {
+                                    Label::new(label)
+                                        .size(LabelSize::Small)
+                                        .color(color)
+                                        .into_any_element()
+                                };
+
+                                this.child(git_indicator)
+                            })
+                            .when_some(canonical_path, |this, path| {
+                                this.child(
+                                    div()
+                                        .id("symlink_icon")
+                                        .tooltip(move |_window, cx| {
+                                            Tooltip::with_meta(
+                                                path.to_string(),
+                                                None,
+                                                "Symbolic Link",
+                                                cx,
                                             )
                                         })
-                                        .when(
-                                            count.warning_count > 0,
-                                            |this| {
-                                                this.child(
-                                                    Label::new(count.capped_warning_count())
-                                                        .size(LabelSize::Small)
-                                                        .color(Color::Warning),
-                                                )
-                                            },
-                                        )
-                                    })
-                                    .when_some(git_indicator, |this, (label, color)| {
-                                        let git_indicator = if kind.is_dir() {
-                                            Indicator::dot()
-                                                .color(Color::Custom(color.color(cx).opacity(0.5)))
-                                                .into_any_element()
-                                        } else {
-                                            Label::new(label)
-                                                .size(LabelSize::Small)
-                                                .color(color)
-                                                .into_any_element()
-                                        };
-
-                                        this.child(git_indicator)
-                                    })
-                                    .when_some(symlink_element, |this, el| this.child(el))
-                                    .when_some(hover_badge, |this, badge| this.child(badge))
-                                    .into_any_element(),
-                            )
-                        },
+                                        .child(
+                                            Icon::new(IconName::ArrowUpRight)
+                                                .size(IconSize::Indicator)
+                                                .color(filename_text_color),
+                                        ),
+                                )
+                            })
+                            .child(hover_badge)
+                            .into_any_element(),
                     )
                     .child(if let Some(icon) = &icon {
                         if let Some((_, decoration_color)) =
@@ -6339,9 +6309,40 @@ impl ProjectPanel {
                     .map(|worktree| worktree.read(cx).absolutize(&entry.path))
                     .unwrap_or_default()
             });
+        let folder_file_count = entry.kind.is_dir().then(|| {
+            let cache_key = (worktree_id, entry.id);
+            if let Some(count) = self.folder_file_counts.borrow().get(&cache_key).copied() {
+                count
+            } else {
+                let settings = ProjectPanelSettings::get_global(cx);
+                let count = self
+                    .project
+                    .read(cx)
+                    .worktree_for_id(worktree_id, cx)
+                    .map(|worktree| {
+                        let snapshot = worktree.read(cx).snapshot();
+                        snapshot
+                            .child_entries_with_options(
+                                &entry.path,
+                                ChildEntriesOptions {
+                                    include_files: true,
+                                    include_dirs: false,
+                                    include_ignored: !settings.hide_gitignore,
+                                },
+                            )
+                            .filter(|child| !settings.hide_hidden || !child.is_hidden)
+                            .count()
+                    })
+                    .unwrap_or_default();
+                self.folder_file_counts.borrow_mut().insert(cache_key, count);
+                count
+            }
+        });
 
         EntryDetails {
             filename,
+            size: entry.size,
+            folder_file_count,
             icon,
             path: entry.path.clone(),
             absolute_path,
@@ -6642,109 +6643,11 @@ fn item_width_estimate(depth: usize, item_text_chars: usize, is_symlink: bool) -
 }
 
 fn render_file_label(file_name: String, color: Color) -> AnyElement {
-    let path = Path::new(&file_name);
-    let extension = path
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .filter(|extension| !extension.is_empty())
-        .map(|extension| format!(".{extension}"));
-    let stem = path
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .filter(|stem| !stem.is_empty())
-        .map(ToOwned::to_owned)
-        .unwrap_or(file_name.clone());
-
-    if let Some(extension) = extension {
-        return h_flex()
-            .w_full()
-            .min_w_0()
-            .items_center()
-            .child(
-                Label::new(stem)
-                    .single_line()
-                    .truncate()
-                    .color(color)
-                    .flex_1(),
-            )
-            .child(Label::new(extension).single_line().color(color).flex_none())
-            .into_any_element();
-    }
-
     Label::new(file_name)
         .single_line()
         .truncate()
         .color(color)
         .into_any_element()
-}
-
-async fn compute_entry_hover_info(
-    fs: Arc<dyn Fs>,
-    absolute_path: PathBuf,
-    kind: EntryKind,
-) -> Result<String> {
-    if kind.is_dir() {
-        let (item_count, total_size) = collect_directory_stats(fs, &absolute_path).await?;
-        return Ok(format!(
-            "{} items | {}",
-            format_compact_count(item_count),
-            format_file_size(total_size),
-        ));
-    }
-
-    let metadata = fs
-        .metadata(&absolute_path)
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("Missing metadata for {}", absolute_path.display()))?;
-
-    const MAX_TEXT_PREVIEW_BYTES: u64 = 1024 * 1024;
-    if metadata.len <= MAX_TEXT_PREVIEW_BYTES
-        && let Ok(contents) = fs.load(&absolute_path).await
-    {
-        let lines = contents.lines().count();
-        let token_count = estimate_token_count(contents.as_str());
-        return Ok(format!(
-            "{} lines | {} tokens",
-            format_compact_count(lines),
-            format_compact_count(token_count),
-        ));
-    }
-
-    Ok(format_file_size(metadata.len))
-}
-
-async fn collect_directory_stats(fs: Arc<dyn Fs>, root: &Path) -> Result<(usize, u64)> {
-    let mut item_count = 0usize;
-    let mut total_size = 0u64;
-    let mut pending = vec![root.to_path_buf()];
-
-    while let Some(path) = pending.pop() {
-        let mut entries = fs.read_dir(&path).await?;
-        while let Some(entry) = entries.next().await {
-            let entry_path = entry?;
-            let Some(metadata) = fs.metadata(&entry_path).await? else {
-                continue;
-            };
-
-            item_count += 1;
-            if metadata.is_dir && !metadata.is_symlink {
-                pending.push(entry_path);
-            } else {
-                total_size = total_size.saturating_add(metadata.len);
-            }
-        }
-    }
-
-    Ok((item_count, total_size))
-}
-
-fn estimate_token_count(text: &str) -> usize {
-    let chars = text.chars().count();
-    chars.saturating_add(3) / 4
-}
-
-fn format_compact_count(value: usize) -> String {
-    format_compact_number(value as u64)
 }
 
 fn format_file_size(bytes: u64) -> String {
@@ -6762,24 +6665,6 @@ fn format_file_size(bytes: u64) -> String {
         format!("{value:.0} {}", UNITS[unit_ix])
     } else {
         format!("{value:.1} {}", UNITS[unit_ix])
-    }
-}
-
-fn format_compact_number(value: u64) -> String {
-    const UNITS: [&str; 4] = ["", "K", "M", "B"];
-    let mut scaled = value as f64;
-    let mut unit_ix = 0usize;
-    while scaled >= 1000.0 && unit_ix < UNITS.len() - 1 {
-        scaled /= 1000.0;
-        unit_ix += 1;
-    }
-
-    if unit_ix == 0 {
-        value.to_string()
-    } else if scaled >= 10.0 {
-        format!("{scaled:.0}{}", UNITS[unit_ix])
-    } else {
-        format!("{scaled:.1}{}", UNITS[unit_ix])
     }
 }
 
