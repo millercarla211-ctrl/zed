@@ -1,0 +1,12 @@
+[2026-05-13] - Fresh Upstream Dev Branch
+
+CHANGED:
+- Renamed the previous custom `dev` branch to `web-preivew` and preserved its source/config changes in a local commit.
+- Synced local `main` to `upstream/main` at `592727b892`.
+- Created a fresh local `dev` branch from the synced `main`.
+- Restored the local Windows/G-drive `just run` workflow on the fresh `dev` branch.
+- `.cargo/config.toml` now keeps build output at `G:/Zed/target`, uses 6 Cargo jobs, uses `rust-lld` on Windows, and disables debug-info/linker PDB output for faster local iteration.
+
+NOTES:
+- The old WebPreview/local-AI work is kept on `web-preivew`.
+- Local model/tool artifacts under `models/` and `tools/` remain untracked G-drive runtime artifacts.

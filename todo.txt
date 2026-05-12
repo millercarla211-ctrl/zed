@@ -1,0 +1,13 @@
+IN PROGRESS:
+- Fresh upstream-based dev branch validation with `just run`.
+
+PENDING:
+- Manual user feedback on the clean upstream-based dev branch runtime.
+- Continue WebPreview feature work from `web-preivew` when requested.
+
+COMPLETED:
+- Preserved the previous custom `dev` work on local branch `web-preivew`.
+- Synced local `main` to `upstream/main`.
+- Pushed synced `main` to `origin/main`.
+- Created a fresh local `dev` branch from synced `main`.
+- Restored the local Windows/G-drive `just run` workflow on the fresh `dev`.
