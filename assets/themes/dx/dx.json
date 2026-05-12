@@ -155,7 +155,7 @@
         "players": [
           {
             "cursor": "#ededed",
-            "selection": "#52a8ff33",
+            "selection": "#58c76033",
             "background": "#ededed"
           }
         ],
@@ -494,7 +494,7 @@
         "players": [
           {
             "cursor": "#171717",
-            "selection": "#0068d633",
+            "selection": "#397c3b33",
             "background": "#171717"
           }
         ],

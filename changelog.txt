@@ -1,3 +1,23 @@
+[2026-05-13] - Dx Selection and Bulk Editor Input
+
+CHANGED:
+- `assets/themes/dx/dx.json` now uses the Dx green primary color for local editor text selection in both dark and light variants.
+- `crates/editor/src/editor.rs` now keeps the always-visible cursor fallback to full code editors while requiring real focus for single-line input-box carets.
+- `crates/editor/src/input.rs` now treats multi-character/newline text insertion as bulk input and skips single-keystroke-only bracket, emoji, linked-edit, completion, on-type-formatting, and JSX auto-close work.
+
+FIXED:
+- Prevented unfocused input boxes from all showing a text caret after the previous code-editor caret visibility fix.
+- Reduced latency risk when inserting or pasting larger chunks of text into code files.
+
+NOTES:
+- Pushed the current working WebPreview/editor baseline to `origin/dev` at `87831af7cb` before these new scoped edits.
+- WebPreview code was intentionally left unchanged in this pass.
+- Ran `rustfmt` on the touched editor Rust files.
+- Parsed `assets/themes/dx/dx.json` successfully with PowerShell `ConvertFrom-Json`.
+- Ran `git diff --check` on the touched files; only the repository's normal LF/CRLF checkout warnings were reported.
+- Ran `just run`; Cargo rebuilt the affected crates successfully in 3m 03s and launched Zed once.
+- The known post-launch `zed-cli` lookup message remains.
+
 [2026-05-13] - Editor Typing Paint-First Fix
 
 CHANGED:

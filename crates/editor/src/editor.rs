@@ -16683,9 +16683,15 @@ impl Editor {
     }
 
     pub fn show_local_cursors(&self, window: &mut Window, cx: &mut App) -> bool {
-        self.input_enabled
-            || self.show_cursor_when_unfocused
-            || (self.read_only(cx) && self.focus_handle.contains_focused(window, cx))
+        if self.show_cursor_when_unfocused {
+            return true;
+        }
+
+        if self.focus_handle.contains_focused(window, cx) {
+            return self.input_enabled || self.read_only(cx);
+        }
+
+        self.input_enabled && self.mode.is_full()
     }
 
     pub fn set_show_cursor_when_unfocused(&mut self, is_enabled: bool, cx: &mut Context<Self>) {

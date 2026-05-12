@@ -1,14 +1,18 @@
 IN PROGRESS:
-- User manual feedback on the final editor cursor visibility fix and already-working WebPreview.
+- User manual feedback on the scoped DX selection color and editor input/caret performance pass.
 
 PENDING:
-- User manual feedback on normal code-editor typing responsiveness and caret visibility after deferred editor refreshes.
-- User manual feedback on WebPreview hover, click, right-click, wheel, drag/drop, and keyboard after the native-bounds routing fix.
-- User manual feedback on WebPreview typing inside page inputs after the WebView2 focus/style fix.
-- User manual feedback on normal code-editor typing responsiveness and caret/pointer visibility after the latest Windows input hot-path fix.
+- User manual check that selected text in Dx Dark and Dx Light uses the green primary selection color.
+- User manual check that only the focused single-line input shows a caret while full code editors keep the real insertion caret visible.
+- User manual check that pasting or inserting larger text chunks feels faster after skipping single-keystroke-only editor work.
 - User manual feedback on switching between Qwen 3.5 0.8B, Gemma 4 E4B, and any newly dropped GGUF files from the AI panel.
 
 COMPLETED:
+- Ran `just run` after the DX selection/focused-caret/bulk-input pass; Cargo rebuilt successfully in 3m 03s and launched Zed once.
+- Pushed the current good WebPreview/editor baseline to `origin/dev` at `87831af7cb` before making the new scoped edits.
+- Changed Dx theme editor selection colors from blue to green primary opacity in both dark and light variants.
+- Limited the always-visible code caret fallback to full editors so unfocused single-line input boxes do not all paint carets.
+- Skipped bracket/emoji/link/completion/JSX single-keystroke work for bulk text input so large inserted text can paint sooner.
 - Ran `just run` after the final cursor visibility fix; Cargo rebuilt successfully and Zed launched once.
 - Made normal editable editors paint local cursors without depending on blink/focus overlay state.
 - Changed the default mouse cursor hide policy to `never` so the pointer does not disappear during code typing.

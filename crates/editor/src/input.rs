@@ -65,6 +65,7 @@ impl Editor {
 
     pub fn handle_input(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
         let text: Arc<str> = text.into();
+        let is_bulk_input = text.len() > 1 || text.contains('\n');
 
         if self.read_only(cx) {
             return;
@@ -79,7 +80,7 @@ impl Editor {
         let mut new_selections = Vec::with_capacity(selections.len());
         let mut new_autoclose_regions = Vec::new();
         let snapshot = self.buffer.read(cx).read(cx);
-        let mut clear_linked_edit_ranges = false;
+        let mut clear_linked_edit_ranges = is_bulk_input && !self.linked_edit_ranges.is_empty();
         let mut all_selections_read_only = true;
         let mut has_adjacent_edits = false;
         let mut in_adjacent_group = false;
@@ -104,7 +105,7 @@ impl Editor {
             }
             all_selections_read_only = false;
 
-            if let Some(scope) = snapshot.language_scope_at(selection.head()) {
+            if !is_bulk_input && let Some(scope) = snapshot.language_scope_at(selection.head()) {
                 // Determine if the inserted text matches the opening or closing
                 // bracket of any of this language's bracket pairs.
                 let mut bracket_pair = None;
@@ -315,7 +316,8 @@ impl Editor {
                 }
             }
 
-            if self.auto_replace_emoji_shortcode
+            if !is_bulk_input
+                && self.auto_replace_emoji_shortcode
                 && selection.is_empty()
                 && text.as_ref().ends_with(':')
                 && let Some(possible_emoji_short_code) =
@@ -367,7 +369,7 @@ impl Editor {
                 snapshot.anchor_after(selection.end)
             };
 
-            if !self.linked_edit_ranges.is_empty() {
+            if !is_bulk_input && !self.linked_edit_ranges.is_empty() {
                 let start_anchor = snapshot.anchor_before(selection.start);
                 let classifier = snapshot
                     .char_classifier_at(start_anchor)
@@ -410,8 +412,11 @@ impl Editor {
             if clear_linked_edit_ranges {
                 this.linked_edit_ranges.clear();
             }
-            let initial_buffer_versions =
-                jsx_tag_auto_close::construct_initial_buffer_versions_map(this, &edits, cx);
+            let initial_buffer_versions = if is_bulk_input {
+                jsx_tag_auto_close::InitialBufferVersionsMap::default()
+            } else {
+                jsx_tag_auto_close::construct_initial_buffer_versions_map(this, &edits, cx)
+            };
 
             this.buffer.update(cx, |buffer, cx| {
                 if has_adjacent_edits {
@@ -470,7 +475,7 @@ impl Editor {
                 );
             }
 
-            let had_active_edit_prediction = this.has_active_edit_prediction();
+            let had_active_edit_prediction = !is_bulk_input && this.has_active_edit_prediction();
             this.change_selections(
                 SelectionEffects::scroll(Autoscroll::fit())
                     .completions(false)
@@ -480,7 +485,8 @@ impl Editor {
                 |s| s.select(new_selections),
             );
 
-            if !bracket_inserted
+            if !is_bulk_input
+                && !bracket_inserted
                 && let Some(on_type_format_task) =
                     this.trigger_on_type_formatting(text.to_string(), window, cx)
             {
@@ -488,15 +494,14 @@ impl Editor {
             }
 
             let editor_settings = EditorSettings::get_global(cx);
-            if bracket_inserted
+            if !is_bulk_input
+                && bracket_inserted
                 && (editor_settings.auto_signature_help
                     || editor_settings.show_signature_help_after_edits)
             {
                 this.show_signature_help(&ShowSignatureHelp, window, cx);
             }
 
-            let trigger_in_words =
-                this.show_edit_predictions_in_menu() || !had_active_edit_prediction;
             if this.hard_wrap.is_some() {
                 let latest: Range<Point> = this.selections.newest(&map).range();
                 if latest.is_empty()
@@ -517,9 +522,13 @@ impl Editor {
                     )
                 }
             }
-            refresh_linked_ranges(this, window, cx);
-            this.defer_completion_on_input(text.to_string(), trigger_in_words, window, cx);
-            jsx_tag_auto_close::handle_from(this, initial_buffer_versions, window, cx);
+            if !is_bulk_input {
+                let trigger_in_words =
+                    this.show_edit_predictions_in_menu() || !had_active_edit_prediction;
+                refresh_linked_ranges(this, window, cx);
+                this.defer_completion_on_input(text.to_string(), trigger_in_words, window, cx);
+                jsx_tag_auto_close::handle_from(this, initial_buffer_versions, window, cx);
+            }
         });
     }
 
