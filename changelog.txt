@@ -1,3 +1,41 @@
+[2026-05-13] - Editor Typing Paint-First Fix
+
+CHANGED:
+- `assets/settings/default.json` now disables editor caret blinking by default so the code caret stays visible while typing.
+- `assets/settings/default.json` now defaults `hide_mouse` to `never` so the mouse pointer does not disappear during code typing.
+- `crates/editor/src/editor.rs` now paints local cursors for normal editable editors without depending on blink/focus overlay state.
+- `crates/editor/src/selection.rs` now makes the caret visible before selection-dependent refresh work and can defer noncritical local selection refreshes to the next frame.
+- `crates/editor/src/input.rs` now uses the deferred editor refresh path for normal text insertion and newline selection updates.
+- `crates/editor/src/completions.rs` now coalesces completion/edit-prediction refreshes after text input onto the next frame.
+
+FIXED:
+- Reduced code-editor typing latency by letting buffer edits and caret painting complete before follow-up completion, prediction, highlight, outline, and code-action refresh work.
+
+NOTES:
+- WebPreview code was not changed in this editor-only pass.
+- Ran `rustfmt` on the touched editor Rust files.
+- Ran `git diff --check` on the touched editor files; only the repository's normal LF/CRLF checkout warnings were reported.
+- Ran `just run`; Cargo rebuilt the affected crates successfully in 4m 20s and launched Zed once.
+- Ran `just run` again after the stronger cursor visibility path; Cargo rebuilt the affected crates successfully in 2m 45s and launched Zed once.
+- The known post-launch `zed-cli` lookup message remains.
+
+[2026-05-13] - Topbar Trim and WebPreview Native Bounds Input
+
+CHANGED:
+- `crates/ui/src/utils/constants.rs` now uses a 40px Windows titlebar height instead of the previous oversized 44px value.
+- `crates/title_bar/src/title_bar.rs` trims the screen dock body from 33px to 31px so it fits the slimmer topbar.
+- `crates/gpui_windows/src/events.rs` now routes WebView2 hover, click, right-click, wheel, and captured pointer input by the registered native preview bounds.
+- `crates/gpui_windows/src/window.rs` now uses the same native preview bounds for WebView2 drag/drop targeting.
+
+FIXED:
+- Restored WebPreview interactivity when GPUI pane/container hitboxes blocked the generic passthrough snapshot even though the native WebView2 preview was visible.
+
+NOTES:
+- Ran `rustfmt` on the touched Rust files.
+- Ran `git diff --check` on the touched files; only the repository's normal LF/CRLF checkout warnings were reported.
+- Ran `just run`; Cargo rebuilt the affected crates successfully in 2m 13s and launched Zed once.
+- The known post-launch `zed-cli` lookup message remains.
+
 [2026-05-13] - Restore WebPreview as Dev
 
 CHANGED:

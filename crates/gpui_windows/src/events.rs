@@ -1568,20 +1568,9 @@ fn webview_passthrough_target_for_point(
     handle: HWND,
     client_point: POINT,
 ) -> Option<(WebviewPassthroughTarget, POINT)> {
-    let position = logical_point(
-        client_point.x as f32,
-        client_point.y as f32,
-        state.scale_factor.get(),
-    );
-    let should_passthrough = state.webview_input_captured.get()
-        || state
-            .mouse_passthrough_snapshot
-            .borrow()
-            .should_mouse_passthrough(position);
-    if !should_passthrough {
-        return None;
-    }
-
+    // WebView2 CompositionController input must follow the native preview bounds.
+    // GPUI's generic passthrough snapshot can be blocked by ordinary pane
+    // containers, which leaves the visible page unable to receive hover/clicks.
     let target = if state.webview_input_captured.get() {
         webview_passthrough_target(handle)?
     } else {

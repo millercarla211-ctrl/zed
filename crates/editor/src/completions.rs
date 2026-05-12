@@ -136,6 +136,34 @@ impl Editor {
         }
     }
 
+    pub(super) fn defer_completion_on_input(
+        &mut self,
+        text: String,
+        trigger_in_words: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.deferred_completion_on_input = Some(DeferredCompletionOnInput {
+            text,
+            trigger_in_words,
+        });
+
+        if self.deferred_completion_on_input_scheduled {
+            return;
+        }
+
+        self.deferred_completion_on_input_scheduled = true;
+        cx.on_next_frame(window, |this, window, cx| {
+            this.deferred_completion_on_input_scheduled = false;
+            let Some(deferred) = this.deferred_completion_on_input.take() else {
+                return;
+            };
+
+            this.trigger_completion_on_input(&deferred.text, deferred.trigger_in_words, window, cx);
+            this.refresh_edit_prediction(true, false, window, cx);
+        });
+    }
+
     pub(super) fn is_lsp_relevant(&self, file: Option<&Arc<dyn language::File>>, cx: &App) -> bool {
         let Some(project) = self.project() else {
             return false;

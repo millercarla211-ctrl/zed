@@ -505,7 +505,7 @@ impl TitleBar {
         let dock_body = h_flex()
             .id("screen-dock-body")
             .flex_none()
-            .h(px(33.))
+            .h(px(31.))
             .items_center()
             .gap_0p5()
             .px_1p5()

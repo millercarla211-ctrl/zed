@@ -1,12 +1,23 @@
 IN PROGRESS:
-- Run restored WebPreview-backed `dev` branch with `just run`.
+- User manual feedback on the final editor cursor visibility fix and already-working WebPreview.
 
 PENDING:
+- User manual feedback on normal code-editor typing responsiveness and caret visibility after deferred editor refreshes.
+- User manual feedback on WebPreview hover, click, right-click, wheel, drag/drop, and keyboard after the native-bounds routing fix.
 - User manual feedback on WebPreview typing inside page inputs after the WebView2 focus/style fix.
 - User manual feedback on normal code-editor typing responsiveness and caret/pointer visibility after the latest Windows input hot-path fix.
 - User manual feedback on switching between Qwen 3.5 0.8B, Gemma 4 E4B, and any newly dropped GGUF files from the AI panel.
 
 COMPLETED:
+- Ran `just run` after the final cursor visibility fix; Cargo rebuilt successfully and Zed launched once.
+- Made normal editable editors paint local cursors without depending on blink/focus overlay state.
+- Changed the default mouse cursor hide policy to `never` so the pointer does not disappear during code typing.
+- Ran `just run` after the editor typing/caret fix; Cargo rebuilt successfully and Zed launched once.
+- Deferred editor-only completion, edit-prediction, and cursor-dependent selection refresh work to the next frame during typing.
+- Disabled editor caret blinking by default so the insertion caret remains visible while typing.
+- Ran `just run` after the topbar/native-bounds WebPreview input fix; Cargo rebuilt successfully and Zed launched once.
+- Reduced the Windows titlebar height and screen-dock body height slightly while keeping caption controls full-height.
+- Made Windows WebView2 pointer and drag/drop targeting follow the registered native preview bounds directly instead of the fragile GPUI passthrough snapshot.
 - Parked the fresh upstream-only `dev` branch as `depricated-1`.
 - Recreated local `dev` from the saved `web-preivew` branch so WebPreview work is current again.
 - Kept normal code editor tabs off the WebPreview browser screen-kind lookup unless the tab is actually active.

@@ -62,6 +62,7 @@ impl Editor {
             state.effects.scroll = effects.scroll.or(state.effects.scroll);
             state.effects.completions = effects.completions;
             state.effects.nav_history = effects.nav_history.or(state.effects.nav_history);
+            state.effects.defer_noncritical_refreshes |= effects.defer_noncritical_refreshes;
             let (changed, result) = self.selections.change_with(&snapshot, change);
             state.changed |= changed;
             return result;
@@ -650,6 +651,7 @@ impl Editor {
         self.invalidate_autoclose_regions(&selection_anchors, buffer);
         self.snippet_stack.invalidate(&selection_anchors, buffer);
         self.take_rename(false, window, cx);
+        self.blink_manager.update(cx, BlinkManager::pause_blinking);
 
         let newest_selection = self.selections.newest_anchor();
         let new_cursor_position = newest_selection.head();
@@ -715,21 +717,12 @@ impl Editor {
 
             hide_hover(self, cx);
 
-            self.refresh_code_actions_for_selection(window, cx);
-            self.refresh_document_highlights(cx);
-            refresh_linked_ranges(self, window, cx);
-
-            self.refresh_selected_text_highlights(&display_map, false, window, cx);
-            self.refresh_matching_bracket_highlights(&display_map, cx);
-            self.refresh_outline_symbols_at_cursor(cx);
-            self.update_visible_edit_prediction(window, cx);
-            self.hide_blame_popover(true, cx);
-            if self.git_blame_inline_enabled {
-                self.start_inline_blame_timer(window, cx);
+            if effects.defer_noncritical_refreshes {
+                self.schedule_deferred_selection_refresh(window, cx);
+            } else {
+                self.refresh_selection_dependent_state(&display_map, window, cx);
             }
         }
-
-        self.blink_manager.update(cx, BlinkManager::pause_blinking);
 
         if local && !self.suppress_selection_callback {
             if let Some(callback) = self.on_local_selections_changed.as_ref() {
@@ -812,6 +805,40 @@ impl Editor {
                 self.show_signature_help_auto(window, cx);
             }
         }
+    }
+
+    fn refresh_selection_dependent_state(
+        &mut self,
+        display_map: &DisplaySnapshot,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.refresh_code_actions_for_selection(window, cx);
+        self.refresh_document_highlights(cx);
+        refresh_linked_ranges(self, window, cx);
+        self.refresh_selected_text_highlights(display_map, false, window, cx);
+        self.refresh_matching_bracket_highlights(display_map, cx);
+        self.refresh_outline_symbols_at_cursor(cx);
+        self.update_visible_edit_prediction(window, cx);
+        self.hide_blame_popover(true, cx);
+        if self.git_blame_inline_enabled {
+            self.start_inline_blame_timer(window, cx);
+        }
+    }
+
+    fn schedule_deferred_selection_refresh(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.deferred_selection_refresh_scheduled {
+            return;
+        }
+
+        self.deferred_selection_refresh_scheduled = true;
+        cx.on_next_frame(window, |this, window, cx| {
+            this.deferred_selection_refresh_scheduled = false;
+            let display_map = this
+                .display_map
+                .update(cx, |display_map, cx| display_map.snapshot(cx));
+            this.refresh_selection_dependent_state(&display_map, window, cx);
+        });
     }
 
     fn select_columns(

@@ -1262,21 +1262,8 @@ impl WindowsDragDropHandler {
         &self,
         client_point: POINT,
     ) -> Option<(WebviewPassthroughTarget, POINT)> {
-        let position = logical_point(
-            client_point.x as f32,
-            client_point.y as f32,
-            self.window.state.scale_factor.get(),
-        );
-        if !self
-            .window
-            .state
-            .mouse_passthrough_snapshot
-            .borrow()
-            .should_mouse_passthrough(position)
-        {
-            return None;
-        }
-
+        // Drag/drop follows the same native bounds as pointer input so the page
+        // stays targetable even when GPUI has pane/container hitboxes above it.
         let target = lookup_webview_passthrough_target(self.window.hwnd, client_point)?;
         let relative_point = POINT {
             x: client_point.x - target.bounds.left,

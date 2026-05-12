@@ -1009,6 +1009,9 @@ pub struct Editor {
     selection_history: SelectionHistory,
     defer_selection_effects: bool,
     deferred_selection_effects_state: Option<DeferredSelectionEffectsState>,
+    deferred_selection_refresh_scheduled: bool,
+    deferred_completion_on_input: Option<DeferredCompletionOnInput>,
+    deferred_completion_on_input_scheduled: bool,
     autoclose_regions: Vec<AutocloseRegion>,
     snippet_stack: InvalidationStack<SnippetState>,
     select_syntax_node_history: SelectSyntaxNodeHistory,
@@ -1380,6 +1383,7 @@ pub struct SelectionEffects {
     completions: bool,
     scroll: Option<Autoscroll>,
     from_search: bool,
+    defer_noncritical_refreshes: bool,
 }
 
 impl Default for SelectionEffects {
@@ -1389,6 +1393,7 @@ impl Default for SelectionEffects {
             completions: true,
             scroll: Some(Autoscroll::fit()),
             from_search: false,
+            defer_noncritical_refreshes: false,
         }
     }
 }
@@ -1427,6 +1432,18 @@ impl SelectionEffects {
             ..self
         }
     }
+
+    pub fn defer_noncritical_refreshes(self, defer_noncritical_refreshes: bool) -> Self {
+        Self {
+            defer_noncritical_refreshes,
+            ..self
+        }
+    }
+}
+
+struct DeferredCompletionOnInput {
+    text: String,
+    trigger_in_words: bool,
 }
 
 struct DeferredSelectionEffectsState {
@@ -2263,6 +2280,9 @@ impl Editor {
             selection_history: SelectionHistory::default(),
             defer_selection_effects: false,
             deferred_selection_effects_state: None,
+            deferred_selection_refresh_scheduled: false,
+            deferred_completion_on_input: None,
+            deferred_completion_on_input_scheduled: false,
             autoclose_regions: Vec::new(),
             snippet_stack: InvalidationStack::default(),
             select_syntax_node_history: SelectSyntaxNodeHistory::default(),
@@ -16663,10 +16683,9 @@ impl Editor {
     }
 
     pub fn show_local_cursors(&self, window: &mut Window, cx: &mut App) -> bool {
-        (self.read_only(cx)
-            || !EditorSettings::get_global(cx).cursor_blink
-            || self.blink_manager.read(cx).visible())
-            && self.focus_handle.contains_focused(window, cx)
+        self.input_enabled
+            || self.show_cursor_when_unfocused
+            || (self.read_only(cx) && self.focus_handle.contains_focused(window, cx))
     }
 
     pub fn set_show_cursor_when_unfocused(&mut self, is_enabled: bool, cx: &mut Context<Self>) {

@@ -217,7 +217,7 @@
   // this option is ignored and Zed will always use the built-in prompts.
   "use_system_prompts": true,
   // Whether the cursor blinks in the editor.
-  "cursor_blink": true,
+  "cursor_blink": false,
   // Cursor shape for the default editor.
   //  1. A vertical bar
   //     "bar"
@@ -239,7 +239,7 @@
   //    "on_typing"
   // 3. Hide on typing and on key bindings that resolve to an action:
   //    "on_typing_and_action"
-  "hide_mouse": "on_typing_and_action",
+  "hide_mouse": "never",
   // Determines whether the focused panel follows the mouse location.
   "focus_follows_mouse": {
     "enabled": false,
