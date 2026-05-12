@@ -1,3 +1,13 @@
+[2026-05-13] - Restore WebPreview as Dev
+
+CHANGED:
+- Renamed the fresh upstream-only `dev` branch to `depricated-1`.
+- Pushed `depricated-1` to `origin/depricated-1`.
+- Recreated local `dev` from the saved `web-preivew` branch so WebPreview work is current again.
+
+NOTES:
+- The previous WebPreview branch is still present as `web-preivew` for safety until the restored `dev` is fully confirmed.
+
 [2026-05-13] - Editor Tab Hot Path and WebPreview Event Pump
 
 CHANGED:

@@ -1,5 +1,5 @@
 IN PROGRESS:
-- None
+- Run restored WebPreview-backed `dev` branch with `just run`.
 
 PENDING:
 - User manual feedback on WebPreview typing inside page inputs after the WebView2 focus/style fix.
@@ -7,6 +7,8 @@ PENDING:
 - User manual feedback on switching between Qwen 3.5 0.8B, Gemma 4 E4B, and any newly dropped GGUF files from the AI panel.
 
 COMPLETED:
+- Parked the fresh upstream-only `dev` branch as `depricated-1`.
+- Recreated local `dev` from the saved `web-preivew` branch so WebPreview work is current again.
 - Kept normal code editor tabs off the WebPreview browser screen-kind lookup unless the tab is actually active.
 - Reused the already-computed titlebar screen kind for the screen-dock add menu instead of querying active workspace state again.
 - Added a lightweight WebPreview browser-event pump so WebView2 navigation-completed focus repair is applied promptly instead of waiting for an unrelated render/reload.
