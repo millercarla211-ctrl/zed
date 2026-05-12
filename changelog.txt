@@ -1,3 +1,25 @@
+[2026-05-13] - Checkpointed Editor Speed and WebPreview Loading
+
+ADDED:
+- Pushed checkpoint branch `codex/checkpoint-working-2026-05-13` from the confirmed working `dev` state before making new edits.
+
+CHANGED:
+- Renamed stale branch `web-preivew` to `depricated-web-preview` locally and on `origin`, preserving the branch history under the deprecated naming pattern.
+- `crates/editor/src/selection.rs` now throttles deferred selection-dependent refresh work by 75ms instead of running it on the next frame after typing.
+- `crates/web_preview/src/web_preview_view.rs` now treats initial/open/reload/navigation as a real loading state and only removes the loading placeholder after navigation completes.
+- `crates/web_preview/src/web_preview_view.rs` now starts Windows native preview mounting hidden during workspace attachment so the browser can warm up before the tab is shown.
+- `crates/web_preview/src/windows_visual_webview.rs` now emits navigation-started events and respects the requested initial visibility when creating the WebView2 surface.
+
+FIXED:
+- Reduced editor typing and large input latency risk by moving noncritical code actions, highlights, outline, prediction, and blame refresh work out of the immediate paint path.
+- Prevented the WebPreview transparent gap by keeping an opaque loading layer up until the embedded browser reports that navigation completed.
+
+NOTES:
+- WebPreview input/focus/passthrough routing was intentionally left unchanged.
+- Ran `rustfmt` on the touched Rust files.
+- Ran `git diff --check` on the touched files; only the repository's normal LF/CRLF checkout warnings were reported.
+- Ran `just run`; Zed launched and exited successfully.
+
 [2026-05-13] - Text Input Hot Path Speed Pass
 
 CHANGED:

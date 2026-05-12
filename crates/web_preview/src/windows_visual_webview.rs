@@ -15,7 +15,8 @@ use webview2_com::{
     CoreWebView2EnvironmentOptions, CreateCoreWebView2CompositionControllerCompletedHandler,
     CreateCoreWebView2EnvironmentCompletedHandler, CursorChangedEventHandler,
     DocumentTitleChangedEventHandler, ExecuteScriptCompletedHandler, FocusChangedEventHandler,
-    NavigationCompletedEventHandler, WebMessageReceivedEventHandler, take_pwstr, wait_with_pump,
+    NavigationCompletedEventHandler, NavigationStartingEventHandler,
+    WebMessageReceivedEventHandler, take_pwstr, wait_with_pump,
 };
 use windows::{
     Win32::{
@@ -57,6 +58,7 @@ impl WindowsVisualWebView {
         scale_factor: f32,
         bounds: RECT,
         browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
+        initially_visible: bool,
     ) -> Result<Self> {
         Self::new_internal(
             main_window,
@@ -66,7 +68,7 @@ impl WindowsVisualWebView {
             scale_factor,
             bounds,
             browser_events,
-            true,
+            initially_visible,
         )
     }
 
@@ -484,6 +486,15 @@ fn attach_event_handlers(
                 let mut title = PWSTR::null();
                 webview.DocumentTitle(&mut title)?;
                 push_browser_event(&event_queue, BrowserEvent::TitleChanged(take_pwstr(title)));
+                Ok(())
+            })),
+            &mut token,
+        )?;
+
+        let event_queue = browser_events.clone();
+        webview.add_NavigationStarting(
+            &NavigationStartingEventHandler::create(Box::new(move |_, _| {
+                push_browser_event(&event_queue, BrowserEvent::NavigationStarted);
                 Ok(())
             })),
             &mut token,

@@ -78,6 +78,7 @@ struct DetectedExtension {
 
 #[derive(Clone, Debug)]
 enum PreviewLoadState {
+    Loading,
     Ready,
     Error(SharedString),
 }
@@ -86,6 +87,7 @@ enum PreviewLoadState {
 pub(crate) enum BrowserEvent {
     UrlChanged(String),
     TitleChanged(String),
+    NavigationStarted,
     NavigationCompleted,
     IpcMessage(String),
     MountFailed(String),
@@ -206,6 +208,7 @@ struct NativePreviewMountRequest {
     initial_url: String,
     zoom_factor: f64,
     scale_factor: f32,
+    initially_visible: bool,
     host_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
     browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
     native_mount_requested: Rc<Cell<bool>>,
@@ -371,7 +374,7 @@ impl WebPreviewView {
                 bookmarks: load_bookmarks(&workspace_context.profile_dir).unwrap_or_default(),
                 detected_extensions: Vec::new(),
                 extensions_scanned: false,
-                load_state: PreviewLoadState::Ready,
+                load_state: PreviewLoadState::Loading,
                 host_bounds: Rc::new(RefCell::new(None)),
                 #[cfg(target_os = "macos")]
                 last_applied_bounds: Rc::new(RefCell::new(None)),
@@ -627,8 +630,6 @@ impl WebPreviewView {
         self.page_title = None;
         if let Err(error) = self.load_url(url.as_str(), window, cx) {
             self.load_state = PreviewLoadState::Error(error.to_string().into());
-        } else {
-            self.load_state = PreviewLoadState::Ready;
         }
         cx.emit(ItemEvent::UpdateTab);
         cx.notify();
@@ -649,8 +650,6 @@ impl WebPreviewView {
         self.page_title = None;
         if let Err(error) = self.load_url(url.as_str(), window, cx) {
             self.load_state = PreviewLoadState::Error(error.to_string().into());
-        } else {
-            self.load_state = PreviewLoadState::Ready;
         }
         cx.emit(ItemEvent::UpdateTab);
         cx.notify();
@@ -665,10 +664,11 @@ impl WebPreviewView {
     }
 
     fn reload_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.load_state = PreviewLoadState::Loading;
         if let Err(error) = self.reload_webview(window, cx) {
             self.load_state = PreviewLoadState::Error(error.to_string().into());
-            cx.notify();
         }
+        cx.notify();
     }
 
     fn toggle_bookmark_for_active_url(&mut self, cx: &mut Context<Self>) {
@@ -849,7 +849,13 @@ impl WebPreviewView {
                     self.page_title = Some(title.into());
                     tab_updated = true;
                 }
+                BrowserEvent::NavigationStarted => {
+                    self.load_state = PreviewLoadState::Loading;
+                    self.page_title = None;
+                    tab_updated = true;
+                }
                 BrowserEvent::NavigationCompleted => {
+                    self.load_state = PreviewLoadState::Ready;
                     refocus_after_navigation = true;
                 }
                 BrowserEvent::IpcMessage(message) => {
@@ -1426,6 +1432,7 @@ impl WebPreviewView {
             initial_url: self.active_url.to_string(),
             zoom_factor: self.zoom_factor,
             scale_factor: window.scale_factor(),
+            initially_visible: self.is_active_item,
             host_bounds: self.host_bounds.clone(),
             browser_events: self.browser_events.clone(),
             native_mount_requested: self.native_mount_requested.clone(),
@@ -1471,12 +1478,14 @@ impl WebPreviewView {
 
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     fn load_url(&mut self, url: &str, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
+        self.load_state = PreviewLoadState::Loading;
         self.ensure_native_preview(window, cx);
         let mut borrow = self.native_preview.borrow_mut();
-        let preview = borrow
-            .as_mut()
-            .ok_or_else(|| anyhow!("The native web preview is not available"))?;
-        preview.load_url(url)?;
+        if let Some(preview) = borrow.as_mut() {
+            preview.load_url(url)?;
+        } else if !self.native_mount_requested.get() {
+            return Err(anyhow!("The native web preview is not available"));
+        }
         Ok(())
     }
 
@@ -1494,6 +1503,7 @@ impl WebPreviewView {
 
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     fn reload_webview(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
+        self.load_state = PreviewLoadState::Loading;
         self.ensure_native_preview(window, cx);
         let borrow = self.native_preview.borrow();
         let preview = borrow
@@ -1948,7 +1958,7 @@ impl Item for WebPreviewView {
                 bookmarks,
                 detected_extensions,
                 extensions_scanned: self.extensions_scanned,
-                load_state: PreviewLoadState::Ready,
+                load_state: PreviewLoadState::Loading,
                 host_bounds: Rc::new(RefCell::new(None)),
                 #[cfg(target_os = "macos")]
                 last_applied_bounds: Rc::new(RefCell::new(None)),
@@ -2008,6 +2018,12 @@ impl Item for WebPreviewView {
             }),
         );
 
+        #[cfg(target_os = "windows")]
+        cx.defer_in(window, |this, window, cx| {
+            this.ensure_native_preview(window, cx);
+            this.sync_native_preview_window_activation(window);
+        });
+
         let focus_handle = self.focus_handle(cx);
         cx.defer_in(window, move |_, window, cx| {
             focus_handle.focus(window, cx);
@@ -2063,11 +2079,15 @@ impl Render for WebPreviewView {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         let preview_ready = self.native_preview.borrow().is_some();
         let error_message = match &self.load_state {
+            PreviewLoadState::Loading => None,
             PreviewLoadState::Ready => None,
             PreviewLoadState::Error(error) => Some(error.clone()),
         };
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        let show_loading_placeholder = error_message.is_none()
+            && (!preview_ready || matches!(self.load_state, PreviewLoadState::Loading));
         #[cfg(target_os = "windows")]
-        let preview_surface_background = if !preview_ready {
+        let preview_surface_background = if show_loading_placeholder {
             cx.theme().colors().surface_background
         } else {
             gpui::transparent_black().alpha(1.0 / 255.0)
@@ -2075,7 +2095,7 @@ impl Render for WebPreviewView {
         #[cfg(not(target_os = "windows"))]
         let preview_surface_background = gpui::transparent_black();
         #[cfg(any(target_os = "windows", target_os = "macos"))]
-        let loading_placeholder = (!preview_ready).then(|| {
+        let loading_placeholder = show_loading_placeholder.then(|| {
             div()
                 .absolute()
                 .inset_0()
@@ -2211,6 +2231,7 @@ fn create_native_preview_for_request(request: &NativePreviewMountRequest) -> Res
         request.scale_factor,
         initial_bounds,
         request.browser_events.clone(),
+        request.initially_visible,
     )
     .with_context(|| "Failed to build the embedded web preview")?;
 

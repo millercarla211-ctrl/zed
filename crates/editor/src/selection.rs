@@ -832,13 +832,21 @@ impl Editor {
         }
 
         self.deferred_selection_refresh_scheduled = true;
-        cx.on_next_frame(window, |this, window, cx| {
-            this.deferred_selection_refresh_scheduled = false;
-            let display_map = this
-                .display_map
-                .update(cx, |display_map, cx| display_map.snapshot(cx));
-            this.refresh_selection_dependent_state(&display_map, window, cx);
-        });
+        cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor()
+                .timer(DEFERRED_SELECTION_REFRESH_DEBOUNCE)
+                .await;
+
+            this.update_in(cx, |this, window, cx| {
+                this.deferred_selection_refresh_scheduled = false;
+                let display_map = this
+                    .display_map
+                    .update(cx, |display_map, cx| display_map.snapshot(cx));
+                this.refresh_selection_dependent_state(&display_map, window, cx);
+            })
+            .log_err();
+        })
+        .detach();
     }
 
     fn select_columns(
