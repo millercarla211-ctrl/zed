@@ -9999,9 +9999,10 @@ impl Editor {
         self.finalize_last_transaction(cx);
 
         let clipboard_text = Cow::Borrowed(text.as_str());
+        let is_bulk_paste = text.len() > 1 || text.contains('\n');
 
         self.transact(window, cx, |this, window, cx| {
-            let had_active_edit_prediction = this.has_active_edit_prediction();
+            let had_active_edit_prediction = !is_bulk_paste && this.has_active_edit_prediction();
             let display_map = this.display_snapshot(cx);
             let old_selections = this.selections.all::<MultiBufferOffset>(&display_map);
             let cursor_offset = this
@@ -10095,7 +10096,14 @@ impl Editor {
                 let selections = this
                     .selections
                     .all::<MultiBufferOffset>(&this.display_snapshot(cx));
-                this.change_selections(Default::default(), window, cx, |s| s.select(selections));
+                this.change_selections(
+                    SelectionEffects::scroll(Autoscroll::fit())
+                        .completions(false)
+                        .defer_noncritical_refreshes(is_bulk_paste),
+                    window,
+                    cx,
+                    |s| s.select(selections),
+                );
             } else {
                 let url = url::Url::parse(&clipboard_text).ok();
 
@@ -10124,18 +10132,19 @@ impl Editor {
                     // external editor using multiple cursors) and the number of
                     // lines matches the number of selections, distribute one
                     // line per cursor instead of pasting the whole text at each.
-                    let lines: Vec<&str> = clipboard_text.split('\n').collect();
-                    let distribute_lines =
-                        old_selections.len() > 1 && lines.len() == old_selections.len();
+                    let lines = (old_selections.len() > 1)
+                        .then(|| clipboard_text.split('\n').collect::<Vec<&str>>());
+                    let distribute_lines = lines
+                        .as_ref()
+                        .is_some_and(|lines| lines.len() == old_selections.len());
 
                     for (ix, selection) in old_selections.iter().enumerate() {
                         let language = snapshot.language_at(selection.head());
                         let range = selection.range();
 
-                        let text_for_cursor: &str = if distribute_lines {
-                            lines[ix]
-                        } else {
-                            &clipboard_text
+                        let text_for_cursor: &str = match lines.as_ref() {
+                            Some(lines) if distribute_lines => lines[ix],
+                            _ => &clipboard_text,
                         };
 
                         let (edit_range, edit_text) = if let Some(language) = language
@@ -10155,19 +10164,28 @@ impl Editor {
                     anchors
                 });
 
-                this.change_selections(Default::default(), window, cx, |s| {
-                    s.select_anchors(selection_anchors);
-                });
+                this.change_selections(
+                    SelectionEffects::scroll(Autoscroll::fit())
+                        .completions(false)
+                        .defer_noncritical_refreshes(is_bulk_paste),
+                    window,
+                    cx,
+                    |s| {
+                        s.select_anchors(selection_anchors);
+                    },
+                );
             }
 
             //   🤔                 |    ..     | show_in_menu |
             // | ..                  |   true        true
             // | had_edit_prediction |   false       true
 
-            let trigger_in_words =
-                this.show_edit_predictions_in_menu() || !had_active_edit_prediction;
+            if !is_bulk_paste {
+                let trigger_in_words =
+                    this.show_edit_predictions_in_menu() || !had_active_edit_prediction;
 
-            this.trigger_completion_on_input(text, trigger_in_words, window, cx);
+                this.trigger_completion_on_input(text, trigger_in_words, window, cx);
+            }
         });
     }
 

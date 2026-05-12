@@ -1,3 +1,23 @@
+[2026-05-13] - Text Input Hot Path Speed Pass
+
+CHANGED:
+- Created and pushed `depricated-2` from the existing `web-preivew` branch without deleting the original branch name.
+- `crates/editor/src/input.rs` no longer refreshes linked-edit ranges immediately after normal text input because the deferred selection refresh path already performs that work.
+- `crates/editor/src/editor.rs` now treats paste/bulk text insertion like a paint-first edit path, deferring noncritical selection refreshes and skipping immediate completion/edit-prediction refresh work.
+- `crates/editor/src/editor.rs` now avoids splitting clipboard text into lines unless there are multiple selections that could use line-distributed paste.
+
+FIXED:
+- Reduced duplicate work on every typed character after the previous deferred-refresh editor changes.
+- Reduced latency risk when pasting or inserting larger text chunks into code files.
+
+NOTES:
+- No branches were deleted in this pass.
+- WebPreview code was intentionally left unchanged.
+- Ran `rustfmt` on the touched editor Rust files.
+- Ran `git diff --check` on the touched files; only the repository's normal LF/CRLF checkout warnings were reported.
+- Ran `just run`; Cargo rebuilt the affected crates successfully in 4m 52s and launched Zed once.
+- The known post-launch `zed-cli` lookup message remains.
+
 [2026-05-13] - Dx Selection and Bulk Editor Input
 
 CHANGED:

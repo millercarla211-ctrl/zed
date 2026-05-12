@@ -1,13 +1,21 @@
 IN PROGRESS:
-- User manual feedback on the scoped DX selection color and editor input/caret performance pass.
+- User manual feedback on the text input speed-only pass after preserving `web-preivew` as `depricated-2`.
 
 PENDING:
+- User manual check that normal typing stays responsive after removing duplicate linked-edit refresh work from the hot path.
+- User manual check that pasting large text chunks no longer triggers immediate completion/edit-prediction refresh work.
 - User manual check that selected text in Dx Dark and Dx Light uses the green primary selection color.
 - User manual check that only the focused single-line input shows a caret while full code editors keep the real insertion caret visible.
 - User manual check that pasting or inserting larger text chunks feels faster after skipping single-keystroke-only editor work.
 - User manual feedback on switching between Qwen 3.5 0.8B, Gemma 4 E4B, and any newly dropped GGUF files from the AI panel.
 
 COMPLETED:
+- Ran `just run` after the text input speed-only pass; Cargo rebuilt successfully in 4m 52s and launched Zed once.
+- Created and pushed `depricated-2` from the existing `web-preivew` branch without deleting `web-preivew`.
+- Kept the text input performance work on current `dev`, which is ahead of the preserved `web-preivew` branch.
+- Removed duplicate linked-edit range refresh from the normal text input hot path because deferred selection refresh already covers it.
+- Made paste/bulk insertion defer noncritical selection refreshes and skip immediate completion/edit-prediction trigger work.
+- Avoided splitting clipboard text into lines unless a multi-cursor paste can actually use line distribution.
 - Ran `just run` after the DX selection/focused-caret/bulk-input pass; Cargo rebuilt successfully in 3m 03s and launched Zed once.
 - Pushed the current good WebPreview/editor baseline to `origin/dev` at `87831af7cb` before making the new scoped edits.
 - Changed Dx theme editor selection colors from blue to green primary opacity in both dark and light variants.

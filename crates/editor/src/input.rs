@@ -525,7 +525,6 @@ impl Editor {
             if !is_bulk_input {
                 let trigger_in_words =
                     this.show_edit_predictions_in_menu() || !had_active_edit_prediction;
-                refresh_linked_ranges(this, window, cx);
                 this.defer_completion_on_input(text.to_string(), trigger_in_words, window, cx);
                 jsx_tag_auto_close::handle_from(this, initial_buffer_versions, window, cx);
             }
