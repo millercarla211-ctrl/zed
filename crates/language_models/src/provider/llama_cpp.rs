@@ -36,6 +36,7 @@ const PROVIDER_NAME: LanguageModelProviderName = LanguageModelProviderName::new(
 
 const LOW_SPEC_MEMORY_THRESHOLD_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 const LOCAL_LLAMA_SERVER_PARALLEL_SLOTS: u64 = 1;
+const LOCAL_LLAMA_PROMPT_TOKEN_MARGIN: u64 = 256;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LlamaCppSettings {
@@ -299,6 +300,7 @@ impl LlamaCppLanguageModel {
                 .ensure_server(config.clone(), http_client.clone())
                 .await
                 .map_err(LanguageModelCompletionError::Other)?;
+            let config = effective_launch_config(http_client.as_ref(), config).await;
             stream_llama_completion(http_client.as_ref(), &config, request).await
         });
 
@@ -493,26 +495,39 @@ impl LlamaCppRuntime {
                 .unwrap_or_default();
             let loaded_model_names = loaded_models.join(", ");
             if server_models_include(&loaded_models, &config.model) {
-                let running_settings = server_props(http_client.as_ref(), &config.api_url)
+                let running_props = server_props(http_client.as_ref(), &config.api_url)
                     .await
-                    .ok()
+                    .ok();
+                let running_settings = running_props
+                    .as_ref()
                     .map(|props| props.describe())
                     .unwrap_or_else(|| "unknown server settings".to_string());
-                anyhow::bail!(
-                    "llama-server is already running at {} with model(s) [{}], but it was launched with different settings ({}). Stop the existing llama-server so Zed can restart it with {} ctx and {} parallel slot.",
+                log::warn!(
+                    "reusing already-running llama.cpp server at {} with model(s) [{}] and settings ({}); requested {} ctx and {} parallel slot",
                     config.api_url,
                     loaded_model_names,
                     running_settings,
                     config.context_window,
-                    LOCAL_LLAMA_SERVER_PARALLEL_SLOTS,
+                    LOCAL_LLAMA_SERVER_PARALLEL_SLOTS
                 );
+                return Ok(());
             } else {
-                anyhow::bail!(
-                    "llama-server is already running at {} with model(s) [{}], but {} was selected. Stop the existing llama-server or use a different port.",
-                    config.api_url,
-                    loaded_model_names,
-                    config.model.name
-                );
+                if stop_existing_local_llama_server_for_switch(&config, &server_path)? {
+                    log::info!(
+                        "stopped existing local llama-server at {} with model(s) [{}] so {} can start",
+                        config.api_url,
+                        loaded_model_names,
+                        config.model.name
+                    );
+                    async_io::Timer::after(Duration::from_millis(500)).await;
+                } else {
+                    anyhow::bail!(
+                        "llama-server is already running at {} with model(s) [{}], but {} was selected. Stop the existing llama-server or use a different port.",
+                        config.api_url,
+                        loaded_model_names,
+                        config.model.name
+                    );
+                }
             }
         }
 
@@ -610,6 +625,7 @@ impl LlamaCppRuntime {
 
         for _ in 0..900 {
             if server_is_ready_for_model(http_client.as_ref(), &config).await {
+                warm_up_llama_server(http_client.as_ref(), &config).await;
                 return Ok(());
             }
             {
@@ -775,6 +791,27 @@ async fn server_props(http_client: &dyn HttpClient, api_url: &str) -> Result<Lla
     serde_json::from_str(&body).with_context(|| format!("parsing {url} response"))
 }
 
+async fn effective_launch_config(
+    http_client: &dyn HttpClient,
+    mut config: LlamaCppLaunchConfig,
+) -> LlamaCppLaunchConfig {
+    let Ok(props) = server_props(http_client, &config.api_url).await else {
+        return config;
+    };
+    if let Some(context_window) = props.context_window()
+        && context_window != config.context_window
+    {
+        log::warn!(
+            "using running llama.cpp context window {} for model {} instead of configured {}",
+            context_window,
+            config.model.name,
+            config.context_window
+        );
+        config.context_window = context_window;
+    }
+    config
+}
+
 #[derive(Deserialize)]
 struct LlamaServerProps {
     default_generation_settings: Option<LlamaDefaultGenerationSettings>,
@@ -782,10 +819,14 @@ struct LlamaServerProps {
 }
 
 impl LlamaServerProps {
-    fn matches_config(&self, config: &LlamaCppLaunchConfig) -> bool {
+    fn context_window(&self) -> Option<u64> {
         self.default_generation_settings
             .as_ref()
             .and_then(|settings| settings.n_ctx)
+    }
+
+    fn matches_config(&self, config: &LlamaCppLaunchConfig) -> bool {
+        self.context_window()
             .map_or(true, |n_ctx| n_ctx == config.context_window)
             && self
                 .total_slots
@@ -794,9 +835,7 @@ impl LlamaServerProps {
 
     fn describe(&self) -> String {
         let context = self
-            .default_generation_settings
-            .as_ref()
-            .and_then(|settings| settings.n_ctx)
+            .context_window()
             .map(|context| context.to_string())
             .unwrap_or_else(|| "unknown".to_string());
         let slots = self
@@ -937,13 +976,32 @@ async fn apply_llama_chat_template(
     request: &LanguageModelRequest,
 ) -> Result<String, LanguageModelCompletionError> {
     let native_url = native_api_url(&config.api_url);
+    let messages = request
+        .messages
+        .iter()
+        .filter_map(llama_chat_message_from_request)
+        .collect::<Vec<_>>();
+    let prompt =
+        apply_llama_template_to_messages(http_client, &native_url, messages.clone()).await?;
+    let prompt_budget = llama_prompt_token_budget(config);
+
+    if llama_prompt_fits(http_client, &native_url, &prompt, prompt_budget).await {
+        return Ok(prompt);
+    }
+
+    fit_llama_prompt_to_context(http_client, &native_url, messages, prompt_budget)
+        .await
+        .unwrap_or(Ok(prompt))
+}
+
+async fn apply_llama_template_to_messages(
+    http_client: &dyn HttpClient,
+    native_url: &str,
+    messages: Vec<LlamaChatMessage>,
+) -> Result<String, LanguageModelCompletionError> {
     let url = format!("{native_url}/apply-template");
     let request = LlamaApplyTemplateRequest {
-        messages: request
-            .messages
-            .iter()
-            .filter_map(llama_chat_message_from_request)
-            .collect(),
+        messages,
         add_generation_prompt: true,
         chat_template_kwargs: LlamaChatTemplateKwargs {
             enable_thinking: false,
@@ -964,6 +1022,193 @@ async fn apply_llama_chat_template(
         }
     })?;
     Ok(response.prompt)
+}
+
+async fn fit_llama_prompt_to_context(
+    http_client: &dyn HttpClient,
+    native_url: &str,
+    messages: Vec<LlamaChatMessage>,
+    prompt_budget: u64,
+) -> Option<Result<String, LanguageModelCompletionError>> {
+    if messages.len() <= 1 {
+        return trim_last_llama_message_to_context(
+            http_client,
+            native_url,
+            messages,
+            prompt_budget,
+        )
+        .await;
+    }
+
+    let system_message = messages
+        .first()
+        .filter(|message| message.role == "system")
+        .cloned();
+    let first_conversation_index = usize::from(system_message.is_some());
+    for start in (first_conversation_index + 1)..messages.len() {
+        let mut candidate = Vec::new();
+        if let Some(system_message) = system_message.clone() {
+            candidate.push(system_message);
+        }
+        candidate.extend(messages[start..].iter().cloned());
+        let prompt = match apply_llama_template_to_messages(
+            http_client,
+            native_url,
+            candidate.clone(),
+        )
+        .await
+        {
+            Ok(prompt) => prompt,
+            Err(error) => return Some(Err(error)),
+        };
+        if llama_prompt_fits(http_client, native_url, &prompt, prompt_budget).await {
+            log::warn!(
+                "trimmed older llama.cpp chat history to fit local context window ({} messages kept)",
+                candidate.len()
+            );
+            return Some(Ok(prompt));
+        }
+    }
+
+    trim_last_llama_message_to_context(http_client, native_url, messages, prompt_budget).await
+}
+
+async fn trim_last_llama_message_to_context(
+    http_client: &dyn HttpClient,
+    native_url: &str,
+    messages: Vec<LlamaChatMessage>,
+    prompt_budget: u64,
+) -> Option<Result<String, LanguageModelCompletionError>> {
+    let last_message = messages.last()?;
+    let system_message = messages
+        .first()
+        .filter(|message| message.role == "system")
+        .cloned();
+    let mut keep_chars = last_message.content.chars().count().saturating_mul(3) / 4;
+    keep_chars = keep_chars.max(512);
+
+    while keep_chars >= 512 {
+        let mut candidate = Vec::new();
+        if let Some(system_message) = system_message.clone() {
+            candidate.push(system_message);
+        }
+        candidate.push(LlamaChatMessage {
+            role: last_message.role.clone(),
+            content: tail_content_for_local_context(&last_message.content, keep_chars),
+        });
+        let prompt =
+            match apply_llama_template_to_messages(http_client, native_url, candidate).await {
+                Ok(prompt) => prompt,
+                Err(error) => return Some(Err(error)),
+            };
+        if llama_prompt_fits(http_client, native_url, &prompt, prompt_budget).await {
+            log::warn!("trimmed oversized llama.cpp prompt tail to fit local context window");
+            return Some(Ok(prompt));
+        }
+        keep_chars /= 2;
+    }
+
+    None
+}
+
+fn tail_content_for_local_context(content: &str, keep_chars: usize) -> String {
+    let total_chars = content.chars().count();
+    if total_chars <= keep_chars {
+        return content.to_string();
+    }
+
+    let tail = content
+        .chars()
+        .skip(total_chars.saturating_sub(keep_chars))
+        .collect::<String>();
+    format!("[Earlier local context was omitted to fit this llama.cpp model.]\n{tail}")
+}
+
+async fn llama_prompt_fits(
+    http_client: &dyn HttpClient,
+    native_url: &str,
+    prompt: &str,
+    prompt_budget: u64,
+) -> bool {
+    llama_prompt_token_count(http_client, native_url, prompt)
+        .await
+        .map(|tokens| tokens <= prompt_budget)
+        .unwrap_or(true)
+}
+
+async fn llama_prompt_token_count(
+    http_client: &dyn HttpClient,
+    native_url: &str,
+    prompt: &str,
+) -> Result<u64, LanguageModelCompletionError> {
+    let url = format!("{native_url}/tokenize");
+    let request = LlamaTokenizeRequest {
+        content: prompt.to_string(),
+    };
+    let mut response = send_json(http_client, &url, &request).await?;
+    let status = response.status();
+    let body = response_body_string(&mut response).await?;
+
+    if !status.is_success() {
+        return Err(map_llama_http_error(status, body));
+    }
+
+    let response: LlamaTokenizeResponse = serde_json::from_str(&body).map_err(|error| {
+        LanguageModelCompletionError::DeserializeResponse {
+            provider: PROVIDER_NAME,
+            error,
+        }
+    })?;
+    Ok(response.tokens.len() as u64)
+}
+
+fn llama_prompt_token_budget(config: &LlamaCppLaunchConfig) -> u64 {
+    let output_tokens = config.model.max_output_tokens.unwrap_or(1024);
+    config
+        .context_window
+        .saturating_sub(output_tokens)
+        .saturating_sub(LOCAL_LLAMA_PROMPT_TOKEN_MARGIN)
+        .max(config.context_window / 2)
+}
+
+async fn warm_up_llama_server(http_client: &dyn HttpClient, config: &LlamaCppLaunchConfig) {
+    let native_url = native_api_url(&config.api_url);
+    let request = LlamaCompletionRequest {
+        prompt: "User: warm up.\nAssistant:".to_string(),
+        stream: false,
+        n_predict: 1,
+        stop: Vec::new(),
+        temperature: Some(0.0),
+        cache_prompt: false,
+        timings_per_token: false,
+        return_progress: false,
+    };
+
+    match send_json(http_client, &format!("{native_url}/completion"), &request).await {
+        Ok(mut response) => {
+            let status = response.status();
+            if status.is_success() {
+                let _ = response_body_string(&mut response).await;
+            } else {
+                let body = response_body_string(&mut response)
+                    .await
+                    .unwrap_or_else(|_| String::new());
+                log::warn!(
+                    "llama.cpp warmup for {} returned {}: {}",
+                    config.model.name,
+                    status,
+                    body
+                );
+            }
+        }
+        Err(error) => {
+            log::warn!(
+                "llama.cpp warmup for {} failed: {}",
+                config.model.name,
+                error
+            );
+        }
+    }
 }
 
 fn llama_chat_message_from_request(
@@ -1077,7 +1322,7 @@ struct LlamaChatTemplateKwargs {
     enable_thinking: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct LlamaChatMessage {
     role: String,
     content: String,
@@ -1086,6 +1331,16 @@ struct LlamaChatMessage {
 #[derive(Deserialize)]
 struct LlamaApplyTemplateResponse {
     prompt: String,
+}
+
+#[derive(Serialize)]
+struct LlamaTokenizeRequest {
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct LlamaTokenizeResponse {
+    tokens: Vec<i64>,
 }
 
 #[derive(Serialize)]
@@ -1743,6 +1998,65 @@ fn server_binary_name() -> &'static str {
     } else {
         "llama-server"
     }
+}
+
+fn stop_existing_local_llama_server_for_switch(
+    config: &LlamaCppLaunchConfig,
+    server_path: &Path,
+) -> Result<bool> {
+    let process_refresh_kind = sysinfo::ProcessRefreshKind::nothing()
+        .with_cmd(sysinfo::UpdateKind::Always)
+        .with_exe(sysinfo::UpdateKind::Always);
+    let system = sysinfo::System::new_with_specifics(
+        sysinfo::RefreshKind::nothing().with_processes(process_refresh_kind),
+    );
+    let mut stopped_any = false;
+
+    for process in system.processes().values() {
+        if !is_llama_server_process_name(process.name()) {
+            continue;
+        }
+
+        let Some(exe) = process.exe() else {
+            continue;
+        };
+
+        if !is_local_managed_llama_server(exe, server_path, &config.tools_dir) {
+            continue;
+        }
+
+        log::info!(
+            "stopping local llama-server process {} at {} before switching to {}",
+            process.pid(),
+            exe.display(),
+            config.model.name
+        );
+        stopped_any |= process.kill();
+    }
+
+    Ok(stopped_any)
+}
+
+fn is_llama_server_process_name(name: &std::ffi::OsStr) -> bool {
+    name.to_string_lossy()
+        .eq_ignore_ascii_case(server_binary_name())
+}
+
+fn is_local_managed_llama_server(exe: &Path, server_path: &Path, tools_dir: &Path) -> bool {
+    let exe = comparable_path(exe);
+    let server_path = comparable_path(server_path);
+    let tools_dir = comparable_path(tools_dir);
+
+    exe == server_path || exe.starts_with(&format!("{tools_dir}/"))
+}
+
+fn comparable_path(path: &Path) -> String {
+    path.canonicalize()
+        .unwrap_or_else(|_| path.to_path_buf())
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_ascii_lowercase()
 }
 
 fn is_low_spec_system() -> bool {

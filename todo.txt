@@ -1,7 +1,11 @@
 IN PROGRESS:
-- Commit and push the checkpointed editor-speed/WebPreview-loading pass on current `dev`.
+- Finish local llama.cpp model speed/switching polish for Qwen and Gemma in the Zed AI panel/code editor.
 
 PENDING:
+- Final `just run` validation for the local llama.cpp speed/model-switching fix.
+- User manual check that Qwen 3.5 0.8B answers in the Zed AI panel/code editor with normal and larger project context.
+- User manual check that switching from Qwen to Gemma in the AI panel stops/replaces the old local llama-server automatically.
+- User manual check that Qwen 3.5 4B appears in the AI panel and downloads/launches from `G:\Zed\models\llama.cpp` when selected.
 - User manual check that WebPreview opens without the transparent gap and keeps the loading overlay until the page is actually ready.
 - User manual check that WebPreview hover, click, wheel, right-click, and keyboard input still work after the load-state-only changes.
 - User manual check that normal code typing and large paste/input chunks feel faster after throttling selection-dependent editor refresh work.
@@ -13,6 +17,14 @@ PENDING:
 - User manual feedback on switching between Qwen 3.5 0.8B, Gemma 4 E4B, and any newly dropped GGUF files from the AI panel.
 
 COMPLETED:
+- Measured Qwen 3.5 0.8B directly through llama.cpp at 4096 context; warmed completions are about 0.5s with roughly 38 output tokens/sec for a tiny prompt.
+- Verified Gemma 4 E4B starts directly through llama.cpp on port 8080 and answers `gemma-ok`.
+- Added automatic managed llama-server replacement when the user switches from a running Qwen server to Gemma or another selected local model.
+- Added Qwen 3.5 4B and official Qwen 3 4B selector entries with G-drive model paths and auto-download metadata.
+- Retuned the default Qwen 3.5 0.8B profile to a smaller 4096-token local context and 384-token output cap for faster first-response behavior.
+- Verified the local Qwen server and model file exist on `G:\Zed`; direct llama.cpp `/completion` returns `qwen-ok`.
+- Made the llama.cpp provider reuse an already-running same-model server instead of failing when server props differ.
+- Made the llama.cpp provider read the actual running server context window and trim older prompt history/context before sending oversized local prompts.
 - Renamed stale `web-preivew` branch to `depricated-web-preview` locally and on `origin` so active branches stay as `main` and `dev`.
 - Ran `just run` after the checkpointed editor-speed and WebPreview loading pass; Zed launched and exited successfully.
 - Created and pushed checkpoint branch `codex/checkpoint-working-2026-05-13` from the current good `dev` state before making new edits.

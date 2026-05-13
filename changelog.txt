@@ -1,3 +1,37 @@
+[2026-05-13] - Local llama.cpp Speed and Model Switching
+
+ADDED:
+- `assets/settings/default.json` now includes Qwen 3.5 4B Q4_K_M and official Qwen 3 4B Q4_K_M local selector entries with G-drive model paths and Hugging Face auto-download metadata.
+
+CHANGED:
+- `assets/settings/default.json` now tunes the default Qwen 3.5 0.8B model to a 4096-token context and 384-token output cap so the tiny local model is not fed huge editor context by default.
+- `crates/language_models/src/provider/llama_cpp.rs` now warms a freshly-started llama-server with a one-token completion before the first user request.
+- `crates/language_models/src/provider/llama_cpp.rs` keeps exact llama.cpp `/tokenize` checks before completion so the smaller fast Qwen context still trims oversized Zed prompts safely.
+
+FIXED:
+- `crates/language_models/src/provider/llama_cpp.rs` now stops a Zed-managed local llama-server from `G:\Zed\tools\llama.cpp` when the selected AI panel model changes, so choosing Gemma no longer fails just because Qwen is already running on port 8080.
+
+NOTES:
+- Scanned G: for Qwen GGUF files; only the existing Qwen 3.5 0.8B GGUF and Flow's Qwen 3 0.6B GGUF were found, so the new 4B selector entries are configured to download into `G:\Zed\models\llama.cpp` when selected.
+- Measured Qwen 3.5 0.8B via llama.cpp CLI/server at 4096 context: warmed tiny prompt completion was about 0.5s with roughly 38 output tokens/sec.
+- Started Gemma 4 E4B directly with llama-server at 8192 context and verified a native `/apply-template` plus `/completion` request returned `gemma-ok`.
+
+[2026-05-13] - Local Qwen llama.cpp Reliability
+
+CHANGED:
+- `crates/language_models/src/provider/llama_cpp.rs` now reuses an already-running same-model llama.cpp server instead of failing when the running server was launched with different context or slot settings.
+- `crates/language_models/src/provider/llama_cpp.rs` now reads the actual running llama-server context window from `/props` before sending a completion.
+- `crates/language_models/src/provider/llama_cpp.rs` now token-counts rendered prompts through llama.cpp `/tokenize` and trims older chat/context history before sending prompts that would exceed the local model window.
+
+FIXED:
+- Prevented local Qwen requests from failing in the code editor when a stale llama-server is already running with a smaller context than Zed's configured default.
+- Prevented oversized local prompts from surfacing as hard llama.cpp context errors when Qwen can still answer with the newest relevant context.
+
+NOTES:
+- Verified the running Qwen server at `http://127.0.0.1:8080` has `Qwen3.5-0.8B-GGUF` loaded from `G:/Zed/models/llama.cpp/Qwen3.5-0.8B-Q4_0.gguf`.
+- Smoke-tested the running server directly with `/apply-template`, `/completion`, and `/tokenize`; it returned `qwen-ok`.
+- Ran `rustfmt` on the touched Rust file.
+
 [2026-05-13] - Checkpointed Editor Speed and WebPreview Loading
 
 ADDED:
