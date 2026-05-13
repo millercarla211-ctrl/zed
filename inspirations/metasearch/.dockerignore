@@ -1,0 +1,15 @@
+.git
+.github
+target
+**/target
+.cargo
+debug_*.html
+*.log
+*.tmp
+*.bak
+node_modules
+dist
+artifacts
+docs
+integrations
+TODO.md

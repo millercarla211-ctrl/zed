@@ -1,0 +1,111 @@
+{
+  "project": "flow",
+  "crate_version": "0.1.0",
+  "generated_at_unix_ms": 1777240708736,
+  "repo_root": "F:\\flow",
+  "device_tier": "Low",
+  "selected_text_model": "qwen3-0.6b",
+  "selected_stt_model": "moonshine-tiny",
+  "selected_tts_model": "kokoro-int8",
+  "production_bundle_ready": true,
+  "production_bundle_files": [
+    {
+      "path": "configs/production/dx-desktop.json",
+      "exists": true,
+      "bytes": 1613,
+      "sha256": null
+    },
+    {
+      "path": "configs/production/browser-extension.json",
+      "exists": true,
+      "bytes": 1622,
+      "sha256": null
+    },
+    {
+      "path": "configs/production/zed-fork.json",
+      "exists": true,
+      "bytes": 1617,
+      "sha256": null
+    },
+    {
+      "path": "configs/production/codex-fork.json",
+      "exists": true,
+      "bytes": 1614,
+      "sha256": null
+    },
+    {
+      "path": "configs/production/zeroclaw-fork.json",
+      "exists": true,
+      "bytes": 1617,
+      "sha256": null
+    },
+    {
+      "path": "configs/production/manifest.json",
+      "exists": true,
+      "bytes": 1533,
+      "sha256": null
+    },
+    {
+      "path": "configs/production/README.txt",
+      "exists": true,
+      "bytes": 913,
+      "sha256": null
+    }
+  ],
+  "browser_release_artifacts": [
+    {
+      "path": "extensions/flow-webext/artifacts/flow-webext-chromium-v0.1.0.zip",
+      "exists": true,
+      "bytes": 1491702,
+      "sha256": "af12d72041859712ecf19ee3d0f7e3a9ab9aee060f4e68fca7be6caaa3971fc8"
+    },
+    {
+      "path": "extensions/flow-webext/artifacts/flow-webext-firefox-v0.1.0.zip",
+      "exists": true,
+      "bytes": 1491563,
+      "sha256": "611bec9b836a546eafb0ce5b432becd1a3bff745553f6edbefb3fa309044d83c"
+    },
+    {
+      "path": "extensions/flow-webext/artifacts/flow-webext-safari-v0.1.0.zip",
+      "exists": true,
+      "bytes": 1491548,
+      "sha256": "dd1079a10c8b6c2e62b85232a81d258b471eda85ba1a886148699bc20b62e285"
+    }
+  ],
+  "validated_commands": [
+    "cargo check",
+    "cargo test",
+    "cargo build",
+    "cargo check -p flow-browser-core",
+    "cargo check --features example-binaries --examples",
+    "npm run typecheck (extensions/flow-webext)",
+    "npm run build:all (extensions/flow-webext)",
+    "npm run package:all (extensions/flow-webext)"
+  ],
+  "external_tasks": [
+    {
+      "key": "firebase-project-linking",
+      "status": "pending-external",
+      "note": "Run firebase login, select the production Firebase project, and apply the project env values outside the repository."
+    },
+    {
+      "key": "chromium-store-publish",
+      "status": "pending-external",
+      "note": "Upload the packaged Chromium zip to the Chrome Web Store or Edge Add-ons dashboard."
+    },
+    {
+      "key": "firefox-amo-publish",
+      "status": "pending-external",
+      "note": "Upload the packaged Firefox zip to addons.mozilla.org with the reviewed listing assets."
+    },
+    {
+      "key": "safari-xcode-package",
+      "status": "pending-external",
+      "note": "Wrap the Safari WebExtension assets in Xcode, sign with the Apple team, and submit through App Store Connect."
+    }
+  ],
+  "notes": [
+    "The repository scope is code-complete and validated; the remaining tasks are vendor-side release operations.",
+    "This summary is intended for client handoff, operator review, and downstream host integration."
+  ]
+}

@@ -1,0 +1,22 @@
+$ErrorActionPreference = "Stop"
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$targetDir = Join-Path $repoRoot "models\stt\nemotron-speech-streaming-en-0.6b-int8"
+
+Write-Host "Flow Nemotron STT handoff"
+Write-Host "========================="
+Write-Host ""
+Write-Host "Target directory:"
+Write-Host "  $targetDir"
+Write-Host ""
+Write-Host "Flow expects a sherpa-onnx-compatible transducer bundle:"
+Write-Host "  encoder.int8.onnx"
+Write-Host "  decoder.int8.onnx"
+Write-Host "  joiner.int8.onnx"
+Write-Host "  tokens.txt"
+Write-Host ""
+Write-Host "Use this path only for explicit NVIDIA/performance profiles."
+Write-Host "On this AMD Windows machine, Parakeet is the practical local upgrade and Moonshine remains the safe fallback."
+Write-Host ""
+Write-Host "After placing files, verify:"
+Write-Host "  powershell -ExecutionPolicy Bypass -File scripts/flow-voice-status.ps1"

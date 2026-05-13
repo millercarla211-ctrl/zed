@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "pack_key": "qwen3-0.6b-onnx-browserpack",
+  "model_key": "qwen3-0.6b",
+  "display_name": "Qwen3 0.6B Browser Pack",
+  "repo_id": "onnx-community/Qwen3-0.6B-DQ-ONNX",
+  "modality": "chat",
+  "backend": "transformersjs-onnx",
+  "quantization": "q4f16",
+  "requires_webgpu": false,
+  "files": [
+    {
+      "path": "config.json",
+      "source_url": "https://huggingface.co/onnx-community/Qwen3-0.6B-DQ-ONNX/resolve/main/config.json",
+      "purpose": "model-config",
+      "content_type": "application/json"
+    },
+    {
+      "path": "tokenizer.json",
+      "source_url": "https://huggingface.co/onnx-community/Qwen3-0.6B-DQ-ONNX/resolve/main/tokenizer.json",
+      "purpose": "tokenizer",
+      "content_type": "application/json"
+    },
+    {
+      "path": "onnx/model_q4f16.onnx",
+      "source_url": "https://huggingface.co/onnx-community/Qwen3-0.6B-DQ-ONNX/resolve/main/onnx/model_q4f16.onnx",
+      "purpose": "decoder-model",
+      "content_type": "application/octet-stream"
+    }
+  ]
+}

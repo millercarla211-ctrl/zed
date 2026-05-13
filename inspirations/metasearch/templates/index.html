@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Metasearch — Privacy-respecting Search</title>
+  <script>
+    (function () {
+      try {
+        var prefs = JSON.parse(localStorage.getItem('metasearch-prefs') || '{}');
+        var theme = prefs.theme || 'dark';
+        document.documentElement.classList.remove('light');
+        if (theme === 'light') {
+          document.documentElement.classList.add('light');
+        } else if (theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+          document.documentElement.classList.add('light');
+        }
+      } catch (_) {}
+    }());
+  </script>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/shadcn-vercel.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230070f3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.35-4.35'/></svg>">
+  <link rel="search" type="application/opensearchdescription+xml" title="Metasearch" href="/opensearch.xml">
+  <script src="/static/js/lucide-local.js" defer></script>
+</head>
+<body class="home-page">
+
+  <!-- Page loading bar -->
+  <div class="search-loading-bar" id="page-loading-bar"></div>
+
+  <!-- Nav Bar -->
+  <nav class="home-nav">
+    <div class="home-nav-inner">
+      <a href="/" class="brand">
+        <span class="brand-icon"><i data-lucide="search"></i></span>
+        <span class="brand-name">Metasearch</span>
+      </a>
+      <div class="home-nav-links">
+        <a href="/about" class="nav-link">About</a>
+        <a href="/status" class="nav-link">Status</a>
+        <a href="/preferences" class="nav-link">Preferences</a>
+        <a href="/api/v1/engines" class="nav-link">Engines</a>
+        <a href="https://github.com/najmus-sakib-hossain/metasearch" target="_blank" rel="noopener" class="nav-link nav-link--icon" title="GitHub">
+          <i data-lucide="github"></i>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <main class="home">
+
+    <section class="hero">
+      <div class="hero-badge">
+        <i data-lucide="shield-check"></i>
+        <span>Zero tracking · Zero profiling · Zero ads</span>
+      </div>
+
+      <h1 class="hero-title">
+        Search the web<br>
+        <span class="hero-title-accent">privately.</span>
+      </h1>
+      <p class="hero-sub">
+        Aggregating {{ engine_count }} built-in sources. All in one place. None of it about you.
+      </p>
+
+      <!-- Search Box -->
+      <div class="hero-search-wrap">
+        <form action="/search" method="get" class="hero-form" id="search-form">
+          <div class="hero-input-wrap" id="search-input-wrap">
+            <span class="hero-input-icon"><i data-lucide="search"></i></span>
+            <input
+              type="text"
+              name="q"
+              id="search-input"
+              class="hero-input"
+              placeholder="Search anything…"
+              autocomplete="off"
+              autofocus
+              aria-autocomplete="list"
+              aria-controls="autocomplete-list"
+              aria-expanded="false"
+            >
+            <input type="hidden" name="language" id="search-language-hidden" value="{{ default_language }}">
+            <input type="hidden" name="safe_search" id="search-safe-search-hidden" value="{{ default_safe_search }}">
+            <input type="hidden" name="category" id="search-category-hidden" value="general">
+            <button type="submit" class="hero-btn" id="search-btn">
+              <span id="btn-text">Search</span>
+              <i data-lucide="arrow-right" id="btn-icon"></i>
+              <span class="loading-spinner" id="btn-spinner" style="display:none;"></span>
+            </button>
+            <!-- Autocomplete Dropdown -->
+            <ul id="autocomplete-list" class="autocomplete-dropdown" role="listbox" hidden></ul>
+          </div>
+        </form>
+
+        <div class="category-pills">
+          <button type="button" class="pill pill--active" data-category="general" aria-pressed="true">
+            <i data-lucide="globe"></i><span>General</span>
+          </button>
+          <button type="button" class="pill" data-category="images" aria-pressed="false">
+            <i data-lucide="image"></i><span>Images</span>
+          </button>
+          <button type="button" class="pill" data-category="videos" aria-pressed="false">
+            <i data-lucide="play-circle"></i><span>Videos</span>
+          </button>
+          <button type="button" class="pill" data-category="news" aria-pressed="false">
+            <i data-lucide="newspaper"></i><span>News</span>
+          </button>
+          <button type="button" class="pill" data-category="science" aria-pressed="false">
+            <i data-lucide="flask-conical"></i><span>Science</span>
+          </button>
+          <button type="button" class="pill" data-category="music" aria-pressed="false">
+            <i data-lucide="music"></i><span>Music</span>
+          </button>
+          <button type="button" class="pill" data-category="files" aria-pressed="false">
+            <i data-lucide="folder-open"></i><span>Files</span>
+          </button>
+          <button type="button" class="pill" data-category="it" aria-pressed="false">
+            <i data-lucide="terminal"></i><span>IT</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features-section">
+      <p class="section-label">Why Metasearch</p>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon feature-icon--blue">
+            <i data-lucide="shield"></i>
+          </div>
+          <h3 class="feature-title">No Tracking</h3>
+          <p class="feature-desc">We don't store your searches, set cookies, or build profiles. Your queries disappear after you leave.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon feature-icon--purple">
+            <i data-lucide="zap"></i>
+          </div>
+          <h3 class="feature-title">Lightning Fast</h3>
+          <p class="feature-desc">Built in Rust. Up to {{ engine_count }} engines can be orchestrated through one local runtime.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon feature-icon--green">
+            <i data-lucide="layers"></i>
+          </div>
+          <h3 class="feature-title">{{ engine_count }} Sources</h3>
+          <p class="feature-desc">Google, Bing, DuckDuckGo, Brave, academic databases, torrent trackers, social platforms, and more.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon feature-icon--orange">
+            <i data-lucide="sliders-horizontal"></i>
+          </div>
+          <h3 class="feature-title">Category Search</h3>
+          <p class="feature-desc">Dedicated modes for images, videos, news, science, music, files, IT, and social media.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon feature-icon--red">
+            <i data-lucide="code-2"></i>
+          </div>
+          <h3 class="feature-title">Open Source</h3>
+          <p class="feature-desc">Every line of code is public. Self-host in minutes. Audit it, fork it, improve it.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon feature-icon--cyan">
+            <i data-lucide="refresh-cw"></i>
+          </div>
+          <h3 class="feature-title">Smart Ranking</h3>
+          <p class="feature-desc">Results are deduplicated and ranked by relevance across sources, not by who paid more.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats-section">
+      <div class="stats-grid">
+        <div class="stat-item">
+          <span class="stat-number">{{ engine_count }}</span>
+          <span class="stat-label">Search engines</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <span class="stat-number">&lt;100ms</span>
+          <span class="stat-label">Typical response</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <span class="stat-number">0</span>
+          <span class="stat-label">Tracking cookies</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <span class="stat-number">100%</span>
+          <span class="stat-label">Open source</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="home-footer">
+    <div class="home-footer-inner">
+      <div class="footer-brand">
+        <span class="brand-icon-sm"><i data-lucide="search"></i></span>
+        <span>Metasearch</span>
+      </div>
+      <nav class="footer-links">
+        <a href="/about">About</a>
+        <a href="/status">Status</a>
+        <a href="/preferences">Preferences</a>
+        <a href="/api/v1/engines">Engines</a>
+        <a href="https://github.com/najmus-sakib-hossain/metasearch" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+      <p class="footer-copy">No tracking. No profiling. No ads. v{{ version }}</p>
+    </div>
+  </footer>
+
+  <!-- ── Search Autocomplete ──────────────────────────────── -->
+  <script>
+  (function () {
+    var input = document.getElementById('search-input');
+    var list  = document.getElementById('autocomplete-list');
+    var form  = document.getElementById('search-form');
+    
+    if (!input || !list) return;
+
+    var activeIdx = -1;
+    var lastQuery = '';
+    var timer;
+    var recentKey = 'metasearch-recent-queries';
+    var categoryHidden = document.getElementById('search-category-hidden');
+    var categoryPills = Array.prototype.slice.call(document.querySelectorAll('.category-pills .pill'));
+
+    function loadSearchPrefs() {
+      try {
+        var prefs = JSON.parse(localStorage.getItem('metasearch-prefs') || '{}');
+        var lang = document.getElementById('search-language-hidden');
+        var safe = document.getElementById('search-safe-search-hidden');
+        if (lang && prefs.language) lang.value = prefs.language;
+        if (safe && prefs.safeSearch) safe.value = prefs.safeSearch;
+      } catch (_) {}
+    }
+
+    loadSearchPrefs();
+
+    function setActiveCategory(category) {
+      if (categoryHidden) categoryHidden.value = category;
+      categoryPills.forEach(function (pill) {
+        var active = pill.getAttribute('data-category') === category;
+        pill.classList.toggle('pill--active', active);
+        pill.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+    }
+
+    categoryPills.forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        setActiveCategory(pill.getAttribute('data-category') || 'general');
+        input.focus();
+      });
+    });
+
+    function loadRecentQueries() {
+      try {
+        var value = JSON.parse(localStorage.getItem(recentKey) || '[]');
+        return Array.isArray(value) ? value : [];
+      } catch (_) {
+        return [];
+      }
+    }
+
+    function saveRecentQuery(value) {
+      var query = String(value || '').trim();
+      if (!query) return;
+      var recent = loadRecentQueries().filter(function (item) {
+        return String(item).toLowerCase() !== query.toLowerCase();
+      });
+      recent.unshift(query);
+      localStorage.setItem(recentKey, JSON.stringify(recent.slice(0, 8)));
+    }
+
+    function getRecentSuggestions(query) {
+      var normalized = query.toLowerCase();
+      return loadRecentQueries().filter(function (item) {
+        return item.toLowerCase().indexOf(normalized) !== -1;
+      }).slice(0, 6);
+    }
+
+    // Loading state for search button
+    var bar = document.getElementById('page-loading-bar');
+    form.addEventListener('submit', function() {
+      var btnText = document.getElementById('btn-text');
+      var btnIcon = document.getElementById('btn-icon');
+      var btnSpinner = document.getElementById('btn-spinner');
+      var searchBtn = document.getElementById('search-btn');
+      
+      if (btnText) btnText.style.display = 'none';
+      if (btnIcon) btnIcon.style.display = 'none';
+      if (btnSpinner) btnSpinner.style.display = 'inline-block';
+      if (searchBtn) searchBtn.style.cursor = 'wait';
+      if (bar) bar.classList.add('active');
+      saveRecentQuery(input.value);
+    });
+    window.addEventListener('beforeunload', function () {
+      if (bar) bar.classList.add('complete');
+    });
+
+    function clearDropdown() {
+      list.innerHTML = '';
+      list.hidden = true;
+      input.setAttribute('aria-expanded', 'false');
+      activeIdx = -1;
+    }
+
+    function renderSuggestions(query, suggestions) {
+      clearDropdown();
+      if (!suggestions || suggestions.length === 0) return;
+      
+      suggestions.forEach(function (text, i) {
+        var li = document.createElement('li');
+        li.setAttribute('role', 'option');
+        li.setAttribute('id', 'ac-item-' + i);
+
+        // Search icon inside each item
+        var icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        icon.setAttribute('class', 'ac-icon');
+        icon.setAttribute('viewBox', '0 0 24 24');
+        icon.setAttribute('fill', 'none');
+        icon.setAttribute('stroke', 'currentColor');
+        icon.setAttribute('stroke-width', '2');
+        icon.setAttribute('stroke-linecap', 'round');
+        icon.setAttribute('stroke-linejoin', 'round');
+        var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', '11'); circle.setAttribute('cy', '11'); circle.setAttribute('r', '8');
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'm21 21-4.35-4.35');
+        icon.append(circle, path);
+
+        var span = document.createElement('span');
+        span.textContent = text;
+        li.append(icon, span);
+
+        li.addEventListener('mousedown', function (e) {
+          e.preventDefault(); // prevent blur before click
+          input.value = text;
+          clearDropdown();
+          form.submit();
+        });
+        list.appendChild(li);
+      });
+      
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    }
+
+    function setActiveItem(idx) {
+      var items = list.querySelectorAll('li');
+      items.forEach(function (el, i) {
+        if (i === idx) {
+          el.setAttribute('aria-selected', 'true');
+          input.value = el.querySelector('span').textContent;
+        } else {
+          el.removeAttribute('aria-selected');
+        }
+      });
+      activeIdx = idx;
+    }
+
+    input.addEventListener('input', function () {
+      var q = input.value.trim();
+      if (q === lastQuery) return;
+      lastQuery = q;
+      activeIdx = -1;
+      clearTimeout(timer);
+      if (q.length < 2) { 
+        clearDropdown(); 
+        return; 
+      }
+      timer = setTimeout(function () { renderSuggestions(q, getRecentSuggestions(q)); }, 100);
+    });
+
+    input.addEventListener('keydown', function (e) {
+      var items = list.querySelectorAll('li');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        var next = Math.min(activeIdx + 1, items.length - 1);
+        setActiveItem(next);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        var prev = Math.max(activeIdx - 1, -1);
+        if (prev === -1) { 
+          input.value = lastQuery; 
+          items.forEach(function(el){ el.removeAttribute('aria-selected'); }); 
+          activeIdx = -1; 
+        } else {
+          setActiveItem(prev);
+        }
+      } else if (e.key === 'Escape') {
+        clearDropdown();
+      } else if (e.key === 'Enter') {
+        if (activeIdx >= 0) { 
+          e.preventDefault(); 
+          form.submit(); 
+        }
+      }
+    });
+
+    input.addEventListener('blur', function () {
+      // Small delay so mousedown click can fire first
+      setTimeout(clearDropdown, 150);
+    });
+
+    input.addEventListener('focus', function () {
+      var q = input.value.trim();
+      if (q.length >= 2 && list.children.length > 0) {
+        list.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+      }
+    });
+
+    setActiveCategory((categoryHidden && categoryHidden.value) || 'general');
+  }());
+  </script>
+</body>
+</html>

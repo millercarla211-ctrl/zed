@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preferences — Metasearch</title>
+  <script>
+    (function () {
+      try {
+        var prefs = JSON.parse(localStorage.getItem('metasearch-prefs') || '{}');
+        var theme = prefs.theme || 'dark';
+        document.documentElement.classList.remove('light');
+        if (theme === 'light') {
+          document.documentElement.classList.add('light');
+        } else if (theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+          document.documentElement.classList.add('light');
+        }
+      } catch (_) {}
+    }());
+  </script>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/shadcn-vercel.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230070f3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.35-4.35'/></svg>">
+  <script src="/static/js/lucide-local.js" defer></script>
+  <style>
+    .preferences-page {
+      min-height: 100vh;
+      background: hsl(var(--background));
+    }
+    .pref-header {
+      border-bottom: 1px solid hsl(var(--border));
+      padding: 1rem 0;
+    }
+    .pref-container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem 1rem;
+    }
+    .pref-section {
+      background: hsl(var(--card));
+      border: 1px solid hsl(var(--border));
+      border-radius: calc(var(--radius) + 4px);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .pref-section h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: hsl(var(--foreground));
+    }
+    .pref-section p {
+      font-size: 14px;
+      color: hsl(var(--muted-foreground));
+      margin-bottom: 1rem;
+    }
+    .pref-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 0;
+      border-bottom: 1px solid hsl(var(--border));
+    }
+    .pref-item:last-child {
+      border-bottom: none;
+    }
+    .pref-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: hsl(var(--foreground));
+    }
+    .pref-desc {
+      font-size: 13px;
+      color: hsl(var(--muted-foreground));
+      margin-top: 0.25rem;
+    }
+    select, input[type="number"] {
+      padding: 8px 12px;
+      border: 1px solid hsl(var(--input));
+      border-radius: var(--radius);
+      background: hsl(var(--background));
+      color: hsl(var(--foreground));
+      font-size: 14px;
+    }
+    select:focus, input:focus {
+      outline: none;
+      border-color: hsl(var(--ring));
+      box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+    }
+  </style>
+</head>
+<body class="preferences-page">
+  <header class="pref-header">
+    <div class="pref-container" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <a href="/" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: hsl(var(--foreground));">
+        <i data-lucide="arrow-left" style="width: 18px; height: 18px;"></i>
+        <span style="font-weight: 500;">Back to Search</span>
+      </a>
+      <nav style="display:flex;gap:0.9rem;flex-wrap:wrap;">
+        <a href="/about" style="color:hsl(var(--muted-foreground));text-decoration:none;">About</a>
+        <a href="/status" style="color:hsl(var(--muted-foreground));text-decoration:none;">Status</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="pref-container">
+    <h1 style="font-size: 32px; font-weight: 700; margin-bottom: 0.5rem;">Preferences</h1>
+    <p style="color: hsl(var(--muted-foreground)); margin-bottom: 2rem;">Customize your search experience</p>
+
+    <div class="pref-section">
+      <h2>Search Settings</h2>
+      <p>Configure how search results are displayed and filtered</p>
+      
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Safe Search</div>
+          <div class="pref-desc">Filter explicit content from results</div>
+        </div>
+        <select id="safe-search">
+          <option value="0" {% if default_safe_search == 0 %}selected{% endif %}>Off</option>
+          <option value="1" {% if default_safe_search == 1 %}selected{% endif %}>Moderate</option>
+          <option value="2" {% if default_safe_search == 2 %}selected{% endif %}>Strict</option>
+        </select>
+      </div>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Default Language</div>
+          <div class="pref-desc">Preferred language for search results</div>
+        </div>
+        <select id="language">
+          <option value="en" {% if default_language == "en" %}selected{% endif %}>English</option>
+          <option value="es" {% if default_language == "es" %}selected{% endif %}>Spanish</option>
+          <option value="fr" {% if default_language == "fr" %}selected{% endif %}>French</option>
+          <option value="de" {% if default_language == "de" %}selected{% endif %}>German</option>
+          <option value="zh" {% if default_language == "zh" %}selected{% endif %}>Chinese</option>
+          <option value="ja" {% if default_language == "ja" %}selected{% endif %}>Japanese</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="pref-section">
+      <h2>Privacy</h2>
+      <p>Control how your data is handled</p>
+      
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Search History</div>
+          <div class="pref-desc">We don't store your search history</div>
+        </div>
+        <span style="color: hsl(var(--muted-foreground)); font-size: 14px;">Always disabled</span>
+      </div>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Tracking</div>
+          <div class="pref-desc">We don't track you or use cookies</div>
+        </div>
+        <span style="color: hsl(var(--muted-foreground)); font-size: 14px;">Always disabled</span>
+      </div>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Autocomplete source</div>
+          <div class="pref-desc">The browser UI uses only your local recent queries unless the operator enables remote suggestions.</div>
+        </div>
+        <span style="color: hsl(var(--muted-foreground)); font-size: 14px;">{% if remote_autocomplete_enabled %}Remote endpoint enabled{% else %}Local-only{% endif %}</span>
+      </div>
+    </div>
+
+    <div class="pref-section">
+      <h2>Runtime</h2>
+      <p>Metasearch serves {{ engine_count }} built-in engines in this deployment.</p>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Server version</div>
+          <div class="pref-desc">Current workspace package version</div>
+        </div>
+        <span style="color: hsl(var(--muted-foreground)); font-size: 14px;">v{{ version }}</span>
+      </div>
+    </div>
+
+    <div class="pref-section">
+      <h2>Appearance</h2>
+      <p>Customize the look and feel</p>
+      
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Theme</div>
+          <div class="pref-desc">Choose your preferred color scheme</div>
+        </div>
+        <select id="theme">
+          <option value="dark" selected>Dark</option>
+          <option value="light">Light</option>
+          <option value="auto">Auto</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="pref-section">
+      <h2>Local Data</h2>
+      <p>Manage the small amount of browser-only state used by the UI.</p>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Recent query suggestions</div>
+          <div class="pref-desc">Used only for local autocomplete in this browser.</div>
+        </div>
+        <button class="btn btn-secondary" type="button" onclick="clearRecentQueries()">Clear recent queries</button>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 12px; margin-top: 2rem;">
+      <button class="btn btn-primary" onclick="savePreferences()">
+        <i data-lucide="save" style="width: 16px; height: 16px;"></i>
+        Save Preferences
+      </button>
+      <button class="btn btn-secondary" onclick="resetPreferences()">
+        Reset to Defaults
+      </button>
+    </div>
+
+    <div id="pref-status" style="display:none;margin-top:1rem;padding:0.85rem 1rem;border:1px solid hsl(var(--border));border-radius:var(--radius);background:hsl(var(--card));color:hsl(var(--foreground));font-size:14px;"></div>
+
+    <p style="color: hsl(var(--muted-foreground)); font-size: 13px; margin-top: 1rem;">
+      Note: Preferences are stored locally in your browser and are not synced across devices.
+    </p>
+  </div>
+
+  <script>
+    // Load preferences from localStorage
+    function loadPreferences() {
+      const prefs = JSON.parse(localStorage.getItem('metasearch-prefs') || '{}');
+      if (prefs.safeSearch) document.getElementById('safe-search').value = prefs.safeSearch;
+      if (prefs.language) document.getElementById('language').value = prefs.language;
+      document.getElementById('theme').value = prefs.theme || 'dark';
+    }
+
+    // Save preferences to localStorage
+    function savePreferences() {
+      const prefs = {
+        safeSearch: document.getElementById('safe-search').value,
+        language: document.getElementById('language').value,
+        theme: document.getElementById('theme').value
+      };
+      localStorage.setItem('metasearch-prefs', JSON.stringify(prefs));
+      
+      // Apply theme
+      document.documentElement.classList.remove('light');
+      if (prefs.theme === 'light') {
+        document.documentElement.classList.add('light');
+      } else if (prefs.theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+        document.documentElement.classList.add('light');
+      }
+      
+      showStatus('Preferences saved locally. New searches will use these defaults.');
+    }
+
+    // Reset preferences
+    function resetPreferences() {
+      localStorage.removeItem('metasearch-prefs');
+      localStorage.removeItem('metasearch-recent-queries');
+      document.getElementById('safe-search').value = '{{ default_safe_search }}';
+      document.getElementById('language').value = '{{ default_language }}';
+      document.getElementById('theme').value = 'dark';
+      document.documentElement.classList.remove('light');
+      showStatus('Preferences and local query suggestions reset to deployment defaults.');
+    }
+
+    function clearRecentQueries() {
+      localStorage.removeItem('metasearch-recent-queries');
+      showStatus('Local recent-query suggestions cleared from this browser.');
+    }
+
+    function showStatus(message) {
+      const status = document.getElementById('pref-status');
+      if (!status) return;
+      status.textContent = message;
+      status.style.display = 'block';
+    }
+
+    // Load preferences on page load
+    loadPreferences();
+  </script>
+</body>
+</html>

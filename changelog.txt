@@ -1,3 +1,18 @@
+[2026-05-13] - Inspiration Source Import
+
+ADDED:
+- `inspirations/` now contains source/reference folders copied from `G:\Workspaces\hexed\archeive\integrations\tool-tui` and `G:\Workspaces\flow`.
+- `inspirations/metasearch` now preserves the newer Flow metasearch workspace, including `crates/metasearch-core`.
+
+CHANGED:
+- Duplicate top-level inspiration folders such as `crates`, `docs`, and `extensions` now use the Flow versions instead of the older tool-tui versions.
+- The import excludes generated/runtime-heavy folders and files such as `.git`, `target`, `tmp`, `trash`, `models`, logs, local `.env` files, audio recordings, and the oversized 98 MB `fluent-emoji.json` icon data asset.
+
+NOTES:
+- Committed and pushed the local llama.cpp model switching/speed checkpoint before copying inspiration sources.
+- Verified Flow `inspirations/crates/flow-browser-core` exists and the older tool-tui duplicate `inspirations/crates/agent` is absent.
+- Verified unique tool-tui folders such as `inspirations/apps` and `inspirations/mcp` exist.
+
 [2026-05-13] - Local llama.cpp Speed and Model Switching
 
 ADDED:

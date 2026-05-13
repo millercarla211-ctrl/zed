@@ -1,0 +1,52 @@
+{
+  "project": "flow",
+  "crate_version": "0.1.0",
+  "generated_at_unix_ms": 1777240709096,
+  "device_tier": "Low",
+  "selected_text_model": "qwen3-0.6b",
+  "selected_stt_model": "moonshine-tiny",
+  "selected_tts_model": "kokoro-int8",
+  "all_models_ready": true,
+  "missing_model_paths": [],
+  "entries": [
+    {
+      "target": "dx-desktop",
+      "filename": "dx-desktop.json"
+    },
+    {
+      "target": "browser-extension",
+      "filename": "browser-extension.json"
+    },
+    {
+      "target": "zed-fork",
+      "filename": "zed-fork.json"
+    },
+    {
+      "target": "codex-fork",
+      "filename": "codex-fork.json"
+    },
+    {
+      "target": "zeroclaw-fork",
+      "filename": "zeroclaw-fork.json"
+    }
+  ],
+  "browser_release_artifacts": [
+    "extensions/flow-webext/artifacts/flow-webext-chromium-v0.1.0.zip",
+    "extensions/flow-webext/artifacts/flow-webext-firefox-v0.1.0.zip",
+    "extensions/flow-webext/artifacts/flow-webext-safari-v0.1.0.zip"
+  ],
+  "validated_commands": [
+    "cargo check",
+    "cargo test",
+    "cargo build",
+    "cargo check -p flow-browser-core",
+    "cargo check --features example-binaries --examples",
+    "npm run typecheck (extensions/flow-webext)",
+    "npm run build:all (extensions/flow-webext)",
+    "npm run package:all (extensions/flow-webext)"
+  ],
+  "notes": [
+    "This bundle contains low-end-safe production defaults for every supported Flow host target.",
+    "Firebase wiring, browser-store publishing, and vendor-side signing stay external to this repository."
+  ]
+}

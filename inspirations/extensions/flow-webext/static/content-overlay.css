@@ -1,0 +1,100 @@
+.flow-browser-overlay {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 2147483647;
+  width: min(360px, calc(100vw - 32px));
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(83, 214, 158, 0.28);
+  background:
+    radial-gradient(circle at top right, rgba(83, 214, 158, 0.16), transparent 36%),
+    linear-gradient(180deg, rgba(17, 31, 28, 0.98), rgba(8, 13, 12, 0.98));
+  color: #eff8f4;
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.34);
+  font: 13px/1.5 "Segoe UI", sans-serif;
+}
+
+.flow-browser-overlay-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.flow-browser-overlay-eyebrow {
+  color: #9af2c7;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.flow-browser-overlay-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(154, 242, 199, 0.3);
+  padding: 4px 9px;
+  font-size: 12px;
+  color: #eff8f4;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.flow-browser-overlay h2 {
+  margin: 10px 0 6px;
+  font-size: 16px;
+}
+
+.flow-browser-overlay .muted {
+  color: #9cbab0;
+}
+
+.flow-browser-overlay-actions,
+.flow-browser-overlay .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.flow-browser-overlay-chip {
+  border-radius: 999px;
+  border: 1px solid rgba(130, 184, 166, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  color: #c7ddd4;
+  padding: 5px 9px;
+}
+
+.flow-browser-overlay-preview {
+  border-radius: 16px;
+  border: 1px solid rgba(130, 184, 166, 0.2);
+  background: rgba(255, 255, 255, 0.035);
+  padding: 12px;
+}
+
+.flow-browser-overlay-preview strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.flow-browser-overlay-preview p {
+  margin: 0;
+  color: #dceae5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.flow-browser-overlay-preview.empty p {
+  color: #9cbab0;
+}
+
+.flow-browser-overlay button {
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  background: linear-gradient(135deg, #53d69e, #1ba666);
+  color: #03160d;
+}

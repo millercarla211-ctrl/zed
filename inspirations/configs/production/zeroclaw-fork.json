@@ -1,0 +1,58 @@
+{
+  "environment": "production",
+  "target": "zeroclaw-fork",
+  "device_tier": "Low",
+  "selected_text_model": "qwen3-0.6b",
+  "selected_stt_model": "moonshine-tiny",
+  "selected_tts_model": "kokoro-int8",
+  "runtime": {
+    "local_only_default": true,
+    "remote_fallback_enabled": false,
+    "warm_text_model_on_start": false,
+    "warm_speech_models_on_start": false,
+    "max_response_candidates": 2,
+    "browser_context_enabled": true,
+    "terminal_context_enabled": true,
+    "memory_context_enabled": true
+  },
+  "browser": {
+    "preferred_chat_model": "qwen3-0.6b",
+    "preferred_ocr_model": "trocr-small-printed",
+    "preferred_multimodal_model": "qwen3.5-0.8b",
+    "required_packs": [
+      "qwen3-0.6b"
+    ],
+    "optional_packs": [
+      "trocr-small-printed",
+      "qwen3.5-0.8b"
+    ],
+    "overlay_enabled": true,
+    "quick_actions_enabled": true,
+    "delivery_screen_enabled": true
+  },
+  "zed": {
+    "default_profile": "ask",
+    "default_tool_permission_mode": "confirm",
+    "warm_on_open": false,
+    "edit_prediction_enabled": true,
+    "voice_input_enabled": true
+  },
+  "codex": {
+    "default_approval_mode": "suggest",
+    "default_reasoning_effort": "low",
+    "max_candidates": 2,
+    "review_enabled": true,
+    "browser_context_enabled": true,
+    "background_tasks_enabled": false
+  },
+  "zeroclaw": {
+    "default_autonomy_level": "read-only",
+    "default_channel": "dashboard",
+    "max_candidates": 2,
+    "gateway_enabled": true,
+    "daemon_enabled": false,
+    "skill_runner_enabled": true,
+    "browser_context_enabled": true,
+    "memory_context_enabled": true
+  }
+}

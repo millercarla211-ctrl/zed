@@ -1,0 +1,47 @@
+# Changelog
+
+## 2026-04-27
+
+- cleaned the root README and integration guide so they match the actual crate surface
+- replaced the stale root `config.toml` with a config file that matches `Settings`
+- aligned `config/default.toml` with the current settings model
+- made `Settings` partially configurable through serde defaults and added `bot_detection` settings
+- added CLI config loading from `config.toml` or `--config <path>`
+- fixed search cache keys so they now include safe-search, time-range, and explicit engine selection
+- made the orchestrator honor `SearchQuery.engines`
+- expanded the JSON API to honor `safe_search`, `time_range`, and `engines`
+- upgraded `/api/v1/engines` to return structured engine metadata and health snapshots
+- upgraded `/health` to expose engine and middleware state
+- mounted the existing OpenSearch route in the main router
+- implemented the previously stubbed rate-limit and bot-detection middleware modules
+- removed committed debug scrape HTML artifacts from `metasearch-engine`
+- cleaned the container and integrations docs so they match the actual runtime layout
+- added real `/about` and `/preferences` pages instead of shipping dead links
+- removed the unsupported "results per page" UI knob from the results drawer
+- preserved language, safe-search, and explicit engine choices across result-page transitions
+- aligned the local CI workflow wording with the current engine-registry size
+- made the homepage category pills drive a real search category instead of dead links
+- replaced passive third-party browser assets with local icon rendering and local recent-query autocomplete
+- disabled remote autocomplete by default through config and surfaced the flag in runtime endpoints/pages
+- added same-origin-by-default CORS, opt-in permissive mode, response hardening headers, and proxy-header trust controls
+- switched rate limiting to prefer socket client IPs unless trusted proxy headers are explicitly enabled
+- added explicit `allowed_origins` support for controlled cross-origin browser access
+- made the OpenSearch descriptor dynamic and only advertise suggestion URLs when remote autocomplete is enabled
+- added privacy-oriented cache-control headers for dynamic responses and bounded caching for static assets/OpenSearch
+- hardened the container/runtime story with a non-root image, healthchecks, and a `.dockerignore`
+- added `/robots.txt`, `X-Robots-Tag` controls for result/API/operator routes, and a proper `503` health status for hard error states
+- made multi-category requests real across API parsing, cache identity, orchestrator engine selection, and HTML result pagination
+- normalized `social_media` category serialization with compatible aliases for existing social-category inputs
+- added `/api/v1/status` plus runtime configuration warnings for operators, and surfaced those warnings in `/health`, `/api/v1/config`, and the about page
+- added a browser `/status` page, normalized `base_url` use for OpenSearch generation, and marked operator information pages as non-indexable runtime surfaces
+- added shared input normalization limits for `/search`, `/api/v1/search`, and `/autocomplete`, and surfaced those bounds through the operator status surfaces
+- preserved normalized `time_range` state across the HTML results flow, including resubmits, category switches, empty-state recovery, and infinite scroll
+- stopped the CLI from clobbering configured host, port, and `base_url` values unless the operator explicitly overrides them
+- normalized `base_url` reporting in the operator status API and added direct status-page navigation across the public HTML surfaces
+- added `/livez` and `/readyz`, switched container healthchecks to readiness, tightened rate-limit identity handling to real IPs, exposed lightweight `X-RateLimit-*` headers, and added graceful shutdown/startup warning logging
+- added explicit container stop signaling and a grace period so deploys can use the graceful shutdown path
+- made template and static asset roots first-class runtime settings with CLI overrides, startup validation, and operator status reporting
+- extended crawler/noindex policy to autocomplete, liveness, and readiness endpoints, and replaced stale project-root template error hints with configured asset-root diagnostics
+- tightened runtime warning logic so browser/proxy-facing deployments now flag local-host or non-HTTPS `base_url` mistakes earlier
+- strengthened startup asset validation to require the core HTML/static files and added HSTS plus extra browser-hardening headers where the configured public URL is HTTPS
+- unified runtime warnings across config and asset integrity, and exposed asset-integrity status directly in the HTML status page

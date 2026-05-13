@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "pack_key": "qwen3.5-0.8b-onnx-browserpack",
+  "model_key": "qwen3.5-0.8b",
+  "display_name": "Qwen3.5 0.8B Browser Pack",
+  "repo_id": "onnx-community/Qwen3.5-0.8B-ONNX",
+  "modality": "vision-language",
+  "backend": "transformersjs-onnx",
+  "quantization": "q4",
+  "requires_webgpu": true,
+  "files": [
+    {
+      "path": "config.json",
+      "source_url": "https://huggingface.co/onnx-community/Qwen3.5-0.8B-ONNX/resolve/main/config.json",
+      "purpose": "model-config",
+      "content_type": "application/json"
+    },
+    {
+      "path": "processor_config.json",
+      "source_url": "https://huggingface.co/onnx-community/Qwen3.5-0.8B-ONNX/resolve/main/processor_config.json",
+      "purpose": "processor-config",
+      "content_type": "application/json"
+    },
+    {
+      "path": "onnx/vision_encoder_fp16.onnx",
+      "source_url": "https://huggingface.co/onnx-community/Qwen3.5-0.8B-ONNX/resolve/main/onnx/vision_encoder_fp16.onnx",
+      "purpose": "vision-encoder",
+      "content_type": "application/octet-stream"
+    },
+    {
+      "path": "onnx/decoder_model_merged_q4.onnx",
+      "source_url": "https://huggingface.co/onnx-community/Qwen3.5-0.8B-ONNX/resolve/main/onnx/decoder_model_merged_q4.onnx",
+      "purpose": "decoder-model",
+      "content_type": "application/octet-stream"
+    }
+  ]
+}

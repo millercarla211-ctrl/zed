@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Flow Browserpack Manifest",
+  "type": "object",
+  "required": [
+    "version",
+    "pack_key",
+    "model_key",
+    "display_name",
+    "repo_id",
+    "modality",
+    "backend",
+    "requires_webgpu",
+    "files"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "pack_key": {
+      "type": "string"
+    },
+    "model_key": {
+      "type": "string"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "repo_id": {
+      "type": "string"
+    },
+    "modality": {
+      "type": "string"
+    },
+    "backend": {
+      "type": "string"
+    },
+    "quantization": {
+      "type": ["string", "null"]
+    },
+    "requires_webgpu": {
+      "type": "boolean"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "source_url", "purpose"],
+        "properties": {
+          "path": { "type": "string" },
+          "source_url": { "type": "string" },
+          "purpose": { "type": "string" },
+          "content_type": { "type": ["string", "null"] },
+          "sha256": { "type": ["string", "null"] },
+          "size_bytes": { "type": ["integer", "null"], "minimum": 0 }
+        }
+      }
+    }
+  }
+}

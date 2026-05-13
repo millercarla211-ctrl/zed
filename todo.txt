@@ -1,7 +1,8 @@
 IN PROGRESS:
-- Finish local llama.cpp model speed/switching polish for Qwen and Gemma in the Zed AI panel/code editor.
+- None.
 
 PENDING:
+- User manual review of the copied `G:\Zed\inspirations` source/reference folders.
 - Final `just run` validation for the local llama.cpp speed/model-switching fix.
 - User manual check that Qwen 3.5 0.8B answers in the Zed AI panel/code editor with normal and larger project context.
 - User manual check that switching from Qwen to Gemma in the AI panel stops/replaces the old local llama-server automatically.
@@ -17,6 +18,9 @@ PENDING:
 - User manual feedback on switching between Qwen 3.5 0.8B, Gemma 4 E4B, and any newly dropped GGUF files from the AI panel.
 
 COMPLETED:
+- Committed and pushed local llama.cpp model switching/speed work to `origin/dev`.
+- Copied tool-tui and Flow source/reference folders into `G:\Zed\inspirations`, with Flow replacing duplicate top-level folders.
+- Verified the inspirations import has Flow `metasearch` and `flow-browser-core`, keeps unique tool-tui `apps` and `mcp`, and excludes top-level/generated folders like `.git`, `target`, `tmp`, `trash`, and `models`.
 - Measured Qwen 3.5 0.8B directly through llama.cpp at 4096 context; warmed completions are about 0.5s with roughly 38 output tokens/sec for a tiny prompt.
 - Verified Gemma 4 E4B starts directly through llama.cpp on port 8080 and answers `gemma-ok`.
 - Added automatic managed llama-server replacement when the user switches from a running Qwen server to Gemma or another selected local model.

@@ -1,0 +1,29 @@
+{
+  "name": "flow-webext",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared Flow WebExtension shell for Chromium, Firefox, and Safari local-first inference",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build:chromium": "node ./scripts/build.mjs chromium",
+    "build:firefox": "node ./scripts/build.mjs firefox",
+    "build:safari": "node ./scripts/build.mjs safari",
+    "build:all": "node ./scripts/build.mjs chromium && node ./scripts/build.mjs firefox && node ./scripts/build.mjs safari",
+    "package:chromium": "node ./scripts/package.mjs chromium",
+    "package:firefox": "node ./scripts/package.mjs firefox",
+    "package:safari": "node ./scripts/package.mjs safari",
+    "package:all": "npm run build:all && node ./scripts/package.mjs chromium && node ./scripts/package.mjs firefox && node ./scripts/package.mjs safari"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "idb": "^8.0.2",
+    "webextension-polyfill": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/webextension-polyfill": "^0.12.5",
+    "esbuild": "^0.25.4",
+    "fflate": "^0.8.2",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Flow Browser",
+  "version": "0.1.0",
+  "description": "Local-first Flow browser extension with on-device Qwen and OCR inference.",
+  "action": {
+    "default_title": "Flow",
+    "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "scripts": ["background/index.js"],
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "contextMenus",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "https://huggingface.co/*",
+    "https://cdn-lfs.huggingface.co/*",
+    "https://*.hf.co/*"
+  ],
+  "commands": {
+    "toggle-flow": {
+      "suggested_key": {
+        "default": "Alt+Shift+F"
+      },
+      "description": "Open Flow browser assistant"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/index.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "pack_key": "trocr-small-printed-browserpack",
+  "model_key": "trocr-small-printed",
+  "display_name": "TrOCR Small Printed Browser Pack",
+  "repo_id": "Xenova/trocr-small-printed",
+  "modality": "ocr",
+  "backend": "transformersjs-onnx",
+  "quantization": "quantized",
+  "requires_webgpu": false,
+  "files": [
+    {
+      "path": "config.json",
+      "source_url": "https://huggingface.co/Xenova/trocr-small-printed/resolve/main/config.json",
+      "purpose": "model-config",
+      "content_type": "application/json"
+    },
+    {
+      "path": "preprocessor_config.json",
+      "source_url": "https://huggingface.co/Xenova/trocr-small-printed/resolve/main/preprocessor_config.json",
+      "purpose": "processor-config",
+      "content_type": "application/json"
+    },
+    {
+      "path": "onnx/encoder_model_quantized.onnx",
+      "source_url": "https://huggingface.co/Xenova/trocr-small-printed/resolve/main/onnx/encoder_model_quantized.onnx",
+      "purpose": "ocr-encoder",
+      "content_type": "application/octet-stream"
+    },
+    {
+      "path": "onnx/decoder_model_merged_quantized.onnx",
+      "source_url": "https://huggingface.co/Xenova/trocr-small-printed/resolve/main/onnx/decoder_model_merged_quantized.onnx",
+      "purpose": "ocr-decoder",
+      "content_type": "application/octet-stream"
+    }
+  ]
+}

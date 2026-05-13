@@ -1,0 +1,48 @@
+# Metasearch — Default Configuration
+# Copy this file to config/local.toml and customize.
+
+[server]
+host = "0.0.0.0"
+port = 8888
+base_url = "http://localhost:8888"
+templates_dir = "templates"
+static_dir = "static"
+secret_key = "change-me-in-production"
+image_proxy = true
+trust_forwarded_headers = false
+security_headers_enabled = true
+permissive_cors = false
+allowed_origins = []
+
+[search]
+safe_search = 1
+default_language = "en"
+max_page = 10
+request_timeout_ms = 10000
+max_concurrent_engines = 50
+remote_autocomplete_enabled = false
+
+[cache]
+enabled = true
+ttl_secs = 300
+max_entries = 10000
+
+[rate_limit]
+enabled = true
+requests_per_second = 10
+burst_size = 30
+
+[bot_detection]
+enabled = false
+block_missing_user_agent = false
+blocked_user_agent_keywords = [
+  "python-requests",
+  "scrapy",
+  "curl/",
+  "wget/",
+  "go-http-client",
+  "aiohttp",
+  "feedfetcher",
+  "crawler",
+  "spider",
+]

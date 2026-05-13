@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Status - Metasearch</title>
+  <script>
+    (function () {
+      try {
+        var prefs = JSON.parse(localStorage.getItem('metasearch-prefs') || '{}');
+        var theme = prefs.theme || 'dark';
+        document.documentElement.classList.remove('light');
+        if (theme === 'light') {
+          document.documentElement.classList.add('light');
+        } else if (theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+          document.documentElement.classList.add('light');
+        }
+      } catch (_) {}
+    }());
+  </script>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/shadcn-vercel.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230070f3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.35-4.35'/></svg>">
+  <script src="/static/js/lucide-local.js" defer></script>
+  <style>
+    .status-page {
+      min-height: 100vh;
+      background: hsl(var(--background));
+    }
+    .status-header {
+      border-bottom: 1px solid hsl(var(--border));
+      padding: 1rem 0;
+    }
+    .status-container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1rem 3rem;
+    }
+    .status-section {
+      background: hsl(var(--card));
+      border: 1px solid hsl(var(--border));
+      border-radius: calc(var(--radius) + 4px);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+    .status-kpi {
+      border: 1px solid hsl(var(--border));
+      border-radius: var(--radius);
+      padding: 1rem;
+      background: hsl(var(--background));
+    }
+    .status-kpi-label {
+      font-size: 12px;
+      color: hsl(var(--muted-foreground));
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.4rem;
+    }
+    .status-kpi-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: hsl(var(--foreground));
+    }
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0.45rem 0.8rem;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .status-chip--ok {
+      background: hsl(150 60% 16%);
+      color: hsl(150 65% 72%);
+    }
+    .status-chip--degraded {
+      background: hsl(38 70% 16%);
+      color: hsl(40 92% 72%);
+    }
+    .status-chip--error {
+      background: hsl(0 60% 16%);
+      color: hsl(0 84% 72%);
+    }
+    .status-list {
+      margin: 0;
+      padding-left: 1.1rem;
+      color: hsl(var(--foreground));
+      line-height: 1.9;
+    }
+    .status-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .status-table th,
+    .status-table td {
+      text-align: left;
+      padding: 0.75rem;
+      border-bottom: 1px solid hsl(var(--border));
+      vertical-align: top;
+    }
+    .status-table th {
+      color: hsl(var(--muted-foreground));
+      font-weight: 600;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: hsl(var(--muted));
+      color: hsl(var(--muted-foreground));
+    }
+    .status-badge--ok {
+      background: hsl(150 60% 16%);
+      color: hsl(150 65% 72%);
+    }
+    .status-badge--warn {
+      background: hsl(38 70% 16%);
+      color: hsl(40 92% 72%);
+    }
+  </style>
+</head>
+<body class="status-page">
+  <header class="status-header">
+    <div class="status-container" style="padding-top:0;padding-bottom:0;display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <a href="/" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:hsl(var(--foreground));">
+        <i data-lucide="arrow-left" style="width:18px;height:18px;"></i>
+        <span style="font-weight:500;">Back to Search</span>
+      </a>
+      <nav style="display:flex;gap:0.9rem;flex-wrap:wrap;">
+        <a href="/about" style="color:hsl(var(--muted-foreground));text-decoration:none;">About</a>
+        <a href="/preferences" style="color:hsl(var(--muted-foreground));text-decoration:none;">Preferences</a>
+        <a href="/api/v1/status" style="color:hsl(var(--muted-foreground));text-decoration:none;">API Status</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="status-container">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem;">
+      <div>
+        <h1 style="font-size:32px;font-weight:700;margin:0 0 0.5rem;">Runtime Status</h1>
+        <p style="color:hsl(var(--muted-foreground));margin:0;">Live operator view for the current metasearch deployment.</p>
+      </div>
+      <span class="status-chip {% if status == 'ok' %}status-chip--ok{% elif status == 'error' %}status-chip--error{% else %}status-chip--degraded{% endif %}">
+        <i data-lucide="{% if status == 'ok' %}check-circle-2{% elif status == 'error' %}x-circle{% else %}alert-triangle{% endif %}"></i>
+        {{ status | upper }}
+      </span>
+    </div>
+
+    <div class="status-section">
+      <div class="status-grid">
+        <div class="status-kpi">
+          <div class="status-kpi-label">Registered engines</div>
+          <div class="status-kpi-value">{{ engine_count }}</div>
+        </div>
+        <div class="status-kpi">
+          <div class="status-kpi-label">Tracked engines</div>
+          <div class="status-kpi-value">{{ tracked_engines }}</div>
+        </div>
+        <div class="status-kpi">
+          <div class="status-kpi-label">Warnings</div>
+          <div class="status-kpi-value">{{ runtime_warnings | length }}</div>
+        </div>
+        <div class="status-kpi">
+          <div class="status-kpi-label">Unhealthy engines</div>
+          <div class="status-kpi-value">{{ unhealthy_engines | length }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-section">
+      <h2 style="font-size:18px;font-weight:600;margin:0 0 0.5rem;">Deployment posture</h2>
+      <p style="font-size:14px;color:hsl(var(--muted-foreground));margin:0 0 1rem;">These are the effective runtime settings that matter most in production.</p>
+      <div class="status-grid">
+        <div class="status-kpi">
+          <div class="status-kpi-label">Base URL</div>
+          <div style="font-size:14px;color:hsl(var(--foreground));word-break:break-all;">{{ base_url }}</div>
+        </div>
+        <div class="status-kpi">
+          <div class="status-kpi-label">Template directory</div>
+          <div style="font-size:14px;color:hsl(var(--foreground));word-break:break-all;">{{ template_dir }}</div>
+        </div>
+        <div class="status-kpi">
+          <div class="status-kpi-label">Static directory</div>
+          <div style="font-size:14px;color:hsl(var(--foreground));word-break:break-all;">{{ static_dir }}</div>
+        </div>
+        <div class="status-kpi">
+          <div class="status-kpi-label">CORS</div>
+          <div style="font-size:14px;color:hsl(var(--foreground));">{% if permissive_cors %}Permissive{% elif allowed_origins | length > 0 %}Origin allowlist{% else %}Same-origin default{% endif %}</div>
+        </div>
+        <div class="status-kpi">
+          <div class="status-kpi-label">Security headers</div>
+          <div style="font-size:14px;color:hsl(var(--foreground));">{% if security_headers_enabled %}Enabled{% else %}Disabled{% endif %}</div>
+        </div>
+        <div class="status-kpi">
+          <div class="status-kpi-label">Forwarded headers</div>
+          <div style="font-size:14px;color:hsl(var(--foreground));">{% if trust_forwarded_headers %}Trusted proxy mode{% else %}Socket IP only{% endif %}</div>
+        </div>
+        <div class="status-kpi">
+          <div class="status-kpi-label">Autocomplete</div>
+          <div style="font-size:14px;color:hsl(var(--foreground));">{% if remote_autocomplete_enabled %}Remote endpoint enabled{% else %}Local-only{% endif %}</div>
+        </div>
+        <div class="status-kpi">
+          <div class="status-kpi-label">Concurrency / timeout</div>
+          <div style="font-size:14px;color:hsl(var(--foreground));">{{ max_concurrent_engines }} engines - {{ request_timeout_ms }}ms</div>
+        </div>
+        <div class="status-kpi">
+          <div class="status-kpi-label">Cache</div>
+          <div style="font-size:14px;color:hsl(var(--foreground));">{% if cache_enabled %}Enabled{% else %}Disabled{% endif %} - TTL {{ cache_ttl_secs }}s - {{ cache_max_entries }} entries</div>
+        </div>
+        <div class="status-kpi">
+          <div class="status-kpi-label">Rate limiting</div>
+          <div style="font-size:14px;color:hsl(var(--foreground));">{% if rate_limit_enabled %}Enabled{% else %}Disabled{% endif %} - {{ requests_per_second }}/s burst {{ burst_size }}</div>
+        </div>
+        <div class="status-kpi">
+          <div class="status-kpi-label">Input bounds</div>
+          <div style="font-size:14px;color:hsl(var(--foreground));">{{ max_query_chars }} char query - {{ max_autocomplete_query_chars }} char autocomplete</div>
+        </div>
+        <div class="status-kpi">
+          <div class="status-kpi-label">Selector bounds</div>
+          <div style="font-size:14px;color:hsl(var(--foreground));">{{ max_engine_count }} engines - {{ max_category_count }} categories</div>
+        </div>
+      </div>
+    </div>
+
+    {% if runtime_warnings | length > 0 %}
+    <div class="status-section">
+      <h2 style="font-size:18px;font-weight:600;margin:0 0 0.5rem;">Warnings</h2>
+      <p style="font-size:14px;color:hsl(var(--muted-foreground));margin:0 0 1rem;">These are configuration-level warnings, not necessarily service outages.</p>
+      <ul class="status-list">
+        {% for warning in runtime_warnings %}
+        <li>{{ warning }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <div class="status-section">
+      <h2 style="font-size:18px;font-weight:600;margin:0 0 0.5rem;">Asset integrity</h2>
+      <p style="font-size:14px;color:hsl(var(--muted-foreground));margin:0 0 1rem;">These checks reflect the configured template and static roots used by the running deployment.</p>
+      {% if asset_warnings | length > 0 %}
+      <ul class="status-list">
+        {% for warning in asset_warnings %}
+        <li>{{ warning }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p style="margin:0;color:hsl(var(--foreground));">All required template and static files are present.</p>
+      {% endif %}
+    </div>
+
+    <div class="status-section">
+      <h2 style="font-size:18px;font-weight:600;margin:0 0 0.5rem;">Engine health</h2>
+      <p style="font-size:14px;color:hsl(var(--muted-foreground));margin:0 0 1rem;">Tracked runtime health is adaptive and only appears after the server has handled search traffic.</p>
+      {% if health_snapshots | length > 0 %}
+      <div style="overflow-x:auto;">
+        <table class="status-table">
+          <thead>
+            <tr>
+              <th>Engine</th>
+              <th>Status</th>
+              <th>Requests</th>
+              <th>Failure rate</th>
+              <th>Adaptive timeout</th>
+              <th>Last success</th>
+              <th>Last failure</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in health_snapshots %}
+            <tr>
+              <td>{{ item.name }}</td>
+              <td>
+                <span class="status-badge {% if item.healthy %}status-badge--ok{% else %}status-badge--warn{% endif %}">
+                  {% if item.healthy %}healthy{% else %}degraded{% endif %}
+                </span>
+              </td>
+              <td>{{ item.total_requests }}</td>
+              <td>{{ (item.failure_rate * 100.0) | round(method="common", precision=1) }}%</td>
+              <td>{{ item.adaptive_timeout_ms }}ms</td>
+              <td>{% if item.last_success_age_secs is defined and item.last_success_age_secs is not none %}{{ item.last_success_age_secs }}s ago{% else %}-{% endif %}</td>
+              <td>{% if item.last_failure_age_secs is defined and item.last_failure_age_secs is not none %}{{ item.last_failure_age_secs }}s ago{% else %}-{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p style="margin:0;color:hsl(var(--muted-foreground));">No engine health samples have been recorded yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="status-section">
+      <h2 style="font-size:18px;font-weight:600;margin:0 0 0.5rem;">Operator endpoints</h2>
+      <ul class="status-list">
+        <li><a href="/health">/health</a></li>
+        <li><a href="/livez">/livez</a></li>
+        <li><a href="/readyz">/readyz</a></li>
+        <li><a href="/api/v1/config">/api/v1/config</a></li>
+        <li><a href="/api/v1/status">/api/v1/status</a></li>
+        <li><a href="/api/v1/engines">/api/v1/engines</a></li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

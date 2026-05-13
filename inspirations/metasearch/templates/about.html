@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About — Metasearch</title>
+  <script>
+    (function () {
+      try {
+        var prefs = JSON.parse(localStorage.getItem('metasearch-prefs') || '{}');
+        var theme = prefs.theme || 'dark';
+        document.documentElement.classList.remove('light');
+        if (theme === 'light') {
+          document.documentElement.classList.add('light');
+        } else if (theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+          document.documentElement.classList.add('light');
+        }
+      } catch (_) {}
+    }());
+  </script>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/shadcn-vercel.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230070f3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.35-4.35'/></svg>">
+  <script src="/static/js/lucide-local.js" defer></script>
+  <style>
+    .preferences-page {
+      min-height: 100vh;
+      background: hsl(var(--background));
+    }
+    .pref-header {
+      border-bottom: 1px solid hsl(var(--border));
+      padding: 1rem 0;
+    }
+    .pref-container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem 1rem;
+    }
+    .pref-section {
+      background: hsl(var(--card));
+      border: 1px solid hsl(var(--border));
+      border-radius: calc(var(--radius) + 4px);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .pref-section h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: hsl(var(--foreground));
+    }
+    .pref-section p {
+      font-size: 14px;
+      color: hsl(var(--muted-foreground));
+      margin-bottom: 1rem;
+    }
+    .pref-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 0;
+      border-bottom: 1px solid hsl(var(--border));
+    }
+    .pref-item:last-child {
+      border-bottom: none;
+    }
+    .pref-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: hsl(var(--foreground));
+    }
+    .pref-desc {
+      font-size: 13px;
+      color: hsl(var(--muted-foreground));
+      margin-top: 0.25rem;
+    }
+  </style>
+</head>
+<body class="preferences-page">
+  <header class="pref-header">
+    <div class="pref-container" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <a href="/" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: hsl(var(--foreground));">
+        <i data-lucide="arrow-left" style="width: 18px; height: 18px;"></i>
+        <span style="font-weight: 500;">Back to Search</span>
+      </a>
+      <nav style="display:flex;gap:0.9rem;flex-wrap:wrap;">
+        <a href="/status" style="color:hsl(var(--muted-foreground));text-decoration:none;">Status</a>
+        <a href="/preferences" style="color:hsl(var(--muted-foreground));text-decoration:none;">Preferences</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="pref-container">
+    <h1 style="font-size: 32px; font-weight: 700; margin-bottom: 0.5rem;">About Metasearch</h1>
+    <p style="color: hsl(var(--muted-foreground)); margin-bottom: 2rem;">A local-first Rust metasearch workspace with a reusable engine registry and HTTP surface.</p>
+
+    <div class="pref-section">
+      <h2>Current deployment</h2>
+      <p>These values come from the running workspace, not hardcoded marketing copy.</p>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Built-in engines</div>
+          <div class="pref-desc">Registered adapters available through the default engine registry</div>
+        </div>
+        <span style="color: hsl(var(--foreground)); font-size: 14px; font-weight: 600;">{{ engine_count }}</span>
+      </div>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Default language</div>
+          <div class="pref-desc">Language applied when the client does not specify one</div>
+        </div>
+        <span style="color: hsl(var(--foreground)); font-size: 14px; font-weight: 600;">{{ default_language }}</span>
+      </div>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Safe search default</div>
+          <div class="pref-desc">Server-side default safe-search level</div>
+        </div>
+        <span style="color: hsl(var(--foreground)); font-size: 14px; font-weight: 600;">{{ safe_search }}</span>
+      </div>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Concurrency budget</div>
+          <div class="pref-desc">Maximum built-in engine fan-out per request</div>
+        </div>
+        <span style="color: hsl(var(--foreground)); font-size: 14px; font-weight: 600;">{{ max_concurrent_engines }}</span>
+      </div>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Version</div>
+          <div class="pref-desc">Current workspace package version</div>
+        </div>
+        <span style="color: hsl(var(--foreground)); font-size: 14px; font-weight: 600;">v{{ version }}</span>
+      </div>
+    </div>
+
+    <div class="pref-section">
+      <h2>Privacy and runtime behavior</h2>
+      <p>These flags describe the current local deployment posture.</p>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Cache</div>
+          <div class="pref-desc">Full-response caching and in-flight request coalescing</div>
+        </div>
+        <span style="color: hsl(var(--muted-foreground)); font-size: 14px;">{% if cache_enabled %}Enabled{% else %}Disabled{% endif %}</span>
+      </div>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Rate limiting</div>
+          <div class="pref-desc">Per-client request limiting for the HTTP surface</div>
+        </div>
+        <span style="color: hsl(var(--muted-foreground)); font-size: 14px;">{% if rate_limit_enabled %}Enabled{% else %}Disabled{% endif %}</span>
+      </div>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Bot detection</div>
+          <div class="pref-desc">Optional user-agent based blocking for suspicious clients</div>
+        </div>
+        <span style="color: hsl(var(--muted-foreground)); font-size: 14px;">{% if bot_detection_enabled %}Enabled{% else %}Disabled{% endif %}</span>
+      </div>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Security headers</div>
+          <div class="pref-desc">CSP, frame protection, referrer policy, and related response hardening</div>
+        </div>
+        <span style="color: hsl(var(--muted-foreground)); font-size: 14px;">{% if security_headers_enabled %}Enabled{% else %}Disabled{% endif %}</span>
+      </div>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">CORS mode</div>
+          <div class="pref-desc">Cross-origin access policy for browser clients</div>
+        </div>
+        <span style="color: hsl(var(--muted-foreground)); font-size: 14px;">{% if permissive_cors %}Permissive{% elif allowed_origins | length > 0 %}Origin allowlist{% else %}Same-origin default{% endif %}</span>
+      </div>
+
+      {% if allowed_origins | length > 0 %}
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Allowed origins</div>
+          <div class="pref-desc">Explicit browser origins allowed by the server CORS policy</div>
+        </div>
+        <span style="color: hsl(var(--muted-foreground)); font-size: 14px; text-align: right;">{{ allowed_origins | join(sep=", ") }}</span>
+      </div>
+      {% endif %}
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Forwarded headers</div>
+          <div class="pref-desc">Whether the server trusts `X-Forwarded-For` / proxy IP headers for client identification</div>
+        </div>
+        <span style="color: hsl(var(--muted-foreground)); font-size: 14px;">{% if trust_forwarded_headers %}Trusted{% else %}Socket IP only{% endif %}</span>
+      </div>
+
+      <div class="pref-item">
+        <div>
+          <div class="pref-label">Autocomplete privacy</div>
+          <div class="pref-desc">The browser UI uses local recent-query suggestions; the remote endpoint is operator-gated.</div>
+        </div>
+        <span style="color: hsl(var(--muted-foreground)); font-size: 14px;">{% if remote_autocomplete_enabled %}Remote endpoint enabled{% else %}Local-only by default{% endif %}</span>
+      </div>
+    </div>
+
+    {% if runtime_warnings | length > 0 %}
+    <div class="pref-section">
+      <h2>Deployment warnings</h2>
+      <p>These warnings are derived from the live runtime configuration and usually indicate a deployer action is still needed.</p>
+      <ul style="padding-left: 1.1rem; color: hsl(var(--foreground)); line-height: 1.9; margin: 0;">
+        {% for warning in runtime_warnings %}
+        <li>{{ warning }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <div class="pref-section">
+      <h2>Useful endpoints</h2>
+      <p>These are the main operator and integration surfaces.</p>
+      <ul style="padding-left: 1.1rem; color: hsl(var(--foreground)); line-height: 1.9;">
+        <li><a href="/">Home UI</a></li>
+        <li><a href="/search?q=rust">Search UI</a></li>
+        <li><a href="/api/v1/search?q=rust">JSON search API</a></li>
+        <li><a href="/api/v1/engines">Engine catalog</a></li>
+        <li><a href="/api/v1/config">Runtime config summary</a></li>
+        <li><a href="/api/v1/status">Operator status</a></li>
+        <li><a href="/status">Status page</a></li>
+        <li><a href="/health">Health</a></li>
+        <li><a href="/robots.txt">robots.txt</a></li>
+        <li><a href="/opensearch.xml">OpenSearch descriptor</a></li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

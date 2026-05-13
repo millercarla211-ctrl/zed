@@ -1,0 +1,15 @@
+pub mod add;
+pub mod auth;
+pub mod checkout;
+pub mod commit;
+pub mod diff;
+pub mod init;
+pub mod jobs;
+pub mod log;
+pub mod pull;
+pub mod push;
+pub mod remote;
+pub mod status;
+pub mod sync;
+pub mod train_dict;
+pub mod vibe_demo;
