@@ -466,17 +466,22 @@ impl MediaPanel {
     fn matching_assets(&self, query_terms: &[&str], limit: usize) -> (Vec<MediaAsset>, usize) {
         let kind_filter = self.kind_filter;
         if query_terms.is_empty() {
-            let visible_assets = self
-                .assets
-                .iter()
-                .filter(|asset| kind_filter.matches(asset.payload.kind))
-                .take(limit)
-                .cloned()
-                .collect();
-            return (visible_assets, self.local_kind_counts.count(kind_filter));
+            let total_count = self.local_kind_counts.count(kind_filter);
+            let mut visible_assets = Vec::with_capacity(limit.min(total_count));
+            for asset in &self.assets {
+                if !kind_filter.matches(asset.payload.kind) {
+                    continue;
+                }
+
+                if visible_assets.len() >= limit {
+                    break;
+                }
+                visible_assets.push(asset.clone());
+            }
+            return (visible_assets, total_count);
         }
 
-        let mut visible_assets = Vec::new();
+        let mut visible_assets = Vec::with_capacity(limit);
         let mut match_count = 0;
 
         for asset in &self.assets {
@@ -505,14 +510,13 @@ impl MediaPanel {
         limit: usize,
     ) -> (Vec<RemoteMediaAsset>, usize) {
         let kind_filter = self.kind_filter;
-        let mut visible_assets = Vec::new();
+        let static_assets = remote_media_assets();
+        let mut visible_assets =
+            Vec::with_capacity(limit.min(static_assets.len() + self.remote_assets.len()));
         let mut match_count = 0;
         let mut seen_urls = HashSet::new();
 
-        for asset in remote_media_assets()
-            .iter()
-            .chain(self.remote_assets.iter())
-        {
+        for asset in static_assets.iter().chain(self.remote_assets.iter()) {
             if !kind_filter.matches(asset.kind) {
                 continue;
             }

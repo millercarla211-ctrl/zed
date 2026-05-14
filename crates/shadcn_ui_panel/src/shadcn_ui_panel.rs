@@ -320,18 +320,23 @@ impl ShadcnUiPanel {
         let source_filter = self.source_filter;
         if query.is_empty() {
             let total_count = self.filter_counts.count(source_filter);
-            let visible_items = self
-                .items
-                .iter()
-                .filter(|item| source_filter.matches(item.source))
-                .take(limit)
-                .cloned()
-                .collect();
+            let mut visible_items = Vec::with_capacity(limit.min(total_count));
+            for item in &self.items {
+                if !source_filter.matches(item.source) {
+                    continue;
+                }
+
+                if visible_items.len() >= limit {
+                    break;
+                }
+                visible_items.push(item.clone());
+            }
             return (visible_items, total_count);
         }
 
         let query_terms = query.split_whitespace().collect::<Vec<_>>();
-        let mut visible_items = Vec::new();
+        let mut visible_items =
+            Vec::with_capacity(limit.min(self.filter_counts.count(source_filter)));
         let mut match_count = 0;
 
         for item in &self.items {

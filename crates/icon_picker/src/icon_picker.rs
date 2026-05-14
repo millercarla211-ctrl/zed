@@ -303,9 +303,9 @@ impl IconPickerPanel {
 
     fn filtered_icons(&self, query: &str) -> (Vec<PickerIcon>, usize, usize) {
         let selected_pack = self.selected_pack.as_ref().map(|pack| pack.as_ref());
-        let mut icons = Vec::new();
-        let mut match_count = 0;
         let total_count = self.total_count_for_selection(selected_pack);
+        let mut icons = Vec::with_capacity(MAX_ICON_RESULTS.min(total_count));
+        let mut match_count = 0;
 
         if selected_pack.is_none() && query.is_empty() {
             icons.extend(

@@ -272,7 +272,7 @@ impl FontPanel {
         let source_filter = self.source_filter;
         if query.is_empty() {
             let total_count = FontSourceCounts::from_panel(self).count(source_filter);
-            let mut visible_fonts = Vec::new();
+            let mut visible_fonts = Vec::with_capacity(limit.min(total_count));
 
             if source_filter.matches(FontSource::System) {
                 visible_fonts.extend(self.fonts.iter().take(limit).cloned().map(|name| {
@@ -299,7 +299,7 @@ impl FontPanel {
         }
 
         let query_terms = query.split_whitespace().collect::<Vec<_>>();
-        let mut visible_fonts = Vec::new();
+        let mut visible_fonts = Vec::with_capacity(limit);
         let mut match_count = 0;
         let mut exact_match = false;
 
