@@ -1365,7 +1365,8 @@ fn load_external_icon_bodies(pack: &str) -> anyhow::Result<HashMap<String, Exter
 }
 
 fn warm_external_icon_previews(icons: Vec<ExternalIcon>) -> Vec<(String, Option<SharedString>)> {
-    let mut pack_bodies = HashMap::<String, HashMap<String, ExternalIconBody>>::new();
+    let mut pack_bodies =
+        HashMap::<String, HashMap<String, ExternalIconBody>>::with_capacity(icons.len().min(16));
     let mut previews = Vec::with_capacity(icons.len());
 
     for icon in icons {
@@ -1375,13 +1376,16 @@ fn warm_external_icon_previews(icons: Vec<ExternalIcon>) -> Vec<(String, Option<
             continue;
         }
 
-        let body = representative_icon_body(icon.pack.as_ref(), icon.name.as_ref()).or_else(|| {
-            let pack = icon.pack.to_string();
-            let bodies = pack_bodies
-                .entry(pack.clone())
-                .or_insert_with(|| load_external_icon_bodies(&pack).unwrap_or_default());
-            bodies.get(icon.name.as_ref()).cloned()
-        });
+        let body = representative_icon_bodies()
+            .get(key.as_str())
+            .cloned()
+            .or_else(|| {
+                let pack = icon.pack.to_string();
+                let bodies = pack_bodies
+                    .entry(pack.clone())
+                    .or_insert_with(|| load_external_icon_bodies(&pack).unwrap_or_default());
+                bodies.get(icon.name.as_ref()).cloned()
+            });
         let Some(body) = body else {
             previews.push((key, None));
             continue;
@@ -1407,16 +1411,11 @@ fn warm_external_icon_previews(icons: Vec<ExternalIcon>) -> Vec<(String, Option<
     previews
 }
 
-fn representative_icon_body(pack: &str, name: &str) -> Option<ExternalIconBody> {
-    representative_icon_bodies()
-        .get(&format!("{pack}:{name}"))
-        .cloned()
-}
-
 fn representative_icon_bodies() -> &'static HashMap<String, ExternalIconBody> {
     REPRESENTATIVE_ICON_BODY_CACHE.get_or_init(|| {
-        let mut bodies = HashMap::new();
-        for line in ICON_REPRESENTATIVE_BODIES.lines() {
+        let lines = ICON_REPRESENTATIVE_BODIES.lines();
+        let mut bodies = HashMap::with_capacity(lines.size_hint().0);
+        for line in lines {
             if line.trim().is_empty() || line.starts_with('#') {
                 continue;
             }

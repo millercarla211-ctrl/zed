@@ -1,3 +1,11 @@
+[2026-05-15] - Icon Preview Warm Key Reuse
+
+CHANGED:
+- `crates/icon_picker` now reuses each external icon's existing pack/name key for embedded representative SVG body lookups and preallocates preview warming maps, reducing allocation churn while warming real Iconify previews.
+
+NOTES:
+- Preserved the external icon preview cache, alias transform behavior, SVG output path, and editor/WebPreview input paths.
+
 [2026-05-15] - UI Panel Catalog Buffer Preallocation
 
 CHANGED:
