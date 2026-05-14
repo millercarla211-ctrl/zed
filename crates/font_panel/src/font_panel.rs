@@ -385,8 +385,9 @@ impl FontPanel {
     ) -> impl IntoElement {
         let selected = self.source_filter == filter;
         let label = format!("{} {count}", filter.label());
+        let button_id = font_element_id("font-source-filter-", filter.label());
         div().flex_none().child(
-            Button::new(format!("font-source-filter-{}", filter.label()), label)
+            Button::new(button_id, label)
                 .style(ButtonStyle::Subtle)
                 .size(ButtonSize::Compact)
                 .toggle_state(selected)
@@ -571,9 +572,10 @@ impl FontPanel {
         let source = font.source;
         let click_font = font.clone();
         let is_system_font = source == FontSource::System;
+        let row_id = font_element_id("font-panel-row-", id_font.as_ref());
 
         div()
-            .id(format!("font-panel-row-{}", id_font.as_ref()))
+            .id(row_id)
             .v_flex()
             .gap_1()
             .p_2()
@@ -899,6 +901,13 @@ fn scroll_tab_handle(handle: &ScrollHandle, direction: f32) {
 
 fn font_search_matches(searchable: &str, query_terms: &[&str]) -> bool {
     query_terms.iter().all(|term| searchable.contains(term))
+}
+
+fn font_element_id(prefix: &str, id: &str) -> String {
+    let mut element_id = String::with_capacity(prefix.len() + id.len());
+    element_id.push_str(prefix);
+    element_id.push_str(id);
+    element_id
 }
 
 fn web_font_spec_by_name(name: &str) -> Option<WebFontSpec> {

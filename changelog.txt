@@ -1,3 +1,11 @@
+[2026-05-15] - Font Row Element Id Allocation Cleanup
+
+CHANGED:
+- `crates/font_panel` now builds source-tab and font-row element ids with a small preallocated helper instead of repeated generic `format!` calls.
+
+NOTES:
+- Preserved the exact stable tab/row ids, source filters, font row selection/actions, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Media Row Element Id Allocation Cleanup
 
 CHANGED:
