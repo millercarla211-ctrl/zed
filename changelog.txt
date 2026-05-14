@@ -1,3 +1,11 @@
+[2026-05-15] - Icon Preview Buffer Preallocation
+
+CHANGED:
+- `crates/icon_picker` now fills preallocated buffers for startup and visible-grid SVG preview warming and reserves the known pack-filter tab count before rendering buttons.
+
+NOTES:
+- Preserved preview warming behavior, pack tab ordering, icon grid rendering, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media Candidate Selection Allocation Cleanup
 
 CHANGED:

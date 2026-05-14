@@ -212,12 +212,17 @@ impl IconPickerPanel {
         }
         self.representative_preview_warm_started = true;
 
-        let external_icons = self
+        let warm_count = self
             .representative_external_icons
-            .iter()
-            .take(STARTUP_ICON_PREVIEW_WARM_LIMIT)
-            .cloned()
-            .collect::<Vec<_>>();
+            .len()
+            .min(STARTUP_ICON_PREVIEW_WARM_LIMIT);
+        let mut external_icons = Vec::with_capacity(warm_count);
+        external_icons.extend(
+            self.representative_external_icons
+                .iter()
+                .take(STARTUP_ICON_PREVIEW_WARM_LIMIT)
+                .cloned(),
+        );
         self.queue_external_preview_warm(external_icons, false, cx);
     }
 
@@ -455,21 +460,23 @@ impl IconPickerPanel {
         icons: &[PickerIcon],
         cx: &mut Context<Self>,
     ) {
-        let external_icons = {
+        let mut external_icons = Vec::with_capacity(icons.len());
+        {
             let preview_cache = self.preview_cache.borrow();
-            icons
-                .iter()
-                .filter_map(|icon| match icon {
+            for icon in icons {
+                match icon {
                     PickerIcon::External(icon) => {
                         let key = icon.id();
-                        (!self.warming_preview_keys.contains(&key)
-                            && !preview_cache.contains_key(&key))
-                        .then(|| icon.clone())
+                        if !self.warming_preview_keys.contains(&key)
+                            && !preview_cache.contains_key(&key)
+                        {
+                            external_icons.push(icon.clone());
+                        }
                     }
-                    PickerIcon::Zed(_) => None,
-                })
-                .collect::<Vec<_>>()
-        };
+                    PickerIcon::Zed(_) => {}
+                }
+            }
+        }
         self.queue_external_preview_warm(external_icons, true, cx);
     }
 
@@ -635,7 +642,7 @@ impl IconPickerPanel {
             .as_ref()
             .map(|pack| pack.as_ref())
             .unwrap_or("all");
-        let mut pack_buttons = Vec::new();
+        let mut pack_buttons = Vec::with_capacity(self.packs.len() + 2);
         pack_buttons.push(
             self.render_pack_button(
                 "all",
