@@ -1,3 +1,11 @@
+[2026-05-15] - Media Row Element Id Allocation Cleanup
+
+CHANGED:
+- `crates/media_panel` now builds local and remote media row/action element ids with a small preallocated helper instead of repeated generic `format!` calls.
+
+NOTES:
+- Preserved the exact stable row/button ids, local and remote media actions, editor input, and WebPreview input behavior.
+
 [2026-05-15] - UI Row Element Id Allocation Cleanup
 
 CHANGED:

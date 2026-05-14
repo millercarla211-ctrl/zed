@@ -907,9 +907,12 @@ impl MediaPanel {
         let preview_payload = payload.clone();
         let copy_path = payload.path.clone();
         let copy_label = label.clone();
+        let row_id = media_element_id("media-panel-row-", relative_display.as_ref());
+        let preview_id = media_element_id("media-panel-preview-", relative_display.as_ref());
+        let copy_id = media_element_id("media-panel-copy-path-", relative_display.as_ref());
 
         h_flex()
-            .id(format!("media-panel-row-{}", relative_display.as_ref()))
+            .id(row_id)
             .gap_2()
             .items_center()
             .p_2()
@@ -951,27 +954,21 @@ impl MediaPanel {
                     .color(Color::Muted),
             )
             .child(
-                Button::new(
-                    format!("media-panel-preview-{}", relative_display.as_ref()),
-                    "Preview",
-                )
-                .style(ButtonStyle::Subtle)
-                .size(ButtonSize::Compact)
-                .on_click(cx.listener(move |panel, _, window, cx| {
-                    panel.preview_media_asset(preview_payload.clone(), window, cx);
-                })),
+                Button::new(preview_id, "Preview")
+                    .style(ButtonStyle::Subtle)
+                    .size(ButtonSize::Compact)
+                    .on_click(cx.listener(move |panel, _, window, cx| {
+                        panel.preview_media_asset(preview_payload.clone(), window, cx);
+                    })),
             )
             .child(
-                Button::new(
-                    format!("media-panel-copy-path-{}", relative_display.as_ref()),
-                    "Copy",
-                )
-                .style(ButtonStyle::Subtle)
-                .size(ButtonSize::Compact)
-                .on_click(cx.listener(move |panel, _, _, cx| {
-                    let copy_path = copy_path.to_string_lossy().into_owned();
-                    panel.copy_media_source(copy_path, copy_label.clone(), cx);
-                })),
+                Button::new(copy_id, "Copy")
+                    .style(ButtonStyle::Subtle)
+                    .size(ButtonSize::Compact)
+                    .on_click(cx.listener(move |panel, _, _, cx| {
+                        let copy_path = copy_path.to_string_lossy().into_owned();
+                        panel.copy_media_source(copy_path, copy_label.clone(), cx);
+                    })),
             )
     }
 
@@ -987,9 +984,12 @@ impl MediaPanel {
         let provider = asset.provider.into_owned();
         let license = asset.license.into_owned();
         let id = asset.id.into_owned();
+        let row_id = media_element_id("media-panel-remote-row-", id.as_str());
+        let preview_id = media_element_id("media-panel-preview-remote-", id.as_str());
+        let insert_id = media_element_id("media-panel-insert-remote-", id.as_str());
 
         h_flex()
-            .id(format!("media-panel-remote-row-{id}"))
+            .id(row_id)
             .gap_2()
             .items_center()
             .p_2()
@@ -1025,7 +1025,7 @@ impl MediaPanel {
                     .color(Color::Accent),
             )
             .child(
-                Button::new(format!("media-panel-preview-remote-{id}"), "Preview")
+                Button::new(preview_id, "Preview")
                     .style(ButtonStyle::Subtle)
                     .size(ButtonSize::Compact)
                     .on_click(cx.listener({
@@ -1037,7 +1037,7 @@ impl MediaPanel {
                     })),
             )
             .child(
-                Button::new(format!("media-panel-insert-remote-{id}"), "Insert URL")
+                Button::new(insert_id, "Insert URL")
                     .style(ButtonStyle::Subtle)
                     .size(ButtonSize::Compact)
                     .on_click(cx.listener(move |panel, _, window, cx| {
@@ -3258,6 +3258,13 @@ fn escape_html(text: &str) -> String {
 
 fn escape_attr(text: &str) -> String {
     escape_html(text)
+}
+
+fn media_element_id(prefix: &str, id: &str) -> String {
+    let mut element_id = String::with_capacity(prefix.len() + id.len());
+    element_id.push_str(prefix);
+    element_id.push_str(id);
+    element_id
 }
 
 fn media_thumbnail(
