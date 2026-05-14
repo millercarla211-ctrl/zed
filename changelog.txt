@@ -1,3 +1,11 @@
+[2026-05-15] - Font Search Cache Key Allocation Cleanup
+
+CHANGED:
+- `crates/font_panel` now keys the font search-text cache by `SharedString` font names instead of allocating fresh `String` keys.
+
+NOTES:
+- Preserved system and Google font search matching, source filters, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - UI Search Cache Key Allocation Cleanup
 
 CHANGED:

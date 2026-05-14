@@ -59,7 +59,7 @@ pub struct FontPanel {
     fs: Arc<dyn Fs>,
     filter_editor: Entity<Editor>,
     fonts: Vec<SharedString>,
-    font_search_text_cache: RefCell<HashMap<String, SharedString>>,
+    font_search_text_cache: RefCell<HashMap<SharedString, SharedString>>,
     fonts_loaded: bool,
     loading_fonts: bool,
     source_filter: FontSourceFilter,
@@ -373,7 +373,7 @@ impl FontPanel {
         let search_text: SharedString = font_name.to_lowercase().into();
         self.font_search_text_cache
             .borrow_mut()
-            .insert(font_name.to_string(), search_text.clone());
+            .insert(font_name.into(), search_text.clone());
         font_search_matches(search_text.as_ref(), query_terms)
     }
 
