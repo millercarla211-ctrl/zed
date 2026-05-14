@@ -2507,14 +2507,9 @@ fn preview_html(item: &CatalogItem, source_file: &Path, source: &str) -> String 
     .demo-screenshot {{
       display: block;
       width: 100%;
-      max-height: 360px;
-      object-fit: cover;
+      max-height: 420px;
+      object-fit: contain;
       background: var(--code);
-    }}
-    .demo-screenshot-caption {{
-      padding: 10px 12px;
-      border-top: 1px solid var(--border);
-      color: var(--muted);
     }}
     .demo-row {{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }}
     .demo-stack {{ display: grid; gap: 12px; }}
@@ -2610,7 +2605,6 @@ fn component_demo_html(item: &CatalogItem) -> String {
         return format!(
             r#"<div class="demo-surface demo-screenshot-shell">
   <img class="demo-screenshot" src="{}" alt="{} preview" />
-  <div class="demo-screenshot-caption">Screenshot-backed preview from the local shadcn registry assets.</div>
 </div>"#,
             escape_attr(&image_url),
             escape_attr(item.title.as_ref())

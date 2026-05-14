@@ -1,3 +1,12 @@
+[2026-05-14] - Native UI Preview Polish
+
+CHANGED:
+- `crates/shadcn_ui_panel` no longer shows implementation/status copy inside screenshot-backed UI previews.
+- `crates/shadcn_ui_panel` now renders screenshot-backed previews with contain-fit sizing so larger dashboard/login screenshots are not cropped.
+
+NOTES:
+- Preserved the panel catalog loading path and WebPreview input behavior; this pass only changes generated UI preview HTML.
+
 [2026-05-14] - Screenshot-Backed UI Panel Previews
 
 CHANGED:
