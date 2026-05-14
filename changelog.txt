@@ -1,3 +1,11 @@
+[2026-05-15] - Media Remote Cache Key Allocation Cleanup
+
+CHANGED:
+- `crates/media_panel` now tracks remote media cache signatures as `SharedString` handles across active state, cache storage, and LRU ordering.
+
+NOTES:
+- Preserved remote query signatures, cached result reuse, cache eviction, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - UI Preview Cache Key Allocation Cleanup
 
 CHANGED:

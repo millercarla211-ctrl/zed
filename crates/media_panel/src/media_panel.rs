@@ -274,14 +274,14 @@ pub struct MediaPanel {
     local_kind_counts: MediaKindCounts,
     remote_assets: Vec<RemoteMediaAsset>,
     remote_kind_counts: MediaKindCounts,
-    remote_cache: HashMap<String, Vec<RemoteMediaAsset>>,
-    remote_cache_order: VecDeque<String>,
+    remote_cache: HashMap<SharedString, Vec<RemoteMediaAsset>>,
+    remote_cache_order: VecDeque<SharedString>,
     kind_filter: MediaKindFilter,
     kind_scroll_handle: ScrollHandle,
     loading: bool,
     remote_loading: bool,
     index_loaded: bool,
-    remote_signature: Option<String>,
+    remote_signature: Option<SharedString>,
     remote_generation: u64,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
@@ -367,9 +367,9 @@ impl MediaPanel {
 
     fn ensure_remote_media_loaded(&mut self, raw_query: &str, cx: &mut Context<Self>) {
         let query = remote_media_query(raw_query, self.kind_filter);
-        let signature = format!("{}:{query}", self.kind_filter.label());
+        let signature: SharedString = format!("{}:{query}", self.kind_filter.label()).into();
 
-        if self.remote_loading || self.remote_signature.as_deref() == Some(signature.as_str()) {
+        if self.remote_loading || self.remote_signature.as_deref() == Some(signature.as_ref()) {
             return;
         }
 
@@ -403,7 +403,7 @@ impl MediaPanel {
             let should_fetch = panel
                 .update(cx, |panel, _| {
                     panel.remote_generation == generation
-                        && panel.remote_signature.as_deref() == Some(signature.as_str())
+                        && panel.remote_signature.as_deref() == Some(signature.as_ref())
                 })
                 .unwrap_or(false);
             if !should_fetch {
@@ -420,7 +420,7 @@ impl MediaPanel {
             panel
                 .update(cx, |panel, cx| {
                     if panel.remote_generation == generation
-                        && panel.remote_signature.as_deref() == Some(signature.as_str())
+                        && panel.remote_signature.as_deref() == Some(signature.as_ref())
                     {
                         panel.remote_loading = false;
                         match result {
@@ -446,7 +446,11 @@ impl MediaPanel {
         .detach();
     }
 
-    fn cache_remote_assets(&mut self, signature: String, remote_assets: Vec<RemoteMediaAsset>) {
+    fn cache_remote_assets(
+        &mut self,
+        signature: SharedString,
+        remote_assets: Vec<RemoteMediaAsset>,
+    ) {
         self.remote_cache.insert(signature.clone(), remote_assets);
         self.touch_remote_cache_entry(&signature);
 
@@ -458,9 +462,10 @@ impl MediaPanel {
         }
     }
 
-    fn touch_remote_cache_entry(&mut self, signature: &str) {
-        self.remote_cache_order.retain(|entry| entry != signature);
-        self.remote_cache_order.push_back(signature.to_string());
+    fn touch_remote_cache_entry(&mut self, signature: &SharedString) {
+        self.remote_cache_order
+            .retain(|entry| entry.as_ref() != signature.as_ref());
+        self.remote_cache_order.push_back(signature.clone());
     }
 
     fn refresh_media_index_from_current_roots(&mut self, cx: &mut Context<Self>) {
