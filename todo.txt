@@ -1,5 +1,5 @@
 IN PROGRESS:
-- Icon and media panel performance pass is code-complete by inspection; awaiting manual Zed panel QA.
+- UI/shadcn row thumbnail screenshot reuse is code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
 - User manual check that the Icon panel All sets grid renders real external SVG icons instead of letter-only pack badges.
@@ -19,6 +19,7 @@ PENDING:
 - User manual check that Media panel count totals follow the selected Images/Videos/Audio tab instead of using the full all-media denominator.
 - User manual check that screenshot-backed UI previews feel native, with no implementation/status caption and no cropped dashboard/login screenshots.
 - User manual check that shadcn dashboard, login, card, sidebar, button, calendar, authentication, playground, and task-style entries show local screenshot-backed previews instead of generic placeholder demos.
+- User manual check that UI panel rows use available local shadcn screenshots as thumbnails before falling back to synthetic component sketches.
 - User manual check that the Media panel direct remote rows cover image, video, and audio samples without opening the remote provider browser first.
 - User manual check that the icon picker opens immediately without scanning all external icon JSON files.
 - User manual check that selecting one icon pack loads that pack quickly and broad search still loads the full catalog only when needed.
@@ -93,6 +94,7 @@ COMPLETED:
 - Made Media panel count labels respect the active media kind tab so Images/Videos/Audio totals are clearer.
 - Removed implementation/status copy from screenshot-backed UI previews and changed screenshot rendering to contain-fit so larger shadcn previews are not cropped.
 - Added screenshot-backed WebPreview demos for common shadcn/ui catalog entries by reusing local shadcn registry/public assets when they are available, including common block/example screenshots.
+- Made UI panel row thumbnails reuse local shadcn screenshot assets with an in-memory lookup cache.
 - Added compact per-row font specimens in the Font panel so Google/system fonts can be judged directly from the list without bringing back the large top sample section.
 - Expanded generated shadcn/ui preview thumbnails and WebPreview demos for common form, menu, feedback, loading, calendar, navigation, and scroll components so the UI panel feels less generic.
 - Added more verified direct remote media rows for NASA imagery, Blender Open Movie videos, and a SoundHelix audio sample so the Media panel has stronger immediate image/video/audio coverage before opening provider search.

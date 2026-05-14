@@ -1,9 +1,9 @@
 use editor::{Editor, EditorEvent};
 use gpui::{
     AnyElement, App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity,
-    EventEmitter, FocusHandle, Focusable, InteractiveElement, Pixels, Render, ScrollHandle,
-    SharedString, StatefulInteractiveElement, Subscription, WeakEntity, Window, actions, div,
-    point, px,
+    EventEmitter, FocusHandle, Focusable, InteractiveElement, ObjectFit, Pixels, Render,
+    ScrollHandle, SharedString, StatefulInteractiveElement, Subscription, WeakEntity, Window,
+    actions, div, img, point, px,
 };
 use memmap2::MmapOptions;
 use rkyv::{
@@ -12,10 +12,10 @@ use rkyv::{
 };
 use serde::Deserialize;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashMap},
     fs::{self as std_fs, File},
     path::{Path, PathBuf},
-    sync::OnceLock,
+    sync::{Mutex, OnceLock},
 };
 use ui::{TintColor, Tooltip, prelude::*};
 use url::Url;
@@ -45,6 +45,8 @@ const CATALOG_CACHE_FILE_NAME: &str = "catalog-v1.rkyv";
 const STATIC_SHADCN_CATALOG_INDEX: &str = include_str!("shadcn_catalog_index.tsv");
 static SHADCN_STATIC_CATALOG_CACHE: OnceLock<Vec<CatalogItem>> = OnceLock::new();
 static SHADCN_CATALOG_CACHE: OnceLock<Vec<CatalogItem>> = OnceLock::new();
+static SHADCN_PREVIEW_IMAGE_CACHE: OnceLock<Mutex<HashMap<String, Option<String>>>> =
+    OnceLock::new();
 
 pub fn init(cx: &mut App) {
     cx.observe_new(|workspace: &mut Workspace, _, _| {
@@ -825,6 +827,20 @@ fn shadcn_thumbnail(item: &CatalogItem, cx: &mut Context<ShadcnUiPanel>) -> AnyE
     let colors = cx.theme().colors();
     let accent = colors.editor_foreground.opacity(0.72);
     let muted = colors.text_muted.opacity(0.56);
+
+    if let Some(image_url) = cached_shadcn_preview_image_url(item) {
+        return div()
+            .w(px(70.))
+            .h(px(46.))
+            .flex_none()
+            .rounded_sm()
+            .border_1()
+            .border_color(colors.border_variant)
+            .bg(colors.element_background)
+            .overflow_hidden()
+            .child(img(image_url).size_full().object_fit(ObjectFit::Cover))
+            .into_any_element();
+    }
 
     let base = || {
         div()
@@ -2786,6 +2802,22 @@ fn shadcn_preview_image_url(item: &CatalogItem) -> Option<String> {
         .find(|path| path.is_file())
         .and_then(|path| Url::from_file_path(path).ok())
         .map(|url| url.to_string())
+}
+
+fn cached_shadcn_preview_image_url(item: &CatalogItem) -> Option<String> {
+    let key = item.id.to_string();
+    let cache = SHADCN_PREVIEW_IMAGE_CACHE.get_or_init(|| Mutex::new(HashMap::default()));
+    if let Ok(cache) = cache.lock()
+        && let Some(image_url) = cache.get(&key)
+    {
+        return image_url.clone();
+    }
+
+    let image_url = shadcn_preview_image_url(item);
+    if let Ok(mut cache) = cache.lock() {
+        cache.insert(key, image_url.clone());
+    }
+    image_url
 }
 
 fn highlight_tsx(source: &str) -> String {
