@@ -597,7 +597,12 @@ impl ShadcnUiPanel {
     }
 
     fn copy_item_code(&mut self, item: CatalogItem, cx: &mut Context<Self>) {
-        let mut code = String::new();
+        let import_len = if item.import_statement.is_empty() {
+            0
+        } else {
+            item.import_statement.len() + 2
+        };
+        let mut code = String::with_capacity(import_len + item.jsx.len());
         if !item.import_statement.is_empty() {
             code.push_str(item.import_statement.as_ref());
             code.push_str("\n\n");

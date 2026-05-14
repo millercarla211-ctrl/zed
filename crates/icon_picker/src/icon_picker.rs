@@ -1081,7 +1081,7 @@ fn external_pack_badge(icon: &ExternalIcon, cx: &mut Context<IconPickerPanel>) -
 }
 
 fn external_pack_initials(pack: &str) -> String {
-    let mut initials = String::new();
+    let mut initials = String::with_capacity(2);
     for part in pack.split(['-', '_', ' ']) {
         if let Some(character) = part
             .chars()

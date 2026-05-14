@@ -1,3 +1,12 @@
+[2026-05-15] - Icon And UI Copy Buffer Preallocation
+
+CHANGED:
+- `crates/icon_picker` now preallocates fallback external-pack initials to their two-character display size.
+- `crates/shadcn_ui_panel` now preallocates copied component code buffers from the import and JSX lengths before writing to the clipboard.
+
+NOTES:
+- Preserved fallback icon labels, copied component snippets, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - UI Highlight Escaping Allocation Cleanup
 
 CHANGED:
