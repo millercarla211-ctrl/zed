@@ -217,14 +217,20 @@ impl MediaKindCounts {
         counts
     }
 
+    fn from_remote_assets(assets: &[RemoteMediaAsset]) -> Self {
+        let mut counts = Self::default();
+        for asset in assets {
+            counts.add(asset.kind);
+        }
+        counts
+    }
+
     fn from_panel(panel: &MediaPanel) -> Self {
         let mut counts = panel.local_kind_counts;
         for asset in remote_media_assets() {
             counts.add(asset.kind);
         }
-        for asset in &panel.remote_assets {
-            counts.add(asset.kind);
-        }
+        counts.add_counts(panel.remote_kind_counts);
         counts
     }
 
@@ -234,6 +240,12 @@ impl MediaKindCounts {
             DraggedMediaKind::Video => self.videos += 1,
             DraggedMediaKind::Audio => self.audio += 1,
         }
+    }
+
+    fn add_counts(&mut self, counts: Self) {
+        self.images += counts.images;
+        self.videos += counts.videos;
+        self.audio += counts.audio;
     }
 
     fn count(&self, filter: MediaKindFilter) -> usize {
@@ -254,6 +266,7 @@ pub struct MediaPanel {
     assets: Vec<MediaAsset>,
     local_kind_counts: MediaKindCounts,
     remote_assets: Vec<RemoteMediaAsset>,
+    remote_kind_counts: MediaKindCounts,
     remote_cache: HashMap<String, Vec<RemoteMediaAsset>>,
     kind_filter: MediaKindFilter,
     kind_scroll_handle: ScrollHandle,
@@ -312,6 +325,7 @@ impl MediaPanel {
                 assets: Vec::new(),
                 local_kind_counts: MediaKindCounts::default(),
                 remote_assets: Vec::new(),
+                remote_kind_counts: MediaKindCounts::default(),
                 remote_cache: HashMap::default(),
                 kind_filter: MediaKindFilter::Images,
                 kind_scroll_handle: ScrollHandle::new(),
@@ -339,6 +353,7 @@ impl MediaPanel {
         self.remote_loading = false;
         self.remote_signature = None;
         self.remote_assets.clear();
+        self.remote_kind_counts = MediaKindCounts::default();
     }
 
     fn ensure_remote_media_loaded(&mut self, raw_query: &str, cx: &mut Context<Self>) {
@@ -350,7 +365,9 @@ impl MediaPanel {
         }
 
         if let Some(remote_assets) = self.remote_cache.get(&signature).cloned() {
+            let remote_kind_counts = MediaKindCounts::from_remote_assets(&remote_assets);
             self.remote_assets = remote_assets;
+            self.remote_kind_counts = remote_kind_counts;
             self.remote_signature = Some(signature);
             self.status = None;
             return;
@@ -392,14 +409,18 @@ impl MediaPanel {
                         panel.remote_loading = false;
                         match result {
                             Ok(remote_assets) => {
+                                let remote_kind_counts =
+                                    MediaKindCounts::from_remote_assets(&remote_assets);
                                 panel
                                     .remote_cache
                                     .insert(signature.clone(), remote_assets.clone());
                                 panel.remote_assets = remote_assets;
+                                panel.remote_kind_counts = remote_kind_counts;
                                 panel.status = None;
                             }
                             Err(error) => {
                                 panel.remote_assets.clear();
+                                panel.remote_kind_counts = MediaKindCounts::default();
                                 panel.status = Some(format!("Remote media: {error:#}").into());
                             }
                         }
