@@ -2,6 +2,8 @@ IN PROGRESS:
 - Panel polish toward 100/100 for icon, font, media, and UI right panels while preserving the stable editor/WebPreview input paths.
 
 PENDING:
+- User manual check that Font panel searches like "inter tight" or "source code" match fonts by words instead of requiring exact phrase order.
+- User manual check that Font panel count totals follow the selected All/System/Web tab and show total matches, not just the capped visible row count.
 - User manual check that Media panel searches like "space background" or "open movie video" match remote/local assets by words instead of requiring exact phrase order.
 - User manual check that Media panel count totals follow the selected Images/Videos/Audio tab instead of using the full all-media denominator.
 - User manual check that screenshot-backed UI previews feel native, with no implementation/status caption and no cropped dashboard/login screenshots.
@@ -63,6 +65,8 @@ PENDING:
 - User manual feedback on switching between Qwen 3.5 0.8B, Gemma 4 E4B, and any newly dropped GGUF files from the AI panel.
 
 COMPLETED:
+- Made Font panel search match all query words across system and Google fonts so multi-word font discovery is more forgiving.
+- Made Font panel count labels respect the selected All/System/Web tab and report total matching fonts instead of capped rendered rows.
 - Made Media panel search match all query words across local and direct remote assets, improving multi-word searches without opening the remote provider browser.
 - Made Media panel count labels respect the active media kind tab so Images/Videos/Audio totals are clearer.
 - Removed implementation/status copy from screenshot-backed UI previews and changed screenshot rendering to contain-fit so larger shadcn previews are not cropped.

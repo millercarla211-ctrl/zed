@@ -1,3 +1,12 @@
+[2026-05-14] - Font Panel Search And Counts
+
+CHANGED:
+- `crates/font_panel` now matches font searches by all query words across system and Google fonts, so searches like `inter tight` and `source code` do not require exact phrase order.
+- `crates/font_panel` now reports total matches against the active All, System, or Web tab instead of showing only the capped visible row count against the all-font denominator.
+
+NOTES:
+- Preserved font preview/apply/project insertion behavior; this pass only changes panel search and count presentation.
+
 [2026-05-14] - Media Panel Search And Counts
 
 CHANGED:

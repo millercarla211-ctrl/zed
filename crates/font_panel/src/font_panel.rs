@@ -248,7 +248,8 @@ impl FontPanel {
 
         let mut push_font = |font: FontEntry| {
             exact_match |= font.name.as_ref().eq_ignore_ascii_case(query.as_str());
-            if !query.is_empty() && !font.name.as_ref().to_lowercase().contains(query.as_str()) {
+            let searchable = font.name.as_ref().to_lowercase();
+            if !font_search_matches(searchable.as_str(), query.as_str()) {
                 return;
             }
 
@@ -639,13 +640,13 @@ impl FontPanel {
         cx.notify();
     }
 
-    fn render_preview(&self, shown_count: usize, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_preview(&self, total_matches: usize, cx: &mut Context<Self>) -> impl IntoElement {
         let count_label = if let Some(status) = self.status.clone() {
             status
         } else if self.fonts_loaded || self.source_filter == FontSourceFilter::Web {
             format!(
-                "{shown_count} / {}",
-                self.filtered_count(FontSourceFilter::All)
+                "{total_matches} / {}",
+                self.filtered_count(self.source_filter)
             )
             .into()
         } else {
@@ -737,7 +738,6 @@ impl Render for FontPanel {
         self.refresh_fonts_if_needed(cx);
         let (fonts, total_matches) = self.matching_fonts(cx, MAX_FONT_RESULTS);
         let is_empty = total_matches == 0;
-        let shown_count = fonts.len();
         let font_rows = fonts
             .iter()
             .cloned()
@@ -749,7 +749,7 @@ impl Render for FontPanel {
             .size_full()
             .overflow_hidden()
             .bg(cx.theme().colors().panel_background)
-            .child(self.render_preview(shown_count, cx))
+            .child(self.render_preview(total_matches, cx))
             .child(
                 div()
                     .id("font-panel-scroll")
@@ -788,6 +788,12 @@ fn scroll_tab_handle(handle: &ScrollHandle, direction: f32) {
         next_x = px(0.);
     }
     handle.set_offset(point(next_x, current.y));
+}
+
+fn font_search_matches(searchable: &str, query: &str) -> bool {
+    query
+        .split_whitespace()
+        .all(|term| searchable.contains(term))
 }
 
 fn web_font_spec_by_name(name: &str) -> Option<WebFontSpec> {
