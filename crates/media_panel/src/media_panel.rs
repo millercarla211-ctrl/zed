@@ -1835,11 +1835,14 @@ async fn fetch_openverse_media(
             let license = item
                 .license
                 .unwrap_or_else(|| "Creative Commons".to_string());
-            let tags = [item.creator, item.foreign_landing_url]
+            let mut tags = String::new();
+            let mut is_first_tag = true;
+            for tag in [item.creator, item.foreign_landing_url]
                 .into_iter()
                 .flatten()
-                .collect::<Vec<_>>()
-                .join(" ");
+            {
+                push_remote_tag(&mut tags, &mut is_first_tag, tag.as_str());
+            }
             Some(RemoteMediaAsset::owned_with_thumbnail(
                 remote_asset_id(provider, &identifier),
                 label,
@@ -2147,15 +2150,18 @@ async fn fetch_cleveland_art_images(
                 .as_ref()
                 .and_then(|image| image.url.clone())
                 .or_else(|| images.print.as_ref().and_then(|image| image.url.clone()))?;
-            let tags = item
+            let mut tags = String::new();
+            let mut is_first_tag = true;
+            for tag in item
                 .creators
                 .unwrap_or_default()
                 .into_iter()
                 .filter_map(|creator| creator.description)
                 .chain(item.department)
                 .chain(item.collection)
-                .collect::<Vec<_>>()
-                .join(" ");
+            {
+                push_remote_tag(&mut tags, &mut is_first_tag, tag.as_str());
+            }
 
             Some(RemoteMediaAsset::owned_with_thumbnail(
                 remote_asset_id("ClevelandMuseum", &item.id.to_string()),
@@ -2428,6 +2434,14 @@ fn clean_remote_label(label: &str) -> String {
     } else {
         normalized
     }
+}
+
+fn push_remote_tag(tags: &mut String, is_first_tag: &mut bool, tag: &str) {
+    if !*is_first_tag {
+        tags.push(' ');
+    }
+    *is_first_tag = false;
+    tags.push_str(tag);
 }
 
 fn remote_asset_id(provider: &str, value: &str) -> String {

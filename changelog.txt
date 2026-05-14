@@ -1,3 +1,11 @@
+[2026-05-15] - Media Remote Tag Allocation Cleanup
+
+CHANGED:
+- `crates/media_panel` now builds Openverse and Cleveland Museum remote tag metadata directly instead of collecting temporary tag vectors before joining.
+
+NOTES:
+- Preserved remote tag separator behavior, media search matching metadata, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - UI Title Generation Allocation Cleanup
 
 CHANGED:
