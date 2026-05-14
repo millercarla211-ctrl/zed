@@ -2,6 +2,7 @@ IN PROGRESS:
 - Panel polish toward 100/100 for icon, font, media, and UI right panels while preserving the stable editor/WebPreview input paths.
 
 PENDING:
+- User manual check that shadcn dashboard, login, card, sidebar, button, calendar, authentication, playground, and task-style entries show local screenshot-backed previews instead of generic placeholder demos.
 - User manual check that the Media panel direct remote rows cover image, video, and audio samples without opening the remote provider browser first.
 - User manual check that the icon picker opens immediately without scanning all external icon JSON files.
 - User manual check that selecting one icon pack loads that pack quickly and broad search still loads the full catalog only when needed.
@@ -59,6 +60,7 @@ PENDING:
 - User manual feedback on switching between Qwen 3.5 0.8B, Gemma 4 E4B, and any newly dropped GGUF files from the AI panel.
 
 COMPLETED:
+- Added screenshot-backed WebPreview demos for common shadcn/ui catalog entries by reusing local shadcn registry/public assets when they are available, including common block/example screenshots.
 - Added compact per-row font specimens in the Font panel so Google/system fonts can be judged directly from the list without bringing back the large top sample section.
 - Expanded generated shadcn/ui preview thumbnails and WebPreview demos for common form, menu, feedback, loading, calendar, navigation, and scroll components so the UI panel feels less generic.
 - Added more verified direct remote media rows for NASA imagery, Blender Open Movie videos, and a SoundHelix audio sample so the Media panel has stronger immediate image/video/audio coverage before opening provider search.

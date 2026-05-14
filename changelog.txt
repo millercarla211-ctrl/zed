@@ -1,3 +1,11 @@
+[2026-05-14] - Screenshot-Backed UI Panel Previews
+
+CHANGED:
+- `crates/shadcn_ui_panel` now uses local shadcn public/registry screenshots for common dashboard, login, button, card, sidebar, calendar, authentication, playground, and task-style preview pages when those assets are available.
+
+NOTES:
+- This keeps the UI panel preview upgrade on the existing static/local asset path without adding registry scans to the panel-open hot path or touching WebPreview input routing.
+
 [2026-05-14] - Right Panel Tab Paging And Fast UI Catalog
 
 CHANGED:

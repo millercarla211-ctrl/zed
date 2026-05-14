@@ -2499,6 +2499,23 @@ fn preview_html(item: &CatalogItem, source_file: &Path, source: &str) -> String 
       padding: 16px;
       box-shadow: 0 16px 48px rgba(0,0,0,.28);
     }}
+    .demo-screenshot-shell {{
+      width: min(100%, 620px);
+      padding: 0;
+      overflow: hidden;
+    }}
+    .demo-screenshot {{
+      display: block;
+      width: 100%;
+      max-height: 360px;
+      object-fit: cover;
+      background: var(--code);
+    }}
+    .demo-screenshot-caption {{
+      padding: 10px 12px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+    }}
     .demo-row {{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }}
     .demo-stack {{ display: grid; gap: 12px; }}
     .demo-button {{
@@ -2589,6 +2606,17 @@ fn preview_html(item: &CatalogItem, source_file: &Path, source: &str) -> String 
 }
 
 fn component_demo_html(item: &CatalogItem) -> String {
+    if let Some(image_url) = shadcn_preview_image_url(item) {
+        return format!(
+            r#"<div class="demo-surface demo-screenshot-shell">
+  <img class="demo-screenshot" src="{}" alt="{} preview" />
+  <div class="demo-screenshot-caption">Screenshot-backed preview from the local shadcn registry assets.</div>
+</div>"#,
+            escape_attr(&image_url),
+            escape_attr(item.title.as_ref())
+        );
+    }
+
     match item.source {
         CatalogSource::CommunityRegistry | CatalogSource::TwentyFirst => {
             return format!(
@@ -2664,6 +2692,107 @@ fn component_demo_html(item: &CatalogItem) -> String {
             escape_html(item.description.as_ref())
         ),
     }
+}
+
+fn shadcn_preview_image_url(item: &CatalogItem) -> Option<String> {
+    let public_root = repo_root()
+        .join("inspirations")
+        .join("shadcn-ui")
+        .join("apps")
+        .join("v4")
+        .join("public");
+    let id = item.id.as_ref();
+    let mut candidates = Vec::new();
+
+    match id {
+        "authentication" => {
+            candidates.extend([
+                public_root.join("examples/authentication-dark.png"),
+                public_root.join("examples/authentication-light.png"),
+            ]);
+        }
+        "dashboard-01" | "dashboard" => {
+            candidates.extend([
+                public_root.join("r/styles/new-york-v4/dashboard-01-dark.png"),
+                public_root.join("r/styles/new-york/dashboard-01-dark.png"),
+                public_root.join("examples/dashboard-dark.png"),
+            ]);
+        }
+        "login-01" | "login" => {
+            candidates.extend([
+                public_root.join("r/styles/new-york-v4/login-01-dark.png"),
+                public_root.join("r/styles/new-york/login-01-dark.png"),
+                public_root.join("examples/authentication-dark.png"),
+            ]);
+        }
+        "button" | "button-01" => {
+            candidates.extend([
+                public_root.join("r/styles/new-york-v4/button-01-dark.png"),
+                public_root.join("r/styles/new-york/button-01-dark.png"),
+            ]);
+        }
+        "card" | "cards" => {
+            candidates.extend([
+                public_root.join("examples/cards-dark.png"),
+                public_root.join("examples/cards-light.png"),
+            ]);
+        }
+        "sidebar" => {
+            candidates.extend([
+                public_root.join("images/sidebar-menu-dark.png"),
+                public_root.join("images/sidebar-structure-dark.png"),
+            ]);
+        }
+        "calendar" | "date-picker" => {
+            candidates.push(public_root.join("images/calendar-2.png"));
+        }
+        "playground" => {
+            candidates.push(public_root.join("examples/playground-dark.png"));
+        }
+        "tasks" | "task-list" => {
+            candidates.extend([
+                public_root.join("examples/tasks-dark.png"),
+                public_root.join("examples/tasks-light.png"),
+            ]);
+        }
+        _ => {}
+    }
+
+    candidates.extend([
+        public_root.join(format!("r/styles/new-york-v4/{id}-dark.png")),
+        public_root.join(format!("r/styles/new-york/{id}-dark.png")),
+        public_root.join(format!("examples/{id}-dark.png")),
+        public_root.join(format!("images/{id}-dark.png")),
+        public_root.join(format!("images/{id}.png")),
+    ]);
+
+    if id.starts_with("sidebar-") {
+        candidates.extend([
+            public_root.join(format!("r/styles/new-york-v4/{id}-dark.png")),
+            public_root.join(format!("r/styles/new-york/{id}-dark.png")),
+            public_root.join("images/sidebar-menu-dark.png"),
+        ]);
+    }
+
+    if id.starts_with("login-") {
+        candidates.extend([
+            public_root.join(format!("r/styles/new-york-v4/{id}-dark.png")),
+            public_root.join(format!("r/styles/new-york/{id}-dark.png")),
+        ]);
+    }
+
+    if id.starts_with("dashboard-") {
+        candidates.extend([
+            public_root.join(format!("r/styles/new-york-v4/{id}-dark.png")),
+            public_root.join(format!("r/styles/new-york/{id}-dark.png")),
+        ]);
+    }
+
+    candidates
+        .into_iter()
+        .find(|path| path.is_file())
+        .and_then(|path| Url::from_file_path(path).ok())
+        .map(|url| url.to_string())
 }
 
 fn highlight_tsx(source: &str) -> String {
