@@ -1823,41 +1823,41 @@ async fn fetch_openverse_media(
         DraggedMediaKind::Video => "Openverse",
     };
 
-    Ok(response
-        .results
-        .into_iter()
-        .filter_map(|item| {
-            let thumbnail_url = item.thumbnail.clone();
-            let url = item.url.or(item.thumbnail)?;
-            let label = clean_remote_label(item.title.as_deref().unwrap_or("Openverse media"));
-            let identifier = item
-                .id
-                .clone()
-                .or_else(|| item.foreign_landing_url.clone())
-                .unwrap_or_else(|| url.clone());
-            let license = item
-                .license
-                .unwrap_or_else(|| "Creative Commons".to_string());
-            let mut tags = String::new();
-            let mut is_first_tag = true;
-            for tag in [item.creator, item.foreign_landing_url]
-                .into_iter()
-                .flatten()
-            {
-                push_remote_tag(&mut tags, &mut is_first_tag, tag.as_str());
-            }
-            Some(RemoteMediaAsset::owned_with_thumbnail(
-                remote_asset_id(provider, &identifier),
-                label,
-                provider,
-                url,
-                thumbnail_url,
-                kind,
-                license,
-                tags,
-            ))
-        })
-        .collect())
+    let mut assets = Vec::with_capacity(response.results.len());
+    for item in response.results {
+        let thumbnail_url = item.thumbnail.clone();
+        let Some(url) = item.url.or(item.thumbnail) else {
+            continue;
+        };
+        let label = clean_remote_label(item.title.as_deref().unwrap_or("Openverse media"));
+        let identifier = item
+            .id
+            .clone()
+            .or_else(|| item.foreign_landing_url.clone())
+            .unwrap_or_else(|| url.clone());
+        let license = item
+            .license
+            .unwrap_or_else(|| "Creative Commons".to_string());
+        let mut tags = String::new();
+        let mut is_first_tag = true;
+        for tag in [item.creator, item.foreign_landing_url]
+            .into_iter()
+            .flatten()
+        {
+            push_remote_tag(&mut tags, &mut is_first_tag, tag.as_str());
+        }
+        assets.push(RemoteMediaAsset::owned_with_thumbnail(
+            remote_asset_id(provider, &identifier),
+            label,
+            provider,
+            url,
+            thumbnail_url,
+            kind,
+            license,
+            tags,
+        ));
+    }
+    Ok(assets)
 }
 
 async fn fetch_wikimedia_media(
@@ -1872,33 +1872,41 @@ async fn fetch_wikimedia_media(
     let response: WikimediaResponse = fetch_json(http_client, &url).await?;
     let pages = response.query.map(|query| query.pages).unwrap_or_default();
 
-    Ok(pages
-        .into_values()
-        .filter_map(|page| {
-            let info = page.imageinfo?.into_iter().next()?;
-            let kind = media_kind_for_mime(info.mime.as_deref()?)?;
-            if !filter.matches(kind) {
-                return None;
-            }
-            let thumbnail_url = info.thumburl.clone();
-            let url = info.url.or(info.thumburl)?;
-            let title = page
-                .title
-                .as_deref()
-                .map(strip_wikimedia_file_prefix)
-                .unwrap_or("Wikimedia media");
-            Some(RemoteMediaAsset::owned_with_thumbnail(
-                remote_asset_id("Wikimedia", &url),
-                clean_remote_label(title),
-                "Wikimedia Commons",
-                url,
-                thumbnail_url,
-                kind,
-                "open license".to_string(),
-                query.to_string(),
-            ))
-        })
-        .collect())
+    let mut assets = Vec::with_capacity(pages.len());
+    for page in pages.into_values() {
+        let Some(info) = page
+            .imageinfo
+            .and_then(|imageinfo| imageinfo.into_iter().next())
+        else {
+            continue;
+        };
+        let Some(kind) = info.mime.as_deref().and_then(media_kind_for_mime) else {
+            continue;
+        };
+        if !filter.matches(kind) {
+            continue;
+        }
+        let thumbnail_url = info.thumburl.clone();
+        let Some(url) = info.url.or(info.thumburl) else {
+            continue;
+        };
+        let title = page
+            .title
+            .as_deref()
+            .map(strip_wikimedia_file_prefix)
+            .unwrap_or("Wikimedia media");
+        assets.push(RemoteMediaAsset::owned_with_thumbnail(
+            remote_asset_id("Wikimedia", &url),
+            clean_remote_label(title),
+            "Wikimedia Commons",
+            url,
+            thumbnail_url,
+            kind,
+            "open license".to_string(),
+            query.to_string(),
+        ));
+    }
+    Ok(assets)
 }
 
 async fn fetch_nasa_images(
@@ -1911,30 +1919,34 @@ async fn fetch_nasa_images(
     );
     let response: NasaResponse = fetch_json(http_client, &url).await?;
 
-    Ok(response
-        .collection
-        .items
-        .into_iter()
-        .filter_map(|item| {
-            let data = item.data.into_iter().next()?;
-            if data.media_type.as_deref() != Some("image") {
-                return None;
-            }
-            let url = item.links?.into_iter().find_map(|link| link.href)?;
-            let label = clean_remote_label(data.title.as_deref().unwrap_or("NASA image"));
-            let identifier = data.nasa_id.clone().unwrap_or_else(|| url.clone());
-            let tags = data.description.unwrap_or_default();
-            Some(RemoteMediaAsset::owned(
-                remote_asset_id("NASA", &identifier),
-                label,
-                "NASA",
-                url,
-                DraggedMediaKind::Image,
-                "public domain".to_string(),
-                tags,
-            ))
-        })
-        .collect())
+    let mut assets = Vec::with_capacity(response.collection.items.len());
+    for item in response.collection.items {
+        let Some(data) = item.data.into_iter().next() else {
+            continue;
+        };
+        if data.media_type.as_deref() != Some("image") {
+            continue;
+        }
+        let Some(url) = item
+            .links
+            .and_then(|links| links.into_iter().find_map(|link| link.href))
+        else {
+            continue;
+        };
+        let label = clean_remote_label(data.title.as_deref().unwrap_or("NASA image"));
+        let identifier = data.nasa_id.clone().unwrap_or_else(|| url.clone());
+        let tags = data.description.unwrap_or_default();
+        assets.push(RemoteMediaAsset::owned(
+            remote_asset_id("NASA", &identifier),
+            label,
+            "NASA",
+            url,
+            DraggedMediaKind::Image,
+            "public domain".to_string(),
+            tags,
+        ));
+    }
+    Ok(assets)
 }
 
 async fn fetch_nasa_media(

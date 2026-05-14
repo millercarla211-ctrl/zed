@@ -1,3 +1,11 @@
+[2026-05-15] - Media Provider Result Buffer Preallocation
+
+CHANGED:
+- `crates/media_panel` now builds Openverse, Wikimedia, and NASA image remote-provider results into preallocated buffers instead of relying on final iterator collection.
+
+NOTES:
+- Preserved provider URLs, filtering behavior, result order, labels, licenses, thumbnails, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Font And UI Small Buffer Preallocation
 
 CHANGED:
