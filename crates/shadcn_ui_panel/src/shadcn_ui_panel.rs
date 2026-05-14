@@ -657,9 +657,14 @@ impl ShadcnUiPanel {
         let can_drag = can_drag_into_editor(item.source);
         let primary_action = if can_drag { "Insert" } else { "Open" };
         let source_label = catalog_source_label(item.source);
+        let row_id = shadcn_element_id("shadcn-item-", item.id.as_ref());
+        let insert_id = shadcn_element_id("shadcn-insert-", item.id.as_ref());
+        let copy_id = shadcn_element_id("shadcn-copy-", item.id.as_ref());
+        let preview_id = shadcn_element_id("shadcn-preview-", item.id.as_ref());
+        let docs_id = shadcn_element_id("shadcn-docs-", item.id.as_ref());
 
         div()
-            .id(format!("shadcn-item-{}", item.id.as_ref()))
+            .id(row_id)
             .v_flex()
             .gap_2()
             .p_2()
@@ -733,25 +738,22 @@ impl ShadcnUiPanel {
                     .gap_1()
                     .flex_wrap()
                     .child(
-                        Button::new(
-                            format!("shadcn-insert-{}", item.id.as_ref()),
-                            primary_action,
-                        )
-                        .style(ButtonStyle::Subtle)
-                        .size(ButtonSize::Compact)
-                        .on_click(cx.listener({
-                            let item = item.clone();
-                            move |panel, _, window, cx| {
-                                if can_drag {
-                                    panel.insert_item(item.clone(), window, cx);
-                                } else {
-                                    panel.open_item_docs(item.clone(), cx);
+                        Button::new(insert_id, primary_action)
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener({
+                                let item = item.clone();
+                                move |panel, _, window, cx| {
+                                    if can_drag {
+                                        panel.insert_item(item.clone(), window, cx);
+                                    } else {
+                                        panel.open_item_docs(item.clone(), cx);
+                                    }
                                 }
-                            }
-                        })),
+                            })),
                     )
                     .child(
-                        Button::new(format!("shadcn-copy-{}", item.id.as_ref()), "Copy")
+                        Button::new(copy_id, "Copy")
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
                             .on_click(cx.listener({
@@ -762,7 +764,7 @@ impl ShadcnUiPanel {
                             })),
                     )
                     .child(
-                        Button::new(format!("shadcn-preview-{}", item.id.as_ref()), "Preview")
+                        Button::new(preview_id, "Preview")
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
                             .on_click(cx.listener({
@@ -773,7 +775,7 @@ impl ShadcnUiPanel {
                             })),
                     )
                     .child(
-                        Button::new(format!("shadcn-docs-{}", item.id.as_ref()), "Docs")
+                        Button::new(docs_id, "Docs")
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
                             .on_click(cx.listener({
@@ -986,6 +988,13 @@ fn can_drag_into_editor(source: CatalogSource) -> bool {
         source,
         CatalogSource::CommunityRegistry | CatalogSource::TwentyFirst
     )
+}
+
+fn shadcn_element_id(prefix: &str, id: &str) -> String {
+    let mut element_id = String::with_capacity(prefix.len() + id.len());
+    element_id.push_str(prefix);
+    element_id.push_str(id);
+    element_id
 }
 
 fn shadcn_thumbnail(

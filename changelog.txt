@@ -1,3 +1,11 @@
+[2026-05-15] - UI Row Element Id Allocation Cleanup
+
+CHANGED:
+- `crates/shadcn_ui_panel` now builds visible row and row-action element ids with a small preallocated helper instead of repeated generic `format!` calls.
+
+NOTES:
+- Preserved the exact stable row/button ids, UI row actions, drag behavior, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Media Local Row Copy Allocation Cleanup
 
 CHANGED:
