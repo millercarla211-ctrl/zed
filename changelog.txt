@@ -1,6 +1,7 @@
 [2026-05-15] - UI Panel Catalog Buffer Preallocation
 
 CHANGED:
+- `crates/shadcn_ui_panel` now skips duplicate screenshot preview candidate paths before checking the filesystem, reducing repeated thumbnail lookup work for dashboard, login, and sidebar-style entries.
 - `crates/shadcn_ui_panel` now preallocates local shadcn/Magic catalog item buffers, screenshot candidate paths, cached thumbnail hits, and warmed thumbnail result rows to reduce allocation churn during UI panel cold loads and thumbnail warming.
 
 NOTES:

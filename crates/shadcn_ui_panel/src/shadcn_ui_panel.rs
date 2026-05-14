@@ -2955,8 +2955,10 @@ fn shadcn_preview_image_url(item: &CatalogItem) -> Option<String> {
         ]);
     }
 
+    let mut seen_candidates = BTreeSet::new();
     candidates
         .into_iter()
+        .filter(|path| seen_candidates.insert(path.clone()))
         .find(|path| path.is_file())
         .and_then(|path| Url::from_file_path(path).ok())
         .map(|url| url.to_string())
