@@ -23,6 +23,7 @@ ADDED:
 - `crates/media_panel` now fetches direct Cleveland Museum of Art CC0 image rows through the no-key open access API.
 
 CHANGED:
+- `crates/shadcn_ui_panel` now snapshots visible shadcn preview-image cache hits once per render and passes them into row rendering instead of locking the global thumbnail cache for every visible row.
 - `crates/icon_picker` now skips render-path preview-file checks for external icons that are already queued for background SVG preview warming.
 - `crates/icon_picker` now limits the empty All Sets representative icon collection to the visible result window instead of extending the full external representative catalog and truncating it afterward.
 - `crates/icon_picker`, `crates/font_panel`, `crates/media_panel`, and `crates/shadcn_ui_panel` now consume the already-filtered visible row vectors when rendering tiles/rows instead of cloning each visible item again.

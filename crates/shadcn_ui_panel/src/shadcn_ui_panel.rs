@@ -382,11 +382,12 @@ impl ShadcnUiPanel {
     fn ensure_visible_preview_images_warmed(
         &mut self,
         items: &[CatalogItem],
+        cached_preview_images: &HashMap<String, Option<String>>,
         cx: &mut Context<Self>,
     ) {
         let pending_items = items
             .iter()
-            .filter(|item| !preview_image_cache_contains(item.id.as_ref()))
+            .filter(|item| !cached_preview_images.contains_key(item.id.as_ref()))
             .filter(|item| !self.warming_preview_image_keys.contains(item.id.as_ref()))
             .cloned()
             .collect::<Vec<_>>();
@@ -634,7 +635,12 @@ impl ShadcnUiPanel {
         )
     }
 
-    fn render_item_row(&self, item: CatalogItem, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_item_row(
+        &self,
+        item: CatalogItem,
+        image_url: Option<String>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let can_drag = can_drag_into_editor(item.source);
         let primary_action = if can_drag { "Insert" } else { "Open" };
         let source_label = catalog_source_label(item.source);
@@ -674,7 +680,7 @@ impl ShadcnUiPanel {
                 h_flex()
                     .gap_2()
                     .items_center()
-                    .child(shadcn_thumbnail(&item, cx))
+                    .child(shadcn_thumbnail(&item, image_url, cx))
                     .child(
                         v_flex()
                             .flex_1()
@@ -831,13 +837,17 @@ impl Render for ShadcnUiPanel {
         self.ensure_catalog_loaded(cx);
         let query = self.query(cx);
         let (items, total_matches) = self.matching_items(query.as_str(), MAX_SHADCN_ROWS);
-        self.ensure_visible_preview_images_warmed(&items, cx);
+        let preview_images = cached_shadcn_preview_image_urls(&items);
+        self.ensure_visible_preview_images_warmed(&items, &preview_images, cx);
         let is_empty = total_matches == 0;
         let filter_counts = self.filter_counts;
         let total_count = filter_counts.count(self.source_filter);
         let item_rows = items
             .into_iter()
-            .map(|item| self.render_item_row(item, cx).into_any_element())
+            .map(|item| {
+                let image_url = preview_images.get(item.id.as_ref()).cloned().flatten();
+                self.render_item_row(item, image_url, cx).into_any_element()
+            })
             .collect::<Vec<_>>();
         let count_label = self.status.clone().unwrap_or_else(|| {
             if self.loading_catalog {
@@ -967,12 +977,16 @@ fn can_drag_into_editor(source: CatalogSource) -> bool {
     )
 }
 
-fn shadcn_thumbnail(item: &CatalogItem, cx: &mut Context<ShadcnUiPanel>) -> AnyElement {
+fn shadcn_thumbnail(
+    item: &CatalogItem,
+    image_url: Option<String>,
+    cx: &mut Context<ShadcnUiPanel>,
+) -> AnyElement {
     let colors = cx.theme().colors();
     let accent = colors.editor_foreground.opacity(0.72);
     let muted = colors.text_muted.opacity(0.56);
 
-    if let Some(image_url) = cached_shadcn_preview_image_url(item) {
+    if let Some(image_url) = image_url {
         return div()
             .w(px(70.))
             .h(px(46.))
@@ -2944,21 +2958,20 @@ fn shadcn_preview_image_url(item: &CatalogItem) -> Option<String> {
         .map(|url| url.to_string())
 }
 
-fn cached_shadcn_preview_image_url(item: &CatalogItem) -> Option<String> {
-    let key = item.id.to_string();
+fn cached_shadcn_preview_image_urls(items: &[CatalogItem]) -> HashMap<String, Option<String>> {
     let cache = SHADCN_PREVIEW_IMAGE_CACHE.get_or_init(|| Mutex::new(HashMap::default()));
-    if let Ok(cache) = cache.lock()
-        && let Some(image_url) = cache.get(&key)
-    {
-        return image_url.clone();
-    }
+    let Ok(cache) = cache.lock() else {
+        return HashMap::default();
+    };
 
-    None
-}
-
-fn preview_image_cache_contains(key: &str) -> bool {
-    let cache = SHADCN_PREVIEW_IMAGE_CACHE.get_or_init(|| Mutex::new(HashMap::default()));
-    cache.lock().is_ok_and(|cache| cache.contains_key(key))
+    items
+        .iter()
+        .filter_map(|item| {
+            cache
+                .get(item.id.as_ref())
+                .map(|image_url| (item.id.to_string(), image_url.clone()))
+        })
+        .collect()
 }
 
 fn insert_preview_image_cache(key: String, image_url: Option<String>) {
