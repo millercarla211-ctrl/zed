@@ -31,10 +31,13 @@ actions!(
 const ICON_PICKER_PANEL_KEY: &str = "IconPickerPanel";
 const DX_ICON_DATA_DIR: &str = "G:/Assets/icon/data";
 const ICON_PACK_INDEX: &str = include_str!("icon_pack_index.tsv");
+const ICON_REPRESENTATIVE_BODIES: &str = include_str!("icon_representative_bodies.tsv");
 const MAX_ICON_RESULTS: usize = 360;
 const STARTUP_ICON_PREVIEW_WARM_LIMIT: usize = 120;
 const EXTERNAL_ICON_PREVIEW_CACHE_VERSION: &str = "v3";
 static EXTERNAL_ICON_CATALOG_CACHE: OnceLock<ExternalIconCatalog> = OnceLock::new();
+static REPRESENTATIVE_ICON_BODY_CACHE: OnceLock<HashMap<String, ExternalIconBody>> =
+    OnceLock::new();
 
 pub fn init(cx: &mut App) {
     cx.observe_new(|workspace: &mut Workspace, _, _| {
@@ -1299,11 +1302,14 @@ fn warm_external_icon_previews(icons: Vec<ExternalIcon>) -> Vec<(String, Option<
             continue;
         }
 
-        let pack = icon.pack.to_string();
-        let bodies = pack_bodies
-            .entry(pack.clone())
-            .or_insert_with(|| load_external_icon_bodies(&pack).unwrap_or_default());
-        let Some(body) = bodies.get(icon.name.as_ref()).cloned() else {
+        let body = representative_icon_body(icon.pack.as_ref(), icon.name.as_ref()).or_else(|| {
+            let pack = icon.pack.to_string();
+            let bodies = pack_bodies
+                .entry(pack.clone())
+                .or_insert_with(|| load_external_icon_bodies(&pack).unwrap_or_default());
+            bodies.get(icon.name.as_ref()).cloned()
+        });
+        let Some(body) = body else {
             previews.push((key, None));
             continue;
         };
@@ -1326,6 +1332,71 @@ fn warm_external_icon_previews(icons: Vec<ExternalIcon>) -> Vec<(String, Option<
     }
 
     previews
+}
+
+fn representative_icon_body(pack: &str, name: &str) -> Option<ExternalIconBody> {
+    representative_icon_bodies()
+        .get(&format!("{pack}:{name}"))
+        .cloned()
+}
+
+fn representative_icon_bodies() -> &'static HashMap<String, ExternalIconBody> {
+    REPRESENTATIVE_ICON_BODY_CACHE.get_or_init(|| {
+        let mut bodies = HashMap::new();
+        for line in ICON_REPRESENTATIVE_BODIES.lines() {
+            if line.trim().is_empty() || line.starts_with('#') {
+                continue;
+            }
+
+            let mut columns = line.splitn(8, '\t');
+            let Some(pack) = columns.next() else {
+                continue;
+            };
+            let Some(name) = columns.next() else {
+                continue;
+            };
+            let width = parse_optional_u32(columns.next());
+            let height = parse_optional_u32(columns.next());
+            let h_flip = columns.next() == Some("1");
+            let v_flip = columns.next() == Some("1");
+            let rotate = parse_optional_u8(columns.next());
+            let Some(body_json) = columns.next() else {
+                continue;
+            };
+            let Ok(body) = serde_json::from_str::<String>(body_json) else {
+                continue;
+            };
+
+            bodies.insert(
+                format!("{pack}:{name}"),
+                ExternalIconBody {
+                    body,
+                    width,
+                    height,
+                    h_flip,
+                    v_flip,
+                    rotate,
+                },
+            );
+        }
+        bodies
+    })
+}
+
+fn parse_optional_u32(value: Option<&str>) -> Option<u32> {
+    value.and_then(|value| {
+        (!value.is_empty())
+            .then_some(value)
+            .and_then(|value| value.parse().ok())
+    })
+}
+
+fn parse_optional_u8(value: Option<&str>) -> Option<u8> {
+    value.and_then(|value| {
+        (!value.is_empty())
+            .then_some(value)
+            .and_then(|value| value.parse().ok())
+    })
 }
 
 fn transform_iconify_alias_body(
