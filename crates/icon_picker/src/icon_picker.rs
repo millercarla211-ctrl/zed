@@ -34,6 +34,7 @@ const ICON_PACK_INDEX: &str = include_str!("icon_pack_index.tsv");
 const ICON_REPRESENTATIVE_BODIES: &str = include_str!("icon_representative_bodies.tsv");
 const MAX_ICON_RESULTS: usize = 360;
 const STARTUP_ICON_PREVIEW_WARM_LIMIT: usize = MAX_ICON_RESULTS;
+const MAX_EXTERNAL_ICON_PREVIEW_CACHE_ENTRIES: usize = 4096;
 const MAX_WARMED_ICON_PREVIEW_SIGNATURES: usize = 128;
 const EXTERNAL_ICON_PREVIEW_CACHE_VERSION: &str = "v3";
 static EXTERNAL_ICON_CATALOG_CACHE: OnceLock<ExternalIconCatalog> = OnceLock::new();
@@ -119,6 +120,7 @@ pub struct IconPickerPanel {
     loading_external_icons: bool,
     external_catalog_loaded: bool,
     preview_cache: RefCell<HashMap<String, Option<ExternalSvg>>>,
+    preview_cache_order: RefCell<VecDeque<String>>,
     warming_preview_keys: HashSet<String>,
     warming_preview_signature: Option<SharedString>,
     warmed_preview_signatures: HashSet<String>,
@@ -181,7 +183,12 @@ impl IconPickerPanel {
                 selected_icon,
                 loading_external_icons: false,
                 external_catalog_loaded: false,
-                preview_cache: RefCell::default(),
+                preview_cache: RefCell::new(HashMap::with_capacity(
+                    MAX_EXTERNAL_ICON_PREVIEW_CACHE_ENTRIES,
+                )),
+                preview_cache_order: RefCell::new(VecDeque::with_capacity(
+                    MAX_EXTERNAL_ICON_PREVIEW_CACHE_ENTRIES,
+                )),
                 warming_preview_keys: HashSet::default(),
                 warming_preview_signature: None,
                 warmed_preview_signatures: HashSet::with_capacity(
@@ -435,9 +442,7 @@ impl IconPickerPanel {
             let external_svg = ExternalSvg {
                 preview_path: preview_path.into(),
             };
-            self.preview_cache
-                .borrow_mut()
-                .insert(key, Some(external_svg.clone()));
+            self.cache_external_svg(key, Some(external_svg.clone()));
             return Some(external_svg);
         }
 
@@ -505,10 +510,9 @@ impl IconPickerPanel {
             panel
                 .update(cx, |panel, cx| {
                     {
-                        let mut preview_cache = panel.preview_cache.borrow_mut();
                         for (key, preview_path) in previews {
                             panel.warming_preview_keys.remove(&key);
-                            preview_cache.insert(
+                            panel.cache_external_svg(
                                 key,
                                 preview_path.map(|preview_path| ExternalSvg { preview_path }),
                             );
@@ -550,17 +554,41 @@ impl IconPickerPanel {
         }
     }
 
-    fn uncached_external_icons(&self, icons: Vec<ExternalIcon>) -> Vec<ExternalIcon> {
-        let mut uncached_icons = Vec::new();
+    fn cache_external_svg(&self, key: String, external_svg: Option<ExternalSvg>) {
         let mut preview_cache = self.preview_cache.borrow_mut();
-        for icon in icons {
-            let key = icon.id();
-            if self.warming_preview_keys.contains(&key) || preview_cache.contains_key(&key) {
-                continue;
-            }
+        let is_new = preview_cache.insert(key.clone(), external_svg).is_none();
+        if !is_new {
+            return;
+        }
 
+        let mut preview_cache_order = self.preview_cache_order.borrow_mut();
+        preview_cache_order.push_back(key);
+        while preview_cache_order.len() > MAX_EXTERNAL_ICON_PREVIEW_CACHE_ENTRIES {
+            let Some(oldest_key) = preview_cache_order.pop_front() else {
+                break;
+            };
+            preview_cache.remove(&oldest_key);
+        }
+    }
+
+    fn uncached_external_icons(&self, icons: Vec<ExternalIcon>) -> Vec<ExternalIcon> {
+        let mut candidates = Vec::with_capacity(icons.len());
+        {
+            let preview_cache = self.preview_cache.borrow();
+            for icon in icons {
+                let key = icon.id();
+                if self.warming_preview_keys.contains(&key) || preview_cache.contains_key(&key) {
+                    continue;
+                }
+
+                candidates.push((key, icon));
+            }
+        }
+
+        let mut uncached_icons = Vec::with_capacity(candidates.len());
+        for (key, icon) in candidates {
             if let Some(preview_path) = existing_external_icon_preview(&icon) {
-                preview_cache.insert(
+                self.cache_external_svg(
                     key,
                     Some(ExternalSvg {
                         preview_path: preview_path.into(),
