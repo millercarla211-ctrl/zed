@@ -1,3 +1,11 @@
+[2026-05-15] - Icon Startup State Preallocation
+
+CHANGED:
+- `crates/icon_picker` now preallocates built-in icon startup storage, search-cache capacity, selected-pack maps, preview-warming keys, and sanitized SVG cache file-name strings from known counts.
+
+NOTES:
+- Preserved icon grid behavior, search matching, SVG preview warming, file cache paths, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Icon Pack Index Buffer Preallocation
 
 CHANGED:

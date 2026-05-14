@@ -167,7 +167,10 @@ impl IconPickerPanel {
                 },
             );
 
-            let zed_icons = IconName::iter().collect::<Vec<_>>();
+            let icon_iter = IconName::iter();
+            let mut zed_icons = Vec::with_capacity(icon_iter.size_hint().1.unwrap_or(0));
+            zed_icons.extend(icon_iter);
+            let zed_icon_count = zed_icons.len();
             let selected_icon = zed_icons.first().copied().map(PickerIcon::Zed);
             let packs = static_icon_pack_summaries();
             let representative_external_icons = representative_icons_from_pack_summaries(&packs);
@@ -175,9 +178,9 @@ impl IconPickerPanel {
                 workspace: workspace_handle,
                 filter_editor,
                 zed_icons,
-                zed_icon_search_text_cache: RefCell::default(),
+                zed_icon_search_text_cache: RefCell::new(HashMap::with_capacity(zed_icon_count)),
                 external_icons: Vec::new(),
-                external_icons_by_pack: HashMap::default(),
+                external_icons_by_pack: HashMap::with_capacity(packs.len()),
                 representative_external_icons,
                 packs,
                 selected_pack: None,
@@ -190,7 +193,7 @@ impl IconPickerPanel {
                 preview_cache_order: RefCell::new(VecDeque::with_capacity(
                     MAX_EXTERNAL_ICON_PREVIEW_CACHE_ENTRIES,
                 )),
-                warming_preview_keys: HashSet::default(),
+                warming_preview_keys: HashSet::with_capacity(STARTUP_ICON_PREVIEW_WARM_LIMIT),
                 warming_preview_signature: None,
                 warmed_preview_signatures: HashSet::with_capacity(
                     MAX_WARMED_ICON_PREVIEW_SIGNATURES,
@@ -1597,16 +1600,15 @@ fn repo_root() -> PathBuf {
 }
 
 fn sanitize_file_component(value: &str) -> String {
-    value
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
-                character
-            } else {
-                '-'
-            }
-        })
-        .collect()
+    let mut sanitized = String::with_capacity(value.len());
+    for character in value.chars() {
+        if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
+            sanitized.push(character);
+        } else {
+            sanitized.push('-');
+        }
+    }
+    sanitized
 }
 
 fn titleize_icon_name(name: &str) -> String {
