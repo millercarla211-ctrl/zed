@@ -549,11 +549,22 @@ fn icon_svg_source(icon: &DraggedIconAsset) -> String {
 #[derive(serde::Deserialize)]
 struct IconifyBodyPack {
     icons: HashMap<String, IconifyBody>,
+    #[serde(default)]
+    aliases: HashMap<String, IconifyAlias>,
 }
 
 #[derive(serde::Deserialize)]
 struct IconifyBody {
     body: String,
+    #[serde(default)]
+    width: Option<u32>,
+    #[serde(default)]
+    height: Option<u32>,
+}
+
+#[derive(serde::Deserialize)]
+struct IconifyAlias {
+    parent: String,
     #[serde(default)]
     width: Option<u32>,
     #[serde(default)]
@@ -567,10 +578,20 @@ fn iconify_svg_source(pack: &str, name: &str, width: u32, height: u32) -> Option
         .join(format!("{pack}.json"));
     let text = std_fs::read_to_string(path).ok()?;
     let pack = serde_json::from_str::<IconifyBodyPack>(&text).ok()?;
-    let icon = pack.icons.get(name)?;
-    let body = icon.body.trim();
-    let width = icon.width.unwrap_or(width).max(1);
-    let height = icon.height.unwrap_or(height).max(1);
+    let (body, icon_width, icon_height) = if let Some(icon) = pack.icons.get(name) {
+        (icon.body.as_str(), icon.width, icon.height)
+    } else {
+        let alias = pack.aliases.get(name)?;
+        let parent = pack.icons.get(alias.parent.as_str())?;
+        (
+            parent.body.as_str(),
+            alias.width.or(parent.width),
+            alias.height.or(parent.height),
+        )
+    };
+    let body = body.trim();
+    let width = icon_width.unwrap_or(width).max(1);
+    let height = icon_height.unwrap_or(height).max(1);
     Some(format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">{body}</svg>"#
     ))

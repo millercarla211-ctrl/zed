@@ -5,7 +5,12 @@ use gpui::{
     StatefulInteractiveElement, Subscription, WeakEntity, Window, actions, div, point, px,
 };
 use serde::Deserialize;
-use std::{cell::RefCell, collections::HashMap, path::PathBuf, sync::OnceLock};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::OnceLock,
+};
 use strum::IntoEnumIterator;
 use ui::{TintColor, Tooltip, prelude::*};
 use workspace::{
@@ -107,8 +112,9 @@ pub struct IconPickerPanel {
     selected_icon: Option<PickerIcon>,
     loading_external_icons: bool,
     external_catalog_loaded: bool,
-    pack_svg_cache: RefCell<HashMap<String, HashMap<String, ExternalIconBody>>>,
     preview_cache: RefCell<HashMap<String, Option<ExternalSvg>>>,
+    warming_preview_signature: Option<SharedString>,
+    warmed_preview_signatures: HashSet<String>,
     pack_scroll_handle: ScrollHandle,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
@@ -165,8 +171,9 @@ impl IconPickerPanel {
                 selected_icon,
                 loading_external_icons: false,
                 external_catalog_loaded: false,
-                pack_svg_cache: RefCell::default(),
                 preview_cache: RefCell::default(),
+                warming_preview_signature: None,
+                warmed_preview_signatures: HashSet::default(),
                 pack_scroll_handle: ScrollHandle::new(),
                 status: None,
                 _subscriptions: vec![filter_subscription],
@@ -358,7 +365,7 @@ impl IconPickerPanel {
         }
     }
 
-    fn external_svg(&self, icon: &ExternalIcon) -> Option<ExternalSvg> {
+    fn cached_external_svg(&self, icon: &ExternalIcon) -> Option<ExternalSvg> {
         let key = icon.id();
         let cached_svg = self.preview_cache.borrow().get(&key).cloned();
         if let Some(svg) = cached_svg {
@@ -375,39 +382,86 @@ impl IconPickerPanel {
             return Some(external_svg);
         }
 
-        let Some(body) = self.external_icon_body(icon) else {
-            self.preview_cache.borrow_mut().insert(key, None);
-            return None;
-        };
-        let width = body.width.unwrap_or(icon.width).max(1);
-        let height = body.height.unwrap_or(icon.height).max(1);
-        let svg = wrap_icon_body(&body.body, width, height);
-        let preview_path = write_external_icon_preview(icon, &svg).ok()?;
-        let external_svg = ExternalSvg {
-            preview_path: preview_path.into(),
-        };
-        self.preview_cache
-            .borrow_mut()
-            .insert(key, Some(external_svg.clone()));
-        Some(external_svg)
+        None
     }
 
-    fn external_icon_body(&self, icon: &ExternalIcon) -> Option<ExternalIconBody> {
-        let pack_loaded = self
-            .pack_svg_cache
-            .borrow()
-            .contains_key(icon.pack.as_ref());
-        if !pack_loaded {
-            let pack_icons = load_external_icon_bodies(icon.pack.as_ref()).unwrap_or_default();
-            self.pack_svg_cache
-                .borrow_mut()
-                .insert(icon.pack.to_string(), pack_icons);
+    fn ensure_visible_external_previews_warmed(
+        &mut self,
+        icons: &[PickerIcon],
+        cx: &mut Context<Self>,
+    ) {
+        let mut external_icons = Vec::new();
+        for icon in icons {
+            let PickerIcon::External(icon) = icon else {
+                continue;
+            };
+
+            let key = icon.id();
+            if self.preview_cache.borrow().contains_key(&key)
+                || existing_external_icon_preview(icon).is_some()
+            {
+                continue;
+            }
+
+            external_icons.push(icon.clone());
         }
 
-        self.pack_svg_cache
-            .borrow()
-            .get(icon.pack.as_ref())
-            .and_then(|icons| icons.get(icon.name.as_ref()).cloned())
+        if external_icons.is_empty() {
+            return;
+        }
+
+        let signature = icon_preview_batch_signature(&external_icons);
+        if self
+            .warming_preview_signature
+            .as_ref()
+            .is_some_and(|current| current.as_ref() == signature.as_str())
+            || self.warmed_preview_signatures.contains(&signature)
+        {
+            return;
+        }
+
+        self.warming_preview_signature = Some(signature.clone().into());
+        if self.status.is_none() {
+            self.status = Some("Preparing icon previews".into());
+        }
+
+        let executor = cx.background_executor().clone();
+        cx.spawn(async move |panel, cx| {
+            let previews = executor
+                .spawn(async move { warm_external_icon_previews(external_icons) })
+                .await;
+            panel
+                .update(cx, |panel, cx| {
+                    {
+                        let mut preview_cache = panel.preview_cache.borrow_mut();
+                        for (key, preview_path) in previews {
+                            preview_cache.insert(
+                                key,
+                                preview_path.map(|preview_path| ExternalSvg { preview_path }),
+                            );
+                        }
+                    }
+
+                    panel.warmed_preview_signatures.insert(signature.clone());
+                    if panel
+                        .warming_preview_signature
+                        .as_ref()
+                        .is_some_and(|current| current.as_ref() == signature.as_str())
+                    {
+                        panel.warming_preview_signature = None;
+                        if panel
+                            .status
+                            .as_ref()
+                            .is_some_and(|status| status.as_ref() == "Preparing icon previews")
+                        {
+                            panel.status = None;
+                        }
+                    }
+                    cx.notify();
+                })
+                .ok();
+        })
+        .detach();
     }
 
     fn insert_icon(&mut self, icon: PickerIcon, window: &mut Window, cx: &mut Context<Self>) {
@@ -618,7 +672,7 @@ impl IconPickerPanel {
         match icon {
             PickerIcon::Zed(icon_name) => Icon::new(*icon_name).size(size).into_any_element(),
             PickerIcon::External(icon) => self
-                .external_svg(icon)
+                .cached_external_svg(icon)
                 .map(|svg| {
                     Icon::from_external_svg(svg.preview_path)
                         .size(size)
@@ -712,6 +766,7 @@ impl Render for IconPickerPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_icon_data_loaded_for_view(cx);
         let (icons, total_matches, total_count) = self.filtered_icons(cx);
+        self.ensure_visible_external_previews_warmed(&icons, cx);
         let is_empty = icons.is_empty();
         let shown_count = icons.len();
         let count_label = self.status.clone().unwrap_or_else(|| {
@@ -905,10 +960,21 @@ struct ExternalIconCatalog {
 #[derive(Deserialize)]
 struct IconifyPack {
     icons: HashMap<String, IconifyCatalogIcon>,
+    #[serde(default)]
+    aliases: HashMap<String, IconifyAlias>,
 }
 
 #[derive(Deserialize)]
 struct IconifyCatalogIcon {
+    #[serde(default)]
+    width: Option<u32>,
+    #[serde(default)]
+    height: Option<u32>,
+}
+
+#[derive(Deserialize)]
+struct IconifyAlias {
+    parent: String,
     #[serde(default)]
     width: Option<u32>,
     #[serde(default)]
@@ -925,6 +991,8 @@ struct ExternalIconBody {
 #[derive(Deserialize)]
 struct IconifyBodyPack {
     icons: HashMap<String, IconifyBody>,
+    #[serde(default)]
+    aliases: HashMap<String, IconifyAlias>,
 }
 
 #[derive(Deserialize)]
@@ -1055,21 +1123,34 @@ fn load_external_icon_pack_catalog(pack_summary: &IconPackSummary) -> Vec<Extern
     let Ok(pack) = serde_json::from_str::<IconifyPack>(&text) else {
         return Vec::new();
     };
+    let IconifyPack { icons, aliases } = pack;
 
-    let mut icons = pack
-        .icons
-        .into_iter()
+    let mut pack_icons = icons
+        .iter()
         .map(|(name, icon_meta)| {
             external_icon_from_summary(
                 pack_summary,
-                &name,
+                name,
                 icon_meta.width.unwrap_or(pack_summary.width),
                 icon_meta.height.unwrap_or(pack_summary.height),
             )
         })
         .collect::<Vec<_>>();
-    icons.sort_by(|left, right| left.name.as_ref().cmp(right.name.as_ref()));
-    icons
+    pack_icons.extend(aliases.into_iter().filter_map(|(name, alias)| {
+        let parent = icons.get(alias.parent.as_str())?;
+        Some(external_icon_from_summary(
+            pack_summary,
+            &name,
+            alias.width.or(parent.width).unwrap_or(pack_summary.width),
+            alias
+                .height
+                .or(parent.height)
+                .unwrap_or(pack_summary.height),
+        ))
+    }));
+    pack_icons.sort_by(|left, right| left.name.as_ref().cmp(right.name.as_ref()));
+    pack_icons.dedup_by(|left, right| left.name.as_ref() == right.name.as_ref());
+    pack_icons
 }
 
 fn external_icon_from_summary(
@@ -1103,8 +1184,8 @@ fn load_external_icon_bodies(pack: &str) -> anyhow::Result<HashMap<String, Exter
     let path = external_icon_data_dir().join(format!("{pack}.json"));
     let text = std::fs::read_to_string(path)?;
     let pack = serde_json::from_str::<IconifyBodyPack>(&text)?;
-    Ok(pack
-        .icons
+    let IconifyBodyPack { icons, aliases } = pack;
+    let mut bodies = icons
         .into_iter()
         .map(|(name, icon)| {
             (
@@ -1116,7 +1197,69 @@ fn load_external_icon_bodies(pack: &str) -> anyhow::Result<HashMap<String, Exter
                 },
             )
         })
-        .collect())
+        .collect::<HashMap<_, _>>();
+
+    for (name, alias) in aliases {
+        if bodies.contains_key(&name) {
+            continue;
+        }
+        let Some(parent) = bodies.get(alias.parent.as_str()).cloned() else {
+            continue;
+        };
+        bodies.insert(
+            name,
+            ExternalIconBody {
+                body: parent.body,
+                width: alias.width.or(parent.width),
+                height: alias.height.or(parent.height),
+            },
+        );
+    }
+
+    Ok(bodies)
+}
+
+fn warm_external_icon_previews(icons: Vec<ExternalIcon>) -> Vec<(String, Option<SharedString>)> {
+    let mut pack_bodies = HashMap::<String, HashMap<String, ExternalIconBody>>::new();
+    let mut previews = Vec::with_capacity(icons.len());
+
+    for icon in icons {
+        let key = icon.id();
+        if let Some(preview_path) = existing_external_icon_preview(&icon) {
+            previews.push((key, Some(preview_path.into())));
+            continue;
+        }
+
+        let pack = icon.pack.to_string();
+        let bodies = pack_bodies
+            .entry(pack.clone())
+            .or_insert_with(|| load_external_icon_bodies(&pack).unwrap_or_default());
+        let Some(body) = bodies.get(icon.name.as_ref()).cloned() else {
+            previews.push((key, None));
+            continue;
+        };
+
+        let width = body.width.unwrap_or(icon.width).max(1);
+        let height = body.height.unwrap_or(icon.height).max(1);
+        let svg = wrap_icon_body(&body.body, width, height);
+        let preview_path = write_external_icon_preview(&icon, &svg)
+            .ok()
+            .map(SharedString::from);
+        previews.push((key, preview_path));
+    }
+
+    previews
+}
+
+fn icon_preview_batch_signature(icons: &[ExternalIcon]) -> String {
+    let mut signature = format!("{}:{}:", EXTERNAL_ICON_PREVIEW_CACHE_VERSION, icons.len());
+    for icon in icons.iter().take(24) {
+        signature.push_str(icon.pack.as_ref());
+        signature.push(':');
+        signature.push_str(icon.name.as_ref());
+        signature.push('|');
+    }
+    signature
 }
 
 fn external_icon_data_dir() -> PathBuf {

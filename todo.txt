@@ -1,7 +1,9 @@
 IN PROGRESS:
-- Internet Archive direct provider integration is code-complete by inspection; awaiting manual Zed panel QA.
+- Iconify alias indexing and background preview warming are code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
+- User manual check that Icon panel All sets and selected-pack grids prepare real SVG previews in the background instead of stalling code editor input while parsing Iconify JSON.
+- User manual check that Iconify aliases like alternate outline/fill names appear in search results and insert/copy as SVGs instead of falling back to pack initials.
 - User manual check that Internet Archive direct image, video, and audio results appear in native Media panel rows for broad searches like `space`, `music`, and `motion`.
 - User manual check that the WebPreview remote media browser includes Internet Archive results alongside Openverse, Wikimedia, NASA, Art Institute, and The Met.
 - User manual check that the Media panel provider chips include Internet Archive for images, videos, and audio.

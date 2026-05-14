@@ -1,6 +1,9 @@
 [2026-05-14] - Icon SVG Rendering And Remote Media Fetch
 
 ADDED:
+- `crates/icon_picker` now warms visible external Iconify SVG previews on a background task and caches the generated SVG files before repainting them into the grid.
+- `crates/icon_picker` now indexes Iconify aliases in addition to base icons so alternate icon names from each pack appear in panel search and selected-pack grids.
+- `crates/editor` now resolves Iconify aliases when inserting dragged or selected external icons, so alias entries create real SVG assets instead of empty files.
 - `crates/media_panel` now fetches live no-key remote media rows from Openverse, Wikimedia Commons, NASA, Library of Congress, and Art Institute of Chicago for the active media query/filter.
 - `crates/media_panel` now uses shared Zed HTTP client plumbing plus JSON parsing for direct provider results instead of relying only on static sample rows.
 - `crates/media_panel` now caches remote media results per active query and media tab so repeated searches and tab switches can repaint immediately.
@@ -16,6 +19,7 @@ ADDED:
 - `crates/media_panel` now caps each remote provider fetch at four seconds so one slow public API cannot block the whole remote media result batch.
 
 CHANGED:
+- `crates/icon_picker` no longer parses Iconify pack JSON from the tile render path; uncached external previews show the lightweight pack badge until the background preview warmer writes real SVGs.
 - `crates/icon_picker` now renders real external SVG previews in the default All sets grid instead of falling back to pack-letter badges.
 - `crates/icon_picker` now caches missing external SVG previews as misses so broken entries do not repeatedly reload.
 - `crates/icon_picker` now reuses generated external SVG preview files from `target/icon-picker-icons` before reparsing source Iconify pack JSON.
