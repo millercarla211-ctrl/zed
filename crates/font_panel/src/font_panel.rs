@@ -815,8 +815,7 @@ impl Render for FontPanel {
         let source_counts = FontSourceCounts::from_panel(self);
         let is_empty = total_matches == 0;
         let font_rows = fonts
-            .iter()
-            .cloned()
+            .into_iter()
             .map(|font| self.render_font_row(font, cx).into_any_element())
             .collect::<Vec<_>>();
 

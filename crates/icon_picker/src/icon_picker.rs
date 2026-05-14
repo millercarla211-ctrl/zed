@@ -849,8 +849,7 @@ impl Render for IconPickerPanel {
             }
         });
         let icon_tiles = icons
-            .iter()
-            .cloned()
+            .into_iter()
             .map(|icon| self.render_icon_tile(icon, cx).into_any_element())
             .collect::<Vec<_>>();
 

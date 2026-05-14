@@ -836,8 +836,7 @@ impl Render for ShadcnUiPanel {
         let filter_counts = self.filter_counts;
         let total_count = filter_counts.count(self.source_filter);
         let item_rows = items
-            .iter()
-            .cloned()
+            .into_iter()
             .map(|item| self.render_item_row(item, cx).into_any_element())
             .collect::<Vec<_>>();
         let count_label = self.status.clone().unwrap_or_else(|| {

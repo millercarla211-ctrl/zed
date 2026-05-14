@@ -1149,14 +1149,12 @@ impl Render for MediaPanel {
         let kind_counts = MediaKindCounts::from_panel(self);
         let total_count = kind_counts.count(self.kind_filter);
         let mut asset_rows = remote_assets
-            .iter()
-            .cloned()
+            .into_iter()
             .map(|asset| self.render_remote_asset_row(asset, cx).into_any_element())
             .collect::<Vec<_>>();
         asset_rows.extend(
             assets
-                .iter()
-                .cloned()
+                .into_iter()
                 .map(|asset| self.render_asset_row(asset, cx).into_any_element()),
         );
         if let Some(url_insert) = url_insert {
