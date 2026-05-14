@@ -23,6 +23,8 @@ ADDED:
 - `crates/media_panel` now fetches direct Cleveland Museum of Art CC0 image rows through the no-key open access API.
 
 CHANGED:
+- `crates/media_panel` now computes media-kind counts once per render and shares them with the tab strip and status label, avoiding repeated local/static/remote asset scans.
+- `crates/media_panel` now skips remote media search-string construction when the query is empty, reducing idle render work while browsing live provider rows.
 - `crates/font_panel` now skips per-font lowercase search text construction when the font query is empty, making idle browsing of system and Google fonts cheaper.
 - `crates/shadcn_ui_panel` now computes UI filter counts once per render and shares them with the tab strip and status label, avoiding repeated per-tab catalog scans.
 - `crates/shadcn_ui_panel` now skips search-text construction when the UI query is empty and caches per-entry lowercase search text for non-empty searches, reducing render work while the panel is open.

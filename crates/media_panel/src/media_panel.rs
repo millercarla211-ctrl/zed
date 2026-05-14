@@ -201,6 +201,46 @@ impl MediaKindFilter {
     }
 }
 
+#[derive(Default)]
+struct MediaKindCounts {
+    images: usize,
+    videos: usize,
+    audio: usize,
+}
+
+impl MediaKindCounts {
+    fn from_panel(panel: &MediaPanel) -> Self {
+        let mut counts = Self::default();
+        for asset in &panel.assets {
+            counts.add(asset.payload.kind);
+        }
+        for asset in remote_media_assets() {
+            counts.add(asset.kind);
+        }
+        for asset in &panel.remote_assets {
+            counts.add(asset.kind);
+        }
+        counts
+    }
+
+    fn add(&mut self, kind: DraggedMediaKind) {
+        match kind {
+            DraggedMediaKind::Image => self.images += 1,
+            DraggedMediaKind::Video => self.videos += 1,
+            DraggedMediaKind::Audio => self.audio += 1,
+        }
+    }
+
+    fn count(&self, filter: MediaKindFilter) -> usize {
+        match filter {
+            MediaKindFilter::All => self.images + self.videos + self.audio,
+            MediaKindFilter::Images => self.images,
+            MediaKindFilter::Videos => self.videos,
+            MediaKindFilter::Audio => self.audio,
+        }
+    }
+}
+
 pub struct MediaPanel {
     workspace: WeakEntity<Workspace>,
     filter_editor: Entity<Editor>,
@@ -438,17 +478,19 @@ impl MediaPanel {
                 continue;
             }
 
-            let searchable = format!(
-                "{} {} {} {} {}",
-                asset.label,
-                asset.provider,
-                asset.license,
-                asset.tags,
-                media_kind_label(asset.kind)
-            )
-            .to_lowercase();
-            if !media_search_matches(searchable.as_str(), query.as_str()) {
-                continue;
+            if !query.is_empty() {
+                let searchable = format!(
+                    "{} {} {} {} {}",
+                    asset.label,
+                    asset.provider,
+                    asset.license,
+                    asset.tags,
+                    media_kind_label(asset.kind)
+                )
+                .to_lowercase();
+                if !media_search_matches(searchable.as_str(), query.as_str()) {
+                    continue;
+                }
             }
 
             match_count += 1;
@@ -460,29 +502,14 @@ impl MediaPanel {
         (visible_assets, match_count)
     }
 
-    fn filtered_count(&self, filter: MediaKindFilter) -> usize {
-        self.assets
-            .iter()
-            .filter(|asset| filter.matches(asset.payload.kind))
-            .count()
-            + remote_media_assets()
-                .iter()
-                .filter(|asset| filter.matches(asset.kind))
-                .count()
-            + self
-                .remote_assets
-                .iter()
-                .filter(|asset| filter.matches(asset.kind))
-                .count()
-    }
-
     fn render_kind_filter_button(
         &self,
         filter: MediaKindFilter,
+        count: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let selected = self.kind_filter == filter;
-        let label = format!("{} {}", filter.label(), self.filtered_count(filter));
+        let label = format!("{} {}", filter.label(), count);
         div().flex_none().child(
             Button::new(format!("media-kind-filter-{}", filter.label()), label)
                 .style(ButtonStyle::Subtle)
@@ -498,7 +525,11 @@ impl MediaPanel {
         )
     }
 
-    fn render_kind_filters(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_kind_filters(
+        &self,
+        counts: &MediaKindCounts,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         h_flex()
             .h(px(42.))
             .gap_1()
@@ -530,10 +561,26 @@ impl MediaPanel {
                             .items_center()
                             .px_1()
                             .py_1()
-                            .child(self.render_kind_filter_button(MediaKindFilter::All, cx))
-                            .child(self.render_kind_filter_button(MediaKindFilter::Images, cx))
-                            .child(self.render_kind_filter_button(MediaKindFilter::Videos, cx))
-                            .child(self.render_kind_filter_button(MediaKindFilter::Audio, cx)),
+                            .child(self.render_kind_filter_button(
+                                MediaKindFilter::All,
+                                counts.count(MediaKindFilter::All),
+                                cx,
+                            ))
+                            .child(self.render_kind_filter_button(
+                                MediaKindFilter::Images,
+                                counts.count(MediaKindFilter::Images),
+                                cx,
+                            ))
+                            .child(self.render_kind_filter_button(
+                                MediaKindFilter::Videos,
+                                counts.count(MediaKindFilter::Videos),
+                                cx,
+                            ))
+                            .child(self.render_kind_filter_button(
+                                MediaKindFilter::Audio,
+                                counts.count(MediaKindFilter::Audio),
+                                cx,
+                            )),
                     ),
             )
             .child(
@@ -1045,7 +1092,8 @@ impl Render for MediaPanel {
             .map(|element| element.into_any_element());
         let shown_count =
             total_asset_matches + total_remote_matches + usize::from(url_insert.is_some());
-        let total_count = self.filtered_count(self.kind_filter);
+        let kind_counts = MediaKindCounts::from_panel(self);
+        let total_count = kind_counts.count(self.kind_filter);
         let mut asset_rows = remote_assets
             .iter()
             .cloned()
@@ -1103,7 +1151,7 @@ impl Render for MediaPanel {
                     )
                     .child(self.filter_editor.clone()),
             )
-            .child(self.render_kind_filters(cx))
+            .child(self.render_kind_filters(&kind_counts, cx))
             .child(
                 div()
                     .image_cache(gpui::retain_all("media-panel-assets"))
