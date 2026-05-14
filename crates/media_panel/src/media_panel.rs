@@ -40,6 +40,7 @@ actions!(
 
 const MEDIA_PANEL_KEY: &str = "MediaPanel";
 const MAX_MEDIA_RESULTS: usize = 320;
+const MAX_REMOTE_MEDIA_RESULTS: usize = 640;
 const OPENVERSE_RESULT_LIMIT: usize = 90;
 const WIKIMEDIA_RESULT_LIMIT: usize = 50;
 const NASA_IMAGE_RESULT_LIMIT: usize = 90;
@@ -1580,7 +1581,7 @@ async fn fetch_remote_media_assets(
     let provider_count = remote_provider_count(filter);
     let mut fetches: Vec<RemoteMediaFetch> = Vec::with_capacity(provider_count);
 
-    let mut assets = Vec::with_capacity(MAX_MEDIA_RESULTS);
+    let mut assets = Vec::with_capacity(MAX_REMOTE_MEDIA_RESULTS);
     let mut errors = Vec::with_capacity(provider_count);
 
     if matches!(filter, MediaKindFilter::All | MediaKindFilter::Images) {
@@ -1733,7 +1734,7 @@ async fn fetch_remote_media_assets(
     }
 
     dedupe_remote_assets(&mut assets);
-    assets.truncate(MAX_MEDIA_RESULTS);
+    assets.truncate(MAX_REMOTE_MEDIA_RESULTS);
 
     if assets.is_empty() && !errors.is_empty() {
         anyhow::bail!(errors.join("; "));
