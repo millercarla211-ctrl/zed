@@ -12,6 +12,7 @@ use rkyv::{
 };
 use serde::Deserialize;
 use std::{
+    cell::RefCell,
     collections::{BTreeSet, HashMap},
     fs::{self as std_fs, File},
     path::{Path, PathBuf},
@@ -167,6 +168,7 @@ pub struct ShadcnUiPanel {
     workspace: WeakEntity<Workspace>,
     filter_editor: Entity<Editor>,
     items: Vec<CatalogItem>,
+    search_text_cache: RefCell<HashMap<String, SharedString>>,
     loading_catalog: bool,
     catalog_loaded: bool,
     source_filter: CatalogFilter,
@@ -225,6 +227,7 @@ impl ShadcnUiPanel {
                 workspace: workspace_handle,
                 filter_editor,
                 items,
+                search_text_cache: RefCell::default(),
                 loading_catalog: false,
                 catalog_loaded: true,
                 source_filter: CatalogFilter::All,
@@ -257,6 +260,7 @@ impl ShadcnUiPanel {
             panel
                 .update(cx, |panel, cx| {
                     panel.items = items;
+                    panel.search_text_cache.borrow_mut().clear();
                     panel.loading_catalog = false;
                     panel.catalog_loaded = true;
                     panel.status = Some(format!("Loaded {} UI entries", panel.items.len()).into());
@@ -282,15 +286,11 @@ impl ShadcnUiPanel {
                 continue;
             }
 
-            let searchable = format!(
-                "{} {} {} {}",
-                item.id.as_ref().to_lowercase(),
-                item.title.as_ref().to_lowercase(),
-                item.category.as_ref().to_lowercase(),
-                item.description.as_ref().to_lowercase()
-            );
-            if !catalog_search_matches(searchable.as_str(), query.as_str()) {
-                continue;
+            if !query.is_empty() {
+                let searchable = self.catalog_search_text(item);
+                if !catalog_search_matches(searchable.as_ref(), query.as_str()) {
+                    continue;
+                }
             }
 
             match_count += 1;
@@ -300,6 +300,26 @@ impl ShadcnUiPanel {
         }
 
         (visible_items, match_count)
+    }
+
+    fn catalog_search_text(&self, item: &CatalogItem) -> SharedString {
+        let key = item.id.to_string();
+        if let Some(search_text) = self.search_text_cache.borrow().get(&key).cloned() {
+            return search_text;
+        }
+
+        let search_text: SharedString = format!(
+            "{} {} {} {}",
+            item.id.as_ref().to_lowercase(),
+            item.title.as_ref().to_lowercase(),
+            item.category.as_ref().to_lowercase(),
+            item.description.as_ref().to_lowercase()
+        )
+        .into();
+        self.search_text_cache
+            .borrow_mut()
+            .insert(key, search_text.clone());
+        search_text
     }
 
     fn ensure_visible_preview_images_warmed(
