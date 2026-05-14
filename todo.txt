@@ -1,5 +1,5 @@
 IN PROGRESS:
-- Remote media thumbnail support is code-complete by inspection; awaiting manual Zed panel QA.
+- Concurrent remote media provider fetching is code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
 - User manual check that the Icon panel All sets grid renders real external SVG icons instead of letter-only pack badges.
@@ -9,6 +9,7 @@ PENDING:
 - User manual check that the Media panel fetches live Openverse, Wikimedia, NASA, Library of Congress, and Art Institute results for the active query and shows remote assets before local files.
 - User manual check that The Met public-domain image results appear directly in the Media panel for image searches without opening the provider browser.
 - User manual check that returning to a previous Media panel query or media tab reuses cached provider results without another visible fetch delay.
+- User manual check that first-time remote Media panel searches feel faster because provider APIs resolve concurrently instead of sequentially.
 - User manual check that typing quickly in the Media panel search only applies the newest remote-provider result batch.
 - Optional user manual smoke test in the launched Zed window for the four top-right panels before starting the next feature set.
 - User manual check that UI panel searches like "login form" or "magic button" match entries by words instead of requiring exact phrase order.
@@ -90,6 +91,7 @@ COMPLETED:
 - Added direct no-key NASA video/audio result extraction from NASA collection manifests for Media panel Videos and Audio tabs.
 - Added Art Institute and The Met direct searches plus NASA audio/video manifest resolution to the WebPreview remote media browser.
 - Added optional thumbnail URLs to remote media rows so provider preview images can render in the native Media panel for images, videos, and audio.
+- Made Media panel no-key provider fetches run concurrently while preserving per-provider error reporting and result deduping.
 - Added in-memory Media panel result caching keyed by active query and media tab.
 - Added debounce/generation protection for Media panel remote searches so stale provider calls cannot repaint old results.
 - Completed the right-side Icon, Font, Media, and UI panel polish loop at 100/100 code-complete status.

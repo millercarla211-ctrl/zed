@@ -12,7 +12,9 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     fs as std_fs,
+    future::Future,
     path::{Path, PathBuf},
+    pin::Pin,
     sync::Arc,
     time::Duration,
 };
@@ -73,6 +75,9 @@ struct RemoteMediaAsset {
     license: Cow<'static, str>,
     tags: Cow<'static, str>,
 }
+
+type RemoteMediaFetch =
+    Pin<Box<dyn Future<Output = (&'static str, anyhow::Result<Vec<RemoteMediaAsset>>)>>>;
 
 impl RemoteMediaAsset {
     const fn borrowed(
@@ -1403,61 +1408,81 @@ async fn fetch_remote_media_assets(
     query: String,
     filter: MediaKindFilter,
 ) -> anyhow::Result<Vec<RemoteMediaAsset>> {
+    let mut fetches: Vec<RemoteMediaFetch> = Vec::new();
+
     let mut assets = Vec::new();
     let mut errors = Vec::new();
 
     if matches!(filter, MediaKindFilter::All | MediaKindFilter::Images) {
-        match fetch_openverse_media(http_client.clone(), &query, DraggedMediaKind::Image).await {
-            Ok(items) => assets.extend(items),
-            Err(error) => errors.push(format!("Openverse images: {error:#}")),
-        }
-        match fetch_wikimedia_media(http_client.clone(), &query, filter).await {
-            Ok(items) => assets.extend(items),
-            Err(error) => errors.push(format!("Wikimedia: {error:#}")),
-        }
-        match fetch_nasa_images(http_client.clone(), &query).await {
-            Ok(items) => assets.extend(items),
-            Err(error) => errors.push(format!("NASA: {error:#}")),
-        }
-        match fetch_library_of_congress_images(http_client.clone(), &query).await {
-            Ok(items) => assets.extend(items),
-            Err(error) => errors.push(format!("Library of Congress: {error:#}")),
-        }
-        match fetch_art_institute_images(http_client.clone(), &query).await {
-            Ok(items) => assets.extend(items),
-            Err(error) => errors.push(format!("Art Institute: {error:#}")),
-        }
-        match fetch_met_museum_images(http_client.clone(), &query).await {
-            Ok(items) => assets.extend(items),
-            Err(error) => errors.push(format!("The Met: {error:#}")),
-        }
+        fetches.push(remote_media_fetch("Openverse images", {
+            let http_client = http_client.clone();
+            let query = query.clone();
+            async move { fetch_openverse_media(http_client, &query, DraggedMediaKind::Image).await }
+        }));
+        fetches.push(remote_media_fetch("Wikimedia", {
+            let http_client = http_client.clone();
+            let query = query.clone();
+            async move { fetch_wikimedia_media(http_client, &query, filter).await }
+        }));
+        fetches.push(remote_media_fetch("NASA", {
+            let http_client = http_client.clone();
+            let query = query.clone();
+            async move { fetch_nasa_images(http_client, &query).await }
+        }));
+        fetches.push(remote_media_fetch("Library of Congress", {
+            let http_client = http_client.clone();
+            let query = query.clone();
+            async move { fetch_library_of_congress_images(http_client, &query).await }
+        }));
+        fetches.push(remote_media_fetch("Art Institute", {
+            let http_client = http_client.clone();
+            let query = query.clone();
+            async move { fetch_art_institute_images(http_client, &query).await }
+        }));
+        fetches.push(remote_media_fetch("The Met", {
+            let http_client = http_client.clone();
+            let query = query.clone();
+            async move { fetch_met_museum_images(http_client, &query).await }
+        }));
     }
 
     if matches!(filter, MediaKindFilter::All | MediaKindFilter::Audio) {
-        match fetch_openverse_media(http_client.clone(), &query, DraggedMediaKind::Audio).await {
-            Ok(items) => assets.extend(items),
-            Err(error) => errors.push(format!("Openverse audio: {error:#}")),
-        }
-        match fetch_nasa_media(http_client.clone(), &query, DraggedMediaKind::Audio).await {
-            Ok(items) => assets.extend(items),
-            Err(error) => errors.push(format!("NASA audio: {error:#}")),
-        }
+        fetches.push(remote_media_fetch("Openverse audio", {
+            let http_client = http_client.clone();
+            let query = query.clone();
+            async move { fetch_openverse_media(http_client, &query, DraggedMediaKind::Audio).await }
+        }));
+        fetches.push(remote_media_fetch("NASA audio", {
+            let http_client = http_client.clone();
+            let query = query.clone();
+            async move { fetch_nasa_media(http_client, &query, DraggedMediaKind::Audio).await }
+        }));
         if matches!(filter, MediaKindFilter::Audio) {
-            match fetch_wikimedia_media(http_client.clone(), &query, MediaKindFilter::Audio).await {
-                Ok(items) => assets.extend(items),
-                Err(error) => errors.push(format!("Wikimedia audio: {error:#}")),
-            }
+            fetches.push(remote_media_fetch("Wikimedia audio", {
+                let http_client = http_client.clone();
+                let query = query.clone();
+                async move { fetch_wikimedia_media(http_client, &query, MediaKindFilter::Audio).await }
+            }));
         }
     }
 
     if matches!(filter, MediaKindFilter::Videos) {
-        match fetch_nasa_media(http_client.clone(), &query, DraggedMediaKind::Video).await {
+        fetches.push(remote_media_fetch("NASA videos", {
+            let http_client = http_client.clone();
+            let query = query.clone();
+            async move { fetch_nasa_media(http_client, &query, DraggedMediaKind::Video).await }
+        }));
+        fetches.push(remote_media_fetch("Wikimedia video", {
+            let http_client = http_client.clone();
+            let query = query.clone();
+            async move { fetch_wikimedia_media(http_client, &query, MediaKindFilter::Videos).await }
+        }));
+    }
+
+    for (provider, result) in futures::future::join_all(fetches).await {
+        match result {
             Ok(items) => assets.extend(items),
-            Err(error) => errors.push(format!("NASA videos: {error:#}")),
-        }
-        match fetch_wikimedia_media(http_client.clone(), &query, MediaKindFilter::Videos).await {
-            Ok(items) => assets.extend(items),
-            Err(error) => errors.push(format!("Wikimedia video: {error:#}")),
+            Err(error) => errors.push(format!("{provider}: {error:#}")),
         }
     }
 
@@ -1469,6 +1494,13 @@ async fn fetch_remote_media_assets(
     }
 
     Ok(assets)
+}
+
+fn remote_media_fetch<F>(provider: &'static str, fetch: F) -> RemoteMediaFetch
+where
+    F: Future<Output = anyhow::Result<Vec<RemoteMediaAsset>>> + 'static,
+{
+    Box::pin(async move { (provider, fetch.await) })
 }
 
 async fn fetch_openverse_media(
