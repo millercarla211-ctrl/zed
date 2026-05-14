@@ -38,6 +38,7 @@ actions!(
 
 const MEDIA_PANEL_KEY: &str = "MediaPanel";
 const MAX_MEDIA_RESULTS: usize = 220;
+const MET_MUSEUM_DETAIL_LIMIT: usize = 18;
 const REMOTE_MEDIA_FETCH_DEBOUNCE: Duration = Duration::from_millis(275);
 
 pub fn init(cx: &mut App) {
@@ -1334,6 +1335,25 @@ struct ArtInstituteItem {
     artist_display: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct MetMuseumSearchResponse {
+    #[serde(rename = "objectIDs")]
+    object_ids: Option<Vec<u64>>,
+}
+
+#[derive(Deserialize)]
+struct MetMuseumObjectResponse {
+    #[serde(rename = "objectID")]
+    object_id: u64,
+    title: Option<String>,
+    #[serde(rename = "primaryImageSmall")]
+    primary_image_small: Option<String>,
+    #[serde(rename = "artistDisplayName")]
+    artist_display_name: Option<String>,
+    #[serde(rename = "isPublicDomain")]
+    is_public_domain: bool,
+}
+
 fn remote_media_query(query: &str, filter: MediaKindFilter) -> String {
     let query = query.trim();
     if !query.is_empty() {
@@ -1375,6 +1395,10 @@ async fn fetch_remote_media_assets(
         match fetch_art_institute_images(http_client.clone(), &query).await {
             Ok(items) => assets.extend(items),
             Err(error) => errors.push(format!("Art Institute: {error:#}")),
+        }
+        match fetch_met_museum_images(http_client.clone(), &query).await {
+            Ok(items) => assets.extend(items),
+            Err(error) => errors.push(format!("The Met: {error:#}")),
         }
     }
 
@@ -1598,6 +1622,54 @@ async fn fetch_art_institute_images(
             ))
         })
         .collect())
+}
+
+async fn fetch_met_museum_images(
+    http_client: Arc<dyn HttpClient>,
+    query: &str,
+) -> anyhow::Result<Vec<RemoteMediaAsset>> {
+    let url = format!(
+        "https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q={}",
+        encode_query(query)
+    );
+    let response: MetMuseumSearchResponse = fetch_json(http_client.clone(), &url).await?;
+    let object_ids = response.object_ids.unwrap_or_default();
+    let detail_requests = object_ids
+        .into_iter()
+        .take(MET_MUSEUM_DETAIL_LIMIT)
+        .map(|object_id| fetch_met_museum_object(http_client.clone(), object_id));
+
+    Ok(futures::future::join_all(detail_requests)
+        .await
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|item| item.is_public_domain)
+        .filter_map(|item| {
+            let image_url = item.primary_image_small?;
+            if image_url.trim().is_empty() {
+                return None;
+            }
+
+            Some(RemoteMediaAsset::owned(
+                remote_asset_id("Met", &item.object_id.to_string()),
+                clean_remote_label(item.title.as_deref().unwrap_or("The Met image")),
+                "The Met",
+                image_url,
+                DraggedMediaKind::Image,
+                "public domain / open access".to_string(),
+                item.artist_display_name.unwrap_or_default(),
+            ))
+        })
+        .collect())
+}
+
+async fn fetch_met_museum_object(
+    http_client: Arc<dyn HttpClient>,
+    object_id: u64,
+) -> anyhow::Result<MetMuseumObjectResponse> {
+    let url =
+        format!("https://collectionapi.metmuseum.org/public/collection/v1/objects/{object_id}");
+    fetch_json(http_client, &url).await
 }
 
 async fn fetch_json<T: for<'de> Deserialize<'de>>(

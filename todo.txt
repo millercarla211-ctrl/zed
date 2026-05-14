@@ -1,11 +1,12 @@
 IN PROGRESS:
-- UI/shadcn row thumbnail screenshot reuse is code-complete by inspection; awaiting manual Zed panel QA.
+- The Met direct media search integration is code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
 - User manual check that the Icon panel All sets grid renders real external SVG icons instead of letter-only pack badges.
 - User manual check that missing/broken external SVG previews fall back once without repeated reload work.
 - User manual check that generated external icon previews are reused from `target/icon-picker-icons` without reparsing Iconify JSON on later panel opens.
 - User manual check that the Media panel fetches live Openverse, Wikimedia, NASA, Library of Congress, and Art Institute results for the active query and shows remote assets before local files.
+- User manual check that The Met public-domain image results appear directly in the Media panel for image searches without opening the provider browser.
 - User manual check that returning to a previous Media panel query or media tab reuses cached provider results without another visible fetch delay.
 - User manual check that typing quickly in the Media panel search only applies the newest remote-provider result batch.
 - Optional user manual smoke test in the launched Zed window for the four top-right panels before starting the next feature set.
@@ -80,6 +81,7 @@ COMPLETED:
 - Made the Icon panel render real external SVG previews in the default All sets grid and cache failed SVG lookups.
 - Made the Icon panel reuse generated external SVG preview files from disk before parsing source icon packs again.
 - Added live no-key remote media fetching for Openverse, Wikimedia Commons, NASA, Library of Congress, and Art Institute in the Media panel, prioritizing remote provider assets ahead of local files.
+- Added direct no-key The Met public-domain image results to the Media panel provider fetch path.
 - Added in-memory Media panel result caching keyed by active query and media tab.
 - Added debounce/generation protection for Media panel remote searches so stale provider calls cannot repaint old results.
 - Completed the right-side Icon, Font, Media, and UI panel polish loop at 100/100 code-complete status.
