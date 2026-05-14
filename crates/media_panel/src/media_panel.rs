@@ -201,7 +201,7 @@ impl MediaKindFilter {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 struct MediaKindCounts {
     images: usize,
     videos: usize,
@@ -209,11 +209,16 @@ struct MediaKindCounts {
 }
 
 impl MediaKindCounts {
-    fn from_panel(panel: &MediaPanel) -> Self {
+    fn from_local_assets(assets: &[MediaAsset]) -> Self {
         let mut counts = Self::default();
-        for asset in &panel.assets {
+        for asset in assets {
             counts.add(asset.payload.kind);
         }
+        counts
+    }
+
+    fn from_panel(panel: &MediaPanel) -> Self {
+        let mut counts = panel.local_kind_counts;
         for asset in remote_media_assets() {
             counts.add(asset.kind);
         }
@@ -247,6 +252,7 @@ pub struct MediaPanel {
     http_client: Arc<dyn HttpClient>,
     media_roots: Vec<PathBuf>,
     assets: Vec<MediaAsset>,
+    local_kind_counts: MediaKindCounts,
     remote_assets: Vec<RemoteMediaAsset>,
     remote_cache: HashMap<String, Vec<RemoteMediaAsset>>,
     kind_filter: MediaKindFilter,
@@ -304,6 +310,7 @@ impl MediaPanel {
                 http_client,
                 media_roots,
                 assets: Vec::new(),
+                local_kind_counts: MediaKindCounts::default(),
                 remote_assets: Vec::new(),
                 remote_cache: HashMap::default(),
                 kind_filter: MediaKindFilter::Images,
@@ -414,7 +421,9 @@ impl MediaPanel {
                 .await;
             panel
                 .update(cx, |panel, cx| {
+                    let local_kind_counts = MediaKindCounts::from_local_assets(&assets);
                     panel.assets = assets;
+                    panel.local_kind_counts = local_kind_counts;
                     panel.loading = false;
                     panel.index_loaded = true;
                     panel.status =
@@ -432,6 +441,17 @@ impl MediaPanel {
 
     fn matching_assets(&self, query_terms: &[&str], limit: usize) -> (Vec<MediaAsset>, usize) {
         let kind_filter = self.kind_filter;
+        if query_terms.is_empty() {
+            let visible_assets = self
+                .assets
+                .iter()
+                .filter(|asset| kind_filter.matches(asset.payload.kind))
+                .take(limit)
+                .cloned()
+                .collect();
+            return (visible_assets, self.local_kind_counts.count(kind_filter));
+        }
+
         let mut visible_assets = Vec::new();
         let mut match_count = 0;
 
