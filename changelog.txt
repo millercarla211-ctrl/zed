@@ -1,3 +1,11 @@
+[2026-05-15] - Icon Tile Render Identity Cleanup
+
+CHANGED:
+- `crates/icon_picker` now compares selected icon identity directly and reuses each visible tile id when rendering Icon panel grid tiles.
+
+NOTES:
+- Preserved selected-tile highlighting, click/drag/insert behavior, SVG preview lookup, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Icon Preview Cache Key Allocation Cleanup
 
 CHANGED:

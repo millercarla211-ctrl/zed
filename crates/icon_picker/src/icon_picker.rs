@@ -72,6 +72,14 @@ impl PickerIcon {
             Self::External(icon) => icon.id(),
         }
     }
+
+    fn same_identity_as(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Zed(left), Self::Zed(right)) => left == right,
+            (Self::External(left), Self::External(right)) => left.id == right.id,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -762,14 +770,15 @@ impl IconPickerPanel {
     fn render_icon_tile(&self, icon: PickerIcon, cx: &mut Context<Self>) -> impl IntoElement {
         let payload = self.payload_for_icon(&icon);
         let label = payload.label.clone();
+        let icon_id = icon.id();
         let selected = self
             .selected_icon
             .as_ref()
-            .is_some_and(|selected| selected.id() == icon.id());
+            .is_some_and(|selected| selected.same_identity_as(&icon));
         let icon_preview = self.render_icon_preview(&icon, IconSize::Medium, cx);
 
         div()
-            .id(format!("icon-picker-tile-{}", icon.id()))
+            .id(format!("icon-picker-tile-{}", icon_id.as_ref()))
             .min_w(px(0.))
             .h(px(44.))
             .p_0p5()
