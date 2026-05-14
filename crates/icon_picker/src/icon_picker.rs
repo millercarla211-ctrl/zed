@@ -320,6 +320,25 @@ impl IconPickerPanel {
             return (icons, MAX_ICON_RESULTS.min(total_count), total_count);
         }
 
+        if query.is_empty() {
+            if selected_pack == Some("zed") {
+                icons.extend(self.zed_icons.iter().copied().map(PickerIcon::Zed));
+                icons.truncate(MAX_ICON_RESULTS);
+                return (icons, total_count, total_count);
+            } else if let Some(selected_pack) = selected_pack
+                && let Some(pack_icons) = self.external_icons_by_pack.get(selected_pack)
+            {
+                icons.extend(
+                    pack_icons
+                        .iter()
+                        .take(MAX_ICON_RESULTS)
+                        .cloned()
+                        .map(PickerIcon::External),
+                );
+                return (icons, total_count, total_count);
+            }
+        }
+
         if selected_pack.is_none() || selected_pack == Some("zed") {
             icons.extend(self.zed_icons.iter().copied().filter_map(|icon_name| {
                 let payload = DraggedIconAsset::new(icon_name);
@@ -337,14 +356,7 @@ impl IconPickerPanel {
         }
 
         if selected_pack != Some("zed") {
-            if query.is_empty() && selected_pack.is_none() {
-                icons.extend(
-                    self.representative_external_icons
-                        .iter()
-                        .cloned()
-                        .map(PickerIcon::External),
-                );
-            } else if let Some(selected_pack) = selected_pack {
+            if let Some(selected_pack) = selected_pack {
                 if let Some(pack_icons) = self.external_icons_by_pack.get(selected_pack) {
                     for icon in pack_icons {
                         if icon_search_matches(icon.search_text.as_ref(), &query_terms) {
