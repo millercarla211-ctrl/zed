@@ -170,6 +170,7 @@ pub struct ShadcnUiPanel {
     loading_catalog: bool,
     catalog_loaded: bool,
     source_filter: CatalogFilter,
+    warming_preview_image_keys: BTreeSet<String>,
     filter_scroll_handle: ScrollHandle,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
@@ -227,6 +228,7 @@ impl ShadcnUiPanel {
                 loading_catalog: false,
                 catalog_loaded: true,
                 source_filter: CatalogFilter::All,
+                warming_preview_image_keys: BTreeSet::new(),
                 filter_scroll_handle: ScrollHandle::new(),
                 status: None,
                 _subscriptions: vec![filter_subscription],
@@ -298,6 +300,44 @@ impl ShadcnUiPanel {
         }
 
         (visible_items, match_count)
+    }
+
+    fn ensure_visible_preview_images_warmed(
+        &mut self,
+        items: &[CatalogItem],
+        cx: &mut Context<Self>,
+    ) {
+        let pending_items = items
+            .iter()
+            .filter(|item| !preview_image_cache_contains(item.id.as_ref()))
+            .filter(|item| !self.warming_preview_image_keys.contains(item.id.as_ref()))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if pending_items.is_empty() {
+            return;
+        }
+
+        for item in &pending_items {
+            self.warming_preview_image_keys.insert(item.id.to_string());
+        }
+
+        let executor = cx.background_executor().clone();
+        cx.spawn(async move |panel, cx| {
+            let images = executor
+                .spawn(async move { warm_shadcn_preview_images(pending_items) })
+                .await;
+            panel
+                .update(cx, |panel, cx| {
+                    for (key, image_url) in images {
+                        panel.warming_preview_image_keys.remove(&key);
+                        insert_preview_image_cache(key, image_url);
+                    }
+                    cx.notify();
+                })
+                .ok();
+        })
+        .detach();
     }
 
     fn filtered_count(&self, filter: CatalogFilter) -> usize {
@@ -695,6 +735,7 @@ impl Render for ShadcnUiPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_catalog_loaded(cx);
         let (items, total_matches) = self.matching_items(cx, MAX_SHADCN_ROWS);
+        self.ensure_visible_preview_images_warmed(&items, cx);
         let is_empty = total_matches == 0;
         let total_count = self.filtered_count(self.source_filter);
         let item_rows = items
@@ -2818,11 +2859,30 @@ fn cached_shadcn_preview_image_url(item: &CatalogItem) -> Option<String> {
         return image_url.clone();
     }
 
-    let image_url = shadcn_preview_image_url(item);
+    None
+}
+
+fn preview_image_cache_contains(key: &str) -> bool {
+    let cache = SHADCN_PREVIEW_IMAGE_CACHE.get_or_init(|| Mutex::new(HashMap::default()));
+    cache.lock().is_ok_and(|cache| cache.contains_key(key))
+}
+
+fn insert_preview_image_cache(key: String, image_url: Option<String>) {
+    let cache = SHADCN_PREVIEW_IMAGE_CACHE.get_or_init(|| Mutex::new(HashMap::default()));
     if let Ok(mut cache) = cache.lock() {
-        cache.insert(key, image_url.clone());
+        cache.insert(key, image_url);
     }
-    image_url
+}
+
+fn warm_shadcn_preview_images(items: Vec<CatalogItem>) -> Vec<(String, Option<String>)> {
+    items
+        .into_iter()
+        .map(|item| {
+            let key = item.id.to_string();
+            let image_url = shadcn_preview_image_url(&item);
+            (key, image_url)
+        })
+        .collect()
 }
 
 fn highlight_tsx(source: &str) -> String {

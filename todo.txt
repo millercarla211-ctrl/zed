@@ -1,5 +1,5 @@
 IN PROGRESS:
-- Icon representative preview prewarming and Cleveland direct remote media support are code-complete by inspection; awaiting manual Zed panel QA.
+- UI screenshot thumbnail warming, icon representative preview prewarming, and Cleveland direct remote media support are code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
 - User manual check that Iconify alias icons with hFlip, vFlip, or rotate metadata, such as arrow-right/arrow-down style aliases, preview and insert with the correct orientation.
@@ -36,6 +36,7 @@ PENDING:
 - User manual check that screenshot-backed UI previews feel native, with no implementation/status caption and no cropped dashboard/login screenshots.
 - User manual check that shadcn dashboard, login, card, sidebar, button, calendar, authentication, playground, and task-style entries show local screenshot-backed previews instead of generic placeholder demos.
 - User manual check that UI panel rows use available local shadcn screenshots as thumbnails before falling back to synthetic component sketches.
+- User manual check that cold UI panel opens paint immediately with synthetic thumbnails and then swap in local shadcn screenshots after background warming, without panel-scroll lag.
 - User manual check that the Media panel direct remote rows cover image, video, and audio samples without opening the remote provider browser first.
 - User manual check that remote video/audio rows use provider thumbnails when available instead of always showing generic media glyphs.
 - User manual check that NASA video and audio searches produce direct playable Media panel rows, not only provider browser links.
