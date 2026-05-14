@@ -314,6 +314,7 @@ impl ShadcnUiPanel {
 
     fn matching_items(&self, cx: &App, limit: usize) -> (Vec<CatalogItem>, usize) {
         let query = self.query(cx);
+        let query_terms = query.split_whitespace().collect::<Vec<_>>();
         let source_filter = self.source_filter;
         let mut visible_items = Vec::new();
         let mut match_count = 0;
@@ -323,9 +324,9 @@ impl ShadcnUiPanel {
                 continue;
             }
 
-            if !query.is_empty() {
+            if !query_terms.is_empty() {
                 let searchable = self.catalog_search_text(item);
-                if !catalog_search_matches(searchable.as_ref(), query.as_str()) {
+                if !catalog_search_matches(searchable.as_ref(), &query_terms) {
                     continue;
                 }
             }
@@ -889,10 +890,8 @@ fn scroll_tab_handle(handle: &ScrollHandle, direction: f32) {
     handle.set_offset(point(next_x, current.y));
 }
 
-fn catalog_search_matches(searchable: &str, query: &str) -> bool {
-    query
-        .split_whitespace()
-        .all(|term| searchable.contains(term))
+fn catalog_search_matches(searchable: &str, query_terms: &[&str]) -> bool {
+    query_terms.iter().all(|term| searchable.contains(term))
 }
 
 struct ShadcnDragPreview {

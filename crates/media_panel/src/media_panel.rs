@@ -436,6 +436,7 @@ impl MediaPanel {
 
     fn matching_assets(&self, cx: &App, limit: usize) -> (Vec<MediaAsset>, usize) {
         let query = self.query(cx);
+        let query_terms = query.split_whitespace().collect::<Vec<_>>();
         let kind_filter = self.kind_filter;
         let mut visible_assets = Vec::new();
         let mut match_count = 0;
@@ -445,8 +446,8 @@ impl MediaPanel {
                 continue;
             }
 
-            if !query.is_empty()
-                && !media_search_matches(asset.search_text.as_ref(), query.as_str())
+            if !query_terms.is_empty()
+                && !media_search_matches(asset.search_text.as_ref(), &query_terms)
             {
                 continue;
             }
@@ -462,6 +463,7 @@ impl MediaPanel {
 
     fn matching_remote_assets(&self, cx: &App, limit: usize) -> (Vec<RemoteMediaAsset>, usize) {
         let query = self.query(cx);
+        let query_terms = query.split_whitespace().collect::<Vec<_>>();
         let kind_filter = self.kind_filter;
         let mut visible_assets = Vec::new();
         let mut match_count = 0;
@@ -480,7 +482,7 @@ impl MediaPanel {
                 continue;
             }
 
-            if !query.is_empty() {
+            if !query_terms.is_empty() {
                 let searchable = format!(
                     "{} {} {} {} {}",
                     asset.label,
@@ -490,7 +492,7 @@ impl MediaPanel {
                     media_kind_label(asset.kind)
                 )
                 .to_lowercase();
-                if !media_search_matches(searchable.as_str(), query.as_str()) {
+                if !media_search_matches(searchable.as_str(), &query_terms) {
                     continue;
                 }
             }
@@ -3262,10 +3264,8 @@ fn media_kind_label(kind: DraggedMediaKind) -> &'static str {
     }
 }
 
-fn media_search_matches(searchable: &str, query: &str) -> bool {
-    query
-        .split_whitespace()
-        .all(|term| searchable.contains(term))
+fn media_search_matches(searchable: &str, query_terms: &[&str]) -> bool {
+    query_terms.iter().all(|term| searchable.contains(term))
 }
 
 fn remote_media_assets() -> &'static [RemoteMediaAsset] {

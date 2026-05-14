@@ -302,6 +302,7 @@ impl IconPickerPanel {
 
     fn filtered_icons(&self, cx: &App) -> (Vec<PickerIcon>, usize, usize) {
         let query = self.query(cx);
+        let query_terms = query.split_whitespace().collect::<Vec<_>>();
         let selected_pack = self.selected_pack.as_ref().map(|pack| pack.as_ref());
         let mut icons = Vec::new();
         let mut match_count = 0;
@@ -329,7 +330,7 @@ impl IconPickerPanel {
                     payload.stem.as_ref(),
                     payload.label.as_ref().to_lowercase()
                 );
-                if !icon_search_matches(searchable.as_str(), query.as_str()) {
+                if !icon_search_matches(searchable.as_str(), &query_terms) {
                     return None;
                 }
                 match_count += 1;
@@ -348,7 +349,7 @@ impl IconPickerPanel {
             } else if let Some(selected_pack) = selected_pack {
                 if let Some(pack_icons) = self.external_icons_by_pack.get(selected_pack) {
                     for icon in pack_icons {
-                        if icon_search_matches(icon.search_text.as_ref(), query.as_str()) {
+                        if icon_search_matches(icon.search_text.as_ref(), &query_terms) {
                             match_count += 1;
                             if icons.len() < MAX_ICON_RESULTS {
                                 icons.push(PickerIcon::External(icon.clone()));
@@ -358,7 +359,7 @@ impl IconPickerPanel {
                 }
             } else {
                 for icon in &self.external_icons {
-                    if icon_search_matches(icon.search_text.as_ref(), query.as_str()) {
+                    if icon_search_matches(icon.search_text.as_ref(), &query_terms) {
                         match_count += 1;
                         if icons.len() < MAX_ICON_RESULTS {
                             icons.push(PickerIcon::External(icon.clone()));
@@ -908,10 +909,8 @@ fn scroll_tab_handle(handle: &ScrollHandle, direction: f32) {
     handle.set_offset(point(next_x, current.y));
 }
 
-fn icon_search_matches(searchable: &str, query: &str) -> bool {
-    query
-        .split_whitespace()
-        .all(|term| searchable.contains(term))
+fn icon_search_matches(searchable: &str, query_terms: &[&str]) -> bool {
+    query_terms.iter().all(|term| searchable.contains(term))
 }
 
 struct IconDragPreview {
