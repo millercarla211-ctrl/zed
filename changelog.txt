@@ -1,3 +1,11 @@
+[2026-05-15] - Icon Preview Cache Key Allocation Cleanup
+
+CHANGED:
+- `crates/icon_picker` now stores precomputed `SharedString` ids on external icons and reuses them for SVG preview cache and warming keys.
+
+NOTES:
+- Preserved external icon ids, selected-icon checks, SVG preview warming/cache behavior, insert/copy actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media Remote Cache Key Allocation Cleanup
 
 CHANGED:

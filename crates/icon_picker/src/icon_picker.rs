@@ -63,11 +63,11 @@ enum PickerIcon {
 }
 
 impl PickerIcon {
-    fn id(&self) -> String {
+    fn id(&self) -> SharedString {
         match self {
             Self::Zed(icon_name) => {
                 let stem: &'static str = icon_name.into();
-                format!("zed:{stem}")
+                format!("zed:{stem}").into()
             }
             Self::External(icon) => icon.id(),
         }
@@ -76,6 +76,7 @@ impl PickerIcon {
 
 #[derive(Clone)]
 struct ExternalIcon {
+    id: SharedString,
     pack: SharedString,
     pack_name: SharedString,
     name: SharedString,
@@ -87,8 +88,8 @@ struct ExternalIcon {
 }
 
 impl ExternalIcon {
-    fn id(&self) -> String {
-        format!("{}:{}", self.pack.as_ref(), self.name.as_ref())
+    fn id(&self) -> SharedString {
+        self.id.clone()
     }
 }
 
@@ -120,9 +121,9 @@ pub struct IconPickerPanel {
     selected_icon: Option<PickerIcon>,
     loading_external_icons: bool,
     external_catalog_loaded: bool,
-    preview_cache: RefCell<HashMap<String, Option<ExternalSvg>>>,
-    preview_cache_order: RefCell<VecDeque<String>>,
-    warming_preview_keys: HashSet<String>,
+    preview_cache: RefCell<HashMap<SharedString, Option<ExternalSvg>>>,
+    preview_cache_order: RefCell<VecDeque<SharedString>>,
+    warming_preview_keys: HashSet<SharedString>,
     warming_preview_signature: Option<SharedString>,
     warmed_preview_signatures: HashSet<String>,
     warmed_preview_signature_order: VecDeque<String>,
@@ -567,7 +568,7 @@ impl IconPickerPanel {
         }
     }
 
-    fn cache_external_svg(&self, key: String, external_svg: Option<ExternalSvg>) {
+    fn cache_external_svg(&self, key: SharedString, external_svg: Option<ExternalSvg>) {
         let mut preview_cache = self.preview_cache.borrow_mut();
         let is_new = preview_cache.insert(key.clone(), external_svg).is_none();
         if !is_new {
@@ -1333,6 +1334,7 @@ fn external_icon_from_summary(
 ) -> ExternalIcon {
     let label = titleize_icon_name(name);
     let stem = format!("{}-{}", pack_summary.prefix.as_ref(), name);
+    let id = format!("{}:{}", pack_summary.prefix.as_ref(), name);
     let search_text = format!(
         "{} {} {} {}",
         name.to_lowercase(),
@@ -1341,6 +1343,7 @@ fn external_icon_from_summary(
         pack_summary.name.as_ref().to_lowercase()
     );
     ExternalIcon {
+        id: id.into(),
         pack: pack_summary.prefix.clone(),
         pack_name: pack_summary.name.clone(),
         name: name.to_string().into(),
@@ -1395,7 +1398,9 @@ fn load_external_icon_bodies(pack: &str) -> anyhow::Result<HashMap<String, Exter
     Ok(bodies)
 }
 
-fn warm_external_icon_previews(icons: Vec<ExternalIcon>) -> Vec<(String, Option<SharedString>)> {
+fn warm_external_icon_previews(
+    icons: Vec<ExternalIcon>,
+) -> Vec<(SharedString, Option<SharedString>)> {
     let mut pack_bodies =
         HashMap::<String, HashMap<String, ExternalIconBody>>::with_capacity(icons.len().min(16));
     let mut previews = Vec::with_capacity(icons.len());
@@ -1408,7 +1413,7 @@ fn warm_external_icon_previews(icons: Vec<ExternalIcon>) -> Vec<(String, Option<
         }
 
         let body = representative_icon_bodies()
-            .get(key.as_str())
+            .get(key.as_ref())
             .cloned()
             .or_else(|| {
                 let pack = icon.pack.to_string();
