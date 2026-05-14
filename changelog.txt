@@ -23,6 +23,7 @@ ADDED:
 - `crates/media_panel` now fetches direct Cleveland Museum of Art CC0 image rows through the no-key open access API.
 
 CHANGED:
+- `crates/icon_picker` now preallocates full external Iconify catalog vectors, pack maps, representative rows, per-pack rows, and SVG body maps from known pack sizes, reducing allocator churn during broad icon search and preview generation.
 - `crates/icon_picker`, `crates/font_panel`, `crates/media_panel`, and `crates/shadcn_ui_panel` now preallocate bounded visible result buffers before collecting search/filter rows, reducing small allocation churn while typing or switching tabs.
 - `crates/icon_picker` now caches built-in Zed icon search text so typed searches do not rebuild `DraggedIconAsset` labels for every Zed icon on each repaint.
 - `crates/font_panel` now checks cached lowercase font search text in place instead of cloning the cached `SharedString` for every typed-search font match.

@@ -1149,7 +1149,7 @@ fn static_icon_pack_summaries() -> Vec<IconPackSummary> {
 }
 
 fn representative_icons_from_pack_summaries(packs: &[IconPackSummary]) -> Vec<ExternalIcon> {
-    let mut icons = Vec::new();
+    let mut icons = Vec::with_capacity(MAX_ICON_RESULTS.min(packs.len().saturating_mul(2)));
     for index in 0..2 {
         for pack in packs {
             let Some(name) = pack.sample_names.get(index) else {
@@ -1175,15 +1175,19 @@ fn load_external_icon_catalog() -> ExternalIconCatalog {
     if !data_dir.is_dir() {
         return ExternalIconCatalog {
             icons: Vec::new(),
-            icons_by_pack: HashMap::default(),
+            icons_by_pack: HashMap::with_capacity(packs.len()),
             representative_icons: Vec::new(),
             packs,
         };
     }
 
-    let mut icons = Vec::new();
+    let total_icon_count = packs.iter().map(|pack| pack.total).sum::<usize>();
+    let mut icons = Vec::with_capacity(total_icon_count);
+    let mut icons_by_pack = HashMap::<String, Vec<ExternalIcon>>::with_capacity(packs.len());
     for pack_summary in &packs {
-        icons.extend(load_external_icon_pack_catalog(pack_summary));
+        let pack_icons = load_external_icon_pack_catalog(pack_summary);
+        icons.extend(pack_icons.iter().cloned());
+        icons_by_pack.insert(pack_summary.prefix.to_string(), pack_icons);
     }
 
     icons.sort_by(|left, right| {
@@ -1192,15 +1196,8 @@ fn load_external_icon_catalog() -> ExternalIconCatalog {
             .cmp(right.pack_name.as_ref())
             .then_with(|| left.name.as_ref().cmp(right.name.as_ref()))
     });
-    let mut icons_by_pack = HashMap::<String, Vec<ExternalIcon>>::new();
-    for icon in &icons {
-        icons_by_pack
-            .entry(icon.pack.to_string())
-            .or_default()
-            .push(icon.clone());
-    }
 
-    let mut representative_icons = Vec::new();
+    let mut representative_icons = Vec::with_capacity(MAX_ICON_RESULTS.min(packs.len()));
     for index in 0..2 {
         for pack in &packs {
             if let Some(icon) = icons_by_pack
@@ -1236,17 +1233,15 @@ fn load_external_icon_pack_catalog(pack_summary: &IconPackSummary) -> Vec<Extern
     };
     let IconifyPack { icons, aliases } = pack;
 
-    let mut pack_icons = icons
-        .iter()
-        .map(|(name, icon_meta)| {
-            external_icon_from_summary(
-                pack_summary,
-                name,
-                icon_meta.width.unwrap_or(pack_summary.width),
-                icon_meta.height.unwrap_or(pack_summary.height),
-            )
-        })
-        .collect::<Vec<_>>();
+    let mut pack_icons = Vec::with_capacity(icons.len() + aliases.len());
+    pack_icons.extend(icons.iter().map(|(name, icon_meta)| {
+        external_icon_from_summary(
+            pack_summary,
+            name,
+            icon_meta.width.unwrap_or(pack_summary.width),
+            icon_meta.height.unwrap_or(pack_summary.height),
+        )
+    }));
     pack_icons.extend(aliases.into_iter().filter_map(|(name, alias)| {
         let parent = icons.get(alias.parent.as_str())?;
         Some(external_icon_from_summary(
@@ -1296,22 +1291,20 @@ fn load_external_icon_bodies(pack: &str) -> anyhow::Result<HashMap<String, Exter
     let text = std::fs::read_to_string(path)?;
     let pack = serde_json::from_str::<IconifyBodyPack>(&text)?;
     let IconifyBodyPack { icons, aliases } = pack;
-    let mut bodies = icons
-        .into_iter()
-        .map(|(name, icon)| {
-            (
-                name,
-                ExternalIconBody {
-                    body: icon.body,
-                    width: icon.width,
-                    height: icon.height,
-                    h_flip: false,
-                    v_flip: false,
-                    rotate: None,
-                },
-            )
-        })
-        .collect::<HashMap<_, _>>();
+    let mut bodies = HashMap::with_capacity(icons.len() + aliases.len());
+    bodies.extend(icons.into_iter().map(|(name, icon)| {
+        (
+            name,
+            ExternalIconBody {
+                body: icon.body,
+                width: icon.width,
+                height: icon.height,
+                h_flip: false,
+                v_flip: false,
+                rotate: None,
+            },
+        )
+    }));
 
     for (name, alias) in aliases {
         if bodies.contains_key(&name) {
