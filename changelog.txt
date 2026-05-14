@@ -25,6 +25,7 @@ ADDED:
 CHANGED:
 - `crates/media_panel` now computes media-kind counts once per render and shares them with the tab strip and status label, avoiding repeated local/static/remote asset scans.
 - `crates/media_panel` now caches local media-kind counts when the media index loads and reuses them for empty-search local totals.
+- `crates/media_panel` now matches remote media rows by reference and clones only rows that are actually shown.
 - `crates/media_panel` now skips remote media search-string construction when the query is empty, reducing idle render work while browsing live provider rows.
 - `crates/media_panel` now skips local media search matching when the query is empty, reducing idle render work while browsing large project media indexes.
 - `crates/media_panel` now reads and normalizes the panel search query once per render before remote loading and local/remote matching.

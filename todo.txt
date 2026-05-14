@@ -1,5 +1,5 @@
 IN PROGRESS:
-- Media panel cached local kind counts/local and remote empty-search fast paths/render-level query reuse/search-term reuse, Font panel bounded empty-search row collection/shared source-count caching/render-level query reuse/search-term reuse, UI panel bounded empty-search row collection/filter-count caching/cached catalog source counts/render-level query reuse/search hot-path caching/search-term reuse/cache-hit key reuse/lazy drag payloads, Icon panel selected-set empty-search fast path/render-level query reuse/search-term reuse, embedded icon representative SVG bodies, expanded remote Media panel result windows, Font panel source-aware actions, UI screenshot thumbnail warming, full visible-grid icon representative preview prewarming, and Cleveland direct remote media support are code-complete by inspection; awaiting manual Zed panel QA.
+- Media panel cached local kind counts/local and remote empty-search fast paths/render-level query reuse/search-term reuse/borrowed remote matching, Font panel bounded empty-search row collection/shared source-count caching/render-level query reuse/search-term reuse, UI panel bounded empty-search row collection/filter-count caching/cached catalog source counts/render-level query reuse/search hot-path caching/search-term reuse/cache-hit key reuse/lazy drag payloads, Icon panel selected-set empty-search fast path/render-level query reuse/search-term reuse, embedded icon representative SVG bodies, expanded remote Media panel result windows, Font panel source-aware actions, UI screenshot thumbnail warming, full visible-grid icon representative preview prewarming, and Cleveland direct remote media support are code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
 - User manual check that Iconify alias icons with hFlip, vFlip, or rotate metadata, such as arrow-right/arrow-down style aliases, preview and insert with the correct orientation.
@@ -54,6 +54,7 @@ PENDING:
 - User manual check that Media panel render reads and normalizes the search query once before remote load, local matching, and remote matching.
 - User manual check that Media panel non-empty searches split query terms once per render instead of once per local or remote media row.
 - User manual check that Media panel local media kind counts are cached when the index loads and reused for empty-search totals.
+- User manual check that Media panel remote matching does not clone every remote row before filtering and deduping.
 - User manual check that browsing the Media panel with an empty search no longer builds lowercase search strings for every remote provider row on each render.
 - User manual check that browsing the Media panel with an empty search no longer runs local media search matching for every indexed project media file on each render.
 - User manual check that Media panel kind tabs keep correct counts while avoiding repeated local/static/remote asset scans for each tab on every render.

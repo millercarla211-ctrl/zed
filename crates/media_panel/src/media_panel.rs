@@ -487,14 +487,13 @@ impl MediaPanel {
 
         for asset in remote_media_assets()
             .iter()
-            .cloned()
-            .chain(self.remote_assets.iter().cloned())
+            .chain(self.remote_assets.iter())
         {
             if !kind_filter.matches(asset.kind) {
                 continue;
             }
 
-            if !seen_urls.insert(asset.url.to_string()) {
+            if !seen_urls.insert(asset.url.as_ref()) {
                 continue;
             }
 
@@ -515,7 +514,7 @@ impl MediaPanel {
 
             match_count += 1;
             if visible_assets.len() < limit {
-                visible_assets.push(asset);
+                visible_assets.push(asset.clone());
             }
         }
 
