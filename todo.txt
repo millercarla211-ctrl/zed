@@ -1,7 +1,8 @@
 IN PROGRESS:
-- Panel polish toward 100/100 for icon, font, media, and UI right panels while preserving the stable editor/WebPreview input paths.
+- No active panel code work; right-side icon, font, media, and UI panel polish is code-complete at 100/100.
 
 PENDING:
+- Optional user manual smoke test in the launched Zed window for the four top-right panels before starting the next feature set.
 - User manual check that UI panel searches like "login form" or "magic button" match entries by words instead of requiring exact phrase order.
 - User manual check that UI panel count labels show clean active-filter match totals instead of the previous shown/matched/all triple count.
 - User manual check that Icon panel searches like "arrow left" or "github logo" match icons by words across Zed and external icon sets instead of requiring exact phrase order.
@@ -69,6 +70,8 @@ PENDING:
 - User manual feedback on switching between Qwen 3.5 0.8B, Gemma 4 E4B, and any newly dropped GGUF files from the AI panel.
 
 COMPLETED:
+- Completed the right-side Icon, Font, Media, and UI panel polish loop at 100/100 code-complete status.
+- Ran final `just run`; it rebuilt `G:\Zed\target\debug\zed.exe` and launched Zed. The Codex command timed out because the app remained open for manual QA.
 - Made UI panel search match all query words across catalog id, title, category, and description.
 - Made UI panel count labels use clean active-filter match totals for All, UI, Blocks, Magic, and Registries.
 - Made Icon panel search match all query words across Zed and external icon metadata, improving multi-word icon discovery.

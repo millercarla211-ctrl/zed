@@ -1,3 +1,13 @@
+[2026-05-14] - Right Panel Polish Completion
+
+CHANGED:
+- `todo.txt` now marks the right-side Icon, Font, Media, and UI panel polish loop as 100/100 code-complete.
+
+NOTES:
+- Ran final `just run`; the debug binary at `G:\Zed\target\debug\zed.exe` was rebuilt and Zed launched successfully.
+- The Codex command timed out because the launched Zed app remained open for manual QA, with process `zed` still running afterward.
+- Existing untracked local logs, inspiration clones, `models`, and `tools` were preserved.
+
 [2026-05-14] - UI Panel Search And Counts
 
 CHANGED:
