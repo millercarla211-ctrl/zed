@@ -1,3 +1,11 @@
+[2026-05-15] - UI Registry Row Preallocation
+
+CHANGED:
+- `crates/shadcn_ui_panel` now builds community registry catalog rows into a preallocated buffer sized from the hardcoded registry directory.
+
+NOTES:
+- Preserved registry row contents, ordering, source filters, install command text, and editor/WebPreview input behavior.
+
 [2026-05-15] - UI Catalog Cache Load Preallocation
 
 CHANGED:

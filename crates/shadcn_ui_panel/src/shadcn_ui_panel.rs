@@ -1991,25 +1991,24 @@ fn magic(
 }
 
 fn registry_directory_items() -> Vec<CatalogItem> {
-    registry_directory::COMMUNITY_REGISTRIES
-        .iter()
-        .map(|registry| {
-            let name = registry.name.trim_start_matches('@');
-            let _registry_description = registry.description;
-            CatalogItem {
-                id: format!("registry-{name}").into(),
-                title: registry.name.into(),
-                description: "External UI registry".into(),
-                category: "registry".into(),
-                source: CatalogSource::CommunityRegistry,
-                source_path: registry.homepage.into(),
-                target_file_name: registry.name.into(),
-                import_statement: format!("npx shadcn@latest add {}/<component>", registry.name)
-                    .into(),
-                jsx: registry.url.into(),
-            }
-        })
-        .collect()
+    let registries = registry_directory::COMMUNITY_REGISTRIES;
+    let mut items = Vec::with_capacity(registries.len());
+    items.extend(registries.iter().map(|registry| {
+        let name = registry.name.trim_start_matches('@');
+        let _registry_description = registry.description;
+        CatalogItem {
+            id: format!("registry-{name}").into(),
+            title: registry.name.into(),
+            description: "External UI registry".into(),
+            category: "registry".into(),
+            source: CatalogSource::CommunityRegistry,
+            source_path: registry.homepage.into(),
+            target_file_name: registry.name.into(),
+            import_statement: format!("npx shadcn@latest add {}/<component>", registry.name).into(),
+            jsx: registry.url.into(),
+        }
+    }));
+    items
 }
 
 fn twenty_first_items() -> Vec<CatalogItem> {
