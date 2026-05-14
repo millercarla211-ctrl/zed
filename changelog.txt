@@ -8,6 +8,7 @@ ADDED:
 - `crates/shadcn_ui_panel` now reuses available local shadcn screenshot assets as panel row thumbnails, with a small in-memory lookup cache.
 - `crates/media_panel` now fetches The Met public-domain image results directly through its no-key collection API.
 - `crates/media_panel` now fetches direct NASA video and audio assets by resolving NASA collection manifests into playable media files.
+- `crates/media_panel` generated remote-browser pages now search Art Institute and The Met no-key APIs and resolve NASA audio/video manifests to playable files.
 
 CHANGED:
 - `crates/icon_picker` now renders real external SVG previews in the default All sets grid instead of falling back to pack-letter badges.

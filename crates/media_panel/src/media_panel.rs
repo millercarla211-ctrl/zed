@@ -2166,8 +2166,8 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
       </article>`;
 
     async function searchOpenverse(query, type) {{
-      if (type === "audio") return [];
-      const endpoint = type === "video" ? "videos" : "images";
+      if (type === "video") return [];
+      const endpoint = type === "audio" ? "audio" : "images";
       const response = await fetch(`https://api.openverse.org/v1/${{endpoint}}/?q=${{encodeURIComponent(query)}}&page_size=30`);
       const json = await response.json();
       return (json.results || []).map((item) => ({{
@@ -2182,11 +2182,11 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
     }}
 
     async function searchNasa(query, type) {{
-      if (type === "audio") return [];
-      const media = type === "video" ? "video" : "image";
+      const media = type === "video" ? "video" : type === "audio" ? "audio" : "image";
       const response = await fetch(`https://images-api.nasa.gov/search?q=${{encodeURIComponent(query)}}&media_type=${{media}}`);
       const json = await response.json();
-      return ((json.collection || {{}}).items || []).slice(0, 24).map((item) => {{
+      const items = ((json.collection || {{}}).items || []).slice(0, 18);
+      if (media === "image") return items.map((item) => {{
         const link = (item.links || [])[0] || {{}};
         const data = (item.data || [])[0] || {{}};
         return {{
@@ -2199,6 +2199,44 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
           kind: media,
         }};
       }}).filter((item) => item.url);
+      const resolved = await Promise.all(items.map(async (item) => {{
+        const data = (item.data || [])[0] || {{}};
+        const files = await fetch(item.href).then((response) => response.json()).catch(() => []);
+        const url = bestNasaMediaUrl(files, media);
+        const link = (item.links || [])[0] || {{}};
+        return url ? {{
+          provider: "NASA",
+          title: data.title,
+          url,
+          thumbnail: link.href,
+          source: item.href,
+          license: "NASA",
+          kind: media,
+        }} : null;
+      }}));
+      return resolved.filter(Boolean);
+    }}
+
+    function bestNasaMediaUrl(files, media) {{
+      const candidates = (files || [])
+        .filter((url) => media === "video" ? /\.mp4$/i.test(url) : /\.(mp3|m4a)$/i.test(url))
+        .map((url) => url.replace("http://images-assets.nasa.gov", "https://images-assets.nasa.gov"));
+      const rank = (url) => {{
+        const lower = url.toLowerCase();
+        if (media === "video") {{
+          if (lower.includes("~preview.mp4")) return 0;
+          if (lower.includes("~small.mp4") || lower.includes("~mobile.mp4")) return 1;
+          if (lower.includes("~medium.mp4")) return 2;
+          if (!lower.includes("~orig")) return 3;
+          return 4;
+        }}
+        if (lower.includes("~128k.mp3")) return 0;
+        if (lower.includes("~64k.mp3")) return 1;
+        if (lower.endsWith(".mp3") && !lower.includes("~orig")) return 2;
+        if (lower.endsWith(".m4a")) return 3;
+        return 4;
+      }};
+      return candidates.sort((left, right) => rank(left) - rank(right))[0];
     }}
 
     async function searchWikimedia(query, type) {{
@@ -2231,15 +2269,50 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
       }}).filter((item) => item.url);
     }}
 
+    async function searchArtInstitute(query, type) {{
+      if (type !== "image") return [];
+      const response = await fetch(`https://api.artic.edu/api/v1/artworks/search?q=${{encodeURIComponent(query)}}&query%5Bterm%5D%5Bis_public_domain%5D=true&limit=30&fields=id,title,image_id,artist_display`);
+      const json = await response.json();
+      return (json.data || []).filter((item) => item.image_id).map((item) => ({{
+        provider: "Art Institute of Chicago",
+        title: item.title,
+        url: `https://www.artic.edu/iiif/2/${{item.image_id}}/full/843,/0/default.jpg`,
+        thumbnail: `https://www.artic.edu/iiif/2/${{item.image_id}}/full/400,/0/default.jpg`,
+        source: `https://www.artic.edu/artworks/${{item.id}}`,
+        license: "public domain",
+        kind: "image",
+      }}));
+    }}
+
+    async function searchMet(query, type) {{
+      if (type !== "image") return [];
+      const search = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=${{encodeURIComponent(query)}}`).then((response) => response.json());
+      const ids = (search.objectIDs || []).slice(0, 18);
+      const objects = await Promise.all(ids.map((id) =>
+        fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${{id}}`).then((response) => response.json()).catch(() => null)
+      ));
+      return objects.filter((item) => item && item.isPublicDomain && item.primaryImageSmall).map((item) => ({{
+        provider: "The Met",
+        title: item.title,
+        url: item.primaryImageSmall,
+        thumbnail: item.primaryImageSmall,
+        source: item.objectURL || item.primaryImageSmall,
+        license: "public domain / open access",
+        kind: "image",
+      }}));
+    }}
+
     async function runSearch() {{
       const query = queryInput.value.trim() || "creative workspace";
       const type = typeInput.value;
-      status.textContent = "Searching Openverse, Wikimedia, and NASA...";
+      status.textContent = "Searching Openverse, Wikimedia, NASA, Art Institute, and The Met...";
       grid.innerHTML = "";
       const settled = await Promise.allSettled([
         searchOpenverse(query, type),
         searchWikimedia(query, type),
         searchNasa(query, type),
+        searchArtInstitute(query, type),
+        searchMet(query, type),
       ]);
       const items = settled.flatMap((result) => result.status === "fulfilled" ? result.value : []);
       grid.innerHTML = items.map(card).join("");
