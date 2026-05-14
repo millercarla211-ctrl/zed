@@ -1,3 +1,11 @@
+[2026-05-15] - Font Sort Key Caching
+
+CHANGED:
+- `crates/font_panel` now sorts system font names with cached lowercase keys, avoiding repeated lowercase allocation during font list sorting.
+
+NOTES:
+- Preserved Font panel source filters, Google font rows, selected-row actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Icon Alias Transform Allocation Cleanup
 
 CHANGED:

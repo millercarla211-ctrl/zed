@@ -255,7 +255,7 @@ impl FontPanel {
     }
 
     fn sort_fonts(mut fonts: Vec<SharedString>) -> Vec<SharedString> {
-        fonts.sort_by_key(|font| font.as_ref().to_lowercase());
+        fonts.sort_by_cached_key(|font| font.as_ref().to_lowercase());
         fonts.dedup();
         fonts
     }
