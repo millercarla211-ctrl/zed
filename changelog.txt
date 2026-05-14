@@ -1,3 +1,11 @@
+[2026-05-15] - Media Art Provider Buffer Preallocation
+
+CHANGED:
+- `crates/media_panel` now builds Library of Congress, Art Institute, and Cleveland Art image provider results into preallocated buffers instead of relying on final iterator collection.
+
+NOTES:
+- Preserved provider URLs, filtering behavior, result order, labels, licenses, tags, thumbnails, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media Provider Result Buffer Preallocation
 
 CHANGED:

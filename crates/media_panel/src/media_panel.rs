@@ -2099,28 +2099,29 @@ async fn fetch_library_of_congress_images(
     );
     let response: LibraryOfCongressResponse = fetch_json(http_client, &url).await?;
 
-    Ok(response
-        .results
-        .into_iter()
-        .filter_map(|item| {
-            let url = item
-                .image_url
-                .into_iter()
-                .rev()
-                .find(|url| url.starts_with("https://"))?;
-            let label = clean_remote_label(item.title.as_deref().unwrap_or("Library image"));
-            let source = item.url.unwrap_or_default();
-            Some(RemoteMediaAsset::owned(
-                remote_asset_id("LOC", &url),
-                label,
-                "Library of Congress",
-                url,
-                DraggedMediaKind::Image,
-                "public domain / rights vary".to_string(),
-                source,
-            ))
-        })
-        .collect())
+    let mut assets = Vec::with_capacity(response.results.len());
+    for item in response.results {
+        let Some(url) = item
+            .image_url
+            .into_iter()
+            .rev()
+            .find(|url| url.starts_with("https://"))
+        else {
+            continue;
+        };
+        let label = clean_remote_label(item.title.as_deref().unwrap_or("Library image"));
+        let source = item.url.unwrap_or_default();
+        assets.push(RemoteMediaAsset::owned(
+            remote_asset_id("LOC", &url),
+            label,
+            "Library of Congress",
+            url,
+            DraggedMediaKind::Image,
+            "public domain / rights vary".to_string(),
+            source,
+        ));
+    }
+    Ok(assets)
 }
 
 async fn fetch_art_institute_images(
@@ -2133,24 +2134,24 @@ async fn fetch_art_institute_images(
     );
     let response: ArtInstituteResponse = fetch_json(http_client, &url).await?;
 
-    Ok(response
-        .data
-        .into_iter()
-        .filter_map(|item| {
-            let image_id = item.image_id?;
-            let url = format!("https://www.artic.edu/iiif/2/{image_id}/full/843,/0/default.jpg");
-            let label = clean_remote_label(item.title.as_deref().unwrap_or("Art Institute image"));
-            Some(RemoteMediaAsset::owned(
-                remote_asset_id("ArtInstitute", &item.id.to_string()),
-                label,
-                "Art Institute of Chicago",
-                url,
-                DraggedMediaKind::Image,
-                "public domain".to_string(),
-                item.artist_display.unwrap_or_default(),
-            ))
-        })
-        .collect())
+    let mut assets = Vec::with_capacity(response.data.len());
+    for item in response.data {
+        let Some(image_id) = item.image_id else {
+            continue;
+        };
+        let url = format!("https://www.artic.edu/iiif/2/{image_id}/full/843,/0/default.jpg");
+        let label = clean_remote_label(item.title.as_deref().unwrap_or("Art Institute image"));
+        assets.push(RemoteMediaAsset::owned(
+            remote_asset_id("ArtInstitute", &item.id.to_string()),
+            label,
+            "Art Institute of Chicago",
+            url,
+            DraggedMediaKind::Image,
+            "public domain".to_string(),
+            item.artist_display.unwrap_or_default(),
+        ));
+    }
+    Ok(assets)
 }
 
 async fn fetch_cleveland_art_images(
@@ -2163,41 +2164,44 @@ async fn fetch_cleveland_art_images(
     );
     let response: ClevelandArtResponse = fetch_json(http_client, &url).await?;
 
-    Ok(response
-        .data
-        .into_iter()
-        .filter_map(|item| {
-            let images = item.images?;
-            let image_url = images
-                .web
-                .as_ref()
-                .and_then(|image| image.url.clone())
-                .or_else(|| images.print.as_ref().and_then(|image| image.url.clone()))?;
-            let mut tags = String::new();
-            let mut is_first_tag = true;
-            for tag in item
-                .creators
-                .unwrap_or_default()
-                .into_iter()
-                .filter_map(|creator| creator.description)
-                .chain(item.department)
-                .chain(item.collection)
-            {
-                push_remote_tag(&mut tags, &mut is_first_tag, tag.as_str());
-            }
+    let mut assets = Vec::with_capacity(response.data.len());
+    for item in response.data {
+        let Some(images) = item.images else {
+            continue;
+        };
+        let Some(image_url) = images
+            .web
+            .as_ref()
+            .and_then(|image| image.url.clone())
+            .or_else(|| images.print.as_ref().and_then(|image| image.url.clone()))
+        else {
+            continue;
+        };
+        let mut tags = String::new();
+        let mut is_first_tag = true;
+        for tag in item
+            .creators
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|creator| creator.description)
+            .chain(item.department)
+            .chain(item.collection)
+        {
+            push_remote_tag(&mut tags, &mut is_first_tag, tag.as_str());
+        }
 
-            Some(RemoteMediaAsset::owned_with_thumbnail(
-                remote_asset_id("ClevelandMuseum", &item.id.to_string()),
-                clean_remote_label(item.title.as_deref().unwrap_or("Cleveland artwork")),
-                "Cleveland Museum of Art",
-                image_url.clone(),
-                Some(image_url),
-                DraggedMediaKind::Image,
-                "CC0".to_string(),
-                tags,
-            ))
-        })
-        .collect())
+        assets.push(RemoteMediaAsset::owned_with_thumbnail(
+            remote_asset_id("ClevelandMuseum", &item.id.to_string()),
+            clean_remote_label(item.title.as_deref().unwrap_or("Cleveland artwork")),
+            "Cleveland Museum of Art",
+            image_url.clone(),
+            Some(image_url),
+            DraggedMediaKind::Image,
+            "CC0".to_string(),
+            tags,
+        ));
+    }
+    Ok(assets)
 }
 
 async fn fetch_met_museum_images(
