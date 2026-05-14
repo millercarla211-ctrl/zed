@@ -263,8 +263,36 @@ impl FontPanel {
     }
 
     fn matching_fonts(&self, query: &str, limit: usize) -> (Vec<FontEntry>, usize) {
-        let query_terms = query.split_whitespace().collect::<Vec<_>>();
         let source_filter = self.source_filter;
+        if query.is_empty() {
+            let total_count = FontSourceCounts::from_panel(self).count(source_filter);
+            let mut visible_fonts = Vec::new();
+
+            if source_filter.matches(FontSource::System) {
+                visible_fonts.extend(self.fonts.iter().take(limit).cloned().map(|name| {
+                    FontEntry {
+                        name,
+                        source: FontSource::System,
+                    }
+                }));
+            }
+
+            if visible_fonts.len() < limit && source_filter.matches(FontSource::Web) {
+                visible_fonts.extend(
+                    google_fonts::GOOGLE_FONT_FAMILIES
+                        .iter()
+                        .take(limit - visible_fonts.len())
+                        .map(|font_name| FontEntry {
+                            name: (*font_name).into(),
+                            source: FontSource::Web,
+                        }),
+                );
+            }
+
+            return (visible_fonts, total_count);
+        }
+
+        let query_terms = query.split_whitespace().collect::<Vec<_>>();
         let mut visible_fonts = Vec::new();
         let mut match_count = 0;
         let mut exact_match = false;

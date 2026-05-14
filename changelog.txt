@@ -28,6 +28,7 @@ CHANGED:
 - `crates/media_panel` now skips local media search matching when the query is empty, reducing idle render work while browsing large project media indexes.
 - `crates/media_panel` now reads and normalizes the panel search query once per render before remote loading and local/remote matching.
 - `crates/font_panel` now skips per-font lowercase search text construction when the font query is empty, making idle browsing of system and Google fonts cheaper.
+- `crates/font_panel` now uses a bounded empty-search row collection path and derives totals from source counts instead of walking every Google font on idle renders.
 - `crates/font_panel` now computes source counts once per render and shares them between the tab strip and header total label.
 - `crates/font_panel` now reuses split search terms across font rows instead of splitting the same query for every font candidate.
 - `crates/icon_picker`, `crates/media_panel`, and `crates/shadcn_ui_panel` now reuse split search terms across candidate rows instead of splitting the same query for every visible/searchable item.
@@ -35,6 +36,7 @@ CHANGED:
 - `crates/icon_picker` now uses a direct selected-set fast path for empty searches in Zed or external icon packs instead of running generic search matching.
 - `crates/shadcn_ui_panel` now computes UI filter counts once per render and shares them with the tab strip and status label, avoiding repeated per-tab catalog scans.
 - `crates/shadcn_ui_panel` now caches catalog source counts with the loaded catalog, avoiding a full catalog count scan on every render.
+- `crates/shadcn_ui_panel` now uses a bounded empty-search row collection path and cached filter counts instead of scanning the full UI catalog on idle renders.
 - `crates/shadcn_ui_panel` now builds drag payloads only for draggable source-owned rows, avoiding wasted row-render work for registry and 21st.dev docs entries.
 - `crates/shadcn_ui_panel` now skips search-text construction when the UI query is empty and caches per-entry lowercase search text for non-empty searches, reducing render work while the panel is open.
 - `crates/shadcn_ui_panel` now reads the panel search query once per render before matching catalog entries.

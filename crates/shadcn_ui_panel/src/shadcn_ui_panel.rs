@@ -317,8 +317,20 @@ impl ShadcnUiPanel {
     }
 
     fn matching_items(&self, query: &str, limit: usize) -> (Vec<CatalogItem>, usize) {
-        let query_terms = query.split_whitespace().collect::<Vec<_>>();
         let source_filter = self.source_filter;
+        if query.is_empty() {
+            let total_count = self.filter_counts.count(source_filter);
+            let visible_items = self
+                .items
+                .iter()
+                .filter(|item| source_filter.matches(item.source))
+                .take(limit)
+                .cloned()
+                .collect();
+            return (visible_items, total_count);
+        }
+
+        let query_terms = query.split_whitespace().collect::<Vec<_>>();
         let mut visible_items = Vec::new();
         let mut match_count = 0;
 
