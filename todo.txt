@@ -1,5 +1,5 @@
 IN PROGRESS:
-- Media panel kind-count caching/local and remote empty-search fast paths/render-level query reuse/search-term reuse, Font panel empty-search fast path/shared source-count caching/render-level query reuse/search-term reuse, UI panel filter-count caching/cached catalog source counts/render-level query reuse/search hot-path caching/search-term reuse/lazy drag payloads, Icon panel selected-set empty-search fast path/render-level query reuse/search-term reuse, embedded icon representative SVG bodies, expanded remote Media panel result windows, Font panel source-aware actions, UI screenshot thumbnail warming, full visible-grid icon representative preview prewarming, and Cleveland direct remote media support are code-complete by inspection; awaiting manual Zed panel QA.
+- Media panel kind-count caching/local and remote empty-search fast paths/render-level query reuse/search-term reuse, Font panel empty-search fast path/shared source-count caching/render-level query reuse/search-term reuse, UI panel filter-count caching/cached catalog source counts/render-level query reuse/search hot-path caching/search-term reuse/cache-hit key reuse/lazy drag payloads, Icon panel selected-set empty-search fast path/render-level query reuse/search-term reuse, embedded icon representative SVG bodies, expanded remote Media panel result windows, Font panel source-aware actions, UI screenshot thumbnail warming, full visible-grid icon representative preview prewarming, and Cleveland direct remote media support are code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
 - User manual check that Iconify alias icons with hFlip, vFlip, or rotate metadata, such as arrow-right/arrow-down style aliases, preview and insert with the correct orientation.
@@ -34,6 +34,7 @@ PENDING:
 - User manual check that UI panel filter tabs keep correct counts while avoiding repeated per-tab catalog scans on every render.
 - User manual check that UI panel source counts are cached with the loaded catalog instead of rescanning the entire catalog on every render.
 - User manual check that UI panel registry/21st.dev rows do not build drag payloads during render because they are open/docs-only entries.
+- User manual check that UI panel cached search-text hits no longer allocate per-row cache keys while scrolling or filtering.
 - User manual check that UI panel count labels show clean active-filter match totals instead of the previous shown/matched/all triple count.
 - User manual check that Icon panel searches like "arrow left" or "github logo" match icons by words across Zed and external icon sets instead of requiring exact phrase order.
 - User manual check that Icon panel render reads the search query once before data loading, filtering, and count-label formatting.

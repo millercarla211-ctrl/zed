@@ -344,8 +344,12 @@ impl ShadcnUiPanel {
     }
 
     fn catalog_search_text(&self, item: &CatalogItem) -> SharedString {
-        let key = item.id.to_string();
-        if let Some(search_text) = self.search_text_cache.borrow().get(&key).cloned() {
+        if let Some(search_text) = self
+            .search_text_cache
+            .borrow()
+            .get(item.id.as_ref())
+            .cloned()
+        {
             return search_text;
         }
 
@@ -359,7 +363,7 @@ impl ShadcnUiPanel {
         .into();
         self.search_text_cache
             .borrow_mut()
-            .insert(key, search_text.clone());
+            .insert(item.id.to_string(), search_text.clone());
         search_text
     }
 

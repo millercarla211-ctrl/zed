@@ -38,6 +38,7 @@ CHANGED:
 - `crates/shadcn_ui_panel` now builds drag payloads only for draggable source-owned rows, avoiding wasted row-render work for registry and 21st.dev docs entries.
 - `crates/shadcn_ui_panel` now skips search-text construction when the UI query is empty and caches per-entry lowercase search text for non-empty searches, reducing render work while the panel is open.
 - `crates/shadcn_ui_panel` now reads the panel search query once per render before matching catalog entries.
+- `crates/shadcn_ui_panel` now looks up cached catalog search text by borrowed item id and only allocates cache keys when a row is first cached.
 - `crates/font_panel` now reads the panel search query once per render before matching system and Google fonts.
 - `crates/icon_picker` now checks the embedded representative icon body index before loading full pack body JSON, reducing cold icon preview work for the default All sets grid.
 - `crates/media_panel` now uses larger bounded result windows for live no-key provider searches and the generated remote media browser, while keeping Wikimedia at a safe anonymous API limit and switching native Openverse requests to the current `api.openverse.org` endpoint.
