@@ -2,6 +2,8 @@ IN PROGRESS:
 - Panel polish toward 100/100 for icon, font, media, and UI right panels while preserving the stable editor/WebPreview input paths.
 
 PENDING:
+- User manual check that UI panel searches like "login form" or "magic button" match entries by words instead of requiring exact phrase order.
+- User manual check that UI panel count labels show clean active-filter match totals instead of the previous shown/matched/all triple count.
 - User manual check that Icon panel searches like "arrow left" or "github logo" match icons by words across Zed and external icon sets instead of requiring exact phrase order.
 - User manual check that Icon panel count labels show total matches for search results and that the All sets tab uses static hardcoded pack totals before the external catalog is fully loaded.
 - User manual check that Font panel searches like "inter tight" or "source code" match fonts by words instead of requiring exact phrase order.
@@ -67,6 +69,8 @@ PENDING:
 - User manual feedback on switching between Qwen 3.5 0.8B, Gemma 4 E4B, and any newly dropped GGUF files from the AI panel.
 
 COMPLETED:
+- Made UI panel search match all query words across catalog id, title, category, and description.
+- Made UI panel count labels use clean active-filter match totals for All, UI, Blocks, Magic, and Registries.
 - Made Icon panel search match all query words across Zed and external icon metadata, improving multi-word icon discovery.
 - Made Icon panel counts use active selection/search totals, and made the All sets tab use the static pack totals before the full external catalog is loaded.
 - Made Font panel search match all query words across system and Google fonts so multi-word font discovery is more forgiving.

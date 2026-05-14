@@ -269,20 +269,14 @@ impl ShadcnUiPanel {
                 continue;
             }
 
-            if !query.is_empty()
-                && !item.id.as_ref().to_lowercase().contains(query.as_str())
-                && !item.title.as_ref().to_lowercase().contains(query.as_str())
-                && !item
-                    .category
-                    .as_ref()
-                    .to_lowercase()
-                    .contains(query.as_str())
-                && !item
-                    .description
-                    .as_ref()
-                    .to_lowercase()
-                    .contains(query.as_str())
-            {
+            let searchable = format!(
+                "{} {} {} {}",
+                item.id.as_ref().to_lowercase(),
+                item.title.as_ref().to_lowercase(),
+                item.category.as_ref().to_lowercase(),
+                item.description.as_ref().to_lowercase()
+            );
+            if !catalog_search_matches(searchable.as_str(), query.as_str()) {
                 continue;
             }
 
@@ -691,8 +685,7 @@ impl Render for ShadcnUiPanel {
         self.ensure_catalog_loaded(cx);
         let (items, total_matches) = self.matching_items(cx, MAX_SHADCN_ROWS);
         let is_empty = total_matches == 0;
-        let shown_count = items.len();
-        let total_count = self.items.len();
+        let total_count = self.filtered_count(self.source_filter);
         let item_rows = items
             .iter()
             .cloned()
@@ -702,7 +695,7 @@ impl Render for ShadcnUiPanel {
             if self.loading_catalog {
                 "loading".into()
             } else {
-                format!("{shown_count} / {total_matches} / {total_count}").into()
+                format!("{total_matches} / {total_count}").into()
             }
         });
 
@@ -766,6 +759,12 @@ fn scroll_tab_handle(handle: &ScrollHandle, direction: f32) {
         next_x = px(0.);
     }
     handle.set_offset(point(next_x, current.y));
+}
+
+fn catalog_search_matches(searchable: &str, query: &str) -> bool {
+    query
+        .split_whitespace()
+        .all(|term| searchable.contains(term))
 }
 
 struct ShadcnDragPreview {

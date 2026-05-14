@@ -1,3 +1,12 @@
+[2026-05-14] - UI Panel Search And Counts
+
+CHANGED:
+- `crates/shadcn_ui_panel` now matches UI catalog searches by all query words across id, title, category, and description, so searches like `login form` and `magic button` do not require exact phrase order.
+- `crates/shadcn_ui_panel` now reports clean active-filter match totals instead of the previous shown/matched/all triple count.
+
+NOTES:
+- Preserved the static/rkyv catalog load path, install actions, generated previews, and WebPreview input behavior.
+
 [2026-05-14] - Icon Panel Search And Counts
 
 CHANGED:
