@@ -1467,7 +1467,7 @@ impl Item for TerminalView {
     }
 
     fn handle_drop(
-        &self,
+        &mut self,
         active_pane: &Pane,
         dropped: &dyn Any,
         window: &mut Window,

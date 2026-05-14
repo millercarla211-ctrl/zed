@@ -12,6 +12,7 @@ use gpui::{
 use gpui::{AsyncApp, EntityId, ImageFormat as GpuiImageFormat};
 use menu::Confirm;
 use paths::data_dir;
+use project::{Project, ProjectEntryId, ProjectPath};
 use serde_json::Value;
 use std::{
     cell::{Cell, RefCell},
@@ -28,7 +29,10 @@ use ui::{
     Color, ContextMenu, ContextMenuEntry, IconButton, IconName, IconSize, Label, LabelSize,
     PopoverMenu, Tooltip, prelude::*,
 };
-use workspace::item::{Item, ItemEvent, PaneTabBarControls, TabContentParams, WorkspaceScreenKind};
+use workspace::item::{
+    Item, ItemBufferKind, ItemEvent, PaneTabBarControls, ProjectItem as WorkspaceProjectItem,
+    ProjectItemKind, TabContentParams, WorkspaceScreenKind,
+};
 use workspace::notifications::NotificationId;
 use workspace::{NewWebPreview, Pane, Toast, Workspace, WorkspaceId};
 
@@ -74,6 +78,39 @@ struct DetectedExtension {
     path: PathBuf,
     icon_path: Option<PathBuf>,
     supports_chromium_loading: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PreviewFileKind {
+    Video,
+    Audio,
+    Document,
+}
+
+impl PreviewFileKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Video => "video",
+            Self::Audio => "audio",
+            Self::Document => "document",
+        }
+    }
+
+    fn icon(self) -> IconName {
+        match self {
+            Self::Video => IconName::PlayOutlined,
+            Self::Audio => IconName::AudioOn,
+            Self::Document => IconName::FileDoc,
+        }
+    }
+}
+
+pub struct WebPreviewFileItem {
+    project_path: ProjectPath,
+    entry_id: Option<ProjectEntryId>,
+    absolute_path: PathBuf,
+    title: SharedString,
+    kind: PreviewFileKind,
 }
 
 #[derive(Clone, Debug)]
@@ -219,6 +256,7 @@ pub struct WebPreviewView {
     workspace: WeakEntity<Workspace>,
     workspace_context: PreviewWorkspaceContext,
     focus_handle: FocusHandle,
+    project_item: Option<Entity<WebPreviewFileItem>>,
     url_editor: Entity<Editor>,
     url_editor_focus_handle: FocusHandle,
     url_editor_focus_requested: Rc<Cell<bool>>,
@@ -352,47 +390,67 @@ impl WebPreviewView {
         let weak_workspace = workspace.weak_handle();
 
         cx.new(|cx| {
-            let current_url = DEFAULT_WEB_PREVIEW_URL.to_string();
-            let url_editor = cx.new(|cx| {
-                let mut editor = Editor::single_line(window, cx);
-                editor.set_placeholder_text("Search Google or enter a URL", window, cx);
-                editor.set_text(current_url.as_str(), window, cx);
-                editor
-            });
-            let url_editor_focus_handle = url_editor.focus_handle(cx);
-
-            let browser_events = Arc::new(Mutex::new(Vec::new()));
-            let mut this = Self {
-                workspace: weak_workspace.clone(),
-                workspace_context: workspace_context.clone(),
-                focus_handle: cx.focus_handle(),
-                url_editor,
-                url_editor_focus_handle,
-                url_editor_focus_requested: Rc::new(Cell::new(false)),
-                page_title: None,
-                active_url: current_url.into(),
-                bookmarks: load_bookmarks(&workspace_context.profile_dir).unwrap_or_default(),
-                detected_extensions: Vec::new(),
-                extensions_scanned: false,
-                load_state: PreviewLoadState::Loading,
-                host_bounds: Rc::new(RefCell::new(None)),
-                #[cfg(target_os = "macos")]
-                last_applied_bounds: Rc::new(RefCell::new(None)),
-                native_mount_requested: Rc::new(Cell::new(false)),
-                browser_events,
-                deferred_ipc_messages: Vec::new(),
-                ipc_flush_scheduled: false,
-                event_pump_task: None,
-                native_mount_task: None,
-                zoom_factor: 1.0,
-                is_active_item: false,
-                #[cfg(any(target_os = "windows", target_os = "macos"))]
-                native_preview: Rc::new(RefCell::new(None)),
-                _subscriptions: vec![],
-            };
-            this.start_event_pump(window, cx);
-            this
+            Self::new_for_url(
+                weak_workspace.clone(),
+                workspace_context.clone(),
+                DEFAULT_WEB_PREVIEW_URL.to_string(),
+                None,
+                None,
+                window,
+                cx,
+            )
         })
+    }
+
+    fn new_for_url(
+        workspace: WeakEntity<Workspace>,
+        workspace_context: PreviewWorkspaceContext,
+        current_url: String,
+        title: Option<SharedString>,
+        project_item: Option<Entity<WebPreviewFileItem>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let url_editor = cx.new(|cx| {
+            let mut editor = Editor::single_line(window, cx);
+            editor.set_placeholder_text("Search Google or enter a URL", window, cx);
+            editor.set_text(current_url.as_str(), window, cx);
+            editor
+        });
+        let url_editor_focus_handle = url_editor.focus_handle(cx);
+
+        let browser_events = Arc::new(Mutex::new(Vec::new()));
+        let mut this = Self {
+            workspace,
+            workspace_context: workspace_context.clone(),
+            focus_handle: cx.focus_handle(),
+            project_item,
+            url_editor,
+            url_editor_focus_handle,
+            url_editor_focus_requested: Rc::new(Cell::new(false)),
+            page_title: title,
+            active_url: current_url.into(),
+            bookmarks: load_bookmarks(&workspace_context.profile_dir).unwrap_or_default(),
+            detected_extensions: Vec::new(),
+            extensions_scanned: false,
+            load_state: PreviewLoadState::Loading,
+            host_bounds: Rc::new(RefCell::new(None)),
+            #[cfg(target_os = "macos")]
+            last_applied_bounds: Rc::new(RefCell::new(None)),
+            native_mount_requested: Rc::new(Cell::new(false)),
+            browser_events,
+            deferred_ipc_messages: Vec::new(),
+            ipc_flush_scheduled: false,
+            event_pump_task: None,
+            native_mount_task: None,
+            zoom_factor: 1.0,
+            is_active_item: false,
+            #[cfg(any(target_os = "windows", target_os = "macos"))]
+            native_preview: Rc::new(RefCell::new(None)),
+            _subscriptions: vec![],
+        };
+        this.start_event_pump(window, cx);
+        this
     }
 
     fn start_event_pump(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -1814,27 +1872,117 @@ impl Focusable for WebPreviewView {
     }
 }
 
+impl project::ProjectItem for WebPreviewFileItem {
+    fn try_open(
+        project: &Entity<Project>,
+        path: &ProjectPath,
+        cx: &mut App,
+    ) -> Option<Task<Result<Entity<Self>>>> {
+        let (absolute_path, entry_id) = {
+            let project_ref = project.read(cx);
+            (
+                project_ref.absolute_path(path, cx)?,
+                project_ref.entry_for_path(path, cx).map(|entry| entry.id),
+            )
+        };
+        let kind = preview_file_kind_for_path(&absolute_path)?;
+        let title = absolute_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| kind.label())
+            .to_string();
+        let project_path = path.clone();
+
+        Some(Task::ready(Ok(cx.new(|_| Self {
+            project_path,
+            entry_id,
+            absolute_path,
+            title: title.into(),
+            kind,
+        }))))
+    }
+
+    fn entry_id(&self, _: &App) -> Option<ProjectEntryId> {
+        self.entry_id
+    }
+
+    fn project_path(&self, _: &App) -> Option<ProjectPath> {
+        Some(self.project_path.clone())
+    }
+
+    fn is_dirty(&self) -> bool {
+        false
+    }
+}
+
+impl WorkspaceProjectItem for WebPreviewView {
+    type Item = WebPreviewFileItem;
+
+    fn project_item_kind() -> Option<ProjectItemKind> {
+        Some(ProjectItemKind("WebPreviewMediaFile"))
+    }
+
+    fn for_project_item(
+        _project: Entity<Project>,
+        pane: Option<&Pane>,
+        item: Entity<Self::Item>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let preview_url = item
+            .read(cx)
+            .preview_url()
+            .unwrap_or_else(|| DEFAULT_WEB_PREVIEW_URL.to_string());
+        let title = Some(item.read(cx).title.clone());
+        let workspace = pane
+            .map(|pane| pane.workspace())
+            .unwrap_or_else(WeakEntity::new_invalid);
+        let workspace_context = workspace
+            .upgrade()
+            .map(|workspace| {
+                let workspace = workspace.read(cx);
+                Self::workspace_context(&workspace, cx)
+            })
+            .unwrap_or_else(|| PreviewWorkspaceContext {
+                workspace_id: None,
+                root_path: None,
+                root_name: "workspace".into(),
+                preview_key: "media-preview".into(),
+                profile_dir: data_dir().join("media-preview"),
+            });
+
+        Self::new_for_url(
+            workspace,
+            workspace_context,
+            preview_url,
+            title,
+            Some(item),
+            window,
+            cx,
+        )
+    }
+}
+
+impl WebPreviewFileItem {
+    fn preview_url(&self) -> Option<String> {
+        web_preview_file_url(&self.absolute_path, &self.title, self.kind)
+    }
+}
+
 impl Item for WebPreviewView {
     type Event = ItemEvent;
 
-    fn tab_content(&self, params: TabContentParams, window: &Window, cx: &App) -> AnyElement {
+    fn tab_content(&self, params: TabContentParams, window: &Window, _cx: &App) -> AnyElement {
         let editor_focused = params.selected
             && !self.native_preview_has_keyboard_focus(window)
             && (self.url_editor_focus_requested.get()
                 || self.url_editor_focus_handle.is_focused(window));
-        let border_color = if params.selected {
-            cx.theme().colors().element_active
-        } else {
-            gpui::transparent_black()
-        };
-
         div()
             .min_w_0()
             .h_full()
             .flex()
             .items_center()
-            .border_b_2()
-            .border_color(border_color)
             .child(if editor_focused {
                 div()
                     .w(px(240.))
@@ -1856,7 +2004,12 @@ impl Item for WebPreviewView {
     }
 
     fn tab_icon(&self, _window: &Window, _cx: &App) -> Option<ui::Icon> {
-        Some(ui::Icon::new(IconName::Public))
+        let icon = self
+            .project_item
+            .as_ref()
+            .map(|item| item.read(_cx).kind.icon())
+            .unwrap_or(IconName::Public);
+        Some(ui::Icon::new(icon))
     }
 
     fn tab_tooltip_text(&self, _cx: &App) -> Option<SharedString> {
@@ -1877,6 +2030,24 @@ impl Item for WebPreviewView {
 
     fn show_toolbar(&self) -> bool {
         false
+    }
+
+    fn buffer_kind(&self, _cx: &App) -> ItemBufferKind {
+        if self.project_item.is_some() {
+            ItemBufferKind::Singleton
+        } else {
+            ItemBufferKind::None
+        }
+    }
+
+    fn for_each_project_item(
+        &self,
+        cx: &App,
+        f: &mut dyn FnMut(EntityId, &dyn project::ProjectItem),
+    ) {
+        if let Some(item) = &self.project_item {
+            f(item.entity_id(), item.read(cx));
+        }
     }
 
     fn pane_tab_bar_controls(
@@ -1950,6 +2121,7 @@ impl Item for WebPreviewView {
                 workspace,
                 workspace_context,
                 focus_handle: cx.focus_handle(),
+                project_item: None,
                 url_editor,
                 url_editor_focus_handle,
                 url_editor_focus_requested: Rc::new(Cell::new(false)),
@@ -2402,6 +2574,181 @@ fn display_title_from_url(url: &str) -> String {
         })
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "Preview".to_string())
+}
+
+fn preview_file_kind_for_path(path: &Path) -> Option<PreviewFileKind> {
+    let extension = path.extension()?.to_str()?.to_lowercase();
+    match extension.as_str() {
+        "mp4" | "webm" | "mov" | "m4v" | "avi" | "mkv" => Some(PreviewFileKind::Video),
+        "mp3" | "wav" | "ogg" | "flac" | "m4a" | "aac" | "opus" => Some(PreviewFileKind::Audio),
+        "pdf" | "epub" | "mobi" | "azw" | "azw3" | "doc" | "docx" | "docm" | "dot" | "dotx"
+        | "dotm" | "odt" | "ott" | "rtf" | "pages" | "xls" | "xlsx" | "xlsm" | "xlsb" | "xlt"
+        | "xltx" | "ods" | "ots" | "numbers" | "csv" | "tsv" | "ppt" | "pptx" | "pptm" | "pps"
+        | "ppsx" | "odp" | "otp" | "key" => Some(PreviewFileKind::Document),
+        _ => None,
+    }
+}
+
+fn web_preview_file_url(path: &Path, title: &str, kind: PreviewFileKind) -> Option<String> {
+    let source_url = url::Url::from_file_path(path).ok()?.to_string();
+    let preview_dir = std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("G:/Zed"))
+        .join("target")
+        .join("web-preview-files");
+    fs::create_dir_all(&preview_dir).ok()?;
+    let preview_stem = {
+        let stem = slugify(title);
+        if stem.is_empty() {
+            "preview".to_string()
+        } else {
+            stem
+        }
+    };
+    let preview_path = preview_dir.join(format!("{}-{}.html", kind.label(), preview_stem));
+    fs::write(
+        &preview_path,
+        web_preview_file_html(title, kind, &source_url),
+    )
+    .ok()?;
+    url::Url::from_file_path(preview_path)
+        .ok()
+        .map(|url| url.to_string())
+}
+
+fn web_preview_file_html(title: &str, kind: PreviewFileKind, source_url: &str) -> String {
+    let title = escape_html(title);
+    let source = escape_attr(source_url);
+    let media = match kind {
+        PreviewFileKind::Video => {
+            format!(r#"<video class="viewer-media" src="{source}" controls autoplay></video>"#)
+        }
+        PreviewFileKind::Audio => {
+            format!(
+                r#"<div class="audio-shell"><div class="audio-disc"></div><h1>{title}</h1><audio class="viewer-audio" src="{source}" controls autoplay></audio></div>"#
+            )
+        }
+        PreviewFileKind::Document => {
+            format!(
+                r#"<iframe class="viewer-doc" src="{source}" title="{title}"></iframe><a class="doc-open" href="{source}">Open source</a>"#
+            )
+        }
+    };
+
+    format!(
+        r#"<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{title} - Zed preview</title>
+  <style>
+    :root {{
+      color-scheme: dark;
+      --background: #09090b;
+      --foreground: #f4f4f5;
+      --card: #101113;
+      --border: #27272a;
+      --accent: #3fb950;
+      --ring: rgba(63, 185, 80, .38);
+    }}
+    * {{ box-sizing: border-box; }}
+    html, body {{ height: 100%; }}
+    body {{
+      margin: 0;
+      background: var(--background);
+      color: var(--foreground);
+      font: 13px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
+    }}
+    .stage {{
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      background: #050506;
+    }}
+    .viewer-media {{
+      width: 100vw;
+      height: 100vh;
+      object-fit: contain;
+      background: #050506;
+      display: block;
+    }}
+    .audio-shell {{
+      width: min(760px, calc(100vw - 48px));
+      display: grid;
+      gap: 22px;
+      justify-items: center;
+      padding: 40px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--card) 92%, transparent);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, .34);
+    }}
+    .audio-disc {{
+      width: 128px;
+      aspect-ratio: 1;
+      border-radius: 999px;
+      background:
+        radial-gradient(circle at center, var(--background) 0 17%, transparent 18%),
+        conic-gradient(from 130deg, var(--accent), #6ee7b7, #64748b, var(--accent));
+      box-shadow: 0 0 0 1px var(--border), 0 0 60px var(--ring);
+    }}
+    h1 {{
+      margin: 0;
+      max-width: 100%;
+      font-size: 20px;
+      letter-spacing: 0;
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+    .viewer-audio {{ width: 100%; }}
+    .viewer-doc {{
+      width: 100vw;
+      height: 100vh;
+      border: 0;
+      background: var(--card);
+    }}
+    .doc-open {{
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      background: color-mix(in srgb, var(--card) 94%, transparent);
+      color: var(--accent);
+      text-decoration: none;
+    }}
+  </style>
+</head>
+<body>
+  <section class="stage">{media}</section>
+</body>
+</html>"#,
+    )
+}
+
+fn escape_html(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&#39;"),
+            _ => escaped.push(character),
+        }
+    }
+    escaped
+}
+
+fn escape_attr(text: &str) -> String {
+    escape_html(text)
 }
 
 fn normalized_url(raw: &str) -> Result<url::Url> {

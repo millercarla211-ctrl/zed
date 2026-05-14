@@ -11,9 +11,9 @@ use anyhow::Result;
 use client::{Client, proto};
 use futures::channel::mpsc;
 use gpui::{
-    Action, AnyElement, AnyEntity, AnyView, App, AppContext, Context, Entity, EntityId,
+    Action, AnyElement, AnyEntity, AnyView, App, AppContext, ClickEvent, Context, Entity, EntityId,
     EventEmitter, FocusHandle, Focusable, Font, Pixels, Point, Render, SharedString, Task, TaskExt,
-    ClickEvent, WeakEntity, Window,
+    WeakEntity, Window,
 };
 use language::Capability;
 pub use language::HighlightedText;
@@ -428,7 +428,7 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
     /// Called when the containing pane receives a drop on the item or the item's tab.
     /// Returns `true` to consume it and suppress the pane's default drop behavior.
     fn handle_drop(
-        &self,
+        &mut self,
         _active_pane: &Pane,
         _dropped: &dyn Any,
         _window: &mut Window,

@@ -1,0 +1,1086 @@
+use editor::{Editor, EditorEvent};
+use fs::Fs;
+use gpui::{
+    App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity, EventEmitter,
+    FocusHandle, Focusable, InteractiveElement, Pixels, Render, ScrollHandle, SharedString,
+    StatefulInteractiveElement, Subscription, WeakEntity, Window, actions, div, point, px,
+};
+use settings::{FontFamilyName, Settings};
+use std::{
+    fs as std_fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+use theme::FontFamilyCache;
+use theme_settings::ThemeSettings;
+use ui::{TintColor, Tooltip, prelude::*};
+use url::Url;
+use workspace::{
+    Workspace,
+    dock::{DockPosition, Panel, PanelEvent},
+};
+
+mod google_fonts;
+
+#[cfg(target_os = "windows")]
+use web_preview::web_preview_view::WebPreviewView;
+
+actions!(
+    font_panel,
+    [
+        /// Toggles the font panel.
+        Toggle,
+        /// Toggles focus on the font panel.
+        ToggleFocus,
+    ]
+);
+
+const FONT_PANEL_KEY: &str = "FontPanel";
+const MAX_FONT_RESULTS: usize = 160;
+
+pub fn init(cx: &mut App) {
+    cx.observe_new(|workspace: &mut Workspace, _, _| {
+        workspace.register_action(|workspace, _: &ToggleFocus, window, cx| {
+            workspace.toggle_panel_focus::<FontPanel>(window, cx);
+        });
+        workspace.register_action(|workspace, _: &Toggle, window, cx| {
+            if !workspace.toggle_panel_focus::<FontPanel>(window, cx) {
+                workspace.close_panel::<FontPanel>(window, cx);
+            }
+        });
+    })
+    .detach();
+}
+
+pub struct FontPanel {
+    workspace: WeakEntity<Workspace>,
+    fs: Arc<dyn Fs>,
+    filter_editor: Entity<Editor>,
+    fonts: Vec<SharedString>,
+    fonts_loaded: bool,
+    loading_fonts: bool,
+    source_filter: FontSourceFilter,
+    source_scroll_handle: ScrollHandle,
+    selected_font: Option<SharedString>,
+    selected_source: FontSource,
+    status: Option<SharedString>,
+    _subscriptions: Vec<Subscription>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FontSource {
+    System,
+    Web,
+}
+
+impl FontSource {
+    fn label(self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::Web => "web",
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FontSourceFilter {
+    All,
+    System,
+    Web,
+}
+
+impl FontSourceFilter {
+    fn matches(self, source: FontSource) -> bool {
+        match self {
+            Self::All => true,
+            Self::System => source == FontSource::System,
+            Self::Web => source == FontSource::Web,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::All => "All",
+            Self::System => "System",
+            Self::Web => "Web",
+        }
+    }
+}
+
+#[derive(Clone)]
+struct FontEntry {
+    name: SharedString,
+    source: FontSource,
+}
+
+#[derive(Clone)]
+struct WebFontSpec {
+    name: String,
+    family_query: String,
+    variable: String,
+}
+
+impl FontPanel {
+    pub async fn load(
+        workspace: WeakEntity<Workspace>,
+        mut cx: AsyncWindowContext,
+    ) -> anyhow::Result<Entity<Self>> {
+        workspace.update_in(&mut cx, |workspace, window, cx| {
+            Self::new(workspace, window, cx)
+        })
+    }
+
+    fn new(
+        workspace: &mut Workspace,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) -> Entity<Self> {
+        let fs = workspace.app_state().fs.clone();
+        let workspace_handle = cx.entity().downgrade();
+
+        cx.new(|cx| {
+            let filter_editor = cx.new(|cx| {
+                let mut editor = Editor::single_line(window, cx);
+                editor.set_placeholder_text("Search fonts...", window, cx);
+                editor
+            });
+
+            let filter_subscription = cx.subscribe_in(
+                &filter_editor,
+                window,
+                |panel: &mut Self, _, event, _, cx| {
+                    if matches!(event, EditorEvent::BufferEdited) {
+                        panel.status = None;
+                        cx.notify();
+                    }
+                },
+            );
+
+            let selected_font = Some(Self::current_buffer_font(cx));
+            let (fonts, fonts_loaded) = Self::cached_fonts(cx, selected_font.clone());
+
+            Self {
+                workspace: workspace_handle,
+                fs,
+                filter_editor,
+                fonts,
+                fonts_loaded,
+                loading_fonts: false,
+                source_filter: FontSourceFilter::All,
+                source_scroll_handle: ScrollHandle::new(),
+                selected_font,
+                selected_source: FontSource::System,
+                status: None,
+                _subscriptions: vec![filter_subscription],
+            }
+        })
+    }
+
+    fn ensure_system_fonts_loading(&mut self, cx: &mut Context<Self>) {
+        if self.fonts_loaded || self.loading_fonts {
+            return;
+        }
+
+        self.loading_fonts = true;
+        let font_family_cache = FontFamilyCache::global(cx);
+        cx.spawn(async move |panel, cx| {
+            font_family_cache.prefetch(cx).await;
+            panel
+                .update(cx, |panel, cx| {
+                    if let Some(fonts) = FontFamilyCache::global(cx).try_list_font_families() {
+                        panel.fonts = Self::sort_fonts(fonts);
+                        panel.fonts_loaded = true;
+                    }
+                    panel.loading_fonts = false;
+                    cx.notify();
+                })
+                .ok();
+        })
+        .detach();
+    }
+
+    fn current_buffer_font(cx: &App) -> SharedString {
+        ThemeSettings::get_global(cx).buffer_font.family.clone()
+    }
+
+    fn cached_fonts(cx: &App, selected_font: Option<SharedString>) -> (Vec<SharedString>, bool) {
+        match FontFamilyCache::global(cx).try_list_font_families() {
+            Some(fonts) => (Self::sort_fonts(fonts), true),
+            None => (selected_font.into_iter().collect(), false),
+        }
+    }
+
+    fn refresh_fonts_if_needed(&mut self, cx: &App) {
+        if self.fonts_loaded {
+            return;
+        }
+
+        let Some(fonts) = FontFamilyCache::global(cx).try_list_font_families() else {
+            return;
+        };
+        let fonts = Self::sort_fonts(fonts);
+        if self.fonts != fonts {
+            self.fonts = fonts;
+        }
+        self.fonts_loaded = true;
+    }
+
+    fn sort_fonts(mut fonts: Vec<SharedString>) -> Vec<SharedString> {
+        fonts.sort_by_key(|font| font.as_ref().to_lowercase());
+        fonts.dedup();
+        fonts
+    }
+
+    fn query(&self, cx: &App) -> String {
+        self.filter_editor.read(cx).text(cx).trim().to_lowercase()
+    }
+
+    fn sample_text(&self, _cx: &App) -> SharedString {
+        "The quick brown fox jumps over the lazy dog.".into()
+    }
+
+    fn matching_fonts(&self, cx: &App, limit: usize) -> (Vec<FontEntry>, usize) {
+        let query = self.query(cx);
+        let source_filter = self.source_filter;
+        let mut visible_fonts = Vec::new();
+        let mut match_count = 0;
+        let mut exact_match = false;
+
+        let mut push_font = |font: FontEntry| {
+            exact_match |= font.name.as_ref().eq_ignore_ascii_case(query.as_str());
+            if !query.is_empty() && !font.name.as_ref().to_lowercase().contains(query.as_str()) {
+                return;
+            }
+
+            match_count += 1;
+            if visible_fonts.len() < limit {
+                visible_fonts.push(font);
+            }
+        };
+
+        if source_filter.matches(FontSource::System) {
+            for font in &self.fonts {
+                push_font(FontEntry {
+                    name: font.clone(),
+                    source: FontSource::System,
+                });
+            }
+        }
+
+        if source_filter.matches(FontSource::Web) {
+            for font_name in google_fonts::GOOGLE_FONT_FAMILIES {
+                push_font(FontEntry {
+                    name: (*font_name).into(),
+                    source: FontSource::Web,
+                });
+            }
+        }
+
+        if !query.is_empty()
+            && source_filter.matches(FontSource::Web)
+            && !exact_match
+            && let Some(font_name) = custom_web_font_name(&query)
+        {
+            match_count += 1;
+            if visible_fonts.len() < limit {
+                visible_fonts.push(FontEntry {
+                    name: font_name.into(),
+                    source: FontSource::Web,
+                });
+            }
+        }
+
+        (visible_fonts, match_count)
+    }
+
+    fn filtered_count(&self, filter: FontSourceFilter) -> usize {
+        let system_count = if filter.matches(FontSource::System) {
+            self.fonts.len()
+        } else {
+            0
+        };
+        let web_count = if filter.matches(FontSource::Web) {
+            google_fonts::GOOGLE_FONT_FAMILIES.len()
+        } else {
+            0
+        };
+        system_count + web_count
+    }
+
+    fn render_source_filter_button(
+        &self,
+        filter: FontSourceFilter,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let selected = self.source_filter == filter;
+        let label = format!("{} {}", filter.label(), self.filtered_count(filter));
+        div().flex_none().child(
+            Button::new(format!("font-source-filter-{}", filter.label()), label)
+                .style(ButtonStyle::Subtle)
+                .size(ButtonSize::Compact)
+                .toggle_state(selected)
+                .selected_style(ButtonStyle::Tinted(TintColor::Accent))
+                .on_click(cx.listener(move |panel, _, _, cx| {
+                    panel.source_filter = filter;
+                    panel.status = None;
+                    cx.notify();
+                })),
+        )
+    }
+
+    fn select_font(&mut self, font: FontEntry, cx: &mut Context<Self>) {
+        self.selected_font = Some(font.name.clone());
+        self.selected_source = font.source;
+        self.status = Some(format!("Previewing {}", font.name.as_ref()).into());
+        cx.notify();
+    }
+
+    fn apply_selected_to_buffer(&mut self, cx: &mut Context<Self>) {
+        let Some(font) = self.selected_font.clone() else {
+            self.status = Some("Select a font first".into());
+            cx.notify();
+            return;
+        };
+
+        let font_name = font.to_string();
+        settings::update_settings_file(self.fs.clone(), cx, move |settings, _| {
+            settings.theme.buffer_font_family = Some(FontFamilyName(Arc::from(font_name.as_str())));
+        });
+
+        self.status = Some(format!("Editor font set to {}", font.as_ref()).into());
+        cx.notify();
+    }
+
+    fn apply_selected_to_ui(&mut self, cx: &mut Context<Self>) {
+        let Some(font) = self.selected_font.clone() else {
+            self.status = Some("Select a font first".into());
+            cx.notify();
+            return;
+        };
+
+        let font_name = font.to_string();
+        settings::update_settings_file(self.fs.clone(), cx, move |settings, _| {
+            settings.theme.ui_font_family = Some(FontFamilyName(Arc::from(font_name.as_str())));
+        });
+
+        self.status = Some(format!("UI font set to {}", font.as_ref()).into());
+        cx.notify();
+    }
+
+    fn add_selected_to_project(&mut self, cx: &mut Context<Self>) {
+        let Some(font) = self.selected_font.clone() else {
+            self.status = Some("Select a web font first".into());
+            cx.notify();
+            return;
+        };
+        if self.selected_source != FontSource::Web {
+            self.status = Some("Select a web font to add to the project".into());
+            cx.notify();
+            return;
+        };
+        let Some(web_font) = web_font_spec_by_name(font.as_ref()) else {
+            self.status = Some("Select a web font to add to the project".into());
+            cx.notify();
+            return;
+        };
+        let Some(root) = self.primary_worktree_root(cx) else {
+            self.status = Some("No project root found for font CSS".into());
+            cx.notify();
+            return;
+        };
+
+        match add_web_font_to_project(&root, &web_font) {
+            Ok(path) => {
+                self.status = Some(
+                    format!(
+                        "Added {} to {}",
+                        web_font.name.as_str(),
+                        path.to_string_lossy().replace('\\', "/")
+                    )
+                    .into(),
+                );
+            }
+            Err(error) => {
+                self.status = Some(format!("Failed to add font CSS: {error}").into());
+            }
+        }
+        cx.notify();
+    }
+
+    fn preview_selected_font(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(font) = self.selected_font.clone() else {
+            self.status = Some("Select a font first".into());
+            cx.notify();
+            return;
+        };
+        let web_font = (self.selected_source == FontSource::Web)
+            .then(|| web_font_spec_by_name(font.as_ref()))
+            .flatten();
+        let sample_text = self.sample_text(cx);
+        let Some(preview_url) = local_font_preview_url(
+            font.as_ref(),
+            self.selected_source,
+            web_font.as_ref(),
+            sample_text.as_ref(),
+        ) else {
+            self.status = Some("Could not create font preview".into());
+            cx.notify();
+            return;
+        };
+
+        #[cfg(target_os = "windows")]
+        {
+            let Some(workspace) = self.workspace.upgrade() else {
+                self.status = Some("No active workspace".into());
+                cx.notify();
+                return;
+            };
+
+            workspace.update(cx, |workspace, cx| {
+                WebPreviewView::open_url_in_active_pane(workspace, &preview_url, window, cx);
+            });
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            cx.open_url(&preview_url);
+        }
+
+        self.status = Some(format!("Previewing {} in WebPreview", font.as_ref()).into());
+        cx.notify();
+    }
+
+    fn copy_selected_css(&mut self, cx: &mut Context<Self>) {
+        let Some(font) = self.selected_font.clone() else {
+            self.status = Some("Select a font first".into());
+            cx.notify();
+            return;
+        };
+
+        let css = if self.selected_source == FontSource::Web {
+            match web_font_spec_by_name(font.as_ref()) {
+                Some(web_font) => web_font_css_snippet(&web_font),
+                None => system_font_css_snippet(font.as_ref()),
+            }
+        } else {
+            system_font_css_snippet(font.as_ref())
+        };
+
+        cx.write_to_clipboard(ClipboardItem::new_string(css));
+        self.status = Some(format!("Copied CSS for {}", font.as_ref()).into());
+        cx.notify();
+    }
+
+    fn primary_worktree_root(&self, cx: &App) -> Option<PathBuf> {
+        let workspace = self.workspace.upgrade()?;
+        let workspace = workspace.read(cx);
+        let project = workspace.project().read(cx);
+        project
+            .visible_worktrees(cx)
+            .next()
+            .map(|worktree| worktree.read(cx).abs_path().to_path_buf())
+    }
+
+    fn render_font_row(&self, font: FontEntry, cx: &mut Context<Self>) -> impl IntoElement {
+        let selected = self
+            .selected_font
+            .as_ref()
+            .is_some_and(|selected| selected == &font.name);
+        let id_font = font.name.clone();
+        let source = font.source;
+        let click_font = font.clone();
+
+        div()
+            .id(format!("font-panel-row-{}", id_font.as_ref()))
+            .v_flex()
+            .gap_1()
+            .p_2()
+            .rounded_sm()
+            .border_1()
+            .border_color(if selected {
+                cx.theme().colors().border_focused
+            } else {
+                cx.theme().colors().border_variant
+            })
+            .bg(if selected {
+                cx.theme().colors().element_selected
+            } else {
+                cx.theme().colors().element_background
+            })
+            .cursor_pointer()
+            .hover(|style| style.bg(cx.theme().colors().element_hover))
+            .tooltip(Tooltip::text(font.name.to_string()))
+            .on_click(cx.listener(move |panel, _, _, cx| {
+                panel.select_font(click_font.clone(), cx);
+            }))
+            .child(
+                h_flex()
+                    .gap_2()
+                    .justify_between()
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .gap_0p5()
+                            .font_family(font.name.clone())
+                            .child(
+                                Label::new(font.name.clone())
+                                    .size(LabelSize::Small)
+                                    .truncate(),
+                            )
+                            .child(
+                                Label::new("Aa Bb Cc 123")
+                                    .size(LabelSize::XSmall)
+                                    .color(Color::Muted)
+                                    .truncate(),
+                            ),
+                    )
+                    .child(Label::new(source.label()).size(LabelSize::XSmall).color(
+                        if source == FontSource::Web {
+                            Color::Accent
+                        } else {
+                            Color::Muted
+                        },
+                    )),
+            )
+            .when(selected, |this| {
+                this.child(
+                    h_flex()
+                        .gap_1()
+                        .flex_wrap()
+                        .child(
+                            Button::new("font-panel-apply-editor", "Use in Editor")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    panel.apply_selected_to_buffer(cx);
+                                })),
+                        )
+                        .child(
+                            Button::new("font-panel-preview", "Preview")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(|panel, _, window, cx| {
+                                    panel.preview_selected_font(window, cx);
+                                })),
+                        )
+                        .child(
+                            Button::new("font-panel-copy-css", "Copy CSS")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    panel.copy_selected_css(cx);
+                                })),
+                        )
+                        .child(
+                            Button::new("font-panel-apply-ui", "Use in UI")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    panel.apply_selected_to_ui(cx);
+                                })),
+                        )
+                        .child(
+                            Button::new("font-panel-add-project", "Add to Project")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    panel.add_selected_to_project(cx);
+                                })),
+                        ),
+                )
+            })
+    }
+
+    fn render_source_filters(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        h_flex()
+            .h(px(38.))
+            .gap_1()
+            .items_center()
+            .child(
+                IconButton::new("font-panel-source-prev", IconName::ChevronLeft)
+                    .shape(ui::IconButtonShape::Square)
+                    .icon_size(IconSize::Small)
+                    .tooltip(Tooltip::text("Previous font groups"))
+                    .on_click(cx.listener(|panel, _, _, cx| {
+                        panel.scroll_source_tabs(-1.0, cx);
+                    })),
+            )
+            .child(
+                h_flex()
+                    .id("font-panel-source-filter-scroll")
+                    .flex_1()
+                    .h_full()
+                    .overflow_x_scroll()
+                    .overflow_y_hidden()
+                    .track_scroll(&self.source_scroll_handle)
+                    .child(
+                        h_flex()
+                            .flex_none()
+                            .gap_1()
+                            .items_center()
+                            .child(self.render_source_filter_button(FontSourceFilter::All, cx))
+                            .child(self.render_source_filter_button(FontSourceFilter::System, cx))
+                            .child(self.render_source_filter_button(FontSourceFilter::Web, cx)),
+                    ),
+            )
+            .child(
+                IconButton::new("font-panel-source-next", IconName::ChevronRight)
+                    .shape(ui::IconButtonShape::Square)
+                    .icon_size(IconSize::Small)
+                    .tooltip(Tooltip::text("Next font groups"))
+                    .on_click(cx.listener(|panel, _, _, cx| {
+                        panel.scroll_source_tabs(1.0, cx);
+                    })),
+            )
+    }
+
+    fn scroll_source_tabs(&mut self, direction: f32, cx: &mut Context<Self>) {
+        scroll_tab_handle(&self.source_scroll_handle, direction);
+        cx.notify();
+    }
+
+    fn render_preview(&self, shown_count: usize, cx: &mut Context<Self>) -> impl IntoElement {
+        let count_label = if let Some(status) = self.status.clone() {
+            status
+        } else if self.fonts_loaded || self.source_filter == FontSourceFilter::Web {
+            format!(
+                "{shown_count} / {}",
+                self.filtered_count(FontSourceFilter::All)
+            )
+            .into()
+        } else {
+            "loading".into()
+        };
+        v_flex()
+            .gap_2()
+            .p_2()
+            .border_b_1()
+            .border_color(cx.theme().colors().border)
+            .child(
+                h_flex()
+                    .justify_between()
+                    .items_center()
+                    .child(Label::new("Fonts").size(LabelSize::Small))
+                    .child(
+                        Label::new(count_label)
+                            .size(LabelSize::XSmall)
+                            .color(Color::Muted)
+                            .truncate(),
+                    ),
+            )
+            .child(self.filter_editor.clone())
+            .child(self.render_source_filters(cx))
+    }
+}
+
+impl Panel for FontPanel {
+    fn persistent_name() -> &'static str {
+        "Font Panel"
+    }
+
+    fn panel_key() -> &'static str {
+        FONT_PANEL_KEY
+    }
+
+    fn position(&self, _: &Window, _: &App) -> DockPosition {
+        DockPosition::Right
+    }
+
+    fn position_is_valid(&self, position: DockPosition) -> bool {
+        position == DockPosition::Right
+    }
+
+    fn set_position(
+        &mut self,
+        _position: DockPosition,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) {
+    }
+
+    fn default_size(&self, _: &Window, _: &App) -> Pixels {
+        px(340.)
+    }
+
+    fn min_size(&self, _: &Window, _: &App) -> Option<Pixels> {
+        Some(px(240.))
+    }
+
+    fn icon(&self, _: &Window, _: &App) -> Option<IconName> {
+        None
+    }
+
+    fn icon_tooltip(&self, _: &Window, _: &App) -> Option<&'static str> {
+        Some("Font Panel")
+    }
+
+    fn toggle_action(&self) -> Box<dyn gpui::Action> {
+        Box::new(ToggleFocus)
+    }
+
+    fn activation_priority(&self) -> u32 {
+        9
+    }
+}
+
+impl Focusable for FontPanel {
+    fn focus_handle(&self, cx: &App) -> FocusHandle {
+        self.filter_editor.focus_handle(cx)
+    }
+}
+
+impl EventEmitter<PanelEvent> for FontPanel {}
+
+impl Render for FontPanel {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.ensure_system_fonts_loading(cx);
+        self.refresh_fonts_if_needed(cx);
+        let (fonts, total_matches) = self.matching_fonts(cx, MAX_FONT_RESULTS);
+        let is_empty = total_matches == 0;
+        let shown_count = fonts.len();
+        let font_rows = fonts
+            .iter()
+            .cloned()
+            .map(|font| self.render_font_row(font, cx).into_any_element())
+            .collect::<Vec<_>>();
+
+        v_flex()
+            .id("font-panel")
+            .size_full()
+            .overflow_hidden()
+            .bg(cx.theme().colors().panel_background)
+            .child(self.render_preview(shown_count, cx))
+            .child(
+                div()
+                    .id("font-panel-scroll")
+                    .flex_1()
+                    .overflow_y_scroll()
+                    .p_2()
+                    .when(is_empty, |this| {
+                        this.child(
+                            div().h_full().flex().items_center().justify_center().child(
+                                Label::new(if self.fonts_loaded {
+                                    "No matching fonts"
+                                } else {
+                                    "Loading fonts"
+                                })
+                                .size(LabelSize::Small)
+                                .color(Color::Muted),
+                            ),
+                        )
+                    })
+                    .when(!is_empty, |this| {
+                        this.child(v_flex().gap_2().children(font_rows))
+                    }),
+            )
+    }
+}
+
+fn scroll_tab_handle(handle: &ScrollHandle, direction: f32) {
+    let current = handle.offset();
+    let max = handle.max_offset();
+    let mut next_x = current.x - px(direction * 160.0);
+    let min_x = -max.x;
+    if next_x < min_x {
+        next_x = min_x;
+    }
+    if next_x > px(0.) {
+        next_x = px(0.);
+    }
+    handle.set_offset(point(next_x, current.y));
+}
+
+fn web_font_spec_by_name(name: &str) -> Option<WebFontSpec> {
+    let name = google_fonts::GOOGLE_FONT_FAMILIES
+        .iter()
+        .find(|font_name| font_name.eq_ignore_ascii_case(name))
+        .map(|font_name| (*font_name).to_string())
+        .or_else(|| custom_web_font_name(name))?;
+    Some(WebFontSpec {
+        family_query: google_font_family_query(&name),
+        variable: css_font_variable_name(&name),
+        name,
+    })
+}
+
+fn custom_web_font_name(query: &str) -> Option<String> {
+    let words = query
+        .split(|character: char| !(character.is_alphanumeric() || character == ' '))
+        .flat_map(|segment| segment.split_whitespace())
+        .filter(|word| !word.is_empty())
+        .take(6)
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => {
+                    let mut title = String::new();
+                    title.extend(first.to_uppercase());
+                    title.push_str(chars.as_str());
+                    title
+                }
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    (!words.is_empty()).then(|| words.join(" "))
+}
+
+fn google_font_family_query(name: &str) -> String {
+    name.split_whitespace().collect::<Vec<_>>().join("+")
+}
+
+fn css_font_variable_name(name: &str) -> String {
+    let normalized = name
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    let variable = normalized
+        .split('-')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+
+    if variable.is_empty() {
+        "web-font".to_string()
+    } else {
+        variable
+    }
+}
+
+fn local_font_preview_url(
+    font_name: &str,
+    source: FontSource,
+    web_font: Option<&WebFontSpec>,
+    sample_text: &str,
+) -> Option<String> {
+    let preview_dir = repo_root().join("target").join("font-previews");
+    std_fs::create_dir_all(&preview_dir).ok()?;
+    let preview_path = preview_dir.join(format!("{}.html", font_preview_file_stem(font_name)));
+    let html = font_preview_html(font_name, source, web_font, sample_text);
+    std_fs::write(&preview_path, html).ok()?;
+    Url::from_file_path(preview_path)
+        .ok()
+        .map(|url| url.to_string())
+}
+
+fn font_preview_file_stem(font_name: &str) -> String {
+    font_name
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string()
+}
+
+fn font_preview_html(
+    font_name: &str,
+    source: FontSource,
+    web_font: Option<&WebFontSpec>,
+    sample_text: &str,
+) -> String {
+    let title = escape_html(font_name);
+    let sample = escape_html(sample_text);
+    let import = web_font
+        .map(|font| {
+            format!(
+                r#"<link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family={}:wght@400;500;600;700&display=swap" rel="stylesheet">"#,
+                font.family_query
+            )
+        })
+        .unwrap_or_default();
+    let source_label = source.label();
+
+    format!(
+        r#"<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{title} - Zed font preview</title>
+  {import}
+  <style>
+    :root {{
+      color-scheme: dark;
+      --bg: #09090b;
+      --panel: #101113;
+      --border: #272a2f;
+      --fg: #f4f4f5;
+      --muted: #a1a1aa;
+      --accent: #3fb950;
+      --accent-soft: rgba(63, 185, 80, .16);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "{title}", Inter, ui-sans-serif, system-ui, sans-serif;
+      padding: 32px;
+    }}
+    main {{
+      max-width: 920px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }}
+    header, section {{
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 20px;
+    }}
+    .pill {{
+      display: inline-flex;
+      width: max-content;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 2px 8px;
+      color: var(--accent);
+      background: var(--accent-soft);
+      font-size: 12px;
+      margin-bottom: 12px;
+    }}
+    h1 {{ margin: 0; font-size: 48px; letter-spacing: 0; line-height: 1.05; }}
+    p {{ margin: 0; color: var(--muted); font-size: 15px; }}
+    .sample-xl {{ font-size: 64px; line-height: 1; font-weight: 700; letter-spacing: 0; }}
+    .sample-lg {{ font-size: 28px; line-height: 1.25; font-weight: 600; }}
+    .sample-body {{ font-size: 17px; line-height: 1.7; }}
+    .grid {{ display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }}
+    .card {{ border: 1px solid var(--border); border-radius: 8px; padding: 14px; }}
+    .label {{ color: var(--muted); font-size: 12px; margin-bottom: 8px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }}
+    code {{ color: var(--accent); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="pill">{source_label}</div>
+      <h1>{title}</h1>
+      <p>Browser-rendered specimen for checking scale, weight, code-adjacent text, and product UI copy.</p>
+    </header>
+    <section class="sample-xl">Aa Bb Cc 012345</section>
+    <section class="sample-lg">{sample}</section>
+    <section class="sample-body">The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs. Sphinx of black quartz, judge my vow.</section>
+    <section class="grid">
+      <div class="card"><div class="label">Regular</div><div style="font-weight:400">Dashboard, editor, panel, preview</div></div>
+      <div class="card"><div class="label">Medium</div><div style="font-weight:500">Dashboard, editor, panel, preview</div></div>
+      <div class="card"><div class="label">Semibold</div><div style="font-weight:600">Dashboard, editor, panel, preview</div></div>
+      <div class="card"><div class="label">Bold</div><div style="font-weight:700">Dashboard, editor, panel, preview</div></div>
+    </section>
+    <section class="sample-body"><code>font-family: "{title}", system-ui, sans-serif;</code></section>
+  </main>
+</body>
+</html>"#
+    )
+}
+
+fn add_web_font_to_project(root: &Path, web_font: &WebFontSpec) -> std::io::Result<PathBuf> {
+    let css_path = project_font_css_path(root);
+    if let Some(parent) = css_path.parent() {
+        std_fs::create_dir_all(parent)?;
+    }
+
+    let mut css = std_fs::read_to_string(&css_path).unwrap_or_default();
+    let import = web_font_import(web_font);
+
+    if !css.contains(&import) {
+        css = if css.trim().is_empty() {
+            format!("{import}\n")
+        } else {
+            format!("{import}\n{css}")
+        };
+    }
+
+    let variable = format!("--font-{}", web_font.variable);
+    if !css.contains(&variable) {
+        css.push_str(&format!(
+            "\n:root {{\n  {variable}: \"{}\", system-ui, sans-serif;\n}}\n",
+            web_font.name
+        ));
+    }
+
+    std_fs::write(&css_path, css)?;
+    Ok(css_path)
+}
+
+fn web_font_import(web_font: &WebFontSpec) -> String {
+    format!(
+        "@import url(\"https://fonts.googleapis.com/css2?family={}:wght@400;500;600;700&display=swap\");",
+        web_font.family_query
+    )
+}
+
+fn web_font_css_snippet(web_font: &WebFontSpec) -> String {
+    format!(
+        "{}\n\n:root {{\n  --font-{}: \"{}\", system-ui, sans-serif;\n}}\n\n.font-{} {{\n  font-family: var(--font-{});\n}}",
+        web_font_import(web_font),
+        web_font.variable,
+        web_font.name,
+        web_font.variable,
+        web_font.variable
+    )
+}
+
+fn system_font_css_snippet(font_name: &str) -> String {
+    format!("font-family: \"{font_name}\", system-ui, sans-serif;")
+}
+
+fn repo_root() -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("G:/Zed"))
+}
+
+fn escape_html(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&#39;"),
+            _ => escaped.push(character),
+        }
+    }
+    escaped
+}
+
+fn project_font_css_path(root: &Path) -> PathBuf {
+    for candidate in [
+        root.join("src").join("app").join("globals.css"),
+        root.join("app").join("globals.css"),
+        root.join("src").join("styles").join("globals.css"),
+        root.join("styles").join("globals.css"),
+        root.join("src").join("index.css"),
+        root.join("index.css"),
+    ] {
+        if candidate.is_file() {
+            return candidate;
+        }
+    }
+
+    if root.join("src").join("app").is_dir() {
+        root.join("src").join("app").join("globals.css")
+    } else if root.join("app").is_dir() {
+        root.join("app").join("globals.css")
+    } else if root.join("src").is_dir() {
+        root.join("src").join("styles").join("globals.css")
+    } else {
+        root.join("styles").join("globals.css")
+    }
+}

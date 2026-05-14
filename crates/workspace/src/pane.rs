@@ -78,6 +78,174 @@ impl DraggedSelection {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct DraggedIconAsset {
+    pub icon_name: Option<IconName>,
+    pub stem: SharedString,
+    pub label: SharedString,
+    pub svg: Option<SharedString>,
+    pub preview_path: Option<SharedString>,
+    pub external_pack: Option<SharedString>,
+    pub external_name: Option<SharedString>,
+    pub external_width: Option<u32>,
+    pub external_height: Option<u32>,
+}
+
+impl DraggedIconAsset {
+    pub fn new(icon_name: IconName) -> Self {
+        let stem: &'static str = (&icon_name).into();
+        let label = stem
+            .split('_')
+            .filter(|segment| !segment.is_empty())
+            .map(|segment| {
+                let mut chars = segment.chars();
+                match chars.next() {
+                    Some(first) => {
+                        let mut word = first.to_uppercase().collect::<String>();
+                        word.push_str(chars.as_str());
+                        word
+                    }
+                    None => String::new(),
+                }
+            })
+            .join(" ");
+
+        Self {
+            icon_name: Some(icon_name),
+            stem: stem.into(),
+            label: label.into(),
+            svg: None,
+            preview_path: None,
+            external_pack: None,
+            external_name: None,
+            external_width: None,
+            external_height: None,
+        }
+    }
+
+    pub fn from_svg(
+        stem: impl Into<SharedString>,
+        label: impl Into<SharedString>,
+        svg: impl Into<SharedString>,
+        preview_path: Option<SharedString>,
+    ) -> Self {
+        Self {
+            icon_name: None,
+            stem: stem.into(),
+            label: label.into(),
+            svg: Some(svg.into()),
+            preview_path,
+            external_pack: None,
+            external_name: None,
+            external_width: None,
+            external_height: None,
+        }
+    }
+
+    pub fn from_iconify(
+        stem: impl Into<SharedString>,
+        label: impl Into<SharedString>,
+        pack: impl Into<SharedString>,
+        name: impl Into<SharedString>,
+        width: u32,
+        height: u32,
+    ) -> Self {
+        Self {
+            icon_name: None,
+            stem: stem.into(),
+            label: label.into(),
+            svg: None,
+            preview_path: None,
+            external_pack: Some(pack.into()),
+            external_name: Some(name.into()),
+            external_width: Some(width),
+            external_height: Some(height),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DraggedMediaKind {
+    Image,
+    Video,
+    Audio,
+}
+
+#[derive(Clone, Debug)]
+pub struct DraggedMediaAsset {
+    pub path: PathBuf,
+    pub kind: DraggedMediaKind,
+    pub label: SharedString,
+    pub relative_display: SharedString,
+}
+
+impl DraggedMediaAsset {
+    pub fn new(path: PathBuf, kind: DraggedMediaKind, root: &PathBuf) -> Self {
+        let label = path
+            .file_stem()
+            .or_else(|| path.file_name())
+            .and_then(|name| name.to_str())
+            .unwrap_or("media")
+            .replace('_', " ")
+            .replace('-', " ");
+        let relative_display = path
+            .strip_prefix(root)
+            .unwrap_or(path.as_path())
+            .to_string_lossy()
+            .replace('\\', "/");
+
+        Self {
+            path,
+            kind,
+            label: label.into(),
+            relative_display: relative_display.into(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DraggedShadcnKind {
+    Component,
+    Block,
+    Magic,
+}
+
+#[derive(Clone, Debug)]
+pub struct DraggedShadcnAsset {
+    pub id: SharedString,
+    pub title: SharedString,
+    pub kind: DraggedShadcnKind,
+    pub source_path: PathBuf,
+    pub registry_root: PathBuf,
+    pub target_file_name: SharedString,
+    pub import_statement: SharedString,
+    pub jsx: SharedString,
+}
+
+impl DraggedShadcnAsset {
+    pub fn new(
+        id: impl Into<SharedString>,
+        title: impl Into<SharedString>,
+        kind: DraggedShadcnKind,
+        source_path: PathBuf,
+        registry_root: PathBuf,
+        target_file_name: impl Into<SharedString>,
+        import_statement: impl Into<SharedString>,
+        jsx: impl Into<SharedString>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            title: title.into(),
+            kind,
+            source_path,
+            registry_root,
+            target_file_name: target_file_name.into(),
+            import_statement: import_statement.into(),
+            jsx: jsx.into(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SaveIntent {
@@ -542,6 +710,10 @@ enum PinOperation {
 }
 
 impl Pane {
+    pub fn workspace(&self) -> WeakEntity<Workspace> {
+        self.workspace.clone()
+    }
+
     pub fn new(
         workspace: WeakEntity<Workspace>,
         project: Entity<Project>,
@@ -4599,6 +4771,9 @@ impl Render for Pane {
                     .overflow_hidden()
                     .on_drag_move::<DraggedTab>(cx.listener(Self::handle_drag_move))
                     .on_drag_move::<DraggedSelection>(cx.listener(Self::handle_drag_move))
+                    .on_drag_move::<DraggedIconAsset>(cx.listener(Self::handle_drag_move))
+                    .on_drag_move::<DraggedMediaAsset>(cx.listener(Self::handle_drag_move))
+                    .on_drag_move::<DraggedShadcnAsset>(cx.listener(Self::handle_drag_move))
                     .when(is_local, |div| {
                         div.on_drag_move::<ExternalPaths>(cx.listener(Self::handle_drag_move))
                     })
@@ -4650,6 +4825,9 @@ impl Render for Pane {
                             .bg(cx.theme().colors().drop_target_background)
                             .group_drag_over::<DraggedTab>("", |style| style.visible())
                             .group_drag_over::<DraggedSelection>("", |style| style.visible())
+                            .group_drag_over::<DraggedIconAsset>("", |style| style.visible())
+                            .group_drag_over::<DraggedMediaAsset>("", |style| style.visible())
+                            .group_drag_over::<DraggedShadcnAsset>("", |style| style.visible())
                             .when(is_local, |div| {
                                 div.group_drag_over::<ExternalPaths>("", |style| style.visible())
                             })
@@ -4668,6 +4846,27 @@ impl Render for Pane {
                             .on_drop(cx.listener(
                                 move |this, selection: &DraggedSelection, window, cx| {
                                     this.handle_dragged_selection_drop(selection, None, window, cx)
+                                },
+                            ))
+                            .on_drop(cx.listener(
+                                move |this, icon: &DraggedIconAsset, window, cx| {
+                                    if let Some(active_item) = this.active_item() {
+                                        active_item.handle_drop(this, icon, window, cx);
+                                    }
+                                },
+                            ))
+                            .on_drop(cx.listener(
+                                move |this, media: &DraggedMediaAsset, window, cx| {
+                                    if let Some(active_item) = this.active_item() {
+                                        active_item.handle_drop(this, media, window, cx);
+                                    }
+                                },
+                            ))
+                            .on_drop(cx.listener(
+                                move |this, shadcn: &DraggedShadcnAsset, window, cx| {
+                                    if let Some(active_item) = this.active_item() {
+                                        active_item.handle_drop(this, shadcn, window, cx);
+                                    }
                                 },
                             ))
                             .on_drop(cx.listener(move |this, paths, window, cx| {
@@ -5123,7 +5322,7 @@ mod tests {
         }
 
         fn handle_drop(
-            &self,
+            &mut self,
             _active_pane: &Pane,
             dropped: &dyn std::any::Any,
             _window: &mut Window,

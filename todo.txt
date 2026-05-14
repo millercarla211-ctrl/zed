@@ -1,7 +1,48 @@
 IN PROGRESS:
-- None.
+- Panel polish toward 100/100 for icon, font, media, and UI right panels while preserving the stable editor/WebPreview input paths.
 
 PENDING:
+- User manual check that the Media panel direct remote rows cover image, video, and audio samples without opening the remote provider browser first.
+- User manual check that the icon picker opens immediately without scanning all external icon JSON files.
+- User manual check that selecting one icon pack loads that pack quickly and broad search still loads the full catalog only when needed.
+- User manual check that UI/shadcn entries appear immediately from the embedded static catalog even if the rkyv cache is absent.
+- User manual check that icon, font, media, and UI panel tab strips page with explicit previous/next controls.
+- User manual check that the icon picker no longer shows a bottom loaded/status strip.
+- User manual check that the font panel no longer shows the sample text section above the font list.
+- User manual check that the UI panel opens immediately from cached/static catalog data instead of visibly stalling on registry discovery.
+- User manual check that WebPreview media tabs no longer show the active-tab bottom border.
+- User manual check that the icon, font, media, and UI panels appear only in the top-right titlebar and no longer duplicate in the bottom-right status bar.
+- User manual check that top-right panel buttons show the active accent color when their right panel is open.
+- User manual check that Office, spreadsheet, presentation, ebook, and PDF files open through the WebPreview document viewer.
+- User manual check that the icon picker no longer shows the selected-icon Copy/Insert strip above the grid.
+- User manual check that the Media panel renders default remote media rows directly in the panel and keeps the remote provider browser available from the content list.
+- User manual check that the top-right icon picker trigger uses the icon glyph and the UI trigger is labeled as UI.
+- User manual check that static icon-pack tabs appear immediately, scroll horizontally, and the denser grid uses the panel width better.
+- User manual check that video, audio, and document viewer tabs open as full-tab viewers without header/source cards or dotted-grid backgrounds.
+- User manual check that media, font, icon, and UI panel tab strips stay horizontally scrollable instead of overflowing.
+- User manual check that the UI catalog reopens from the rkyv/memmap cache without rescanning registry files on every panel open.
+- User manual check that opening `.mp4`, `.webm`, `.mp3`, `.wav`, `.pdf`, or Office-style documents from the project tree opens a WebPreview-backed viewer tab instead of a plain code buffer.
+- User manual check that WebPreview media/document viewer tabs still preserve working WebPreview hover, click, wheel, right-click, and keyboard input behavior.
+- User manual check that the media panel Browse Remote action searches no-key remote media APIs and keeps provider links available for deeper searches.
+- User manual check that icon pack tabs stay compact, selected packs render real external icons, and the catalog is cached across panel openings.
+- User manual check that shadcn/ui catalog loading no longer causes right-panel lag after the first load.
+- User manual check that the icon picker shows the external `G:\Assets\icon\data` catalog with all icon sets represented in the default grid and pack filters.
+- User manual check that selecting a large external icon pack stays responsive and inserts/copies SVG payloads correctly.
+- User manual check that the font panel can search Google Fonts and generate preview/CSS/project snippets for any listed family.
+- User manual check that the media panel opens with Images selected and the expanded free-media provider buttons search the active query correctly.
+- User manual check that registry-directory and 21st.dev shadcn entries open docs/preview without pretending to drag-install missing local source.
+- User manual check that shadcn source previews show the ScrollArea-style source pane and TypeScript highlighting.
+- User manual check that the shadcn/ui panel opens from the right dock/top-right button, filters entries, and previews selected docs/blocks in WebPreview.
+- User manual check that clicking or dragging a shadcn/ui entry into a `.tsx`/`.jsx` file installs real shadcn source files, `components.json`, `lib/utils.ts`, package dependencies, and inserts JSX/imports.
+- User manual check that Magic UI and block entries install into `components/magicui` and `components/blocks` without overwriting existing project files.
+- User manual check that the new icon picker panel can open from the right dock, filter icons, and insert icons into a normal editor.
+- User manual check that inserting into `.tsx`/`.jsx` creates an SVG asset under the project and inserts a React component usage/import instead of markdown.
+- User manual check that dragging an icon into the active editor inserts through the same icon asset path without affecting WebPreview input.
+- User manual check that the top-right title bar icon button opens the icon picker and the font button opens the font panel.
+- User manual check that the font panel previews installed fonts and applies selected fonts to editor/UI settings.
+- User manual check that the media panel opens from the right dock/top-right button, searches only real media assets, and excludes tool/plugin media folders.
+- User manual check that clicking or dragging media into an editor copies it into project assets and inserts the correct React/Markdown/HTML/CSS/plain reference.
+- User manual check that the free media source buttons open source searches using the current media query.
 - User manual review of the copied `G:\Zed\inspirations` source/reference folders.
 - Final `just run` validation for the local llama.cpp speed/model-switching fix.
 - User manual check that Qwen 3.5 0.8B answers in the Zed AI panel/code editor with normal and larger project context.
@@ -18,6 +59,99 @@ PENDING:
 - User manual feedback on switching between Qwen 3.5 0.8B, Gemma 4 E4B, and any newly dropped GGUF files from the AI panel.
 
 COMPLETED:
+- Added compact per-row font specimens in the Font panel so Google/system fonts can be judged directly from the list without bringing back the large top sample section.
+- Expanded generated shadcn/ui preview thumbnails and WebPreview demos for common form, menu, feedback, loading, calendar, navigation, and scroll components so the UI panel feels less generic.
+- Added more verified direct remote media rows for NASA imagery, Blender Open Movie videos, and a SoundHelix audio sample so the Media panel has stronger immediate image/video/audio coverage before opening provider search.
+- Made the Media panel remote-provider row show the number of providers available for the active media tab.
+- Fixed external Iconify icon insertion to carry both width and height through drag/click payloads, so generated SVG files preserve non-square icon viewBoxes across icon sets.
+- Added richer in-panel video/audio remote thumbnails so direct media rows look like media cards instead of generic placeholder icons.
+- Expanded source-aware shadcn/ui thumbnails for common components like badge, avatar, tabs, table, checkbox, dialog, menus, accordion, and sidebar.
+- Made the Media panel's remote provider links respect the active Images, Videos, and Audio tabs, hiding providers that do not support the selected media category instead of falling back to unrelated image searches.
+- Made the UI panel seed its rkyv/memmap catalog cache from the static embedded catalog when the cache is missing, preserving instant first-open behavior and faster later opens without registry scans.
+- Changed the icon picker default external-pack representatives from a generic placeholder icon to compact pack-initial badges, so all hardcoded icon sets are visually distinct before a heavy pack JSON is loaded.
+- Added richer direct-remote media tags so the Media panel can match built-in open assets by natural search terms like space, museum, macro, hero, and classical without opening the remote browser.
+- Added compact source-family labels to UI catalog rows so local shadcn, blocks, Magic UI, registry, and 21st entries are clearer without extra descriptive clutter.
+- Expanded the Media panel's direct remote asset catalog with additional open image, video, and audio rows, and normalized its metadata separator to ASCII.
+- Ran `just run`; Cargo finished the Zed debug build and launched `G:\Zed\target\debug\zed.exe` once. The Codex tool timed out afterward because the app stayed open for manual QA.
+- Embedded a generated local shadcn/Magic UI catalog index so the UI panel has 520 local entries available without scanning registry files on open.
+- Updated the icon pack index with representative icon names and made the icon panel load external icon packs lazily by selected pack or broad search instead of scanning every pack at panel open.
+- Removed bottom status/footer strips from the right-panel flow and moved status text into the top count/status area.
+- Added explicit previous/next paging buttons to the icon set, font source, media kind, and UI catalog tab strips.
+- Removed the font panel sample text editor and per-row sample sentence from the panel body.
+- Made the UI panel initialize from the rkyv/memmap cache when present, otherwise from a static hardcoded catalog before any heavier local discovery runs.
+- Removed the WebPreview tab-content bottom border for browser/media preview tabs.
+- Made the new icon, font, media, and UI panels topbar-only by hiding their bottom-right dock buttons.
+- Added active accent styling to the top-right panel buttons based on the visible right-dock panel.
+- Removed the icon picker selected-icon Copy Name/Copy SVG/Insert strip so the panel flows as status, search, tabs, then grid content.
+- Moved font panel actions into the selected font row and removed the separate top preview/action block.
+- Added direct remote media rows to the Media panel content and kept the provider browser as a content row instead of a top section.
+- Expanded WebPreview document registration for common Word, Excel, PowerPoint, OpenDocument, Apple iWork, ebook, PDF, CSV, and TSV file extensions.
+- Ran `just run`; the build produced `G:\Zed\target\debug\zed.exe` and launched Zed, then the command timed out because the app stayed open for manual QA.
+- Changed the top-right icon picker action to use an icon glyph and changed the shadcn panel title/tooltip to UI.
+- Added a compile-time static icon-pack index for the external icon catalog so pack tabs no longer depend on scanning the icon data directory.
+- Made the icon picker grid denser while keeping pack filters horizontally scrollable and clickable.
+- Reworked media and WebPreview file viewer HTML so video/image/document previews fill the tab and audio uses a focused native-looking fullscreen shell without source/detail cards.
+- Added horizontal scrolling tab strips to the media, font, and UI panels.
+- Added an rkyv + memmap2 catalog cache path for the UI panel so discovered registry tabs/items can be loaded from a compact local cache after the first catalog build.
+- Simplified external UI registry and 21st.dev entries to remove generated-looking marketing descriptions from the panel.
+- Expanded the icon picker to load the external `G:\Assets\icon\data` Iconify-style catalog lazily, representing all packs in the default grid instead of only the first sorted packs.
+- Made the icon picker pack filters compact and scrollable, using pack prefixes plus tooltips so the icon grid keeps useful panel space.
+- Added project-safe external icon payloads so non-Zed icons can insert/copy SVGs and generate React SVG assets from the same drag/click path.
+- Replaced the curated web-font subset with a generated Google Fonts family list from the public metadata endpoint.
+- Set Media to Images by default and expanded the free-media source shortcuts across Openverse, Wikimedia, The Met, NASA, Library of Congress, Smithsonian, Europeana, Rawpixel, and stock/media providers.
+- Added the public shadcn registry directory to the shadcn/ui panel, plus a 21st.dev Magic entry, with docs/preview behavior for non-local registry sources.
+- Updated shadcn local preview pages with a ScrollArea-style source pane and lightweight TypeScript/TSX highlighting.
+- Ran `just run`; Cargo rebuilt the new panel crates successfully, Zed launched once, and the run returned with only the known `zed-cli` lookup message.
+- Fixed the icon/font/media/shadcn-ui panel compile integration with Zed's current UI API: compact buttons, real icon sizes, stable element IDs, correct tooltips, stateful scroll containers, and preview actions routed through the live window.
+- Fixed the Media panel startup re-entrancy panic by indexing initial media roots without rereading `Workspace` during workspace construction.
+- Ran `just run` after the new panel integration fixes; Cargo built successfully and Zed launched once, then exited cleanly after the app closed.
+- Added shadcn registry examples to the native shadcn/ui panel catalog so examples/charts can be inserted through the same source-backed flow as components and blocks.
+- Made the shadcn/ui panel treat public registry manifests as valid install sources, so manifest-backed entries without a mirrored source file still install instead of showing a false missing-source error.
+- Made media insertion create a unique copied asset filename when a project already has a different media file with the same name.
+- Made the media panel Refresh action re-scan current workspace media roots, so newly opened worktrees/media folders are picked up without reopening Zed.
+- Added a shadcn/ui catalog Refresh action so newly cloned or updated inspiration sources can be loaded without reopening Zed.
+- Added Copy CSS to the font panel so selected system/web fonts can be reused without applying them to Zed or a project.
+- Added Copy Path/Copy URL actions to the media panel for local assets and direct media URLs.
+- Made direct media URL detection fall back to the active Images/Videos/Audio filter when the URL has no reliable extension.
+- Added a media panel Refresh action so newly added workspace media can be re-indexed without reopening the panel.
+- Added a shadcn/ui Docs action separate from local Preview for quick access to upstream component/block documentation.
+- Added shadcn/ui row-level Copy actions that copy the import plus JSX snippet to the clipboard.
+- Added Copy SVG to the icon picker selected-icon strip so icons can be used outside the drag/insert flow.
+- Added an icon picker preview strip with selected icon state, explicit Insert action, and Copy Name clipboard support.
+- Added WebPreview media preview pages under `target/media-previews` for local media rows and direct media URLs.
+- Added media URL insertion from the media panel search box for direct image/video/audio URLs, using editor-aware React/Markdown/HTML/CSS insertion.
+- Made the font panel support custom web-font names from search, so adding/testing a new Google-font-style family no longer requires a code edit.
+- Added visual shadcn/ui WebPreview specimens to generated preview pages so previews show a theme-matched component/block mock plus source/snippet details.
+- Added WebPreview font specimen generation under `target/font-previews` so selected system/web fonts can be checked in a real browser-rendered preview.
+- Added a web-font lane to the font panel with System/Web source filters and project CSS insertion for curated Google-font-style families.
+- Added truthfully filtered result counts and empty states to the icon picker, font panel, media panel, and shadcn/ui panel.
+- Added media kind filters for All, Images, Videos, and Audio so the media panel can stay focused on real media assets.
+- Made shadcn Preview generate a local WebPreview HTML page under `target/shadcn-previews` with source code, insert snippet, import path, and docs link before falling back to external docs.
+- Added package-manager install command detection to shadcn install reports when package dependencies are added.
+- Added shadcn panel source filters with live counts for All, UI components, Blocks, and Magic UI.
+- Added a proper empty state when the shadcn panel query/filter has no matching catalog items.
+- Added a native shadcn install report so editor/panel status can say when theme CSS or package dependencies were added.
+- Added project-side shadcn theme CSS scaffolding that appends a marked theme block only when the target project does not already define shadcn variables.
+- Made generated or repaired `components.json` point at the detected global CSS file and fill missing shadcn aliases without overwriting existing user values.
+- Made auto-discovered shadcn/ui and Magic UI catalog entries derive their import component names from actual source exports instead of filename guesses.
+- Added installer/import-path support for shadcn registry chart, example, and internal source folders so block/chart entries install to real project files.
+- Fixed scoped npm package parsing for shadcn/Magic dependency insertion so packages like `@radix-ui/react-slot@x.y.z` are written under the correct package name.
+- Cloned current shadcn/ui, Magic UI, and 21st.dev Magic MCP reference sources under `G:\Zed\inspirations`.
+- Added `crates/shadcn_ui` as the native installer for source-backed shadcn/ui project files.
+- Added `crates/shadcn_ui_panel` as a native right-dock panel with real shadcn/ui, block, and Magic UI catalog entries.
+- Expanded the shadcn/ui panel to discover all cloned new-york-v4 registry UI/block manifests plus Magic UI `.tsx` entries, not just the curated starter list.
+- Made the shadcn/ui installer use official registry JSON manifests for files, package dependencies, and registry dependency recursion.
+- Wired the shadcn/ui panel into Zed startup, the right dock, drag/drop payload routing, and the top-right titlebar action buttons.
+- Added editor-side shadcn installation that writes source-backed components into the active project and inserts React imports/JSX.
+- Added `crates/icon_picker`, registered it as a right-dock Zed panel, and wired its dock button/action registration.
+- Added click insertion from the picker into the active editor.
+- Added icon drag payload routing through workspace panes into editor items.
+- Added React/JSX icon insertion that writes SVG files into project assets and inserts a component import/usage.
+- Added `crates/font_panel`, registered it as a right-dock Zed panel, and wired title bar buttons for icon/font picker access.
+- Added font search, live preview rows, and apply-to-editor/apply-to-UI settings updates using Zed's font cache and settings file.
+- Added `crates/media_panel`, registered it as a right-dock Zed panel, and wired a top-right Media button.
+- Added media-only local indexing for real media roots with tool/cache/runtime folders excluded.
+- Added click/drag insertion for media assets into active editors with project asset copying and contextual reference insertion.
 - Committed and pushed local llama.cpp model switching/speed work to `origin/dev`.
 - Copied tool-tui and Flow source/reference folders into `G:\Zed\inspirations`, with Flow replacing duplicate top-level folders.
 - Verified the inspirations import has Flow `metasearch` and `flow-browser-core`, keeps unique tool-tui `apps` and `mcp`, and excludes top-level/generated folders like `.git`, `target`, `tmp`, `trash`, and `models`.

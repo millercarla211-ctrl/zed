@@ -742,6 +742,10 @@ fn main() {
         project_symbols::init(cx);
         project_panel::init(cx);
         outline_panel::init(cx);
+        icon_picker::init(cx);
+        font_panel::init(cx);
+        media_panel::init(cx);
+        shadcn_ui_panel::init(cx);
         tasks_ui::init(cx);
         snippets_ui::init(cx);
         channel::init(&app_state.client.clone(), app_state.user_store.clone(), cx);

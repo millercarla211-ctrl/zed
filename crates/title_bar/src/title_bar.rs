@@ -45,6 +45,7 @@ use ui::{
 };
 use update_version::UpdateVersion;
 use util::ResultExt;
+use workspace::dock::DockPosition;
 use workspace::{
     GoBack, GoForward, MultiWorkspace, NewCenterTerminal, NewFile, NewLiquidGlass, NewWebPreview,
     OpenLog, ToggleFileFinder, ToggleProjectSymbols, ToggleWorktreeSecurity, Workspace,
@@ -928,20 +929,60 @@ impl TitleBar {
     }
 
     fn render_hidden_feature_buttons(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        vec![self.render_hidden_feature_menu(cx)]
+        let active_right_panel = self.active_right_panel_name(cx);
+        vec![
+            self.render_title_action_button(
+                "titlebar-icon-picker",
+                IconName::SquareDot,
+                "Icon Picker",
+                icon_picker::ToggleFocus.boxed_clone(),
+                active_right_panel == Some("Icon Picker"),
+            ),
+            self.render_title_action_button(
+                "titlebar-font-panel",
+                IconName::Font,
+                "Font Panel",
+                font_panel::ToggleFocus.boxed_clone(),
+                active_right_panel == Some("Font Panel"),
+            ),
+            self.render_title_action_button(
+                "titlebar-media-panel",
+                IconName::Library,
+                "Media",
+                media_panel::ToggleFocus.boxed_clone(),
+                active_right_panel == Some("Media"),
+            ),
+            self.render_title_action_button(
+                "titlebar-shadcn-ui-panel",
+                IconName::Blocks,
+                "UI",
+                shadcn_ui_panel::ToggleFocus.boxed_clone(),
+                active_right_panel == Some("UI"),
+            ),
+            self.render_hidden_feature_menu(cx),
+        ]
     }
 
-    #[allow(dead_code)]
+    fn active_right_panel_name(&self, cx: &App) -> Option<&'static str> {
+        let workspace = self.workspace.upgrade()?;
+        let workspace = workspace.read(cx);
+        let dock = workspace.dock_at_position(DockPosition::Right).read(cx);
+        dock.visible_panel().map(|panel| panel.persistent_name())
+    }
+
     fn render_title_action_button(
         &self,
         id: &'static str,
         icon: IconName,
         tooltip: &'static str,
         action: Box<dyn Action>,
+        selected: bool,
     ) -> AnyElement {
         IconButton::new(id, icon)
             .icon_size(IconSize::Small)
             .style(ButtonStyle::Subtle)
+            .selected_style(ButtonStyle::Tinted(TintColor::Accent))
+            .toggle_state(selected)
             .tooltip(Tooltip::text(tooltip))
             .on_click(move |_, window, cx| {
                 window.dispatch_action(action.boxed_clone(), cx);

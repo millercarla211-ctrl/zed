@@ -1,7 +1,7 @@
 #[cfg(target_os = "windows")]
 use gpui::{App, actions};
 #[cfg(target_os = "windows")]
-use workspace::Workspace;
+use workspace::{Workspace, register_project_item};
 
 #[cfg(target_os = "windows")]
 pub mod web_preview_view;
@@ -21,6 +21,7 @@ actions!(
 
 #[cfg(target_os = "windows")]
 pub fn init(cx: &mut App) {
+    register_project_item::<web_preview_view::WebPreviewView>(cx);
     cx.observe_new(|workspace: &mut Workspace, window, cx| {
         let Some(window) = window else {
             return;

@@ -1,3 +1,153 @@
+[2026-05-14] - Right Panel Tab Paging And Fast UI Catalog
+
+CHANGED:
+- `crates/media_panel` now ships more direct remote media rows across open images, videos, and audio samples before the provider-browser handoff.
+- `crates/media_panel` now uses an ASCII metadata separator in remote media rows and generated remote-browser cards.
+- `crates/shadcn_ui_panel/src/shadcn_catalog_index.tsv` now embeds the generated local shadcn/Magic catalog so the UI panel can show local entries immediately without scanning registry files on open.
+- `crates/shadcn_ui_panel` now treats the static or cached catalog as loaded at startup, keeping heavier registry discovery out of the normal panel-open path.
+- `crates/icon_picker/src/icon_pack_index.tsv` now includes representative icon names per pack.
+- `crates/icon_picker` now loads external icon metadata by selected pack or broad search instead of scanning every external icon pack when the panel opens.
+- `crates/icon_picker`, `crates/font_panel`, `crates/media_panel`, and `crates/shadcn_ui_panel` now page their horizontal tab strips with explicit previous/next icon buttons.
+- `crates/icon_picker` no longer renders a bottom loaded/status strip; status now appears in the top count/status area.
+- `crates/font_panel` no longer renders the sample text editor or per-row sample sentence in the panel body.
+- `crates/font_panel`, `crates/media_panel`, and `crates/shadcn_ui_panel` now also keep status in the top count/status area instead of a bottom footer.
+- `crates/shadcn_ui_panel` now opens from the rkyv/memmap cache when available and falls back to a static catalog before any heavier local catalog discovery.
+
+NOTES:
+- Preserved the current working WebPreview input path and normal editor input/caret behavior; this pass only touches the new right-panel UI.
+- Ran `just run`; Cargo finished the debug build and launched `G:\Zed\target\debug\zed.exe` once. The Codex tool timed out afterward because the Zed app remained open for manual QA.
+
+[2026-05-14] - Right Panel Dock And Preview Follow-Up
+
+CHANGED:
+- `crates/web_preview` no longer draws the WebPreview tab-content bottom border, and its document file handler now covers common Word, Excel, PowerPoint, OpenDocument, Apple iWork, ebook, PDF, CSV, and TSV formats.
+- `crates/title_bar` now marks top-right panel buttons with the accent selected style when the matching right panel is open.
+- `crates/icon_picker`, `crates/font_panel`, `crates/media_panel`, and `crates/shadcn_ui_panel` now hide their bottom-right dock buttons so the new panels are opened from the top-right titlebar only.
+- `crates/icon_picker` no longer renders the selected-icon Copy/Insert strip above the icon grid.
+- `crates/font_panel` now keeps action buttons inside the selected font row instead of a separate top preview/action block.
+- `crates/media_panel` now renders direct remote media rows in the panel content and keeps the remote provider browser available as a content row instead of a top source section.
+
+NOTES:
+- Preserved the existing WebPreview input/focus routing and normal editor input path.
+
+[2026-05-14] - Right Panel Polish And Viewer Cleanup
+
+ADDED:
+- `crates/icon_picker/src/icon_pack_index.tsv` stores the external icon-pack names/counts/sizes as compile-time data so pack tabs render immediately without directory discovery.
+- `crates/shadcn_ui_panel` now writes and reads a compact rkyv catalog cache through memmap2 under `target/shadcn-ui-panel`.
+
+CHANGED:
+- `crates/title_bar` now uses an icon glyph for the icon picker action and labels the shadcn panel action as UI.
+- `crates/icon_picker` now starts with static pack metadata, keeps external pack filters scrollable, and uses a denser icon tile grid.
+- `crates/media_panel` and `crates/web_preview` generated viewer pages now fill the tab for video/image/document previews and remove the header/source cards and dotted-grid style.
+- `crates/font_panel`, `crates/media_panel`, and `crates/shadcn_ui_panel` now use horizontally scrollable tab strips to avoid right-panel tab overflow.
+- `crates/shadcn_ui_panel` now presents registry-directory and 21st.dev entries with concise source labels instead of generated-looking descriptions.
+
+NOTES:
+- Preserved the current working WebPreview input path and normal editor input/caret behavior; this pass only touches right-panel chrome, static catalog loading, and generated preview pages.
+- Ran `just run`; it rebuilt and launched `G:\Zed\target\debug\zed.exe`. The command timed out afterward because the Zed app remained open for manual QA.
+
+[2026-05-14] - WebPreview File Viewers And Right Panel Follow-Up
+
+ADDED:
+- `crates/web_preview` now registers media/document project items so video, audio, PDF, EPUB, and Office-style files open in WebPreview-backed editor tabs.
+- `crates/web_preview` now generates theme-matched local viewer pages under `target/web-preview-files` for media/document files opened from the project tree.
+- `crates/media_panel` now has a Browse Remote action that opens a WebPreview remote-media browser backed by no-key Openverse, Wikimedia Commons, and NASA API searches plus all configured provider links.
+- `crates/font_panel` now includes an editable sample text field that drives panel row previews and generated WebPreview font specimens.
+
+CHANGED:
+- `crates/icon_picker` now caches the external Iconify catalog for the process, uses a compact tab strip for icon packs, renders real external SVGs when a pack or query is active, and uses a denser icon grid.
+- `crates/shadcn_ui_panel` now caches the discovered shadcn/ui catalog for the process so reopening the panel avoids repeated local registry scans.
+- `crates/media_panel` generated media preview pages now use a shadcn-style scroll area instead of the browser's default body scroll.
+- `crates/workspace/src/pane.rs` exposes the owning workspace handle for project-item integrations that need workspace context.
+
+NOTES:
+- Preserved the current working Windows WebPreview input/focus path; this pass adds file-preview integration without changing native WebView event routing.
+
+[2026-05-13] - Right Panel Quality Pass
+
+CHANGED:
+- `crates/shadcn_ui_panel` now includes shadcn registry examples in the native catalog, allowing chart/example entries to install through the same manifest-backed flow as components and blocks.
+- `crates/shadcn_ui_panel` now treats shadcn public registry manifests as valid install sources, so entries without mirrored source files can still install through the native manifest installer.
+- `crates/editor/src/items.rs` now creates unique destination filenames when copying media into a project, preventing different files with the same basename from silently reusing an old asset.
+- `crates/media_panel` Refresh now re-reads the current workspace media roots before indexing, so new worktrees or media folders are discovered without reopening Zed.
+- `crates/shadcn_ui_panel` now has a catalog Refresh action for reloading updated local shadcn/ui, block, and Magic UI inspiration sources.
+- `crates/icon_picker` now shows filtered/total result counts and a polished no-match state instead of an empty grid.
+- `crates/icon_picker` now has a selected-icon preview strip with explicit Insert and Copy Name actions backed by the system clipboard.
+- `crates/icon_picker` can now copy the selected icon SVG markup directly to the clipboard.
+- `crates/shadcn_ui_panel` rows now include a Copy action that places the import plus JSX snippet on the clipboard.
+- `crates/shadcn_ui_panel` rows now include a Docs action separate from local Preview.
+- `crates/font_panel` can now copy CSS snippets for selected system or web fonts to the clipboard.
+- `crates/media_panel` can now copy local media paths and direct media URLs from the panel.
+- `crates/editor/src/items.rs` now supports direct media URL insertion with React/Markdown/HTML/CSS-aware output.
+- `crates/media_panel` now detects image, video, and audio URLs in the search box and offers direct URL insertion into the active editor.
+- `crates/media_panel` URL detection now falls back to the active Images/Videos/Audio filter for extensionless CDN URLs.
+- `crates/media_panel` now generates local WebPreview media pages under `target/media-previews` for local assets and direct URLs before insertion.
+- `crates/media_panel` now has a Refresh action so workspace media can be re-indexed after files are added.
+- `crates/font_panel` now shows loading, filtered/total counts, source filters for System/Web fonts, and a no-match state while keeping font preview/apply behavior on the existing settings path.
+- `crates/font_panel` now supports custom web-font names from the search box, generating Google Fonts family queries and CSS variable names without requiring a new code entry.
+- `crates/font_panel` now creates local browser-rendered font specimen pages under `target/font-previews` and opens them through WebPreview for true web-font testing.
+- `crates/font_panel` can now add curated web fonts to the active project's global CSS by writing a Google Fonts import and a reusable `--font-*` CSS variable.
+- `crates/media_panel` now has native All/Image/Video/Audio filters with live counts, plus loading and no-match states for the indexed local media list.
+- `crates/shadcn_ui_panel` now reports filtered/total catalog counts consistently with the other right dock panels.
+- `crates/shadcn_ui_panel` generated preview pages now include theme-matched visual component/block specimens before the insert snippet and source code.
+
+NOTES:
+- Ran targeted `rustfmt` on the touched right-panel Rust files.
+- Did not run `just run`; this pass avoids expensive runtime validation until the full panel batch is ready.
+
+[2026-05-13] - Native shadcn/ui Panel First Pass
+
+ADDED:
+- `crates/shadcn_ui` adds a native installer for source-backed shadcn/ui assets, import rewriting, project layout, `components.json`, `lib/utils.ts`, and common package dependencies.
+- `crates/shadcn_ui_panel` adds a native right-dock shadcn/ui catalog panel with searchable official components, shadcn blocks, and Magic UI entries.
+- `crates/shadcn_ui_panel` now discovers cloned shadcn registry manifests and Magic UI `.tsx` entries so the panel includes all available local registry UI/block assets beyond the curated starter list.
+- `crates/shadcn_ui_panel` adds source filters with live counts for All, UI components, Blocks, and Magic UI plus an empty state for no-match searches.
+- `crates/shadcn_ui_panel` now generates local source-backed WebPreview pages under `target/shadcn-previews` for Preview actions, with docs fallback when source is unavailable.
+- The top-right titlebar hidden-feature actions now include a real shadcn/ui button that toggles the new panel.
+- `crates/workspace/src/pane.rs` adds a `DraggedShadcnAsset` payload and pane-level drag/drop routing into active editor items.
+- `crates/editor/src/items.rs` can insert shadcn assets into an active project through the new installer crate.
+- `G:\Zed\inspirations` now includes cloned reference sources for shadcn/ui, Magic UI, and 21st.dev Magic MCP.
+
+CHANGED:
+- shadcn/ui previews open through the Windows WebPreview path when available, with external URL fallback on other platforms.
+- shadcn registry imports are rewritten from the upstream registry paths into normal project paths like `@/components/ui`, `@/components/blocks`, and `@/hooks`.
+- shadcn installs now prefer official `public/r/styles/new-york-v4/*.json` manifests, recursively installing registry dependencies and adding package dependencies from the manifest instead of copying every UI component blindly.
+- Auto-discovered shadcn/ui, chart/block, and Magic UI catalog entries now derive their primary import component from real source exports, so entries like `input-otp`, `button-group`, and `rainbow-button` use the correct React identifiers.
+- shadcn chart, example, and internal registry files now map into project `components/blocks` paths instead of being skipped by the installer.
+- The shadcn/ui panel header is now more work-surface-like and avoids instructional filler text.
+- shadcn installs now detect or create a global CSS file and append a marked shadcn theme block only when the target project does not already define shadcn variables.
+- Existing `components.json` files now get missing `tailwind.css`, `cssVariables`, and alias fields filled without overwriting explicit user configuration.
+- `crates/shadcn_ui` now returns an install report with the installed path, added dependency count, and theme-CSS write state for better panel/editor feedback.
+- shadcn install reports now detect the target project's package manager from lockfiles and include the right install command when dependencies were added.
+
+FIXED:
+- Fixed scoped npm package parsing during dependency insertion so specs like `@radix-ui/react-slot@1.2.3` do not become malformed package names.
+
+NOTES:
+- Ran targeted `rustfmt` on the touched Rust files.
+- Did not run `just run`; this pass stayed within the repo rule to avoid runtime validation until the full change set is ready for user testing.
+
+[2026-05-13] - Icon Picker Sidebar Work
+
+ADDED:
+- Added `crates/icon_picker`, a right-dock icon picker panel backed by the existing `crates/icons` icon registry and bundled SVG assets.
+- Added workspace/editor drag payload routing so icon tiles can be dropped into the active editor.
+- Added React/JSX icon insertion that writes selected SVG assets into the current project and inserts a component import/usage.
+- Added `crates/font_panel`, a right-dock font panel backed by Zed's cached system font family list.
+- Added top-right title bar buttons for opening the icon picker and font panel directly.
+- Added font search, per-font preview rows, and actions to apply the selected font to editor buffers or the Zed UI.
+- Added `crates/media_panel`, a right-dock media search panel that indexes real media assets while excluding tool/plugin media folders.
+- Added free media source launchers for Openverse, Wikimedia Commons, Unsplash, Pexels, and Pixabay using the panel query.
+- Added editor drag/click insertion for media assets, copying selected media into project `assets/media` folders before inserting the right reference for React, Markdown, HTML, CSS, or plain text.
+
+NOTES:
+- Non-React buffers receive the raw SVG at the editor cursor.
+- React `.tsx`/`.jsx` buffers generate project SVG files under `src/assets/icons` when a `src` folder exists, otherwise under `assets/icons`.
+- The font panel writes through the existing user settings update path instead of maintaining a separate font preference store, and warms Zed's font cache in the background.
+- The media panel indexes `inspirations/media`, `media`, `assets/media`, and `public/media` roots from visible worktrees, while skipping tool-ish folders such as `mcp`, `tools`, `target`, and cache/runtime folders.
+- The implementation does not touch the WebPreview input path.
+
 [2026-05-13] - Inspiration Source Import
 
 ADDED:
@@ -571,3 +721,61 @@ NOTES:
 - Ran `just run`; Cargo built successfully in 4m 57s and Zed launched once, with only the known close-time `zed-cli` lookup message after the app exited.
 - Ran `just run` again after the navigation refocus and cursor default follow-up; Cargo rebuilt `web_preview`, `sidebar`, and `zed` in 4m 44s and launched Zed once. The recipe returned the known post-launch `zed-cli` lookup exit code.
 - The latest runtime log did not show a new Zed-side panic during the user test; system CPU was very high during follow-up inspection, led by the external `flow`/Codex processes.
+
+[2026-05-14] - Native Right Panel Runtime Integration Pass
+
+CHANGED:
+- `crates/icon_picker/src/icon_picker.rs`, `crates/font_panel/src/font_panel.rs`, `crates/media_panel/src/media_panel.rs`, and `crates/shadcn_ui_panel/src/shadcn_ui_panel.rs` now use Zed's current compact button sizing, `IconSize::XLarge`, stable string element IDs, and direct tooltip builders.
+- The new panel scroll containers now use stateful element IDs before vertical scrolling, matching GPUI's scroll API expectations.
+- Font, media, and shadcn preview buttons now route through the live click-event `Window` and update the workspace directly, instead of trying to call `update_in` from a panel context.
+- `crates/media_panel/src/media_panel.rs` now separates first-load indexing from manual refresh so startup can index the already-known media roots without rereading `Workspace` during workspace construction.
+
+FIXED:
+- Fixed compile errors in the new icon, font, media, and shadcn/ui panel crates caused by API mismatches with local Zed UI types.
+- Fixed the startup panic where the Media panel tried to read `Workspace` while the workspace was already being updated.
+- Fixed row rendering borrow issues by materializing panel rows into concrete elements before inserting them into the element tree.
+
+NOTES:
+- Ran `just run`; Cargo rebuilt the touched crates successfully in 1m 12s and launched `target/debug/zed.exe` once. The app exited cleanly after closing, with only the known `zed-cli` lookup message in terminal output.
+
+[2026-05-14] - Expanded Native Right Panel Catalogs
+
+ADDED:
+- `crates/font_panel/src/google_fonts.rs` now contains the generated Google Fonts family catalog from the public fonts metadata endpoint, so the font panel can list all current families without requiring an API key at runtime.
+- `crates/shadcn_ui_panel/src/registry_directory.rs` now contains the public shadcn registry directory, including community registries such as Magic UI, AI Elements, shadcnblocks, and related shadcn-compatible libraries.
+
+CHANGED:
+- `crates/icon_picker/src/icon_picker.rs` now loads the external `G:\Assets\icon\data` Iconify-style packs lazily, samples all icon sets in the default grid, and keeps pack filters compact/scrollable so the icon grid can use the panel space.
+- `crates/workspace/src/pane.rs` and `crates/editor/src/items.rs` now carry optional external SVG payloads for icon drag/drop and insertion, while preserving built-in Zed icons.
+- `crates/font_panel/src/font_panel.rs` now searches the generated Google Fonts list and still supports typed custom Google-style family names.
+- `crates/media_panel/src/media_panel.rs` now starts on the Images filter and exposes a larger set of free media source shortcuts.
+- `crates/shadcn_ui_panel/src/shadcn_ui_panel.rs` now exposes registry-directory and 21st.dev Magic entries as docs/preview sources, keeps source-backed entries draggable/installable, and renders generated preview pages with a ScrollArea-style source pane plus TypeScript highlighting.
+
+FIXED:
+- Fixed the icon pack filter strip so it no longer consumes the panel or fails GPUI scroll API requirements.
+- Prevented non-local shadcn registry rows from advertising broken drag-install behavior.
+
+NOTES:
+- Verified Openverse, Wikimedia Commons, The Met, and NASA image APIs separately for no-key image discovery, and kept API-key providers as web-search shortcuts.
+- Ran `git diff --check` over the touched panel/editor/workspace files; only existing LF/CRLF checkout warnings were reported.
+- Ran `just run`; Cargo rebuilt the new panel crates successfully in 3m 40s, launched Zed once, and returned with only the known `zed-cli` lookup message.
+
+[2026-05-14] - Right Panel Catalog Polish Follow-up
+
+CHANGED:
+- `crates/font_panel/src/font_panel.rs` now renders a compact `Aa Bb Cc 123` specimen inside each font row, so users can judge system and Google fonts directly from the list without restoring the removed top sample block.
+- `crates/workspace/src/pane.rs`, `crates/icon_picker/src/icon_picker.rs`, and `crates/editor/src/items.rs` now carry external Iconify width as well as height through icon drag/click insertion so generated SVG files keep correct non-square viewBoxes.
+- `crates/icon_picker/src/icon_picker.rs` now shows compact pack-initial badges for unloaded external icon-pack representatives instead of a generic placeholder, keeping all hardcoded icon sets visually distinct without loading every large pack body.
+- `crates/media_panel/src/media_panel.rs` now renders direct remote video rows as compact player cards and audio rows as waveform cards instead of using one generic icon placeholder.
+- `crates/media_panel/src/media_panel.rs` now includes additional verified direct remote rows from NASA, Blender Open Movie, and SoundHelix for immediate image, video, and audio coverage.
+- `crates/media_panel/src/media_panel.rs` now gives direct remote media assets explicit search tags so built-in open images, videos, and audio samples match natural media/design queries immediately.
+- `crates/media_panel/src/media_panel.rs` now routes remote provider links through image, video, or audio search templates based on the active media tab and hides providers that do not support the selected category.
+- `crates/media_panel/src/media_panel.rs` now shows the number of remote providers available for the active media tab in the provider browser row.
+- `crates/shadcn_ui_panel/src/shadcn_ui_panel.rs` now seeds the rkyv/memmap catalog cache from the embedded static catalog when no cache exists, so first open remains instant and later opens can use the memory-mapped cache path.
+- `crates/shadcn_ui_panel/src/shadcn_ui_panel.rs` now has distinct generated thumbnails for more common shadcn components, including badges, avatars, tabs, tables, checkboxes, dialogs, menus, accordions, and sidebars.
+- `crates/shadcn_ui_panel/src/shadcn_ui_panel.rs` now has richer generated thumbnails and WebPreview demo shells for form, menu, feedback, loading, calendar, navigation, scroll, switch, slider, progress, and tooltip-style components.
+- `crates/shadcn_ui_panel/src/shadcn_ui_panel.rs` now labels each row by source family (`shadcn`, `block`, `magic-ui`, `registry`, or `21st`) beside the category, keeping rows informative without long marketing descriptions.
+
+NOTES:
+- Ran `rustfmt` on the touched icon, media, and UI panel files.
+- Ran `git diff --check -- crates\media_panel\src\media_panel.rs crates\shadcn_ui_panel\src\shadcn_ui_panel.rs`; no whitespace errors were reported.

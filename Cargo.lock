@@ -5610,6 +5610,7 @@ dependencies = [
  "multi_buffer",
  "ordered-float 2.10.1",
  "parking_lot",
+ "pathdiff",
  "pretty_assertions",
  "project",
  "proptest",
@@ -5624,6 +5625,7 @@ dependencies = [
  "serde",
  "serde_json",
  "settings",
+ "shadcn_ui",
  "smallvec",
  "snippet",
  "sum_tree",
@@ -6612,6 +6614,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1e4d2d0cf79d38430cc9dc9aadec84774bff2e1ba30ae2bf6c16cfce9385a23"
 dependencies = [
  "bytemuck",
+]
+
+[[package]]
+name = "font_panel"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "editor",
+ "fs",
+ "gpui",
+ "settings",
+ "theme",
+ "theme_settings",
+ "ui",
+ "url",
+ "web_preview",
+ "workspace",
 ]
 
 [[package]]
@@ -9048,6 +9067,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "icon_picker"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assets",
+ "editor",
+ "gpui",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "ui",
+ "util",
+ "workspace",
+]
+
+[[package]]
 name = "icons"
 version = "0.1.0"
 dependencies = [
@@ -11115,6 +11150,19 @@ dependencies = [
  "foreign-types 0.5.0",
  "metal",
  "objc",
+]
+
+[[package]]
+name = "media_panel"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "editor",
+ "gpui",
+ "ui",
+ "url",
+ "web_preview",
+ "workspace",
 ]
 
 [[package]]
@@ -17038,6 +17086,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "shadcn_ui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "workspace",
+]
+
+[[package]]
+name = "shadcn_ui_panel"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "editor",
+ "gpui",
+ "memmap2",
+ "rkyv",
+ "serde",
+ "serde_json",
+ "ui",
+ "url",
+ "web_preview",
+ "workspace",
+]
+
+[[package]]
 name = "sharded-slab"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19026,11 +19101,14 @@ dependencies = [
  "client",
  "cloud_api_types",
  "db",
+ "font_panel",
  "fs",
  "git_ui",
  "gpui",
+ "icon_picker",
  "icons",
  "livekit_client",
+ "media_panel",
  "notifications",
  "platform_title_bar",
  "project",
@@ -19043,6 +19121,7 @@ dependencies = [
  "semver",
  "serde",
  "settings",
+ "shadcn_ui_panel",
  "smallvec",
  "telemetry",
  "theme",
@@ -21352,6 +21431,7 @@ dependencies = [
  "markdown",
  "menu",
  "paths",
+ "project",
  "raw-window-handle",
  "serde_json",
  "ui",
@@ -23609,6 +23689,7 @@ dependencies = [
  "feature_flags",
  "feedback",
  "file_finder",
+ "font_panel",
  "fs",
  "futures 0.3.32",
  "git",
@@ -23620,6 +23701,7 @@ dependencies = [
  "gpui_platform",
  "gpui_tokio",
  "http_client",
+ "icon_picker",
  "image",
  "image_viewer",
  "input_latency_ui",
@@ -23642,6 +23724,7 @@ dependencies = [
  "log",
  "markdown",
  "markdown_preview",
+ "media_panel",
  "menu",
  "migrator",
  "mimalloc",
@@ -23678,6 +23761,7 @@ dependencies = [
  "settings",
  "settings_profile_selector",
  "settings_ui",
+ "shadcn_ui_panel",
  "shellexpand",
  "sidebar",
  "smol",

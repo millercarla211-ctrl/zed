@@ -8,6 +8,7 @@ use crate::{
     scroll::{ScrollAnchor, ScrollOffset},
 };
 use anyhow::{Context as _, Result, anyhow};
+use assets::Assets;
 use collections::{HashMap, HashSet};
 use file_icons::FileIcons;
 use fs::MTime;
@@ -34,6 +35,7 @@ use std::{
     any::{Any, TypeId},
     borrow::Cow,
     cmp::{self, Ordering},
+    fs as std_fs,
     num::NonZeroU32,
     ops::Range,
     path::{Path, PathBuf},
@@ -41,7 +43,7 @@ use std::{
 };
 use text::{BufferId, BufferSnapshot, OffsetRangeExt, Selection};
 use ui::{IconDecorationKind, prelude::*};
-use util::{ResultExt, TryFutureExt, paths::PathExt, rel_path::RelPath};
+use util::{ResultExt, TryFutureExt, asset_str, paths::PathExt, rel_path::RelPath};
 use workspace::item::{
     Dedup, ItemSettings, SerializableItem, TabContentParams, WorkspaceScreenKind,
 };
@@ -55,7 +57,8 @@ use workspace::{
     },
 };
 use workspace::{
-    Pane, WorkspaceSettings,
+    DraggedIconAsset, DraggedMediaAsset, DraggedMediaKind, DraggedShadcnAsset, Pane,
+    WorkspaceSettings,
     item::{FollowEvent, ProjectItemKind},
     searchable::SearchOptions,
 };
@@ -64,6 +67,782 @@ use zed_actions::preview::{
 };
 
 pub const MAX_TAB_TITLE_LEN: usize = 24;
+
+impl Editor {
+    pub fn insert_icon_asset(
+        &mut self,
+        icon: &DraggedIconAsset,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<SharedString> {
+        let svg = icon_svg_source(icon);
+
+        if let Some(active_path) = target_file_abs_path_for_app(self, cx)
+            && is_react_editor_path(&active_path)
+            && let Some((project_root, active_path)) = self.project_path(cx).and_then(|path| {
+                let project = self.project()?.read(cx);
+                Some((
+                    project.get_workspace_root(&path, cx)?,
+                    project.absolute_path(&path, cx)?,
+                ))
+            })
+        {
+            return self.insert_react_icon_asset(icon, &svg, project_root, active_path, window, cx);
+        }
+
+        self.insert(&svg, window, cx);
+        Ok(format!("Inserted {}", icon.label.as_ref()).into())
+    }
+
+    fn insert_react_icon_asset(
+        &mut self,
+        icon: &DraggedIconAsset,
+        svg: &str,
+        project_root: PathBuf,
+        active_path: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<SharedString> {
+        let asset_dir = icon_asset_dir(&project_root);
+        std_fs::create_dir_all(&asset_dir)
+            .with_context(|| format!("creating {}", asset_dir.display()))?;
+
+        let svg_path = asset_dir.join(format!("{}.svg", icon.stem.as_ref()));
+        if !svg_path.exists() {
+            std_fs::write(&svg_path, format!("{svg}\n"))
+                .with_context(|| format!("writing {}", svg_path.display()))?;
+        }
+
+        let import_path = relative_import_path(&active_path, &svg_path).with_context(|| {
+            format!(
+                "building import from {} to {}",
+                active_path.display(),
+                svg_path.display()
+            )
+        })?;
+        let component_name = react_icon_component_name(icon.stem.as_ref());
+        let import_statement = format!("import {component_name} from \"{import_path}?react\";\n");
+
+        let text = self.text(cx);
+        if !react_import_exists(&text, &component_name, &import_path) {
+            let offset = import_insertion_offset(&text);
+            self.edit(
+                [(
+                    MultiBufferOffset(offset)..MultiBufferOffset(offset),
+                    import_statement,
+                )],
+                cx,
+            );
+        }
+
+        self.insert(&format!("<{component_name} />"), window, cx);
+        Ok(format!("Inserted {component_name}").into())
+    }
+
+    fn insert_icon_asset_on_drop(
+        &mut self,
+        icon: &DraggedIconAsset,
+        cx: &mut App,
+    ) -> Result<SharedString> {
+        let svg = icon_svg_source(icon);
+
+        if let Some(active_path) = target_file_abs_path_for_app(self, cx)
+            && is_react_editor_path(&active_path)
+            && let Some((project_root, active_path)) = self.project_path(cx).and_then(|path| {
+                let project = self.project()?.read(cx);
+                Some((
+                    project.get_workspace_root(&path, cx)?,
+                    project.absolute_path(&path, cx)?,
+                ))
+            })
+        {
+            return self.insert_react_icon_asset_on_drop(icon, &svg, project_root, active_path, cx);
+        }
+
+        self.insert_text_on_drop(svg, cx);
+        Ok(format!("Inserted {}", icon.label.as_ref()).into())
+    }
+
+    fn insert_react_icon_asset_on_drop(
+        &mut self,
+        icon: &DraggedIconAsset,
+        svg: &str,
+        project_root: PathBuf,
+        active_path: PathBuf,
+        cx: &mut App,
+    ) -> Result<SharedString> {
+        let asset_dir = icon_asset_dir(&project_root);
+        std_fs::create_dir_all(&asset_dir)
+            .with_context(|| format!("creating {}", asset_dir.display()))?;
+
+        let svg_path = asset_dir.join(format!("{}.svg", icon.stem.as_ref()));
+        if !svg_path.exists() {
+            std_fs::write(&svg_path, format!("{svg}\n"))
+                .with_context(|| format!("writing {}", svg_path.display()))?;
+        }
+
+        let import_path = relative_import_path(&active_path, &svg_path).with_context(|| {
+            format!(
+                "building import from {} to {}",
+                active_path.display(),
+                svg_path.display()
+            )
+        })?;
+        let component_name = react_icon_component_name(icon.stem.as_ref());
+        let import_statement = format!("import {component_name} from \"{import_path}?react\";\n");
+
+        let text = self.text(cx);
+        if !react_import_exists(&text, &component_name, &import_path) {
+            self.insert_text_at_offset_on_drop(
+                import_insertion_offset(&text),
+                import_statement,
+                cx,
+            );
+        }
+
+        self.insert_text_on_drop(format!("<{component_name} />"), cx);
+        Ok(format!("Inserted {component_name}").into())
+    }
+
+    pub fn insert_media_asset(
+        &mut self,
+        media: &DraggedMediaAsset,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<SharedString> {
+        let Some(_active_path) = self.target_file_abs_path(cx) else {
+            let path = media.path.to_string_lossy().to_string();
+            self.insert(&path, window, cx);
+            return Ok(format!("Inserted {}", media.label.as_ref()).into());
+        };
+
+        let Some((project_root, active_path)) = self.project_path(cx).and_then(|path| {
+            let project = self.project()?.read(cx);
+            Some((
+                project.get_workspace_root(&path, cx)?,
+                project.absolute_path(&path, cx)?,
+            ))
+        }) else {
+            let path = media.path.to_string_lossy().to_string();
+            self.insert(&path, window, cx);
+            return Ok(format!("Inserted {}", media.label.as_ref()).into());
+        };
+
+        let asset_path = copy_media_asset_into_project(media, &project_root)?;
+        let reference_path =
+            relative_import_path(&active_path, &asset_path).with_context(|| {
+                format!(
+                    "building media reference from {} to {}",
+                    active_path.display(),
+                    asset_path.display()
+                )
+            })?;
+
+        if is_react_editor_path(&active_path) {
+            let identifier = media_asset_identifier(&asset_path);
+            let import_statement = format!("import {identifier} from \"{reference_path}\";\n");
+            let text = self.text(cx);
+            if !media_import_exists(&text, &identifier, &reference_path) {
+                let offset = import_insertion_offset(&text);
+                self.edit(
+                    [(
+                        MultiBufferOffset(offset)..MultiBufferOffset(offset),
+                        import_statement,
+                    )],
+                    cx,
+                );
+            }
+            self.insert(
+                &react_media_element(media.kind, &identifier, media.label.as_ref()),
+                window,
+                cx,
+            );
+        } else {
+            self.insert(
+                &media_reference_for_path(
+                    &active_path,
+                    media.kind,
+                    media.label.as_ref(),
+                    &reference_path,
+                ),
+                window,
+                cx,
+            );
+        }
+
+        Ok(format!("Inserted {}", media.label.as_ref()).into())
+    }
+
+    fn insert_media_asset_on_drop(
+        &mut self,
+        media: &DraggedMediaAsset,
+        cx: &mut App,
+    ) -> Result<SharedString> {
+        let Some(_active_path) = target_file_abs_path_for_app(self, cx) else {
+            self.insert_text_on_drop(media.path.to_string_lossy().to_string(), cx);
+            return Ok(format!("Inserted {}", media.label.as_ref()).into());
+        };
+
+        let Some((project_root, active_path)) = self.project_path(cx).and_then(|path| {
+            let project = self.project()?.read(cx);
+            Some((
+                project.get_workspace_root(&path, cx)?,
+                project.absolute_path(&path, cx)?,
+            ))
+        }) else {
+            self.insert_text_on_drop(media.path.to_string_lossy().to_string(), cx);
+            return Ok(format!("Inserted {}", media.label.as_ref()).into());
+        };
+
+        let asset_path = copy_media_asset_into_project(media, &project_root)?;
+        let reference_path =
+            relative_import_path(&active_path, &asset_path).with_context(|| {
+                format!(
+                    "building media reference from {} to {}",
+                    active_path.display(),
+                    asset_path.display()
+                )
+            })?;
+
+        if is_react_editor_path(&active_path) {
+            let identifier = media_asset_identifier(&asset_path);
+            let import_statement = format!("import {identifier} from \"{reference_path}\";\n");
+            let text = self.text(cx);
+            if !media_import_exists(&text, &identifier, &reference_path) {
+                self.insert_text_at_offset_on_drop(
+                    import_insertion_offset(&text),
+                    import_statement,
+                    cx,
+                );
+            }
+            self.insert_text_on_drop(
+                react_media_element(media.kind, &identifier, media.label.as_ref()),
+                cx,
+            );
+        } else {
+            self.insert_text_on_drop(
+                media_reference_for_path(
+                    &active_path,
+                    media.kind,
+                    media.label.as_ref(),
+                    &reference_path,
+                ),
+                cx,
+            );
+        }
+
+        Ok(format!("Inserted {}", media.label.as_ref()).into())
+    }
+
+    pub fn insert_media_url(
+        &mut self,
+        url: &str,
+        kind: DraggedMediaKind,
+        label: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> SharedString {
+        let Some(active_path) = self.target_file_abs_path(cx) else {
+            self.insert(url, window, cx);
+            return format!("Inserted {label}").into();
+        };
+
+        if is_react_editor_path(&active_path) {
+            self.insert(&react_media_url_element(kind, url, label), window, cx);
+        } else {
+            self.insert(
+                &media_reference_for_path(&active_path, kind, label, url),
+                window,
+                cx,
+            );
+        }
+
+        format!("Inserted {label}").into()
+    }
+
+    pub fn insert_shadcn_asset(
+        &mut self,
+        asset: &DraggedShadcnAsset,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<SharedString> {
+        let Some(_active_path) = self.target_file_abs_path(cx) else {
+            self.insert(asset.jsx.as_ref(), window, cx);
+            return Ok(format!("Inserted {}", asset.title.as_ref()).into());
+        };
+
+        let Some((project_root, active_path)) = self.project_path(cx).and_then(|path| {
+            let project = self.project()?.read(cx);
+            Some((
+                project.get_workspace_root(&path, cx)?,
+                project.absolute_path(&path, cx)?,
+            ))
+        }) else {
+            self.insert(asset.jsx.as_ref(), window, cx);
+            return Ok(format!("Inserted {}", asset.title.as_ref()).into());
+        };
+
+        let install_report = shadcn_ui::install_asset(asset, &project_root)?;
+
+        if is_react_editor_path(&active_path) {
+            let text = self.text(cx);
+            let import_statement = asset.import_statement.as_ref();
+            if !import_statement.is_empty() && !shadcn_import_exists(&text, import_statement) {
+                let offset = import_insertion_offset(&text);
+                self.edit(
+                    [(
+                        MultiBufferOffset(offset)..MultiBufferOffset(offset),
+                        format!("{import_statement}\n"),
+                    )],
+                    cx,
+                );
+            }
+            self.insert(asset.jsx.as_ref(), window, cx);
+        } else {
+            self.insert(
+                &format!(
+                    "Installed {} into {}",
+                    asset.title.as_ref(),
+                    install_report.installed_path.as_str()
+                ),
+                window,
+                cx,
+            );
+        }
+
+        Ok(install_report.status_message(asset.title.as_ref()).into())
+    }
+
+    fn insert_shadcn_asset_on_drop(
+        &mut self,
+        asset: &DraggedShadcnAsset,
+        cx: &mut App,
+    ) -> Result<SharedString> {
+        let Some(_active_path) = target_file_abs_path_for_app(self, cx) else {
+            self.insert_text_on_drop(asset.jsx.to_string(), cx);
+            return Ok(format!("Inserted {}", asset.title.as_ref()).into());
+        };
+
+        let Some((project_root, active_path)) = self.project_path(cx).and_then(|path| {
+            let project = self.project()?.read(cx);
+            Some((
+                project.get_workspace_root(&path, cx)?,
+                project.absolute_path(&path, cx)?,
+            ))
+        }) else {
+            self.insert_text_on_drop(asset.jsx.to_string(), cx);
+            return Ok(format!("Inserted {}", asset.title.as_ref()).into());
+        };
+
+        let install_report = shadcn_ui::install_asset(asset, &project_root)?;
+
+        if is_react_editor_path(&active_path) {
+            let text = self.text(cx);
+            let import_statement = asset.import_statement.as_ref();
+            if !import_statement.is_empty() && !shadcn_import_exists(&text, import_statement) {
+                self.insert_text_at_offset_on_drop(
+                    import_insertion_offset(&text),
+                    format!("{import_statement}\n"),
+                    cx,
+                );
+            }
+            self.insert_text_on_drop(asset.jsx.to_string(), cx);
+        } else {
+            self.insert_text_on_drop(
+                format!(
+                    "Installed {} into {}",
+                    asset.title.as_ref(),
+                    install_report.installed_path.as_str()
+                ),
+                cx,
+            );
+        }
+
+        Ok(install_report.status_message(asset.title.as_ref()).into())
+    }
+
+    fn insert_text_on_drop(&mut self, text: impl Into<Arc<str>>, cx: &mut App) {
+        if self.read_only(cx) {
+            return;
+        }
+
+        let text = text.into();
+        let selections = self.selections.all_adjusted(&self.display_snapshot(cx));
+        self.buffer.update(cx, |buffer, cx| {
+            buffer.edit(
+                selections
+                    .iter()
+                    .map(|selection| (selection.start..selection.end, text.clone())),
+                None,
+                cx,
+            );
+        });
+    }
+
+    fn insert_text_at_offset_on_drop(
+        &mut self,
+        offset: usize,
+        text: impl Into<Arc<str>>,
+        cx: &mut App,
+    ) {
+        if self.read_only(cx) {
+            return;
+        }
+
+        let offset = MultiBufferOffset(offset);
+        let text = text.into();
+        self.buffer.update(cx, |buffer, cx| {
+            buffer.edit([(offset..offset, text)], None, cx);
+        });
+    }
+}
+
+fn shadcn_import_exists(text: &str, import_statement: &str) -> bool {
+    text.contains(import_statement)
+}
+
+fn target_file_abs_path_for_app(editor: &Editor, cx: &App) -> Option<PathBuf> {
+    if let Some(project_path) = editor.project_path(cx) {
+        let project = editor.project()?.read(cx);
+        return project.absolute_path(&project_path, cx);
+    }
+
+    editor
+        .buffer()
+        .read(cx)
+        .as_singleton()
+        .and_then(|buffer| buffer.read(cx).file())
+        .and_then(|file| file.as_local().map(|file| file.abs_path(cx)))
+}
+
+fn is_react_editor_path(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|extension| extension.to_str()),
+        Some("tsx" | "jsx")
+    )
+}
+
+fn icon_svg_source(icon: &DraggedIconAsset) -> String {
+    icon.svg
+        .as_ref()
+        .map(|svg| svg.trim().to_string())
+        .or_else(|| {
+            icon.icon_name.map(|icon_name| {
+                asset_str::<Assets>(icon_name.path().as_ref())
+                    .trim()
+                    .to_string()
+            })
+        })
+        .or_else(|| {
+            let pack = icon.external_pack.as_ref()?;
+            let name = icon.external_name.as_ref()?;
+            iconify_svg_source(
+                pack.as_ref(),
+                name.as_ref(),
+                icon.external_width.unwrap_or(24),
+                icon.external_height.unwrap_or(24),
+            )
+        })
+        .unwrap_or_default()
+}
+
+#[derive(serde::Deserialize)]
+struct IconifyBodyPack {
+    icons: HashMap<String, IconifyBody>,
+}
+
+#[derive(serde::Deserialize)]
+struct IconifyBody {
+    body: String,
+    #[serde(default)]
+    width: Option<u32>,
+    #[serde(default)]
+    height: Option<u32>,
+}
+
+fn iconify_svg_source(pack: &str, name: &str, width: u32, height: u32) -> Option<String> {
+    let path = std::env::var("DX_ICONS_DATA_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("G:/Assets/icon/data"))
+        .join(format!("{pack}.json"));
+    let text = std_fs::read_to_string(path).ok()?;
+    let pack = serde_json::from_str::<IconifyBodyPack>(&text).ok()?;
+    let icon = pack.icons.get(name)?;
+    let body = icon.body.trim();
+    let width = icon.width.unwrap_or(width).max(1);
+    let height = icon.height.unwrap_or(height).max(1);
+    Some(format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">{body}</svg>"#
+    ))
+}
+
+fn icon_asset_dir(project_root: &Path) -> PathBuf {
+    let src_dir = project_root.join("src");
+    if src_dir.is_dir() {
+        src_dir.join("assets").join("icons")
+    } else {
+        project_root.join("assets").join("icons")
+    }
+}
+
+fn copy_media_asset_into_project(
+    media: &DraggedMediaAsset,
+    project_root: &Path,
+) -> Result<PathBuf> {
+    let asset_dir = media_asset_dir(project_root, media.kind);
+    std_fs::create_dir_all(&asset_dir)
+        .with_context(|| format!("creating {}", asset_dir.display()))?;
+
+    let file_name = media
+        .path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("media");
+    let destination = unique_media_destination(&asset_dir, file_name, &media.path)?;
+    if !paths_equivalent(&destination, &media.path) {
+        std_fs::copy(&media.path, &destination).with_context(|| {
+            format!(
+                "copying media asset from {} to {}",
+                media.path.display(),
+                destination.display()
+            )
+        })?;
+    }
+
+    Ok(destination)
+}
+
+fn unique_media_destination(
+    asset_dir: &Path,
+    file_name: &str,
+    source_path: &Path,
+) -> Result<PathBuf> {
+    let destination = asset_dir.join(file_name);
+    if !destination.exists() || paths_equivalent(&destination, source_path) {
+        return Ok(destination);
+    }
+
+    let file_path = Path::new(file_name);
+    let stem = file_path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .filter(|stem| !stem.is_empty())
+        .unwrap_or("media");
+    let extension = file_path
+        .extension()
+        .and_then(|extension| extension.to_str());
+
+    for suffix in 2..=999 {
+        let file_name = match extension {
+            Some(extension) if !extension.is_empty() => format!("{stem}-{suffix}.{extension}"),
+            _ => format!("{stem}-{suffix}"),
+        };
+        let destination = asset_dir.join(file_name);
+        if !destination.exists() || paths_equivalent(&destination, source_path) {
+            return Ok(destination);
+        }
+    }
+
+    Err(anyhow!(
+        "could not find an available media filename for {}",
+        file_name
+    ))
+}
+
+fn paths_equivalent(left: &Path, right: &Path) -> bool {
+    if left == right {
+        return true;
+    }
+
+    let Ok(left) = std_fs::canonicalize(left) else {
+        return false;
+    };
+    let Ok(right) = std_fs::canonicalize(right) else {
+        return false;
+    };
+
+    left == right
+}
+
+fn media_asset_dir(project_root: &Path, kind: DraggedMediaKind) -> PathBuf {
+    let category = match kind {
+        DraggedMediaKind::Image => "images",
+        DraggedMediaKind::Video => "videos",
+        DraggedMediaKind::Audio => "audio",
+    };
+    let src_dir = project_root.join("src");
+    if src_dir.is_dir() {
+        src_dir.join("assets").join("media").join(category)
+    } else {
+        project_root.join("assets").join("media").join(category)
+    }
+}
+
+fn relative_import_path(from_file: &Path, to_file: &Path) -> Option<String> {
+    let from_dir = from_file.parent()?;
+    let relative = pathdiff::diff_paths(to_file, from_dir)?;
+    let mut relative = relative.to_string_lossy().replace('\\', "/");
+    if !relative.starts_with('.') {
+        relative = format!("./{relative}");
+    }
+    Some(relative)
+}
+
+fn react_icon_component_name(stem: &str) -> String {
+    let mut name = String::new();
+    for segment in stem.split('_').filter(|segment| !segment.is_empty()) {
+        let mut chars = segment.chars();
+        if let Some(first) = chars.next() {
+            name.extend(first.to_uppercase());
+            name.push_str(chars.as_str());
+        }
+    }
+
+    if name.is_empty() {
+        name.push_str("Svg");
+    }
+    if name
+        .chars()
+        .next()
+        .is_some_and(|first| first.is_ascii_digit())
+    {
+        name.insert_str(0, "Svg");
+    }
+    if !name.ends_with("Icon") {
+        name.push_str("Icon");
+    }
+    name
+}
+
+fn react_import_exists(text: &str, component_name: &str, import_path: &str) -> bool {
+    text.contains(&format!(
+        "import {component_name} from \"{import_path}?react\""
+    )) || text.contains(&format!(
+        "import {component_name} from '{import_path}?react'"
+    ))
+}
+
+fn media_import_exists(text: &str, identifier: &str, import_path: &str) -> bool {
+    text.contains(&format!("import {identifier} from \"{import_path}\""))
+        || text.contains(&format!("import {identifier} from '{import_path}'"))
+}
+
+fn media_asset_identifier(path: &Path) -> String {
+    let stem = path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("media");
+    let mut name = String::from("media");
+    for segment in stem
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .filter(|segment| !segment.is_empty())
+    {
+        let mut chars = segment.chars();
+        if let Some(first) = chars.next() {
+            name.extend(first.to_uppercase());
+            name.push_str(chars.as_str());
+        }
+    }
+    name
+}
+
+fn react_media_element(kind: DraggedMediaKind, identifier: &str, label: &str) -> String {
+    match kind {
+        DraggedMediaKind::Image => format!("<img src={{{identifier}}} alt=\"{label}\" />"),
+        DraggedMediaKind::Video => format!("<video controls src={{{identifier}}} />"),
+        DraggedMediaKind::Audio => format!("<audio controls src={{{identifier}}} />"),
+    }
+}
+
+fn react_media_url_element(kind: DraggedMediaKind, url: &str, label: &str) -> String {
+    let url = escape_html_attr(url);
+    let label = escape_html_attr(label);
+    match kind {
+        DraggedMediaKind::Image => format!("<img src=\"{url}\" alt=\"{label}\" />"),
+        DraggedMediaKind::Video => format!("<video controls src=\"{url}\" />"),
+        DraggedMediaKind::Audio => format!("<audio controls src=\"{url}\" />"),
+    }
+}
+
+fn media_reference_for_path(
+    active_path: &Path,
+    kind: DraggedMediaKind,
+    label: &str,
+    reference_path: &str,
+) -> String {
+    match active_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+    {
+        Some("md" | "mdx") => match kind {
+            DraggedMediaKind::Image => format!("![{label}]({reference_path})"),
+            DraggedMediaKind::Video => format!("<video controls src=\"{reference_path}\"></video>"),
+            DraggedMediaKind::Audio => format!("<audio controls src=\"{reference_path}\"></audio>"),
+        },
+        Some("html" | "htm") => match kind {
+            DraggedMediaKind::Image => format!(
+                "<img src=\"{}\" alt=\"{}\">",
+                escape_html_attr(reference_path),
+                escape_html_attr(label)
+            ),
+            DraggedMediaKind::Video => format!(
+                "<video controls src=\"{}\"></video>",
+                escape_html_attr(reference_path)
+            ),
+            DraggedMediaKind::Audio => format!(
+                "<audio controls src=\"{}\"></audio>",
+                escape_html_attr(reference_path)
+            ),
+        },
+        Some("css" | "scss" | "sass" | "less") => format!("url(\"{reference_path}\")"),
+        _ => reference_path.to_string(),
+    }
+}
+
+fn escape_html_attr(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&#39;"),
+            _ => escaped.push(character),
+        }
+    }
+    escaped
+}
+
+fn import_insertion_offset(text: &str) -> usize {
+    let mut offset = 0;
+    let mut first_code_line_seen = false;
+
+    for line in text.split_inclusive('\n') {
+        let trimmed = line.trim();
+        if trimmed.is_empty() && !first_code_line_seen {
+            offset += line.len();
+            continue;
+        }
+
+        first_code_line_seen = true;
+        if is_use_directive(trimmed) {
+            offset += line.len();
+            continue;
+        }
+
+        break;
+    }
+
+    offset
+}
+
+fn is_use_directive(line: &str) -> bool {
+    ((line.starts_with("\"use ") && line.ends_with("\";"))
+        || (line.starts_with("'use ") && line.ends_with("';")))
+        || ((line.starts_with("\"use ") && line.ends_with('"'))
+            || (line.starts_with("'use ") && line.ends_with('\'')))
+}
 
 impl FollowableItem for Editor {
     fn remote_id(&self) -> Option<ViewId> {
@@ -1137,6 +1916,30 @@ impl Item for Editor {
             }
 
             _ => {}
+        }
+    }
+
+    fn handle_drop(
+        &mut self,
+        _active_pane: &Pane,
+        dropped: &dyn Any,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> bool {
+        if let Some(icon) = dropped.downcast_ref::<DraggedIconAsset>() {
+            self.focus_handle.focus(window, cx);
+            self.insert_icon_asset_on_drop(icon, cx).log_err();
+            true
+        } else if let Some(media) = dropped.downcast_ref::<DraggedMediaAsset>() {
+            self.focus_handle.focus(window, cx);
+            self.insert_media_asset_on_drop(media, cx).log_err();
+            true
+        } else if let Some(shadcn) = dropped.downcast_ref::<DraggedShadcnAsset>() {
+            self.focus_handle.focus(window, cx);
+            self.insert_shadcn_asset_on_drop(shadcn, cx).log_err();
+            true
+        } else {
+            false
         }
     }
 

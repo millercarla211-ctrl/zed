@@ -78,6 +78,7 @@ members = [
     "crates/feedback",
     "crates/file_finder",
     "crates/file_icons",
+    "crates/font_panel",
     "crates/fs",
     "crates/fs_benchmarks",
     "crates/fuzzy",
@@ -103,6 +104,7 @@ members = [
     "crates/html_to_markdown",
     "crates/http_client",
     "crates/http_client_tls",
+    "crates/icon_picker",
     "crates/icons",
     "crates/image_viewer",
     "crates/input_latency_ui",
@@ -131,6 +133,7 @@ members = [
     "crates/markdown",
     "crates/markdown_preview",
     "crates/media",
+    "crates/media_panel",
     "crates/menu",
     "crates/migrator",
     "crates/miniprofiler_ui",
@@ -181,6 +184,8 @@ members = [
     "crates/settings_macros",
     "crates/settings_profile_selector",
     "crates/settings_ui",
+    "crates/shadcn_ui",
+    "crates/shadcn_ui_panel",
     "crates/shell_command_parser",
     "crates/sidebar",
     "crates/snippet",
@@ -336,6 +341,7 @@ feature_flags_macros = { path = "crates/feature_flags_macros" }
 feedback = { path = "crates/feedback" }
 file_finder = { path = "crates/file_finder" }
 file_icons = { path = "crates/file_icons" }
+font_panel = { path = "crates/font_panel" }
 fs = { path = "crates/fs" }
 fuzzy = { path = "crates/fuzzy" }
 fuzzy_nucleo = { path = "crates/fuzzy_nucleo" }
@@ -360,6 +366,7 @@ gpui_util = { path = "crates/gpui_util" }
 html_to_markdown = { path = "crates/html_to_markdown" }
 http_client = { path = "crates/http_client" }
 http_client_tls = { path = "crates/http_client_tls" }
+icon_picker = { path = "crates/icon_picker" }
 icons = { path = "crates/icons" }
 image_viewer = { path = "crates/image_viewer" }
 edit_prediction_types = { path = "crates/edit_prediction_types" }
@@ -395,6 +402,7 @@ web_preview_linux = { path = "crates/web_preview_linux" }
 web_preview_macos = { path = "crates/web_preview_macos" }
 svg_preview = { path = "crates/svg_preview" }
 media = { path = "crates/media" }
+media_panel = { path = "crates/media_panel" }
 menu = { path = "crates/menu" }
 mermaid-rs-renderer = { git = "https://github.com/zed-industries/mermaid-rs-renderer", rev = "782b89a7da3f0e91e51f98d00a93acba679be6fb", default-features = false }
 migrator = { path = "crates/migrator" }
@@ -445,6 +453,8 @@ settings_content = { path = "crates/settings_content" }
 settings_json = { path = "crates/settings_json" }
 settings_macros = { path = "crates/settings_macros" }
 settings_ui = { path = "crates/settings_ui" }
+shadcn_ui = { path = "crates/shadcn_ui" }
+shadcn_ui_panel = { path = "crates/shadcn_ui_panel" }
 shell_command_parser = { path = "crates/shell_command_parser" }
 snippet = { path = "crates/snippet" }
 snippet_provider = { path = "crates/snippet_provider" }
