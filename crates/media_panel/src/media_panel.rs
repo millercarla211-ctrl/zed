@@ -521,19 +521,8 @@ impl MediaPanel {
                 continue;
             }
 
-            if !query_terms.is_empty() {
-                let searchable = format!(
-                    "{} {} {} {} {}",
-                    asset.label,
-                    asset.provider,
-                    asset.license,
-                    asset.tags,
-                    media_kind_label(asset.kind)
-                )
-                .to_lowercase();
-                if !media_search_matches(searchable.as_str(), &query_terms) {
-                    continue;
-                }
+            if !query_terms.is_empty() && !remote_media_search_matches(asset, query_terms) {
+                continue;
             }
 
             match_count += 1;
@@ -3314,6 +3303,28 @@ fn media_kind_label(kind: DraggedMediaKind) -> &'static str {
 
 fn media_search_matches(searchable: &str, query_terms: &[&str]) -> bool {
     query_terms.iter().all(|term| searchable.contains(term))
+}
+
+fn remote_media_search_matches(asset: &RemoteMediaAsset, query_terms: &[&str]) -> bool {
+    query_terms.iter().all(|term| {
+        contains_ascii_case_insensitive(asset.label.as_ref(), term)
+            || contains_ascii_case_insensitive(asset.provider.as_ref(), term)
+            || contains_ascii_case_insensitive(asset.license.as_ref(), term)
+            || contains_ascii_case_insensitive(asset.tags.as_ref(), term)
+            || media_kind_label(asset.kind).contains(term)
+    })
+}
+
+fn contains_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
+    let needle = needle.as_bytes();
+    if needle.is_empty() {
+        return true;
+    }
+
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .any(|window| window.eq_ignore_ascii_case(needle))
 }
 
 fn remote_media_assets() -> &'static [RemoteMediaAsset] {

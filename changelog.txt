@@ -23,6 +23,7 @@ ADDED:
 - `crates/media_panel` now fetches direct Cleveland Museum of Art CC0 image rows through the no-key open access API.
 
 CHANGED:
+- `crates/media_panel` now matches remote media query terms directly against asset fields instead of formatting and lowercasing a combined searchable string for every remote row.
 - `crates/icon_picker` now batches external preview-cache checks with one preview-cache borrow and skips icons that are already warming before queuing another SVG preview batch.
 - `crates/shadcn_ui_panel` now consumes per-render cached thumbnail URLs when building visible rows, avoiding another thumbnail URL clone per row.
 - `crates/shadcn_ui_panel` now snapshots visible shadcn preview-image cache hits once per render and passes them into row rendering instead of locking the global thumbnail cache for every visible row.
