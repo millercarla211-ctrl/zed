@@ -13,7 +13,7 @@ use rkyv::{
 use serde::Deserialize;
 use std::{
     cell::RefCell,
-    collections::{BTreeSet, HashMap},
+    collections::{HashMap, HashSet},
     fs::{self as std_fs, File},
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
@@ -210,7 +210,7 @@ pub struct ShadcnUiPanel {
     loading_catalog: bool,
     catalog_loaded: bool,
     source_filter: CatalogFilter,
-    warming_preview_image_keys: BTreeSet<String>,
+    warming_preview_image_keys: HashSet<String>,
     filter_scroll_handle: ScrollHandle,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
@@ -271,7 +271,7 @@ impl ShadcnUiPanel {
                 loading_catalog: false,
                 catalog_loaded: true,
                 source_filter: CatalogFilter::All,
-                warming_preview_image_keys: BTreeSet::new(),
+                warming_preview_image_keys: HashSet::with_capacity(MAX_SHADCN_ROWS),
                 filter_scroll_handle: ScrollHandle::new(),
                 status: None,
                 _subscriptions: vec![filter_subscription],
@@ -1474,7 +1474,7 @@ fn static_shadcn_catalog() -> Vec<CatalogItem> {
             let mut existing_ids = items
                 .iter()
                 .map(|item| item.id.to_string())
-                .collect::<BTreeSet<_>>();
+                .collect::<HashSet<_>>();
 
             for item in static_catalog_index_items() {
                 if existing_ids.insert(item.id.to_string()) {
@@ -1606,7 +1606,7 @@ fn shadcn_catalog() -> Vec<CatalogItem> {
     let mut existing_ids = items
         .iter()
         .map(|item| item.id.to_string())
-        .collect::<BTreeSet<_>>();
+        .collect::<HashSet<_>>();
 
     for item in manifest_catalog_items() {
         if existing_ids.insert(item.id.to_string()) {
@@ -2955,7 +2955,7 @@ fn shadcn_preview_image_url(item: &CatalogItem) -> Option<String> {
         ]);
     }
 
-    let mut seen_candidates = BTreeSet::new();
+    let mut seen_candidates = HashSet::with_capacity(candidates.len());
     candidates
         .into_iter()
         .filter(|path| seen_candidates.insert(path.clone()))
