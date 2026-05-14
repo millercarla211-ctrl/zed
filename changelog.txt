@@ -36,6 +36,7 @@ CHANGED:
 - `crates/icon_picker`, `crates/media_panel`, and `crates/shadcn_ui_panel` now reuse split search terms across candidate rows instead of splitting the same query for every visible/searchable item.
 - `crates/icon_picker` now reads the panel search query once per render before data loading, filtering, and count-label formatting.
 - `crates/icon_picker` now uses a direct selected-set fast path for empty searches in Zed or external icon packs instead of running generic search matching.
+- `crates/icon_picker` now returns from empty-search fast paths before allocating split query terms.
 - `crates/shadcn_ui_panel` now computes UI filter counts once per render and shares them with the tab strip and status label, avoiding repeated per-tab catalog scans.
 - `crates/shadcn_ui_panel` now caches catalog source counts with the loaded catalog, avoiding a full catalog count scan on every render.
 - `crates/shadcn_ui_panel` now uses a bounded empty-search row collection path and cached filter counts instead of scanning the full UI catalog on idle renders.

@@ -300,7 +300,6 @@ impl IconPickerPanel {
     }
 
     fn filtered_icons(&self, query: &str) -> (Vec<PickerIcon>, usize, usize) {
-        let query_terms = query.split_whitespace().collect::<Vec<_>>();
         let selected_pack = self.selected_pack.as_ref().map(|pack| pack.as_ref());
         let mut icons = Vec::new();
         let mut match_count = 0;
@@ -338,6 +337,8 @@ impl IconPickerPanel {
                 return (icons, total_count, total_count);
             }
         }
+
+        let query_terms = query.split_whitespace().collect::<Vec<_>>();
 
         if selected_pack.is_none() || selected_pack == Some("zed") {
             icons.extend(self.zed_icons.iter().copied().filter_map(|icon_name| {
