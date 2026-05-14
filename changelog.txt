@@ -1,6 +1,7 @@
 [2026-05-15] - UI Catalog TSV Parse Cleanup
 
 CHANGED:
+- `crates/shadcn_ui_panel` now collects embedded static catalog rows into a preallocated result vector while parsing, avoiding the final iterator collection path.
 - `crates/shadcn_ui_panel` now parses embedded static catalog TSV rows field-by-field instead of collecting each row into a temporary column vector.
 
 NOTES:

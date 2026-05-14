@@ -1500,37 +1500,63 @@ fn static_shadcn_catalog() -> Vec<CatalogItem> {
 }
 
 fn static_catalog_index_items() -> Vec<CatalogItem> {
-    STATIC_SHADCN_CATALOG_INDEX
-        .lines()
-        .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
-        .filter_map(|line| {
-            let mut columns = line.split('\t');
-            let id = columns.next()?;
-            let title = columns.next()?;
-            let description = columns.next()?;
-            let category = columns.next()?;
-            let source = columns.next()?;
-            let source_path = columns.next()?;
-            let target_file_name = columns.next()?;
-            let import_statement = columns.next()?;
-            let jsx = columns.next()?;
-            if columns.next().is_some() {
-                return None;
-            }
+    let lines = STATIC_SHADCN_CATALOG_INDEX.lines();
+    let mut items = Vec::with_capacity(lines.size_hint().0);
 
-            Some(CatalogItem {
-                id: decode_static_catalog_field(id).into(),
-                title: decode_static_catalog_field(title).into(),
-                description: decode_static_catalog_field(description).into(),
-                category: decode_static_catalog_field(category).into(),
-                source: catalog_source_from_u8(source.parse::<u8>().ok()?),
-                source_path: decode_static_catalog_field(source_path).into(),
-                target_file_name: decode_static_catalog_field(target_file_name).into(),
-                import_statement: decode_static_catalog_field(import_statement).into(),
-                jsx: decode_static_catalog_field(jsx).into(),
-            })
-        })
-        .collect()
+    for line in lines {
+        if line.trim().is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        let mut columns = line.split('\t');
+        let Some(id) = columns.next() else {
+            continue;
+        };
+        let Some(title) = columns.next() else {
+            continue;
+        };
+        let Some(description) = columns.next() else {
+            continue;
+        };
+        let Some(category) = columns.next() else {
+            continue;
+        };
+        let Some(source) = columns.next() else {
+            continue;
+        };
+        let Some(source_path) = columns.next() else {
+            continue;
+        };
+        let Some(target_file_name) = columns.next() else {
+            continue;
+        };
+        let Some(import_statement) = columns.next() else {
+            continue;
+        };
+        let Some(jsx) = columns.next() else {
+            continue;
+        };
+        if columns.next().is_some() {
+            continue;
+        }
+        let Ok(source) = source.parse::<u8>() else {
+            continue;
+        };
+
+        items.push(CatalogItem {
+            id: decode_static_catalog_field(id).into(),
+            title: decode_static_catalog_field(title).into(),
+            description: decode_static_catalog_field(description).into(),
+            category: decode_static_catalog_field(category).into(),
+            source: catalog_source_from_u8(source),
+            source_path: decode_static_catalog_field(source_path).into(),
+            target_file_name: decode_static_catalog_field(target_file_name).into(),
+            import_statement: decode_static_catalog_field(import_statement).into(),
+            jsx: decode_static_catalog_field(jsx).into(),
+        });
+    }
+
+    items
 }
 
 fn decode_static_catalog_field(value: &str) -> String {
