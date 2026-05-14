@@ -435,13 +435,21 @@ impl IconPickerPanel {
         icons: &[PickerIcon],
         cx: &mut Context<Self>,
     ) {
-        let external_icons = icons
-            .iter()
-            .filter_map(|icon| match icon {
-                PickerIcon::External(icon) => Some(icon.clone()),
-                PickerIcon::Zed(_) => None,
-            })
-            .collect::<Vec<_>>();
+        let external_icons = {
+            let preview_cache = self.preview_cache.borrow();
+            icons
+                .iter()
+                .filter_map(|icon| match icon {
+                    PickerIcon::External(icon) => {
+                        let key = icon.id();
+                        (!self.warming_preview_keys.contains(&key)
+                            && !preview_cache.contains_key(&key))
+                        .then(|| icon.clone())
+                    }
+                    PickerIcon::Zed(_) => None,
+                })
+                .collect::<Vec<_>>()
+        };
         self.queue_external_preview_warm(external_icons, true, cx);
     }
 

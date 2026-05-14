@@ -23,6 +23,7 @@ ADDED:
 - `crates/media_panel` now fetches direct Cleveland Museum of Art CC0 image rows through the no-key open access API.
 
 CHANGED:
+- `crates/icon_picker` now filters cached or already-warming visible external icons before cloning them for preview warm queues.
 - `crates/font_panel` now caches lowercase font search text and only builds visible `FontEntry` rows after a font matches a typed query.
 - `crates/media_panel` now matches remote media query terms directly against asset fields instead of formatting and lowercasing a combined searchable string for every remote row.
 - `crates/icon_picker` now batches external preview-cache checks with one preview-cache borrow and skips icons that are already warming before queuing another SVG preview batch.
