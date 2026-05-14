@@ -1,3 +1,11 @@
+[2026-05-15] - UI Catalog Cache Load Preallocation
+
+CHANGED:
+- `crates/shadcn_ui_panel` now converts loaded rkyv catalog cache records into a preallocated catalog item buffer sized from the cached record count.
+
+NOTES:
+- Preserved warm-cache catalog contents, ordering, source filters, row actions, screenshot thumbnail flow, and editor/WebPreview input behavior.
+
 [2026-05-15] - UI Row Render Buffer Preallocation
 
 CHANGED:

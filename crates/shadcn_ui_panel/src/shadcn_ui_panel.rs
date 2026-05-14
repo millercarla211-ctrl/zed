@@ -1612,12 +1612,13 @@ fn load_shadcn_catalog_rkyv_cache() -> Option<Vec<CatalogItem>> {
     let archived = unsafe { archived_root::<Vec<CachedCatalogItem>>(&mmap) };
     let mut deserializer = Infallible;
     let records: Vec<CachedCatalogItem> = archived.deserialize(&mut deserializer).ok()?;
-    Some(
+    let mut items = Vec::with_capacity(records.len());
+    items.extend(
         records
             .into_iter()
-            .map(CachedCatalogItem::into_catalog_item)
-            .collect(),
-    )
+            .map(CachedCatalogItem::into_catalog_item),
+    );
+    Some(items)
 }
 
 fn write_shadcn_catalog_rkyv_cache(items: &[CatalogItem]) -> Option<()> {
