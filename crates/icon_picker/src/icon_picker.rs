@@ -413,6 +413,10 @@ impl IconPickerPanel {
             return svg;
         }
 
+        if self.warming_preview_keys.contains(&key) {
+            return None;
+        }
+
         if let Some(preview_path) = existing_external_icon_preview(icon) {
             let external_svg = ExternalSvg {
                 preview_path: preview_path.into(),
