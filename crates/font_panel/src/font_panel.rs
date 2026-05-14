@@ -909,30 +909,35 @@ fn web_font_spec_by_name(name: &str) -> Option<WebFontSpec> {
 }
 
 fn custom_web_font_name(query: &str) -> Option<String> {
-    let words = query
+    let mut name = String::with_capacity(query.len());
+    for word in query
         .split(|character: char| !(character.is_alphanumeric() || character == ' '))
         .flat_map(|segment| segment.split_whitespace())
         .filter(|word| !word.is_empty())
         .take(6)
-        .map(|word| {
-            let mut chars = word.chars();
-            match chars.next() {
-                Some(first) => {
-                    let mut title = String::new();
-                    title.extend(first.to_uppercase());
-                    title.push_str(chars.as_str());
-                    title
-                }
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>();
+    {
+        if !name.is_empty() {
+            name.push(' ');
+        }
+        let mut chars = word.chars();
+        if let Some(first) = chars.next() {
+            name.extend(first.to_uppercase());
+            name.push_str(chars.as_str());
+        }
+    }
 
-    (!words.is_empty()).then(|| words.join(" "))
+    (!name.is_empty()).then_some(name)
 }
 
 fn google_font_family_query(name: &str) -> String {
-    name.split_whitespace().collect::<Vec<_>>().join("+")
+    let mut query = String::with_capacity(name.len());
+    for word in name.split_whitespace() {
+        if !query.is_empty() {
+            query.push('+');
+        }
+        query.push_str(word);
+    }
+    query
 }
 
 fn css_font_variable_name(name: &str) -> String {

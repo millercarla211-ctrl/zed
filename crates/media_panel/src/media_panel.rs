@@ -2416,11 +2416,17 @@ fn clean_remote_label(label: &str) -> String {
         .filter(|(_, extension)| extension.len() <= 5)
         .map_or(label, |(stem, _)| stem)
         .replace(['_', '-'], " ");
-    let label = label.split_whitespace().collect::<Vec<_>>().join(" ");
-    if label.is_empty() {
+    let mut normalized = String::with_capacity(label.len());
+    for word in label.split_whitespace() {
+        if !normalized.is_empty() {
+            normalized.push(' ');
+        }
+        normalized.push_str(word);
+    }
+    if normalized.is_empty() {
         "remote media".to_string()
     } else {
-        label
+        normalized
     }
 }
 

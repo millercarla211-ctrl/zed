@@ -1,3 +1,12 @@
+[2026-05-15] - Panel String Join Allocation Cleanup
+
+CHANGED:
+- `crates/font_panel` now builds custom font names and Google font family query strings directly instead of collecting temporary word vectors before joining.
+- `crates/media_panel` now normalizes remote media labels directly instead of collecting temporary word vectors before joining.
+
+NOTES:
+- Preserved generated font names, Google Fonts URL query text, remote media labels, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - UI Catalog Merge Reservation
 
 CHANGED:
