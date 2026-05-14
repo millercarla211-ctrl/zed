@@ -11,6 +11,7 @@ ADDED:
 - `crates/media_panel` generated remote-browser pages now search Art Institute and The Met no-key APIs and resolve NASA audio/video manifests to playable files.
 - `crates/media_panel` remote media rows now carry optional thumbnail URLs so provider preview images can render in native image, video, and audio rows.
 - `crates/media_panel` now runs no-key provider fetches concurrently for first-time remote searches while keeping provider-specific error reporting.
+- `crates/media_panel` now overlays compact Zed-themed video/audio badges on remote provider thumbnails so playable media does not read as a plain image row.
 
 CHANGED:
 - `crates/icon_picker` now renders real external SVG previews in the default All sets grid instead of falling back to pack-letter badges.

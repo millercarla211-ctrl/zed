@@ -2601,19 +2601,11 @@ fn remote_media_thumbnail(asset: RemoteMediaAsset, cx: &mut Context<MediaPanel>)
             .into_any_element(),
         DraggedMediaKind::Video => {
             if let Some(thumbnail_url) = asset.thumbnail_url.as_ref() {
-                div()
-                    .w(px(64.))
-                    .h(px(48.))
-                    .rounded_sm()
-                    .overflow_hidden()
-                    .border_1()
-                    .border_color(cx.theme().colors().border_variant)
-                    .child(
-                        img(thumbnail_url.to_string())
-                            .size_full()
-                            .object_fit(ObjectFit::Cover),
-                    )
-                    .into_any_element()
+                remote_media_thumbnail_with_badge(
+                    thumbnail_url.to_string(),
+                    IconName::PlayOutlined,
+                    cx,
+                )
             } else {
                 div()
                     .w(px(64.))
@@ -2658,19 +2650,7 @@ fn remote_media_thumbnail(asset: RemoteMediaAsset, cx: &mut Context<MediaPanel>)
         }
         DraggedMediaKind::Audio => {
             if let Some(thumbnail_url) = asset.thumbnail_url.as_ref() {
-                div()
-                    .w(px(64.))
-                    .h(px(48.))
-                    .rounded_sm()
-                    .overflow_hidden()
-                    .border_1()
-                    .border_color(cx.theme().colors().border_variant)
-                    .child(
-                        img(thumbnail_url.to_string())
-                            .size_full()
-                            .object_fit(ObjectFit::Cover),
-                    )
-                    .into_any_element()
+                remote_media_thumbnail_with_badge(thumbnail_url.to_string(), IconName::AudioOn, cx)
             } else {
                 div()
                     .w(px(64.))
@@ -2722,6 +2702,43 @@ fn remote_media_thumbnail(asset: RemoteMediaAsset, cx: &mut Context<MediaPanel>)
             }
         }
     }
+}
+
+fn remote_media_thumbnail_with_badge(
+    thumbnail_url: String,
+    icon: IconName,
+    cx: &mut Context<MediaPanel>,
+) -> AnyElement {
+    div()
+        .relative()
+        .w(px(64.))
+        .h(px(48.))
+        .rounded_sm()
+        .overflow_hidden()
+        .border_1()
+        .border_color(cx.theme().colors().border_variant)
+        .child(img(thumbnail_url).size_full().object_fit(ObjectFit::Cover))
+        .child(
+            div()
+                .absolute()
+                .right(px(4.))
+                .bottom(px(4.))
+                .w(px(18.))
+                .h(px(18.))
+                .rounded_full()
+                .border_1()
+                .border_color(cx.theme().colors().border.opacity(0.6))
+                .bg(cx
+                    .theme()
+                    .colors()
+                    .elevated_surface_background
+                    .opacity(0.88))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(Icon::new(icon).size(IconSize::XSmall).color(Color::Accent)),
+        )
+        .into_any_element()
 }
 
 fn media_kind_icon(kind: DraggedMediaKind) -> IconName {

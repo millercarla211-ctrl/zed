@@ -1,7 +1,8 @@
 IN PROGRESS:
-- Concurrent remote media provider fetching is code-complete by inspection; awaiting manual Zed panel QA.
+- Remote media thumbnail type badges are code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
+- User manual check that remote video/audio rows with provider thumbnails show a clear playable/audio badge without looking like plain image rows.
 - User manual check that the Icon panel All sets grid renders real external SVG icons instead of letter-only pack badges.
 - User manual check that Iconify packs whose SVG paths omit explicit fill colors render visibly on the dark icon picker background.
 - User manual check that missing/broken external SVG previews fall back once without repeated reload work.
