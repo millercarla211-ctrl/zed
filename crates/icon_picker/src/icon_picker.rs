@@ -7,7 +7,7 @@ use gpui::{
 use serde::Deserialize;
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     path::PathBuf,
     sync::OnceLock,
 };
@@ -34,6 +34,7 @@ const ICON_PACK_INDEX: &str = include_str!("icon_pack_index.tsv");
 const ICON_REPRESENTATIVE_BODIES: &str = include_str!("icon_representative_bodies.tsv");
 const MAX_ICON_RESULTS: usize = 360;
 const STARTUP_ICON_PREVIEW_WARM_LIMIT: usize = MAX_ICON_RESULTS;
+const MAX_WARMED_ICON_PREVIEW_SIGNATURES: usize = 128;
 const EXTERNAL_ICON_PREVIEW_CACHE_VERSION: &str = "v3";
 static EXTERNAL_ICON_CATALOG_CACHE: OnceLock<ExternalIconCatalog> = OnceLock::new();
 static REPRESENTATIVE_ICON_BODY_CACHE: OnceLock<HashMap<String, ExternalIconBody>> =
@@ -121,6 +122,7 @@ pub struct IconPickerPanel {
     warming_preview_keys: HashSet<String>,
     warming_preview_signature: Option<SharedString>,
     warmed_preview_signatures: HashSet<String>,
+    warmed_preview_signature_order: VecDeque<String>,
     representative_preview_warm_started: bool,
     pack_scroll_handle: ScrollHandle,
     status: Option<SharedString>,
@@ -182,7 +184,12 @@ impl IconPickerPanel {
                 preview_cache: RefCell::default(),
                 warming_preview_keys: HashSet::default(),
                 warming_preview_signature: None,
-                warmed_preview_signatures: HashSet::default(),
+                warmed_preview_signatures: HashSet::with_capacity(
+                    MAX_WARMED_ICON_PREVIEW_SIGNATURES,
+                ),
+                warmed_preview_signature_order: VecDeque::with_capacity(
+                    MAX_WARMED_ICON_PREVIEW_SIGNATURES,
+                ),
                 representative_preview_warm_started: false,
                 pack_scroll_handle: ScrollHandle::new(),
                 status: None,
@@ -508,7 +515,7 @@ impl IconPickerPanel {
                         }
                     }
 
-                    panel.warmed_preview_signatures.insert(signature.clone());
+                    panel.remember_warmed_preview_signature(signature.clone());
                     if panel
                         .warming_preview_signature
                         .as_ref()
@@ -528,6 +535,19 @@ impl IconPickerPanel {
                 .ok();
         })
         .detach();
+    }
+
+    fn remember_warmed_preview_signature(&mut self, signature: String) {
+        if self.warmed_preview_signatures.insert(signature.clone()) {
+            self.warmed_preview_signature_order.push_back(signature);
+        }
+
+        while self.warmed_preview_signature_order.len() > MAX_WARMED_ICON_PREVIEW_SIGNATURES {
+            let Some(oldest_signature) = self.warmed_preview_signature_order.pop_front() else {
+                break;
+            };
+            self.warmed_preview_signatures.remove(&oldest_signature);
+        }
     }
 
     fn uncached_external_icons(&self, icons: Vec<ExternalIcon>) -> Vec<ExternalIcon> {
