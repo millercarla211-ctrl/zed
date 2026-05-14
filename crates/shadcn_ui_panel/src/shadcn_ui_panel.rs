@@ -339,11 +339,8 @@ impl ShadcnUiPanel {
                 continue;
             }
 
-            if !query_terms.is_empty() {
-                let searchable = self.catalog_search_text(item);
-                if !catalog_search_matches(searchable.as_ref(), &query_terms) {
-                    continue;
-                }
+            if !query_terms.is_empty() && !self.catalog_item_matches(item, &query_terms) {
+                continue;
             }
 
             match_count += 1;
@@ -355,14 +352,14 @@ impl ShadcnUiPanel {
         (visible_items, match_count)
     }
 
-    fn catalog_search_text(&self, item: &CatalogItem) -> SharedString {
-        if let Some(search_text) = self
-            .search_text_cache
-            .borrow()
-            .get(item.id.as_ref())
-            .cloned()
-        {
-            return search_text;
+    fn catalog_item_matches(&self, item: &CatalogItem, query_terms: &[&str]) -> bool {
+        if let Some(matches) = {
+            let search_text_cache = self.search_text_cache.borrow();
+            search_text_cache
+                .get(item.id.as_ref())
+                .map(|search_text| catalog_search_matches(search_text.as_ref(), query_terms))
+        } {
+            return matches;
         }
 
         let search_text: SharedString = format!(
@@ -376,7 +373,7 @@ impl ShadcnUiPanel {
         self.search_text_cache
             .borrow_mut()
             .insert(item.id.to_string(), search_text.clone());
-        search_text
+        catalog_search_matches(search_text.as_ref(), query_terms)
     }
 
     fn ensure_visible_preview_images_warmed(
