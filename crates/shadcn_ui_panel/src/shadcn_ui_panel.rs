@@ -108,7 +108,7 @@ impl CatalogFilter {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 struct CatalogFilterCounts {
     all: usize,
     components: usize,
@@ -205,6 +205,7 @@ pub struct ShadcnUiPanel {
     workspace: WeakEntity<Workspace>,
     filter_editor: Entity<Editor>,
     items: Vec<CatalogItem>,
+    filter_counts: CatalogFilterCounts,
     search_text_cache: RefCell<HashMap<String, SharedString>>,
     loading_catalog: bool,
     catalog_loaded: bool,
@@ -251,6 +252,7 @@ impl ShadcnUiPanel {
             );
             let should_write_initial_cache = !shadcn_catalog_cache_path().is_file();
             let items = initial_shadcn_catalog();
+            let filter_counts = CatalogFilterCounts::from_items(&items);
             if should_write_initial_cache {
                 let cache_items = items.clone();
                 cx.background_executor()
@@ -264,6 +266,7 @@ impl ShadcnUiPanel {
                 workspace: workspace_handle,
                 filter_editor,
                 items,
+                filter_counts,
                 search_text_cache: RefCell::default(),
                 loading_catalog: false,
                 catalog_loaded: true,
@@ -297,6 +300,7 @@ impl ShadcnUiPanel {
             panel
                 .update(cx, |panel, cx| {
                     panel.items = items;
+                    panel.filter_counts = CatalogFilterCounts::from_items(&panel.items);
                     panel.search_text_cache.borrow_mut().clear();
                     panel.loading_catalog = false;
                     panel.catalog_loaded = true;
@@ -813,7 +817,7 @@ impl Render for ShadcnUiPanel {
         let (items, total_matches) = self.matching_items(cx, MAX_SHADCN_ROWS);
         self.ensure_visible_preview_images_warmed(&items, cx);
         let is_empty = total_matches == 0;
-        let filter_counts = CatalogFilterCounts::from_items(&self.items);
+        let filter_counts = self.filter_counts;
         let total_count = filter_counts.count(self.source_filter);
         let item_rows = items
             .iter()
