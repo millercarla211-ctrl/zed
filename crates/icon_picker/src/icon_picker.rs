@@ -245,20 +245,7 @@ impl IconPickerPanel {
                 .update(cx, |panel, cx| {
                     if !icons.is_empty() {
                         let pack = icons[0].pack.to_string();
-                        panel
-                            .external_icons_by_pack
-                            .insert(pack.clone(), icons.clone());
-                        panel.external_icons.extend(icons);
-                        panel.external_icons.sort_by(|left, right| {
-                            left.pack_name
-                                .as_ref()
-                                .cmp(right.pack_name.as_ref())
-                                .then_with(|| left.name.as_ref().cmp(right.name.as_ref()))
-                        });
-                        panel.external_icons.dedup_by(|left, right| {
-                            left.pack.as_ref() == right.pack.as_ref()
-                                && left.name.as_ref() == right.name.as_ref()
-                        });
+                        panel.external_icons_by_pack.insert(pack, icons);
                     }
                     panel.loading_external_icons = false;
                     panel.status = None;
