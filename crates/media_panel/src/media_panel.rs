@@ -1167,19 +1167,26 @@ impl Render for MediaPanel {
             total_asset_matches + total_remote_matches + usize::from(url_insert.is_some());
         let kind_counts = MediaKindCounts::from_panel(self);
         let total_count = kind_counts.count(self.kind_filter);
-        let mut asset_rows = remote_assets
-            .into_iter()
-            .map(|asset| self.render_remote_asset_row(asset, cx).into_any_element())
-            .collect::<Vec<_>>();
+        let provider_count = remote_provider_count(self.kind_filter);
+        let mut asset_rows = Vec::with_capacity(
+            usize::from(url_insert.is_some())
+                + remote_assets.len()
+                + assets.len()
+                + usize::from(provider_count > 0),
+        );
+        if let Some(url_insert) = url_insert {
+            asset_rows.push(url_insert);
+        }
+        asset_rows.extend(
+            remote_assets
+                .into_iter()
+                .map(|asset| self.render_remote_asset_row(asset, cx).into_any_element()),
+        );
         asset_rows.extend(
             assets
                 .into_iter()
                 .map(|asset| self.render_asset_row(asset, cx).into_any_element()),
         );
-        if let Some(url_insert) = url_insert {
-            asset_rows.insert(0, url_insert);
-        }
-        let provider_count = remote_provider_count(self.kind_filter);
         if provider_count > 0 {
             asset_rows.push(
                 self.render_remote_browser_row(provider_count, cx)

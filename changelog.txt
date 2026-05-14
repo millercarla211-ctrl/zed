@@ -1,3 +1,11 @@
+[2026-05-15] - Media Row Vector Preallocation
+
+CHANGED:
+- `crates/media_panel` now preallocates visible media row capacity and appends URL, remote, local, and provider-browser rows in final order instead of inserting at the front after collection.
+
+NOTES:
+- Preserved Media panel row ordering, remote/local matching, generated preview flow, and editor/WebPreview input behavior.
+
 [2026-05-15] - Font Sort Key Caching
 
 CHANGED:
