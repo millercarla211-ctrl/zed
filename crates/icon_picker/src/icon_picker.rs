@@ -747,9 +747,10 @@ impl IconPickerPanel {
     ) -> impl IntoElement {
         let selected = current == id;
         let id_string = id.to_string();
+        let button_id = icon_element_id("icon-picker-pack-", id);
         let tooltip_label = tooltip.unwrap_or_else(|| label.to_string().into());
         div().flex_none().child(
-            Button::new(format!("icon-picker-pack-{id}"), format!("{label} {count}"))
+            Button::new(button_id, format!("{label} {count}"))
                 .style(ButtonStyle::Subtle)
                 .size(ButtonSize::Compact)
                 .toggle_state(selected)
@@ -772,6 +773,7 @@ impl IconPickerPanel {
         let label = payload.label.clone();
         let tooltip_label = label.clone();
         let icon_id = icon.id();
+        let tile_id = icon_element_id("icon-picker-tile-", icon_id.as_ref());
         let selected = self
             .selected_icon
             .as_ref()
@@ -779,7 +781,7 @@ impl IconPickerPanel {
         let icon_preview = self.render_icon_preview(&icon, IconSize::Medium, cx);
 
         div()
-            .id(format!("icon-picker-tile-{}", icon_id.as_ref()))
+            .id(tile_id)
             .min_w(px(0.))
             .h(px(44.))
             .p_0p5()
@@ -1018,6 +1020,13 @@ fn scroll_tab_handle(handle: &ScrollHandle, direction: f32) {
 
 fn icon_search_matches(searchable: &str, query_terms: &[&str]) -> bool {
     query_terms.iter().all(|term| searchable.contains(term))
+}
+
+fn icon_element_id(prefix: &str, id: &str) -> String {
+    let mut element_id = String::with_capacity(prefix.len() + id.len());
+    element_id.push_str(prefix);
+    element_id.push_str(id);
+    element_id
 }
 
 struct IconDragPreview {

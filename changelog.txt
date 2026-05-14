@@ -1,3 +1,11 @@
+[2026-05-15] - Icon Row Element Id Allocation Cleanup
+
+CHANGED:
+- `crates/icon_picker` now builds pack-tab and visible icon-tile element ids with a small preallocated helper instead of repeated generic `format!` calls.
+
+NOTES:
+- Preserved the exact stable tab/tile ids, pack filters, selected icon highlighting, icon tile actions, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Font Row Element Id Allocation Cleanup
 
 CHANGED:
