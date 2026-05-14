@@ -22,6 +22,7 @@ ADDED:
 - `crates/media_panel` now fetches direct Cleveland Museum of Art CC0 image rows through the no-key open access API.
 
 CHANGED:
+- `crates/media_panel` now uses larger bounded result windows for live no-key provider searches and the generated remote media browser, while keeping Wikimedia at a safe anonymous API limit and switching native Openverse requests to the current `api.openverse.org` endpoint.
 - `crates/icon_picker` no longer parses Iconify pack JSON from the tile render path; uncached external previews show the lightweight pack badge until the background preview warmer writes real SVGs.
 - `crates/icon_picker` now uses a new external SVG preview cache version so stale pre-transform Iconify alias previews are bypassed automatically.
 - `crates/icon_picker` now starts warming representative external icon previews on first render, tracks in-flight preview keys, and reuses disk hits in the preview cache instead of checking them repeatedly.

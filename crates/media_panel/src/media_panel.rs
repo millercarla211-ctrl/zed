@@ -39,11 +39,18 @@ actions!(
 );
 
 const MEDIA_PANEL_KEY: &str = "MediaPanel";
-const MAX_MEDIA_RESULTS: usize = 220;
-const MET_MUSEUM_DETAIL_LIMIT: usize = 18;
-const NASA_MEDIA_DETAIL_LIMIT: usize = 12;
-const INTERNET_ARCHIVE_DETAIL_LIMIT: usize = 16;
-const CLEVELAND_ART_RESULT_LIMIT: usize = 70;
+const MAX_MEDIA_RESULTS: usize = 320;
+const OPENVERSE_RESULT_LIMIT: usize = 90;
+const WIKIMEDIA_RESULT_LIMIT: usize = 50;
+const NASA_IMAGE_RESULT_LIMIT: usize = 90;
+const NASA_MEDIA_SEARCH_LIMIT: usize = 36;
+const NASA_MEDIA_DETAIL_LIMIT: usize = 20;
+const LIBRARY_OF_CONGRESS_RESULT_LIMIT: usize = 90;
+const ART_INSTITUTE_RESULT_LIMIT: usize = 90;
+const CLEVELAND_ART_RESULT_LIMIT: usize = 90;
+const MET_MUSEUM_DETAIL_LIMIT: usize = 24;
+const INTERNET_ARCHIVE_SEARCH_LIMIT: usize = 42;
+const INTERNET_ARCHIVE_DETAIL_LIMIT: usize = 24;
 const REMOTE_MEDIA_FETCH_DEBOUNCE: Duration = Duration::from_millis(275);
 const REMOTE_MEDIA_PROVIDER_TIMEOUT: Duration = Duration::from_secs(4);
 
@@ -1676,7 +1683,7 @@ async fn fetch_openverse_media(
         DraggedMediaKind::Video => return Ok(Vec::new()),
     };
     let url = format!(
-        "https://api.openverse.engineering/v1/{endpoint}/?q={}&page_size=70",
+        "https://api.openverse.org/v1/{endpoint}/?q={}&page_size={OPENVERSE_RESULT_LIMIT}",
         encode_query(query)
     );
     let response: OpenverseResponse = fetch_json(http_client, &url).await?;
@@ -1726,7 +1733,7 @@ async fn fetch_wikimedia_media(
     filter: MediaKindFilter,
 ) -> anyhow::Result<Vec<RemoteMediaAsset>> {
     let url = format!(
-        "https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch={}&gsrlimit=70&prop=imageinfo&iiprop=url%7Cmime&iiurlwidth=360&format=json&origin=*",
+        "https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch={}&gsrlimit={WIKIMEDIA_RESULT_LIMIT}&prop=imageinfo&iiprop=url%7Cmime&iiurlwidth=360&format=json&origin=*",
         encode_query(query)
     );
     let response: WikimediaResponse = fetch_json(http_client, &url).await?;
@@ -1766,7 +1773,7 @@ async fn fetch_nasa_images(
     query: &str,
 ) -> anyhow::Result<Vec<RemoteMediaAsset>> {
     let url = format!(
-        "https://images-api.nasa.gov/search?q={}&media_type=image&page_size=70",
+        "https://images-api.nasa.gov/search?q={}&media_type=image&page_size={NASA_IMAGE_RESULT_LIMIT}",
         encode_query(query)
     );
     let response: NasaResponse = fetch_json(http_client, &url).await?;
@@ -1808,7 +1815,7 @@ async fn fetch_nasa_media(
         DraggedMediaKind::Image => return fetch_nasa_images(http_client, query).await,
     };
     let url = format!(
-        "https://images-api.nasa.gov/search?q={}&media_type={media_type}&page_size=24",
+        "https://images-api.nasa.gov/search?q={}&media_type={media_type}&page_size={NASA_MEDIA_SEARCH_LIMIT}",
         encode_query(query)
     );
     let response: NasaResponse = fetch_json(http_client.clone(), &url).await?;
@@ -1934,7 +1941,7 @@ async fn fetch_library_of_congress_images(
     query: &str,
 ) -> anyhow::Result<Vec<RemoteMediaAsset>> {
     let url = format!(
-        "https://www.loc.gov/photos/?fo=json&c=70&q={}",
+        "https://www.loc.gov/photos/?fo=json&c={LIBRARY_OF_CONGRESS_RESULT_LIMIT}&q={}",
         encode_query(query)
     );
     let response: LibraryOfCongressResponse = fetch_json(http_client, &url).await?;
@@ -1968,7 +1975,7 @@ async fn fetch_art_institute_images(
     query: &str,
 ) -> anyhow::Result<Vec<RemoteMediaAsset>> {
     let url = format!(
-        "https://api.artic.edu/api/v1/artworks/search?q={}&query%5Bterm%5D%5Bis_public_domain%5D=true&limit=70&fields=id,title,image_id,artist_display",
+        "https://api.artic.edu/api/v1/artworks/search?q={}&query%5Bterm%5D%5Bis_public_domain%5D=true&limit={ART_INSTITUTE_RESULT_LIMIT}&fields=id,title,image_id,artist_display",
         encode_query(query)
     );
     let response: ArtInstituteResponse = fetch_json(http_client, &url).await?;
@@ -2097,7 +2104,7 @@ async fn fetch_internet_archive_media(
     };
     let search = format!("{query} AND mediatype:{mediatype}");
     let url = format!(
-        "https://archive.org/advancedsearch.php?q={}&fl[]=identifier&fl[]=title&fl[]=mediatype&rows=28&page=1&output=json",
+        "https://archive.org/advancedsearch.php?q={}&fl[]=identifier&fl[]=title&fl[]=mediatype&rows={INTERNET_ARCHIVE_SEARCH_LIMIT}&page=1&output=json",
         encode_query(&search)
     );
     let response: InternetArchiveSearchResponse = fetch_json(http_client.clone(), &url).await?;
@@ -2596,7 +2603,7 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
     async function searchOpenverse(query, type) {{
       if (type === "video") return [];
       const endpoint = type === "audio" ? "audio" : "images";
-      const response = await fetch(`https://api.openverse.org/v1/${{endpoint}}/?q=${{encodeURIComponent(query)}}&page_size=30`);
+      const response = await fetch(`https://api.openverse.org/v1/${{endpoint}}/?q=${{encodeURIComponent(query)}}&page_size=60`);
       const json = await response.json();
       return (json.results || []).map((item) => ({{
         provider: "Openverse",
@@ -2613,7 +2620,7 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
       const media = type === "video" ? "video" : type === "audio" ? "audio" : "image";
       const response = await fetch(`https://images-api.nasa.gov/search?q=${{encodeURIComponent(query)}}&media_type=${{media}}`);
       const json = await response.json();
-      const items = ((json.collection || {{}}).items || []).slice(0, 18);
+      const items = ((json.collection || {{}}).items || []).slice(0, 30);
       if (media === "image") return items.map((item) => {{
         const link = (item.links || [])[0] || {{}};
         const data = (item.data || [])[0] || {{}};
@@ -2674,7 +2681,7 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
         generator: "search",
         gsrsearch: query,
         gsrnamespace: "6",
-        gsrlimit: "24",
+        gsrlimit: "48",
         prop: "imageinfo",
         iiprop: "url|mime|extmetadata",
         iiurlwidth: "640",
@@ -2699,7 +2706,7 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
 
     async function searchArtInstitute(query, type) {{
       if (type !== "image") return [];
-      const response = await fetch(`https://api.artic.edu/api/v1/artworks/search?q=${{encodeURIComponent(query)}}&query%5Bterm%5D%5Bis_public_domain%5D=true&limit=30&fields=id,title,image_id,artist_display`);
+      const response = await fetch(`https://api.artic.edu/api/v1/artworks/search?q=${{encodeURIComponent(query)}}&query%5Bterm%5D%5Bis_public_domain%5D=true&limit=48&fields=id,title,image_id,artist_display`);
       const json = await response.json();
       return (json.data || []).filter((item) => item.image_id).map((item) => ({{
         provider: "Art Institute of Chicago",
@@ -2714,7 +2721,7 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
 
     async function searchClevelandArt(query, type) {{
       if (type !== "image") return [];
-      const response = await fetch(`https://openaccess-api.clevelandart.org/api/artworks/?q=${{encodeURIComponent(query)}}&cc0=1&has_image=1&limit=30`);
+      const response = await fetch(`https://openaccess-api.clevelandart.org/api/artworks/?q=${{encodeURIComponent(query)}}&cc0=1&has_image=1&limit=48`);
       const json = await response.json();
       return (json.data || []).map((item) => {{
         const images = item.images || {{}};
@@ -2734,7 +2741,7 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
     async function searchMet(query, type) {{
       if (type !== "image") return [];
       const search = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=${{encodeURIComponent(query)}}`).then((response) => response.json());
-      const ids = (search.objectIDs || []).slice(0, 18);
+      const ids = (search.objectIDs || []).slice(0, 24);
       const objects = await Promise.all(ids.map((id) =>
         fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${{id}}`).then((response) => response.json()).catch(() => null)
       ));
@@ -2756,11 +2763,11 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
       params.append("fl[]", "identifier");
       params.append("fl[]", "title");
       params.append("fl[]", "mediatype");
-      params.set("rows", "14");
+      params.set("rows", "24");
       params.set("page", "1");
       params.set("output", "json");
       const search = await fetch(`https://archive.org/advancedsearch.php?${{params}}`).then((response) => response.json());
-      const docs = (((search || {{}}).response || {{}}).docs || []).slice(0, 14);
+      const docs = (((search || {{}}).response || {{}}).docs || []).slice(0, 24);
       const resolved = await Promise.all(docs.map(async (doc) => {{
         const identifier = doc.identifier;
         if (!identifier) return null;
