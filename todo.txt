@@ -1,4 +1,5 @@
 IN PROGRESS:
+- UI/shadcn catalog discovery and screenshot thumbnail warming now preallocate local catalog, candidate, cache-hit, and warm-result buffers; awaiting manual QA that UI panel cold open and screenshot-backed rows keep the same ordering while feeling instant.
 - Icon panel in-memory external SVG preview entries are now capped to the most recent 4096 icons while keeping the on-disk SVG cache as the durable layer; awaiting manual QA that long icon browsing stays memory-bounded.
 - Icon panel warmed-preview batch tracking is now capped to the most recent 128 visible batches; awaiting manual QA that long icon browsing sessions do not accumulate stale warm signatures.
 - Media panel remote result caching is now capped to the most recent 24 query/filter signatures with pre-sized cache containers; awaiting manual QA that long search sessions stay responsive without stale query regressions.
@@ -11,6 +12,7 @@ IN PROGRESS:
 - Icon, Font, Media, and UI panel visible-row rendering now consumes already-filtered row vectors instead of cloning every visible item again, the Icon panel All Sets empty view now only collects the visible representative icon window instead of extending the full 300k+ representative list before truncating, visible in-flight icon preview warming no longer repeats filesystem checks from the tile render path, the Icon panel batches preview-cache checks while skipping already-warming icons and avoids cloning visible icons that are already cached or warming, built-in Zed icon typed searches now reuse cached search text instead of rebuilding drag payload labels per repaint, the UI panel snapshots and consumes visible shadcn preview-image cache hits once per render without cloning thumbnail URLs per row and answers cached catalog search matches without cloning cached search text, Media panel remote searches now match fields directly without formatting/lowercasing a combined string per remote row, and Font panel typed searches now reuse cached lowercase font names without cloning cached search text and only build row entries after matches; awaiting manual Zed panel QA.
 
 PENDING:
+- User manual check that UI/shadcn panel cold open and screenshot thumbnail warming still show the same rows while avoiding avoidable allocation churn.
 - User manual check that browsing thousands of external icons does not grow the in-memory Icon panel SVG preview cache indefinitely and cached disk previews still reload quickly.
 - User manual check that scrolling through many Icon panel searches/sets keeps preview warming responsive without unbounded warmed-batch state.
 - User manual check that trying many Media panel searches does not grow memory indefinitely and recent cached queries still reopen instantly.

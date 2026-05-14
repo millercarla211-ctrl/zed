@@ -1,3 +1,11 @@
+[2026-05-15] - UI Panel Catalog Buffer Preallocation
+
+CHANGED:
+- `crates/shadcn_ui_panel` now preallocates local shadcn/Magic catalog item buffers, screenshot candidate paths, cached thumbnail hits, and warmed thumbnail result rows to reduce allocation churn during UI panel cold loads and thumbnail warming.
+
+NOTES:
+- Preserved the existing static/rkyv catalog path, screenshot lookup order, WebPreview behavior, and editor input path.
+
 [2026-05-14] - Icon SVG Rendering And Remote Media Fetch
 
 ADDED:

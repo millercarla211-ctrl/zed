@@ -2020,8 +2020,9 @@ fn manifest_catalog_items() -> Vec<CatalogItem> {
         return Vec::new();
     };
 
-    let mut items = Vec::new();
-    for entry in entries.flatten() {
+    let entries = entries.flatten();
+    let mut items = Vec::with_capacity(entries.size_hint().0);
+    for entry in entries {
         let path = entry.path();
         if path.extension().and_then(|extension| extension.to_str()) != Some("json") {
             continue;
@@ -2120,8 +2121,9 @@ fn magic_catalog_items() -> Vec<CatalogItem> {
         return Vec::new();
     };
 
-    let mut items = Vec::new();
-    for entry in entries.flatten() {
+    let entries = entries.flatten();
+    let mut items = Vec::with_capacity(entries.size_hint().0);
+    for entry in entries {
         let path = entry.path();
         if path.extension().and_then(|extension| extension.to_str()) != Some("tsx") {
             continue;
@@ -2867,7 +2869,7 @@ fn shadcn_preview_image_url(item: &CatalogItem) -> Option<String> {
         .join("v4")
         .join("public");
     let id = item.id.as_ref();
-    let mut candidates = Vec::new();
+    let mut candidates = Vec::with_capacity(16);
 
     match id {
         "authentication" => {
@@ -2966,14 +2968,13 @@ fn cached_shadcn_preview_image_urls(items: &[CatalogItem]) -> HashMap<String, Op
         return HashMap::default();
     };
 
-    items
-        .iter()
-        .filter_map(|item| {
-            cache
-                .get(item.id.as_ref())
-                .map(|image_url| (item.id.to_string(), image_url.clone()))
-        })
-        .collect()
+    let mut cached = HashMap::with_capacity(items.len().min(cache.len()));
+    for item in items {
+        if let Some(image_url) = cache.get(item.id.as_ref()) {
+            cached.insert(item.id.to_string(), image_url.clone());
+        }
+    }
+    cached
 }
 
 fn insert_preview_image_cache(key: String, image_url: Option<String>) {
@@ -2984,14 +2985,13 @@ fn insert_preview_image_cache(key: String, image_url: Option<String>) {
 }
 
 fn warm_shadcn_preview_images(items: Vec<CatalogItem>) -> Vec<(String, Option<String>)> {
-    items
-        .into_iter()
-        .map(|item| {
-            let key = item.id.to_string();
-            let image_url = shadcn_preview_image_url(&item);
-            (key, image_url)
-        })
-        .collect()
+    let mut warmed = Vec::with_capacity(items.len());
+    for item in items {
+        let key = item.id.to_string();
+        let image_url = shadcn_preview_image_url(&item);
+        warmed.push((key, image_url));
+    }
+    warmed
 }
 
 fn highlight_tsx(source: &str) -> String {
