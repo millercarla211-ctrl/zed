@@ -620,7 +620,6 @@ impl ShadcnUiPanel {
     }
 
     fn render_item_row(&self, item: CatalogItem, cx: &mut Context<Self>) -> impl IntoElement {
-        let payload = self.payload_for_item(&item);
         let can_drag = can_drag_into_editor(item.source);
         let primary_action = if can_drag { "Insert" } else { "Open" };
         let source_label = catalog_source_label(item.source);
@@ -648,6 +647,7 @@ impl ShadcnUiPanel {
                 }
             }))
             .when(can_drag, |this| {
+                let payload = self.payload_for_item(&item);
                 this.on_drag(payload, |asset, position, _, cx| {
                     cx.new(|_| ShadcnDragPreview {
                         title: asset.title.clone(),
