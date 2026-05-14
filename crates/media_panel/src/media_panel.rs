@@ -1103,12 +1103,18 @@ impl Render for MediaPanel {
         self.ensure_media_index_loaded(cx);
         let raw_query = self.raw_query(cx);
         let normalized_query = raw_query.trim().to_lowercase();
-        let query_terms = normalized_query.split_whitespace().collect::<Vec<_>>();
+        let query_terms_storage;
+        let query_terms: &[&str] = if normalized_query.is_empty() {
+            &[]
+        } else {
+            query_terms_storage = normalized_query.split_whitespace().collect::<Vec<_>>();
+            query_terms_storage.as_slice()
+        };
         self.ensure_remote_media_loaded(raw_query.as_str(), cx);
         let (remote_assets, total_remote_matches) =
-            self.matching_remote_assets(&query_terms, MAX_MEDIA_RESULTS);
+            self.matching_remote_assets(query_terms, MAX_MEDIA_RESULTS);
         let (assets, total_asset_matches) = self.matching_assets(
-            &query_terms,
+            query_terms,
             MAX_MEDIA_RESULTS.saturating_sub(remote_assets.len()),
         );
         let url_insert = self

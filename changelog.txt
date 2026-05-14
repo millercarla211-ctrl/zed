@@ -29,6 +29,7 @@ CHANGED:
 - `crates/media_panel` now skips remote media search-string construction when the query is empty, reducing idle render work while browsing live provider rows.
 - `crates/media_panel` now skips local media search matching when the query is empty, reducing idle render work while browsing large project media indexes.
 - `crates/media_panel` now reads and normalizes the panel search query once per render before remote loading and local/remote matching.
+- `crates/media_panel` now passes an empty query slice for empty searches instead of allocating split query terms.
 - `crates/font_panel` now skips per-font lowercase search text construction when the font query is empty, making idle browsing of system and Google fonts cheaper.
 - `crates/font_panel` now uses a bounded empty-search row collection path and derives totals from source counts instead of walking every Google font on idle renders.
 - `crates/font_panel` now computes source counts once per render and shares them between the tab strip and header total label.
