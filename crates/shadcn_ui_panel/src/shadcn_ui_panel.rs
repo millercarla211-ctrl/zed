@@ -3106,7 +3106,7 @@ fn highlight_tsx(source: &str) -> String {
         "String",
     ];
 
-    let mut output = String::new();
+    let mut output = String::with_capacity(source.len().saturating_mul(2));
     for line in source.lines() {
         let rest = line;
         if let Some(comment_index) = rest.find("//") {
@@ -3125,7 +3125,7 @@ fn highlight_tsx(source: &str) -> String {
 }
 
 fn highlight_tsx_code(source: &str, keywords: &[&str], types: &[&str]) -> String {
-    let mut output = String::new();
+    let mut output = String::with_capacity(source.len().saturating_mul(2));
     let mut chars = source.char_indices().peekable();
     while let Some((start, character)) = chars.next() {
         if character == '"' || character == '\'' || character == '`' {
@@ -3183,21 +3183,32 @@ fn highlight_tsx_code(source: &str, keywords: &[&str], types: &[&str]) -> String
             '<' | '>' | '{' | '}' | '(' | ')' | '[' | ']' | ':' | '=' | '/'
         ) {
             output.push_str(r#"<span class="pn">"#);
-            output.push_str(&escape_html(&character.to_string()));
+            push_escaped_html_char(&mut output, character);
             output.push_str("</span>");
         } else {
-            output.push_str(&escape_html(&character.to_string()));
+            push_escaped_html_char(&mut output, character);
         }
     }
     output
 }
 
 fn escape_html(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
+    let mut escaped = String::with_capacity(text.len());
+    for character in text.chars() {
+        push_escaped_html_char(&mut escaped, character);
+    }
+    escaped
+}
+
+fn push_escaped_html_char(output: &mut String, character: char) {
+    match character {
+        '&' => output.push_str("&amp;"),
+        '<' => output.push_str("&lt;"),
+        '>' => output.push_str("&gt;"),
+        '"' => output.push_str("&quot;"),
+        '\'' => output.push_str("&#39;"),
+        _ => output.push(character),
+    }
 }
 
 fn escape_attr(text: &str) -> String {

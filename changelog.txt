@@ -1,3 +1,11 @@
+[2026-05-15] - UI Highlight Escaping Allocation Cleanup
+
+CHANGED:
+- `crates/shadcn_ui_panel` now preallocates TSX highlight output buffers and escapes HTML through a single-pass helper instead of chained replacement or per-character temporary strings.
+
+NOTES:
+- Preserved highlighted code markup, escaped preview text, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media Panel Result Buffer Reservation
 
 CHANGED:
