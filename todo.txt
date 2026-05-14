@@ -1,5 +1,5 @@
 IN PROGRESS:
-- Media panel kind-count caching/local and remote empty-search fast paths, Font panel empty-search fast path, UI panel filter-count caching/search hot-path caching, embedded icon representative SVG bodies, expanded remote Media panel result windows, Font panel source-aware actions, UI screenshot thumbnail warming, full visible-grid icon representative preview prewarming, and Cleveland direct remote media support are code-complete by inspection; awaiting manual Zed panel QA.
+- Media panel kind-count caching/local and remote empty-search fast paths, Font panel empty-search fast path/shared source-count caching, UI panel filter-count caching/search hot-path caching, embedded icon representative SVG bodies, expanded remote Media panel result windows, Font panel source-aware actions, UI screenshot thumbnail warming, full visible-grid icon representative preview prewarming, and Cleveland direct remote media support are code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
 - User manual check that Iconify alias icons with hFlip, vFlip, or rotate metadata, such as arrow-right/arrow-down style aliases, preview and insert with the correct orientation.
@@ -35,6 +35,7 @@ PENDING:
 - User manual check that Icon panel count labels show total matches for search results and that the All sets tab uses static hardcoded pack totals before the external catalog is fully loaded.
 - User manual check that Font panel searches like "inter tight" or "source code" match fonts by words instead of requiring exact phrase order.
 - User manual check that opening or scrolling the Font panel with an empty search no longer lowercases every system and Google font name on each render.
+- User manual check that Font panel source tab counts and header totals stay correct while using one shared source-count snapshot per render.
 - User manual check that Font panel count totals follow the selected All/System/Web tab and show total matches, not just the capped visible row count.
 - User manual check that Font panel selected-row actions are source-aware: system fonts expose Use in Editor/UI, while Google/web fonts expose Preview, Copy CSS, and Add to Project.
 - User manual check that Media panel searches like "space background" or "open movie video" match remote/local assets by words instead of requiring exact phrase order.

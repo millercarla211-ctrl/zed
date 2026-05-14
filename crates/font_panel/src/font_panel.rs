@@ -107,6 +107,29 @@ impl FontSourceFilter {
     }
 }
 
+#[derive(Clone, Copy)]
+struct FontSourceCounts {
+    system: usize,
+    web: usize,
+}
+
+impl FontSourceCounts {
+    fn from_panel(panel: &FontPanel) -> Self {
+        Self {
+            system: panel.fonts.len(),
+            web: google_fonts::GOOGLE_FONT_FAMILIES.len(),
+        }
+    }
+
+    fn count(self, filter: FontSourceFilter) -> usize {
+        match filter {
+            FontSourceFilter::All => self.system + self.web,
+            FontSourceFilter::System => self.system,
+            FontSourceFilter::Web => self.web,
+        }
+    }
+}
+
 #[derive(Clone)]
 struct FontEntry {
     name: SharedString,
@@ -296,27 +319,14 @@ impl FontPanel {
         (visible_fonts, match_count)
     }
 
-    fn filtered_count(&self, filter: FontSourceFilter) -> usize {
-        let system_count = if filter.matches(FontSource::System) {
-            self.fonts.len()
-        } else {
-            0
-        };
-        let web_count = if filter.matches(FontSource::Web) {
-            google_fonts::GOOGLE_FONT_FAMILIES.len()
-        } else {
-            0
-        };
-        system_count + web_count
-    }
-
     fn render_source_filter_button(
         &self,
         filter: FontSourceFilter,
+        count: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let selected = self.source_filter == filter;
-        let label = format!("{} {}", filter.label(), self.filtered_count(filter));
+        let label = format!("{} {count}", filter.label());
         div().flex_none().child(
             Button::new(format!("font-source-filter-{}", filter.label()), label)
                 .style(ButtonStyle::Subtle)
@@ -611,7 +621,11 @@ impl FontPanel {
             })
     }
 
-    fn render_source_filters(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_source_filters(
+        &self,
+        counts: FontSourceCounts,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         h_flex()
             .h(px(38.))
             .gap_1()
@@ -638,9 +652,21 @@ impl FontPanel {
                             .flex_none()
                             .gap_1()
                             .items_center()
-                            .child(self.render_source_filter_button(FontSourceFilter::All, cx))
-                            .child(self.render_source_filter_button(FontSourceFilter::System, cx))
-                            .child(self.render_source_filter_button(FontSourceFilter::Web, cx)),
+                            .child(self.render_source_filter_button(
+                                FontSourceFilter::All,
+                                counts.count(FontSourceFilter::All),
+                                cx,
+                            ))
+                            .child(self.render_source_filter_button(
+                                FontSourceFilter::System,
+                                counts.count(FontSourceFilter::System),
+                                cx,
+                            ))
+                            .child(self.render_source_filter_button(
+                                FontSourceFilter::Web,
+                                counts.count(FontSourceFilter::Web),
+                                cx,
+                            )),
                     ),
             )
             .child(
@@ -659,15 +685,16 @@ impl FontPanel {
         cx.notify();
     }
 
-    fn render_preview(&self, total_matches: usize, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_preview(
+        &self,
+        total_matches: usize,
+        counts: FontSourceCounts,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let count_label = if let Some(status) = self.status.clone() {
             status
         } else if self.fonts_loaded || self.source_filter == FontSourceFilter::Web {
-            format!(
-                "{total_matches} / {}",
-                self.filtered_count(self.source_filter)
-            )
-            .into()
+            format!("{total_matches} / {}", counts.count(self.source_filter)).into()
         } else {
             "loading".into()
         };
@@ -689,7 +716,7 @@ impl FontPanel {
                     ),
             )
             .child(self.filter_editor.clone())
-            .child(self.render_source_filters(cx))
+            .child(self.render_source_filters(counts, cx))
     }
 }
 
@@ -756,6 +783,7 @@ impl Render for FontPanel {
         self.ensure_system_fonts_loading(cx);
         self.refresh_fonts_if_needed(cx);
         let (fonts, total_matches) = self.matching_fonts(cx, MAX_FONT_RESULTS);
+        let source_counts = FontSourceCounts::from_panel(self);
         let is_empty = total_matches == 0;
         let font_rows = fonts
             .iter()
@@ -768,7 +796,7 @@ impl Render for FontPanel {
             .size_full()
             .overflow_hidden()
             .bg(cx.theme().colors().panel_background)
-            .child(self.render_preview(total_matches, cx))
+            .child(self.render_preview(total_matches, source_counts, cx))
             .child(
                 div()
                     .id("font-panel-scroll")
