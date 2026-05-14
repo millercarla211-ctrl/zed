@@ -3738,14 +3738,15 @@ fn free_media_sources() -> &'static [FreeMediaSource] {
 }
 
 fn encode_query(query: &str) -> String {
-    let mut encoded = String::new();
-    for byte in query.trim().bytes() {
+    let query = query.trim();
+    let mut encoded = String::with_capacity(query.len());
+    for byte in query.bytes() {
         match byte {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
                 encoded.push(byte as char);
             }
             b' ' => encoded.push('+'),
-            _ => encoded.push_str(&format!("%{byte:02X}")),
+            _ => push_percent_encoded_byte(&mut encoded, byte),
         }
     }
     encoded
@@ -3763,14 +3764,21 @@ fn encode_path(path: &str) -> String {
 }
 
 fn encode_path_component(component: &str) -> String {
-    let mut encoded = String::new();
+    let mut encoded = String::with_capacity(component.len());
     for byte in component.bytes() {
         match byte {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
                 encoded.push(byte as char);
             }
-            _ => encoded.push_str(&format!("%{byte:02X}")),
+            _ => push_percent_encoded_byte(&mut encoded, byte),
         }
     }
     encoded
+}
+
+fn push_percent_encoded_byte(encoded: &mut String, byte: u8) {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    encoded.push('%');
+    encoded.push(HEX[(byte >> 4) as usize] as char);
+    encoded.push(HEX[(byte & 0x0f) as usize] as char);
 }

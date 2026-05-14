@@ -1,3 +1,11 @@
+[2026-05-15] - Media URL Encoder Allocation Cleanup
+
+CHANGED:
+- `crates/media_panel` now writes percent-encoded query and path bytes directly instead of allocating a temporary `format!` string for every escaped byte.
+
+NOTES:
+- Preserved remote provider query URLs, Internet Archive path encoding, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media String Helper Allocation Cleanup
 
 CHANGED:
