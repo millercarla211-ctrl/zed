@@ -1,3 +1,11 @@
+[2026-05-15] - Media Remote JSON Body Preallocation
+
+CHANGED:
+- `crates/media_panel` now reserves bounded response-body capacity from `Content-Length` before reading remote provider JSON.
+
+NOTES:
+- Preserved provider fetch URLs, timeout behavior, JSON parsing, error handling, remote media rows, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media Remote Dedupe Allocation Cleanup
 
 CHANGED:

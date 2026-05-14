@@ -54,6 +54,7 @@ const CLEVELAND_ART_RESULT_LIMIT: usize = 90;
 const MET_MUSEUM_DETAIL_LIMIT: usize = 24;
 const INTERNET_ARCHIVE_SEARCH_LIMIT: usize = 42;
 const INTERNET_ARCHIVE_DETAIL_LIMIT: usize = 24;
+const MAX_REMOTE_JSON_BODY_RESERVE: usize = 2 * 1024 * 1024;
 const REMOTE_MEDIA_FETCH_DEBOUNCE: Duration = Duration::from_millis(275);
 const REMOTE_MEDIA_PROVIDER_TIMEOUT: Duration = Duration::from_secs(4);
 
@@ -2445,7 +2446,14 @@ async fn fetch_json<T: for<'de> Deserialize<'de>>(
         anyhow::bail!("HTTP {}", response.status());
     }
 
-    let mut body = String::new();
+    let body_capacity = response
+        .headers()
+        .get("content-length")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<usize>().ok())
+        .map(|length| length.min(MAX_REMOTE_JSON_BODY_RESERVE))
+        .unwrap_or(0);
+    let mut body = String::with_capacity(body_capacity);
     response.body_mut().read_to_string(&mut body).await?;
     Ok(serde_json::from_str(&body)?)
 }
