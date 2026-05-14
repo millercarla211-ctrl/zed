@@ -1,3 +1,11 @@
+[2026-05-15] - Media String Helper Allocation Cleanup
+
+CHANGED:
+- `crates/media_panel` now builds URL-derived labels, preview cache file stems, and encoded URL paths directly instead of collecting temporary vectors before joining.
+
+NOTES:
+- Preserved media labels, preview cache file names, Internet Archive encoded paths, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Panel Naming Allocation Cleanup
 
 CHANGED:

@@ -2467,19 +2467,19 @@ fn media_label_from_url(file_name: &str) -> String {
     let stem = file_name
         .rsplit_once('.')
         .map_or(file_name, |(stem, _)| stem);
-    let label = stem
-        .chars()
-        .map(|character| {
-            if character == '_' || character == '-' {
-                ' '
-            } else {
-                character
+    let mut label = String::with_capacity(stem.len());
+    let mut needs_separator = false;
+    for character in stem.chars() {
+        if character == '_' || character == '-' || character.is_whitespace() {
+            needs_separator = !label.is_empty();
+        } else {
+            if needs_separator {
+                label.push(' ');
             }
-        })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+            label.push(character);
+            needs_separator = false;
+        }
+    }
     if label.is_empty() {
         "media".to_string()
     } else {
@@ -3096,21 +3096,19 @@ fn media_preview_html(label: &str, kind: DraggedMediaKind, source_url: &str) -> 
 }
 
 fn preview_file_stem(label: &str) -> String {
-    let normalized = label
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() {
-                character.to_ascii_lowercase()
-            } else {
-                '-'
+    let mut stem = String::with_capacity(label.len());
+    let mut needs_separator = false;
+    for character in label.chars() {
+        if character.is_ascii_alphanumeric() {
+            if needs_separator && !stem.is_empty() {
+                stem.push('-');
             }
-        })
-        .collect::<String>();
-    let stem = normalized
-        .split('-')
-        .filter(|segment| !segment.is_empty())
-        .collect::<Vec<_>>()
-        .join("-");
+            stem.push(character.to_ascii_lowercase());
+            needs_separator = false;
+        } else {
+            needs_separator = !stem.is_empty();
+        }
+    }
 
     if stem.is_empty() {
         "media".to_string()
@@ -3754,10 +3752,14 @@ fn encode_query(query: &str) -> String {
 }
 
 fn encode_path(path: &str) -> String {
-    path.split('/')
-        .map(encode_path_component)
-        .collect::<Vec<_>>()
-        .join("/")
+    let mut encoded = String::with_capacity(path.len());
+    for (index, component) in path.split('/').enumerate() {
+        if index > 0 {
+            encoded.push('/');
+        }
+        encoded.push_str(&encode_path_component(component));
+    }
+    encoded
 }
 
 fn encode_path_component(component: &str) -> String {
