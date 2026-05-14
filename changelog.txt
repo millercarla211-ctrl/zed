@@ -1,3 +1,11 @@
+[2026-05-15] - Panel Filter Tab Id Allocation Cleanup
+
+CHANGED:
+- `crates/media_panel` and `crates/shadcn_ui_panel` now build source/filter tab element ids with their preallocated id helpers instead of repeated generic `format!` calls.
+
+NOTES:
+- Preserved exact stable filter-tab ids, selected states, click behavior, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Icon Row Element Id Allocation Cleanup
 
 CHANGED:

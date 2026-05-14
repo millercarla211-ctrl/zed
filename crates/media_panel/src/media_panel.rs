@@ -582,8 +582,9 @@ impl MediaPanel {
     ) -> impl IntoElement {
         let selected = self.kind_filter == filter;
         let label = format!("{} {}", filter.label(), count);
+        let button_id = media_element_id("media-kind-filter-", filter.label());
         div().flex_none().child(
-            Button::new(format!("media-kind-filter-{}", filter.label()), label)
+            Button::new(button_id, label)
                 .style(ButtonStyle::Subtle)
                 .size(ButtonSize::Compact)
                 .toggle_state(selected)

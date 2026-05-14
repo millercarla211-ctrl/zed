@@ -434,8 +434,9 @@ impl ShadcnUiPanel {
     ) -> impl IntoElement {
         let selected = self.source_filter == filter;
         let label = format!("{} {}", filter.label(), count);
+        let button_id = shadcn_element_id("shadcn-filter-", filter.label());
         div().flex_none().child(
-            Button::new(format!("shadcn-filter-{}", filter.label()), label)
+            Button::new(button_id, label)
                 .style(ButtonStyle::Subtle)
                 .size(ButtonSize::Compact)
                 .toggle_state(selected)
