@@ -209,7 +209,16 @@ impl ShadcnUiPanel {
                     }
                 },
             );
+            let should_write_initial_cache = !shadcn_catalog_cache_path().is_file();
             let items = initial_shadcn_catalog();
+            if should_write_initial_cache {
+                let cache_items = items.clone();
+                cx.background_executor()
+                    .spawn(async move {
+                        let _ = write_shadcn_catalog_rkyv_cache(&cache_items);
+                    })
+                    .detach();
+            }
 
             Self {
                 workspace: workspace_handle,
@@ -1304,11 +1313,7 @@ fn shadcn_catalog_cached() -> Vec<CatalogItem> {
 }
 
 fn initial_shadcn_catalog() -> Vec<CatalogItem> {
-    load_shadcn_catalog_rkyv_cache().unwrap_or_else(|| {
-        let items = static_shadcn_catalog();
-        let _ = write_shadcn_catalog_rkyv_cache(&items);
-        items
-    })
+    load_shadcn_catalog_rkyv_cache().unwrap_or_else(static_shadcn_catalog)
 }
 
 fn static_shadcn_catalog() -> Vec<CatalogItem> {
