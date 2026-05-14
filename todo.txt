@@ -1,7 +1,11 @@
 IN PROGRESS:
-- Remote media thumbnail type badges are code-complete by inspection; awaiting manual Zed panel QA.
+- Internet Archive direct provider integration is code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
+- User manual check that Internet Archive direct image, video, and audio results appear in native Media panel rows for broad searches like `space`, `music`, and `motion`.
+- User manual check that the WebPreview remote media browser includes Internet Archive results alongside Openverse, Wikimedia, NASA, Art Institute, and The Met.
+- User manual check that the Media panel provider chips include Internet Archive for images, videos, and audio.
+- User manual check that slow remote providers time out without delaying other Media panel rows for more than a few seconds.
 - User manual check that remote video/audio rows with provider thumbnails show a clear playable/audio badge without looking like plain image rows.
 - User manual check that the Icon panel All sets grid renders real external SVG icons instead of letter-only pack badges.
 - User manual check that Iconify packs whose SVG paths omit explicit fill colors render visibly on the dark icon picker background.

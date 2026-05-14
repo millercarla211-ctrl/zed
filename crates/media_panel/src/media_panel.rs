@@ -1,10 +1,10 @@
 use editor::{Editor, EditorEvent};
 use futures::AsyncReadExt as _;
 use gpui::{
-    App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity, EventEmitter,
-    FocusHandle, Focusable, InteractiveElement, ObjectFit, Pixels, Render, ScrollHandle,
-    SharedString, StatefulInteractiveElement, Subscription, WeakEntity, Window, actions, div, img,
-    point, px,
+    App, AppContext as _, AsyncWindowContext, BackgroundExecutor, ClipboardItem, Context, Entity,
+    EventEmitter, FocusHandle, Focusable, InteractiveElement, ObjectFit, Pixels, Render,
+    ScrollHandle, SharedString, StatefulInteractiveElement, Subscription, WeakEntity, Window,
+    actions, div, img, point, px,
 };
 use http_client::{AsyncBody, HttpClient};
 use serde::Deserialize;
@@ -42,7 +42,9 @@ const MEDIA_PANEL_KEY: &str = "MediaPanel";
 const MAX_MEDIA_RESULTS: usize = 220;
 const MET_MUSEUM_DETAIL_LIMIT: usize = 18;
 const NASA_MEDIA_DETAIL_LIMIT: usize = 12;
+const INTERNET_ARCHIVE_DETAIL_LIMIT: usize = 16;
 const REMOTE_MEDIA_FETCH_DEBOUNCE: Duration = Duration::from_millis(275);
+const REMOTE_MEDIA_PROVIDER_TIMEOUT: Duration = Duration::from_secs(4);
 
 pub fn init(cx: &mut App) {
     cx.observe_new(|workspace: &mut Workspace, _, _| {
@@ -320,7 +322,13 @@ impl MediaPanel {
                 return;
             }
 
-            let result = fetch_remote_media_assets(http_client, query, kind_filter).await;
+            let result = fetch_remote_media_assets(
+                http_client,
+                query,
+                kind_filter,
+                cx.background_executor().clone(),
+            )
+            .await;
             panel
                 .update(cx, |panel, cx| {
                     if panel.remote_generation == generation
@@ -1390,6 +1398,34 @@ struct MetMuseumObjectResponse {
     is_public_domain: bool,
 }
 
+#[derive(Deserialize)]
+struct InternetArchiveSearchResponse {
+    response: InternetArchiveSearchDocs,
+}
+
+#[derive(Deserialize)]
+struct InternetArchiveSearchDocs {
+    docs: Vec<InternetArchiveSearchDoc>,
+}
+
+#[derive(Deserialize)]
+struct InternetArchiveSearchDoc {
+    identifier: String,
+    title: Option<String>,
+    mediatype: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct InternetArchiveMetadataResponse {
+    #[serde(default)]
+    files: Vec<InternetArchiveFile>,
+}
+
+#[derive(Deserialize)]
+struct InternetArchiveFile {
+    name: String,
+}
+
 fn remote_media_query(query: &str, filter: MediaKindFilter) -> String {
     let query = query.trim();
     if !query.is_empty() {
@@ -1407,6 +1443,7 @@ async fn fetch_remote_media_assets(
     http_client: Arc<dyn HttpClient>,
     query: String,
     filter: MediaKindFilter,
+    executor: BackgroundExecutor,
 ) -> anyhow::Result<Vec<RemoteMediaAsset>> {
     let mut fetches: Vec<RemoteMediaFetch> = Vec::new();
 
@@ -1418,32 +1455,63 @@ async fn fetch_remote_media_assets(
             let http_client = http_client.clone();
             let query = query.clone();
             async move { fetch_openverse_media(http_client, &query, DraggedMediaKind::Image).await }
-        }));
-        fetches.push(remote_media_fetch("Wikimedia", {
-            let http_client = http_client.clone();
-            let query = query.clone();
-            async move { fetch_wikimedia_media(http_client, &query, filter).await }
-        }));
-        fetches.push(remote_media_fetch("NASA", {
-            let http_client = http_client.clone();
-            let query = query.clone();
-            async move { fetch_nasa_images(http_client, &query).await }
-        }));
-        fetches.push(remote_media_fetch("Library of Congress", {
-            let http_client = http_client.clone();
-            let query = query.clone();
-            async move { fetch_library_of_congress_images(http_client, &query).await }
-        }));
-        fetches.push(remote_media_fetch("Art Institute", {
-            let http_client = http_client.clone();
-            let query = query.clone();
-            async move { fetch_art_institute_images(http_client, &query).await }
-        }));
-        fetches.push(remote_media_fetch("The Met", {
-            let http_client = http_client.clone();
-            let query = query.clone();
-            async move { fetch_met_museum_images(http_client, &query).await }
-        }));
+        }, executor.clone()));
+        fetches.push(remote_media_fetch(
+            "Wikimedia",
+            {
+                let http_client = http_client.clone();
+                let query = query.clone();
+                async move { fetch_wikimedia_media(http_client, &query, filter).await }
+            },
+            executor.clone(),
+        ));
+        fetches.push(remote_media_fetch(
+            "NASA",
+            {
+                let http_client = http_client.clone();
+                let query = query.clone();
+                async move { fetch_nasa_images(http_client, &query).await }
+            },
+            executor.clone(),
+        ));
+        fetches.push(remote_media_fetch(
+            "Library of Congress",
+            {
+                let http_client = http_client.clone();
+                let query = query.clone();
+                async move { fetch_library_of_congress_images(http_client, &query).await }
+            },
+            executor.clone(),
+        ));
+        fetches.push(remote_media_fetch(
+            "Art Institute",
+            {
+                let http_client = http_client.clone();
+                let query = query.clone();
+                async move { fetch_art_institute_images(http_client, &query).await }
+            },
+            executor.clone(),
+        ));
+        fetches.push(remote_media_fetch(
+            "The Met",
+            {
+                let http_client = http_client.clone();
+                let query = query.clone();
+                async move { fetch_met_museum_images(http_client, &query).await }
+            },
+            executor.clone(),
+        ));
+        fetches.push(remote_media_fetch(
+            "Internet Archive images",
+            {
+                let http_client = http_client.clone();
+                let query = query.clone();
+                async move {
+                    fetch_internet_archive_media(http_client, &query, DraggedMediaKind::Image).await
+                }
+            },
+            executor.clone(),
+        ));
     }
 
     if matches!(filter, MediaKindFilter::All | MediaKindFilter::Audio) {
@@ -1451,32 +1519,68 @@ async fn fetch_remote_media_assets(
             let http_client = http_client.clone();
             let query = query.clone();
             async move { fetch_openverse_media(http_client, &query, DraggedMediaKind::Audio).await }
-        }));
-        fetches.push(remote_media_fetch("NASA audio", {
-            let http_client = http_client.clone();
-            let query = query.clone();
-            async move { fetch_nasa_media(http_client, &query, DraggedMediaKind::Audio).await }
-        }));
-        if matches!(filter, MediaKindFilter::Audio) {
-            fetches.push(remote_media_fetch("Wikimedia audio", {
+        }, executor.clone()));
+        fetches.push(remote_media_fetch(
+            "NASA audio",
+            {
                 let http_client = http_client.clone();
                 let query = query.clone();
-                async move { fetch_wikimedia_media(http_client, &query, MediaKindFilter::Audio).await }
-            }));
+                async move { fetch_nasa_media(http_client, &query, DraggedMediaKind::Audio).await }
+            },
+            executor.clone(),
+        ));
+        if matches!(filter, MediaKindFilter::Audio) {
+            fetches.push(remote_media_fetch(
+                "Wikimedia audio",
+                {
+                    let http_client = http_client.clone();
+                    let query = query.clone();
+                    async move {
+                        fetch_wikimedia_media(http_client, &query, MediaKindFilter::Audio).await
+                    }
+                },
+                executor.clone(),
+            ));
         }
+        fetches.push(remote_media_fetch(
+            "Internet Archive audio",
+            {
+                let http_client = http_client.clone();
+                let query = query.clone();
+                async move {
+                    fetch_internet_archive_media(http_client, &query, DraggedMediaKind::Audio).await
+                }
+            },
+            executor.clone(),
+        ));
     }
 
-    if matches!(filter, MediaKindFilter::Videos) {
-        fetches.push(remote_media_fetch("NASA videos", {
-            let http_client = http_client.clone();
-            let query = query.clone();
-            async move { fetch_nasa_media(http_client, &query, DraggedMediaKind::Video).await }
-        }));
+    if matches!(filter, MediaKindFilter::All | MediaKindFilter::Videos) {
+        fetches.push(remote_media_fetch(
+            "NASA videos",
+            {
+                let http_client = http_client.clone();
+                let query = query.clone();
+                async move { fetch_nasa_media(http_client, &query, DraggedMediaKind::Video).await }
+            },
+            executor.clone(),
+        ));
         fetches.push(remote_media_fetch("Wikimedia video", {
             let http_client = http_client.clone();
             let query = query.clone();
             async move { fetch_wikimedia_media(http_client, &query, MediaKindFilter::Videos).await }
-        }));
+        }, executor.clone()));
+        fetches.push(remote_media_fetch(
+            "Internet Archive videos",
+            {
+                let http_client = http_client.clone();
+                let query = query.clone();
+                async move {
+                    fetch_internet_archive_media(http_client, &query, DraggedMediaKind::Video).await
+                }
+            },
+            executor.clone(),
+        ));
     }
 
     for (provider, result) in futures::future::join_all(fetches).await {
@@ -1496,11 +1600,28 @@ async fn fetch_remote_media_assets(
     Ok(assets)
 }
 
-fn remote_media_fetch<F>(provider: &'static str, fetch: F) -> RemoteMediaFetch
+fn remote_media_fetch<F>(
+    provider: &'static str,
+    fetch: F,
+    executor: BackgroundExecutor,
+) -> RemoteMediaFetch
 where
     F: Future<Output = anyhow::Result<Vec<RemoteMediaAsset>>> + 'static,
 {
-    Box::pin(async move { (provider, fetch.await) })
+    Box::pin(async move {
+        let fetch = Box::pin(fetch);
+        let timeout = Box::pin(executor.timer(REMOTE_MEDIA_PROVIDER_TIMEOUT));
+        match futures::future::select(fetch, timeout).await {
+            futures::future::Either::Left((result, _)) => (provider, result),
+            futures::future::Either::Right((_, _)) => (
+                provider,
+                Err(anyhow::anyhow!(
+                    "timed out after {}s",
+                    REMOTE_MEDIA_PROVIDER_TIMEOUT.as_secs()
+                )),
+            ),
+        }
+    })
 }
 
 async fn fetch_openverse_media(
@@ -1877,6 +1998,159 @@ async fn fetch_met_museum_object(
     let url =
         format!("https://collectionapi.metmuseum.org/public/collection/v1/objects/{object_id}");
     fetch_json(http_client, &url).await
+}
+
+async fn fetch_internet_archive_media(
+    http_client: Arc<dyn HttpClient>,
+    query: &str,
+    kind: DraggedMediaKind,
+) -> anyhow::Result<Vec<RemoteMediaAsset>> {
+    let mediatype = match kind {
+        DraggedMediaKind::Image => "image",
+        DraggedMediaKind::Video => "movies",
+        DraggedMediaKind::Audio => "audio",
+    };
+    let search = format!("{query} AND mediatype:{mediatype}");
+    let url = format!(
+        "https://archive.org/advancedsearch.php?q={}&fl[]=identifier&fl[]=title&fl[]=mediatype&rows=28&page=1&output=json",
+        encode_query(&search)
+    );
+    let response: InternetArchiveSearchResponse = fetch_json(http_client.clone(), &url).await?;
+    let detail_requests = response
+        .response
+        .docs
+        .into_iter()
+        .take(INTERNET_ARCHIVE_DETAIL_LIMIT)
+        .map(|item| fetch_internet_archive_asset(http_client.clone(), item, kind));
+
+    Ok(futures::future::join_all(detail_requests)
+        .await
+        .into_iter()
+        .filter_map(Result::ok)
+        .collect())
+}
+
+async fn fetch_internet_archive_asset(
+    http_client: Arc<dyn HttpClient>,
+    item: InternetArchiveSearchDoc,
+    kind: DraggedMediaKind,
+) -> anyhow::Result<RemoteMediaAsset> {
+    let metadata_url = format!(
+        "https://archive.org/metadata/{}",
+        encode_path_component(&item.identifier)
+    );
+    let metadata: InternetArchiveMetadataResponse = fetch_json(http_client, &metadata_url).await?;
+    let file_name = best_internet_archive_file(metadata.files.into_iter(), kind)
+        .ok_or_else(|| anyhow::anyhow!("missing direct Internet Archive media file"))?;
+    let media_url = format!(
+        "https://archive.org/download/{}/{}",
+        encode_path_component(&item.identifier),
+        encode_path(&file_name)
+    );
+    let thumbnail_url = Some(format!(
+        "https://archive.org/services/img/{}",
+        encode_path_component(&item.identifier)
+    ));
+    let label = clean_remote_label(item.title.as_deref().unwrap_or(&item.identifier));
+    let tags = item.mediatype.unwrap_or_default();
+
+    Ok(RemoteMediaAsset::owned_with_thumbnail(
+        remote_asset_id("InternetArchive", &item.identifier),
+        label,
+        "Internet Archive",
+        media_url,
+        thumbnail_url,
+        kind,
+        "public domain / Creative Commons / rights vary".to_string(),
+        tags,
+    ))
+}
+
+fn best_internet_archive_file(
+    files: impl Iterator<Item = InternetArchiveFile>,
+    kind: DraggedMediaKind,
+) -> Option<String> {
+    let mut candidates = files
+        .filter_map(|file| {
+            let lower = file.name.to_lowercase();
+            if lower.contains("_meta.")
+                || lower.contains("_files.")
+                || lower.ends_with(".torrent")
+                || lower.ends_with(".xml")
+                || lower.ends_with(".sqlite")
+            {
+                return None;
+            }
+
+            let extension = Path::new(&lower).extension()?.to_str()?;
+            if media_kind_for_extension(extension)? == kind {
+                Some(file.name)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    candidates.sort_by_key(|name| internet_archive_file_rank(name, kind));
+    candidates.into_iter().next()
+}
+
+fn internet_archive_file_rank(name: &str, kind: DraggedMediaKind) -> usize {
+    let lower = name.to_lowercase();
+    let generated_penalty = if lower.contains("_thumb")
+        || lower.contains("thumbs/")
+        || lower.contains("_spectrogram")
+        || lower.contains("_itemimage")
+    {
+        20
+    } else {
+        0
+    };
+
+    generated_penalty
+        + match kind {
+            DraggedMediaKind::Image => {
+                if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+                    0
+                } else if lower.ends_with(".png") {
+                    1
+                } else if lower.ends_with(".webp") {
+                    2
+                } else if lower.ends_with(".gif") {
+                    3
+                } else {
+                    4
+                }
+            }
+            DraggedMediaKind::Video => {
+                if lower.ends_with(".mp4") && !lower.contains("ia.mp4") {
+                    0
+                } else if lower.ends_with(".mp4") {
+                    1
+                } else if lower.ends_with(".webm") {
+                    2
+                } else if lower.ends_with(".m4v") {
+                    3
+                } else {
+                    4
+                }
+            }
+            DraggedMediaKind::Audio => {
+                if lower.ends_with(".mp3") {
+                    0
+                } else if lower.ends_with(".m4a") {
+                    1
+                } else if lower.ends_with(".ogg") {
+                    2
+                } else if lower.ends_with(".flac") {
+                    3
+                } else if lower.ends_with(".wav") {
+                    4
+                } else {
+                    5
+                }
+            }
+        }
 }
 
 async fn fetch_json<T: for<'de> Deserialize<'de>>(
@@ -2371,15 +2645,84 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
       }}));
     }}
 
+    async function searchInternetArchive(query, type) {{
+      const mediaType = type === "video" ? "movies" : type === "audio" ? "audio" : "image";
+      const params = new URLSearchParams();
+      params.set("q", `${{query}} AND mediatype:${{mediaType}}`);
+      params.append("fl[]", "identifier");
+      params.append("fl[]", "title");
+      params.append("fl[]", "mediatype");
+      params.set("rows", "14");
+      params.set("page", "1");
+      params.set("output", "json");
+      const search = await fetch(`https://archive.org/advancedsearch.php?${{params}}`).then((response) => response.json());
+      const docs = (((search || {{}}).response || {{}}).docs || []).slice(0, 14);
+      const resolved = await Promise.all(docs.map(async (doc) => {{
+        const identifier = doc.identifier;
+        if (!identifier) return null;
+        const metadata = await fetch(`https://archive.org/metadata/${{encodeURIComponent(identifier)}}`).then((response) => response.json()).catch(() => null);
+        const file = bestInternetArchiveFile((metadata || {{}}).files || [], type);
+        if (!file) return null;
+        const encodedFile = file.split("/").map(encodeURIComponent).join("/");
+        return {{
+          provider: "Internet Archive",
+          title: doc.title || identifier,
+          url: `https://archive.org/download/${{encodeURIComponent(identifier)}}/${{encodedFile}}`,
+          thumbnail: `https://archive.org/services/img/${{encodeURIComponent(identifier)}}`,
+          source: `https://archive.org/details/${{encodeURIComponent(identifier)}}`,
+          license: "public domain / Creative Commons / rights vary",
+          kind: type,
+        }};
+      }}));
+      return resolved.filter(Boolean);
+    }}
+
+    function bestInternetArchiveFile(files, type) {{
+      const extensions = type === "video"
+        ? [".mp4", ".webm", ".m4v"]
+        : type === "audio"
+          ? [".mp3", ".m4a", ".ogg", ".flac", ".wav"]
+          : [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+      return (files || [])
+        .map((file) => file && file.name)
+        .filter(Boolean)
+        .filter((name) => {{
+          const lower = name.toLowerCase();
+          return extensions.some((extension) => lower.endsWith(extension))
+            && !lower.includes("_meta.")
+            && !lower.includes("_files.")
+            && !lower.endsWith(".torrent")
+            && !lower.endsWith(".xml");
+        }})
+        .sort((left, right) => internetArchiveFileRank(left, type) - internetArchiveFileRank(right, type))[0];
+    }}
+
+    function internetArchiveFileRank(name, type) {{
+      const lower = name.toLowerCase();
+      const generatedPenalty = lower.includes("_thumb")
+        || lower.includes("thumbs/")
+        || lower.includes("_spectrogram")
+        || lower.includes("_itemimage")
+        ? 20
+        : 0;
+      const rank = type === "video"
+        ? lower.endsWith(".mp4") && !lower.includes("ia.mp4") ? 0 : lower.endsWith(".mp4") ? 1 : lower.endsWith(".webm") ? 2 : 3
+        : type === "audio"
+          ? lower.endsWith(".mp3") ? 0 : lower.endsWith(".m4a") ? 1 : lower.endsWith(".ogg") ? 2 : lower.endsWith(".flac") ? 3 : 4
+          : lower.endsWith(".jpg") || lower.endsWith(".jpeg") ? 0 : lower.endsWith(".png") ? 1 : lower.endsWith(".webp") ? 2 : 3;
+      return generatedPenalty + rank;
+    }}
+
     async function runSearch() {{
       const query = queryInput.value.trim() || "creative workspace";
       const type = typeInput.value;
-      status.textContent = "Searching Openverse, Wikimedia, NASA, Art Institute, and The Met...";
+      status.textContent = "Searching Openverse, Wikimedia, NASA, Internet Archive, Art Institute, and The Met...";
       grid.innerHTML = "";
       const settled = await Promise.allSettled([
         searchOpenverse(query, type),
         searchWikimedia(query, type),
         searchNasa(query, type),
+        searchInternetArchive(query, type),
         searchArtInstitute(query, type),
         searchMet(query, type),
       ]);
@@ -2960,6 +3303,19 @@ fn free_media_sources() -> &'static [FreeMediaSource] {
             audio_search: Some("https://openverse.org/search/audio?q={query}"),
         },
         FreeMediaSource {
+            id: "internet-archive",
+            name: "Internet Archive",
+            description: "No-key public-domain and Creative Commons images, videos, and audio",
+            homepage: "https://archive.org/",
+            image_search: "https://archive.org/search?query={query}%20AND%20mediatype%3Aimage",
+            video_search: Some(
+                "https://archive.org/search?query={query}%20AND%20mediatype%3Amovies",
+            ),
+            audio_search: Some(
+                "https://archive.org/search?query={query}%20AND%20mediatype%3Aaudio",
+            ),
+        },
+        FreeMediaSource {
             id: "wikimedia",
             name: "Wikimedia",
             description: "No-key Wikimedia Commons media search",
@@ -3117,6 +3473,26 @@ fn encode_query(query: &str) -> String {
                 encoded.push(byte as char);
             }
             b' ' => encoded.push('+'),
+            _ => encoded.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    encoded
+}
+
+fn encode_path(path: &str) -> String {
+    path.split('/')
+        .map(encode_path_component)
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn encode_path_component(component: &str) -> String {
+    let mut encoded = String::new();
+    for byte in component.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(byte as char);
+            }
             _ => encoded.push_str(&format!("%{byte:02X}")),
         }
     }
