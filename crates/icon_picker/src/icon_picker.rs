@@ -32,6 +32,7 @@ const ICON_PICKER_PANEL_KEY: &str = "IconPickerPanel";
 const DX_ICON_DATA_DIR: &str = "G:/Assets/icon/data";
 const ICON_PACK_INDEX: &str = include_str!("icon_pack_index.tsv");
 const MAX_ICON_RESULTS: usize = 360;
+const STARTUP_ICON_PREVIEW_WARM_LIMIT: usize = 120;
 const EXTERNAL_ICON_PREVIEW_CACHE_VERSION: &str = "v3";
 static EXTERNAL_ICON_CATALOG_CACHE: OnceLock<ExternalIconCatalog> = OnceLock::new();
 
@@ -113,8 +114,10 @@ pub struct IconPickerPanel {
     loading_external_icons: bool,
     external_catalog_loaded: bool,
     preview_cache: RefCell<HashMap<String, Option<ExternalSvg>>>,
+    warming_preview_keys: HashSet<String>,
     warming_preview_signature: Option<SharedString>,
     warmed_preview_signatures: HashSet<String>,
+    representative_preview_warm_started: bool,
     pack_scroll_handle: ScrollHandle,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
@@ -172,13 +175,30 @@ impl IconPickerPanel {
                 loading_external_icons: false,
                 external_catalog_loaded: false,
                 preview_cache: RefCell::default(),
+                warming_preview_keys: HashSet::default(),
                 warming_preview_signature: None,
                 warmed_preview_signatures: HashSet::default(),
+                representative_preview_warm_started: false,
                 pack_scroll_handle: ScrollHandle::new(),
                 status: None,
                 _subscriptions: vec![filter_subscription],
             }
         })
+    }
+
+    fn ensure_representative_external_previews_warmed(&mut self, cx: &mut Context<Self>) {
+        if self.representative_preview_warm_started {
+            return;
+        }
+        self.representative_preview_warm_started = true;
+
+        let external_icons = self
+            .representative_external_icons
+            .iter()
+            .take(STARTUP_ICON_PREVIEW_WARM_LIMIT)
+            .cloned()
+            .collect::<Vec<_>>();
+        self.queue_external_preview_warm(external_icons, false, cx);
     }
 
     fn ensure_icon_data_loaded_for_view(&mut self, cx: &mut Context<Self>) {
@@ -390,21 +410,27 @@ impl IconPickerPanel {
         icons: &[PickerIcon],
         cx: &mut Context<Self>,
     ) {
-        let mut external_icons = Vec::new();
-        for icon in icons {
-            let PickerIcon::External(icon) = icon else {
-                continue;
-            };
+        let external_icons = icons
+            .iter()
+            .filter_map(|icon| match icon {
+                PickerIcon::External(icon) => Some(icon.clone()),
+                PickerIcon::Zed(_) => None,
+            })
+            .collect::<Vec<_>>();
+        self.queue_external_preview_warm(external_icons, true, cx);
+    }
 
-            let key = icon.id();
-            if self.preview_cache.borrow().contains_key(&key)
-                || existing_external_icon_preview(icon).is_some()
-            {
-                continue;
-            }
-
-            external_icons.push(icon.clone());
-        }
+    fn queue_external_preview_warm(
+        &mut self,
+        external_icons: Vec<ExternalIcon>,
+        update_status: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let external_icons = self
+            .uncached_external_icons(external_icons)
+            .into_iter()
+            .filter(|icon| !self.warming_preview_keys.contains(&icon.id()))
+            .collect::<Vec<_>>();
 
         if external_icons.is_empty() {
             return;
@@ -420,8 +446,11 @@ impl IconPickerPanel {
             return;
         }
 
+        for icon in &external_icons {
+            self.warming_preview_keys.insert(icon.id());
+        }
         self.warming_preview_signature = Some(signature.clone().into());
-        if self.status.is_none() {
+        if update_status && self.status.is_none() {
             self.status = Some("Preparing icon previews".into());
         }
 
@@ -435,6 +464,7 @@ impl IconPickerPanel {
                     {
                         let mut preview_cache = panel.preview_cache.borrow_mut();
                         for (key, preview_path) in previews {
+                            panel.warming_preview_keys.remove(&key);
                             preview_cache.insert(
                                 key,
                                 preview_path.map(|preview_path| ExternalSvg { preview_path }),
@@ -462,6 +492,29 @@ impl IconPickerPanel {
                 .ok();
         })
         .detach();
+    }
+
+    fn uncached_external_icons(&self, icons: Vec<ExternalIcon>) -> Vec<ExternalIcon> {
+        let mut uncached_icons = Vec::new();
+        for icon in icons {
+            let key = icon.id();
+            if self.preview_cache.borrow().contains_key(&key) {
+                continue;
+            }
+
+            if let Some(preview_path) = existing_external_icon_preview(&icon) {
+                self.preview_cache.borrow_mut().insert(
+                    key,
+                    Some(ExternalSvg {
+                        preview_path: preview_path.into(),
+                    }),
+                );
+                continue;
+            }
+
+            uncached_icons.push(icon);
+        }
+        uncached_icons
     }
 
     fn insert_icon(&mut self, icon: PickerIcon, window: &mut Window, cx: &mut Context<Self>) {
@@ -764,6 +817,7 @@ impl EventEmitter<PanelEvent> for IconPickerPanel {}
 
 impl Render for IconPickerPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.ensure_representative_external_previews_warmed(cx);
         self.ensure_icon_data_loaded_for_view(cx);
         let (icons, total_matches, total_count) = self.filtered_icons(cx);
         self.ensure_visible_external_previews_warmed(&icons, cx);
