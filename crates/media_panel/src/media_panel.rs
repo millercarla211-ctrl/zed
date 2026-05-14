@@ -2548,20 +2548,19 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
         MediaKindFilter::Audio => "audio",
         _ => "image",
     };
-    let provider_links = free_media_sources()
-        .iter()
-        .filter_map(|source| {
-            let search_url = source.search_url(query, filter)?;
-            Some(format!(
-                r#"<a class="provider" data-provider="{}" title="{}" href="{}">{}</a>"#,
-                escape_attr(source.id),
-                escape_attr(source.description),
-                escape_attr(&search_url),
-                escape_html(source.name)
-            ))
-        })
-        .collect::<Vec<_>>()
-        .join("");
+    let mut provider_links = String::new();
+    for source in free_media_sources() {
+        let Some(search_url) = source.search_url(query, filter) else {
+            continue;
+        };
+        provider_links.push_str(&format!(
+            r#"<a class="provider" data-provider="{}" title="{}" href="{}">{}</a>"#,
+            escape_attr(source.id),
+            escape_attr(source.description),
+            escape_attr(&search_url),
+            escape_html(source.name)
+        ));
+    }
 
     format!(
         r#"<!doctype html>

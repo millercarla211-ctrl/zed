@@ -1,3 +1,11 @@
+[2026-05-15] - Media Browser Link Allocation Cleanup
+
+CHANGED:
+- `crates/media_panel` now appends remote browser provider links into one string buffer instead of collecting temporary link snippets before joining.
+
+NOTES:
+- Preserved provider ordering, labels, titles, URLs, generated WebPreview media-browser HTML, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media Remote Tag Allocation Cleanup
 
 CHANGED:
