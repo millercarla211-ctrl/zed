@@ -445,7 +445,9 @@ impl MediaPanel {
                 continue;
             }
 
-            if !media_search_matches(asset.search_text.as_ref(), query.as_str()) {
+            if !query.is_empty()
+                && !media_search_matches(asset.search_text.as_ref(), query.as_str())
+            {
                 continue;
             }
 

@@ -25,6 +25,7 @@ ADDED:
 CHANGED:
 - `crates/media_panel` now computes media-kind counts once per render and shares them with the tab strip and status label, avoiding repeated local/static/remote asset scans.
 - `crates/media_panel` now skips remote media search-string construction when the query is empty, reducing idle render work while browsing live provider rows.
+- `crates/media_panel` now skips local media search matching when the query is empty, reducing idle render work while browsing large project media indexes.
 - `crates/font_panel` now skips per-font lowercase search text construction when the font query is empty, making idle browsing of system and Google fonts cheaper.
 - `crates/shadcn_ui_panel` now computes UI filter counts once per render and shares them with the tab strip and status label, avoiding repeated per-tab catalog scans.
 - `crates/shadcn_ui_panel` now skips search-text construction when the UI query is empty and caches per-entry lowercase search text for non-empty searches, reducing render work while the panel is open.
@@ -33,6 +34,7 @@ CHANGED:
 - `crates/icon_picker` no longer parses Iconify pack JSON from the tile render path; uncached external previews show the lightweight pack badge until the background preview warmer writes real SVGs.
 - `crates/icon_picker` now uses a new external SVG preview cache version so stale pre-transform Iconify alias previews are bypassed automatically.
 - `crates/icon_picker` now starts warming representative external icon previews on first render, tracks in-flight preview keys, and reuses disk hits in the preview cache instead of checking them repeatedly.
+- `crates/icon_picker` now prewarms the full visible All Sets representative icon grid on first open instead of stopping after the first 120 entries.
 - `crates/shadcn_ui_panel` now warms local screenshot thumbnail lookups on a background task instead of checking the filesystem from each row render.
 - `crates/font_panel` now shows source-aware selected-row actions so native system fonts can change Zed editor/UI settings while Google/web fonts focus on preview, CSS, and project installation.
 - `crates/shadcn_ui_panel` no longer performs the initial static catalog cache write synchronously from `initial_shadcn_catalog`.

@@ -1,5 +1,5 @@
 IN PROGRESS:
-- Media panel kind-count caching/remote empty-search fast path, Font panel empty-search fast path, UI panel filter-count caching/search hot-path caching, embedded icon representative SVG bodies, expanded remote Media panel result windows, Font panel source-aware actions, UI screenshot thumbnail warming, icon representative preview prewarming, and Cleveland direct remote media support are code-complete by inspection; awaiting manual Zed panel QA.
+- Media panel kind-count caching/local and remote empty-search fast paths, Font panel empty-search fast path, UI panel filter-count caching/search hot-path caching, embedded icon representative SVG bodies, expanded remote Media panel result windows, Font panel source-aware actions, UI screenshot thumbnail warming, full visible-grid icon representative preview prewarming, and Cleveland direct remote media support are code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
 - User manual check that Iconify alias icons with hFlip, vFlip, or rotate metadata, such as arrow-right/arrow-down style aliases, preview and insert with the correct orientation.
@@ -7,6 +7,7 @@ PENDING:
 - User manual check that first opening the UI panel no longer pauses while writing the shadcn rkyv cache when the cache file is missing.
 - User manual check that Icon panel All sets and selected-pack grids prepare real SVG previews in the background instead of stalling code editor input while parsing Iconify JSON.
 - User manual check that the Icon panel starts prewarming representative pack previews on open so the first visible icon grid swaps from pack initials to real SVGs faster.
+- User manual check that the Icon panel prewarms the full first All Sets grid of representative external icons instead of only the first 120 entries.
 - User manual check that the Icon panel default All sets grid warms representative SVG previews from the embedded representative body index without repeatedly reading large Iconify pack JSON files.
 - User manual check that Iconify aliases like alternate outline/fill names appear in search results and insert/copy as SVGs instead of falling back to pack initials.
 - User manual check that Internet Archive direct image, video, and audio results appear in native Media panel rows for broad searches like `space`, `music`, and `motion`.
@@ -38,6 +39,7 @@ PENDING:
 - User manual check that Font panel selected-row actions are source-aware: system fonts expose Use in Editor/UI, while Google/web fonts expose Preview, Copy CSS, and Add to Project.
 - User manual check that Media panel searches like "space background" or "open movie video" match remote/local assets by words instead of requiring exact phrase order.
 - User manual check that browsing the Media panel with an empty search no longer builds lowercase search strings for every remote provider row on each render.
+- User manual check that browsing the Media panel with an empty search no longer runs local media search matching for every indexed project media file on each render.
 - User manual check that Media panel kind tabs keep correct counts while avoiding repeated local/static/remote asset scans for each tab on every render.
 - User manual check that broad Media panel searches now show a larger live remote result set from Openverse, Wikimedia, NASA, Library of Congress, Art Institute, Cleveland Museum, The Met, and Internet Archive without noticeably slowing editor typing.
 - User manual check that Media panel count totals follow the selected Images/Videos/Audio tab instead of using the full all-media denominator.
