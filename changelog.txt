@@ -4,6 +4,7 @@ ADDED:
 - `crates/media_panel` now fetches live no-key remote media rows from Openverse, Wikimedia Commons, NASA, Library of Congress, and Art Institute of Chicago for the active media query/filter.
 - `crates/media_panel` now uses shared Zed HTTP client plumbing plus JSON parsing for direct provider results instead of relying only on static sample rows.
 - `crates/media_panel` now caches remote media results per active query and media tab so repeated searches and tab switches can repaint immediately.
+- `crates/media_panel` now debounces remote provider searches and guards them by generation, preventing stale or partial keystroke searches from repainting the panel.
 
 CHANGED:
 - `crates/icon_picker` now renders real external SVG previews in the default All sets grid instead of falling back to pack-letter badges.

@@ -14,6 +14,7 @@ use std::{
     fs as std_fs,
     path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
 use ui::{TintColor, Tooltip, prelude::*};
 use url::Url;
@@ -37,6 +38,7 @@ actions!(
 
 const MEDIA_PANEL_KEY: &str = "MediaPanel";
 const MAX_MEDIA_RESULTS: usize = 220;
+const REMOTE_MEDIA_FETCH_DEBOUNCE: Duration = Duration::from_millis(275);
 
 pub fn init(cx: &mut App) {
     cx.observe_new(|workspace: &mut Workspace, _, _| {
@@ -167,6 +169,7 @@ pub struct MediaPanel {
     remote_loading: bool,
     index_loaded: bool,
     remote_signature: Option<String>,
+    remote_generation: u64,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
 }
@@ -203,9 +206,7 @@ impl MediaPanel {
                 |panel: &mut Self, _, event, _, cx| {
                     if matches!(event, EditorEvent::BufferEdited) {
                         panel.status = None;
-                        panel.remote_loading = false;
-                        panel.remote_signature = None;
-                        panel.remote_assets.clear();
+                        panel.invalidate_remote_media();
                         cx.notify();
                     }
                 },
@@ -225,6 +226,7 @@ impl MediaPanel {
                 remote_loading: false,
                 index_loaded: false,
                 remote_signature: None,
+                remote_generation: 0,
                 status: None,
                 _subscriptions: vec![filter_subscription],
             }
@@ -237,6 +239,13 @@ impl MediaPanel {
         }
 
         self.refresh_media_index_from_current_roots(cx);
+    }
+
+    fn invalidate_remote_media(&mut self) {
+        self.remote_generation = self.remote_generation.wrapping_add(1);
+        self.remote_loading = false;
+        self.remote_signature = None;
+        self.remote_assets.clear();
     }
 
     fn ensure_remote_media_loaded(&mut self, cx: &mut Context<Self>) {
@@ -260,11 +269,27 @@ impl MediaPanel {
 
         let http_client = self.http_client.clone();
         let kind_filter = self.kind_filter;
+        let generation = self.remote_generation;
         cx.spawn(async move |panel, cx| {
+            cx.background_executor()
+                .timer(REMOTE_MEDIA_FETCH_DEBOUNCE)
+                .await;
+            let should_fetch = panel
+                .update(cx, |panel, _| {
+                    panel.remote_generation == generation
+                        && panel.remote_signature.as_deref() == Some(signature.as_str())
+                })
+                .unwrap_or(false);
+            if !should_fetch {
+                return;
+            }
+
             let result = fetch_remote_media_assets(http_client, query, kind_filter).await;
             panel
                 .update(cx, |panel, cx| {
-                    if panel.remote_signature.as_deref() == Some(signature.as_str()) {
+                    if panel.remote_generation == generation
+                        && panel.remote_signature.as_deref() == Some(signature.as_str())
+                    {
                         panel.remote_loading = false;
                         match result {
                             Ok(remote_assets) => {
@@ -415,9 +440,7 @@ impl MediaPanel {
                 .on_click(cx.listener(move |panel, _, _, cx| {
                     panel.kind_filter = filter;
                     panel.status = None;
-                    panel.remote_loading = false;
-                    panel.remote_signature = None;
-                    panel.remote_assets.clear();
+                    panel.invalidate_remote_media();
                     cx.notify();
                 })),
         )
