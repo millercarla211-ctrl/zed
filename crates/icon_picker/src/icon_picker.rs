@@ -108,6 +108,7 @@ pub struct IconPickerPanel {
     workspace: WeakEntity<Workspace>,
     filter_editor: Entity<Editor>,
     zed_icons: Vec<IconName>,
+    zed_icon_search_text_cache: RefCell<HashMap<&'static str, SharedString>>,
     external_icons: Vec<ExternalIcon>,
     external_icons_by_pack: HashMap<String, Vec<ExternalIcon>>,
     representative_external_icons: Vec<ExternalIcon>,
@@ -169,6 +170,7 @@ impl IconPickerPanel {
                 workspace: workspace_handle,
                 filter_editor,
                 zed_icons,
+                zed_icon_search_text_cache: RefCell::default(),
                 external_icons: Vec::new(),
                 external_icons_by_pack: HashMap::default(),
                 representative_external_icons,
@@ -348,13 +350,7 @@ impl IconPickerPanel {
 
         if selected_pack.is_none() || selected_pack == Some("zed") {
             icons.extend(self.zed_icons.iter().copied().filter_map(|icon_name| {
-                let payload = DraggedIconAsset::new(icon_name);
-                let searchable = format!(
-                    "{} {} zed",
-                    payload.stem.as_ref(),
-                    payload.label.as_ref().to_lowercase()
-                );
-                if !icon_search_matches(searchable.as_str(), &query_terms) {
+                if !self.zed_icon_matches(icon_name, &query_terms) {
                     return None;
                 }
                 match_count += 1;
@@ -390,6 +386,30 @@ impl IconPickerPanel {
             icons.truncate(MAX_ICON_RESULTS);
         }
         (icons, match_count, total_count)
+    }
+
+    fn zed_icon_matches(&self, icon_name: IconName, query_terms: &[&str]) -> bool {
+        let stem: &'static str = (&icon_name).into();
+        if let Some(matches) = {
+            let search_text_cache = self.zed_icon_search_text_cache.borrow();
+            search_text_cache
+                .get(stem)
+                .map(|search_text| icon_search_matches(search_text.as_ref(), query_terms))
+        } {
+            return matches;
+        }
+
+        let payload = DraggedIconAsset::new(icon_name);
+        let search_text: SharedString = format!(
+            "{} {} zed",
+            payload.stem.as_ref(),
+            payload.label.as_ref().to_lowercase()
+        )
+        .into();
+        self.zed_icon_search_text_cache
+            .borrow_mut()
+            .insert(stem, search_text.clone());
+        icon_search_matches(search_text.as_ref(), query_terms)
     }
 
     fn payload_for_icon(&self, icon: &PickerIcon) -> DraggedIconAsset {
