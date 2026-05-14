@@ -1,4 +1,5 @@
 IN PROGRESS:
+- Media panel cached remote provider results now reuse the active result buffer and preallocate provider/dedupe buffers; awaiting manual QA that repeated media queries and tab switches stay responsive with the same result ordering.
 - Icon pack opens now update only the selected pack cache instead of also rebuilding the broad all-icons list; awaiting manual QA that selected-pack browsing remains instant and broad search still loads the full catalog on demand.
 - External Iconify catalog and SVG body loading now preallocates large icon vectors/maps from hardcoded pack counts before broad icon searches or preview warming; awaiting manual Icon panel QA on cold open and all-set browsing.
 - Icon, Font, Media, and UI panel visible search/match buffers now preallocate bounded row capacity before filtering typed queries or collecting empty-search rows; awaiting manual Zed panel QA for scroll/search smoothness.
@@ -6,6 +7,7 @@ IN PROGRESS:
 - Icon, Font, Media, and UI panel visible-row rendering now consumes already-filtered row vectors instead of cloning every visible item again, the Icon panel All Sets empty view now only collects the visible representative icon window instead of extending the full 300k+ representative list before truncating, visible in-flight icon preview warming no longer repeats filesystem checks from the tile render path, the Icon panel batches preview-cache checks while skipping already-warming icons and avoids cloning visible icons that are already cached or warming, built-in Zed icon typed searches now reuse cached search text instead of rebuilding drag payload labels per repaint, the UI panel snapshots and consumes visible shadcn preview-image cache hits once per render without cloning thumbnail URLs per row and answers cached catalog search matches without cloning cached search text, Media panel remote searches now match fields directly without formatting/lowercasing a combined string per remote row, and Font panel typed searches now reuse cached lowercase font names without cloning cached search text and only build row entries after matches; awaiting manual Zed panel QA.
 
 PENDING:
+- User manual check that returning to a cached Media panel query reuses results immediately without visible allocation/fetch churn.
 - User manual check that opening a single Iconify pack no longer triggers extra broad-list sort/dedup work while still showing all icons in that pack.
 - User manual check that broad Icon panel searches and selected-pack opens still render the same Iconify entries after catalog/map preallocation.
 - User manual check that cold Icon panel All Sets browsing feels smoother when the full external catalog eventually loads.

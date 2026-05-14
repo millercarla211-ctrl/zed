@@ -367,9 +367,9 @@ impl MediaPanel {
             return;
         }
 
-        if let Some(remote_assets) = self.remote_cache.get(&signature).cloned() {
-            let remote_kind_counts = MediaKindCounts::from_remote_assets(&remote_assets);
-            self.remote_assets = remote_assets;
+        if let Some(remote_assets) = self.remote_cache.get(&signature) {
+            let remote_kind_counts = MediaKindCounts::from_remote_assets(remote_assets);
+            self.remote_assets.clone_from(remote_assets);
             self.remote_kind_counts = remote_kind_counts;
             self.remote_signature = Some(signature);
             self.status = None;
@@ -511,10 +511,10 @@ impl MediaPanel {
     ) -> (Vec<RemoteMediaAsset>, usize) {
         let kind_filter = self.kind_filter;
         let static_assets = remote_media_assets();
-        let mut visible_assets =
-            Vec::with_capacity(limit.min(static_assets.len() + self.remote_assets.len()));
+        let candidate_count = static_assets.len() + self.remote_assets.len();
+        let mut visible_assets = Vec::with_capacity(limit.min(candidate_count));
         let mut match_count = 0;
-        let mut seen_urls = HashSet::new();
+        let mut seen_urls = HashSet::with_capacity(candidate_count);
 
         for asset in static_assets.iter().chain(self.remote_assets.iter()) {
             if !kind_filter.matches(asset.kind) {
@@ -1577,10 +1577,11 @@ async fn fetch_remote_media_assets(
     filter: MediaKindFilter,
     executor: BackgroundExecutor,
 ) -> anyhow::Result<Vec<RemoteMediaAsset>> {
-    let mut fetches: Vec<RemoteMediaFetch> = Vec::new();
+    let provider_count = remote_provider_count(filter);
+    let mut fetches: Vec<RemoteMediaFetch> = Vec::with_capacity(provider_count);
 
-    let mut assets = Vec::new();
-    let mut errors = Vec::new();
+    let mut assets = Vec::with_capacity(MAX_MEDIA_RESULTS);
+    let mut errors = Vec::with_capacity(provider_count);
 
     if matches!(filter, MediaKindFilter::All | MediaKindFilter::Images) {
         fetches.push(remote_media_fetch("Openverse images", {
@@ -2353,7 +2354,7 @@ async fn fetch_json<T: for<'de> Deserialize<'de>>(
 }
 
 fn dedupe_remote_assets(assets: &mut Vec<RemoteMediaAsset>) {
-    let mut seen = HashSet::new();
+    let mut seen = HashSet::with_capacity(assets.len());
     assets.retain(|asset| seen.insert(asset.url.to_string()));
 }
 
