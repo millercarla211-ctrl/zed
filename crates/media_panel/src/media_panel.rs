@@ -39,6 +39,7 @@ actions!(
 const MEDIA_PANEL_KEY: &str = "MediaPanel";
 const MAX_MEDIA_RESULTS: usize = 220;
 const MET_MUSEUM_DETAIL_LIMIT: usize = 18;
+const NASA_MEDIA_DETAIL_LIMIT: usize = 12;
 const REMOTE_MEDIA_FETCH_DEBOUNCE: Duration = Duration::from_millis(275);
 
 pub fn init(cx: &mut App) {
@@ -1292,6 +1293,7 @@ struct NasaCollection {
 
 #[derive(Deserialize)]
 struct NasaItem {
+    href: Option<String>,
     data: Vec<NasaData>,
     links: Option<Vec<NasaLink>>,
 }
@@ -1407,6 +1409,10 @@ async fn fetch_remote_media_assets(
             Ok(items) => assets.extend(items),
             Err(error) => errors.push(format!("Openverse audio: {error:#}")),
         }
+        match fetch_nasa_media(http_client.clone(), &query, DraggedMediaKind::Audio).await {
+            Ok(items) => assets.extend(items),
+            Err(error) => errors.push(format!("NASA audio: {error:#}")),
+        }
         if matches!(filter, MediaKindFilter::Audio) {
             match fetch_wikimedia_media(http_client.clone(), &query, MediaKindFilter::Audio).await {
                 Ok(items) => assets.extend(items),
@@ -1416,6 +1422,10 @@ async fn fetch_remote_media_assets(
     }
 
     if matches!(filter, MediaKindFilter::Videos) {
+        match fetch_nasa_media(http_client.clone(), &query, DraggedMediaKind::Video).await {
+            Ok(items) => assets.extend(items),
+            Err(error) => errors.push(format!("NASA videos: {error:#}")),
+        }
         match fetch_wikimedia_media(http_client.clone(), &query, MediaKindFilter::Videos).await {
             Ok(items) => assets.extend(items),
             Err(error) => errors.push(format!("Wikimedia video: {error:#}")),
@@ -1558,6 +1568,134 @@ async fn fetch_nasa_images(
             ))
         })
         .collect())
+}
+
+async fn fetch_nasa_media(
+    http_client: Arc<dyn HttpClient>,
+    query: &str,
+    kind: DraggedMediaKind,
+) -> anyhow::Result<Vec<RemoteMediaAsset>> {
+    let media_type = match kind {
+        DraggedMediaKind::Video => "video",
+        DraggedMediaKind::Audio => "audio",
+        DraggedMediaKind::Image => return fetch_nasa_images(http_client, query).await,
+    };
+    let url = format!(
+        "https://images-api.nasa.gov/search?q={}&media_type={media_type}&page_size=24",
+        encode_query(query)
+    );
+    let response: NasaResponse = fetch_json(http_client.clone(), &url).await?;
+    let detail_requests = response
+        .collection
+        .items
+        .into_iter()
+        .take(NASA_MEDIA_DETAIL_LIMIT)
+        .map(|item| fetch_nasa_media_asset(http_client.clone(), item, kind));
+
+    Ok(futures::future::join_all(detail_requests)
+        .await
+        .into_iter()
+        .filter_map(Result::ok)
+        .collect())
+}
+
+async fn fetch_nasa_media_asset(
+    http_client: Arc<dyn HttpClient>,
+    item: NasaItem,
+    kind: DraggedMediaKind,
+) -> anyhow::Result<RemoteMediaAsset> {
+    let data = item
+        .data
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("missing NASA media metadata"))?;
+    let media_type = match kind {
+        DraggedMediaKind::Video => "video",
+        DraggedMediaKind::Audio => "audio",
+        DraggedMediaKind::Image => "image",
+    };
+    if data.media_type.as_deref() != Some(media_type) {
+        anyhow::bail!("unexpected NASA media type");
+    }
+
+    let collection_url = item
+        .href
+        .ok_or_else(|| anyhow::anyhow!("missing NASA media collection"))?;
+    let files: Vec<String> = fetch_json(http_client, &collection_url).await?;
+    let media_url = nasa_media_file_url(files.into_iter(), kind)
+        .ok_or_else(|| anyhow::anyhow!("missing direct NASA media file"))?;
+    let label = clean_remote_label(data.title.as_deref().unwrap_or("NASA media"));
+    let identifier = data.nasa_id.unwrap_or_else(|| media_url.clone());
+    let tags = data.description.unwrap_or_default();
+
+    Ok(RemoteMediaAsset::owned(
+        remote_asset_id("NASA", &identifier),
+        label,
+        "NASA",
+        media_url,
+        kind,
+        "public domain".to_string(),
+        tags,
+    ))
+}
+
+fn nasa_media_file_url(
+    files: impl Iterator<Item = String>,
+    kind: DraggedMediaKind,
+) -> Option<String> {
+    let mut candidates = files
+        .filter(|url| {
+            let lower = url.to_lowercase();
+            match kind {
+                DraggedMediaKind::Video => lower.ends_with(".mp4"),
+                DraggedMediaKind::Audio => lower.ends_with(".mp3") || lower.ends_with(".m4a"),
+                DraggedMediaKind::Image => false,
+            }
+        })
+        .map(|url| {
+            url.replacen(
+                "http://images-assets.nasa.gov",
+                "https://images-assets.nasa.gov",
+                1,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    candidates.sort_by_key(|url| nasa_media_file_rank(url, kind));
+    candidates.into_iter().next()
+}
+
+fn nasa_media_file_rank(url: &str, kind: DraggedMediaKind) -> usize {
+    let lower = url.to_lowercase();
+    match kind {
+        DraggedMediaKind::Video => {
+            if lower.contains("~preview.mp4") {
+                0
+            } else if lower.contains("~small.mp4") || lower.contains("~mobile.mp4") {
+                1
+            } else if lower.contains("~medium.mp4") {
+                2
+            } else if lower.ends_with(".mp4") && !lower.contains("~orig") {
+                3
+            } else {
+                4
+            }
+        }
+        DraggedMediaKind::Audio => {
+            if lower.contains("~128k.mp3") {
+                0
+            } else if lower.contains("~64k.mp3") {
+                1
+            } else if lower.ends_with(".mp3") && !lower.contains("~orig") {
+                2
+            } else if lower.ends_with(".m4a") {
+                3
+            } else {
+                4
+            }
+        }
+        DraggedMediaKind::Image => 0,
+    }
 }
 
 async fn fetch_library_of_congress_images(
