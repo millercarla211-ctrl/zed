@@ -2446,7 +2446,11 @@ fn push_remote_tag(tags: &mut String, is_first_tag: &mut bool, tag: &str) {
 
 fn remote_asset_id(provider: &str, value: &str) -> String {
     let id = format!("{provider}-{value}");
-    preview_file_stem(&id).chars().take(96).collect()
+    let mut id = preview_file_stem(&id);
+    if let Some((index, _)) = id.char_indices().nth(96) {
+        id.truncate(index);
+    }
+    id
 }
 
 fn media_url_candidate(

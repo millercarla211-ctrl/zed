@@ -1,3 +1,11 @@
+[2026-05-15] - Media Remote Id Allocation Cleanup
+
+CHANGED:
+- `crates/media_panel` now truncates normalized remote media IDs in place instead of collecting a second 96-character string.
+
+NOTES:
+- Preserved remote media row IDs, preview/cache key text, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media Browser Link Allocation Cleanup
 
 CHANGED:
