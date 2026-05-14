@@ -1,13 +1,16 @@
 IN PROGRESS:
-- Iconify alias transform support is code-complete by inspection; awaiting manual Zed panel QA.
+- Iconify preview-cache refresh and Cleveland direct remote media support are code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
 - User manual check that Iconify alias icons with hFlip, vFlip, or rotate metadata, such as arrow-right/arrow-down style aliases, preview and insert with the correct orientation.
+- User manual check that the `target/icon-picker-icons/v3` preview cache regenerates external icons and does not reuse stale pre-transform alias SVGs.
 - User manual check that first opening the UI panel no longer pauses while writing the shadcn rkyv cache when the cache file is missing.
 - User manual check that Icon panel All sets and selected-pack grids prepare real SVG previews in the background instead of stalling code editor input while parsing Iconify JSON.
 - User manual check that Iconify aliases like alternate outline/fill names appear in search results and insert/copy as SVGs instead of falling back to pack initials.
 - User manual check that Internet Archive direct image, video, and audio results appear in native Media panel rows for broad searches like `space`, `music`, and `motion`.
+- User manual check that Cleveland Museum of Art CC0 image results appear directly in the Media panel for image searches like `landscape`, `portrait`, and `painting`.
 - User manual check that the WebPreview remote media browser includes Internet Archive results alongside Openverse, Wikimedia, NASA, Art Institute, and The Met.
+- User manual check that the WebPreview remote media browser includes Cleveland Museum image results alongside Openverse, Wikimedia, NASA, Internet Archive, Art Institute, and The Met.
 - User manual check that the Media panel provider chips include Internet Archive for images, videos, and audio.
 - User manual check that slow remote providers time out without delaying other Media panel rows for more than a few seconds.
 - User manual check that remote video/audio rows with provider thumbnails show a clear playable/audio badge without looking like plain image rows.

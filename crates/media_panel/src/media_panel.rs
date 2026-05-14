@@ -43,6 +43,7 @@ const MAX_MEDIA_RESULTS: usize = 220;
 const MET_MUSEUM_DETAIL_LIMIT: usize = 18;
 const NASA_MEDIA_DETAIL_LIMIT: usize = 12;
 const INTERNET_ARCHIVE_DETAIL_LIMIT: usize = 16;
+const CLEVELAND_ART_RESULT_LIMIT: usize = 70;
 const REMOTE_MEDIA_FETCH_DEBOUNCE: Duration = Duration::from_millis(275);
 const REMOTE_MEDIA_PROVIDER_TIMEOUT: Duration = Duration::from_secs(4);
 
@@ -1380,6 +1381,37 @@ struct ArtInstituteItem {
 }
 
 #[derive(Deserialize)]
+struct ClevelandArtResponse {
+    data: Vec<ClevelandArtItem>,
+}
+
+#[derive(Deserialize)]
+struct ClevelandArtItem {
+    id: u64,
+    title: Option<String>,
+    images: Option<ClevelandArtImages>,
+    creators: Option<Vec<ClevelandArtCreator>>,
+    department: Option<String>,
+    collection: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ClevelandArtImages {
+    web: Option<ClevelandArtImage>,
+    print: Option<ClevelandArtImage>,
+}
+
+#[derive(Deserialize)]
+struct ClevelandArtImage {
+    url: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ClevelandArtCreator {
+    description: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct MetMuseumSearchResponse {
     #[serde(rename = "objectIDs")]
     object_ids: Option<Vec<u64>>,
@@ -1489,6 +1521,15 @@ async fn fetch_remote_media_assets(
                 let http_client = http_client.clone();
                 let query = query.clone();
                 async move { fetch_art_institute_images(http_client, &query).await }
+            },
+            executor.clone(),
+        ));
+        fetches.push(remote_media_fetch(
+            "Cleveland Museum",
+            {
+                let http_client = http_client.clone();
+                let query = query.clone();
+                async move { fetch_cleveland_art_images(http_client, &query).await }
             },
             executor.clone(),
         ));
@@ -1947,6 +1988,50 @@ async fn fetch_art_institute_images(
                 DraggedMediaKind::Image,
                 "public domain".to_string(),
                 item.artist_display.unwrap_or_default(),
+            ))
+        })
+        .collect())
+}
+
+async fn fetch_cleveland_art_images(
+    http_client: Arc<dyn HttpClient>,
+    query: &str,
+) -> anyhow::Result<Vec<RemoteMediaAsset>> {
+    let url = format!(
+        "https://openaccess-api.clevelandart.org/api/artworks/?q={}&cc0=1&has_image=1&limit={CLEVELAND_ART_RESULT_LIMIT}",
+        encode_query(query)
+    );
+    let response: ClevelandArtResponse = fetch_json(http_client, &url).await?;
+
+    Ok(response
+        .data
+        .into_iter()
+        .filter_map(|item| {
+            let images = item.images?;
+            let image_url = images
+                .web
+                .as_ref()
+                .and_then(|image| image.url.clone())
+                .or_else(|| images.print.as_ref().and_then(|image| image.url.clone()))?;
+            let tags = item
+                .creators
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|creator| creator.description)
+                .chain(item.department)
+                .chain(item.collection)
+                .collect::<Vec<_>>()
+                .join(" ");
+
+            Some(RemoteMediaAsset::owned_with_thumbnail(
+                remote_asset_id("ClevelandMuseum", &item.id.to_string()),
+                clean_remote_label(item.title.as_deref().unwrap_or("Cleveland artwork")),
+                "Cleveland Museum of Art",
+                image_url.clone(),
+                Some(image_url),
+                DraggedMediaKind::Image,
+                "CC0".to_string(),
+                tags,
             ))
         })
         .collect())
@@ -2627,6 +2712,25 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
       }}));
     }}
 
+    async function searchClevelandArt(query, type) {{
+      if (type !== "image") return [];
+      const response = await fetch(`https://openaccess-api.clevelandart.org/api/artworks/?q=${{encodeURIComponent(query)}}&cc0=1&has_image=1&limit=30`);
+      const json = await response.json();
+      return (json.data || []).map((item) => {{
+        const images = item.images || {{}};
+        const image = (images.web || images.print || {{}}).url;
+        return image ? {{
+          provider: "Cleveland Museum of Art",
+          title: item.title,
+          url: image,
+          thumbnail: image,
+          source: item.url || `https://www.clevelandart.org/art/${{item.id}}`,
+          license: "CC0",
+          kind: "image",
+        }} : null;
+      }}).filter(Boolean);
+    }}
+
     async function searchMet(query, type) {{
       if (type !== "image") return [];
       const search = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=${{encodeURIComponent(query)}}`).then((response) => response.json());
@@ -2716,7 +2820,7 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
     async function runSearch() {{
       const query = queryInput.value.trim() || "creative workspace";
       const type = typeInput.value;
-      status.textContent = "Searching Openverse, Wikimedia, NASA, Internet Archive, Art Institute, and The Met...";
+      status.textContent = "Searching Openverse, Wikimedia, NASA, Internet Archive, Art Institute, Cleveland Museum, and The Met...";
       grid.innerHTML = "";
       const settled = await Promise.allSettled([
         searchOpenverse(query, type),
@@ -2724,6 +2828,7 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
         searchNasa(query, type),
         searchInternetArchive(query, type),
         searchArtInstitute(query, type),
+        searchClevelandArt(query, type),
         searchMet(query, type),
       ]);
       const items = settled.flatMap((result) => result.status === "fulfilled" ? result.value : []);
@@ -3334,6 +3439,15 @@ fn free_media_sources() -> &'static [FreeMediaSource] {
             description: "No-key public-domain and open-access museum images",
             homepage: "https://www.metmuseum.org/art/collection",
             image_search: "https://www.metmuseum.org/art/collection/search?q={query}&showOnly=openAccess",
+            video_search: None,
+            audio_search: None,
+        },
+        FreeMediaSource {
+            id: "cleveland-art",
+            name: "Cleveland Museum",
+            description: "No-key CC0 artwork images from the Cleveland Museum of Art API",
+            homepage: "https://www.clevelandart.org/open-access",
+            image_search: "https://www.clevelandart.org/art/collection/search?search={query}&open_access=1",
             video_search: None,
             audio_search: None,
         },

@@ -32,7 +32,7 @@ const ICON_PICKER_PANEL_KEY: &str = "IconPickerPanel";
 const DX_ICON_DATA_DIR: &str = "G:/Assets/icon/data";
 const ICON_PACK_INDEX: &str = include_str!("icon_pack_index.tsv");
 const MAX_ICON_RESULTS: usize = 360;
-const EXTERNAL_ICON_PREVIEW_CACHE_VERSION: &str = "v2";
+const EXTERNAL_ICON_PREVIEW_CACHE_VERSION: &str = "v3";
 static EXTERNAL_ICON_CATALOG_CACHE: OnceLock<ExternalIconCatalog> = OnceLock::new();
 
 pub fn init(cx: &mut App) {

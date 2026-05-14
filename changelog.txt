@@ -19,16 +19,18 @@ ADDED:
 - `crates/media_panel` now overlays compact Zed-themed video/audio badges on remote provider thumbnails so playable media does not read as a plain image row.
 - `crates/media_panel` now fetches direct Internet Archive image, video, and audio rows by combining no-key advanced search with item metadata/download URLs.
 - `crates/media_panel` now caps each remote provider fetch at four seconds so one slow public API cannot block the whole remote media result batch.
+- `crates/media_panel` now fetches direct Cleveland Museum of Art CC0 image rows through the no-key open access API.
 
 CHANGED:
 - `crates/icon_picker` no longer parses Iconify pack JSON from the tile render path; uncached external previews show the lightweight pack badge until the background preview warmer writes real SVGs.
+- `crates/icon_picker` now uses a new external SVG preview cache version so stale pre-transform Iconify alias previews are bypassed automatically.
 - `crates/shadcn_ui_panel` no longer performs the initial static catalog cache write synchronously from `initial_shadcn_catalog`.
 - `crates/icon_picker` now renders real external SVG previews in the default All sets grid instead of falling back to pack-letter badges.
 - `crates/icon_picker` now caches missing external SVG previews as misses so broken entries do not repeatedly reload.
 - `crates/icon_picker` now reuses generated external SVG preview files from `target/icon-picker-icons` before reparsing source Iconify pack JSON.
 - `crates/icon_picker` now wraps generated Iconify SVG bodies with inherited `currentColor` fill and writes them under a versioned preview cache path, making packs with implicit black fills visible on dark panels.
 - `crates/media_panel` now prioritizes remote provider assets before local media rows so large provider catalogs are visible in the panel immediately.
-- `crates/media_panel` remote browser pages now include Internet Archive in direct in-page searches and the provider chip list.
+- `crates/media_panel` remote browser pages now include Internet Archive and Cleveland Museum of Art in direct in-page searches and the provider chip list.
 
 NOTES:
 - Preserved the existing local media index, media preview insertion flow, and WebPreview-backed media browser fallback.
