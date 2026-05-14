@@ -1,3 +1,11 @@
+[2026-05-15] - Media Remote Row Clone Cleanup
+
+CHANGED:
+- `crates/media_panel` now renders remote media thumbnails by borrowing each remote asset and consumes `Cow` fields with `into_owned` for row actions instead of cloning the whole remote asset and copying every field up front.
+
+NOTES:
+- Preserved remote thumbnail rendering, Preview and Insert URL actions, provider/license labels, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Panel Tooltip Allocation Cleanup
 
 CHANGED:

@@ -158,8 +158,11 @@ impl RemoteMediaAsset {
         }
     }
 
-    fn thumbnail_or_url(&self) -> String {
-        self.thumbnail_url.as_ref().unwrap_or(&self.url).to_string()
+    fn thumbnail_or_url(&self) -> &str {
+        self.thumbnail_url
+            .as_ref()
+            .map(|url| url.as_ref())
+            .unwrap_or_else(|| self.url.as_ref())
     }
 }
 
@@ -971,12 +974,13 @@ impl MediaPanel {
         asset: RemoteMediaAsset,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let url = asset.url.to_string();
-        let label = asset.label.to_string();
-        let provider = asset.provider.to_string();
-        let license = asset.license.to_string();
-        let id = asset.id.to_string();
         let kind = asset.kind;
+        let thumbnail = remote_media_thumbnail(&asset, cx);
+        let url = asset.url.into_owned();
+        let label = asset.label.into_owned();
+        let provider = asset.provider.into_owned();
+        let license = asset.license.into_owned();
+        let id = asset.id.into_owned();
 
         h_flex()
             .id(format!("media-panel-remote-row-{id}"))
@@ -996,7 +1000,7 @@ impl MediaPanel {
                     panel.preview_media_url(url.clone(), kind, label.clone(), window, cx);
                 }
             }))
-            .child(remote_media_thumbnail(asset.clone(), cx))
+            .child(thumbnail)
             .child(
                 v_flex()
                     .flex_1()
@@ -3280,7 +3284,7 @@ fn media_thumbnail(
     }
 }
 
-fn remote_media_thumbnail(asset: RemoteMediaAsset, cx: &mut Context<MediaPanel>) -> AnyElement {
+fn remote_media_thumbnail(asset: &RemoteMediaAsset, cx: &mut Context<MediaPanel>) -> AnyElement {
     match asset.kind {
         DraggedMediaKind::Image => div()
             .w(px(64.))
@@ -3298,7 +3302,7 @@ fn remote_media_thumbnail(asset: RemoteMediaAsset, cx: &mut Context<MediaPanel>)
         DraggedMediaKind::Video => {
             if let Some(thumbnail_url) = asset.thumbnail_url.as_ref() {
                 remote_media_thumbnail_with_badge(
-                    thumbnail_url.to_string(),
+                    thumbnail_url.as_ref(),
                     IconName::PlayOutlined,
                     cx,
                 )
@@ -3346,7 +3350,7 @@ fn remote_media_thumbnail(asset: RemoteMediaAsset, cx: &mut Context<MediaPanel>)
         }
         DraggedMediaKind::Audio => {
             if let Some(thumbnail_url) = asset.thumbnail_url.as_ref() {
-                remote_media_thumbnail_with_badge(thumbnail_url.to_string(), IconName::AudioOn, cx)
+                remote_media_thumbnail_with_badge(thumbnail_url.as_ref(), IconName::AudioOn, cx)
             } else {
                 div()
                     .w(px(64.))
@@ -3401,7 +3405,7 @@ fn remote_media_thumbnail(asset: RemoteMediaAsset, cx: &mut Context<MediaPanel>)
 }
 
 fn remote_media_thumbnail_with_badge(
-    thumbnail_url: String,
+    thumbnail_url: &str,
     icon: IconName,
     cx: &mut Context<MediaPanel>,
 ) -> AnyElement {
