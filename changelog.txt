@@ -1,3 +1,11 @@
+[2026-05-15] - UI Catalog TSV Parse Cleanup
+
+CHANGED:
+- `crates/shadcn_ui_panel` now parses embedded static catalog TSV rows field-by-field instead of collecting each row into a temporary column vector.
+
+NOTES:
+- Preserved static catalog validation, item ordering, source filters, UI actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media Row Vector Preallocation
 
 CHANGED:

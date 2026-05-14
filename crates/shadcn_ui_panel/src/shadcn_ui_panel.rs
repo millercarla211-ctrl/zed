@@ -1504,21 +1504,30 @@ fn static_catalog_index_items() -> Vec<CatalogItem> {
         .lines()
         .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
         .filter_map(|line| {
-            let columns = line.split('\t').collect::<Vec<_>>();
-            if columns.len() != 9 {
+            let mut columns = line.split('\t');
+            let id = columns.next()?;
+            let title = columns.next()?;
+            let description = columns.next()?;
+            let category = columns.next()?;
+            let source = columns.next()?;
+            let source_path = columns.next()?;
+            let target_file_name = columns.next()?;
+            let import_statement = columns.next()?;
+            let jsx = columns.next()?;
+            if columns.next().is_some() {
                 return None;
             }
 
             Some(CatalogItem {
-                id: decode_static_catalog_field(columns[0]).into(),
-                title: decode_static_catalog_field(columns[1]).into(),
-                description: decode_static_catalog_field(columns[2]).into(),
-                category: decode_static_catalog_field(columns[3]).into(),
-                source: catalog_source_from_u8(columns[4].parse::<u8>().ok()?),
-                source_path: decode_static_catalog_field(columns[5]).into(),
-                target_file_name: decode_static_catalog_field(columns[6]).into(),
-                import_statement: decode_static_catalog_field(columns[7]).into(),
-                jsx: decode_static_catalog_field(columns[8]).into(),
+                id: decode_static_catalog_field(id).into(),
+                title: decode_static_catalog_field(title).into(),
+                description: decode_static_catalog_field(description).into(),
+                category: decode_static_catalog_field(category).into(),
+                source: catalog_source_from_u8(source.parse::<u8>().ok()?),
+                source_path: decode_static_catalog_field(source_path).into(),
+                target_file_name: decode_static_catalog_field(target_file_name).into(),
+                import_statement: decode_static_catalog_field(import_statement).into(),
+                jsx: decode_static_catalog_field(jsx).into(),
             })
         })
         .collect()
