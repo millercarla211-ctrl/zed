@@ -7,6 +7,8 @@ use gpui::{
 };
 use settings::{FontFamilyName, Settings};
 use std::{
+    cell::RefCell,
+    collections::HashMap,
     fs as std_fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -57,6 +59,7 @@ pub struct FontPanel {
     fs: Arc<dyn Fs>,
     filter_editor: Entity<Editor>,
     fonts: Vec<SharedString>,
+    font_search_text_cache: RefCell<HashMap<String, SharedString>>,
     fonts_loaded: bool,
     loading_fonts: bool,
     source_filter: FontSourceFilter,
@@ -187,6 +190,7 @@ impl FontPanel {
                 fs,
                 filter_editor,
                 fonts,
+                font_search_text_cache: RefCell::default(),
                 fonts_loaded,
                 loading_fonts: false,
                 source_filter: FontSourceFilter::All,
@@ -212,6 +216,7 @@ impl FontPanel {
                 .update(cx, |panel, cx| {
                     if let Some(fonts) = FontFamilyCache::global(cx).try_list_font_families() {
                         panel.fonts = Self::sort_fonts(fonts);
+                        panel.font_search_text_cache.borrow_mut().clear();
                         panel.fonts_loaded = true;
                     }
                     panel.loading_fonts = false;
@@ -244,6 +249,7 @@ impl FontPanel {
         let fonts = Self::sort_fonts(fonts);
         if self.fonts != fonts {
             self.fonts = fonts;
+            self.font_search_text_cache.borrow_mut().clear();
         }
         self.fonts_loaded = true;
     }
@@ -297,36 +303,39 @@ impl FontPanel {
         let mut match_count = 0;
         let mut exact_match = false;
 
-        let mut push_font = |font: FontEntry| {
-            if !query_terms.is_empty() {
-                exact_match |= font.name.as_ref().eq_ignore_ascii_case(query.as_str());
-                let searchable = font.name.as_ref().to_lowercase();
-                if !font_search_matches(searchable.as_str(), &query_terms) {
-                    return;
-                }
-            }
-
-            match_count += 1;
-            if visible_fonts.len() < limit {
-                visible_fonts.push(font);
-            }
-        };
-
         if source_filter.matches(FontSource::System) {
             for font in &self.fonts {
-                push_font(FontEntry {
-                    name: font.clone(),
-                    source: FontSource::System,
-                });
+                exact_match |= font.as_ref().eq_ignore_ascii_case(query.as_str());
+                let searchable = self.font_search_text(font.as_ref());
+                if !font_search_matches(searchable.as_ref(), &query_terms) {
+                    continue;
+                }
+
+                match_count += 1;
+                if visible_fonts.len() < limit {
+                    visible_fonts.push(FontEntry {
+                        name: font.clone(),
+                        source: FontSource::System,
+                    });
+                }
             }
         }
 
         if source_filter.matches(FontSource::Web) {
             for font_name in google_fonts::GOOGLE_FONT_FAMILIES {
-                push_font(FontEntry {
-                    name: (*font_name).into(),
-                    source: FontSource::Web,
-                });
+                exact_match |= font_name.eq_ignore_ascii_case(query.as_str());
+                let searchable = self.font_search_text(font_name);
+                if !font_search_matches(searchable.as_ref(), &query_terms) {
+                    continue;
+                }
+
+                match_count += 1;
+                if visible_fonts.len() < limit {
+                    visible_fonts.push(FontEntry {
+                        name: (*font_name).into(),
+                        source: FontSource::Web,
+                    });
+                }
             }
         }
 
@@ -345,6 +354,18 @@ impl FontPanel {
         }
 
         (visible_fonts, match_count)
+    }
+
+    fn font_search_text(&self, font_name: &str) -> SharedString {
+        if let Some(search_text) = self.font_search_text_cache.borrow().get(font_name).cloned() {
+            return search_text;
+        }
+
+        let search_text: SharedString = font_name.to_lowercase().into();
+        self.font_search_text_cache
+            .borrow_mut()
+            .insert(font_name.to_string(), search_text.clone());
+        search_text
     }
 
     fn render_source_filter_button(
