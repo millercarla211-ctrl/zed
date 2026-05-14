@@ -2,6 +2,8 @@ IN PROGRESS:
 - Panel polish toward 100/100 for icon, font, media, and UI right panels while preserving the stable editor/WebPreview input paths.
 
 PENDING:
+- User manual check that Icon panel searches like "arrow left" or "github logo" match icons by words across Zed and external icon sets instead of requiring exact phrase order.
+- User manual check that Icon panel count labels show total matches for search results and that the All sets tab uses static hardcoded pack totals before the external catalog is fully loaded.
 - User manual check that Font panel searches like "inter tight" or "source code" match fonts by words instead of requiring exact phrase order.
 - User manual check that Font panel count totals follow the selected All/System/Web tab and show total matches, not just the capped visible row count.
 - User manual check that Media panel searches like "space background" or "open movie video" match remote/local assets by words instead of requiring exact phrase order.
@@ -65,6 +67,8 @@ PENDING:
 - User manual feedback on switching between Qwen 3.5 0.8B, Gemma 4 E4B, and any newly dropped GGUF files from the AI panel.
 
 COMPLETED:
+- Made Icon panel search match all query words across Zed and external icon metadata, improving multi-word icon discovery.
+- Made Icon panel counts use active selection/search totals, and made the All sets tab use the static pack totals before the full external catalog is loaded.
 - Made Font panel search match all query words across system and Google fonts so multi-word font discovery is more forgiving.
 - Made Font panel count labels respect the selected All/System/Web tab and report total matching fonts instead of capped rendered rows.
 - Made Media panel search match all query words across local and direct remote assets, improving multi-word searches without opening the remote provider browser.

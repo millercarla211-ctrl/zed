@@ -269,10 +269,12 @@ impl IconPickerPanel {
         self.filter_editor.read(cx).text(cx).trim().to_lowercase()
     }
 
-    fn filtered_icons(&self, cx: &App) -> Vec<PickerIcon> {
+    fn filtered_icons(&self, cx: &App) -> (Vec<PickerIcon>, usize, usize) {
         let query = self.query(cx);
         let selected_pack = self.selected_pack.as_ref().map(|pack| pack.as_ref());
         let mut icons = Vec::new();
+        let mut match_count = 0;
+        let total_count = self.total_count_for_selection(selected_pack);
 
         if selected_pack.is_none() && query.is_empty() {
             icons.extend(
@@ -285,24 +287,22 @@ impl IconPickerPanel {
                 icons.extend(self.zed_icons.iter().copied().map(PickerIcon::Zed));
             }
             icons.truncate(MAX_ICON_RESULTS);
-            return icons;
+            return (icons, MAX_ICON_RESULTS.min(total_count), total_count);
         }
 
         if selected_pack.is_none() || selected_pack == Some("zed") {
             icons.extend(self.zed_icons.iter().copied().filter_map(|icon_name| {
                 let payload = DraggedIconAsset::new(icon_name);
-                if query.is_empty()
-                    || payload.stem.as_ref().contains(query.as_str())
-                    || payload
-                        .label
-                        .as_ref()
-                        .to_lowercase()
-                        .contains(query.as_str())
-                {
-                    Some(PickerIcon::Zed(icon_name))
-                } else {
-                    None
+                let searchable = format!(
+                    "{} {} zed",
+                    payload.stem.as_ref(),
+                    payload.label.as_ref().to_lowercase()
+                );
+                if !icon_search_matches(searchable.as_str(), query.as_str()) {
+                    return None;
                 }
+                match_count += 1;
+                Some(PickerIcon::Zed(icon_name))
             }));
         }
 
@@ -317,20 +317,20 @@ impl IconPickerPanel {
             } else if let Some(selected_pack) = selected_pack {
                 if let Some(pack_icons) = self.external_icons_by_pack.get(selected_pack) {
                     for icon in pack_icons {
-                        if query.is_empty() || icon.search_text.as_ref().contains(query.as_str()) {
-                            icons.push(PickerIcon::External(icon.clone()));
-                            if icons.len() >= MAX_ICON_RESULTS {
-                                break;
+                        if icon_search_matches(icon.search_text.as_ref(), query.as_str()) {
+                            match_count += 1;
+                            if icons.len() < MAX_ICON_RESULTS {
+                                icons.push(PickerIcon::External(icon.clone()));
                             }
                         }
                     }
                 }
             } else {
                 for icon in &self.external_icons {
-                    if query.is_empty() || icon.search_text.as_ref().contains(query.as_str()) {
-                        icons.push(PickerIcon::External(icon.clone()));
-                        if icons.len() >= MAX_ICON_RESULTS {
-                            break;
+                    if icon_search_matches(icon.search_text.as_ref(), query.as_str()) {
+                        match_count += 1;
+                        if icons.len() < MAX_ICON_RESULTS {
+                            icons.push(PickerIcon::External(icon.clone()));
                         }
                     }
                 }
@@ -340,7 +340,7 @@ impl IconPickerPanel {
         if icons.len() > MAX_ICON_RESULTS {
             icons.truncate(MAX_ICON_RESULTS);
         }
-        icons
+        (icons, match_count, total_count)
     }
 
     fn payload_for_icon(&self, icon: &PickerIcon) -> DraggedIconAsset {
@@ -434,7 +434,7 @@ impl IconPickerPanel {
                 "all",
                 "All sets",
                 None,
-                self.external_icons.len(),
+                self.external_icon_total_count(),
                 current,
                 cx,
             )
@@ -624,6 +624,19 @@ impl IconPickerPanel {
             self.packs.iter().map(|pack| pack.total).sum()
         }
     }
+
+    fn total_count_for_selection(&self, selected_pack: Option<&str>) -> usize {
+        match selected_pack {
+            Some("zed") => self.zed_icons.len(),
+            Some(pack) => self
+                .packs
+                .iter()
+                .find(|summary| summary.prefix.as_ref() == pack)
+                .map(|summary| summary.total)
+                .unwrap_or(0),
+            None => self.zed_icons.len() + self.external_icon_total_count(),
+        }
+    }
 }
 
 impl Panel for IconPickerPanel {
@@ -687,15 +700,16 @@ impl EventEmitter<PanelEvent> for IconPickerPanel {}
 impl Render for IconPickerPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_icon_data_loaded_for_view(cx);
-        let icons = self.filtered_icons(cx);
+        let (icons, total_matches, total_count) = self.filtered_icons(cx);
         let is_empty = icons.is_empty();
         let shown_count = icons.len();
-        let total_count = self.zed_icons.len() + self.external_icon_total_count();
         let count_label = self.status.clone().unwrap_or_else(|| {
             if self.loading_external_icons {
                 "loading icons".into()
-            } else {
+            } else if self.query(cx).is_empty() {
                 format!("{shown_count} / {total_count}").into()
+            } else {
+                format!("{total_matches} / {total_count}").into()
             }
         });
         let icon_tiles = icons
@@ -769,6 +783,12 @@ fn scroll_tab_handle(handle: &ScrollHandle, direction: f32) {
         next_x = px(0.);
     }
     handle.set_offset(point(next_x, current.y));
+}
+
+fn icon_search_matches(searchable: &str, query: &str) -> bool {
+    query
+        .split_whitespace()
+        .all(|term| searchable.contains(term))
 }
 
 struct IconDragPreview {

@@ -1,3 +1,12 @@
+[2026-05-14] - Icon Panel Search And Counts
+
+CHANGED:
+- `crates/icon_picker` now matches icon searches by all query words across Zed icons and external icon metadata, so searches like `arrow left` and `github logo` do not require exact phrase order.
+- `crates/icon_picker` now reports search result totals against the active icon set selection and uses static hardcoded pack totals for the All sets tab before the full external catalog is loaded.
+
+NOTES:
+- Preserved lazy external icon loading and SVG preview generation; this pass only changes search/count behavior and static count presentation.
+
 [2026-05-14] - Font Panel Search And Counts
 
 CHANGED:
