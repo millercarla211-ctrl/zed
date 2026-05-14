@@ -316,8 +316,7 @@ impl ShadcnUiPanel {
         self.filter_editor.read(cx).text(cx).trim().to_lowercase()
     }
 
-    fn matching_items(&self, cx: &App, limit: usize) -> (Vec<CatalogItem>, usize) {
-        let query = self.query(cx);
+    fn matching_items(&self, query: &str, limit: usize) -> (Vec<CatalogItem>, usize) {
         let query_terms = query.split_whitespace().collect::<Vec<_>>();
         let source_filter = self.source_filter;
         let mut visible_items = Vec::new();
@@ -814,7 +813,8 @@ impl EventEmitter<PanelEvent> for ShadcnUiPanel {}
 impl Render for ShadcnUiPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_catalog_loaded(cx);
-        let (items, total_matches) = self.matching_items(cx, MAX_SHADCN_ROWS);
+        let query = self.query(cx);
+        let (items, total_matches) = self.matching_items(query.as_str(), MAX_SHADCN_ROWS);
         self.ensure_visible_preview_images_warmed(&items, cx);
         let is_empty = total_matches == 0;
         let filter_counts = self.filter_counts;
