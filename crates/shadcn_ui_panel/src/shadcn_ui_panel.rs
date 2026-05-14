@@ -47,7 +47,7 @@ const CATALOG_CACHE_FILE_NAME: &str = "catalog-v1.rkyv";
 const STATIC_SHADCN_CATALOG_INDEX: &str = include_str!("shadcn_catalog_index.tsv");
 static SHADCN_STATIC_CATALOG_CACHE: OnceLock<Vec<CatalogItem>> = OnceLock::new();
 static SHADCN_CATALOG_CACHE: OnceLock<Vec<CatalogItem>> = OnceLock::new();
-static SHADCN_PREVIEW_IMAGE_CACHE: OnceLock<Mutex<HashMap<String, Option<String>>>> =
+static SHADCN_PREVIEW_IMAGE_CACHE: OnceLock<Mutex<HashMap<SharedString, Option<String>>>> =
     OnceLock::new();
 
 pub fn init(cx: &mut App) {
@@ -211,7 +211,7 @@ pub struct ShadcnUiPanel {
     loading_catalog: bool,
     catalog_loaded: bool,
     source_filter: CatalogFilter,
-    warming_preview_image_keys: HashSet<String>,
+    warming_preview_image_keys: HashSet<SharedString>,
     filter_scroll_handle: ScrollHandle,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
@@ -387,7 +387,7 @@ impl ShadcnUiPanel {
     fn ensure_visible_preview_images_warmed(
         &mut self,
         items: &[CatalogItem],
-        cached_preview_images: &HashMap<String, Option<String>>,
+        cached_preview_images: &HashMap<SharedString, Option<String>>,
         cx: &mut Context<Self>,
     ) {
         let mut pending_items = Vec::with_capacity(items.len());
@@ -405,7 +405,7 @@ impl ShadcnUiPanel {
         }
 
         for item in &pending_items {
-            self.warming_preview_image_keys.insert(item.id.to_string());
+            self.warming_preview_image_keys.insert(item.id.clone());
         }
 
         let executor = cx.background_executor().clone();
@@ -3019,7 +3019,9 @@ fn shadcn_preview_image_url(item: &CatalogItem) -> Option<String> {
         .map(|url| url.to_string())
 }
 
-fn cached_shadcn_preview_image_urls(items: &[CatalogItem]) -> HashMap<String, Option<String>> {
+fn cached_shadcn_preview_image_urls(
+    items: &[CatalogItem],
+) -> HashMap<SharedString, Option<String>> {
     let cache = shadcn_preview_image_cache();
     let Ok(cache) = cache.lock() else {
         return HashMap::with_capacity(0);
@@ -3028,28 +3030,28 @@ fn cached_shadcn_preview_image_urls(items: &[CatalogItem]) -> HashMap<String, Op
     let mut cached = HashMap::with_capacity(items.len().min(cache.len()));
     for item in items {
         if let Some(image_url) = cache.get(item.id.as_ref()) {
-            cached.insert(item.id.to_string(), image_url.clone());
+            cached.insert(item.id.clone(), image_url.clone());
         }
     }
     cached
 }
 
-fn insert_preview_image_cache(key: String, image_url: Option<String>) {
+fn insert_preview_image_cache(key: SharedString, image_url: Option<String>) {
     let cache = shadcn_preview_image_cache();
     if let Ok(mut cache) = cache.lock() {
         cache.insert(key, image_url);
     }
 }
 
-fn shadcn_preview_image_cache() -> &'static Mutex<HashMap<String, Option<String>>> {
+fn shadcn_preview_image_cache() -> &'static Mutex<HashMap<SharedString, Option<String>>> {
     SHADCN_PREVIEW_IMAGE_CACHE
         .get_or_init(|| Mutex::new(HashMap::with_capacity(PREVIEW_IMAGE_CACHE_INITIAL_CAPACITY)))
 }
 
-fn warm_shadcn_preview_images(items: Vec<CatalogItem>) -> Vec<(String, Option<String>)> {
+fn warm_shadcn_preview_images(items: Vec<CatalogItem>) -> Vec<(SharedString, Option<String>)> {
     let mut warmed = Vec::with_capacity(items.len());
     for item in items {
-        let key = item.id.to_string();
+        let key = item.id.clone();
         let image_url = shadcn_preview_image_url(&item);
         warmed.push((key, image_url));
     }

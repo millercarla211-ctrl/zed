@@ -1,3 +1,11 @@
+[2026-05-15] - UI Preview Cache Key Allocation Cleanup
+
+CHANGED:
+- `crates/shadcn_ui_panel` now keys screenshot preview caches and warming sets by cloned `SharedString` catalog ids instead of fresh `String` keys.
+
+NOTES:
+- Preserved screenshot thumbnail warming, cache hits, UI rows, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Font Search Cache Key Allocation Cleanup
 
 CHANGED:
