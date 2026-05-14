@@ -15,7 +15,7 @@ use std::{
     future::Future,
     path::{Path, PathBuf},
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, OnceLock},
     time::Duration,
 };
 use ui::{TintColor, Tooltip, prelude::*};
@@ -227,9 +227,7 @@ impl MediaKindCounts {
 
     fn from_panel(panel: &MediaPanel) -> Self {
         let mut counts = panel.local_kind_counts;
-        for asset in remote_media_assets() {
-            counts.add(asset.kind);
-        }
+        counts.add_counts(static_remote_kind_counts());
         counts.add_counts(panel.remote_kind_counts);
         counts
     }
@@ -256,6 +254,11 @@ impl MediaKindCounts {
             MediaKindFilter::Audio => self.audio,
         }
     }
+}
+
+fn static_remote_kind_counts() -> MediaKindCounts {
+    static COUNTS: OnceLock<MediaKindCounts> = OnceLock::new();
+    *COUNTS.get_or_init(|| MediaKindCounts::from_remote_assets(remote_media_assets()))
 }
 
 pub struct MediaPanel {
