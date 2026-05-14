@@ -1,3 +1,11 @@
+[2026-05-15] - Icon Pack Index Buffer Preallocation
+
+CHANGED:
+- `crates/icon_picker` now parses hardcoded icon pack summaries into preallocated pack and sample-name buffers instead of relying on final iterator collection.
+
+NOTES:
+- Preserved pack tab labels, counts, dimensions, representative sample names, preview warming behavior, and editor/WebPreview input behavior.
+
 [2026-05-15] - Icon Preview Buffer Preallocation
 
 CHANGED:

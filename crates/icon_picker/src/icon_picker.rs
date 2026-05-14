@@ -1167,30 +1167,46 @@ fn load_external_icon_catalog_cached() -> ExternalIconCatalog {
 }
 
 fn static_icon_pack_summaries() -> Vec<IconPackSummary> {
-    ICON_PACK_INDEX
-        .lines()
-        .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
-        .filter_map(|line| {
-            let mut columns = line.split('\t');
-            let prefix = columns.next()?;
-            let name = columns.next()?;
-            let total = columns.next()?.parse::<usize>().ok()?;
-            let width = columns.next()?.parse::<u32>().ok()?.max(1);
-            let height = columns.next()?.parse::<u32>().ok()?.max(1);
-            let sample_names = columns
+    let lines = ICON_PACK_INDEX.lines();
+    let mut packs = Vec::with_capacity(lines.size_hint().0);
+    for line in lines {
+        if line.trim().is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        let mut columns = line.split('\t');
+        let Some(prefix) = columns.next() else {
+            continue;
+        };
+        let Some(name) = columns.next() else {
+            continue;
+        };
+        let Some(total) = columns.next().and_then(|total| total.parse::<usize>().ok()) else {
+            continue;
+        };
+        let Some(width) = columns.next().and_then(|width| width.parse::<u32>().ok()) else {
+            continue;
+        };
+        let Some(height) = columns.next().and_then(|height| height.parse::<u32>().ok()) else {
+            continue;
+        };
+
+        let mut sample_names = Vec::with_capacity(columns.size_hint().0);
+        sample_names.extend(
+            columns
                 .filter(|name| !name.is_empty())
-                .map(SharedString::from)
-                .collect::<Vec<_>>();
-            Some(IconPackSummary {
-                prefix: prefix.into(),
-                name: name.into(),
-                total,
-                width,
-                height,
-                sample_names,
-            })
-        })
-        .collect()
+                .map(SharedString::from),
+        );
+        packs.push(IconPackSummary {
+            prefix: prefix.into(),
+            name: name.into(),
+            total,
+            width: width.max(1),
+            height: height.max(1),
+            sample_names,
+        });
+    }
+    packs
 }
 
 fn representative_icons_from_pack_summaries(packs: &[IconPackSummary]) -> Vec<ExternalIcon> {
