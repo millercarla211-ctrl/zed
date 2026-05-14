@@ -11,6 +11,7 @@ use serde::Deserialize;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet, VecDeque},
+    fmt::Write as _,
     fs as std_fs,
     future::Future,
     path::{Path, PathBuf},
@@ -2609,18 +2610,19 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
         MediaKindFilter::Audio => "audio",
         _ => "image",
     };
-    let mut provider_links = String::new();
+    let mut provider_links = String::with_capacity(remote_provider_count(filter) * 192);
     for source in free_media_sources() {
         let Some(search_url) = source.search_url(query, filter) else {
             continue;
         };
-        provider_links.push_str(&format!(
+        let _ = write!(
+            provider_links,
             r#"<a class="provider" data-provider="{}" title="{}" href="{}">{}</a>"#,
             escape_attr(source.id),
             escape_attr(source.description),
             escape_attr(&search_url),
             escape_html(source.name)
-        ));
+        );
     }
 
     format!(

@@ -1,3 +1,11 @@
+[2026-05-15] - Media Browser Provider Link Buffer Cleanup
+
+CHANGED:
+- `crates/media_panel` now preallocates the remote media browser provider-link buffer and writes provider anchors directly into it.
+
+NOTES:
+- Preserved Browse Remote provider ordering, labels, titles, URLs, generated WebPreview media-browser HTML, and editor/WebPreview input behavior.
+
 [2026-05-15] - Icon And UI Copy Buffer Preallocation
 
 CHANGED:
