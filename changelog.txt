@@ -1,3 +1,11 @@
+[2026-05-15] - Font Row Render Buffer Preallocation
+
+CHANGED:
+- `crates/font_panel` now renders visible font rows into an explicitly preallocated element buffer sized from the matched row count.
+
+NOTES:
+- Preserved Font panel row ordering, source-aware row actions, search behavior, and editor/WebPreview input behavior.
+
 [2026-05-15] - UI Catalog TSV Parse Cleanup
 
 CHANGED:

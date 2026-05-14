@@ -838,10 +838,12 @@ impl Render for FontPanel {
         let (fonts, total_matches) = self.matching_fonts(query.as_str(), MAX_FONT_RESULTS);
         let source_counts = FontSourceCounts::from_panel(self);
         let is_empty = total_matches == 0;
-        let font_rows = fonts
-            .into_iter()
-            .map(|font| self.render_font_row(font, cx).into_any_element())
-            .collect::<Vec<_>>();
+        let mut font_rows = Vec::with_capacity(fonts.len());
+        font_rows.extend(
+            fonts
+                .into_iter()
+                .map(|font| self.render_font_row(font, cx).into_any_element()),
+        );
 
         v_flex()
             .id("font-panel")
