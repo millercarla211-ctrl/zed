@@ -1,9 +1,10 @@
 IN PROGRESS:
-- Remote media provider expansion is code-complete by inspection; adding debounce/generation guards so typing in media search does not flood provider APIs.
+- Icon and media panel performance pass is code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
 - User manual check that the Icon panel All sets grid renders real external SVG icons instead of letter-only pack badges.
 - User manual check that missing/broken external SVG previews fall back once without repeated reload work.
+- User manual check that generated external icon previews are reused from `target/icon-picker-icons` without reparsing Iconify JSON on later panel opens.
 - User manual check that the Media panel fetches live Openverse, Wikimedia, NASA, Library of Congress, and Art Institute results for the active query and shows remote assets before local files.
 - User manual check that returning to a previous Media panel query or media tab reuses cached provider results without another visible fetch delay.
 - User manual check that typing quickly in the Media panel search only applies the newest remote-provider result batch.
@@ -76,6 +77,7 @@ PENDING:
 
 COMPLETED:
 - Made the Icon panel render real external SVG previews in the default All sets grid and cache failed SVG lookups.
+- Made the Icon panel reuse generated external SVG preview files from disk before parsing source icon packs again.
 - Added live no-key remote media fetching for Openverse, Wikimedia Commons, NASA, Library of Congress, and Art Institute in the Media panel, prioritizing remote provider assets ahead of local files.
 - Added in-memory Media panel result caching keyed by active query and media tab.
 - Added debounce/generation protection for Media panel remote searches so stale provider calls cannot repaint old results.

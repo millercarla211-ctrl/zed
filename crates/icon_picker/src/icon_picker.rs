@@ -364,6 +364,16 @@ impl IconPickerPanel {
             return svg;
         }
 
+        if let Some(preview_path) = existing_external_icon_preview(icon) {
+            let external_svg = ExternalSvg {
+                preview_path: preview_path.into(),
+            };
+            self.preview_cache
+                .borrow_mut()
+                .insert(key, Some(external_svg.clone()));
+            return Some(external_svg);
+        }
+
         let Some(body) = self.external_icon_body(icon) else {
             self.preview_cache.borrow_mut().insert(key, None);
             return None;
@@ -1114,16 +1124,29 @@ fn external_icon_data_dir() -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from(DX_ICON_DATA_DIR))
 }
 
-fn write_external_icon_preview(icon: &ExternalIcon, svg: &str) -> anyhow::Result<String> {
-    let dir = repo_root()
+fn external_icon_preview_path(icon: &ExternalIcon) -> PathBuf {
+    repo_root()
         .join("target")
         .join("icon-picker-icons")
-        .join(sanitize_file_component(icon.pack.as_ref()));
+        .join(sanitize_file_component(icon.pack.as_ref()))
+        .join(format!(
+            "{}.svg",
+            sanitize_file_component(icon.name.as_ref())
+        ))
+}
+
+fn existing_external_icon_preview(icon: &ExternalIcon) -> Option<String> {
+    let path = external_icon_preview_path(icon);
+    path.exists()
+        .then(|| path.to_string_lossy().replace('\\', "/"))
+}
+
+fn write_external_icon_preview(icon: &ExternalIcon, svg: &str) -> anyhow::Result<String> {
+    let path = external_icon_preview_path(icon);
+    let Some(dir) = path.parent() else {
+        anyhow::bail!("invalid icon preview path");
+    };
     std::fs::create_dir_all(&dir)?;
-    let path = dir.join(format!(
-        "{}.svg",
-        sanitize_file_component(icon.name.as_ref())
-    ));
     if !path.exists() {
         std::fs::write(&path, svg)?;
     }

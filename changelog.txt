@@ -9,6 +9,7 @@ ADDED:
 CHANGED:
 - `crates/icon_picker` now renders real external SVG previews in the default All sets grid instead of falling back to pack-letter badges.
 - `crates/icon_picker` now caches missing external SVG previews as misses so broken entries do not repeatedly reload.
+- `crates/icon_picker` now reuses generated external SVG preview files from `target/icon-picker-icons` before reparsing source Iconify pack JSON.
 - `crates/media_panel` now prioritizes remote provider assets before local media rows so large provider catalogs are visible in the panel immediately.
 
 NOTES:
