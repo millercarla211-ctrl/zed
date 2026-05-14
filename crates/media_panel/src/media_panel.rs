@@ -1302,7 +1302,7 @@ impl Render for MediaDragPreview {
 }
 
 fn media_roots_for_workspace(workspace: &Workspace, cx: &App) -> Vec<PathBuf> {
-    let mut roots = Vec::new();
+    let mut roots = Vec::with_capacity(8);
     let project = workspace.project().read(cx);
 
     for worktree in project.visible_worktrees(cx) {
@@ -1334,7 +1334,8 @@ fn media_roots_for_workspace(workspace: &Workspace, cx: &App) -> Vec<PathBuf> {
 }
 
 fn gather_media_assets(roots: Vec<PathBuf>) -> Vec<MediaAsset> {
-    let mut assets = Vec::new();
+    let asset_capacity = roots.len().saturating_mul(32).min(MAX_MEDIA_RESULTS);
+    let mut assets = Vec::with_capacity(asset_capacity);
     for root in roots {
         gather_media_assets_in_root(&root, &root, &mut assets);
     }

@@ -1,3 +1,11 @@
+[2026-05-15] - Media Local Index Buffer Preallocation
+
+CHANGED:
+- `crates/media_panel` now preallocates local media root discovery and local media asset-index buffers from expected source counts before scanning workspace media folders.
+
+NOTES:
+- Preserved local media root candidates, ignored-folder behavior, asset ordering, search metadata, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Panel Search Buffer Preallocation
 
 CHANGED:
