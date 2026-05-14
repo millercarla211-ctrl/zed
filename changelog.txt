@@ -1,3 +1,11 @@
+[2026-05-15] - Icon Alias Transform Allocation Cleanup
+
+CHANGED:
+- `crates/icon_picker` now builds Iconify alias SVG transform attributes in a single string instead of allocating and joining a vector of transform fragments during preview generation.
+
+NOTES:
+- Preserved alias flip/rotate order, generated SVG markup, preview cache paths, and editor/WebPreview input behavior.
+
 [2026-05-15] - Icon Preview Warm Key Reuse
 
 CHANGED:

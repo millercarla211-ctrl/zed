@@ -8,6 +8,7 @@ use serde::Deserialize;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet, VecDeque},
+    fmt::Write as _,
     path::PathBuf,
     sync::OnceLock,
 };
@@ -1479,30 +1480,37 @@ fn transform_iconify_alias_body(
     v_flip: bool,
     rotate: Option<u8>,
 ) -> String {
-    let mut transforms = Vec::new();
+    let mut transform = String::with_capacity(96);
 
     if h_flip {
-        transforms.push(format!("translate({width} 0) scale(-1 1)"));
+        let _ = write!(&mut transform, "translate({width} 0) scale(-1 1)");
     }
     if v_flip {
-        transforms.push(format!("translate(0 {height}) scale(1 -1)"));
+        if !transform.is_empty() {
+            transform.push(' ');
+        }
+        let _ = write!(&mut transform, "translate(0 {height}) scale(1 -1)");
     }
     if let Some(rotate) = rotate
         .map(|rotate| rotate % 4)
         .filter(|rotate| *rotate != 0)
     {
-        transforms.push(format!(
+        if !transform.is_empty() {
+            transform.push(' ');
+        }
+        let _ = write!(
+            &mut transform,
             "rotate({} {} {})",
             rotate as u16 * 90,
             width as f32 / 2.,
             height as f32 / 2.
-        ));
+        );
     }
 
-    if transforms.is_empty() {
+    if transform.is_empty() {
         body.to_string()
     } else {
-        format!(r#"<g transform="{}">{body}</g>"#, transforms.join(" "))
+        format!(r#"<g transform="{transform}">{body}</g>"#)
     }
 }
 
