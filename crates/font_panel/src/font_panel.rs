@@ -298,7 +298,9 @@ impl FontPanel {
             return (visible_fonts, total_count);
         }
 
-        let query_terms = query.split_whitespace().collect::<Vec<_>>();
+        let query_term_count = query.split_whitespace().count();
+        let mut query_terms = Vec::with_capacity(query_term_count);
+        query_terms.extend(query.split_whitespace());
         let mut visible_fonts = Vec::with_capacity(limit);
         let mut match_count = 0;
         let mut exact_match = false;

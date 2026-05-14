@@ -356,7 +356,9 @@ impl IconPickerPanel {
             }
         }
 
-        let query_terms = query.split_whitespace().collect::<Vec<_>>();
+        let query_term_count = query.split_whitespace().count();
+        let mut query_terms = Vec::with_capacity(query_term_count);
+        query_terms.extend(query.split_whitespace());
 
         if selected_pack.is_none() || selected_pack == Some("zed") {
             icons.extend(self.zed_icons.iter().copied().filter_map(|icon_name| {

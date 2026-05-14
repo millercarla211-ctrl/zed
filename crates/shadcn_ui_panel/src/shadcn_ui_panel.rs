@@ -334,7 +334,9 @@ impl ShadcnUiPanel {
             return (visible_items, total_count);
         }
 
-        let query_terms = query.split_whitespace().collect::<Vec<_>>();
+        let query_term_count = query.split_whitespace().count();
+        let mut query_terms = Vec::with_capacity(query_term_count);
+        query_terms.extend(query.split_whitespace());
         let mut visible_items =
             Vec::with_capacity(limit.min(self.filter_counts.count(source_filter)));
         let mut match_count = 0;
@@ -387,12 +389,15 @@ impl ShadcnUiPanel {
         cached_preview_images: &HashMap<String, Option<String>>,
         cx: &mut Context<Self>,
     ) {
-        let pending_items = items
-            .iter()
-            .filter(|item| !cached_preview_images.contains_key(item.id.as_ref()))
-            .filter(|item| !self.warming_preview_image_keys.contains(item.id.as_ref()))
-            .cloned()
-            .collect::<Vec<_>>();
+        let mut pending_items = Vec::with_capacity(items.len());
+        for item in items {
+            if cached_preview_images.contains_key(item.id.as_ref())
+                || self.warming_preview_image_keys.contains(item.id.as_ref())
+            {
+                continue;
+            }
+            pending_items.push(item.clone());
+        }
 
         if pending_items.is_empty() {
             return;

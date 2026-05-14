@@ -1146,11 +1146,13 @@ impl Render for MediaPanel {
         self.ensure_media_index_loaded(cx);
         let raw_query = self.raw_query(cx);
         let normalized_query = raw_query.trim().to_lowercase();
-        let query_terms_storage;
+        let mut query_terms_storage;
         let query_terms: &[&str] = if normalized_query.is_empty() {
             &[]
         } else {
-            query_terms_storage = normalized_query.split_whitespace().collect::<Vec<_>>();
+            let query_term_count = normalized_query.split_whitespace().count();
+            query_terms_storage = Vec::with_capacity(query_term_count);
+            query_terms_storage.extend(normalized_query.split_whitespace());
             query_terms_storage.as_slice()
         };
         self.ensure_remote_media_loaded(raw_query.as_str(), cx);

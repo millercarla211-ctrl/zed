@@ -1,3 +1,12 @@
+[2026-05-15] - Panel Search Buffer Preallocation
+
+CHANGED:
+- `crates/icon_picker`, `crates/font_panel`, `crates/media_panel`, and `crates/shadcn_ui_panel` now preallocate typed-search query-term buffers from the current search text instead of letting small vectors grow while filtering rows.
+- `crates/shadcn_ui_panel` now fills a preallocated screenshot-preview pending-item buffer instead of collecting through an unbounded iterator chain.
+
+NOTES:
+- Preserved row matching semantics, source/tab filters, screenshot thumbnail warming behavior, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Icon Startup State Preallocation
 
 CHANGED:
