@@ -1,3 +1,11 @@
+[2026-05-15] - Icon Tile Render Buffer Preallocation
+
+CHANGED:
+- `crates/icon_picker` now renders visible icon tiles into an explicitly preallocated element buffer sized from the filtered icon count.
+
+NOTES:
+- Preserved Icon panel grid ordering, SVG preview behavior, drag/insert behavior, and editor/WebPreview input behavior.
+
 [2026-05-15] - Font Row Render Buffer Preallocation
 
 CHANGED:

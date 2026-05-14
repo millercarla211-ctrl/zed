@@ -919,10 +919,12 @@ impl Render for IconPickerPanel {
                 format!("{total_matches} / {total_count}").into()
             }
         });
-        let icon_tiles = icons
-            .into_iter()
-            .map(|icon| self.render_icon_tile(icon, cx).into_any_element())
-            .collect::<Vec<_>>();
+        let mut icon_tiles = Vec::with_capacity(icons.len());
+        icon_tiles.extend(
+            icons
+                .into_iter()
+                .map(|icon| self.render_icon_tile(icon, cx).into_any_element()),
+        );
 
         v_flex()
             .id("icon-picker-panel")
