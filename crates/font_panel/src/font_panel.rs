@@ -306,8 +306,7 @@ impl FontPanel {
         if source_filter.matches(FontSource::System) {
             for font in &self.fonts {
                 exact_match |= font.as_ref().eq_ignore_ascii_case(query.as_str());
-                let searchable = self.font_search_text(font.as_ref());
-                if !font_search_matches(searchable.as_ref(), &query_terms) {
+                if !self.font_matches(font.as_ref(), &query_terms) {
                     continue;
                 }
 
@@ -324,8 +323,7 @@ impl FontPanel {
         if source_filter.matches(FontSource::Web) {
             for font_name in google_fonts::GOOGLE_FONT_FAMILIES {
                 exact_match |= font_name.eq_ignore_ascii_case(query.as_str());
-                let searchable = self.font_search_text(font_name);
-                if !font_search_matches(searchable.as_ref(), &query_terms) {
+                if !self.font_matches(font_name, &query_terms) {
                     continue;
                 }
 
@@ -356,16 +354,21 @@ impl FontPanel {
         (visible_fonts, match_count)
     }
 
-    fn font_search_text(&self, font_name: &str) -> SharedString {
-        if let Some(search_text) = self.font_search_text_cache.borrow().get(font_name).cloned() {
-            return search_text;
+    fn font_matches(&self, font_name: &str, query_terms: &[&str]) -> bool {
+        if let Some(matches) = {
+            let search_text_cache = self.font_search_text_cache.borrow();
+            search_text_cache
+                .get(font_name)
+                .map(|search_text| font_search_matches(search_text.as_ref(), query_terms))
+        } {
+            return matches;
         }
 
         let search_text: SharedString = font_name.to_lowercase().into();
         self.font_search_text_cache
             .borrow_mut()
             .insert(font_name.to_string(), search_text.clone());
-        search_text
+        font_search_matches(search_text.as_ref(), query_terms)
     }
 
     fn render_source_filter_button(
