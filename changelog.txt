@@ -1,3 +1,11 @@
+[2026-05-15] - Panel Tab Count Label Cleanup
+
+CHANGED:
+- `crates/icon_picker`, `crates/font_panel`, `crates/media_panel`, and `crates/shadcn_ui_panel` now build tab count labels with small preallocated helpers instead of generic formatting during render.
+
+NOTES:
+- Preserved exact tab label text, counts, selected states, click behavior, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Media Remote Attribution Label Cleanup
 
 CHANGED:

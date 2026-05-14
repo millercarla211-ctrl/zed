@@ -581,7 +581,7 @@ impl MediaPanel {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let selected = self.kind_filter == filter;
-        let label = format!("{} {}", filter.label(), count);
+        let label = media_count_label(filter.label(), count);
         let button_id = media_element_id("media-kind-filter-", filter.label());
         div().flex_none().child(
             Button::new(button_id, label)
@@ -3267,6 +3267,13 @@ fn media_element_id(prefix: &str, id: &str) -> String {
     element_id.push_str(prefix);
     element_id.push_str(id);
     element_id
+}
+
+fn media_count_label(label: &str, count: usize) -> String {
+    let mut text = String::with_capacity(label.len() + 1 + 6);
+    text.push_str(label);
+    let _ = write!(text, " {count}");
+    text
 }
 
 fn media_attribution_label(provider: &str, license: &str) -> String {

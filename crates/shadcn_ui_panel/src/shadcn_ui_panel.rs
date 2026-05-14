@@ -14,6 +14,7 @@ use serde::Deserialize;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    fmt::Write as _,
     fs::{self as std_fs, File},
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
@@ -433,7 +434,7 @@ impl ShadcnUiPanel {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let selected = self.source_filter == filter;
-        let label = format!("{} {}", filter.label(), count);
+        let label = shadcn_count_label(filter.label(), count);
         let button_id = shadcn_element_id("shadcn-filter-", filter.label());
         div().flex_none().child(
             Button::new(button_id, label)
@@ -996,6 +997,13 @@ fn shadcn_element_id(prefix: &str, id: &str) -> String {
     element_id.push_str(prefix);
     element_id.push_str(id);
     element_id
+}
+
+fn shadcn_count_label(label: &str, count: usize) -> String {
+    let mut text = String::with_capacity(label.len() + 1 + 6);
+    text.push_str(label);
+    let _ = write!(text, " {count}");
+    text
 }
 
 fn shadcn_thumbnail(

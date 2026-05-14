@@ -748,9 +748,10 @@ impl IconPickerPanel {
         let selected = current == id;
         let id_string = id.to_string();
         let button_id = icon_element_id("icon-picker-pack-", id);
+        let button_label = icon_count_label(label, count);
         let tooltip_label = tooltip.unwrap_or_else(|| label.to_string().into());
         div().flex_none().child(
-            Button::new(button_id, format!("{label} {count}"))
+            Button::new(button_id, button_label)
                 .style(ButtonStyle::Subtle)
                 .size(ButtonSize::Compact)
                 .toggle_state(selected)
@@ -1027,6 +1028,13 @@ fn icon_element_id(prefix: &str, id: &str) -> String {
     element_id.push_str(prefix);
     element_id.push_str(id);
     element_id
+}
+
+fn icon_count_label(label: &str, count: usize) -> String {
+    let mut text = String::with_capacity(label.len() + 1 + 6);
+    text.push_str(label);
+    let _ = write!(text, " {count}");
+    text
 }
 
 struct IconDragPreview {
