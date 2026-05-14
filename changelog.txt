@@ -1,3 +1,11 @@
+[2026-05-15] - Media Remote Dedupe Allocation Cleanup
+
+CHANGED:
+- `crates/media_panel` now de-dupes remote media rows with cloned `SharedString` URL handles instead of allocating fresh URL strings.
+
+NOTES:
+- Preserved duplicate-removal semantics, remote provider ordering, media rows, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media Browser Provider Link Buffer Cleanup
 
 CHANGED:

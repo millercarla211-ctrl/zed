@@ -2451,8 +2451,8 @@ async fn fetch_json<T: for<'de> Deserialize<'de>>(
 }
 
 fn dedupe_remote_assets(assets: &mut Vec<RemoteMediaAsset>) {
-    let mut seen = HashSet::with_capacity(assets.len());
-    assets.retain(|asset| seen.insert(asset.url.to_string()));
+    let mut seen = HashSet::<SharedString>::with_capacity(assets.len());
+    assets.retain(|asset| seen.insert(asset.url.clone()));
 }
 
 fn media_kind_for_mime(mime: &str) -> Option<DraggedMediaKind> {
