@@ -247,10 +247,12 @@ impl FontPanel {
         let mut exact_match = false;
 
         let mut push_font = |font: FontEntry| {
-            exact_match |= font.name.as_ref().eq_ignore_ascii_case(query.as_str());
-            let searchable = font.name.as_ref().to_lowercase();
-            if !font_search_matches(searchable.as_str(), query.as_str()) {
-                return;
+            if !query.is_empty() {
+                exact_match |= font.name.as_ref().eq_ignore_ascii_case(query.as_str());
+                let searchable = font.name.as_ref().to_lowercase();
+                if !font_search_matches(searchable.as_str(), query.as_str()) {
+                    return;
+                }
             }
 
             match_count += 1;
