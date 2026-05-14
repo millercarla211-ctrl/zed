@@ -31,6 +31,7 @@ CHANGED:
 - `crates/font_panel` now computes source counts once per render and shares them between the tab strip and header total label.
 - `crates/font_panel` now reuses split search terms across font rows instead of splitting the same query for every font candidate.
 - `crates/icon_picker`, `crates/media_panel`, and `crates/shadcn_ui_panel` now reuse split search terms across candidate rows instead of splitting the same query for every visible/searchable item.
+- `crates/icon_picker` now reads the panel search query once per render before data loading, filtering, and count-label formatting.
 - `crates/shadcn_ui_panel` now computes UI filter counts once per render and shares them with the tab strip and status label, avoiding repeated per-tab catalog scans.
 - `crates/shadcn_ui_panel` now caches catalog source counts with the loaded catalog, avoiding a full catalog count scan on every render.
 - `crates/shadcn_ui_panel` now skips search-text construction when the UI query is empty and caches per-entry lowercase search text for non-empty searches, reducing render work while the panel is open.

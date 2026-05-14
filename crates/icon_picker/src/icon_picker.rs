@@ -204,8 +204,7 @@ impl IconPickerPanel {
         self.queue_external_preview_warm(external_icons, false, cx);
     }
 
-    fn ensure_icon_data_loaded_for_view(&mut self, cx: &mut Context<Self>) {
-        let query = self.query(cx);
+    fn ensure_icon_data_loaded_for_view(&mut self, query: &str, cx: &mut Context<Self>) {
         let selected_pack = self
             .selected_pack
             .as_ref()
@@ -300,8 +299,7 @@ impl IconPickerPanel {
         self.filter_editor.read(cx).text(cx).trim().to_lowercase()
     }
 
-    fn filtered_icons(&self, cx: &App) -> (Vec<PickerIcon>, usize, usize) {
-        let query = self.query(cx);
+    fn filtered_icons(&self, query: &str) -> (Vec<PickerIcon>, usize, usize) {
         let query_terms = query.split_whitespace().collect::<Vec<_>>();
         let selected_pack = self.selected_pack.as_ref().map(|pack| pack.as_ref());
         let mut icons = Vec::new();
@@ -822,15 +820,16 @@ impl EventEmitter<PanelEvent> for IconPickerPanel {}
 impl Render for IconPickerPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_representative_external_previews_warmed(cx);
-        self.ensure_icon_data_loaded_for_view(cx);
-        let (icons, total_matches, total_count) = self.filtered_icons(cx);
+        let query = self.query(cx);
+        self.ensure_icon_data_loaded_for_view(query.as_str(), cx);
+        let (icons, total_matches, total_count) = self.filtered_icons(query.as_str());
         self.ensure_visible_external_previews_warmed(&icons, cx);
         let is_empty = icons.is_empty();
         let shown_count = icons.len();
         let count_label = self.status.clone().unwrap_or_else(|| {
             if self.loading_external_icons {
                 "loading icons".into()
-            } else if self.query(cx).is_empty() {
+            } else if query.is_empty() {
                 format!("{shown_count} / {total_count}").into()
             } else {
                 format!("{total_matches} / {total_count}").into()
