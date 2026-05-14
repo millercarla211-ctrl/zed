@@ -234,7 +234,11 @@ impl FontPanel {
     fn cached_fonts(cx: &App, selected_font: Option<SharedString>) -> (Vec<SharedString>, bool) {
         match FontFamilyCache::global(cx).try_list_font_families() {
             Some(fonts) => (Self::sort_fonts(fonts), true),
-            None => (selected_font.into_iter().collect(), false),
+            None => {
+                let mut fonts = Vec::with_capacity(usize::from(selected_font.is_some()));
+                fonts.extend(selected_font);
+                (fonts, false)
+            }
         }
     }
 

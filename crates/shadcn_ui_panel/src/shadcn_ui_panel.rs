@@ -2522,11 +2522,13 @@ fn example_source_path_for_item(item: &CatalogItem) -> Option<PathBuf> {
 }
 
 fn first_source_file(path: &Path) -> Option<PathBuf> {
-    let mut entries = std_fs::read_dir(path)
-        .ok()?
-        .flatten()
-        .map(|entry| entry.path())
-        .collect::<Vec<_>>();
+    let mut entries = Vec::with_capacity(32);
+    entries.extend(
+        std_fs::read_dir(path)
+            .ok()?
+            .flatten()
+            .map(|entry| entry.path()),
+    );
     entries.sort();
 
     for entry in &entries {

@@ -1,3 +1,12 @@
+[2026-05-15] - Font And UI Small Buffer Preallocation
+
+CHANGED:
+- `crates/font_panel` now preallocates the fallback selected-font buffer used before system font discovery completes.
+- `crates/shadcn_ui_panel` now preallocates example-source directory entry buffers before sorting possible preview files.
+
+NOTES:
+- Preserved fallback font display, UI example source resolution order, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media Local Index Buffer Preallocation
 
 CHANGED:
