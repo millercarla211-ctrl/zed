@@ -264,16 +264,17 @@ impl FontPanel {
 
     fn matching_fonts(&self, cx: &App, limit: usize) -> (Vec<FontEntry>, usize) {
         let query = self.query(cx);
+        let query_terms = query.split_whitespace().collect::<Vec<_>>();
         let source_filter = self.source_filter;
         let mut visible_fonts = Vec::new();
         let mut match_count = 0;
         let mut exact_match = false;
 
         let mut push_font = |font: FontEntry| {
-            if !query.is_empty() {
+            if !query_terms.is_empty() {
                 exact_match |= font.name.as_ref().eq_ignore_ascii_case(query.as_str());
                 let searchable = font.name.as_ref().to_lowercase();
-                if !font_search_matches(searchable.as_str(), query.as_str()) {
+                if !font_search_matches(searchable.as_str(), &query_terms) {
                     return;
                 }
             }
@@ -837,10 +838,8 @@ fn scroll_tab_handle(handle: &ScrollHandle, direction: f32) {
     handle.set_offset(point(next_x, current.y));
 }
 
-fn font_search_matches(searchable: &str, query: &str) -> bool {
-    query
-        .split_whitespace()
-        .all(|term| searchable.contains(term))
+fn font_search_matches(searchable: &str, query_terms: &[&str]) -> bool {
+    query_terms.iter().all(|term| searchable.contains(term))
 }
 
 fn web_font_spec_by_name(name: &str) -> Option<WebFontSpec> {
