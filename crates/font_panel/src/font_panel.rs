@@ -342,6 +342,11 @@ impl FontPanel {
             cx.notify();
             return;
         };
+        if self.selected_source != FontSource::System {
+            self.status = Some("Add web fonts to a project before using them in app code".into());
+            cx.notify();
+            return;
+        }
 
         let font_name = font.to_string();
         settings::update_settings_file(self.fs.clone(), cx, move |settings, _| {
@@ -358,6 +363,11 @@ impl FontPanel {
             cx.notify();
             return;
         };
+        if self.selected_source != FontSource::System {
+            self.status = Some("Install the web font locally before using it for Zed UI".into());
+            cx.notify();
+            return;
+        }
 
         let font_name = font.to_string();
         settings::update_settings_file(self.fs.clone(), cx, move |settings, _| {
@@ -490,6 +500,7 @@ impl FontPanel {
         let id_font = font.name.clone();
         let source = font.source;
         let click_font = font.clone();
+        let is_system_font = source == FontSource::System;
 
         div()
             .id(format!("font-panel-row-{}", id_font.as_ref()))
@@ -548,14 +559,16 @@ impl FontPanel {
                     h_flex()
                         .gap_1()
                         .flex_wrap()
-                        .child(
-                            Button::new("font-panel-apply-editor", "Use in Editor")
-                                .style(ButtonStyle::Subtle)
-                                .size(ButtonSize::Compact)
-                                .on_click(cx.listener(|panel, _, _, cx| {
-                                    panel.apply_selected_to_buffer(cx);
-                                })),
-                        )
+                        .when(is_system_font, |this| {
+                            this.child(
+                                Button::new("font-panel-apply-editor", "Use in Editor")
+                                    .style(ButtonStyle::Subtle)
+                                    .size(ButtonSize::Compact)
+                                    .on_click(cx.listener(|panel, _, _, cx| {
+                                        panel.apply_selected_to_buffer(cx);
+                                    })),
+                            )
+                        })
                         .child(
                             Button::new("font-panel-preview", "Preview")
                                 .style(ButtonStyle::Subtle)
@@ -572,22 +585,26 @@ impl FontPanel {
                                     panel.copy_selected_css(cx);
                                 })),
                         )
-                        .child(
-                            Button::new("font-panel-apply-ui", "Use in UI")
-                                .style(ButtonStyle::Subtle)
-                                .size(ButtonSize::Compact)
-                                .on_click(cx.listener(|panel, _, _, cx| {
-                                    panel.apply_selected_to_ui(cx);
-                                })),
-                        )
-                        .child(
-                            Button::new("font-panel-add-project", "Add to Project")
-                                .style(ButtonStyle::Subtle)
-                                .size(ButtonSize::Compact)
-                                .on_click(cx.listener(|panel, _, _, cx| {
-                                    panel.add_selected_to_project(cx);
-                                })),
-                        ),
+                        .when(is_system_font, |this| {
+                            this.child(
+                                Button::new("font-panel-apply-ui", "Use in UI")
+                                    .style(ButtonStyle::Subtle)
+                                    .size(ButtonSize::Compact)
+                                    .on_click(cx.listener(|panel, _, _, cx| {
+                                        panel.apply_selected_to_ui(cx);
+                                    })),
+                            )
+                        })
+                        .when(!is_system_font, |this| {
+                            this.child(
+                                Button::new("font-panel-add-project", "Add to Project")
+                                    .style(ButtonStyle::Subtle)
+                                    .size(ButtonSize::Compact)
+                                    .on_click(cx.listener(|panel, _, _, cx| {
+                                        panel.add_selected_to_project(cx);
+                                    })),
+                            )
+                        }),
                 )
             })
     }

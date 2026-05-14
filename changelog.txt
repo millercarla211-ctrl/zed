@@ -26,6 +26,7 @@ CHANGED:
 - `crates/icon_picker` now uses a new external SVG preview cache version so stale pre-transform Iconify alias previews are bypassed automatically.
 - `crates/icon_picker` now starts warming representative external icon previews on first render, tracks in-flight preview keys, and reuses disk hits in the preview cache instead of checking them repeatedly.
 - `crates/shadcn_ui_panel` now warms local screenshot thumbnail lookups on a background task instead of checking the filesystem from each row render.
+- `crates/font_panel` now shows source-aware selected-row actions so native system fonts can change Zed editor/UI settings while Google/web fonts focus on preview, CSS, and project installation.
 - `crates/shadcn_ui_panel` no longer performs the initial static catalog cache write synchronously from `initial_shadcn_catalog`.
 - `crates/icon_picker` now renders real external SVG previews in the default All sets grid instead of falling back to pack-letter badges.
 - `crates/icon_picker` now caches missing external SVG previews as misses so broken entries do not repeatedly reload.
