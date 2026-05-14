@@ -1587,19 +1587,19 @@ fn sanitize_file_component(value: &str) -> String {
 }
 
 fn titleize_icon_name(name: &str) -> String {
-    name.split(['-', '_', ':'])
+    let mut title = String::with_capacity(name.len());
+    for segment in name
+        .split(['-', '_', ':'])
         .filter(|segment| !segment.is_empty())
-        .map(|segment| {
-            let mut chars = segment.chars();
-            match chars.next() {
-                Some(first) => {
-                    let mut word = first.to_uppercase().collect::<String>();
-                    word.push_str(chars.as_str());
-                    word
-                }
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+    {
+        if !title.is_empty() {
+            title.push(' ');
+        }
+        let mut chars = segment.chars();
+        if let Some(first) = chars.next() {
+            title.extend(first.to_uppercase());
+            title.push_str(chars.as_str());
+        }
+    }
+    title
 }

@@ -1,3 +1,12 @@
+[2026-05-15] - Panel Naming Allocation Cleanup
+
+CHANGED:
+- `crates/font_panel` now builds CSS font variable names directly instead of collecting normalized segments into a temporary vector before joining.
+- `crates/icon_picker` now title-cases icon labels directly instead of collecting temporary title words before joining.
+
+NOTES:
+- Preserved generated CSS variable names, icon display labels, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Panel String Join Allocation Cleanup
 
 CHANGED:

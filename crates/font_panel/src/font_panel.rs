@@ -941,22 +941,19 @@ fn google_font_family_query(name: &str) -> String {
 }
 
 fn css_font_variable_name(name: &str) -> String {
-    let normalized = name
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() {
-                character.to_ascii_lowercase()
-            } else {
-                '-'
+    let mut variable = String::with_capacity(name.len());
+    let mut needs_separator = false;
+    for character in name.chars() {
+        if character.is_ascii_alphanumeric() {
+            if needs_separator && !variable.is_empty() {
+                variable.push('-');
             }
-        })
-        .collect::<String>();
-    let variable = normalized
-        .split('-')
-        .filter(|segment| !segment.is_empty())
-        .collect::<Vec<_>>()
-        .join("-");
-
+            variable.push(character.to_ascii_lowercase());
+            needs_separator = false;
+        } else {
+            needs_separator = !variable.is_empty();
+        }
+    }
     if variable.is_empty() {
         "web-font".to_string()
     } else {
