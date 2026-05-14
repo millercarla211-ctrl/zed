@@ -262,8 +262,7 @@ impl FontPanel {
         "The quick brown fox jumps over the lazy dog.".into()
     }
 
-    fn matching_fonts(&self, cx: &App, limit: usize) -> (Vec<FontEntry>, usize) {
-        let query = self.query(cx);
+    fn matching_fonts(&self, query: &str, limit: usize) -> (Vec<FontEntry>, usize) {
         let query_terms = query.split_whitespace().collect::<Vec<_>>();
         let source_filter = self.source_filter;
         let mut visible_fonts = Vec::new();
@@ -783,7 +782,8 @@ impl Render for FontPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_system_fonts_loading(cx);
         self.refresh_fonts_if_needed(cx);
-        let (fonts, total_matches) = self.matching_fonts(cx, MAX_FONT_RESULTS);
+        let query = self.query(cx);
+        let (fonts, total_matches) = self.matching_fonts(query.as_str(), MAX_FONT_RESULTS);
         let source_counts = FontSourceCounts::from_panel(self);
         let is_empty = total_matches == 0;
         let font_rows = fonts
