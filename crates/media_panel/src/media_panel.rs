@@ -988,6 +988,7 @@ impl MediaPanel {
         let row_id = media_element_id("media-panel-remote-row-", id.as_str());
         let preview_id = media_element_id("media-panel-preview-remote-", id.as_str());
         let insert_id = media_element_id("media-panel-insert-remote-", id.as_str());
+        let attribution = media_attribution_label(provider.as_str(), license.as_str());
 
         h_flex()
             .id(row_id)
@@ -1014,7 +1015,7 @@ impl MediaPanel {
                     .gap_1()
                     .child(Label::new(label.clone()).size(LabelSize::Small).truncate())
                     .child(
-                        Label::new(format!("{provider} - {license}"))
+                        Label::new(attribution)
                             .size(LabelSize::XSmall)
                             .color(Color::Muted)
                             .truncate(),
@@ -3266,6 +3267,14 @@ fn media_element_id(prefix: &str, id: &str) -> String {
     element_id.push_str(prefix);
     element_id.push_str(id);
     element_id
+}
+
+fn media_attribution_label(provider: &str, license: &str) -> String {
+    let mut label = String::with_capacity(provider.len() + 3 + license.len());
+    label.push_str(provider);
+    label.push_str(" - ");
+    label.push_str(license);
+    label
 }
 
 fn media_thumbnail(

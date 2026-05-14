@@ -1,3 +1,11 @@
+[2026-05-15] - Media Remote Attribution Label Cleanup
+
+CHANGED:
+- `crates/media_panel` now builds remote provider/license attribution labels with a preallocated helper instead of generic formatting inside visible row render.
+
+NOTES:
+- Preserved exact provider/license text, remote row layout, local and remote media actions, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Panel Filter Tab Id Allocation Cleanup
 
 CHANGED:
