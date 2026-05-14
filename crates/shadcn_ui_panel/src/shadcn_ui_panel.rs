@@ -2401,7 +2401,7 @@ fn titleize_id(id: &str) -> String {
 }
 
 fn component_identifier(id: &str) -> String {
-    let mut name = String::new();
+    let mut name = String::with_capacity(id.len());
     for segment in id
         .split(|character: char| !character.is_ascii_alphanumeric())
         .filter(|segment| !segment.is_empty())

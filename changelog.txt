@@ -1,3 +1,12 @@
+[2026-05-15] - Panel Metadata String Preallocation
+
+CHANGED:
+- `crates/media_panel` now preallocates Openverse and Cleveland remote tag metadata buffers before appending search metadata.
+- `crates/shadcn_ui_panel` now preallocates generated component identifier buffers from the source id length.
+
+NOTES:
+- Preserved remote media metadata, UI generated identifier text, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media Remote JSON Body Preallocation
 
 CHANGED:

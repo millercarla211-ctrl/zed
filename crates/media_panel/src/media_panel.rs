@@ -1840,7 +1840,14 @@ async fn fetch_openverse_media(
         let license = item
             .license
             .unwrap_or_else(|| "Creative Commons".to_string());
-        let mut tags = String::new();
+        let tag_capacity = item.creator.as_deref().map(str::len).unwrap_or(0)
+            + item
+                .foreign_landing_url
+                .as_deref()
+                .map(str::len)
+                .unwrap_or(0)
+            + 1;
+        let mut tags = String::with_capacity(tag_capacity);
         let mut is_first_tag = true;
         for tag in [item.creator, item.foreign_landing_url]
             .into_iter()
@@ -2185,7 +2192,21 @@ async fn fetch_cleveland_art_images(
         else {
             continue;
         };
-        let mut tags = String::new();
+        let tag_capacity = item
+            .creators
+            .as_ref()
+            .map(|creators| {
+                creators
+                    .iter()
+                    .filter_map(|creator| creator.description.as_deref())
+                    .map(str::len)
+                    .sum::<usize>()
+            })
+            .unwrap_or(0)
+            + item.department.as_deref().map(str::len).unwrap_or(0)
+            + item.collection.as_deref().map(str::len).unwrap_or(0)
+            + 2;
+        let mut tags = String::with_capacity(tag_capacity);
         let mut is_first_tag = true;
         for tag in item
             .creators
