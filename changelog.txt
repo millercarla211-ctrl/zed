@@ -1,3 +1,11 @@
+[2026-05-15] - Media Panel Result Buffer Reservation
+
+CHANGED:
+- `crates/media_panel` now reserves local and remote asset result buffers at panel construction using the existing visible and deep remote result limits.
+
+NOTES:
+- Preserved local index behavior, remote search behavior, result ordering, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - UI Preview Cache Preallocation
 
 CHANGED:
