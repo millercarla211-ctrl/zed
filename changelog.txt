@@ -1,3 +1,11 @@
+[2026-05-15] - Media Local Row Copy Allocation Cleanup
+
+CHANGED:
+- `crates/media_panel` now borrows local media paths for thumbnail creation and defers local Copy-path string conversion until the Copy button is clicked.
+
+NOTES:
+- Preserved local thumbnail rendering, local Preview/Copy actions, copied path text, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Media Remote Row Clone Cleanup
 
 CHANGED:

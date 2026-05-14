@@ -807,9 +807,14 @@ impl MediaPanel {
         cx.notify();
     }
 
-    fn copy_media_source(&mut self, source: String, label: String, cx: &mut Context<Self>) {
+    fn copy_media_source(
+        &mut self,
+        source: String,
+        label: impl AsRef<str>,
+        cx: &mut Context<Self>,
+    ) {
         cx.write_to_clipboard(ClipboardItem::new_string(source));
-        self.status = Some(format!("Copied {label}").into());
+        self.status = Some(format!("Copied {}", label.as_ref()).into());
         cx.notify();
     }
 
@@ -897,11 +902,11 @@ impl MediaPanel {
         let payload = asset.payload;
         let kind = payload.kind;
         let label = payload.label.clone();
-        let path = payload.path.clone();
         let relative_display = payload.relative_display.clone();
+        let thumbnail = media_thumbnail(kind, payload.path.as_path(), cx);
         let preview_payload = payload.clone();
-        let copy_path = path.to_string_lossy().to_string();
-        let copy_label = label.to_string();
+        let copy_path = payload.path.clone();
+        let copy_label = label.clone();
 
         h_flex()
             .id(format!("media-panel-row-{}", relative_display.as_ref()))
@@ -927,7 +932,7 @@ impl MediaPanel {
                     position,
                 })
             })
-            .child(media_thumbnail(kind, path, cx))
+            .child(thumbnail)
             .child(
                 v_flex()
                     .flex_1()
@@ -964,7 +969,8 @@ impl MediaPanel {
                 .style(ButtonStyle::Subtle)
                 .size(ButtonSize::Compact)
                 .on_click(cx.listener(move |panel, _, _, cx| {
-                    panel.copy_media_source(copy_path.clone(), copy_label.clone(), cx);
+                    let copy_path = copy_path.to_string_lossy().into_owned();
+                    panel.copy_media_source(copy_path, copy_label.clone(), cx);
                 })),
             )
     }
@@ -3256,7 +3262,7 @@ fn escape_attr(text: &str) -> String {
 
 fn media_thumbnail(
     kind: DraggedMediaKind,
-    path: PathBuf,
+    path: &Path,
     cx: &mut Context<MediaPanel>,
 ) -> AnyElement {
     match kind {
