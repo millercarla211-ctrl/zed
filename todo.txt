@@ -1,10 +1,11 @@
 IN PROGRESS:
-- Icon SVG rendering and remote media provider expansion are code-complete by inspection; awaiting manual Zed panel QA.
+- Remote media provider expansion is code-complete by inspection; adding panel-local caching so repeated searches/tab switches feel instant.
 
 PENDING:
 - User manual check that the Icon panel All sets grid renders real external SVG icons instead of letter-only pack badges.
 - User manual check that missing/broken external SVG previews fall back once without repeated reload work.
 - User manual check that the Media panel fetches live Openverse, Wikimedia, NASA, Library of Congress, and Art Institute results for the active query and shows remote assets before local files.
+- User manual check that returning to a previous Media panel query or media tab reuses cached provider results without another visible fetch delay.
 - Optional user manual smoke test in the launched Zed window for the four top-right panels before starting the next feature set.
 - User manual check that UI panel searches like "login form" or "magic button" match entries by words instead of requiring exact phrase order.
 - User manual check that UI panel count labels show clean active-filter match totals instead of the previous shown/matched/all triple count.
@@ -75,6 +76,7 @@ PENDING:
 COMPLETED:
 - Made the Icon panel render real external SVG previews in the default All sets grid and cache failed SVG lookups.
 - Added live no-key remote media fetching for Openverse, Wikimedia Commons, NASA, Library of Congress, and Art Institute in the Media panel, prioritizing remote provider assets ahead of local files.
+- Added in-memory Media panel result caching keyed by active query and media tab.
 - Completed the right-side Icon, Font, Media, and UI panel polish loop at 100/100 code-complete status.
 - Ran final `just run`; it rebuilt `G:\Zed\target\debug\zed.exe` and launched Zed. The Codex command timed out because the app remained open for manual QA.
 - Made UI panel search match all query words across catalog id, title, category, and description.

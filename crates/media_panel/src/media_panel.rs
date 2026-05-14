@@ -160,6 +160,7 @@ pub struct MediaPanel {
     media_roots: Vec<PathBuf>,
     assets: Vec<MediaAsset>,
     remote_assets: Vec<RemoteMediaAsset>,
+    remote_cache: HashMap<String, Vec<RemoteMediaAsset>>,
     kind_filter: MediaKindFilter,
     kind_scroll_handle: ScrollHandle,
     loading: bool,
@@ -217,6 +218,7 @@ impl MediaPanel {
                 media_roots,
                 assets: Vec::new(),
                 remote_assets: Vec::new(),
+                remote_cache: HashMap::default(),
                 kind_filter: MediaKindFilter::Images,
                 kind_scroll_handle: ScrollHandle::new(),
                 loading: false,
@@ -245,6 +247,13 @@ impl MediaPanel {
             return;
         }
 
+        if let Some(remote_assets) = self.remote_cache.get(&signature).cloned() {
+            self.remote_assets = remote_assets;
+            self.remote_signature = Some(signature);
+            self.status = None;
+            return;
+        }
+
         self.remote_loading = true;
         self.remote_signature = Some(signature.clone());
         self.status = Some("Fetching remote media".into());
@@ -259,6 +268,9 @@ impl MediaPanel {
                         panel.remote_loading = false;
                         match result {
                             Ok(remote_assets) => {
+                                panel
+                                    .remote_cache
+                                    .insert(signature.clone(), remote_assets.clone());
                                 panel.remote_assets = remote_assets;
                                 panel.status = None;
                             }
