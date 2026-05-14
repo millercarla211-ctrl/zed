@@ -2372,21 +2372,21 @@ fn is_component_export_name(name: &str) -> bool {
 }
 
 fn titleize_id(id: &str) -> String {
-    id.split(|character: char| !character.is_ascii_alphanumeric())
+    let mut title = String::with_capacity(id.len());
+    for segment in id
+        .split(|character: char| !character.is_ascii_alphanumeric())
         .filter(|segment| !segment.is_empty())
-        .map(|segment| {
-            let mut chars = segment.chars();
-            match chars.next() {
-                Some(first) => {
-                    let mut word = first.to_uppercase().collect::<String>();
-                    word.push_str(chars.as_str());
-                    word
-                }
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+    {
+        if !title.is_empty() {
+            title.push(' ');
+        }
+        let mut chars = segment.chars();
+        if let Some(first) = chars.next() {
+            title.extend(first.to_uppercase());
+            title.push_str(chars.as_str());
+        }
+    }
+    title
 }
 
 fn component_identifier(id: &str) -> String {

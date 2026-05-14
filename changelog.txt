@@ -1,3 +1,11 @@
+[2026-05-15] - UI Title Generation Allocation Cleanup
+
+CHANGED:
+- `crates/shadcn_ui_panel` now builds catalog display titles directly instead of collecting temporary title-word vectors before joining.
+
+NOTES:
+- Preserved UI/shadcn component, block, Magic UI, registry labels, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media URL Encoder Allocation Cleanup
 
 CHANGED:
