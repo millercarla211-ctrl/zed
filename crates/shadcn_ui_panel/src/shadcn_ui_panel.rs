@@ -1469,24 +1469,29 @@ fn static_shadcn_catalog() -> Vec<CatalogItem> {
     SHADCN_STATIC_CATALOG_CACHE
         .get_or_init(|| {
             let mut items = curated_catalog();
-            let mut existing_ids = items
-                .iter()
-                .map(|item| item.id.to_string())
-                .collect::<HashSet<_>>();
+            let static_items = static_catalog_index_items();
+            let registry_items = registry_directory_items();
+            let twenty_first_items = twenty_first_items();
+            let extra_capacity =
+                static_items.len() + registry_items.len() + twenty_first_items.len();
 
-            for item in static_catalog_index_items() {
+            items.reserve(extra_capacity);
+            let mut existing_ids = HashSet::with_capacity(items.len() + extra_capacity);
+            existing_ids.extend(items.iter().map(|item| item.id.to_string()));
+
+            for item in static_items {
                 if existing_ids.insert(item.id.to_string()) {
                     items.push(item);
                 }
             }
 
-            for item in registry_directory_items() {
+            for item in registry_items {
                 if existing_ids.insert(item.id.to_string()) {
                     items.push(item);
                 }
             }
 
-            for item in twenty_first_items() {
+            for item in twenty_first_items {
                 if existing_ids.insert(item.id.to_string()) {
                     items.push(item);
                 }
@@ -1635,30 +1640,36 @@ fn write_shadcn_catalog_rkyv_cache(items: &[CatalogItem]) -> Option<()> {
 
 fn shadcn_catalog() -> Vec<CatalogItem> {
     let mut items = curated_catalog();
-    let mut existing_ids = items
-        .iter()
-        .map(|item| item.id.to_string())
-        .collect::<HashSet<_>>();
+    let manifest_items = manifest_catalog_items();
+    let magic_items = magic_catalog_items();
+    let registry_items = registry_directory_items();
+    let twenty_first_items = twenty_first_items();
+    let extra_capacity =
+        manifest_items.len() + magic_items.len() + registry_items.len() + twenty_first_items.len();
 
-    for item in manifest_catalog_items() {
+    items.reserve(extra_capacity);
+    let mut existing_ids = HashSet::with_capacity(items.len() + extra_capacity);
+    existing_ids.extend(items.iter().map(|item| item.id.to_string()));
+
+    for item in manifest_items {
         if existing_ids.insert(item.id.to_string()) {
             items.push(item);
         }
     }
 
-    for item in magic_catalog_items() {
+    for item in magic_items {
         if existing_ids.insert(item.id.to_string()) {
             items.push(item);
         }
     }
 
-    for item in registry_directory_items() {
+    for item in registry_items {
         if existing_ids.insert(item.id.to_string()) {
             items.push(item);
         }
     }
 
-    for item in twenty_first_items() {
+    for item in twenty_first_items {
         if existing_ids.insert(item.id.to_string()) {
             items.push(item);
         }

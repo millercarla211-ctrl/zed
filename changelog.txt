@@ -1,3 +1,11 @@
+[2026-05-15] - UI Catalog Merge Reservation
+
+CHANGED:
+- `crates/shadcn_ui_panel` now reserves merged catalog item buffers and duplicate-ID hash sets from known source chunk lengths before appending static, local, registry, and 21st.dev UI rows.
+
+NOTES:
+- Preserved catalog merge order, duplicate handling, source filters, row actions, screenshot thumbnail flow, and editor/WebPreview input behavior.
+
 [2026-05-15] - UI Registry Row Preallocation
 
 CHANGED:
