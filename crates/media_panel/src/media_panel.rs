@@ -2011,26 +2011,34 @@ fn nasa_media_file_url(
     files: impl Iterator<Item = String>,
     kind: DraggedMediaKind,
 ) -> Option<String> {
-    let mut candidates = files
-        .filter(|url| {
-            let lower = url.to_lowercase();
-            match kind {
-                DraggedMediaKind::Video => lower.ends_with(".mp4"),
-                DraggedMediaKind::Audio => lower.ends_with(".mp3") || lower.ends_with(".m4a"),
-                DraggedMediaKind::Image => false,
-            }
-        })
-        .map(|url| {
-            url.replacen(
-                "http://images-assets.nasa.gov",
-                "https://images-assets.nasa.gov",
-                1,
-            )
-        })
-        .collect::<Vec<_>>();
+    let mut best: Option<(usize, String)> = None;
+    for url in files {
+        let lower = url.to_lowercase();
+        let matches_kind = match kind {
+            DraggedMediaKind::Video => lower.ends_with(".mp4"),
+            DraggedMediaKind::Audio => lower.ends_with(".mp3") || lower.ends_with(".m4a"),
+            DraggedMediaKind::Image => false,
+        };
+        if !matches_kind {
+            continue;
+        }
 
-    candidates.sort_by_key(|url| nasa_media_file_rank(url, kind));
-    candidates.into_iter().next()
+        let url = url.replacen(
+            "http://images-assets.nasa.gov",
+            "https://images-assets.nasa.gov",
+            1,
+        );
+        let rank = nasa_media_file_rank(&url, kind);
+        let should_replace = match best.as_ref() {
+            Some((best_rank, _)) => rank < *best_rank,
+            None => true,
+        };
+        if should_replace {
+            best = Some((rank, url));
+        }
+    }
+
+    best.map(|(_, url)| url)
 }
 
 fn nasa_media_file_rank(url: &str, kind: DraggedMediaKind) -> usize {
@@ -2295,29 +2303,39 @@ fn best_internet_archive_file(
     files: impl Iterator<Item = InternetArchiveFile>,
     kind: DraggedMediaKind,
 ) -> Option<String> {
-    let mut candidates = files
-        .filter_map(|file| {
-            let lower = file.name.to_lowercase();
-            if lower.contains("_meta.")
-                || lower.contains("_files.")
-                || lower.ends_with(".torrent")
-                || lower.ends_with(".xml")
-                || lower.ends_with(".sqlite")
-            {
-                return None;
-            }
+    let mut best: Option<(usize, String)> = None;
+    for file in files {
+        let lower = file.name.to_lowercase();
+        if lower.contains("_meta.")
+            || lower.contains("_files.")
+            || lower.ends_with(".torrent")
+            || lower.ends_with(".xml")
+            || lower.ends_with(".sqlite")
+        {
+            continue;
+        }
 
-            let extension = Path::new(&lower).extension()?.to_str()?;
-            if media_kind_for_extension(extension)? == kind {
-                Some(file.name)
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
+        let Some(extension) = Path::new(&lower)
+            .extension()
+            .and_then(|extension| extension.to_str())
+        else {
+            continue;
+        };
+        if media_kind_for_extension(extension) != Some(kind) {
+            continue;
+        }
 
-    candidates.sort_by_key(|name| internet_archive_file_rank(name, kind));
-    candidates.into_iter().next()
+        let rank = internet_archive_file_rank(&file.name, kind);
+        let should_replace = match best.as_ref() {
+            Some((best_rank, _)) => rank < *best_rank,
+            None => true,
+        };
+        if should_replace {
+            best = Some((rank, file.name));
+        }
+    }
+
+    best.map(|(_, name)| name)
 }
 
 fn internet_archive_file_rank(name: &str, kind: DraggedMediaKind) -> usize {
