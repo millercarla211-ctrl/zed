@@ -1,8 +1,9 @@
 IN PROGRESS:
-- The Met direct media search integration is code-complete by inspection; awaiting manual Zed panel QA.
+- External icon preview color/cache fix is code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
 - User manual check that the Icon panel All sets grid renders real external SVG icons instead of letter-only pack badges.
+- User manual check that Iconify packs whose SVG paths omit explicit fill colors render visibly on the dark icon picker background.
 - User manual check that missing/broken external SVG previews fall back once without repeated reload work.
 - User manual check that generated external icon previews are reused from `target/icon-picker-icons` without reparsing Iconify JSON on later panel opens.
 - User manual check that the Media panel fetches live Openverse, Wikimedia, NASA, Library of Congress, and Art Institute results for the active query and shows remote assets before local files.
@@ -79,6 +80,7 @@ PENDING:
 
 COMPLETED:
 - Made the Icon panel render real external SVG previews in the default All sets grid and cache failed SVG lookups.
+- Made generated external icon previews inherit the Zed text color and bumped the preview cache path so stale black-on-dark SVGs are bypassed.
 - Made the Icon panel reuse generated external SVG preview files from disk before parsing source icon packs again.
 - Added live no-key remote media fetching for Openverse, Wikimedia Commons, NASA, Library of Congress, and Art Institute in the Media panel, prioritizing remote provider assets ahead of local files.
 - Added direct no-key The Met public-domain image results to the Media panel provider fetch path.

@@ -27,6 +27,7 @@ const ICON_PICKER_PANEL_KEY: &str = "IconPickerPanel";
 const DX_ICON_DATA_DIR: &str = "G:/Assets/icon/data";
 const ICON_PACK_INDEX: &str = include_str!("icon_pack_index.tsv");
 const MAX_ICON_RESULTS: usize = 360;
+const EXTERNAL_ICON_PREVIEW_CACHE_VERSION: &str = "v2";
 static EXTERNAL_ICON_CATALOG_CACHE: OnceLock<ExternalIconCatalog> = OnceLock::new();
 
 pub fn init(cx: &mut App) {
@@ -1128,6 +1129,7 @@ fn external_icon_preview_path(icon: &ExternalIcon) -> PathBuf {
     repo_root()
         .join("target")
         .join("icon-picker-icons")
+        .join(EXTERNAL_ICON_PREVIEW_CACHE_VERSION)
         .join(sanitize_file_component(icon.pack.as_ref()))
         .join(format!(
             "{}.svg",
@@ -1155,7 +1157,7 @@ fn write_external_icon_preview(icon: &ExternalIcon, svg: &str) -> anyhow::Result
 
 fn wrap_icon_body(body: &str, width: u32, height: u32) -> String {
     format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">{body}</svg>"#
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}"><g fill="currentColor">{body}</g></svg>"#
     )
 }
 
