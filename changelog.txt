@@ -23,6 +23,7 @@ ADDED:
 - `crates/media_panel` now fetches direct Cleveland Museum of Art CC0 image rows through the no-key open access API.
 
 CHANGED:
+- `crates/shadcn_ui_panel` now computes UI filter counts once per render and shares them with the tab strip and status label, avoiding repeated per-tab catalog scans.
 - `crates/shadcn_ui_panel` now skips search-text construction when the UI query is empty and caches per-entry lowercase search text for non-empty searches, reducing render work while the panel is open.
 - `crates/icon_picker` now checks the embedded representative icon body index before loading full pack body JSON, reducing cold icon preview work for the default All sets grid.
 - `crates/media_panel` now uses larger bounded result windows for live no-key provider searches and the generated remote media browser, while keeping Wikimedia at a safe anonymous API limit and switching native Openverse requests to the current `api.openverse.org` endpoint.

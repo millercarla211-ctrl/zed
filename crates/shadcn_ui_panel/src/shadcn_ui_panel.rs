@@ -108,6 +108,43 @@ impl CatalogFilter {
     }
 }
 
+#[derive(Default)]
+struct CatalogFilterCounts {
+    all: usize,
+    components: usize,
+    blocks: usize,
+    magic: usize,
+    registries: usize,
+}
+
+impl CatalogFilterCounts {
+    fn from_items(items: &[CatalogItem]) -> Self {
+        let mut counts = Self::default();
+        for item in items {
+            counts.all += 1;
+            match item.source {
+                CatalogSource::ShadcnComponent => counts.components += 1,
+                CatalogSource::ShadcnBlock => counts.blocks += 1,
+                CatalogSource::MagicUi => counts.magic += 1,
+                CatalogSource::CommunityRegistry | CatalogSource::TwentyFirst => {
+                    counts.registries += 1
+                }
+            }
+        }
+        counts
+    }
+
+    fn count(&self, filter: CatalogFilter) -> usize {
+        match filter {
+            CatalogFilter::All => self.all,
+            CatalogFilter::Components => self.components,
+            CatalogFilter::Blocks => self.blocks,
+            CatalogFilter::Magic => self.magic,
+            CatalogFilter::Registries => self.registries,
+        }
+    }
+}
+
 #[derive(Clone)]
 struct CatalogItem {
     id: SharedString,
@@ -360,20 +397,14 @@ impl ShadcnUiPanel {
         .detach();
     }
 
-    fn filtered_count(&self, filter: CatalogFilter) -> usize {
-        self.items
-            .iter()
-            .filter(|item| filter.matches(item.source))
-            .count()
-    }
-
     fn render_filter_button(
         &self,
         filter: CatalogFilter,
+        count: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let selected = self.source_filter == filter;
-        let label = format!("{} {}", filter.label(), self.filtered_count(filter));
+        let label = format!("{} {}", filter.label(), count);
         div().flex_none().child(
             Button::new(format!("shadcn-filter-{}", filter.label()), label)
                 .style(ButtonStyle::Subtle)
@@ -388,7 +419,11 @@ impl ShadcnUiPanel {
         )
     }
 
-    fn render_filter_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_filter_tabs(
+        &self,
+        counts: &CatalogFilterCounts,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         h_flex()
             .h(px(42.))
             .gap_1()
@@ -420,11 +455,31 @@ impl ShadcnUiPanel {
                             .items_center()
                             .px_1()
                             .py_1()
-                            .child(self.render_filter_button(CatalogFilter::All, cx))
-                            .child(self.render_filter_button(CatalogFilter::Components, cx))
-                            .child(self.render_filter_button(CatalogFilter::Blocks, cx))
-                            .child(self.render_filter_button(CatalogFilter::Magic, cx))
-                            .child(self.render_filter_button(CatalogFilter::Registries, cx)),
+                            .child(self.render_filter_button(
+                                CatalogFilter::All,
+                                counts.count(CatalogFilter::All),
+                                cx,
+                            ))
+                            .child(self.render_filter_button(
+                                CatalogFilter::Components,
+                                counts.count(CatalogFilter::Components),
+                                cx,
+                            ))
+                            .child(self.render_filter_button(
+                                CatalogFilter::Blocks,
+                                counts.count(CatalogFilter::Blocks),
+                                cx,
+                            ))
+                            .child(self.render_filter_button(
+                                CatalogFilter::Magic,
+                                counts.count(CatalogFilter::Magic),
+                                cx,
+                            ))
+                            .child(self.render_filter_button(
+                                CatalogFilter::Registries,
+                                counts.count(CatalogFilter::Registries),
+                                cx,
+                            )),
                     ),
             )
             .child(
@@ -757,7 +812,8 @@ impl Render for ShadcnUiPanel {
         let (items, total_matches) = self.matching_items(cx, MAX_SHADCN_ROWS);
         self.ensure_visible_preview_images_warmed(&items, cx);
         let is_empty = total_matches == 0;
-        let total_count = self.filtered_count(self.source_filter);
+        let filter_counts = CatalogFilterCounts::from_items(&self.items);
+        let total_count = filter_counts.count(self.source_filter);
         let item_rows = items
             .iter()
             .cloned()
@@ -796,7 +852,7 @@ impl Render for ShadcnUiPanel {
                     )
                     .child(self.filter_editor.clone()),
             )
-            .child(self.render_filter_tabs(cx))
+            .child(self.render_filter_tabs(&filter_counts, cx))
             .child(
                 div()
                     .id("shadcn-ui-panel-scroll")
