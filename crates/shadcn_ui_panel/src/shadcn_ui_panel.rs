@@ -837,7 +837,7 @@ impl Render for ShadcnUiPanel {
         self.ensure_catalog_loaded(cx);
         let query = self.query(cx);
         let (items, total_matches) = self.matching_items(query.as_str(), MAX_SHADCN_ROWS);
-        let preview_images = cached_shadcn_preview_image_urls(&items);
+        let mut preview_images = cached_shadcn_preview_image_urls(&items);
         self.ensure_visible_preview_images_warmed(&items, &preview_images, cx);
         let is_empty = total_matches == 0;
         let filter_counts = self.filter_counts;
@@ -845,7 +845,7 @@ impl Render for ShadcnUiPanel {
         let item_rows = items
             .into_iter()
             .map(|item| {
-                let image_url = preview_images.get(item.id.as_ref()).cloned().flatten();
+                let image_url = preview_images.remove(item.id.as_ref()).flatten();
                 self.render_item_row(item, image_url, cx).into_any_element()
             })
             .collect::<Vec<_>>();

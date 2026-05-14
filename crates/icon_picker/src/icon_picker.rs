@@ -451,11 +451,7 @@ impl IconPickerPanel {
         update_status: bool,
         cx: &mut Context<Self>,
     ) {
-        let external_icons = self
-            .uncached_external_icons(external_icons)
-            .into_iter()
-            .filter(|icon| !self.warming_preview_keys.contains(&icon.id()))
-            .collect::<Vec<_>>();
+        let external_icons = self.uncached_external_icons(external_icons);
 
         if external_icons.is_empty() {
             return;
@@ -521,14 +517,15 @@ impl IconPickerPanel {
 
     fn uncached_external_icons(&self, icons: Vec<ExternalIcon>) -> Vec<ExternalIcon> {
         let mut uncached_icons = Vec::new();
+        let mut preview_cache = self.preview_cache.borrow_mut();
         for icon in icons {
             let key = icon.id();
-            if self.preview_cache.borrow().contains_key(&key) {
+            if self.warming_preview_keys.contains(&key) || preview_cache.contains_key(&key) {
                 continue;
             }
 
             if let Some(preview_path) = existing_external_icon_preview(&icon) {
-                self.preview_cache.borrow_mut().insert(
+                preview_cache.insert(
                     key,
                     Some(ExternalSvg {
                         preview_path: preview_path.into(),
