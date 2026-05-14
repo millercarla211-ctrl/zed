@@ -754,7 +754,7 @@ impl IconPickerPanel {
                 .size(ButtonSize::Compact)
                 .toggle_state(selected)
                 .selected_style(ButtonStyle::Tinted(TintColor::Accent))
-                .tooltip(Tooltip::text(tooltip_label.to_string()))
+                .tooltip(Tooltip::text(tooltip_label))
                 .on_click(cx.listener(move |panel, _, _, cx| {
                     panel.selected_pack = if id_string == "all" {
                         None
@@ -770,6 +770,7 @@ impl IconPickerPanel {
     fn render_icon_tile(&self, icon: PickerIcon, cx: &mut Context<Self>) -> impl IntoElement {
         let payload = self.payload_for_icon(&icon);
         let label = payload.label.clone();
+        let tooltip_label = label.clone();
         let icon_id = icon.id();
         let selected = self
             .selected_icon
@@ -800,7 +801,7 @@ impl IconPickerPanel {
             })
             .cursor_pointer()
             .hover(|style| style.bg(cx.theme().colors().element_hover))
-            .tooltip(Tooltip::text(label.to_string()))
+            .tooltip(Tooltip::text(tooltip_label))
             .on_click(cx.listener({
                 let icon = icon.clone();
                 move |panel, _, window, cx| {

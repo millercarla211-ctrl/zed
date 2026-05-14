@@ -1,3 +1,11 @@
+[2026-05-15] - Panel Tooltip Allocation Cleanup
+
+CHANGED:
+- `crates/icon_picker`, `crates/font_panel`, `crates/media_panel`, and `crates/shadcn_ui_panel` now reuse existing `SharedString` label handles for row and tab tooltips instead of allocating temporary `String`s during render.
+
+NOTES:
+- Preserved tooltip text, row actions, drag/insert behavior, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Icon Tile Render Identity Cleanup
 
 CHANGED:

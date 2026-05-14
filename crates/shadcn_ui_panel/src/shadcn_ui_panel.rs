@@ -669,7 +669,7 @@ impl ShadcnUiPanel {
             .bg(cx.theme().colors().element_background)
             .hover(|style| style.bg(cx.theme().colors().element_hover))
             .cursor_pointer()
-            .tooltip(Tooltip::text(item.description.to_string()))
+            .tooltip(Tooltip::text(item.description.clone()))
             .on_click(cx.listener({
                 let item = item.clone();
                 move |panel, _, window, cx| {

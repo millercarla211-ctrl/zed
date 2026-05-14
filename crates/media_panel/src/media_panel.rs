@@ -911,7 +911,7 @@ impl MediaPanel {
             .bg(cx.theme().colors().element_background)
             .cursor_pointer()
             .hover(|style| style.bg(cx.theme().colors().element_hover))
-            .tooltip(Tooltip::text(relative_display.to_string()))
+            .tooltip(Tooltip::text(relative_display.clone()))
             .on_click(cx.listener({
                 let payload = payload.clone();
                 move |panel, _, window, cx| {

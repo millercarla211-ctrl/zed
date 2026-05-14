@@ -591,7 +591,7 @@ impl FontPanel {
             })
             .cursor_pointer()
             .hover(|style| style.bg(cx.theme().colors().element_hover))
-            .tooltip(Tooltip::text(font.name.to_string()))
+            .tooltip(Tooltip::text(font.name.clone()))
             .on_click(cx.listener(move |panel, _, _, cx| {
                 panel.select_font(click_font.clone(), cx);
             }))
