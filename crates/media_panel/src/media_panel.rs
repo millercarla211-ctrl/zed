@@ -218,7 +218,7 @@ impl MediaPanel {
                 continue;
             }
 
-            if !query.is_empty() && !asset.search_text.as_ref().contains(query.as_str()) {
+            if !media_search_matches(asset.search_text.as_ref(), query.as_str()) {
                 continue;
             }
 
@@ -251,7 +251,7 @@ impl MediaPanel {
                 media_kind_label(asset.kind)
             )
             .to_lowercase();
-            if !query.is_empty() && !searchable.contains(query.as_str()) {
+            if !media_search_matches(searchable.as_str(), query.as_str()) {
                 continue;
             }
 
@@ -838,14 +838,15 @@ impl EventEmitter<PanelEvent> for MediaPanel {}
 impl Render for MediaPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_media_index_loaded(cx);
-        let (assets, _total_matches) = self.matching_assets(cx, MAX_MEDIA_RESULTS);
-        let (remote_assets, _remote_total_matches) =
+        let (assets, total_asset_matches) = self.matching_assets(cx, MAX_MEDIA_RESULTS);
+        let (remote_assets, total_remote_matches) =
             self.matching_remote_assets(cx, MAX_MEDIA_RESULTS.saturating_sub(assets.len()));
         let url_insert = self
             .render_url_insert(cx)
             .map(|element| element.into_any_element());
-        let shown_count = assets.len() + remote_assets.len() + usize::from(url_insert.is_some());
-        let total_count = self.assets.len() + remote_media_assets().len();
+        let shown_count =
+            total_asset_matches + total_remote_matches + usize::from(url_insert.is_some());
+        let total_count = self.filtered_count(self.kind_filter);
         let mut asset_rows = remote_assets
             .iter()
             .cloned()
@@ -1779,6 +1780,12 @@ fn media_kind_label(kind: DraggedMediaKind) -> &'static str {
         DraggedMediaKind::Video => "video",
         DraggedMediaKind::Audio => "audio",
     }
+}
+
+fn media_search_matches(searchable: &str, query: &str) -> bool {
+    query
+        .split_whitespace()
+        .all(|term| searchable.contains(term))
 }
 
 fn remote_media_assets() -> &'static [RemoteMediaAsset] {

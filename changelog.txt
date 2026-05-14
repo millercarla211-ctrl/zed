@@ -1,3 +1,12 @@
+[2026-05-14] - Media Panel Search And Counts
+
+CHANGED:
+- `crates/media_panel` now matches media searches by all query words across local assets and direct remote assets, so searches like `space background` and `open movie video` do not require exact phrase order.
+- `crates/media_panel` now reports count totals against the active Images, Videos, Audio, or All tab instead of using the full unfiltered media denominator.
+
+NOTES:
+- Preserved media insertion, WebPreview preview generation, and the stable WebPreview input path.
+
 [2026-05-14] - Native UI Preview Polish
 
 CHANGED:
