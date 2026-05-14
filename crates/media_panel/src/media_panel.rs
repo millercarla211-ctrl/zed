@@ -334,8 +334,8 @@ impl MediaPanel {
         self.remote_assets.clear();
     }
 
-    fn ensure_remote_media_loaded(&mut self, cx: &mut Context<Self>) {
-        let query = remote_media_query(&self.raw_query(cx), self.kind_filter);
+    fn ensure_remote_media_loaded(&mut self, raw_query: &str, cx: &mut Context<Self>) {
+        let query = remote_media_query(raw_query, self.kind_filter);
         let signature = format!("{}:{query}", self.kind_filter.label());
 
         if self.remote_loading || self.remote_signature.as_deref() == Some(signature.as_str()) {
@@ -426,17 +426,11 @@ impl MediaPanel {
         .detach();
     }
 
-    fn query(&self, cx: &App) -> String {
-        self.filter_editor.read(cx).text(cx).trim().to_lowercase()
-    }
-
     fn raw_query(&self, cx: &App) -> String {
         self.filter_editor.read(cx).text(cx).trim().to_string()
     }
 
-    fn matching_assets(&self, cx: &App, limit: usize) -> (Vec<MediaAsset>, usize) {
-        let query = self.query(cx);
-        let query_terms = query.split_whitespace().collect::<Vec<_>>();
+    fn matching_assets(&self, query_terms: &[&str], limit: usize) -> (Vec<MediaAsset>, usize) {
         let kind_filter = self.kind_filter;
         let mut visible_assets = Vec::new();
         let mut match_count = 0;
@@ -461,9 +455,11 @@ impl MediaPanel {
         (visible_assets, match_count)
     }
 
-    fn matching_remote_assets(&self, cx: &App, limit: usize) -> (Vec<RemoteMediaAsset>, usize) {
-        let query = self.query(cx);
-        let query_terms = query.split_whitespace().collect::<Vec<_>>();
+    fn matching_remote_assets(
+        &self,
+        query_terms: &[&str],
+        limit: usize,
+    ) -> (Vec<RemoteMediaAsset>, usize) {
         let kind_filter = self.kind_filter;
         let mut visible_assets = Vec::new();
         let mut match_count = 0;
@@ -1086,11 +1082,16 @@ impl EventEmitter<PanelEvent> for MediaPanel {}
 impl Render for MediaPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_media_index_loaded(cx);
-        self.ensure_remote_media_loaded(cx);
+        let raw_query = self.raw_query(cx);
+        let normalized_query = raw_query.trim().to_lowercase();
+        let query_terms = normalized_query.split_whitespace().collect::<Vec<_>>();
+        self.ensure_remote_media_loaded(raw_query.as_str(), cx);
         let (remote_assets, total_remote_matches) =
-            self.matching_remote_assets(cx, MAX_MEDIA_RESULTS);
-        let (assets, total_asset_matches) =
-            self.matching_assets(cx, MAX_MEDIA_RESULTS.saturating_sub(remote_assets.len()));
+            self.matching_remote_assets(&query_terms, MAX_MEDIA_RESULTS);
+        let (assets, total_asset_matches) = self.matching_assets(
+            &query_terms,
+            MAX_MEDIA_RESULTS.saturating_sub(remote_assets.len()),
+        );
         let url_insert = self
             .render_url_insert(cx)
             .map(|element| element.into_any_element());
