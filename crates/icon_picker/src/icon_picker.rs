@@ -364,7 +364,10 @@ impl IconPickerPanel {
             return svg;
         }
 
-        let body = self.external_icon_body(icon)?;
+        let Some(body) = self.external_icon_body(icon) else {
+            self.preview_cache.borrow_mut().insert(key, None);
+            return None;
+        };
         let width = body.width.unwrap_or(icon.width).max(1);
         let height = body.height.unwrap_or(icon.height).max(1);
         let svg = wrap_icon_body(&body.body, width, height);
@@ -546,8 +549,7 @@ impl IconPickerPanel {
             .selected_icon
             .as_ref()
             .is_some_and(|selected| selected.id() == icon.id());
-        let load_external_svg = self.selected_pack.is_some() || !self.query(cx).is_empty();
-        let icon_preview = self.render_icon_preview(&icon, IconSize::Medium, load_external_svg, cx);
+        let icon_preview = self.render_icon_preview(&icon, IconSize::Medium, cx);
 
         div()
             .id(format!("icon-picker-tile-{}", icon.id()))
@@ -600,20 +602,18 @@ impl IconPickerPanel {
         &self,
         icon: &PickerIcon,
         size: IconSize,
-        load_external_svg: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         match icon {
             PickerIcon::Zed(icon_name) => Icon::new(*icon_name).size(size).into_any_element(),
-            PickerIcon::External(icon) if load_external_svg => self
+            PickerIcon::External(icon) => self
                 .external_svg(icon)
                 .map(|svg| {
                     Icon::from_external_svg(svg.preview_path)
                         .size(size)
                         .into_any_element()
                 })
-                .unwrap_or_else(|| Icon::new(IconName::SquareDot).size(size).into_any_element()),
-            PickerIcon::External(icon) => external_pack_badge(icon, cx),
+                .unwrap_or_else(|| external_pack_badge(icon, cx)),
         }
     }
 

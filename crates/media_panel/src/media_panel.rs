@@ -1,13 +1,19 @@
 use editor::{Editor, EditorEvent};
+use futures::AsyncReadExt as _;
 use gpui::{
     App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity, EventEmitter,
     FocusHandle, Focusable, InteractiveElement, ObjectFit, Pixels, Render, ScrollHandle,
     SharedString, StatefulInteractiveElement, Subscription, WeakEntity, Window, actions, div, img,
     point, px,
 };
+use http_client::{AsyncBody, HttpClient};
+use serde::Deserialize;
 use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
     fs as std_fs,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use ui::{TintColor, Tooltip, prelude::*};
 use url::Url;
@@ -52,15 +58,57 @@ struct MediaAsset {
     search_text: SharedString,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct RemoteMediaAsset {
-    id: &'static str,
-    label: &'static str,
-    provider: &'static str,
-    url: &'static str,
+    id: Cow<'static, str>,
+    label: Cow<'static, str>,
+    provider: Cow<'static, str>,
+    url: Cow<'static, str>,
     kind: DraggedMediaKind,
-    license: &'static str,
-    tags: &'static str,
+    license: Cow<'static, str>,
+    tags: Cow<'static, str>,
+}
+
+impl RemoteMediaAsset {
+    const fn borrowed(
+        id: &'static str,
+        label: &'static str,
+        provider: &'static str,
+        url: &'static str,
+        kind: DraggedMediaKind,
+        license: &'static str,
+        tags: &'static str,
+    ) -> Self {
+        Self {
+            id: Cow::Borrowed(id),
+            label: Cow::Borrowed(label),
+            provider: Cow::Borrowed(provider),
+            url: Cow::Borrowed(url),
+            kind,
+            license: Cow::Borrowed(license),
+            tags: Cow::Borrowed(tags),
+        }
+    }
+
+    fn owned(
+        id: String,
+        label: String,
+        provider: &'static str,
+        url: String,
+        kind: DraggedMediaKind,
+        license: String,
+        tags: String,
+    ) -> Self {
+        Self {
+            id: Cow::Owned(id),
+            label: Cow::Owned(label),
+            provider: Cow::Borrowed(provider),
+            url: Cow::Owned(url),
+            kind,
+            license: Cow::Owned(license),
+            tags: Cow::Owned(tags),
+        }
+    }
 }
 
 enum MediaPreviewSource {
@@ -108,12 +156,16 @@ impl MediaKindFilter {
 pub struct MediaPanel {
     workspace: WeakEntity<Workspace>,
     filter_editor: Entity<Editor>,
+    http_client: Arc<dyn HttpClient>,
     media_roots: Vec<PathBuf>,
     assets: Vec<MediaAsset>,
+    remote_assets: Vec<RemoteMediaAsset>,
     kind_filter: MediaKindFilter,
     kind_scroll_handle: ScrollHandle,
     loading: bool,
+    remote_loading: bool,
     index_loaded: bool,
+    remote_signature: Option<String>,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
 }
@@ -134,6 +186,7 @@ impl MediaPanel {
         cx: &mut Context<Workspace>,
     ) -> Entity<Self> {
         let workspace_handle = cx.entity().downgrade();
+        let http_client = cx.http_client();
         let media_roots = media_roots_for_workspace(workspace, cx);
 
         cx.new(|cx| {
@@ -149,6 +202,9 @@ impl MediaPanel {
                 |panel: &mut Self, _, event, _, cx| {
                     if matches!(event, EditorEvent::BufferEdited) {
                         panel.status = None;
+                        panel.remote_loading = false;
+                        panel.remote_signature = None;
+                        panel.remote_assets.clear();
                         cx.notify();
                     }
                 },
@@ -157,12 +213,16 @@ impl MediaPanel {
             Self {
                 workspace: workspace_handle,
                 filter_editor,
+                http_client,
                 media_roots,
                 assets: Vec::new(),
+                remote_assets: Vec::new(),
                 kind_filter: MediaKindFilter::Images,
                 kind_scroll_handle: ScrollHandle::new(),
                 loading: false,
+                remote_loading: false,
                 index_loaded: false,
+                remote_signature: None,
                 status: None,
                 _subscriptions: vec![filter_subscription],
             }
@@ -175,6 +235,44 @@ impl MediaPanel {
         }
 
         self.refresh_media_index_from_current_roots(cx);
+    }
+
+    fn ensure_remote_media_loaded(&mut self, cx: &mut Context<Self>) {
+        let query = remote_media_query(&self.raw_query(cx), self.kind_filter);
+        let signature = format!("{}:{query}", self.kind_filter.label());
+
+        if self.remote_loading || self.remote_signature.as_deref() == Some(signature.as_str()) {
+            return;
+        }
+
+        self.remote_loading = true;
+        self.remote_signature = Some(signature.clone());
+        self.status = Some("Fetching remote media".into());
+
+        let http_client = self.http_client.clone();
+        let kind_filter = self.kind_filter;
+        cx.spawn(async move |panel, cx| {
+            let result = fetch_remote_media_assets(http_client, query, kind_filter).await;
+            panel
+                .update(cx, |panel, cx| {
+                    if panel.remote_signature.as_deref() == Some(signature.as_str()) {
+                        panel.remote_loading = false;
+                        match result {
+                            Ok(remote_assets) => {
+                                panel.remote_assets = remote_assets;
+                                panel.status = None;
+                            }
+                            Err(error) => {
+                                panel.remote_assets.clear();
+                                panel.status = Some(format!("Remote media: {error:#}").into());
+                            }
+                        }
+                        cx.notify();
+                    }
+                })
+                .ok();
+        })
+        .detach();
     }
 
     fn refresh_media_index_from_current_roots(&mut self, cx: &mut Context<Self>) {
@@ -236,9 +334,18 @@ impl MediaPanel {
         let kind_filter = self.kind_filter;
         let mut visible_assets = Vec::new();
         let mut match_count = 0;
+        let mut seen_urls = HashSet::new();
 
-        for asset in remote_media_assets() {
+        for asset in remote_media_assets()
+            .iter()
+            .cloned()
+            .chain(self.remote_assets.iter().cloned())
+        {
             if !kind_filter.matches(asset.kind) {
+                continue;
+            }
+
+            if !seen_urls.insert(asset.url.to_string()) {
                 continue;
             }
 
@@ -257,7 +364,7 @@ impl MediaPanel {
 
             match_count += 1;
             if visible_assets.len() < limit {
-                visible_assets.push(*asset);
+                visible_assets.push(asset);
             }
         }
 
@@ -270,6 +377,11 @@ impl MediaPanel {
             .filter(|asset| filter.matches(asset.payload.kind))
             .count()
             + remote_media_assets()
+                .iter()
+                .filter(|asset| filter.matches(asset.kind))
+                .count()
+            + self
+                .remote_assets
                 .iter()
                 .filter(|asset| filter.matches(asset.kind))
                 .count()
@@ -291,6 +403,9 @@ impl MediaPanel {
                 .on_click(cx.listener(move |panel, _, _, cx| {
                     panel.kind_filter = filter;
                     panel.status = None;
+                    panel.remote_loading = false;
+                    panel.remote_signature = None;
+                    panel.remote_assets.clear();
                     cx.notify();
                 })),
         )
@@ -657,10 +772,11 @@ impl MediaPanel {
         let label = asset.label.to_string();
         let provider = asset.provider.to_string();
         let license = asset.license.to_string();
+        let id = asset.id.to_string();
         let kind = asset.kind;
 
         h_flex()
-            .id(format!("media-panel-remote-row-{}", asset.id))
+            .id(format!("media-panel-remote-row-{id}"))
             .gap_2()
             .items_center()
             .p_2()
@@ -677,7 +793,7 @@ impl MediaPanel {
                     panel.preview_media_url(url.clone(), kind, label.clone(), window, cx);
                 }
             }))
-            .child(remote_media_thumbnail(asset, cx))
+            .child(remote_media_thumbnail(asset.clone(), cx))
             .child(
                 v_flex()
                     .flex_1()
@@ -696,30 +812,24 @@ impl MediaPanel {
                     .color(Color::Accent),
             )
             .child(
-                Button::new(
-                    format!("media-panel-preview-remote-{}", asset.id),
-                    "Preview",
-                )
-                .style(ButtonStyle::Subtle)
-                .size(ButtonSize::Compact)
-                .on_click(cx.listener({
-                    let url = url.clone();
-                    let label = label.clone();
-                    move |panel, _, window, cx| {
-                        panel.preview_media_url(url.clone(), kind, label.clone(), window, cx);
-                    }
-                })),
+                Button::new(format!("media-panel-preview-remote-{id}"), "Preview")
+                    .style(ButtonStyle::Subtle)
+                    .size(ButtonSize::Compact)
+                    .on_click(cx.listener({
+                        let url = url.clone();
+                        let label = label.clone();
+                        move |panel, _, window, cx| {
+                            panel.preview_media_url(url.clone(), kind, label.clone(), window, cx);
+                        }
+                    })),
             )
             .child(
-                Button::new(
-                    format!("media-panel-insert-remote-{}", asset.id),
-                    "Insert URL",
-                )
-                .style(ButtonStyle::Subtle)
-                .size(ButtonSize::Compact)
-                .on_click(cx.listener(move |panel, _, window, cx| {
-                    panel.insert_media_url(url.clone(), kind, label.clone(), window, cx);
-                })),
+                Button::new(format!("media-panel-insert-remote-{id}"), "Insert URL")
+                    .style(ButtonStyle::Subtle)
+                    .size(ButtonSize::Compact)
+                    .on_click(cx.listener(move |panel, _, window, cx| {
+                        panel.insert_media_url(url.clone(), kind, label.clone(), window, cx);
+                    })),
             )
     }
 
@@ -838,9 +948,11 @@ impl EventEmitter<PanelEvent> for MediaPanel {}
 impl Render for MediaPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_media_index_loaded(cx);
-        let (assets, total_asset_matches) = self.matching_assets(cx, MAX_MEDIA_RESULTS);
+        self.ensure_remote_media_loaded(cx);
         let (remote_assets, total_remote_matches) =
-            self.matching_remote_assets(cx, MAX_MEDIA_RESULTS.saturating_sub(assets.len()));
+            self.matching_remote_assets(cx, MAX_MEDIA_RESULTS);
+        let (assets, total_asset_matches) =
+            self.matching_assets(cx, MAX_MEDIA_RESULTS.saturating_sub(remote_assets.len()));
         let url_insert = self
             .render_url_insert(cx)
             .map(|element| element.into_any_element());
@@ -872,6 +984,8 @@ impl Render for MediaPanel {
         let count_label = self.status.clone().unwrap_or_else(|| {
             if self.loading {
                 "indexing".into()
+            } else if self.remote_loading {
+                "fetching".into()
             } else {
                 format!("{shown_count} / {total_count}").into()
             }
@@ -1089,6 +1203,423 @@ struct MediaUrlCandidate {
     url: String,
     kind: DraggedMediaKind,
     label: String,
+}
+
+#[derive(Deserialize)]
+struct OpenverseResponse {
+    results: Vec<OpenverseItem>,
+}
+
+#[derive(Deserialize)]
+struct OpenverseItem {
+    id: Option<String>,
+    title: Option<String>,
+    url: Option<String>,
+    thumbnail: Option<String>,
+    license: Option<String>,
+    creator: Option<String>,
+    foreign_landing_url: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct WikimediaResponse {
+    query: Option<WikimediaQuery>,
+}
+
+#[derive(Deserialize)]
+struct WikimediaQuery {
+    pages: HashMap<String, WikimediaPage>,
+}
+
+#[derive(Deserialize)]
+struct WikimediaPage {
+    title: Option<String>,
+    imageinfo: Option<Vec<WikimediaImageInfo>>,
+}
+
+#[derive(Deserialize)]
+struct WikimediaImageInfo {
+    url: Option<String>,
+    thumburl: Option<String>,
+    mime: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct NasaResponse {
+    collection: NasaCollection,
+}
+
+#[derive(Deserialize)]
+struct NasaCollection {
+    items: Vec<NasaItem>,
+}
+
+#[derive(Deserialize)]
+struct NasaItem {
+    data: Vec<NasaData>,
+    links: Option<Vec<NasaLink>>,
+}
+
+#[derive(Deserialize)]
+struct NasaData {
+    title: Option<String>,
+    description: Option<String>,
+    media_type: Option<String>,
+    nasa_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct NasaLink {
+    href: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct LibraryOfCongressResponse {
+    results: Vec<LibraryOfCongressItem>,
+}
+
+#[derive(Deserialize)]
+struct LibraryOfCongressItem {
+    title: Option<String>,
+    url: Option<String>,
+    #[serde(default)]
+    image_url: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct ArtInstituteResponse {
+    data: Vec<ArtInstituteItem>,
+}
+
+#[derive(Deserialize)]
+struct ArtInstituteItem {
+    id: u64,
+    title: Option<String>,
+    image_id: Option<String>,
+    artist_display: Option<String>,
+}
+
+fn remote_media_query(query: &str, filter: MediaKindFilter) -> String {
+    let query = query.trim();
+    if !query.is_empty() {
+        return query.to_string();
+    }
+
+    match filter {
+        MediaKindFilter::All | MediaKindFilter::Images => "interface mockups".to_string(),
+        MediaKindFilter::Videos => "motion background".to_string(),
+        MediaKindFilter::Audio => "ambient music".to_string(),
+    }
+}
+
+async fn fetch_remote_media_assets(
+    http_client: Arc<dyn HttpClient>,
+    query: String,
+    filter: MediaKindFilter,
+) -> anyhow::Result<Vec<RemoteMediaAsset>> {
+    let mut assets = Vec::new();
+    let mut errors = Vec::new();
+
+    if matches!(filter, MediaKindFilter::All | MediaKindFilter::Images) {
+        match fetch_openverse_media(http_client.clone(), &query, DraggedMediaKind::Image).await {
+            Ok(items) => assets.extend(items),
+            Err(error) => errors.push(format!("Openverse images: {error:#}")),
+        }
+        match fetch_wikimedia_media(http_client.clone(), &query, filter).await {
+            Ok(items) => assets.extend(items),
+            Err(error) => errors.push(format!("Wikimedia: {error:#}")),
+        }
+        match fetch_nasa_images(http_client.clone(), &query).await {
+            Ok(items) => assets.extend(items),
+            Err(error) => errors.push(format!("NASA: {error:#}")),
+        }
+        match fetch_library_of_congress_images(http_client.clone(), &query).await {
+            Ok(items) => assets.extend(items),
+            Err(error) => errors.push(format!("Library of Congress: {error:#}")),
+        }
+        match fetch_art_institute_images(http_client.clone(), &query).await {
+            Ok(items) => assets.extend(items),
+            Err(error) => errors.push(format!("Art Institute: {error:#}")),
+        }
+    }
+
+    if matches!(filter, MediaKindFilter::All | MediaKindFilter::Audio) {
+        match fetch_openverse_media(http_client.clone(), &query, DraggedMediaKind::Audio).await {
+            Ok(items) => assets.extend(items),
+            Err(error) => errors.push(format!("Openverse audio: {error:#}")),
+        }
+        if matches!(filter, MediaKindFilter::Audio) {
+            match fetch_wikimedia_media(http_client.clone(), &query, MediaKindFilter::Audio).await {
+                Ok(items) => assets.extend(items),
+                Err(error) => errors.push(format!("Wikimedia audio: {error:#}")),
+            }
+        }
+    }
+
+    if matches!(filter, MediaKindFilter::Videos) {
+        match fetch_wikimedia_media(http_client.clone(), &query, MediaKindFilter::Videos).await {
+            Ok(items) => assets.extend(items),
+            Err(error) => errors.push(format!("Wikimedia video: {error:#}")),
+        }
+    }
+
+    dedupe_remote_assets(&mut assets);
+    assets.truncate(MAX_MEDIA_RESULTS);
+
+    if assets.is_empty() && !errors.is_empty() {
+        anyhow::bail!(errors.join("; "));
+    }
+
+    Ok(assets)
+}
+
+async fn fetch_openverse_media(
+    http_client: Arc<dyn HttpClient>,
+    query: &str,
+    kind: DraggedMediaKind,
+) -> anyhow::Result<Vec<RemoteMediaAsset>> {
+    let endpoint = match kind {
+        DraggedMediaKind::Image => "images",
+        DraggedMediaKind::Audio => "audio",
+        DraggedMediaKind::Video => return Ok(Vec::new()),
+    };
+    let url = format!(
+        "https://api.openverse.engineering/v1/{endpoint}/?q={}&page_size=70",
+        encode_query(query)
+    );
+    let response: OpenverseResponse = fetch_json(http_client, &url).await?;
+    let provider = match kind {
+        DraggedMediaKind::Image => "Openverse Images",
+        DraggedMediaKind::Audio => "Openverse Audio",
+        DraggedMediaKind::Video => "Openverse",
+    };
+
+    Ok(response
+        .results
+        .into_iter()
+        .filter_map(|item| {
+            let url = item.url.or(item.thumbnail)?;
+            let label = clean_remote_label(item.title.as_deref().unwrap_or("Openverse media"));
+            let identifier = item
+                .id
+                .clone()
+                .or_else(|| item.foreign_landing_url.clone())
+                .unwrap_or_else(|| url.clone());
+            let license = item
+                .license
+                .unwrap_or_else(|| "Creative Commons".to_string());
+            let tags = [item.creator, item.foreign_landing_url]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join(" ");
+            Some(RemoteMediaAsset::owned(
+                remote_asset_id(provider, &identifier),
+                label,
+                provider,
+                url,
+                kind,
+                license,
+                tags,
+            ))
+        })
+        .collect())
+}
+
+async fn fetch_wikimedia_media(
+    http_client: Arc<dyn HttpClient>,
+    query: &str,
+    filter: MediaKindFilter,
+) -> anyhow::Result<Vec<RemoteMediaAsset>> {
+    let url = format!(
+        "https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch={}&gsrlimit=70&prop=imageinfo&iiprop=url%7Cmime&iiurlwidth=360&format=json&origin=*",
+        encode_query(query)
+    );
+    let response: WikimediaResponse = fetch_json(http_client, &url).await?;
+    let pages = response.query.map(|query| query.pages).unwrap_or_default();
+
+    Ok(pages
+        .into_values()
+        .filter_map(|page| {
+            let info = page.imageinfo?.into_iter().next()?;
+            let kind = media_kind_for_mime(info.mime.as_deref()?)?;
+            if !filter.matches(kind) {
+                return None;
+            }
+            let url = info.url.or(info.thumburl)?;
+            let title = page
+                .title
+                .as_deref()
+                .map(strip_wikimedia_file_prefix)
+                .unwrap_or("Wikimedia media");
+            Some(RemoteMediaAsset::owned(
+                remote_asset_id("Wikimedia", &url),
+                clean_remote_label(title),
+                "Wikimedia Commons",
+                url,
+                kind,
+                "open license".to_string(),
+                query.to_string(),
+            ))
+        })
+        .collect())
+}
+
+async fn fetch_nasa_images(
+    http_client: Arc<dyn HttpClient>,
+    query: &str,
+) -> anyhow::Result<Vec<RemoteMediaAsset>> {
+    let url = format!(
+        "https://images-api.nasa.gov/search?q={}&media_type=image&page_size=70",
+        encode_query(query)
+    );
+    let response: NasaResponse = fetch_json(http_client, &url).await?;
+
+    Ok(response
+        .collection
+        .items
+        .into_iter()
+        .filter_map(|item| {
+            let data = item.data.into_iter().next()?;
+            if data.media_type.as_deref() != Some("image") {
+                return None;
+            }
+            let url = item.links?.into_iter().find_map(|link| link.href)?;
+            let label = clean_remote_label(data.title.as_deref().unwrap_or("NASA image"));
+            let identifier = data.nasa_id.clone().unwrap_or_else(|| url.clone());
+            let tags = data.description.unwrap_or_default();
+            Some(RemoteMediaAsset::owned(
+                remote_asset_id("NASA", &identifier),
+                label,
+                "NASA",
+                url,
+                DraggedMediaKind::Image,
+                "public domain".to_string(),
+                tags,
+            ))
+        })
+        .collect())
+}
+
+async fn fetch_library_of_congress_images(
+    http_client: Arc<dyn HttpClient>,
+    query: &str,
+) -> anyhow::Result<Vec<RemoteMediaAsset>> {
+    let url = format!(
+        "https://www.loc.gov/photos/?fo=json&c=70&q={}",
+        encode_query(query)
+    );
+    let response: LibraryOfCongressResponse = fetch_json(http_client, &url).await?;
+
+    Ok(response
+        .results
+        .into_iter()
+        .filter_map(|item| {
+            let url = item
+                .image_url
+                .into_iter()
+                .rev()
+                .find(|url| url.starts_with("https://"))?;
+            let label = clean_remote_label(item.title.as_deref().unwrap_or("Library image"));
+            let source = item.url.unwrap_or_default();
+            Some(RemoteMediaAsset::owned(
+                remote_asset_id("LOC", &url),
+                label,
+                "Library of Congress",
+                url,
+                DraggedMediaKind::Image,
+                "public domain / rights vary".to_string(),
+                source,
+            ))
+        })
+        .collect())
+}
+
+async fn fetch_art_institute_images(
+    http_client: Arc<dyn HttpClient>,
+    query: &str,
+) -> anyhow::Result<Vec<RemoteMediaAsset>> {
+    let url = format!(
+        "https://api.artic.edu/api/v1/artworks/search?q={}&query%5Bterm%5D%5Bis_public_domain%5D=true&limit=70&fields=id,title,image_id,artist_display",
+        encode_query(query)
+    );
+    let response: ArtInstituteResponse = fetch_json(http_client, &url).await?;
+
+    Ok(response
+        .data
+        .into_iter()
+        .filter_map(|item| {
+            let image_id = item.image_id?;
+            let url = format!("https://www.artic.edu/iiif/2/{image_id}/full/843,/0/default.jpg");
+            let label = clean_remote_label(item.title.as_deref().unwrap_or("Art Institute image"));
+            Some(RemoteMediaAsset::owned(
+                remote_asset_id("ArtInstitute", &item.id.to_string()),
+                label,
+                "Art Institute of Chicago",
+                url,
+                DraggedMediaKind::Image,
+                "public domain".to_string(),
+                item.artist_display.unwrap_or_default(),
+            ))
+        })
+        .collect())
+}
+
+async fn fetch_json<T: for<'de> Deserialize<'de>>(
+    http_client: Arc<dyn HttpClient>,
+    url: &str,
+) -> anyhow::Result<T> {
+    let mut response = http_client.get(url, AsyncBody::default(), true).await?;
+    if !response.status().is_success() {
+        anyhow::bail!("HTTP {}", response.status());
+    }
+
+    let mut body = String::new();
+    response.body_mut().read_to_string(&mut body).await?;
+    Ok(serde_json::from_str(&body)?)
+}
+
+fn dedupe_remote_assets(assets: &mut Vec<RemoteMediaAsset>) {
+    let mut seen = HashSet::new();
+    assets.retain(|asset| seen.insert(asset.url.to_string()));
+}
+
+fn media_kind_for_mime(mime: &str) -> Option<DraggedMediaKind> {
+    if mime.starts_with("image/") {
+        Some(DraggedMediaKind::Image)
+    } else if mime.starts_with("video/") {
+        Some(DraggedMediaKind::Video)
+    } else if mime.starts_with("audio/") {
+        Some(DraggedMediaKind::Audio)
+    } else {
+        None
+    }
+}
+
+fn strip_wikimedia_file_prefix(title: &str) -> &str {
+    title
+        .strip_prefix("File:")
+        .or_else(|| title.strip_prefix("Image:"))
+        .unwrap_or(title)
+}
+
+fn clean_remote_label(label: &str) -> String {
+    let label = label
+        .rsplit_once('.')
+        .filter(|(_, extension)| extension.len() <= 5)
+        .map_or(label, |(stem, _)| stem)
+        .replace(['_', '-'], " ");
+    let label = label.split_whitespace().collect::<Vec<_>>().join(" ");
+    if label.is_empty() {
+        "remote media".to_string()
+    } else {
+        label
+    }
+}
+
+fn remote_asset_id(provider: &str, value: &str) -> String {
+    let id = format!("{provider}-{value}");
+    preview_file_stem(&id).chars().take(96).collect()
 }
 
 fn media_url_candidate(
@@ -1675,7 +2206,11 @@ fn remote_media_thumbnail(asset: RemoteMediaAsset, cx: &mut Context<MediaPanel>)
             .overflow_hidden()
             .border_1()
             .border_color(cx.theme().colors().border_variant)
-            .child(img(asset.url).size_full().object_fit(ObjectFit::Cover))
+            .child(
+                img(asset.url.to_string())
+                    .size_full()
+                    .object_fit(ObjectFit::Cover),
+            )
             .into_any_element(),
         DraggedMediaKind::Video => div()
             .w(px(64.))
@@ -1790,150 +2325,150 @@ fn media_search_matches(searchable: &str, query: &str) -> bool {
 
 fn remote_media_assets() -> &'static [RemoteMediaAsset] {
     &[
-        RemoteMediaAsset {
-            id: "wikimedia-fronalpstock",
-            label: "Fronalpstock landscape",
-            provider: "Wikimedia Commons",
-            url: "https://upload.wikimedia.org/wikipedia/commons/3/3f/Fronalpstock_big.jpg",
-            kind: DraggedMediaKind::Image,
-            license: "CC BY-SA",
-            tags: "mountain landscape nature travel hero background",
-        },
-        RemoteMediaAsset {
-            id: "wikimedia-van-gogh-starry-night",
-            label: "The Starry Night",
-            provider: "Wikimedia Commons",
-            url: "https://upload.wikimedia.org/wikipedia/commons/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
-            kind: DraggedMediaKind::Image,
-            license: "public domain",
-            tags: "painting art night museum impressionism texture",
-        },
-        RemoteMediaAsset {
-            id: "wikimedia-mona-lisa",
-            label: "Mona Lisa",
-            provider: "Wikimedia Commons",
-            url: "https://upload.wikimedia.org/wikipedia/commons/6/6a/Mona_Lisa.jpg",
-            kind: DraggedMediaKind::Image,
-            license: "public domain",
-            tags: "portrait art museum renaissance people",
-        },
-        RemoteMediaAsset {
-            id: "wikimedia-hubble-deep-field",
-            label: "Hubble Deep Field",
-            provider: "NASA / Wikimedia",
-            url: "https://upload.wikimedia.org/wikipedia/commons/5/5f/HubbleDeepField.800px.jpg",
-            kind: DraggedMediaKind::Image,
-            license: "public domain",
-            tags: "space galaxy nasa stars astronomy background",
-        },
-        RemoteMediaAsset {
-            id: "wikimedia-great-wave",
-            label: "The Great Wave",
-            provider: "Wikimedia Commons",
-            url: "https://upload.wikimedia.org/wikipedia/commons/a/a5/Tsunami_by_hokusai_19th_century.jpg",
-            kind: DraggedMediaKind::Image,
-            license: "public domain",
-            tags: "wave ocean japan illustration art print",
-        },
-        RemoteMediaAsset {
-            id: "wikimedia-blue-marble",
-            label: "Blue Marble",
-            provider: "NASA",
-            url: "https://upload.wikimedia.org/wikipedia/commons/9/97/The_Earth_seen_from_Apollo_17.jpg",
-            kind: DraggedMediaKind::Image,
-            license: "public domain",
-            tags: "earth space planet nasa globe science",
-        },
-        RemoteMediaAsset {
-            id: "nasa-mars-pathfinder",
-            label: "Mars Pathfinder panorama",
-            provider: "NASA",
-            url: "https://images-assets.nasa.gov/image/PIA00452/PIA00452~orig.jpg",
-            kind: DraggedMediaKind::Image,
-            license: "public domain",
-            tags: "mars nasa space rover science panorama planet",
-        },
-        RemoteMediaAsset {
-            id: "mdn-flower-video",
-            label: "Flower video",
-            provider: "MDN",
-            url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-            kind: DraggedMediaKind::Video,
-            license: "CC0",
-            tags: "flower nature macro loop video motion",
-        },
-        RemoteMediaAsset {
-            id: "mdn-flower-webm",
-            label: "Flower video WebM",
-            provider: "MDN",
-            url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm",
-            kind: DraggedMediaKind::Video,
-            license: "CC0",
-            tags: "flower nature macro webm loop motion",
-        },
-        RemoteMediaAsset {
-            id: "wikimedia-big-buck-bunny",
-            label: "Big Buck Bunny sample",
-            provider: "Wikimedia Commons",
-            url: "https://upload.wikimedia.org/wikipedia/commons/transcoded/7/70/Big.Buck.Bunny.-.Opening.Screen.ogv/Big.Buck.Bunny.-.Opening.Screen.ogv.360p.webm",
-            kind: DraggedMediaKind::Video,
-            license: "CC BY",
-            tags: "animation sample open movie video webm",
-        },
-        RemoteMediaAsset {
-            id: "blender-big-buck-bunny-mp4",
-            label: "Big Buck Bunny MP4",
-            provider: "Blender Open Movie",
-            url: "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
-            kind: DraggedMediaKind::Video,
-            license: "CC BY",
-            tags: "animation open movie blender video mp4 sample",
-        },
-        RemoteMediaAsset {
-            id: "blender-sintel-trailer",
-            label: "Sintel trailer",
-            provider: "Blender Open Movie",
-            url: "https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4",
-            kind: DraggedMediaKind::Video,
-            license: "CC BY",
-            tags: "animation fantasy trailer blender video mp4 open movie",
-        },
-        RemoteMediaAsset {
-            id: "wikimedia-example-audio",
-            label: "Example audio",
-            provider: "Wikimedia Commons",
-            url: "https://upload.wikimedia.org/wikipedia/commons/c/c8/Example.ogg",
-            kind: DraggedMediaKind::Audio,
-            license: "public sample",
-            tags: "speech sample sound audio ogg",
-        },
-        RemoteMediaAsset {
-            id: "mdn-t-rex-roar",
-            label: "T-Rex roar",
-            provider: "MDN",
-            url: "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
-            kind: DraggedMediaKind::Audio,
-            license: "CC0",
-            tags: "sound effect roar mp3 sample",
-        },
-        RemoteMediaAsset {
-            id: "wikimedia-bach-brandenburg",
-            label: "Bach Brandenburg sample",
-            provider: "Wikimedia Commons",
-            url: "https://upload.wikimedia.org/wikipedia/commons/4/45/Bach_-_Brandenburg_Concerto_No._3_-_1._Allegro.ogg",
-            kind: DraggedMediaKind::Audio,
-            license: "public domain",
-            tags: "classical music bach orchestral sample",
-        },
-        RemoteMediaAsset {
-            id: "soundhelix-song-1",
-            label: "SoundHelix music sample",
-            provider: "SoundHelix",
-            url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-            kind: DraggedMediaKind::Audio,
-            license: "royalty-free sample",
-            tags: "music mp3 sample soundtrack background audio",
-        },
+        RemoteMediaAsset::borrowed(
+            "wikimedia-fronalpstock",
+            "Fronalpstock landscape",
+            "Wikimedia Commons",
+            "https://upload.wikimedia.org/wikipedia/commons/3/3f/Fronalpstock_big.jpg",
+            DraggedMediaKind::Image,
+            "CC BY-SA",
+            "mountain landscape nature travel hero background",
+        ),
+        RemoteMediaAsset::borrowed(
+            "wikimedia-van-gogh-starry-night",
+            "The Starry Night",
+            "Wikimedia Commons",
+            "https://upload.wikimedia.org/wikipedia/commons/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
+            DraggedMediaKind::Image,
+            "public domain",
+            "painting art night museum impressionism texture",
+        ),
+        RemoteMediaAsset::borrowed(
+            "wikimedia-mona-lisa",
+            "Mona Lisa",
+            "Wikimedia Commons",
+            "https://upload.wikimedia.org/wikipedia/commons/6/6a/Mona_Lisa.jpg",
+            DraggedMediaKind::Image,
+            "public domain",
+            "portrait art museum renaissance people",
+        ),
+        RemoteMediaAsset::borrowed(
+            "wikimedia-hubble-deep-field",
+            "Hubble Deep Field",
+            "NASA / Wikimedia",
+            "https://upload.wikimedia.org/wikipedia/commons/5/5f/HubbleDeepField.800px.jpg",
+            DraggedMediaKind::Image,
+            "public domain",
+            "space galaxy nasa stars astronomy background",
+        ),
+        RemoteMediaAsset::borrowed(
+            "wikimedia-great-wave",
+            "The Great Wave",
+            "Wikimedia Commons",
+            "https://upload.wikimedia.org/wikipedia/commons/a/a5/Tsunami_by_hokusai_19th_century.jpg",
+            DraggedMediaKind::Image,
+            "public domain",
+            "wave ocean japan illustration art print",
+        ),
+        RemoteMediaAsset::borrowed(
+            "wikimedia-blue-marble",
+            "Blue Marble",
+            "NASA",
+            "https://upload.wikimedia.org/wikipedia/commons/9/97/The_Earth_seen_from_Apollo_17.jpg",
+            DraggedMediaKind::Image,
+            "public domain",
+            "earth space planet nasa globe science",
+        ),
+        RemoteMediaAsset::borrowed(
+            "nasa-mars-pathfinder",
+            "Mars Pathfinder panorama",
+            "NASA",
+            "https://images-assets.nasa.gov/image/PIA00452/PIA00452~orig.jpg",
+            DraggedMediaKind::Image,
+            "public domain",
+            "mars nasa space rover science panorama planet",
+        ),
+        RemoteMediaAsset::borrowed(
+            "mdn-flower-video",
+            "Flower video",
+            "MDN",
+            "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+            DraggedMediaKind::Video,
+            "CC0",
+            "flower nature macro loop video motion",
+        ),
+        RemoteMediaAsset::borrowed(
+            "mdn-flower-webm",
+            "Flower video WebM",
+            "MDN",
+            "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm",
+            DraggedMediaKind::Video,
+            "CC0",
+            "flower nature macro webm loop motion",
+        ),
+        RemoteMediaAsset::borrowed(
+            "wikimedia-big-buck-bunny",
+            "Big Buck Bunny sample",
+            "Wikimedia Commons",
+            "https://upload.wikimedia.org/wikipedia/commons/transcoded/7/70/Big.Buck.Bunny.-.Opening.Screen.ogv/Big.Buck.Bunny.-.Opening.Screen.ogv.360p.webm",
+            DraggedMediaKind::Video,
+            "CC BY",
+            "animation sample open movie video webm",
+        ),
+        RemoteMediaAsset::borrowed(
+            "blender-big-buck-bunny-mp4",
+            "Big Buck Bunny MP4",
+            "Blender Open Movie",
+            "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
+            DraggedMediaKind::Video,
+            "CC BY",
+            "animation open movie blender video mp4 sample",
+        ),
+        RemoteMediaAsset::borrowed(
+            "blender-sintel-trailer",
+            "Sintel trailer",
+            "Blender Open Movie",
+            "https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4",
+            DraggedMediaKind::Video,
+            "CC BY",
+            "animation fantasy trailer blender video mp4 open movie",
+        ),
+        RemoteMediaAsset::borrowed(
+            "wikimedia-example-audio",
+            "Example audio",
+            "Wikimedia Commons",
+            "https://upload.wikimedia.org/wikipedia/commons/c/c8/Example.ogg",
+            DraggedMediaKind::Audio,
+            "public sample",
+            "speech sample sound audio ogg",
+        ),
+        RemoteMediaAsset::borrowed(
+            "mdn-t-rex-roar",
+            "T-Rex roar",
+            "MDN",
+            "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+            DraggedMediaKind::Audio,
+            "CC0",
+            "sound effect roar mp3 sample",
+        ),
+        RemoteMediaAsset::borrowed(
+            "wikimedia-bach-brandenburg",
+            "Bach Brandenburg sample",
+            "Wikimedia Commons",
+            "https://upload.wikimedia.org/wikipedia/commons/4/45/Bach_-_Brandenburg_Concerto_No._3_-_1._Allegro.ogg",
+            DraggedMediaKind::Audio,
+            "public domain",
+            "classical music bach orchestral sample",
+        ),
+        RemoteMediaAsset::borrowed(
+            "soundhelix-song-1",
+            "SoundHelix music sample",
+            "SoundHelix",
+            "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+            DraggedMediaKind::Audio,
+            "royalty-free sample",
+            "music mp3 sample soundtrack background audio",
+        ),
     ]
 }
 
