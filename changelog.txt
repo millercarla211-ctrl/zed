@@ -23,6 +23,7 @@ ADDED:
 - `crates/media_panel` now fetches direct Cleveland Museum of Art CC0 image rows through the no-key open access API.
 
 CHANGED:
+- `crates/media_panel` now caps cached remote media result sets to the 24 most recent query/filter signatures and pre-sizes the cache containers.
 - `crates/media_panel` now caches up to 640 remote provider assets per query while keeping the native panel's visible row cap at 320, giving broader provider coverage without increasing the rendered row window.
 - `crates/media_panel` now reuses the active remote-results buffer on cache hits and preallocates remote provider, dedupe, and error buffers for remote media fetches.
 - `crates/icon_picker` now keeps selected-pack icon loads scoped to `external_icons_by_pack` instead of extending, sorting, and deduping the broad all-icons list on each individual pack open.

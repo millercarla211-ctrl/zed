@@ -10,7 +10,7 @@ use http_client::{AsyncBody, HttpClient};
 use serde::Deserialize;
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     fs as std_fs,
     future::Future,
     path::{Path, PathBuf},
@@ -41,6 +41,7 @@ actions!(
 const MEDIA_PANEL_KEY: &str = "MediaPanel";
 const MAX_MEDIA_RESULTS: usize = 320;
 const MAX_REMOTE_MEDIA_RESULTS: usize = 640;
+const MAX_REMOTE_MEDIA_CACHE_ENTRIES: usize = 24;
 const OPENVERSE_RESULT_LIMIT: usize = 90;
 const WIKIMEDIA_RESULT_LIMIT: usize = 50;
 const NASA_IMAGE_RESULT_LIMIT: usize = 90;
@@ -272,6 +273,7 @@ pub struct MediaPanel {
     remote_assets: Vec<RemoteMediaAsset>,
     remote_kind_counts: MediaKindCounts,
     remote_cache: HashMap<String, Vec<RemoteMediaAsset>>,
+    remote_cache_order: VecDeque<String>,
     kind_filter: MediaKindFilter,
     kind_scroll_handle: ScrollHandle,
     loading: bool,
@@ -330,7 +332,8 @@ impl MediaPanel {
                 local_kind_counts: MediaKindCounts::default(),
                 remote_assets: Vec::new(),
                 remote_kind_counts: MediaKindCounts::default(),
-                remote_cache: HashMap::default(),
+                remote_cache: HashMap::with_capacity(MAX_REMOTE_MEDIA_CACHE_ENTRIES),
+                remote_cache_order: VecDeque::with_capacity(MAX_REMOTE_MEDIA_CACHE_ENTRIES),
                 kind_filter: MediaKindFilter::Images,
                 kind_scroll_handle: ScrollHandle::new(),
                 loading: false,
@@ -368,11 +371,18 @@ impl MediaPanel {
             return;
         }
 
-        if let Some(remote_assets) = self.remote_cache.get(&signature) {
-            let remote_kind_counts = MediaKindCounts::from_remote_assets(remote_assets);
-            self.remote_assets.clone_from(remote_assets);
+        if let Some(remote_kind_counts) = {
+            if let Some(remote_assets) = self.remote_cache.get(&signature) {
+                let remote_kind_counts = MediaKindCounts::from_remote_assets(remote_assets);
+                self.remote_assets.clone_from(remote_assets);
+                Some(remote_kind_counts)
+            } else {
+                None
+            }
+        } {
             self.remote_kind_counts = remote_kind_counts;
-            self.remote_signature = Some(signature);
+            self.remote_signature = Some(signature.clone());
+            self.touch_remote_cache_entry(&signature);
             self.status = None;
             return;
         }
@@ -415,10 +425,8 @@ impl MediaPanel {
                             Ok(remote_assets) => {
                                 let remote_kind_counts =
                                     MediaKindCounts::from_remote_assets(&remote_assets);
-                                panel
-                                    .remote_cache
-                                    .insert(signature.clone(), remote_assets.clone());
-                                panel.remote_assets = remote_assets;
+                                panel.remote_assets.clone_from(&remote_assets);
+                                panel.cache_remote_assets(signature.clone(), remote_assets);
                                 panel.remote_kind_counts = remote_kind_counts;
                                 panel.status = None;
                             }
@@ -434,6 +442,23 @@ impl MediaPanel {
                 .ok();
         })
         .detach();
+    }
+
+    fn cache_remote_assets(&mut self, signature: String, remote_assets: Vec<RemoteMediaAsset>) {
+        self.remote_cache.insert(signature.clone(), remote_assets);
+        self.touch_remote_cache_entry(&signature);
+
+        while self.remote_cache_order.len() > MAX_REMOTE_MEDIA_CACHE_ENTRIES {
+            let Some(oldest_signature) = self.remote_cache_order.pop_front() else {
+                break;
+            };
+            self.remote_cache.remove(&oldest_signature);
+        }
+    }
+
+    fn touch_remote_cache_entry(&mut self, signature: &str) {
+        self.remote_cache_order.retain(|entry| entry != signature);
+        self.remote_cache_order.push_back(signature.to_string());
     }
 
     fn refresh_media_index_from_current_roots(&mut self, cx: &mut Context<Self>) {
