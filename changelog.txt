@@ -1,3 +1,11 @@
+[2026-05-15] - UI Search Cache Key Allocation Cleanup
+
+CHANGED:
+- `crates/shadcn_ui_panel` now keys the catalog search-text cache by cloned `SharedString` ids instead of allocating fresh `String` keys.
+
+NOTES:
+- Preserved UI search matching, source filters, catalog rows, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - UI Catalog Dedupe Allocation Cleanup
 
 CHANGED:

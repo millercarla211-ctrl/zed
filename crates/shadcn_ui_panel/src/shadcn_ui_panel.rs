@@ -207,7 +207,7 @@ pub struct ShadcnUiPanel {
     filter_editor: Entity<Editor>,
     items: Vec<CatalogItem>,
     filter_counts: CatalogFilterCounts,
-    search_text_cache: RefCell<HashMap<String, SharedString>>,
+    search_text_cache: RefCell<HashMap<SharedString, SharedString>>,
     loading_catalog: bool,
     catalog_loaded: bool,
     source_filter: CatalogFilter,
@@ -364,7 +364,7 @@ impl ShadcnUiPanel {
         if let Some(matches) = {
             let search_text_cache = self.search_text_cache.borrow();
             search_text_cache
-                .get(item.id.as_ref())
+                .get(&item.id)
                 .map(|search_text| catalog_search_matches(search_text.as_ref(), query_terms))
         } {
             return matches;
@@ -380,7 +380,7 @@ impl ShadcnUiPanel {
         .into();
         self.search_text_cache
             .borrow_mut()
-            .insert(item.id.to_string(), search_text.clone());
+            .insert(item.id.clone(), search_text.clone());
         catalog_search_matches(search_text.as_ref(), query_terms)
     }
 
