@@ -844,13 +844,11 @@ impl Render for ShadcnUiPanel {
         let is_empty = total_matches == 0;
         let filter_counts = self.filter_counts;
         let total_count = filter_counts.count(self.source_filter);
-        let item_rows = items
-            .into_iter()
-            .map(|item| {
-                let image_url = preview_images.remove(item.id.as_ref()).flatten();
-                self.render_item_row(item, image_url, cx).into_any_element()
-            })
-            .collect::<Vec<_>>();
+        let mut item_rows = Vec::with_capacity(items.len());
+        item_rows.extend(items.into_iter().map(|item| {
+            let image_url = preview_images.remove(item.id.as_ref()).flatten();
+            self.render_item_row(item, image_url, cx).into_any_element()
+        }));
         let count_label = self.status.clone().unwrap_or_else(|| {
             if self.loading_catalog {
                 "loading".into()

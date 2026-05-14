@@ -1,3 +1,11 @@
+[2026-05-15] - UI Row Render Buffer Preallocation
+
+CHANGED:
+- `crates/shadcn_ui_panel` now renders visible UI/shadcn rows into an explicitly preallocated element buffer sized from the matched item count.
+
+NOTES:
+- Preserved UI row ordering, screenshot thumbnail lookup, install/copy/preview/docs actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Icon Tile Render Buffer Preallocation
 
 CHANGED:
