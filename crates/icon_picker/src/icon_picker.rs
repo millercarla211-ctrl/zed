@@ -309,13 +309,19 @@ impl IconPickerPanel {
             icons.extend(
                 self.representative_external_icons
                     .iter()
+                    .take(MAX_ICON_RESULTS)
                     .cloned()
                     .map(PickerIcon::External),
             );
             if icons.len() < MAX_ICON_RESULTS {
-                icons.extend(self.zed_icons.iter().copied().map(PickerIcon::Zed));
+                icons.extend(
+                    self.zed_icons
+                        .iter()
+                        .take(MAX_ICON_RESULTS - icons.len())
+                        .copied()
+                        .map(PickerIcon::Zed),
+                );
             }
-            icons.truncate(MAX_ICON_RESULTS);
             return (icons, MAX_ICON_RESULTS.min(total_count), total_count);
         }
 
