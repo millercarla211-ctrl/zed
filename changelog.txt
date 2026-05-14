@@ -4,6 +4,7 @@ ADDED:
 - `crates/icon_picker` now warms visible external Iconify SVG previews on a background task and caches the generated SVG files before repainting them into the grid.
 - `crates/icon_picker` now indexes Iconify aliases in addition to base icons so alternate icon names from each pack appear in panel search and selected-pack grids.
 - `crates/editor` now resolves Iconify aliases when inserting dragged or selected external icons, so alias entries create real SVG assets instead of empty files.
+- `crates/icon_picker` and `crates/editor` now apply Iconify alias hFlip, vFlip, and rotate metadata when generating previews or inserted SVG assets.
 - `crates/shadcn_ui_panel` now writes the initial shadcn rkyv catalog cache on a background task when the cache is missing, keeping first panel construction responsive.
 - `crates/media_panel` now fetches live no-key remote media rows from Openverse, Wikimedia Commons, NASA, Library of Congress, and Art Institute of Chicago for the active media query/filter.
 - `crates/media_panel` now uses shared Zed HTTP client plumbing plus JSON parsing for direct provider results instead of relying only on static sample rows.

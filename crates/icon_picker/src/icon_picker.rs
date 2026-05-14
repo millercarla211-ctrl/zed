@@ -979,6 +979,12 @@ struct IconifyAlias {
     width: Option<u32>,
     #[serde(default)]
     height: Option<u32>,
+    #[serde(default, rename = "hFlip")]
+    h_flip: bool,
+    #[serde(default, rename = "vFlip")]
+    v_flip: bool,
+    #[serde(default)]
+    rotate: Option<u8>,
 }
 
 #[derive(Clone)]
@@ -986,6 +992,9 @@ struct ExternalIconBody {
     body: String,
     width: Option<u32>,
     height: Option<u32>,
+    h_flip: bool,
+    v_flip: bool,
+    rotate: Option<u8>,
 }
 
 #[derive(Deserialize)]
@@ -1194,6 +1203,9 @@ fn load_external_icon_bodies(pack: &str) -> anyhow::Result<HashMap<String, Exter
                     body: icon.body,
                     width: icon.width,
                     height: icon.height,
+                    h_flip: false,
+                    v_flip: false,
+                    rotate: None,
                 },
             )
         })
@@ -1212,6 +1224,9 @@ fn load_external_icon_bodies(pack: &str) -> anyhow::Result<HashMap<String, Exter
                 body: parent.body,
                 width: alias.width.or(parent.width),
                 height: alias.height.or(parent.height),
+                h_flip: alias.h_flip,
+                v_flip: alias.v_flip,
+                rotate: alias.rotate,
             },
         );
     }
@@ -1241,7 +1256,15 @@ fn warm_external_icon_previews(icons: Vec<ExternalIcon>) -> Vec<(String, Option<
 
         let width = body.width.unwrap_or(icon.width).max(1);
         let height = body.height.unwrap_or(icon.height).max(1);
-        let svg = wrap_icon_body(&body.body, width, height);
+        let icon_body = transform_iconify_alias_body(
+            &body.body,
+            width,
+            height,
+            body.h_flip,
+            body.v_flip,
+            body.rotate,
+        );
+        let svg = wrap_icon_body(&icon_body, width, height);
         let preview_path = write_external_icon_preview(&icon, &svg)
             .ok()
             .map(SharedString::from);
@@ -1249,6 +1272,41 @@ fn warm_external_icon_previews(icons: Vec<ExternalIcon>) -> Vec<(String, Option<
     }
 
     previews
+}
+
+fn transform_iconify_alias_body(
+    body: &str,
+    width: u32,
+    height: u32,
+    h_flip: bool,
+    v_flip: bool,
+    rotate: Option<u8>,
+) -> String {
+    let mut transforms = Vec::new();
+
+    if h_flip {
+        transforms.push(format!("translate({width} 0) scale(-1 1)"));
+    }
+    if v_flip {
+        transforms.push(format!("translate(0 {height}) scale(1 -1)"));
+    }
+    if let Some(rotate) = rotate
+        .map(|rotate| rotate % 4)
+        .filter(|rotate| *rotate != 0)
+    {
+        transforms.push(format!(
+            "rotate({} {} {})",
+            rotate as u16 * 90,
+            width as f32 / 2.,
+            height as f32 / 2.
+        ));
+    }
+
+    if transforms.is_empty() {
+        body.to_string()
+    } else {
+        format!(r#"<g transform="{}">{body}</g>"#, transforms.join(" "))
+    }
 }
 
 fn icon_preview_batch_signature(icons: &[ExternalIcon]) -> String {

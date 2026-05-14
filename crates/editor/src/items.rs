@@ -569,6 +569,12 @@ struct IconifyAlias {
     width: Option<u32>,
     #[serde(default)]
     height: Option<u32>,
+    #[serde(default, rename = "hFlip")]
+    h_flip: bool,
+    #[serde(default, rename = "vFlip")]
+    v_flip: bool,
+    #[serde(default)]
+    rotate: Option<u8>,
 }
 
 fn iconify_svg_source(pack: &str, name: &str, width: u32, height: u32) -> Option<String> {
@@ -579,22 +585,65 @@ fn iconify_svg_source(pack: &str, name: &str, width: u32, height: u32) -> Option
     let text = std_fs::read_to_string(path).ok()?;
     let pack = serde_json::from_str::<IconifyBodyPack>(&text).ok()?;
     let (body, icon_width, icon_height) = if let Some(icon) = pack.icons.get(name) {
-        (icon.body.as_str(), icon.width, icon.height)
+        (icon.body.trim().to_string(), icon.width, icon.height)
     } else {
         let alias = pack.aliases.get(name)?;
         let parent = pack.icons.get(alias.parent.as_str())?;
+        let icon_width = alias.width.or(parent.width);
+        let icon_height = alias.height.or(parent.height);
         (
-            parent.body.as_str(),
-            alias.width.or(parent.width),
-            alias.height.or(parent.height),
+            transform_iconify_alias_body(
+                parent.body.trim(),
+                icon_width.unwrap_or(width).max(1),
+                icon_height.unwrap_or(height).max(1),
+                alias.h_flip,
+                alias.v_flip,
+                alias.rotate,
+            ),
+            icon_width,
+            icon_height,
         )
     };
-    let body = body.trim();
     let width = icon_width.unwrap_or(width).max(1);
     let height = icon_height.unwrap_or(height).max(1);
     Some(format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">{body}</svg>"#
     ))
+}
+
+fn transform_iconify_alias_body(
+    body: &str,
+    width: u32,
+    height: u32,
+    h_flip: bool,
+    v_flip: bool,
+    rotate: Option<u8>,
+) -> String {
+    let mut transforms = Vec::new();
+
+    if h_flip {
+        transforms.push(format!("translate({width} 0) scale(-1 1)"));
+    }
+    if v_flip {
+        transforms.push(format!("translate(0 {height}) scale(1 -1)"));
+    }
+    if let Some(rotate) = rotate
+        .map(|rotate| rotate % 4)
+        .filter(|rotate| *rotate != 0)
+    {
+        transforms.push(format!(
+            "rotate({} {} {})",
+            rotate as u16 * 90,
+            width as f32 / 2.,
+            height as f32 / 2.
+        ));
+    }
+
+    if transforms.is_empty() {
+        body.to_string()
+    } else {
+        format!(r#"<g transform="{}">{body}</g>"#, transforms.join(" "))
+    }
 }
 
 fn icon_asset_dir(project_root: &Path) -> PathBuf {

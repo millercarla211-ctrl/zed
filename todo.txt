@@ -1,7 +1,8 @@
 IN PROGRESS:
-- UI catalog initial cache warming is code-complete by inspection; awaiting manual Zed panel QA.
+- Iconify alias transform support is code-complete by inspection; awaiting manual Zed panel QA.
 
 PENDING:
+- User manual check that Iconify alias icons with hFlip, vFlip, or rotate metadata, such as arrow-right/arrow-down style aliases, preview and insert with the correct orientation.
 - User manual check that first opening the UI panel no longer pauses while writing the shadcn rkyv cache when the cache file is missing.
 - User manual check that Icon panel All sets and selected-pack grids prepare real SVG previews in the background instead of stalling code editor input while parsing Iconify JSON.
 - User manual check that Iconify aliases like alternate outline/fill names appear in search results and insert/copy as SVGs instead of falling back to pack initials.
