@@ -68,6 +68,7 @@ struct RemoteMediaAsset {
     label: Cow<'static, str>,
     provider: Cow<'static, str>,
     url: Cow<'static, str>,
+    thumbnail_url: Option<Cow<'static, str>>,
     kind: DraggedMediaKind,
     license: Cow<'static, str>,
     tags: Cow<'static, str>,
@@ -88,6 +89,7 @@ impl RemoteMediaAsset {
             label: Cow::Borrowed(label),
             provider: Cow::Borrowed(provider),
             url: Cow::Borrowed(url),
+            thumbnail_url: None,
             kind,
             license: Cow::Borrowed(license),
             tags: Cow::Borrowed(tags),
@@ -108,10 +110,37 @@ impl RemoteMediaAsset {
             label: Cow::Owned(label),
             provider: Cow::Borrowed(provider),
             url: Cow::Owned(url),
+            thumbnail_url: None,
             kind,
             license: Cow::Owned(license),
             tags: Cow::Owned(tags),
         }
+    }
+
+    fn owned_with_thumbnail(
+        id: String,
+        label: String,
+        provider: &'static str,
+        url: String,
+        thumbnail_url: Option<String>,
+        kind: DraggedMediaKind,
+        license: String,
+        tags: String,
+    ) -> Self {
+        Self {
+            id: Cow::Owned(id),
+            label: Cow::Owned(label),
+            provider: Cow::Borrowed(provider),
+            url: Cow::Owned(url),
+            thumbnail_url: thumbnail_url.map(Cow::Owned),
+            kind,
+            license: Cow::Owned(license),
+            tags: Cow::Owned(tags),
+        }
+    }
+
+    fn thumbnail_or_url(&self) -> String {
+        self.thumbnail_url.as_ref().unwrap_or(&self.url).to_string()
     }
 }
 
@@ -1467,6 +1496,7 @@ async fn fetch_openverse_media(
         .results
         .into_iter()
         .filter_map(|item| {
+            let thumbnail_url = item.thumbnail.clone();
             let url = item.url.or(item.thumbnail)?;
             let label = clean_remote_label(item.title.as_deref().unwrap_or("Openverse media"));
             let identifier = item
@@ -1482,11 +1512,12 @@ async fn fetch_openverse_media(
                 .flatten()
                 .collect::<Vec<_>>()
                 .join(" ");
-            Some(RemoteMediaAsset::owned(
+            Some(RemoteMediaAsset::owned_with_thumbnail(
                 remote_asset_id(provider, &identifier),
                 label,
                 provider,
                 url,
+                thumbnail_url,
                 kind,
                 license,
                 tags,
@@ -1515,17 +1546,19 @@ async fn fetch_wikimedia_media(
             if !filter.matches(kind) {
                 return None;
             }
+            let thumbnail_url = info.thumburl.clone();
             let url = info.url.or(info.thumburl)?;
             let title = page
                 .title
                 .as_deref()
                 .map(strip_wikimedia_file_prefix)
                 .unwrap_or("Wikimedia media");
-            Some(RemoteMediaAsset::owned(
+            Some(RemoteMediaAsset::owned_with_thumbnail(
                 remote_asset_id("Wikimedia", &url),
                 clean_remote_label(title),
                 "Wikimedia Commons",
                 url,
+                thumbnail_url,
                 kind,
                 "open license".to_string(),
                 query.to_string(),
@@ -1621,6 +1654,9 @@ async fn fetch_nasa_media_asset(
     let collection_url = item
         .href
         .ok_or_else(|| anyhow::anyhow!("missing NASA media collection"))?;
+    let thumbnail_url = item
+        .links
+        .and_then(|links| links.into_iter().find_map(|link| link.href));
     let files: Vec<String> = fetch_json(http_client, &collection_url).await?;
     let media_url = nasa_media_file_url(files.into_iter(), kind)
         .ok_or_else(|| anyhow::anyhow!("missing direct NASA media file"))?;
@@ -1628,11 +1664,12 @@ async fn fetch_nasa_media_asset(
     let identifier = data.nasa_id.unwrap_or_else(|| media_url.clone());
     let tags = data.description.unwrap_or_default();
 
-    Ok(RemoteMediaAsset::owned(
+    Ok(RemoteMediaAsset::owned_with_thumbnail(
         remote_asset_id("NASA", &identifier),
         label,
         "NASA",
         media_url,
+        thumbnail_url,
         kind,
         "public domain".to_string(),
         tags,
@@ -2525,97 +2562,133 @@ fn remote_media_thumbnail(asset: RemoteMediaAsset, cx: &mut Context<MediaPanel>)
             .border_1()
             .border_color(cx.theme().colors().border_variant)
             .child(
-                img(asset.url.to_string())
+                img(asset.thumbnail_or_url())
                     .size_full()
                     .object_fit(ObjectFit::Cover),
             )
             .into_any_element(),
-        DraggedMediaKind::Video => div()
-            .w(px(64.))
-            .h(px(48.))
-            .rounded_sm()
-            .border_1()
-            .border_color(cx.theme().colors().border_variant)
-            .bg(cx.theme().colors().elevated_surface_background)
-            .v_flex()
-            .gap_0p5()
-            .p_1()
-            .child(
+        DraggedMediaKind::Video => {
+            if let Some(thumbnail_url) = asset.thumbnail_url.as_ref() {
                 div()
-                    .flex_1()
+                    .w(px(64.))
+                    .h(px(48.))
                     .rounded_sm()
-                    .bg(cx.theme().colors().element_background)
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(Icon::new(IconName::PlayOutlined).size(IconSize::Small)),
-            )
-            .child(
-                h_flex()
+                    .overflow_hidden()
+                    .border_1()
+                    .border_color(cx.theme().colors().border_variant)
+                    .child(
+                        img(thumbnail_url.to_string())
+                            .size_full()
+                            .object_fit(ObjectFit::Cover),
+                    )
+                    .into_any_element()
+            } else {
+                div()
+                    .w(px(64.))
+                    .h(px(48.))
+                    .rounded_sm()
+                    .border_1()
+                    .border_color(cx.theme().colors().border_variant)
+                    .bg(cx.theme().colors().elevated_surface_background)
+                    .v_flex()
                     .gap_0p5()
+                    .p_1()
                     .child(
                         div()
                             .flex_1()
-                            .h(px(3.))
+                            .rounded_sm()
+                            .bg(cx.theme().colors().element_background)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(Icon::new(IconName::PlayOutlined).size(IconSize::Small)),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_0p5()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .h(px(3.))
+                                    .rounded_full()
+                                    .bg(cx.theme().colors().border),
+                            )
+                            .child(
+                                div()
+                                    .w(px(12.))
+                                    .h(px(3.))
+                                    .rounded_full()
+                                    .bg(cx.theme().colors().border_focused),
+                            ),
+                    )
+                    .into_any_element()
+            }
+        }
+        DraggedMediaKind::Audio => {
+            if let Some(thumbnail_url) = asset.thumbnail_url.as_ref() {
+                div()
+                    .w(px(64.))
+                    .h(px(48.))
+                    .rounded_sm()
+                    .overflow_hidden()
+                    .border_1()
+                    .border_color(cx.theme().colors().border_variant)
+                    .child(
+                        img(thumbnail_url.to_string())
+                            .size_full()
+                            .object_fit(ObjectFit::Cover),
+                    )
+                    .into_any_element()
+            } else {
+                div()
+                    .w(px(64.))
+                    .h(px(48.))
+                    .rounded_sm()
+                    .border_1()
+                    .border_color(cx.theme().colors().border_variant)
+                    .bg(cx.theme().colors().elevated_surface_background)
+                    .h_flex()
+                    .gap_0p5()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        div()
+                            .w(px(4.))
+                            .h(px(14.))
                             .rounded_full()
                             .bg(cx.theme().colors().border),
                     )
                     .child(
                         div()
-                            .w(px(12.))
-                            .h(px(3.))
+                            .w(px(4.))
+                            .h(px(26.))
                             .rounded_full()
                             .bg(cx.theme().colors().border_focused),
-                    ),
-            )
-            .into_any_element(),
-        DraggedMediaKind::Audio => div()
-            .w(px(64.))
-            .h(px(48.))
-            .rounded_sm()
-            .border_1()
-            .border_color(cx.theme().colors().border_variant)
-            .bg(cx.theme().colors().elevated_surface_background)
-            .h_flex()
-            .gap_0p5()
-            .items_center()
-            .justify_center()
-            .child(
-                div()
-                    .w(px(4.))
-                    .h(px(14.))
-                    .rounded_full()
-                    .bg(cx.theme().colors().border),
-            )
-            .child(
-                div()
-                    .w(px(4.))
-                    .h(px(26.))
-                    .rounded_full()
-                    .bg(cx.theme().colors().border_focused),
-            )
-            .child(
-                div()
-                    .w(px(4.))
-                    .h(px(18.))
-                    .rounded_full()
-                    .bg(cx.theme().colors().border),
-            )
-            .child(
-                div()
-                    .w(px(4.))
-                    .h(px(30.))
-                    .rounded_full()
-                    .bg(cx.theme().colors().border_focused),
-            )
-            .child(
-                div()
-                    .w(px(4.))
-                    .h(px(16.))
-                    .rounded_full()
-                    .bg(cx.theme().colors().border),
-            )
-            .into_any_element(),
+                    )
+                    .child(
+                        div()
+                            .w(px(4.))
+                            .h(px(18.))
+                            .rounded_full()
+                            .bg(cx.theme().colors().border),
+                    )
+                    .child(
+                        div()
+                            .w(px(4.))
+                            .h(px(30.))
+                            .rounded_full()
+                            .bg(cx.theme().colors().border_focused),
+                    )
+                    .child(
+                        div()
+                            .w(px(4.))
+                            .h(px(16.))
+                            .rounded_full()
+                            .bg(cx.theme().colors().border),
+                    )
+                    .into_any_element()
+            }
+        }
     }
 }
 
