@@ -1,3 +1,11 @@
+[2026-05-15] - UI Catalog Dedupe Allocation Cleanup
+
+CHANGED:
+- `crates/shadcn_ui_panel` now de-dupes static and live catalog ids with cloned `SharedString` handles instead of allocating fresh id strings.
+
+NOTES:
+- Preserved catalog merge ordering, duplicate filtering, UI rows, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Panel Metadata String Preallocation
 
 CHANGED:

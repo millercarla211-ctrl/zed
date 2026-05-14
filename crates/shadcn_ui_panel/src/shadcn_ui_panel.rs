@@ -1488,22 +1488,22 @@ fn static_shadcn_catalog() -> Vec<CatalogItem> {
 
             items.reserve(extra_capacity);
             let mut existing_ids = HashSet::with_capacity(items.len() + extra_capacity);
-            existing_ids.extend(items.iter().map(|item| item.id.to_string()));
+            existing_ids.extend(items.iter().map(|item| item.id.clone()));
 
             for item in static_items {
-                if existing_ids.insert(item.id.to_string()) {
+                if existing_ids.insert(item.id.clone()) {
                     items.push(item);
                 }
             }
 
             for item in registry_items {
-                if existing_ids.insert(item.id.to_string()) {
+                if existing_ids.insert(item.id.clone()) {
                     items.push(item);
                 }
             }
 
             for item in twenty_first_items {
-                if existing_ids.insert(item.id.to_string()) {
+                if existing_ids.insert(item.id.clone()) {
                     items.push(item);
                 }
             }
@@ -1660,28 +1660,28 @@ fn shadcn_catalog() -> Vec<CatalogItem> {
 
     items.reserve(extra_capacity);
     let mut existing_ids = HashSet::with_capacity(items.len() + extra_capacity);
-    existing_ids.extend(items.iter().map(|item| item.id.to_string()));
+    existing_ids.extend(items.iter().map(|item| item.id.clone()));
 
     for item in manifest_items {
-        if existing_ids.insert(item.id.to_string()) {
+        if existing_ids.insert(item.id.clone()) {
             items.push(item);
         }
     }
 
     for item in magic_items {
-        if existing_ids.insert(item.id.to_string()) {
+        if existing_ids.insert(item.id.clone()) {
             items.push(item);
         }
     }
 
     for item in registry_items {
-        if existing_ids.insert(item.id.to_string()) {
+        if existing_ids.insert(item.id.clone()) {
             items.push(item);
         }
     }
 
     for item in twenty_first_items {
-        if existing_ids.insert(item.id.to_string()) {
+        if existing_ids.insert(item.id.clone()) {
             items.push(item);
         }
     }
