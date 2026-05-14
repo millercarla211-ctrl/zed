@@ -42,6 +42,7 @@ actions!(
 
 const SHADCN_UI_PANEL_KEY: &str = "ShadcnUiPanel";
 const MAX_SHADCN_ROWS: usize = 96;
+const PREVIEW_IMAGE_CACHE_INITIAL_CAPACITY: usize = MAX_SHADCN_ROWS * 4;
 const CATALOG_CACHE_FILE_NAME: &str = "catalog-v1.rkyv";
 const STATIC_SHADCN_CATALOG_INDEX: &str = include_str!("shadcn_catalog_index.tsv");
 static SHADCN_STATIC_CATALOG_CACHE: OnceLock<Vec<CatalogItem>> = OnceLock::new();
@@ -3014,9 +3015,9 @@ fn shadcn_preview_image_url(item: &CatalogItem) -> Option<String> {
 }
 
 fn cached_shadcn_preview_image_urls(items: &[CatalogItem]) -> HashMap<String, Option<String>> {
-    let cache = SHADCN_PREVIEW_IMAGE_CACHE.get_or_init(|| Mutex::new(HashMap::default()));
+    let cache = shadcn_preview_image_cache();
     let Ok(cache) = cache.lock() else {
-        return HashMap::default();
+        return HashMap::with_capacity(0);
     };
 
     let mut cached = HashMap::with_capacity(items.len().min(cache.len()));
@@ -3029,10 +3030,15 @@ fn cached_shadcn_preview_image_urls(items: &[CatalogItem]) -> HashMap<String, Op
 }
 
 fn insert_preview_image_cache(key: String, image_url: Option<String>) {
-    let cache = SHADCN_PREVIEW_IMAGE_CACHE.get_or_init(|| Mutex::new(HashMap::default()));
+    let cache = shadcn_preview_image_cache();
     if let Ok(mut cache) = cache.lock() {
         cache.insert(key, image_url);
     }
+}
+
+fn shadcn_preview_image_cache() -> &'static Mutex<HashMap<String, Option<String>>> {
+    SHADCN_PREVIEW_IMAGE_CACHE
+        .get_or_init(|| Mutex::new(HashMap::with_capacity(PREVIEW_IMAGE_CACHE_INITIAL_CAPACITY)))
 }
 
 fn warm_shadcn_preview_images(items: Vec<CatalogItem>) -> Vec<(String, Option<String>)> {

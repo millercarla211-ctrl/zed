@@ -1,3 +1,11 @@
+[2026-05-15] - UI Preview Cache Preallocation
+
+CHANGED:
+- `crates/shadcn_ui_panel` now initializes the screenshot preview-image cache through a shared helper with explicit capacity sized for several visible pages.
+
+NOTES:
+- Preserved preview-image cache keys, thumbnail warming, screenshot lookup behavior, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media Detail Provider Buffer Preallocation
 
 CHANGED:
