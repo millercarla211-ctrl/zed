@@ -1625,10 +1625,8 @@ fn load_shadcn_catalog_rkyv_cache() -> Option<Vec<CatalogItem>> {
 fn write_shadcn_catalog_rkyv_cache(items: &[CatalogItem]) -> Option<()> {
     let path = shadcn_catalog_cache_path();
     std_fs::create_dir_all(path.parent()?).ok()?;
-    let records = items
-        .iter()
-        .map(CachedCatalogItem::from_catalog_item)
-        .collect::<Vec<_>>();
+    let mut records = Vec::with_capacity(items.len());
+    records.extend(items.iter().map(CachedCatalogItem::from_catalog_item));
     let mut serializer = AllocSerializer::<4096>::default();
     serializer.serialize_value(&records).ok()?;
     let bytes = serializer.into_serializer().into_inner();
