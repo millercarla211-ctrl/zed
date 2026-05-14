@@ -1964,18 +1964,24 @@ async fn fetch_nasa_media(
         encode_query(query)
     );
     let response: NasaResponse = fetch_json(http_client.clone(), &url).await?;
-    let detail_requests = response
-        .collection
-        .items
-        .into_iter()
-        .take(NASA_MEDIA_DETAIL_LIMIT)
-        .map(|item| fetch_nasa_media_asset(http_client.clone(), item, kind));
+    let items = response.collection.items;
+    let request_count = items.len().min(NASA_MEDIA_DETAIL_LIMIT);
+    let mut detail_requests = Vec::with_capacity(request_count);
+    detail_requests.extend(
+        items
+            .into_iter()
+            .take(NASA_MEDIA_DETAIL_LIMIT)
+            .map(|item| fetch_nasa_media_asset(http_client.clone(), item, kind)),
+    );
 
-    Ok(futures::future::join_all(detail_requests)
-        .await
-        .into_iter()
-        .filter_map(Result::ok)
-        .collect())
+    let results = futures::future::join_all(detail_requests).await;
+    let mut assets = Vec::with_capacity(results.len());
+    for result in results {
+        if let Ok(asset) = result {
+            assets.push(asset);
+        }
+    }
+    Ok(assets)
 }
 
 async fn fetch_nasa_media_asset(
@@ -2214,33 +2220,42 @@ async fn fetch_met_museum_images(
     );
     let response: MetMuseumSearchResponse = fetch_json(http_client.clone(), &url).await?;
     let object_ids = response.object_ids.unwrap_or_default();
-    let detail_requests = object_ids
-        .into_iter()
-        .take(MET_MUSEUM_DETAIL_LIMIT)
-        .map(|object_id| fetch_met_museum_object(http_client.clone(), object_id));
+    let request_count = object_ids.len().min(MET_MUSEUM_DETAIL_LIMIT);
+    let mut detail_requests = Vec::with_capacity(request_count);
+    detail_requests.extend(
+        object_ids
+            .into_iter()
+            .take(MET_MUSEUM_DETAIL_LIMIT)
+            .map(|object_id| fetch_met_museum_object(http_client.clone(), object_id)),
+    );
 
-    Ok(futures::future::join_all(detail_requests)
-        .await
-        .into_iter()
-        .filter_map(Result::ok)
-        .filter(|item| item.is_public_domain)
-        .filter_map(|item| {
-            let image_url = item.primary_image_small?;
-            if image_url.trim().is_empty() {
-                return None;
-            }
+    let results = futures::future::join_all(detail_requests).await;
+    let mut assets = Vec::with_capacity(results.len());
+    for result in results {
+        let Ok(item) = result else {
+            continue;
+        };
+        if !item.is_public_domain {
+            continue;
+        }
+        let Some(image_url) = item.primary_image_small else {
+            continue;
+        };
+        if image_url.trim().is_empty() {
+            continue;
+        }
 
-            Some(RemoteMediaAsset::owned(
-                remote_asset_id("Met", &item.object_id.to_string()),
-                clean_remote_label(item.title.as_deref().unwrap_or("The Met image")),
-                "The Met",
-                image_url,
-                DraggedMediaKind::Image,
-                "public domain / open access".to_string(),
-                item.artist_display_name.unwrap_or_default(),
-            ))
-        })
-        .collect())
+        assets.push(RemoteMediaAsset::owned(
+            remote_asset_id("Met", &item.object_id.to_string()),
+            clean_remote_label(item.title.as_deref().unwrap_or("The Met image")),
+            "The Met",
+            image_url,
+            DraggedMediaKind::Image,
+            "public domain / open access".to_string(),
+            item.artist_display_name.unwrap_or_default(),
+        ));
+    }
+    Ok(assets)
 }
 
 async fn fetch_met_museum_object(
@@ -2268,18 +2283,23 @@ async fn fetch_internet_archive_media(
         encode_query(&search)
     );
     let response: InternetArchiveSearchResponse = fetch_json(http_client.clone(), &url).await?;
-    let detail_requests = response
-        .response
-        .docs
-        .into_iter()
-        .take(INTERNET_ARCHIVE_DETAIL_LIMIT)
-        .map(|item| fetch_internet_archive_asset(http_client.clone(), item, kind));
+    let docs = response.response.docs;
+    let request_count = docs.len().min(INTERNET_ARCHIVE_DETAIL_LIMIT);
+    let mut detail_requests = Vec::with_capacity(request_count);
+    detail_requests.extend(
+        docs.into_iter()
+            .take(INTERNET_ARCHIVE_DETAIL_LIMIT)
+            .map(|item| fetch_internet_archive_asset(http_client.clone(), item, kind)),
+    );
 
-    Ok(futures::future::join_all(detail_requests)
-        .await
-        .into_iter()
-        .filter_map(Result::ok)
-        .collect())
+    let results = futures::future::join_all(detail_requests).await;
+    let mut assets = Vec::with_capacity(results.len());
+    for result in results {
+        if let Ok(asset) = result {
+            assets.push(asset);
+        }
+    }
+    Ok(assets)
 }
 
 async fn fetch_internet_archive_asset(

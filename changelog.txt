@@ -1,3 +1,11 @@
+[2026-05-15] - Media Detail Provider Buffer Preallocation
+
+CHANGED:
+- `crates/media_panel` now preallocates NASA video/audio, Met Museum, and Internet Archive detail-request buffers and successful-result buffers before folding remote assets.
+
+NOTES:
+- Preserved provider URLs, request limits, success-only filtering, result order, direct media URL selection, panel actions, and editor/WebPreview input behavior.
+
 [2026-05-15] - Media Art Provider Buffer Preallocation
 
 CHANGED:
