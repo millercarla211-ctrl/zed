@@ -251,6 +251,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_blocked_interaction_receipt_to_agent",
     "copy_successful_interaction_receipt",
     "send_successful_interaction_receipt_to_agent",
+    "copy_agent_browser_status_packet",
+    "send_agent_browser_status_packet_to_agent",
     "take_screenshot",
     "inspect_element",
 ];
@@ -435,6 +437,7 @@ pub struct WebPreviewView {
     latest_interaction_action_request: Option<Value>,
     latest_blocked_interaction_receipt: Option<Value>,
     latest_successful_interaction_receipt: Option<Value>,
+    latest_agent_browser_status_packet: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -619,6 +622,7 @@ impl WebPreviewView {
             latest_interaction_action_request: None,
             latest_blocked_interaction_receipt: None,
             latest_successful_interaction_receipt: None,
+            latest_agent_browser_status_packet: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1078,6 +1082,7 @@ impl WebPreviewView {
             "interaction_action_request": self.latest_interaction_action_request_summary(),
             "blocked_interaction_receipt": self.latest_blocked_interaction_receipt_summary(),
             "successful_interaction_receipt": self.latest_successful_interaction_receipt_summary(),
+            "agent_browser_status_packet": self.latest_agent_browser_status_packet_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1112,6 +1117,8 @@ impl WebPreviewView {
                 "send_blocked_interaction_receipt_to_agent": true,
                 "copy_successful_interaction_receipt": true,
                 "send_successful_interaction_receipt_to_agent": true,
+                "copy_agent_browser_status_packet": true,
+                "send_agent_browser_status_packet_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1277,6 +1284,27 @@ impl WebPreviewView {
             "sample_only": receipt.pointer("/receipt/success_receipt/sample_only").and_then(Value::as_bool),
             "counts": receipt.pointer("/receipt/counts").cloned(),
         }))
+    }
+
+    fn latest_agent_browser_status_packet_summary(&self) -> Option<Value> {
+        let packet = self.latest_agent_browser_status_packet.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at_ms": packet.pointer("/packet/captured_at_ms").and_then(Value::as_u64),
+            "url": packet.pointer("/packet/url").and_then(Value::as_str),
+            "title": packet.pointer("/packet/title").and_then(Value::as_str),
+            "status": packet.pointer("/packet/status").and_then(Value::as_str),
+            "context_ready": packet.pointer("/packet/readiness/context_ready").and_then(Value::as_bool),
+            "audit_ready": packet.pointer("/packet/readiness/audit_ready").and_then(Value::as_bool),
+            "interactive_unlocked": packet.pointer("/packet/readiness/interactive_unlocked").and_then(Value::as_bool),
+            "next_step": packet.pointer("/packet/next_step").and_then(Value::as_str),
+        }))
+    }
+
+    fn current_epoch_millis() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis().min(u64::MAX as u128) as u64)
+            .unwrap_or_default()
     }
 
     fn viewport_label(&self) -> String {
@@ -2281,6 +2309,146 @@ impl WebPreviewView {
 
     fn send_successful_interaction_receipt_to_agent(&mut self, cx: &mut Context<Self>) {
         self.request_successful_interaction_receipt("agent", cx);
+    }
+
+    fn agent_browser_status_packet(&self, window: &Window) -> Value {
+        let diagnostics_ready = self.latest_page_diagnostics.is_some();
+        let runtime_ready = self.latest_runtime_events.is_some();
+        let dom_ready = self.latest_dom_snapshot.is_some();
+        let targets_ready = self.latest_action_targets.is_some();
+        let readiness_ready = self.latest_readiness_probe.is_some();
+        let wait_ready = self.latest_wait_contract.is_some();
+        let plan_ready = self.latest_interaction_plan.is_some();
+        let preflight_ready = self.latest_interaction_preflight.is_some();
+        let receipt_template_ready = self.latest_interaction_receipt_template.is_some();
+        let action_request_ready = self.latest_interaction_action_request.is_some();
+        let blocked_receipt_ready = self.latest_blocked_interaction_receipt.is_some();
+        let success_receipt_ready = self.latest_successful_interaction_receipt.is_some();
+        let context_ready =
+            diagnostics_ready || runtime_ready || dom_ready || targets_ready || readiness_ready;
+        let audit_ready = plan_ready
+            && preflight_ready
+            && receipt_template_ready
+            && action_request_ready
+            && blocked_receipt_ready
+            && success_receipt_ready;
+        let interactive_unlocked = self.agent_action_permission.interactive_enabled();
+        let status = if context_ready && audit_ready {
+            "ready_for_permissioned_executor"
+        } else if context_ready {
+            "context_ready_audit_incomplete"
+        } else {
+            "needs_read_only_context_collection"
+        };
+        let next_step = if !context_ready {
+            "Collect page diagnostics, DOM, action targets, readiness, and runtime events before attempting browser actions."
+        } else if !audit_ready {
+            "Collect the interaction plan, preflight, action request, blocked receipt, and success receipt template to complete the audit packet."
+        } else if !interactive_unlocked {
+            "Keep actions read-only until the user explicitly unlocks interactive browser actions for this WebPreview session."
+        } else {
+            "Interactive actions are unlocked; the executor must still perform a fresh preflight and emit a receipt for every action."
+        };
+
+        serde_json::json!({
+            "schema": "zed.web_preview.agent_browser_status_packet.v1",
+            "session": self.browser_session_snapshot(window),
+            "policy": self.agent_browser_policy_snapshot(),
+            "packet": {
+                "captured_at_ms": Self::current_epoch_millis(),
+                "session_id": self.session_id.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "url": self.active_url.as_ref(),
+                "status": status,
+                "next_step": next_step,
+                "readiness": {
+                    "context_ready": context_ready,
+                    "audit_ready": audit_ready,
+                    "interactive_unlocked": interactive_unlocked,
+                    "page_diagnostics_ready": diagnostics_ready,
+                    "runtime_events_ready": runtime_ready,
+                    "dom_snapshot_ready": dom_ready,
+                    "action_targets_ready": targets_ready,
+                    "readiness_probe_ready": readiness_ready,
+                    "wait_contract_ready": wait_ready,
+                    "interaction_plan_ready": plan_ready,
+                    "interaction_preflight_ready": preflight_ready,
+                    "receipt_template_ready": receipt_template_ready,
+                    "action_request_ready": action_request_ready,
+                    "blocked_receipt_ready": blocked_receipt_ready,
+                    "successful_receipt_template_ready": success_receipt_ready,
+                },
+                "latest": {
+                    "page_diagnostics": self.latest_page_diagnostics_summary(),
+                    "runtime_events": self.latest_runtime_events_summary(),
+                    "dom_snapshot": self.latest_dom_snapshot_summary(),
+                    "action_targets": self.latest_action_targets_summary(),
+                    "readiness_probe": self.latest_readiness_probe_summary(),
+                    "wait_contract": self.latest_wait_contract_summary(),
+                    "interaction_plan": self.latest_interaction_plan_summary(),
+                    "interaction_preflight": self.latest_interaction_preflight_summary(),
+                    "interaction_receipt_template": self.latest_interaction_receipt_template_summary(),
+                    "interaction_action_request": self.latest_interaction_action_request_summary(),
+                    "blocked_interaction_receipt": self.latest_blocked_interaction_receipt_summary(),
+                    "successful_interaction_receipt": self.latest_successful_interaction_receipt_summary(),
+                },
+                "handoff": {
+                    "read_only_only": !interactive_unlocked,
+                    "requires_fresh_preflight_before_input": true,
+                    "requires_receipt_after_every_input": true,
+                    "executor_wired": false,
+                    "safe_to_send_to_agent_panel": true,
+                },
+            },
+            "notes": [
+                "This packet is a read-only state handoff for the Agent Browser Command Center.",
+                "It does not execute click, type, key, scroll, navigation, viewport, cache, or other mutating browser actions.",
+                "A future executor should treat this packet as context, then revalidate preflight immediately before every permissioned action."
+            ],
+        })
+    }
+
+    fn agent_browser_status_packet_json(packet: &Value) -> String {
+        serde_json::to_string_pretty(packet).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_status_packet_agent_blocks(&self, packet: &Value) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = packet.pointer("/packet/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview agent browser status packet:\n\n```json\n{}\n```",
+            Self::agent_browser_status_packet_json(packet)
+        ))));
+        blocks
+    }
+
+    fn copy_agent_browser_status_packet(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let packet = self.agent_browser_status_packet(window);
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_status_packet_json(&packet),
+        ));
+        self.latest_agent_browser_status_packet = Some(packet);
+        self.show_toast("Copied agent browser status packet", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_status_packet_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let packet = self.agent_browser_status_packet(window);
+        let blocks = self.agent_browser_status_packet_agent_blocks(&packet);
+        self.latest_agent_browser_status_packet = Some(packet);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent agent browser status packet to the agent panel", cx);
+        cx.notify();
     }
 
     fn agent_browser_action_manifest(&self, window: &Window) -> Value {
@@ -3830,6 +3998,32 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Copy Agent Browser Status")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_status_packet(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Agent Browser Status")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_status_packet_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy Agent Browser Manifest")
                                 .icon(IconName::Info)
                                 .handler({
@@ -4805,6 +4999,7 @@ impl Item for WebPreviewView {
                 latest_interaction_action_request: None,
                 latest_blocked_interaction_receipt: None,
                 latest_successful_interaction_receipt: None,
+                latest_agent_browser_status_packet: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,

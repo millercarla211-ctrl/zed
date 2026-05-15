@@ -1,3 +1,13 @@
+[2026-05-16] - Web Preview Agent Browser Status Packet
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Agent Browser Status" and "Send Agent Browser Status".
+- WebPreview sessions now summarize the latest Agent Browser status packet alongside diagnostics, runtime events, DOM, action targets, readiness, action requests, and receipts.
+- The status packet bundles session state, policy, cached context summaries, audit readiness, permission status, handoff rules, and the next safe step for Agent Panel workflows.
+
+NOTES:
+- This keeps the Agent Browser Command Center read-only while giving future executors one compact state handoff before permissioned actions are wired.
+
 [2026-05-16] - Web Preview Successful Interaction Receipt
 
 ADDED:
