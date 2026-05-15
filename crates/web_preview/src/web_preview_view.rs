@@ -241,6 +241,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_wait_contract_to_agent",
     "copy_interaction_plan",
     "send_interaction_plan_to_agent",
+    "copy_interaction_preflight",
+    "send_interaction_preflight_to_agent",
     "take_screenshot",
     "inspect_element",
 ];
@@ -420,6 +422,7 @@ pub struct WebPreviewView {
     latest_readiness_probe: Option<Value>,
     latest_wait_contract: Option<Value>,
     latest_interaction_plan: Option<Value>,
+    latest_interaction_preflight: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -599,6 +602,7 @@ impl WebPreviewView {
             latest_readiness_probe: None,
             latest_wait_contract: None,
             latest_interaction_plan: None,
+            latest_interaction_preflight: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1053,6 +1057,7 @@ impl WebPreviewView {
             "readiness_probe": self.latest_readiness_probe_summary(),
             "wait_contract": self.latest_wait_contract_summary(),
             "interaction_plan": self.latest_interaction_plan_summary(),
+            "interaction_preflight": self.latest_interaction_preflight_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1077,6 +1082,8 @@ impl WebPreviewView {
                 "send_wait_contract_to_agent": true,
                 "copy_interaction_plan": true,
                 "send_interaction_plan_to_agent": true,
+                "copy_interaction_preflight": true,
+                "send_interaction_preflight_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1173,6 +1180,19 @@ impl WebPreviewView {
             "ready_state": plan.pointer("/plan/ready_state").and_then(Value::as_str),
             "dry_run_only": plan.pointer("/plan/dry_run_only").and_then(Value::as_bool),
             "counts": plan.pointer("/plan/counts").cloned(),
+        }))
+    }
+
+    fn latest_interaction_preflight_summary(&self) -> Option<Value> {
+        let preflight = self.latest_interaction_preflight.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at": preflight.pointer("/preflight/timestamp").and_then(Value::as_str),
+            "url": preflight.pointer("/preflight/url").and_then(Value::as_str),
+            "title": preflight.pointer("/preflight/title").and_then(Value::as_str),
+            "ready_state": preflight.pointer("/preflight/ready_state").and_then(Value::as_str),
+            "permission": preflight.pointer("/preflight/permission").cloned(),
+            "decision": preflight.pointer("/preflight/decision").cloned(),
+            "counts": preflight.pointer("/preflight/counts").cloned(),
         }))
     }
 
@@ -1680,6 +1700,85 @@ impl WebPreviewView {
 
     fn send_interaction_plan_to_agent(&mut self, cx: &mut Context<Self>) {
         self.request_interaction_plan("agent", cx);
+    }
+
+    fn interaction_preflight_snapshot(&self, payload: &Value, window: &Window) -> Value {
+        let mut preflight = payload.clone();
+        if let Some(preflight) = preflight.as_object_mut() {
+            preflight.remove("kind");
+            preflight.remove("action");
+            preflight.insert(
+                "permission".to_string(),
+                self.agent_action_permission.snapshot(),
+            );
+            preflight.insert(
+                "permission_gate".to_string(),
+                serde_json::json!({
+                    "interactive_unlocked": self.agent_action_permission.interactive_enabled(),
+                    "status": if self.agent_action_permission.interactive_enabled() {
+                        "unlocked"
+                    } else {
+                        "locked"
+                    },
+                    "message": if self.agent_action_permission.interactive_enabled() {
+                        "Interactive actions are currently unlocked for this WebPreview session."
+                    } else {
+                        "Interactive actions are locked; this preflight can only be used for planning."
+                    },
+                }),
+            );
+        }
+
+        serde_json::json!({
+            "schema": "zed.web_preview.interaction_preflight.v1",
+            "session": self.browser_session_snapshot(window),
+            "preflight": preflight,
+        })
+    }
+
+    fn interaction_preflight_json(preflight: &Value) -> String {
+        serde_json::to_string_pretty(preflight).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn interaction_preflight_agent_blocks(&self, preflight: &Value) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = preflight.pointer("/preflight/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview interaction preflight:\n\n```json\n{}\n```",
+            Self::interaction_preflight_json(preflight)
+        ))));
+        blocks
+    }
+
+    fn request_interaction_preflight(&mut self, action: &'static str, cx: &mut Context<Self>) {
+        let script = format!(
+            "window.__zedWebPreview && window.__zedWebPreview.collectInteractionPreflight('{action}');"
+        );
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(&script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Collecting web preview interaction preflight", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("Interaction preflight is unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic("Interaction preflight crashed before collection", cx);
+            }
+        }
+    }
+
+    fn copy_interaction_preflight(&mut self, cx: &mut Context<Self>) {
+        self.request_interaction_preflight("copy", cx);
+    }
+
+    fn send_interaction_preflight_to_agent(&mut self, cx: &mut Context<Self>) {
+        self.request_interaction_preflight("agent", cx);
     }
 
     fn agent_browser_action_manifest(&self, window: &Window) -> Value {
@@ -2353,6 +2452,50 @@ impl WebPreviewView {
                     }
                 }
             }
+            "interaction-preflight" => {
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let action = payload
+                        .get("action")
+                        .and_then(Value::as_str)
+                        .unwrap_or("copy");
+                    let preflight = self.interaction_preflight_snapshot(&payload, window);
+                    self.latest_interaction_preflight = Some(preflight.clone());
+
+                    match action {
+                        "agent" => {
+                            self.append_content_blocks_to_agent_panel(
+                                self.interaction_preflight_agent_blocks(&preflight),
+                                window,
+                                cx,
+                            );
+                            self.show_toast("Sent interaction preflight to the agent panel", cx);
+                        }
+                        _ => {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                Self::interaction_preflight_json(&preflight),
+                            ));
+                            self.show_toast("Copied web preview interaction preflight JSON", cx);
+                        }
+                    }
+
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.report_action_error(
+                            "Interaction preflight collection failed",
+                            error,
+                            cx,
+                        );
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "Interaction preflight crashed while collecting page data",
+                            cx,
+                        );
+                    }
+                }
+            }
             "capture-area" => {
                 match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
                     let scale = payload
@@ -2860,6 +3003,30 @@ impl WebPreviewView {
                                     move |_, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_interaction_plan_to_agent(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Interaction Preflight")
+                                .icon(IconName::LockOutlined)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_interaction_preflight(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Interaction Preflight to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_interaction_preflight_to_agent(cx);
                                         });
                                     }
                                 }),
@@ -3835,6 +4002,7 @@ impl Item for WebPreviewView {
                 latest_readiness_probe: None,
                 latest_wait_contract: None,
                 latest_interaction_plan: None,
+                latest_interaction_preflight: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
@@ -5871,6 +6039,94 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     ];
   };
 
+  const interactionPreflight = (actionTargets, recommended) => {
+    const warnings = interactionPlanWarnings(actionTargets, recommended);
+    const hasPasswordField = Boolean(document.querySelector("input[type='password']"));
+    const hasFilePicker = Boolean(document.querySelector("input[type='file']"));
+    const actionTargetCount = (actionTargets.targets || []).length;
+    const checks = [
+      {
+        check: "document_complete",
+        passed: Boolean(recommended.document_complete),
+        detail: "document.readyState must be complete before interactive browser actions."
+      },
+      {
+        check: "network_idle",
+        passed: Boolean(recommended.network_idle),
+        detail: "fetch/XHR activity should be idle before targeting the page."
+      },
+      {
+        check: "dom_quiet_500ms",
+        passed: Boolean(recommended.dom_quiet_500ms),
+        detail: "DOM mutations should be quiet for at least 500ms."
+      },
+      {
+        check: "no_busy_indicators",
+        passed: Boolean(recommended.no_busy_indicators),
+        detail: "Visible loading or busy indicators can intercept or invalidate actions."
+      },
+      {
+        check: "has_visible_action_targets",
+        passed: actionTargetCount > 0,
+        detail: "At least one visible target should be present before click/type/select planning."
+      },
+      {
+        check: "no_password_field_without_permission",
+        passed: !hasPasswordField,
+        detail: "Password fields require explicit user approval for credential entry."
+      },
+      {
+        check: "no_file_picker_without_permission",
+        passed: !hasFilePicker,
+        detail: "File pickers require explicit file-selection approval."
+      }
+    ];
+    const blockers = checks
+      .filter((check) => !check.passed)
+      .map((check) => ({
+        code: check.check,
+        message: check.detail
+      }));
+    const status = blockers.length > 0 ? "blocked_until_ready" : "ready_for_permissioned_action";
+    return {
+      status,
+      checks,
+      blockers,
+      warnings,
+      receipt_contract: {
+        schema: "zed.web_preview.interaction_receipt.v1",
+        required_fields: [
+          "session_id",
+          "action_id",
+          "action",
+          "selector",
+          "planned_at",
+          "attempted_at",
+          "permission_mode",
+          "preflight_timestamp",
+          "before_url",
+          "after_url",
+          "before_ready_state",
+          "after_ready_state",
+          "outcome",
+          "error"
+        ],
+        post_action_context: [
+          "readiness_probe",
+          "runtime_events",
+          "action_targets",
+          "screenshot_or_capture_area_when_requested"
+        ]
+      },
+      execution_rules: [
+        "Do not execute actions from this payload; it is a preflight snapshot.",
+        "Re-collect readiness, wait contract, action targets, and interaction plan immediately before execution.",
+        "Interactive actions must be unlocked in Zed and must emit a receipt with before/after context.",
+        "Never type credentials or select files without a separate explicit user instruction."
+      ]
+    };
+  };
+
   installRuntimeCapture();
 
   window.__zedWebPreview = {
@@ -6231,6 +6487,81 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
           "This plan is intentionally dry-run only.",
           "Re-collect readiness, wait contract, and action targets before executing any future interactive action.",
           "The Rust-side session snapshot includes whether interactive agent actions are currently locked or unlocked."
+        ]
+      });
+    },
+
+    collectInteractionPreflight(action = "copy") {
+      try { installMutationCapture(); } catch (_error) {}
+      const html = document.documentElement;
+      const body = document.body;
+      const actionTargets = collectActionTargetRows();
+      const selectorContracts = waitSelectorContracts();
+      const textCandidates = waitTextCandidates();
+      const recommended = recommendedWaitRecipe();
+      const actionGroups = interactionPlanGroups(actionTargets);
+      const preflight = interactionPreflight(actionTargets, recommended);
+
+      post({
+        kind: "interaction-preflight",
+        action,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState,
+        recommended_wait: recommended,
+        decision: {
+          status: preflight.status,
+          blockers: preflight.blockers,
+          next_steps: preflight.status === "blocked_until_ready"
+            ? ["Wait for the blocked checks to pass, then collect a fresh preflight."]
+            : ["Unlock interactive agent actions in Zed only when the next action is user-approved."]
+        },
+        checks: preflight.checks,
+        warnings: preflight.warnings,
+        permissions: {
+          required_for_interactive_actions: true,
+          current_payload_executes_actions: false,
+          user_must_unlock_interactive_actions_in_zed: true,
+          credentials_require_separate_approval: true,
+          file_uploads_require_separate_approval: true
+        },
+        viewport: {
+          inner_width: window.innerWidth,
+          inner_height: window.innerHeight,
+          device_pixel_ratio: window.devicePixelRatio || 1,
+          scroll_x: Math.round(window.scrollX || 0),
+          scroll_y: Math.round(window.scrollY || 0),
+          scroll_width: Math.max(html?.scrollWidth || 0, body?.scrollWidth || 0),
+          scroll_height: Math.max(html?.scrollHeight || 0, body?.scrollHeight || 0)
+        },
+        counts: {
+          action_groups: actionGroups.length,
+          available_action_groups: actionGroups.filter((group) => group.available).length,
+          action_targets: actionTargets.targets.length,
+          selector_contracts: selectorContracts.length,
+          text_candidates: textCandidates.length,
+          warnings: preflight.warnings.length,
+          blockers: preflight.blockers.length,
+          pending_network: runtimeState.pendingNetwork,
+          busy_indicators: readinessBusyCount()
+        },
+        action_groups: actionGroups,
+        action_target_sample: actionTargets.targets.slice(0, 20),
+        selector_contracts: selectorContracts.slice(0, 20),
+        text_candidates: textCandidates.slice(0, 20),
+        receipt_contract: preflight.receipt_contract,
+        execution_rules: preflight.execution_rules,
+        mutation: {
+          observed: mutationState.observed,
+          count: mutationState.count,
+          last_mutation_at: mutationState.lastMutationAt,
+          quiet_for_ms: readinessQuietForMs()
+        },
+        notes: [
+          "This preflight is read-only and does not perform browser input.",
+          "A future interactive action must compare its target against a fresh preflight and then emit a receipt.",
+          "The Rust-side snapshot adds the current Zed permission gate for this WebPreview session."
         ]
       });
     },

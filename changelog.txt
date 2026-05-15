@@ -1,3 +1,13 @@
+[2026-05-16] - Web Preview Interaction Preflight
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Interaction Preflight" and "Send Interaction Preflight to Agent".
+- The WebPreview bridge now produces a read-only preflight with page readiness checks, blockers, warnings, action-group samples, selector/text candidates, and the receipt contract required for future interactive browser actions.
+- Rust-side WebPreview snapshots now record the latest interaction preflight and enrich it with the current Zed interactive-action permission gate.
+
+NOTES:
+- This creates the safety and audit layer needed before wiring real click, type, key, or scroll execution.
+
 [2026-05-16] - Web Preview Interaction Plan
 
 ADDED:
