@@ -754,6 +754,78 @@ impl WebPreviewView {
         cx.notify();
     }
 
+    fn browser_session_info(&self, window: &Window) -> String {
+        let load_state = match &self.load_state {
+            PreviewLoadState::Loading => "loading".to_string(),
+            PreviewLoadState::Ready => "ready".to_string(),
+            PreviewLoadState::Error(error) => format!("error: {error}"),
+        };
+        let root_path = self
+            .workspace_context
+            .root_path
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "none".to_string());
+        let visible_bounds = self
+            .host_bounds
+            .borrow()
+            .as_ref()
+            .map(|bounds| {
+                format!(
+                    "{:.0}x{:.0} at {:.0},{:.0}",
+                    bounds.size.width.as_f32(),
+                    bounds.size.height.as_f32(),
+                    bounds.origin.x.as_f32(),
+                    bounds.origin.y.as_f32()
+                )
+            })
+            .unwrap_or_else(|| "not mounted".to_string());
+
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        let native_preview_mounted = self.native_preview.borrow().is_some();
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        let native_preview_mounted = false;
+
+        format!(
+            concat!(
+                "Web Preview Session\n",
+                "title: {title}\n",
+                "url: {url}\n",
+                "load_state: {load_state}\n",
+                "workspace: {workspace}\n",
+                "workspace_key: {workspace_key}\n",
+                "root_path: {root_path}\n",
+                "profile_dir: {profile_dir}\n",
+                "zoom: {zoom:.0}%\n",
+                "active_item: {active_item}\n",
+                "native_preview_mounted: {native_preview_mounted}\n",
+                "native_keyboard_focus: {native_keyboard_focus}\n",
+                "visible_bounds: {visible_bounds}\n",
+                "bookmarks: {bookmark_count}\n",
+                "project_file_preview: {project_file_preview}\n"
+            ),
+            title = self.current_tab_title(),
+            url = self.active_url.as_ref(),
+            load_state = load_state,
+            workspace = self.workspace_context.root_name.as_ref(),
+            workspace_key = self.workspace_context.preview_key.as_ref(),
+            root_path = root_path,
+            profile_dir = self.workspace_context.profile_dir.display(),
+            zoom = self.zoom_factor * 100.0,
+            active_item = self.is_active_item,
+            native_preview_mounted = native_preview_mounted,
+            native_keyboard_focus = self.native_preview_has_keyboard_focus(window),
+            visible_bounds = visible_bounds,
+            bookmark_count = self.bookmarks.len(),
+            project_file_preview = self.project_item.is_some(),
+        )
+    }
+
+    fn copy_browser_session_info(&mut self, window: &Window, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(ClipboardItem::new_string(self.browser_session_info(window)));
+        self.show_toast("Copied web preview session info", cx);
+    }
+
     fn go_back_in_history(&mut self, cx: &mut Context<Self>) {
         let _ = self.evaluate_script("history.back();");
         cx.notify();
@@ -1348,6 +1420,18 @@ impl WebPreviewView {
                                 }),
                         )
                         .separator()
+                        .item(
+                            ContextMenuEntry::new("Copy Session Info")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_browser_session_info(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
                         .item(
                             ContextMenuEntry::new("Take Screenshot")
                                 .icon(IconName::Screen)

@@ -1,3 +1,12 @@
+[2026-05-15] - Web Preview Session Inventory
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Session Info" for a read-only browser session snapshot.
+- Session snapshots include the current title, URL, load state, workspace/profile context, zoom, active state, native focus state, visible bounds, bookmark count, and whether the preview is file-backed.
+
+NOTES:
+- This starts the Agent Browser Command Center feature set with read-only inventory only, avoiding input routing, editor typing, and WebPreview focus changes.
+
 [2026-05-15] - Asset Command Center Completion
 
 CHANGED:
