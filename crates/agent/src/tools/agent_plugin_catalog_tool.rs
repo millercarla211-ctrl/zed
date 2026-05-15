@@ -8,7 +8,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    path::PathBuf,
+    env,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -17,7 +18,8 @@ use std::{
 ///
 /// Use this before trying to control the in-app WebPreview browser, external Chrome through
 /// Playwright and the DX Chrome extension, or future permissioned PC UI tools. The tool is
-/// read-only and returns capability manifests, bootstrap roots, and safety requirements.
+/// read-only and returns capability manifests, bootstrap roots, current readiness, and safety
+/// requirements.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct AgentPluginCatalogToolInput {
@@ -25,6 +27,8 @@ pub struct AgentPluginCatalogToolInput {
     pub include_planned_plugins: bool,
     /// Include install roots and download/update policy for default plugin provisioning.
     pub include_bootstrap_plan: bool,
+    /// Include current host/workspace readiness for Chrome, Playwright, and the DX extension.
+    pub include_bootstrap_readiness: bool,
 }
 
 impl Default for AgentPluginCatalogToolInput {
@@ -32,6 +36,7 @@ impl Default for AgentPluginCatalogToolInput {
         Self {
             include_planned_plugins: true,
             include_bootstrap_plan: true,
+            include_bootstrap_readiness: true,
         }
     }
 }
@@ -166,6 +171,14 @@ fn agent_plugin_catalog(
                     "install_policy": "download_or_update_on_first_use"
                 }
             })),
+            "bootstrap_readiness": input.include_bootstrap_readiness.then(|| {
+                agent_plugin_bootstrap_readiness(
+                    project_root.as_ref(),
+                    &default_plugin_root,
+                    workspace_plugin_root.as_ref(),
+                    workspace_tools_root.as_ref(),
+                )
+            }),
             "permission_model": {
                 "read_only_discovery_without_prompt": true,
                 "browser_interactions_require_explicit_session_unlock": true,
@@ -331,6 +344,266 @@ fn pc_use_plugin_manifest(
             "receipts_required": true
         }
     })
+}
+
+fn agent_plugin_bootstrap_readiness(
+    project_root: Option<&PathBuf>,
+    default_plugin_root: &Path,
+    workspace_plugin_root: Option<&PathBuf>,
+    workspace_tools_root: Option<&PathBuf>,
+) -> Value {
+    let workspace_tools_root = workspace_tools_root.cloned();
+    let workspace_plugin_root = workspace_plugin_root.cloned();
+    let playwright_root = workspace_tools_root
+        .as_ref()
+        .map(|root| root.join("playwright"))
+        .unwrap_or_else(|| default_plugin_root.join("playwright"));
+    let dx_extension_root = workspace_plugin_root
+        .as_ref()
+        .map(|root| root.join("dx-chrome-extension"))
+        .unwrap_or_else(|| default_plugin_root.join("dx-chrome-extension"));
+    let managed_profile_root = workspace_tools_root
+        .as_ref()
+        .map(|root| root.join("browser-profiles").join("chrome"))
+        .unwrap_or_else(|| default_plugin_root.join("browser-profiles").join("chrome"));
+
+    let node = find_executable(&["node", "node.exe"]);
+    let npm = find_executable(&["npm", "npm.cmd", "npm.exe"]);
+    let browser = find_browser_executable();
+    let playwright_package = playwright_root
+        .join("node_modules")
+        .join("playwright")
+        .join("package.json");
+    let dx_extension_manifest = dx_extension_root.join("manifest.json");
+
+    let checks = vec![
+        bootstrap_check(
+            "workspace.root",
+            "Workspace root",
+            project_root.is_some(),
+            project_root.cloned(),
+            "host_blocker",
+            "A workspace root is needed so managed browser tools stay inside the project.",
+        ),
+        bootstrap_check(
+            "host.node",
+            "Node.js runtime",
+            node.is_some(),
+            node.clone(),
+            "host_blocker",
+            "Playwright and Chrome plugin bootstrapping need Node.js.",
+        ),
+        bootstrap_check(
+            "host.npm",
+            "npm package manager",
+            npm.is_some(),
+            npm.clone(),
+            "host_blocker",
+            "Playwright package provisioning needs npm or a compatible npm executable.",
+        ),
+        bootstrap_check(
+            "host.chrome_or_edge",
+            "Chrome or Edge executable",
+            browser.is_some(),
+            browser.clone(),
+            "host_blocker",
+            "External Chrome control needs Chrome, Edge, or Chromium on this OS.",
+        ),
+        bootstrap_check(
+            "asset.playwright_package",
+            "Managed Playwright package",
+            playwright_package.is_file(),
+            Some(playwright_package.clone()),
+            "provision_required",
+            "Install Playwright into the managed tools root before launching external Chrome.",
+        ),
+        bootstrap_check(
+            "asset.dx_chrome_extension",
+            "DX Chrome extension manifest",
+            dx_extension_manifest.is_file(),
+            Some(dx_extension_manifest.clone()),
+            "provision_required",
+            "Download or unpack the DX Chrome extension before loading managed Chrome with the bridge.",
+        ),
+        bootstrap_check(
+            "profile.managed_chrome",
+            "Managed Chrome profile root",
+            managed_profile_root.is_dir(),
+            Some(managed_profile_root.clone()),
+            "provision_required",
+            "Create this profile root and never write into a user's real Chrome, Edge, or Firefox profile.",
+        ),
+    ];
+
+    let host_blockers = readiness_issues(&checks, "host_blocker");
+    let provision_required = readiness_issues(&checks, "provision_required");
+    let status = if !host_blockers.is_empty() {
+        "blocked_missing_host_dependencies"
+    } else if !provision_required.is_empty() {
+        "ready_to_provision"
+    } else {
+        "ready_for_managed_chrome_executor"
+    };
+
+    serde_json::json!({
+        "schema": "zed.agent_plugins.bootstrap_readiness.v1",
+        "generated_at_ms": current_epoch_millis(),
+        "status": status,
+        "project_root": project_root.map(path_string),
+        "roots": {
+            "zed_data_plugin_root": path_string(default_plugin_root),
+            "workspace_plugin_root": workspace_plugin_root.as_ref().map(path_string),
+            "workspace_tools_root": workspace_tools_root.as_ref().map(path_string),
+            "playwright_root": path_string(&playwright_root),
+            "dx_chrome_extension_root": path_string(&dx_extension_root),
+            "managed_chrome_profile_root": path_string(&managed_profile_root),
+        },
+        "host": {
+            "node": node.as_ref().map(path_string),
+            "npm": npm.as_ref().map(path_string),
+            "chrome_or_edge": browser.as_ref().map(path_string),
+        },
+        "checks": checks,
+        "host_blockers": host_blockers,
+        "provision_required": provision_required,
+        "next_actions": bootstrap_next_actions(status),
+        "safety": {
+            "write_scope": "managed Zed data roots or workspace tools roots only",
+            "never_write_to_user_browser_profiles": true,
+            "external_browser_input_requires_user_permission": true,
+            "receipts_required_for_executor_actions": true,
+        },
+    })
+}
+
+fn bootstrap_check(
+    id: &str,
+    label: &str,
+    ready: bool,
+    path: Option<PathBuf>,
+    missing_kind: &str,
+    details: &str,
+) -> Value {
+    serde_json::json!({
+        "id": id,
+        "label": label,
+        "state": if ready { "ready" } else { missing_kind },
+        "ready": ready,
+        "path": path.as_ref().map(path_string),
+        "details": details,
+    })
+}
+
+fn readiness_issues(checks: &[Value], state: &str) -> Vec<Value> {
+    checks
+        .iter()
+        .filter(|check| {
+            check
+                .get("state")
+                .and_then(Value::as_str)
+                .is_some_and(|check_state| check_state == state)
+        })
+        .cloned()
+        .collect()
+}
+
+fn bootstrap_next_actions(status: &str) -> Vec<&'static str> {
+    match status {
+        "blocked_missing_host_dependencies" => vec![
+            "Install missing host dependencies first: Node.js, npm, and Chrome/Edge/Chromium.",
+            "Re-run list_agent_plugins with include_bootstrap_readiness=true before provisioning.",
+        ],
+        "ready_to_provision" => vec![
+            "Create managed workspace tools roots under the project or Zed data directory.",
+            "Install Playwright into the managed tools root.",
+            "Download or unpack the DX Chrome extension into the managed agent plugin root.",
+            "Create the managed Chrome profile root without touching real user browser profiles.",
+        ],
+        _ => vec![
+            "Chrome plugin bootstrap assets are present.",
+            "Next slice can add permission-gated launch and screenshot executors.",
+        ],
+    }
+}
+
+fn find_browser_executable() -> Option<PathBuf> {
+    find_executable(&[
+        "chrome",
+        "chrome.exe",
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium",
+        "chromium-browser",
+        "msedge",
+        "msedge.exe",
+        "microsoft-edge",
+    ])
+    .or_else(|| existing_file(common_browser_candidates()))
+}
+
+fn common_browser_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+
+    if cfg!(target_os = "windows") {
+        for env_name in ["PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"] {
+            if let Some(root) = env_path(env_name) {
+                candidates.push(
+                    root.join("Google")
+                        .join("Chrome")
+                        .join("Application")
+                        .join("chrome.exe"),
+                );
+                candidates.push(
+                    root.join("Microsoft")
+                        .join("Edge")
+                        .join("Application")
+                        .join("msedge.exe"),
+                );
+            }
+        }
+    } else if cfg!(target_os = "macos") {
+        candidates.push(
+            PathBuf::from("/Applications")
+                .join("Google Chrome.app")
+                .join("Contents")
+                .join("MacOS")
+                .join("Google Chrome"),
+        );
+        candidates.push(
+            PathBuf::from("/Applications")
+                .join("Microsoft Edge.app")
+                .join("Contents")
+                .join("MacOS")
+                .join("Microsoft Edge"),
+        );
+    }
+
+    candidates
+}
+
+fn find_executable(names: &[&str]) -> Option<PathBuf> {
+    let paths = env::var_os("PATH")?;
+    for dir in env::split_paths(&paths) {
+        for name in names {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+fn existing_file(candidates: Vec<PathBuf>) -> Option<PathBuf> {
+    candidates.into_iter().find(|candidate| candidate.is_file())
+}
+
+fn env_path(name: &str) -> Option<PathBuf> {
+    env::var_os(name).map(PathBuf::from)
+}
+
+fn path_string(path: impl AsRef<Path>) -> String {
+    path.as_ref().display().to_string()
 }
 
 fn capability(id: &str, state: &str, description: &str) -> Value {

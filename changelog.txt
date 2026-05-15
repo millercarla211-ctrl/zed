@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Bootstrap Readiness
+
+ADDED:
+- `list_agent_plugins` now returns a schema-versioned bootstrap readiness report by default.
+- The readiness report checks workspace roots, Node.js, npm, Chrome/Edge/Chromium, the managed Playwright package, the DX Chrome extension manifest, and the managed Chrome profile root.
+- The report separates missing host blockers from managed provisioning steps so future downloaders know what is safe to create inside Zed/workspace tools roots.
+
+NOTES:
+- This is still read-only: no downloader runs yet and no user browser profile is touched.
+
 [2026-05-16] - Web Preview Browser Function Wiring
 
 ADDED:
