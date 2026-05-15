@@ -2184,6 +2184,22 @@ impl Render for MediaPanel {
                 )
             }
         });
+        let stale_history_count = self
+            .pinned_media
+            .iter()
+            .chain(self.recent_media.iter())
+            .filter(|entry| media_history_entry_stale(entry))
+            .count();
+        let working_set_label = media_working_set_label(
+            self.pinned_media.len(),
+            self.recent_media.len(),
+            stale_history_count,
+        );
+        let working_set_color = if stale_history_count > 0 {
+            Color::Warning
+        } else {
+            Color::Muted
+        };
 
         v_flex()
             .id("media-panel")
@@ -2219,6 +2235,14 @@ impl Render for MediaPanel {
                                             }),
                                         ),
                                     )
+                                    .when_some(working_set_label, |this, working_set_label| {
+                                        this.child(
+                                            Label::new(working_set_label)
+                                                .size(LabelSize::XSmall)
+                                                .color(working_set_color)
+                                                .truncate(),
+                                        )
+                                    })
                                     .child(
                                         Label::new(count_label)
                                             .size(LabelSize::XSmall)
@@ -2508,6 +2532,28 @@ fn media_history_health_label(total: usize, stale: usize) -> SharedString {
         format!("{ready} ready").into()
     } else {
         format!("{ready} ready / {stale} stale").into()
+    }
+}
+
+fn media_working_set_label(pinned: usize, recent: usize, stale: usize) -> Option<SharedString> {
+    if pinned == 0 && recent == 0 {
+        return None;
+    }
+
+    Some(history_working_set_label(pinned, recent, stale))
+}
+
+fn history_working_set_label(pinned: usize, recent: usize, stale: usize) -> SharedString {
+    if stale == 0 {
+        let mut text = String::with_capacity("pins ".len() + 6 + " / recent ".len() + 6);
+        let _ = write!(text, "pins {pinned} / recent {recent}");
+        text.into()
+    } else {
+        let mut text = String::with_capacity(
+            "pins ".len() + 6 + " / recent ".len() + 6 + " / stale ".len() + 6,
+        );
+        let _ = write!(text, "pins {pinned} / recent {recent} / stale {stale}");
+        text.into()
     }
 }
 

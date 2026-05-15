@@ -1372,6 +1372,10 @@ impl Render for IconPickerPanel {
                 icon_fraction_label(total_matches, total_count)
             }
         });
+        let working_set_label = icon_working_set_label(
+            self.pinned_icon_actions.len(),
+            self.recent_icon_actions.len(),
+        );
         let mut icon_tiles = Vec::with_capacity(icons.len());
         icon_tiles.extend(
             icons
@@ -1422,6 +1426,14 @@ impl Render for IconPickerPanel {
                                                 panel.pin_selected_icon(cx);
                                             })),
                                     )
+                                    .when_some(working_set_label, |this, working_set_label| {
+                                        this.child(
+                                            Label::new(working_set_label)
+                                                .size(LabelSize::XSmall)
+                                                .color(Color::Muted)
+                                                .truncate(),
+                                        )
+                                    })
                                     .child(
                                         Label::new(count_label)
                                             .size(LabelSize::XSmall)
@@ -1611,6 +1623,20 @@ fn icon_history_health_label(count: usize) -> SharedString {
             text.into()
         }
     }
+}
+
+fn icon_working_set_label(pinned: usize, recent: usize) -> Option<SharedString> {
+    if pinned == 0 && recent == 0 {
+        return None;
+    }
+
+    Some(history_working_set_label(pinned, recent))
+}
+
+fn history_working_set_label(pinned: usize, recent: usize) -> SharedString {
+    let mut text = String::with_capacity("pins ".len() + 6 + " / recent ".len() + 6);
+    let _ = write!(text, "pins {pinned} / recent {recent}");
+    text.into()
 }
 
 fn icon_source_label(icon: &PickerIcon) -> SharedString {

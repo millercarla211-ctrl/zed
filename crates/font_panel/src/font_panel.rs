@@ -1191,6 +1191,10 @@ impl FontPanel {
         } else {
             "loading".into()
         };
+        let working_set_label = font_working_set_label(
+            self.pinned_font_actions.len(),
+            self.recent_font_actions.len(),
+        );
         v_flex()
             .gap_2()
             .p_2()
@@ -1202,10 +1206,23 @@ impl FontPanel {
                     .items_center()
                     .child(Label::new("Fonts").size(LabelSize::Small))
                     .child(
-                        Label::new(count_label)
-                            .size(LabelSize::XSmall)
-                            .color(Color::Muted)
-                            .truncate(),
+                        h_flex()
+                            .gap_1()
+                            .items_center()
+                            .when_some(working_set_label, |this, working_set_label| {
+                                this.child(
+                                    Label::new(working_set_label)
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Muted)
+                                        .truncate(),
+                                )
+                            })
+                            .child(
+                                Label::new(count_label)
+                                    .size(LabelSize::XSmall)
+                                    .color(Color::Muted)
+                                    .truncate(),
+                            ),
                     ),
             )
             .child(self.filter_editor.clone())
@@ -1404,6 +1421,20 @@ fn font_history_health_label(count: usize) -> SharedString {
             text.into()
         }
     }
+}
+
+fn font_working_set_label(pinned: usize, recent: usize) -> Option<SharedString> {
+    if pinned == 0 && recent == 0 {
+        return None;
+    }
+
+    Some(history_working_set_label(pinned, recent))
+}
+
+fn history_working_set_label(pinned: usize, recent: usize) -> SharedString {
+    let mut text = String::with_capacity("pins ".len() + 6 + " / recent ".len() + 6);
+    let _ = write!(text, "pins {pinned} / recent {recent}");
+    text.into()
 }
 
 fn lowercase_text(value: &str) -> String {

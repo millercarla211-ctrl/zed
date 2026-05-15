@@ -1,3 +1,12 @@
+[2026-05-15] - Asset Panel Header Working-Set Summaries
+
+ADDED:
+- Icon, Font, Media, and UI panel headers now show pinned/recent working-set counts when history entries exist.
+- Media and UI header summaries include stale counts and warning color when restored entries need cleanup.
+
+NOTES:
+- The summary is visible even while searching, when pinned/recent sections are hidden, and does not change insertion, preview, drag, editor input, or WebPreview behavior.
+
 [2026-05-15] - Icon and Font History Visibility
 
 ADDED:
