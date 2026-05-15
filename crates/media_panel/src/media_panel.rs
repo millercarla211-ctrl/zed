@@ -4443,10 +4443,20 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      min-width: 0;
+      max-width: 100%;
+    }}
+    .provider span:first-child {{
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }}
     .provider-kinds {{
       color: var(--muted-foreground);
       font-size: 11px;
+      flex: none;
+      white-space: nowrap;
     }}
     .status {{ padding: 10px 12px; color: var(--muted-foreground); }}
     .grid {{

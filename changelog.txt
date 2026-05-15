@@ -1,3 +1,12 @@
+[2026-05-15] - Asset Command Center Completion
+
+CHANGED:
+- Generated Remote Media browser provider chips now constrain long provider names and keep media-kind capability badges from stretching rows.
+- todo.txt now marks the Asset Command Center set code-complete at 100/100 and defines the next Agent Browser Command Center feature set.
+
+NOTES:
+- This is the final code polish for the current right-panel asset workflow set and does not change provider fetches, editor input, WebPreview routing, or asset insertion behavior.
+
 [2026-05-15] - Remote Browser Provider Capabilities
 
 ADDED:
