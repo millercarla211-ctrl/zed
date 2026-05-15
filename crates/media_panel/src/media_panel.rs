@@ -131,6 +131,13 @@ struct RemoteMediaFetchResult {
     warning: Option<SharedString>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RemoteMediaResultSource {
+    None,
+    Live,
+    Cached,
+}
+
 impl RemoteMediaAsset {
     const fn borrowed(
         id: &'static str,
@@ -324,6 +331,7 @@ pub struct MediaPanel {
     remote_loading: bool,
     index_loaded: bool,
     remote_signature: Option<SharedString>,
+    remote_result_source: RemoteMediaResultSource,
     remote_generation: u64,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
@@ -385,6 +393,7 @@ impl MediaPanel {
                 remote_loading: false,
                 index_loaded: false,
                 remote_signature: None,
+                remote_result_source: RemoteMediaResultSource::None,
                 remote_generation: 0,
                 status: None,
                 _subscriptions: vec![filter_subscription],
@@ -407,6 +416,7 @@ impl MediaPanel {
         self.remote_assets.clear();
         self.remote_kind_counts = MediaKindCounts::default();
         self.remote_warning = None;
+        self.remote_result_source = RemoteMediaResultSource::None;
     }
 
     fn refresh_remote_media(&mut self, cx: &mut Context<Self>) {
@@ -441,6 +451,7 @@ impl MediaPanel {
             self.remote_kind_counts = remote_kind_counts;
             self.remote_signature = Some(signature.clone());
             self.remote_warning = warning;
+            self.remote_result_source = RemoteMediaResultSource::Cached;
             self.touch_remote_cache_entry(&signature);
             self.status = None;
             return;
@@ -448,6 +459,7 @@ impl MediaPanel {
 
         self.remote_loading = true;
         self.remote_signature = Some(signature.clone());
+        self.remote_result_source = RemoteMediaResultSource::None;
         self.status = Some("Fetching remote media".into());
 
         let http_client = self.http_client.clone();
@@ -488,12 +500,14 @@ impl MediaPanel {
                                 panel.remote_warning = result.warning.clone();
                                 panel.cache_remote_assets(signature.clone(), result);
                                 panel.remote_kind_counts = remote_kind_counts;
+                                panel.remote_result_source = RemoteMediaResultSource::Live;
                                 panel.status = None;
                             }
                             Err(error) => {
                                 panel.remote_assets.clear();
                                 panel.remote_kind_counts = MediaKindCounts::default();
                                 panel.remote_warning = None;
+                                panel.remote_result_source = RemoteMediaResultSource::None;
                                 panel.status = Some(format!("Remote media: {error:#}").into());
                             }
                         }
@@ -1336,7 +1350,12 @@ impl Render for MediaPanel {
             } else if self.remote_loading {
                 "fetching".into()
             } else {
-                media_fraction_label(shown_count, total_count)
+                media_fraction_label_with_remote_source(
+                    shown_count,
+                    total_count,
+                    self.remote_assets.len(),
+                    self.remote_result_source,
+                )
             }
         });
 
@@ -3659,6 +3678,26 @@ fn media_count_label(label: &str, count: usize) -> String {
 fn media_fraction_label(left: usize, right: usize) -> SharedString {
     let mut text = String::with_capacity(24);
     let _ = write!(text, "{left} / {right}");
+    text.into()
+}
+
+fn media_fraction_label_with_remote_source(
+    left: usize,
+    right: usize,
+    remote_count: usize,
+    remote_source: RemoteMediaResultSource,
+) -> SharedString {
+    if remote_count == 0 || remote_source == RemoteMediaResultSource::None {
+        return media_fraction_label(left, right);
+    }
+
+    let source = match remote_source {
+        RemoteMediaResultSource::Live => "live",
+        RemoteMediaResultSource::Cached => "cached",
+        RemoteMediaResultSource::None => unreachable!(),
+    };
+    let mut text = String::with_capacity(40);
+    let _ = write!(text, "{left} / {right} - {source} {remote_count}");
     text.into()
 }
 

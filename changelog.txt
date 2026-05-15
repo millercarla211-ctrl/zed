@@ -1,3 +1,12 @@
+[2026-05-15] - Media Remote Source Header Status
+
+CHANGED:
+- Media panel header counts now show whether direct remote rows came from a fresh live fetch or a cached query result.
+- Remote result source state resets on query/filter refresh and failed provider batches, so stale cached/live labels are not preserved across unrelated searches.
+
+NOTES:
+- This improves remote media trust without adding new rows, changing provider fetch breadth, or touching editor/WebPreview input behavior.
+
 [2026-05-15] - Media Warning Retry Action
 
 CHANGED:
