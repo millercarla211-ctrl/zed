@@ -1,3 +1,12 @@
+[2026-05-15] - Media Provider Health Row
+
+ADDED:
+- Media panel now preserves direct-provider health summaries for live and cached remote searches.
+- Remote result views now show a compact provider-health row with healthy/skipped provider counts and live/cached remote row totals.
+
+NOTES:
+- This makes provider reliability inspectable inside the panel while preserving existing partial-warning, retry, cache, editor input, and WebPreview behavior.
+
 [2026-05-15] - Media Recent Action Reuse
 
 ADDED:

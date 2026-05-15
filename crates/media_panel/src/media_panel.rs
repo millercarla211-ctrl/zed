@@ -125,11 +125,20 @@ type RemoteMediaFetch =
 struct RemoteMediaCacheEntry {
     assets: Vec<RemoteMediaAsset>,
     warning: Option<SharedString>,
+    health: RemoteMediaProviderHealth,
 }
 
 struct RemoteMediaFetchResult {
     assets: Vec<RemoteMediaAsset>,
     warning: Option<SharedString>,
+    health: RemoteMediaProviderHealth,
+}
+
+#[derive(Clone, Copy)]
+struct RemoteMediaProviderHealth {
+    direct_provider_count: usize,
+    skipped_provider_count: usize,
+    asset_count: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -352,6 +361,7 @@ pub struct MediaPanel {
     remote_signature: Option<SharedString>,
     remote_result_source: RemoteMediaResultSource,
     remote_generation: u64,
+    remote_health: Option<RemoteMediaProviderHealth>,
     recent_media: VecDeque<RecentMediaEntry>,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
@@ -415,6 +425,7 @@ impl MediaPanel {
                 remote_signature: None,
                 remote_result_source: RemoteMediaResultSource::None,
                 remote_generation: 0,
+                remote_health: None,
                 recent_media: VecDeque::with_capacity(MAX_RECENT_MEDIA_ACTIONS),
                 status: None,
                 _subscriptions: vec![filter_subscription],
@@ -438,6 +449,7 @@ impl MediaPanel {
         self.remote_kind_counts = MediaKindCounts::default();
         self.remote_warning = None;
         self.remote_result_source = RemoteMediaResultSource::None;
+        self.remote_health = None;
     }
 
     fn refresh_remote_media(&mut self, cx: &mut Context<Self>) {
@@ -460,11 +472,15 @@ impl MediaPanel {
             return;
         }
 
-        if let Some((remote_kind_counts, warning)) = {
+        if let Some((remote_kind_counts, warning, health)) = {
             if let Some(remote_entry) = self.remote_cache.get(&signature) {
                 let remote_kind_counts = MediaKindCounts::from_remote_assets(&remote_entry.assets);
                 self.remote_assets.clone_from(&remote_entry.assets);
-                Some((remote_kind_counts, remote_entry.warning.clone()))
+                Some((
+                    remote_kind_counts,
+                    remote_entry.warning.clone(),
+                    remote_entry.health,
+                ))
             } else {
                 None
             }
@@ -472,6 +488,7 @@ impl MediaPanel {
             self.remote_kind_counts = remote_kind_counts;
             self.remote_signature = Some(signature.clone());
             self.remote_warning = warning;
+            self.remote_health = Some(health);
             self.remote_result_source = RemoteMediaResultSource::Cached;
             self.touch_remote_cache_entry(&signature);
             self.status = None;
@@ -519,6 +536,7 @@ impl MediaPanel {
                                     MediaKindCounts::from_remote_assets(&result.assets);
                                 panel.remote_assets.clone_from(&result.assets);
                                 panel.remote_warning = result.warning.clone();
+                                panel.remote_health = Some(result.health);
                                 panel.cache_remote_assets(signature.clone(), result);
                                 panel.remote_kind_counts = remote_kind_counts;
                                 panel.remote_result_source = RemoteMediaResultSource::Live;
@@ -528,6 +546,7 @@ impl MediaPanel {
                                 panel.remote_assets.clear();
                                 panel.remote_kind_counts = MediaKindCounts::default();
                                 panel.remote_warning = None;
+                                panel.remote_health = None;
                                 panel.remote_result_source = RemoteMediaResultSource::None;
                                 panel.status = Some(format!("Remote media: {error:#}").into());
                             }
@@ -546,6 +565,7 @@ impl MediaPanel {
             RemoteMediaCacheEntry {
                 assets: result.assets,
                 warning: result.warning,
+                health: result.health,
             },
         );
         self.touch_remote_cache_entry(&signature);
@@ -1292,6 +1312,50 @@ impl MediaPanel {
             )
     }
 
+    fn render_remote_health_row(
+        &self,
+        health: RemoteMediaProviderHealth,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let description = remote_provider_health_description(health, self.remote_result_source);
+        let color = if health.skipped_provider_count == 0 {
+            Color::Accent
+        } else {
+            Color::Warning
+        };
+        h_flex()
+            .id("media-panel-remote-health-row")
+            .gap_2()
+            .items_center()
+            .p_2()
+            .rounded_sm()
+            .border_1()
+            .border_color(cx.theme().colors().border_variant)
+            .bg(cx.theme().colors().element_background)
+            .tooltip(Tooltip::text(description.clone()))
+            .child(
+                Icon::new(IconName::Public)
+                    .size(IconSize::Small)
+                    .color(color),
+            )
+            .child(
+                v_flex()
+                    .flex_1()
+                    .gap_0p5()
+                    .child(
+                        Label::new("Remote provider health")
+                            .size(LabelSize::XSmall)
+                            .color(Color::Muted),
+                    )
+                    .child(
+                        Label::new(description)
+                            .size(LabelSize::XSmall)
+                            .color(color)
+                            .truncate(),
+                    ),
+            )
+    }
+
     fn render_remote_loading_row(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let description = remote_loading_description(self.kind_filter);
         h_flex()
@@ -1603,6 +1667,7 @@ impl Render for MediaPanel {
         let provider_count = remote_provider_count(self.kind_filter);
         let remote_warning = self.remote_warning.clone();
         let show_remote_loading_row = self.remote_loading && remote_assets.is_empty();
+        let remote_health = self.remote_health;
         let recent_media_section = if normalized_query.is_empty() {
             self.render_recent_media_section(cx)
         } else {
@@ -1612,6 +1677,7 @@ impl Render for MediaPanel {
             usize::from(url_insert.is_some())
                 + usize::from(remote_warning.is_some())
                 + usize::from(show_remote_loading_row)
+                + usize::from(remote_health.is_some())
                 + usize::from(recent_media_section.is_some())
                 + remote_assets.len()
                 + assets.len()
@@ -1628,6 +1694,12 @@ impl Render for MediaPanel {
         }
         if show_remote_loading_row {
             asset_rows.push(self.render_remote_loading_row(cx).into_any_element());
+        }
+        if let Some(remote_health) = remote_health {
+            asset_rows.push(
+                self.render_remote_health_row(remote_health, cx)
+                    .into_any_element(),
+            );
         }
         if let Some(recent_media_section) = recent_media_section {
             asset_rows.push(recent_media_section);
@@ -1959,6 +2031,35 @@ fn recent_media_source_kind(source: &RecentMediaSource) -> &'static str {
         RecentMediaSource::Local { .. } => "local",
         RecentMediaSource::Remote { .. } => "remote",
     }
+}
+
+fn remote_provider_health_description(
+    health: RemoteMediaProviderHealth,
+    source: RemoteMediaResultSource,
+) -> SharedString {
+    let healthy_count = health
+        .direct_provider_count
+        .saturating_sub(health.skipped_provider_count);
+    let source = match source {
+        RemoteMediaResultSource::Live => "live",
+        RemoteMediaResultSource::Cached => "cached",
+        RemoteMediaResultSource::None => "remote",
+    };
+    let mut text = String::with_capacity(72);
+    if health.skipped_provider_count == 0 {
+        let _ = write!(
+            text,
+            "{healthy_count}/{} direct providers healthy; {source} {} rows",
+            health.direct_provider_count, health.asset_count
+        );
+    } else {
+        let _ = write!(
+            text,
+            "{healthy_count}/{} direct providers healthy; {} skipped; {source} {} rows",
+            health.direct_provider_count, health.skipped_provider_count, health.asset_count
+        );
+    }
+    text.into()
 }
 
 fn remote_media_provider_warning(
@@ -2520,13 +2621,22 @@ async fn fetch_remote_media_assets(
 
     dedupe_remote_assets(&mut assets);
     assets.truncate(MAX_REMOTE_MEDIA_RESULTS);
+    let health = RemoteMediaProviderHealth {
+        direct_provider_count,
+        skipped_provider_count: errors.len(),
+        asset_count: assets.len(),
+    };
 
     if assets.is_empty() && !errors.is_empty() {
         anyhow::bail!(errors.join("; "));
     }
 
     let warning = remote_media_provider_warning(&errors, direct_provider_count);
-    Ok(RemoteMediaFetchResult { assets, warning })
+    Ok(RemoteMediaFetchResult {
+        assets,
+        warning,
+        health,
+    })
 }
 
 fn remote_media_fetch<F>(
