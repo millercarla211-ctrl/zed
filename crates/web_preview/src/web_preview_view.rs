@@ -249,6 +249,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_interaction_action_request_to_agent",
     "copy_blocked_interaction_receipt",
     "send_blocked_interaction_receipt_to_agent",
+    "copy_successful_interaction_receipt",
+    "send_successful_interaction_receipt_to_agent",
     "take_screenshot",
     "inspect_element",
 ];
@@ -432,6 +434,7 @@ pub struct WebPreviewView {
     latest_interaction_receipt_template: Option<Value>,
     latest_interaction_action_request: Option<Value>,
     latest_blocked_interaction_receipt: Option<Value>,
+    latest_successful_interaction_receipt: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -615,6 +618,7 @@ impl WebPreviewView {
             latest_interaction_receipt_template: None,
             latest_interaction_action_request: None,
             latest_blocked_interaction_receipt: None,
+            latest_successful_interaction_receipt: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1073,6 +1077,7 @@ impl WebPreviewView {
             "interaction_receipt_template": self.latest_interaction_receipt_template_summary(),
             "interaction_action_request": self.latest_interaction_action_request_summary(),
             "blocked_interaction_receipt": self.latest_blocked_interaction_receipt_summary(),
+            "successful_interaction_receipt": self.latest_successful_interaction_receipt_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1105,6 +1110,8 @@ impl WebPreviewView {
                 "send_interaction_action_request_to_agent": true,
                 "copy_blocked_interaction_receipt": true,
                 "send_blocked_interaction_receipt_to_agent": true,
+                "copy_successful_interaction_receipt": true,
+                "send_successful_interaction_receipt_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1254,6 +1261,20 @@ impl WebPreviewView {
             "permission": receipt.pointer("/receipt/permission").cloned(),
             "outcome": receipt.pointer("/receipt/blocked_receipt/outcome").and_then(Value::as_str),
             "blockers": receipt.pointer("/receipt/blocked_receipt/error/blockers").cloned(),
+            "counts": receipt.pointer("/receipt/counts").cloned(),
+        }))
+    }
+
+    fn latest_successful_interaction_receipt_summary(&self) -> Option<Value> {
+        let receipt = self.latest_successful_interaction_receipt.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at": receipt.pointer("/receipt/timestamp").and_then(Value::as_str),
+            "url": receipt.pointer("/receipt/url").and_then(Value::as_str),
+            "title": receipt.pointer("/receipt/title").and_then(Value::as_str),
+            "ready_state": receipt.pointer("/receipt/ready_state").and_then(Value::as_str),
+            "permission": receipt.pointer("/receipt/permission").cloned(),
+            "outcome": receipt.pointer("/receipt/success_receipt/outcome").and_then(Value::as_str),
+            "sample_only": receipt.pointer("/receipt/success_receipt/sample_only").and_then(Value::as_bool),
             "counts": receipt.pointer("/receipt/counts").cloned(),
         }))
     }
@@ -2154,6 +2175,114 @@ impl WebPreviewView {
         self.request_blocked_interaction_receipt("agent", cx);
     }
 
+    fn successful_interaction_receipt_snapshot(&self, payload: &Value, window: &Window) -> Value {
+        let mut receipt = payload.clone();
+        if let Some(receipt) = receipt.as_object_mut() {
+            receipt.remove("kind");
+            receipt.remove("action");
+            let interactive_enabled = self.agent_action_permission.interactive_enabled();
+            receipt.insert(
+                "permission".to_string(),
+                self.agent_action_permission.snapshot(),
+            );
+            receipt.insert(
+                "permission_gate".to_string(),
+                serde_json::json!({
+                    "interactive_unlocked": interactive_enabled,
+                    "status": if interactive_enabled {
+                        "unlocked"
+                    } else {
+                        "locked"
+                    },
+                    "message": if interactive_enabled {
+                        "A real successful receipt still requires a fresh post-action snapshot from the executor."
+                    } else {
+                        "Interactive actions are locked; this success receipt remains a sample-only audit template."
+                    },
+                }),
+            );
+            if let Some(success_receipt) = receipt
+                .get_mut("success_receipt")
+                .and_then(Value::as_object_mut)
+            {
+                success_receipt.insert(
+                    "permission_mode".to_string(),
+                    serde_json::json!(if interactive_enabled {
+                        "interactive"
+                    } else {
+                        "read_only"
+                    }),
+                );
+                success_receipt.insert("sample_only".to_string(), serde_json::json!(true));
+            }
+        }
+
+        serde_json::json!({
+            "schema": "zed.web_preview.successful_interaction_receipt.v1",
+            "session": self.browser_session_snapshot(window),
+            "receipt": receipt,
+        })
+    }
+
+    fn successful_interaction_receipt_json(receipt: &Value) -> String {
+        serde_json::to_string_pretty(receipt).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn successful_interaction_receipt_agent_blocks(
+        &self,
+        receipt: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = receipt.pointer("/receipt/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview successful interaction receipt template:\n\n```json\n{}\n```",
+            Self::successful_interaction_receipt_json(receipt)
+        ))));
+        blocks
+    }
+
+    fn request_successful_interaction_receipt(
+        &mut self,
+        action: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let script = format!(
+            "window.__zedWebPreview && window.__zedWebPreview.collectSuccessfulInteractionReceipt('{action}');"
+        );
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(&script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Collecting successful interaction receipt template", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error(
+                    "Successful interaction receipt is unavailable",
+                    error,
+                    cx,
+                );
+            }
+            Err(_) => {
+                self.report_action_panic(
+                    "Successful interaction receipt crashed before collection",
+                    cx,
+                );
+            }
+        }
+    }
+
+    fn copy_successful_interaction_receipt(&mut self, cx: &mut Context<Self>) {
+        self.request_successful_interaction_receipt("copy", cx);
+    }
+
+    fn send_successful_interaction_receipt_to_agent(&mut self, cx: &mut Context<Self>) {
+        self.request_successful_interaction_receipt("agent", cx);
+    }
+
     fn agent_browser_action_manifest(&self, window: &Window) -> Value {
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_actions.v1",
@@ -3019,6 +3148,56 @@ impl WebPreviewView {
                     }
                 }
             }
+            "successful-interaction-receipt" => {
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let action = payload
+                        .get("action")
+                        .and_then(Value::as_str)
+                        .unwrap_or("copy");
+                    let receipt = self.successful_interaction_receipt_snapshot(&payload, window);
+                    self.latest_successful_interaction_receipt = Some(receipt.clone());
+
+                    match action {
+                        "agent" => {
+                            self.append_content_blocks_to_agent_panel(
+                                self.successful_interaction_receipt_agent_blocks(&receipt),
+                                window,
+                                cx,
+                            );
+                            self.show_toast(
+                                "Sent successful interaction receipt template to the agent panel",
+                                cx,
+                            );
+                        }
+                        _ => {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                Self::successful_interaction_receipt_json(&receipt),
+                            ));
+                            self.show_toast(
+                                "Copied web preview successful interaction receipt template JSON",
+                                cx,
+                            );
+                        }
+                    }
+
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.report_action_error(
+                            "Successful interaction receipt collection failed",
+                            error,
+                            cx,
+                        );
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "Successful interaction receipt crashed while collecting page data",
+                            cx,
+                        );
+                    }
+                }
+            }
             "capture-area" => {
                 match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
                     let scale = payload
@@ -3622,6 +3801,30 @@ impl WebPreviewView {
                                     move |_, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_blocked_interaction_receipt_to_agent(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Success Receipt Template")
+                                .icon(IconName::Check)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_successful_interaction_receipt(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Success Receipt Template to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_successful_interaction_receipt_to_agent(cx);
                                         });
                                     }
                                 }),
@@ -4601,6 +4804,7 @@ impl Item for WebPreviewView {
                 latest_interaction_receipt_template: None,
                 latest_interaction_action_request: None,
                 latest_blocked_interaction_receipt: None,
+                latest_successful_interaction_receipt: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
@@ -6963,6 +7167,67 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     };
   };
 
+  const successfulInteractionReceipt = (actionTargets, recommended) => {
+    const actionEnvelope = interactionActionRequestEnvelope(actionTargets, recommended);
+    const baseReceipt = interactionReceiptTemplate(actionTargets, recommended);
+    const firstCandidate = actionEnvelope.action_requests
+      .flatMap((request) => request.candidates.map((candidate) => ({
+        action: request.action,
+        candidate
+      })))
+      [0] || null;
+    return {
+      schema: "zed.web_preview.interaction_receipt.v1",
+      action_id: baseReceipt.action_id,
+      request_id: actionEnvelope.request_id,
+      action: firstCandidate?.action || "not_selected",
+      selector: firstCandidate?.candidate?.selector || null,
+      planned_at: actionEnvelope.generated_at,
+      attempted_at: null,
+      completed_at: null,
+      permission_mode: "unknown_until_rust_gate_is_applied",
+      preflight_timestamp: new Date().toISOString(),
+      before_context: baseReceipt.before_context,
+      after_context: {
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState,
+        focused_selector: document.activeElement instanceof Element ? cssSelector(document.activeElement) : null,
+        scroll_x: Math.round(window.scrollX || 0),
+        scroll_y: Math.round(window.scrollY || 0),
+        pending_network: runtimeState.pendingNetwork,
+        dom_quiet_for_ms: readinessQuietForMs(),
+        busy_indicators: readinessBusyCount(),
+        runtime_error_count: runtimeEvents.console.filter((event) => event.level === "error").length,
+        failed_network_count: runtimeEvents.network.filter((event) => event.ok === false || event.status >= 400).length
+      },
+      outcome: "succeeded",
+      error: null,
+      sample_only: true,
+      dry_run_only: true,
+      action_request: actionEnvelope,
+      verification: {
+        required_after_action_refreshes: [
+          "readiness_probe",
+          "runtime_events",
+          "action_targets",
+          "optional_screenshot"
+        ],
+        success_requires: [
+          "The requested target was still present or intentionally changed.",
+          "The action did not create new runtime or network errors unless expected.",
+          "The after_context was collected after the page settled or timed out.",
+          "The receipt was attached to the Agent Panel response."
+        ]
+      },
+      notes: [
+        "This is a sample success receipt template, not proof that browser input was executed.",
+        "A future executor must replace attempted_at, completed_at, action, selector, and after_context after real input dispatch.",
+        "Successful receipts and blocked receipts use the same schema so agent workflows can audit every requested action."
+      ]
+    };
+  };
+
   installRuntimeCapture();
 
   window.__zedWebPreview = {
@@ -7548,6 +7813,54 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
           "This blocked receipt is read-only and does not perform browser input.",
           "Use it when a future interactive request is denied by Zed permission or page preflight.",
           "A successful future action must emit a normal interaction receipt with after-action context."
+        ]
+      });
+    },
+
+    collectSuccessfulInteractionReceipt(action = "copy") {
+      try { installMutationCapture(); } catch (_error) {}
+      const actionTargets = collectActionTargetRows();
+      const selectorContracts = waitSelectorContracts();
+      const textCandidates = waitTextCandidates();
+      const recommended = recommendedWaitRecipe();
+      const successReceipt = successfulInteractionReceipt(actionTargets, recommended);
+
+      post({
+        kind: "successful-interaction-receipt",
+        action,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState,
+        success_receipt: successReceipt,
+        recommended_wait: recommended,
+        permissions: {
+          required_for_interactive_actions: true,
+          current_payload_executes_actions: false,
+          user_must_unlock_interactive_actions_in_zed: true,
+          success_receipt_template_only: true
+        },
+        counts: {
+          action_targets: actionTargets.targets.length,
+          selector_contracts: selectorContracts.length,
+          text_candidates: textCandidates.length,
+          pending_network: runtimeState.pendingNetwork,
+          busy_indicators: readinessBusyCount(),
+          runtime_errors: runtimeEvents.console.filter((event) => event.level === "error").length,
+          failed_network: runtimeEvents.network.filter((event) => event.ok === false || event.status >= 400).length
+        },
+        selector_contracts: selectorContracts.slice(0, 12),
+        text_candidates: textCandidates.slice(0, 12),
+        mutation: {
+          observed: mutationState.observed,
+          count: mutationState.count,
+          last_mutation_at: mutationState.lastMutationAt,
+          quiet_for_ms: readinessQuietForMs()
+        },
+        notes: [
+          "This success receipt is read-only and does not perform browser input.",
+          "Use it as the required shape future successful click/type/key/scroll actions must fill.",
+          "A blocked future action must emit a blocked receipt instead."
         ]
       });
     },

@@ -1,3 +1,13 @@
+[2026-05-16] - Web Preview Successful Interaction Receipt
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Success Receipt Template" and "Send Success Receipt Template to Agent".
+- The WebPreview bridge now produces a read-only successful interaction receipt template that shares the blocked-receipt audit schema.
+- Successful receipt templates include target/action placeholders, before/after context, runtime/network counts, and verification requirements future completed actions must fill after real browser input dispatch.
+
+NOTES:
+- This completes the paired audit contract for denied and completed future browser actions without executing input.
+
 [2026-05-16] - Web Preview Blocked Interaction Receipt
 
 ADDED:
