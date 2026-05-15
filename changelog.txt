@@ -1,3 +1,12 @@
+[2026-05-15] - Web Preview Agent Session Context
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Send Session to Agent" for attaching the current read-only browser session snapshot to the Agent Panel.
+- Session context attachments include the active URL resource link when the preview is on an HTTP(S) page.
+
+NOTES:
+- This keeps the Agent Browser Command Center work read-only while making the session inventory usable inside the AI workflow.
+
 [2026-05-15] - Web Preview Session Inventory
 
 ADDED:

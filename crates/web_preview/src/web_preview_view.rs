@@ -826,6 +826,21 @@ impl WebPreviewView {
         self.show_toast("Copied web preview session info", cx);
     }
 
+    fn send_browser_session_info_to_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let mut blocks = Vec::new();
+        if let Some(url_block) = self.current_url_attachment_block() {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview session context:\n\n```text\n{}\n```",
+            self.browser_session_info(window)
+        ))));
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent web preview session info to the agent panel", cx);
+    }
+
     fn go_back_in_history(&mut self, cx: &mut Context<Self>) {
         let _ = self.evaluate_script("history.back();");
         cx.notify();
@@ -1428,6 +1443,18 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.copy_browser_session_info(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Session to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_browser_session_info_to_agent(window, cx);
                                         });
                                     }
                                 }),
