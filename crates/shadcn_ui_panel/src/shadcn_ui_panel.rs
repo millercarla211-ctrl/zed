@@ -371,14 +371,7 @@ impl ShadcnUiPanel {
             return matches;
         }
 
-        let search_text: SharedString = format!(
-            "{} {} {} {}",
-            item.id.as_ref().to_lowercase(),
-            item.title.as_ref().to_lowercase(),
-            item.category.as_ref().to_lowercase(),
-            item.description.as_ref().to_lowercase()
-        )
-        .into();
+        let search_text = catalog_item_search_text(item);
         self.search_text_cache
             .borrow_mut()
             .insert(item.id.clone(), search_text.clone());
@@ -936,6 +929,32 @@ fn scroll_tab_handle(handle: &ScrollHandle, direction: f32) {
 
 fn catalog_search_matches(searchable: &str, query_terms: &[&str]) -> bool {
     query_terms.iter().all(|term| searchable.contains(term))
+}
+
+fn catalog_item_search_text(item: &CatalogItem) -> SharedString {
+    let mut text = String::with_capacity(
+        item.id.as_ref().len()
+            + item.title.as_ref().len()
+            + item.category.as_ref().len()
+            + item.description.as_ref().len()
+            + 3,
+    );
+    push_lowercase(&mut text, item.id.as_ref());
+    text.push(' ');
+    push_lowercase(&mut text, item.title.as_ref());
+    text.push(' ');
+    push_lowercase(&mut text, item.category.as_ref());
+    text.push(' ');
+    push_lowercase(&mut text, item.description.as_ref());
+    text.into()
+}
+
+fn push_lowercase(buffer: &mut String, value: &str) {
+    for ch in value.chars() {
+        for lower in ch.to_lowercase() {
+            buffer.push(lower);
+        }
+    }
 }
 
 struct ShadcnDragPreview {

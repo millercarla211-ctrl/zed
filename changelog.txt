@@ -1,3 +1,11 @@
+[2026-05-15] - UI Catalog Search Text Allocation Cleanup
+
+CHANGED:
+- `crates/shadcn_ui_panel` now builds cached catalog search text in one preallocated lowercase buffer instead of allocating lowercase strings for each field and formatting them together.
+
+NOTES:
+- Preserved the same searchable field order, UI search behavior, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Media Remote Signature Allocation Cleanup
 
 CHANGED:
