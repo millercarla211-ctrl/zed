@@ -1,3 +1,11 @@
+[2026-05-15] - Icon Search Text Allocation Cleanup
+
+CHANGED:
+- `crates/icon_picker` now builds cached Zed and external Iconify search text in preallocated buffers instead of allocating lowercase strings for each field and formatting them together.
+
+NOTES:
+- Preserved the same searchable field order, icon search behavior, editor input, and WebPreview input behavior.
+
 [2026-05-15] - UI Catalog Search Text Allocation Cleanup
 
 CHANGED:

@@ -422,12 +422,7 @@ impl IconPickerPanel {
         }
 
         let payload = DraggedIconAsset::new(icon_name);
-        let search_text: SharedString = format!(
-            "{} {} zed",
-            payload.stem.as_ref(),
-            payload.label.as_ref().to_lowercase()
-        )
-        .into();
+        let search_text = zed_icon_search_text(payload.stem.as_ref(), payload.label.as_ref());
         self.zed_icon_search_text_cache
             .borrow_mut()
             .insert(stem, search_text.clone());
@@ -1030,6 +1025,41 @@ fn icon_search_matches(searchable: &str, query_terms: &[&str]) -> bool {
     query_terms.iter().all(|term| searchable.contains(term))
 }
 
+fn zed_icon_search_text(stem: &str, label: &str) -> SharedString {
+    let mut text = String::with_capacity(stem.len() + 1 + label.len() + 4);
+    text.push_str(stem);
+    text.push(' ');
+    push_lowercase(&mut text, label);
+    text.push_str(" zed");
+    text.into()
+}
+
+fn external_icon_search_text(
+    name: &str,
+    label: &str,
+    pack_prefix: &str,
+    pack_name: &str,
+) -> SharedString {
+    let mut text =
+        String::with_capacity(name.len() + label.len() + pack_prefix.len() + pack_name.len() + 3);
+    push_lowercase(&mut text, name);
+    text.push(' ');
+    push_lowercase(&mut text, label);
+    text.push(' ');
+    push_lowercase(&mut text, pack_prefix);
+    text.push(' ');
+    push_lowercase(&mut text, pack_name);
+    text.into()
+}
+
+fn push_lowercase(buffer: &mut String, value: &str) {
+    for ch in value.chars() {
+        for lower in ch.to_lowercase() {
+            buffer.push(lower);
+        }
+    }
+}
+
 fn icon_element_id(prefix: &str, id: &str) -> String {
     let mut element_id = String::with_capacity(prefix.len() + id.len());
     element_id.push_str(prefix);
@@ -1385,12 +1415,11 @@ fn external_icon_from_summary(
     let label = titleize_icon_name(name);
     let stem = format!("{}-{}", pack_summary.prefix.as_ref(), name);
     let id = format!("{}:{}", pack_summary.prefix.as_ref(), name);
-    let search_text = format!(
-        "{} {} {} {}",
-        name.to_lowercase(),
-        label.to_lowercase(),
-        pack_summary.prefix.as_ref().to_lowercase(),
-        pack_summary.name.as_ref().to_lowercase()
+    let search_text = external_icon_search_text(
+        name,
+        &label,
+        pack_summary.prefix.as_ref(),
+        pack_summary.name.as_ref(),
     );
     ExternalIcon {
         id: id.into(),
@@ -1401,7 +1430,7 @@ fn external_icon_from_summary(
         stem: stem.into(),
         width: width.max(1),
         height: height.max(1),
-        search_text: search_text.into(),
+        search_text,
     }
 }
 
