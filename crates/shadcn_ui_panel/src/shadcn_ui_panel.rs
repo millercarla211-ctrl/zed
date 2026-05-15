@@ -654,6 +654,11 @@ impl ShadcnUiPanel {
             "Open"
         };
         let source_label = catalog_source_label(item.source);
+        let category_label: SharedString = if item.install_only {
+            "route install".into()
+        } else {
+            item.category.clone()
+        };
         let row_id = shadcn_element_id("shadcn-item-", item.id.as_ref());
         let insert_id = shadcn_element_id("shadcn-insert-", item.id.as_ref());
         let copy_id = shadcn_element_id("shadcn-copy-", item.id.as_ref());
@@ -724,7 +729,7 @@ impl ShadcnUiPanel {
                                 },
                             ))
                             .child(
-                                Label::new(item.category.clone())
+                                Label::new(category_label)
                                     .size(LabelSize::XSmall)
                                     .color(Color::Muted),
                             ),
@@ -957,6 +962,9 @@ fn catalog_item_search_text(item: &CatalogItem) -> SharedString {
     push_lowercase(&mut text, item.category.as_ref());
     text.push(' ');
     push_lowercase(&mut text, item.description.as_ref());
+    if item.install_only {
+        text.push_str(" route install app page");
+    }
     text.into()
 }
 

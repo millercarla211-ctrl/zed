@@ -1,3 +1,12 @@
+[2026-05-15] - UI Route Block Search Clarity
+
+CHANGED:
+- Install-only shadcn route rows now show `route install` as their compact category label instead of looking like ordinary block snippets.
+- UI/shadcn search text now includes route/install/page/app keywords for install-only rows, making app and page blocks easier to find intentionally.
+
+NOTES:
+- This keeps route-block handling visible without changing WebPreview, editor input, install paths, or snippet-backed component rows.
+
 [2026-05-15] - UI Route Block Action Labels
 
 CHANGED:
