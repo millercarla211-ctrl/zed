@@ -1053,6 +1053,7 @@ impl IconPickerPanel {
             return None;
         }
 
+        let health_label = icon_history_health_label(self.recent_icon_actions.len());
         let mut rows =
             Vec::with_capacity(self.recent_icon_actions.len().min(MAX_RECENT_ICON_ACTIONS));
         for (index, entry) in self
@@ -1082,6 +1083,11 @@ impl IconPickerPanel {
                                     Label::new("Recent")
                                         .size(LabelSize::XSmall)
                                         .color(Color::Muted),
+                                )
+                                .child(
+                                    Label::new(health_label)
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Muted),
                                 ),
                         )
                         .child(
@@ -1103,6 +1109,7 @@ impl IconPickerPanel {
             return None;
         }
 
+        let health_label = icon_history_health_label(self.pinned_icon_actions.len());
         let mut rows =
             Vec::with_capacity(self.pinned_icon_actions.len().min(MAX_PINNED_ICON_ACTIONS));
         for (index, entry) in self
@@ -1130,6 +1137,11 @@ impl IconPickerPanel {
                                 .child(Icon::new(IconName::Star).size(IconSize::XSmall))
                                 .child(
                                     Label::new("Pinned")
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Muted),
+                                )
+                                .child(
+                                    Label::new(health_label)
                                         .size(LabelSize::XSmall)
                                         .color(Color::Muted),
                                 ),
@@ -1587,6 +1599,17 @@ fn recent_icon_action_label(action: RecentIconAction) -> &'static str {
         RecentIconAction::Inserted => "inserted",
         RecentIconAction::CopiedName => "copied name",
         RecentIconAction::Pinned => "pinned",
+    }
+}
+
+fn icon_history_health_label(count: usize) -> SharedString {
+    match count {
+        1 => "1 ready".into(),
+        _ => {
+            let mut text = String::with_capacity(12);
+            let _ = write!(text, "{count} ready");
+            text.into()
+        }
     }
 }
 

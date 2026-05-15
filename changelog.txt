@@ -1,3 +1,12 @@
+[2026-05-15] - Icon and Font History Visibility
+
+ADDED:
+- Icon pinned and recent headers now show ready counts beside the section title.
+- Font pinned and recent headers now show the same ready-count context.
+
+NOTES:
+- This brings Icon and Font history sections in line with the Media/UI health-header pattern without changing insertion, preview, drag, or WebPreview behavior.
+
 [2026-05-15] - UI Catalog Freshness and Refresh
 
 ADDED:

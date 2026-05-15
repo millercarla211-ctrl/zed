@@ -853,6 +853,7 @@ impl FontPanel {
             return None;
         }
 
+        let health_label = font_history_health_label(self.recent_font_actions.len());
         let mut rows =
             Vec::with_capacity(self.recent_font_actions.len().min(MAX_RECENT_FONT_ACTIONS));
         for (index, entry) in self
@@ -882,6 +883,11 @@ impl FontPanel {
                                     Label::new("Recent")
                                         .size(LabelSize::XSmall)
                                         .color(Color::Muted),
+                                )
+                                .child(
+                                    Label::new(health_label)
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Muted),
                                 ),
                         )
                         .child(
@@ -903,6 +909,7 @@ impl FontPanel {
             return None;
         }
 
+        let health_label = font_history_health_label(self.pinned_font_actions.len());
         let mut rows =
             Vec::with_capacity(self.pinned_font_actions.len().min(MAX_PINNED_FONT_ACTIONS));
         for (index, entry) in self
@@ -930,6 +937,11 @@ impl FontPanel {
                                 .child(Icon::new(IconName::Star).size(IconSize::XSmall))
                                 .child(
                                     Label::new("Pinned")
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Muted),
+                                )
+                                .child(
+                                    Label::new(health_label)
                                         .size(LabelSize::XSmall)
                                         .color(Color::Muted),
                                 ),
@@ -1380,6 +1392,17 @@ fn recent_font_action_label(action: RecentFontAction) -> &'static str {
         RecentFontAction::AppliedUi => "UI",
         RecentFontAction::AddedProject => "added",
         RecentFontAction::Pinned => "pinned",
+    }
+}
+
+fn font_history_health_label(count: usize) -> SharedString {
+    match count {
+        1 => "1 ready".into(),
+        _ => {
+            let mut text = String::with_capacity(12);
+            let _ = write!(text, "{count} ready");
+            text.into()
+        }
     }
 }
 
