@@ -1,3 +1,11 @@
+[2026-05-15] - Asset Panel Readiness Tooltips
+
+ADDED:
+- Icon, Font, Media, and UI title readiness labels now expose concise tooltips that explain loading, empty, indexing, fetching, cleanup, fallback, cached, and ready states.
+
+NOTES:
+- This is hover-only state clarity for the right-side asset panels and does not change catalog loading, media providers, editor input, or WebPreview routing.
+
 [2026-05-15] - Asset Panel Action Readiness Tooltips
 
 ADDED:

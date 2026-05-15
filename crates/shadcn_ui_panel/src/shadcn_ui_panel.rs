@@ -1593,7 +1593,7 @@ impl Render for ShadcnUiPanel {
         } else {
             Color::Muted
         };
-        let (readiness_label, readiness_color) = ui_readiness_label(
+        let (readiness_label, readiness_color, readiness_tooltip) = ui_readiness_label(
             self.loading_catalog,
             self.catalog_freshness,
             stale_history_count,
@@ -1620,10 +1620,12 @@ impl Render for ShadcnUiPanel {
                                     .items_center()
                                     .child(Label::new("UI").size(LabelSize::Small))
                                     .child(
-                                        Label::new(readiness_label)
-                                            .size(LabelSize::XSmall)
-                                            .color(readiness_color)
-                                            .truncate(),
+                                        div().tooltip(Tooltip::text(readiness_tooltip)).child(
+                                            Label::new(readiness_label)
+                                                .size(LabelSize::XSmall)
+                                                .color(readiness_color)
+                                                .truncate(),
+                                        ),
                                     ),
                             )
                             .child(
@@ -1938,16 +1940,36 @@ fn ui_readiness_label(
     loading: bool,
     freshness: UiCatalogFreshness,
     stale: usize,
-) -> (&'static str, Color) {
+) -> (&'static str, Color, &'static str) {
     if loading {
-        ("loading", Color::Accent)
+        (
+            "loading",
+            Color::Accent,
+            "Hydrating local shadcn, Magic UI, and registry sources.",
+        )
     } else if stale > 0 {
-        ("cleanup", Color::Warning)
+        (
+            "cleanup",
+            Color::Warning,
+            "Some restored UI entries are missing source or registry manifests. Use Clean to remove stale rows.",
+        )
     } else {
         match freshness {
-            UiCatalogFreshness::StaticFallback => ("fallback", Color::Warning),
-            UiCatalogFreshness::Cached => ("cached", Color::Muted),
-            UiCatalogFreshness::Hydrated => ("ready", Color::Success),
+            UiCatalogFreshness::StaticFallback => (
+                "fallback",
+                Color::Warning,
+                "Showing the bundled fallback catalog while source catalog hydration runs.",
+            ),
+            UiCatalogFreshness::Cached => (
+                "cached",
+                Color::Muted,
+                "Loaded cached UI catalog. Refresh to rescan local sources.",
+            ),
+            UiCatalogFreshness::Hydrated => (
+                "ready",
+                Color::Success,
+                "Source-backed UI catalog is ready for preview, install, insert, and copy.",
+            ),
         }
     }
 }

@@ -2218,7 +2218,7 @@ impl Render for MediaPanel {
         } else {
             Color::Muted
         };
-        let (readiness_label, readiness_color) =
+        let (readiness_label, readiness_color, readiness_tooltip) =
             media_readiness_label(self.loading, self.remote_loading, stale_history_count);
 
         v_flex()
@@ -2242,10 +2242,12 @@ impl Render for MediaPanel {
                                     .items_center()
                                     .child(Label::new("Media").size(LabelSize::Small))
                                     .child(
-                                        Label::new(readiness_label)
-                                            .size(LabelSize::XSmall)
-                                            .color(readiness_color)
-                                            .truncate(),
+                                        div().tooltip(Tooltip::text(readiness_tooltip)).child(
+                                            Label::new(readiness_label)
+                                                .size(LabelSize::XSmall)
+                                                .color(readiness_color)
+                                                .truncate(),
+                                        ),
                                     ),
                             )
                             .child(
@@ -2639,15 +2641,35 @@ fn history_working_set_label(pinned: usize, recent: usize, stale: usize) -> Shar
     }
 }
 
-fn media_readiness_label(indexing: bool, fetching: bool, stale: usize) -> (&'static str, Color) {
+fn media_readiness_label(
+    indexing: bool,
+    fetching: bool,
+    stale: usize,
+) -> (&'static str, Color, &'static str) {
     if indexing {
-        ("indexing", Color::Accent)
+        (
+            "indexing",
+            Color::Accent,
+            "Indexing local workspace media sources.",
+        )
     } else if fetching {
-        ("fetching", Color::Accent)
+        (
+            "fetching",
+            Color::Accent,
+            "Fetching remote media provider results.",
+        )
     } else if stale > 0 {
-        ("cleanup", Color::Warning)
+        (
+            "cleanup",
+            Color::Warning,
+            "Some restored media entries point to missing files. Use Clean to remove stale rows.",
+        )
     } else {
-        ("ready", Color::Success)
+        (
+            "ready",
+            Color::Success,
+            "Media catalog is ready for preview, copy, insert, and remote search.",
+        )
     }
 }
 

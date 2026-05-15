@@ -1376,7 +1376,7 @@ impl Render for IconPickerPanel {
             self.pinned_icon_actions.len(),
             self.recent_icon_actions.len(),
         );
-        let (readiness_label, readiness_color) =
+        let (readiness_label, readiness_color, readiness_tooltip) =
             icon_readiness_label(self.loading_external_icons, total_count);
         let mut icon_tiles = Vec::with_capacity(icons.len());
         icon_tiles.extend(
@@ -1420,10 +1420,12 @@ impl Render for IconPickerPanel {
                                     .items_center()
                                     .child(Label::new("Icons").size(LabelSize::Small))
                                     .child(
-                                        Label::new(readiness_label)
-                                            .size(LabelSize::XSmall)
-                                            .color(readiness_color)
-                                            .truncate(),
+                                        div().tooltip(Tooltip::text(readiness_tooltip)).child(
+                                            Label::new(readiness_label)
+                                                .size(LabelSize::XSmall)
+                                                .color(readiness_color)
+                                                .truncate(),
+                                        ),
                                     ),
                             )
                             .child(
@@ -1652,13 +1654,25 @@ fn history_working_set_label(pinned: usize, recent: usize) -> SharedString {
     text.into()
 }
 
-fn icon_readiness_label(loading: bool, total_count: usize) -> (&'static str, Color) {
+fn icon_readiness_label(loading: bool, total_count: usize) -> (&'static str, Color, &'static str) {
     if loading {
-        ("loading", Color::Accent)
+        (
+            "loading",
+            Color::Accent,
+            "Loading icon packs and warming previews.",
+        )
     } else if total_count == 0 {
-        ("empty", Color::Warning)
+        (
+            "empty",
+            Color::Warning,
+            "No icons are available for the current filters.",
+        )
     } else {
-        ("ready", Color::Success)
+        (
+            "ready",
+            Color::Success,
+            "Icon catalog is ready for search, copy, insert, and drag.",
+        )
     }
 }
 

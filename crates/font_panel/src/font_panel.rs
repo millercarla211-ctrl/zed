@@ -1195,7 +1195,7 @@ impl FontPanel {
             self.pinned_font_actions.len(),
             self.recent_font_actions.len(),
         );
-        let (readiness_label, readiness_color) = font_readiness_label(
+        let (readiness_label, readiness_color, readiness_tooltip) = font_readiness_label(
             self.fonts_loaded || self.source_filter == FontSourceFilter::Web,
             counts.count(self.source_filter),
         );
@@ -1214,10 +1214,12 @@ impl FontPanel {
                             .items_center()
                             .child(Label::new("Fonts").size(LabelSize::Small))
                             .child(
-                                Label::new(readiness_label)
-                                    .size(LabelSize::XSmall)
-                                    .color(readiness_color)
-                                    .truncate(),
+                                div().tooltip(Tooltip::text(readiness_tooltip)).child(
+                                    Label::new(readiness_label)
+                                        .size(LabelSize::XSmall)
+                                        .color(readiness_color)
+                                        .truncate(),
+                                ),
                             ),
                     )
                     .child(
@@ -1452,13 +1454,21 @@ fn history_working_set_label(pinned: usize, recent: usize) -> SharedString {
     text.into()
 }
 
-fn font_readiness_label(loaded: bool, total_count: usize) -> (&'static str, Color) {
+fn font_readiness_label(loaded: bool, total_count: usize) -> (&'static str, Color, &'static str) {
     if !loaded {
-        ("loading", Color::Accent)
+        ("loading", Color::Accent, "Loading local system fonts.")
     } else if total_count == 0 {
-        ("empty", Color::Warning)
+        (
+            "empty",
+            Color::Warning,
+            "No fonts are available for the current source filter.",
+        )
     } else {
-        ("ready", Color::Success)
+        (
+            "ready",
+            Color::Success,
+            "Fonts are ready for preview, CSS copy, editor apply, and project insertion.",
+        )
     }
 }
 
