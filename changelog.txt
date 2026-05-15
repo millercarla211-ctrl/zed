@@ -1,3 +1,12 @@
+[2026-05-15] - Media Kind-Specific Loading Copy
+
+CHANGED:
+- Media panel remote-loading rows now describe the active media tab, distinguishing all media, image, video, and audio provider fetches.
+- The loading row still uses the existing provider fetch/cache path and only changes the visible helper copy while no remote rows have arrived yet.
+
+NOTES:
+- This keeps the new loading state useful in focused tabs without touching editor input, WebPreview input, local indexing, or remote provider behavior.
+
 [2026-05-15] - Media Remote Loading Row
 
 CHANGED:

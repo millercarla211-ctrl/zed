@@ -1223,6 +1223,7 @@ impl MediaPanel {
     }
 
     fn render_remote_loading_row(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let description = remote_loading_description(self.kind_filter);
         h_flex()
             .id("media-panel-remote-loading-row")
             .gap_2()
@@ -1247,7 +1248,7 @@ impl MediaPanel {
                             .color(Color::Muted),
                     )
                     .child(
-                        Label::new("Remote provider results will appear above local files.")
+                        Label::new(description)
                             .size(LabelSize::XSmall)
                             .color(Color::Muted)
                             .truncate(),
@@ -1654,6 +1655,15 @@ fn remote_browser_description(provider_count: usize, kind_label: &str) -> Shared
     let _ = write!(text, "{provider_count} no-key remote sources for ");
     push_lowercase(&mut text, kind_label);
     text.into()
+}
+
+fn remote_loading_description(filter: MediaKindFilter) -> &'static str {
+    match filter {
+        MediaKindFilter::All => "Remote media results will appear above local files.",
+        MediaKindFilter::Images => "Remote image results will appear above local files.",
+        MediaKindFilter::Videos => "Remote video results will appear above local files.",
+        MediaKindFilter::Audio => "Remote audio results will appear above local files.",
+    }
 }
 
 fn remote_media_provider_warning(
