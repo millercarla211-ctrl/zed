@@ -661,6 +661,20 @@ impl ShadcnUiPanel {
         cx.notify();
     }
 
+    fn remove_ui_history_entry(&mut self, item: CatalogItem, pinned: bool, cx: &mut Context<Self>) {
+        if pinned {
+            self.pinned_ui_actions
+                .retain(|entry| entry.item.id.as_ref() != item.id.as_ref());
+            self.persist_pinned_ui_actions(cx);
+            self.status = Some(shadcn_status_label("Removed pinned ", item.title.as_ref()));
+        } else {
+            self.recent_ui_actions
+                .retain(|entry| entry.item.id.as_ref() != item.id.as_ref());
+            self.status = Some(shadcn_status_label("Removed recent ", item.title.as_ref()));
+        }
+        cx.notify();
+    }
+
     fn persist_pinned_ui_actions(&self, cx: &mut Context<Self>) {
         let entries = self
             .pinned_ui_actions
@@ -1145,13 +1159,20 @@ impl ShadcnUiPanel {
         let copy_id = shadcn_element_id(id_prefix, &format!("copy-{id_suffix}"));
         let preview_id = shadcn_element_id(id_prefix, &format!("preview-{id_suffix}"));
         let docs_id = shadcn_element_id(id_prefix, &format!("docs-{id_suffix}"));
+        let remove_id = shadcn_element_id(id_prefix, &format!("remove-{id_suffix}"));
         let pin_id = shadcn_element_id(id_prefix, &format!("pin-{id_suffix}"));
         let pin_entry = entry.clone();
         let item = entry.item;
         let pin_item = item.clone();
+        let remove_item = item.clone();
         let source_available = {
             let payload = self.payload_for_item(&item);
             item_source_available(&item, &payload)
+        };
+        let pin_label = if pinned {
+            if source_available { "Unpin" } else { "Remove" }
+        } else {
+            "Pin"
         };
         let can_insert = can_drag_into_editor(item.source);
         let primary_action = if item.install_only {
@@ -1272,6 +1293,16 @@ impl ShadcnUiPanel {
                                 }
                             })),
                     )
+                    .when(!source_available && !pinned, |this| {
+                        this.child(
+                            Button::new(remove_id, "Remove")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(move |panel, _, _, cx| {
+                                    panel.remove_ui_history_entry(remove_item.clone(), pinned, cx);
+                                })),
+                        )
+                    })
                     .child(
                         Button::new(docs_id, "Docs")
                             .style(ButtonStyle::Subtle)
@@ -1282,12 +1313,17 @@ impl ShadcnUiPanel {
                     ),
             )
             .child(
-                Button::new(pin_id, if pinned { "Unpin" } else { "Pin" })
+                Button::new(pin_id, pin_label)
                     .style(ButtonStyle::Subtle)
                     .size(ButtonSize::Compact)
+                    .disabled(!pinned && !source_available)
                     .on_click(cx.listener(move |panel, _, _, cx| {
                         if pinned {
-                            panel.unpin_ui_action(pin_item.clone(), cx);
+                            if source_available {
+                                panel.unpin_ui_action(pin_item.clone(), cx);
+                            } else {
+                                panel.remove_ui_history_entry(pin_item.clone(), pinned, cx);
+                            }
                         } else {
                             panel.pin_ui_action(pin_entry.clone(), cx);
                         }

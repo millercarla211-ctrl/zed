@@ -1,3 +1,15 @@
+[2026-05-15] - Asset Panel Stale Entry Recovery
+
+ADDED:
+- Media pinned/recent rows now expose a direct Remove recovery path for stale local media entries, and stale pinned rows relabel Unpin as Remove.
+- UI pinned/recent rows now expose the same stale-entry recovery path for missing local source or registry-backed items.
+
+CHANGED:
+- Stale recent Media and UI rows can no longer be pinned again until their source is valid, keeping persisted working sets clean after project moves or deleted files.
+
+NOTES:
+- Recovery remains local to pinned/recent panel state and does not touch catalogs, media providers, editor typing, or WebPreview input routing.
+
 [2026-05-15] - Asset Panel Restored Pin Health
 
 ADDED:

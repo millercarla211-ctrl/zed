@@ -1146,6 +1146,25 @@ impl MediaPanel {
         cx.notify();
     }
 
+    fn remove_media_history_entry(
+        &mut self,
+        entry: RecentMediaEntry,
+        pinned: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if pinned {
+            self.pinned_media
+                .retain(|pinned_entry| !recent_media_sources_match(pinned_entry, &entry));
+            self.persist_pinned_media(cx);
+            self.status = Some(media_status_label("Removed pinned ", entry.label.as_ref()));
+        } else {
+            self.recent_media
+                .retain(|recent_entry| !recent_media_sources_match(recent_entry, &entry));
+            self.status = Some(media_status_label("Removed recent ", entry.label.as_ref()));
+        }
+        cx.notify();
+    }
+
     fn persist_pinned_media(&self, cx: &mut Context<Self>) {
         let entries = self
             .pinned_media
@@ -1724,17 +1743,24 @@ impl MediaPanel {
         let preview_id = media_element_id(id_prefix, &format!("preview-{id_suffix}"));
         let copy_id = media_element_id(id_prefix, &format!("copy-{id_suffix}"));
         let insert_id = media_element_id(id_prefix, &format!("insert-{id_suffix}"));
+        let remove_id = media_element_id(id_prefix, &format!("remove-{id_suffix}"));
         let pin_id = media_element_id(id_prefix, &format!("pin-{id_suffix}"));
         let pin_entry = entry.clone();
+        let remove_entry = entry.clone();
         let source_label = recent_media_source_label(&entry.source);
         let source_kind = recent_media_source_kind(&entry.source);
         let source_health = recent_media_source_health(&entry.source);
+        let source_available = recent_media_source_available(&entry.source);
+        let pin_label = if pinned {
+            if source_available { "Unpin" } else { "Remove" }
+        } else {
+            "Pin"
+        };
         let actions = match entry.source.clone() {
             RecentMediaSource::Local {
                 path,
                 relative_display,
             } => {
-                let source_available = path.exists();
                 let asset = DraggedMediaAsset {
                     path,
                     kind: entry.kind,
@@ -1870,13 +1896,28 @@ impl MediaPanel {
                     ),
             )
             .child(actions)
+            .when(!source_available && !pinned, |this| {
+                this.child(
+                    Button::new(remove_id, "Remove")
+                        .style(ButtonStyle::Subtle)
+                        .size(ButtonSize::Compact)
+                        .on_click(cx.listener(move |panel, _, _, cx| {
+                            panel.remove_media_history_entry(remove_entry.clone(), pinned, cx);
+                        })),
+                )
+            })
             .child(
-                Button::new(pin_id, if pinned { "Unpin" } else { "Pin" })
+                Button::new(pin_id, pin_label)
                     .style(ButtonStyle::Subtle)
                     .size(ButtonSize::Compact)
+                    .disabled(!pinned && !source_available)
                     .on_click(cx.listener(move |panel, _, _, cx| {
                         if pinned {
-                            panel.unpin_media(pin_entry.clone(), cx);
+                            if source_available {
+                                panel.unpin_media(pin_entry.clone(), cx);
+                            } else {
+                                panel.remove_media_history_entry(pin_entry.clone(), pinned, cx);
+                            }
                         } else {
                             panel.pin_media(pin_entry.clone(), cx);
                         }
@@ -2351,9 +2392,17 @@ fn recent_media_source_kind(source: &RecentMediaSource) -> &'static str {
 }
 
 fn recent_media_source_health(source: &RecentMediaSource) -> Option<&'static str> {
+    if recent_media_source_available(source) {
+        None
+    } else {
+        Some("missing")
+    }
+}
+
+fn recent_media_source_available(source: &RecentMediaSource) -> bool {
     match source {
-        RecentMediaSource::Local { path, .. } if !path.exists() => Some("missing"),
-        _ => None,
+        RecentMediaSource::Local { path, .. } => path.exists(),
+        RecentMediaSource::Remote { .. } => true,
     }
 }
 
