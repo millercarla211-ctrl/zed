@@ -1381,15 +1381,14 @@ fn gather_media_assets_in_root(root: &PathBuf, path: &Path, assets: &mut Vec<Med
             gather_media_assets_in_root(root, &path, assets);
         } else if let Some(kind) = media_kind_for_path(&path) {
             let payload = DraggedMediaAsset::new(path.clone(), kind, root);
-            let search_text = format!(
-                "{} {} {}",
-                payload.label.as_ref().to_lowercase(),
-                payload.relative_display.as_ref().to_lowercase(),
-                media_kind_label(kind)
+            let search_text = local_media_search_text(
+                payload.label.as_ref(),
+                payload.relative_display.as_ref(),
+                media_kind_label(kind),
             );
             assets.push(MediaAsset {
                 payload,
-                search_text: search_text.into(),
+                search_text,
             });
         }
 
@@ -1416,6 +1415,25 @@ fn has_ignored_media_segment(path: &Path) -> bool {
                 | "node_modules"
         )
     })
+}
+
+fn local_media_search_text(label: &str, relative_display: &str, kind_label: &str) -> SharedString {
+    let mut text =
+        String::with_capacity(label.len() + relative_display.len() + kind_label.len() + 2);
+    push_lowercase(&mut text, label);
+    text.push(' ');
+    push_lowercase(&mut text, relative_display);
+    text.push(' ');
+    text.push_str(kind_label);
+    text.into()
+}
+
+fn push_lowercase(buffer: &mut String, value: &str) {
+    for ch in value.chars() {
+        for lower in ch.to_lowercase() {
+            buffer.push(lower);
+        }
+    }
 }
 
 fn media_kind_for_path(path: &Path) -> Option<DraggedMediaKind> {

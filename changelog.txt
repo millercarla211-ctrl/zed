@@ -1,3 +1,11 @@
+[2026-05-15] - Media Local Search Text Allocation Cleanup
+
+CHANGED:
+- `crates/media_panel` now builds cached local media search text in one preallocated lowercase buffer instead of allocating lowercase label/path strings and formatting them together.
+
+NOTES:
+- Preserved the same searchable field order, local media search behavior, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Icon Search Text Allocation Cleanup
 
 CHANGED:
