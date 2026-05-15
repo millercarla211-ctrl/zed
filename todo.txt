@@ -1,5 +1,6 @@
 IN PROGRESS:
 - NEXT 100-POINT FEATURE SET: Permissioned Agent Browser Executor. Goal: wire real browser click, type, key, scroll, navigation, viewport, and cache actions behind the completed Agent Browser Command Center readiness gate, preserving editor speed and WebPreview focus.
+- Permissioned Agent Browser Executor no-op harness slice: WebPreview now records a no-op executor attempt across all interactive action families, checks permission/context/audit readiness, emits a blocked receipt, and proves the executor path without dispatching native or page input.
 - Permissioned Agent Browser Executor first target: add a no-op executor harness that records attempted actions, checks permission/readiness, emits blocked receipts, and proves the action path without dispatching native input.
 
 COMPLETED:

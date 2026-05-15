@@ -255,6 +255,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_status_packet_to_agent",
     "copy_agent_browser_executor_readiness",
     "send_agent_browser_executor_readiness_to_agent",
+    "copy_agent_browser_noop_executor_attempt",
+    "send_agent_browser_noop_executor_attempt_to_agent",
     "copy_agent_browser_qa_runbook",
     "send_agent_browser_qa_runbook_to_agent",
     "take_screenshot",
@@ -443,6 +445,7 @@ pub struct WebPreviewView {
     latest_successful_interaction_receipt: Option<Value>,
     latest_agent_browser_status_packet: Option<Value>,
     latest_agent_browser_executor_readiness: Option<Value>,
+    latest_agent_browser_noop_executor_attempt: Option<Value>,
     latest_agent_browser_qa_runbook: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
@@ -630,6 +633,7 @@ impl WebPreviewView {
             latest_successful_interaction_receipt: None,
             latest_agent_browser_status_packet: None,
             latest_agent_browser_executor_readiness: None,
+            latest_agent_browser_noop_executor_attempt: None,
             latest_agent_browser_qa_runbook: None,
             event_pump_task: None,
             native_mount_task: None,
@@ -1092,6 +1096,7 @@ impl WebPreviewView {
             "successful_interaction_receipt": self.latest_successful_interaction_receipt_summary(),
             "agent_browser_status_packet": self.latest_agent_browser_status_packet_summary(),
             "agent_browser_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
+            "agent_browser_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
             "agent_browser_qa_runbook": self.latest_agent_browser_qa_runbook_summary(),
             "native_preview": {
                 "backend": native_backend,
@@ -1131,6 +1136,8 @@ impl WebPreviewView {
                 "send_agent_browser_status_packet_to_agent": true,
                 "copy_agent_browser_executor_readiness": true,
                 "send_agent_browser_executor_readiness_to_agent": true,
+                "copy_agent_browser_noop_executor_attempt": true,
+                "send_agent_browser_noop_executor_attempt_to_agent": true,
                 "copy_agent_browser_qa_runbook": true,
                 "send_agent_browser_qa_runbook_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
@@ -1325,6 +1332,20 @@ impl WebPreviewView {
             "can_dispatch_now": readiness.pointer("/readiness/can_dispatch_now").and_then(Value::as_bool),
             "blocker_count": readiness.pointer("/readiness/blockers").and_then(Value::as_array).map(Vec::len),
             "next_step": readiness.pointer("/readiness/next_step").and_then(Value::as_str),
+        }))
+    }
+
+    fn latest_agent_browser_noop_executor_attempt_summary(&self) -> Option<Value> {
+        let attempt = self.latest_agent_browser_noop_executor_attempt.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at_ms": attempt.pointer("/attempt/captured_at_ms").and_then(Value::as_u64),
+            "url": attempt.pointer("/attempt/url").and_then(Value::as_str),
+            "title": attempt.pointer("/attempt/title").and_then(Value::as_str),
+            "mode": attempt.pointer("/attempt/mode").and_then(Value::as_str),
+            "outcome": attempt.pointer("/attempt/outcome").and_then(Value::as_str),
+            "attempted_action_count": attempt.pointer("/attempt/attempted_actions").and_then(Value::as_array).map(Vec::len),
+            "blocked_receipt_outcome": attempt.pointer("/attempt/blocked_receipt/outcome").and_then(Value::as_str),
+            "blocker_count": attempt.pointer("/attempt/blockers").and_then(Value::as_array).map(Vec::len),
         }))
     }
 
@@ -2682,6 +2703,166 @@ impl WebPreviewView {
         cx.notify();
     }
 
+    fn agent_browser_noop_executor_attempt(&self, window: &Window) -> Value {
+        let interactive_unlocked = self.agent_action_permission.interactive_enabled();
+        let context_ready = self.latest_page_diagnostics.is_some()
+            && self.latest_dom_snapshot.is_some()
+            && self.latest_action_targets.is_some()
+            && self.latest_readiness_probe.is_some();
+        let audit_ready = self.latest_wait_contract.is_some()
+            && self.latest_interaction_plan.is_some()
+            && self.latest_interaction_preflight.is_some()
+            && self.latest_interaction_receipt_template.is_some()
+            && self.latest_interaction_action_request.is_some()
+            && self.latest_blocked_interaction_receipt.is_some()
+            && self.latest_successful_interaction_receipt.is_some();
+        let gate_ready_for_executor = interactive_unlocked && context_ready && audit_ready;
+
+        let mut blockers = Vec::new();
+        if !interactive_unlocked {
+            blockers.push(serde_json::json!({
+                "code": "interactive_actions_locked",
+                "message": "Interactive Agent Browser actions are locked for this WebPreview session.",
+            }));
+        }
+        if !context_ready {
+            blockers.push(serde_json::json!({
+                "code": "context_not_collected",
+                "message": "Fresh diagnostics, DOM, action targets, and readiness context are required before dispatch.",
+            }));
+        }
+        if !audit_ready {
+            blockers.push(serde_json::json!({
+                "code": "audit_contract_incomplete",
+                "message": "Wait, plan, preflight, request, and receipt artifacts must exist before dispatch.",
+            }));
+        }
+        blockers.push(serde_json::json!({
+            "code": "noop_executor_harness",
+            "message": "This executor harness records the attempt and emits a blocked receipt without dispatching native or page input.",
+        }));
+
+        let blocker_codes = blockers
+            .iter()
+            .filter_map(|blocker| blocker.get("code").and_then(Value::as_str))
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        let attempted_actions = INTERACTIVE_AGENT_BROWSER_ACTIONS
+            .iter()
+            .map(|action| {
+                serde_json::json!({
+                    "action": action,
+                    "attempt_id": format!("noop-{action}"),
+                    "mode": "no_op",
+                    "dispatch_status": "blocked",
+                    "would_pass_gate_if_executor_were_wired": gate_ready_for_executor,
+                    "native_input_dispatched": false,
+                    "page_script_dispatched": false,
+                    "blocker_codes": &blocker_codes,
+                    "receipt_required": true,
+                })
+            })
+            .collect::<Vec<_>>();
+        let receipt = serde_json::json!({
+            "schema": "zed.web_preview.noop_executor_blocked_receipt.v1",
+            "timestamp_ms": Self::current_epoch_millis(),
+            "outcome": "blocked",
+            "reason": "noop_executor_harness",
+            "session_id": self.session_id.as_ref(),
+            "url": self.active_url.as_ref(),
+            "title": self.current_tab_title().as_ref(),
+            "permission": self.agent_action_permission.snapshot(),
+            "gate": {
+                "interactive_unlocked": interactive_unlocked,
+                "context_ready": context_ready,
+                "audit_ready": audit_ready,
+                "gate_ready_for_executor": gate_ready_for_executor,
+            },
+            "blockers": blockers,
+            "attempted_action_count": attempted_actions.len(),
+            "native_input_dispatched": false,
+            "page_script_dispatched": false,
+        });
+        let receipt_blockers = receipt.pointer("/blockers").cloned();
+
+        serde_json::json!({
+            "schema": "zed.web_preview.agent_browser_noop_executor_attempt.v1",
+            "session": self.browser_session_snapshot(window),
+            "policy": self.agent_browser_policy_snapshot(),
+            "attempt": {
+                "captured_at_ms": Self::current_epoch_millis(),
+                "session_id": self.session_id.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "url": self.active_url.as_ref(),
+                "mode": "no_op",
+                "outcome": "blocked",
+                "executor_wired": true,
+                "native_dispatch_enabled": false,
+                "page_script_dispatch_enabled": false,
+                "gate_ready_for_executor": gate_ready_for_executor,
+                "blockers": receipt_blockers,
+                "attempted_actions": attempted_actions,
+                "blocked_receipt": receipt,
+                "latest_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
+            },
+            "notes": [
+                "This harness proves the executor path, readiness check, and receipt shape without touching WebPreview native input.",
+                "Every interactive action family is represented as blocked with native_input_dispatched=false.",
+                "Real dispatch must remain disabled until a later slice wires one action behind fresh preflight and receipt emission."
+            ],
+        })
+    }
+
+    fn agent_browser_noop_executor_attempt_json(attempt: &Value) -> String {
+        serde_json::to_string_pretty(attempt).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_noop_executor_attempt_agent_blocks(
+        &self,
+        attempt: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = attempt.pointer("/attempt/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview no-op executor attempt:\n\n```json\n{}\n```",
+            Self::agent_browser_noop_executor_attempt_json(attempt)
+        ))));
+        blocks
+    }
+
+    fn copy_agent_browser_noop_executor_attempt(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let attempt = self.agent_browser_noop_executor_attempt(window);
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_noop_executor_attempt_json(&attempt),
+        ));
+        self.latest_agent_browser_noop_executor_attempt = Some(attempt);
+        self.show_toast("Copied no-op executor attempt", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_noop_executor_attempt_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let attempt = self.agent_browser_noop_executor_attempt(window);
+        let blocks = self.agent_browser_noop_executor_attempt_agent_blocks(&attempt);
+        self.latest_agent_browser_noop_executor_attempt = Some(attempt);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent no-op executor attempt to the agent panel", cx);
+        cx.notify();
+    }
+
     fn agent_browser_qa_runbook(&self, window: &Window) -> Value {
         let interactive_unlocked = self.agent_action_permission.interactive_enabled();
         let context_ready = self.latest_page_diagnostics.is_some()
@@ -2719,6 +2900,7 @@ impl WebPreviewView {
                     "executor_wired": false,
                     "latest_status_packet": self.latest_agent_browser_status_packet_summary(),
                     "latest_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
+                    "latest_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
                 },
                 "manual_gates": [
                     {
@@ -4420,6 +4602,34 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Copy No-op Executor Attempt")
+                                .icon(IconName::Warning)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_noop_executor_attempt(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send No-op Executor Attempt")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_noop_executor_attempt_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy Agent Browser QA Runbook")
                                 .icon(IconName::Check)
                                 .handler({
@@ -5421,6 +5631,7 @@ impl Item for WebPreviewView {
                 latest_successful_interaction_receipt: None,
                 latest_agent_browser_status_packet: None,
                 latest_agent_browser_executor_readiness: None,
+                latest_agent_browser_noop_executor_attempt: None,
                 latest_agent_browser_qa_runbook: None,
                 event_pump_task: None,
                 native_mount_task: None,

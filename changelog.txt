@@ -1,3 +1,13 @@
+[2026-05-16] - Web Preview No-op Executor Harness
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy No-op Executor Attempt" and "Send No-op Executor Attempt".
+- The no-op executor harness checks the Agent Browser permission, context, and audit gates, records every future interactive action family as an attempted no-op, and emits a blocked receipt.
+- WebPreview session snapshots now summarize the latest no-op executor attempt for Agent Panel handoff and future executor debugging.
+
+NOTES:
+- This starts the Permissioned Agent Browser Executor set without dispatching native input or page JavaScript.
+
 [2026-05-16] - Web Preview Agent Browser QA Runbook
 
 ADDED:
