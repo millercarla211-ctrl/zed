@@ -4780,24 +4780,10 @@ impl WebPreviewView {
             }));
         }
 
-        let native_keyboard_focus = self.native_preview_has_keyboard_focus(window);
-        let preview_focused = self.focus_handle.is_focused(window);
-        let url_editor_focused = self.url_editor_focus_handle.is_focused(window);
+        let (keyboard_focus_gate, mut keyboard_focus_blockers) =
+            self.native_keyboard_focus_gate(window, "type");
         if config.action == "type_native_trace" {
-            if !native_keyboard_focus {
-                blockers.push(serde_json::json!({
-                    "code": "native_keyboard_focus_missing",
-                    "message": "The WebPreview does not currently own native keyboard focus.",
-                    "required_action": "Click inside the WebPreview body and rerun type preflight before enabling native type dispatch.",
-                }));
-            }
-            if url_editor_focused {
-                blockers.push(serde_json::json!({
-                    "code": "url_editor_focus_active",
-                    "message": "The WebPreview URL editor is focused, so typed text must stay in Zed UI instead of the page.",
-                    "required_action": "Leave the URL editor, focus the page body or a page input, and rerun type preflight.",
-                }));
-            }
+            blockers.append(&mut keyboard_focus_blockers);
         }
 
         let scale_factor = window.scale_factor() as f64;
@@ -4841,18 +4827,79 @@ impl WebPreviewView {
         if config.action == "type_native_trace"
             && let Some(object) = plan.as_object_mut()
         {
-            object.insert(
-                "keyboard_focus".to_string(),
-                serde_json::json!({
-                    "native_keyboard_focus": native_keyboard_focus,
-                    "preview_focused": preview_focused,
-                    "url_editor_focused": url_editor_focused,
-                    "required_before_dispatch": "WebPreview must own native keyboard focus and the URL editor must be unfocused before any type executor can send text.",
-                }),
-            );
+            object.insert("keyboard_focus".to_string(), keyboard_focus_gate);
         }
 
         (Some(plan), blockers)
+    }
+
+    fn native_keyboard_focus_gate(
+        &self,
+        window: &Window,
+        action_label: &'static str,
+    ) -> (Value, Vec<Value>) {
+        let native_keyboard_focus = self.native_preview_has_keyboard_focus(window);
+        let preview_focused = self.focus_handle.is_focused(window);
+        let url_editor_focused = self.url_editor_focus_handle.is_focused(window);
+        let url_editor_focus_requested = self.url_editor_focus_requested.get();
+        let window_active = window.is_window_active();
+        let preview_is_active_item = self.is_active_item;
+        let ready_for_keyboard_dispatch = native_keyboard_focus
+            && preview_focused
+            && !url_editor_focused
+            && !url_editor_focus_requested
+            && window_active
+            && preview_is_active_item;
+        let mut blockers = Vec::new();
+        if !window_active {
+            blockers.push(serde_json::json!({
+                "code": "window_not_active",
+                "message": "The Zed window is not active, so keyboard input must not be sent to the WebPreview.",
+                "required_action": format!("Activate the Zed window, focus the WebPreview page, and rerun {action_label} preflight."),
+            }));
+        }
+        if !preview_is_active_item {
+            blockers.push(serde_json::json!({
+                "code": "preview_not_active_item",
+                "message": "This WebPreview is not the active item, so keyboard input could route to a stale preview.",
+                "required_action": format!("Select this WebPreview tab or pane and rerun {action_label} preflight."),
+            }));
+        }
+        if !preview_focused {
+            blockers.push(serde_json::json!({
+                "code": "preview_gpui_focus_missing",
+                "message": "The WebPreview GPUI focus handle is not focused.",
+                "required_action": format!("Focus the WebPreview page body and rerun {action_label} preflight."),
+            }));
+        }
+        if !native_keyboard_focus {
+            blockers.push(serde_json::json!({
+                "code": "native_keyboard_focus_missing",
+                "message": "The WebPreview does not currently own native keyboard focus.",
+                "required_action": format!("Click inside the WebPreview body and rerun {action_label} preflight before enabling native keyboard dispatch."),
+            }));
+        }
+        if url_editor_focused || url_editor_focus_requested {
+            blockers.push(serde_json::json!({
+                "code": "url_editor_focus_active",
+                "message": "The WebPreview URL editor is focused or has a pending focus request, so keyboard input must stay in Zed UI instead of the page.",
+                "required_action": format!("Leave the URL editor, focus the page body or a page input, and rerun {action_label} preflight."),
+            }));
+        }
+
+        (
+            serde_json::json!({
+                "ready_for_keyboard_dispatch": ready_for_keyboard_dispatch,
+                "native_keyboard_focus": native_keyboard_focus,
+                "preview_focused": preview_focused,
+                "url_editor_focused": url_editor_focused,
+                "url_editor_focus_requested": url_editor_focus_requested,
+                "window_active": window_active,
+                "preview_is_active_item": preview_is_active_item,
+                "required_before_dispatch": "WebPreview must be the active item, own GPUI and native keyboard focus, and the URL editor must be unfocused before any keyboard executor can send input.",
+            }),
+            blockers,
+        )
     }
 
     fn native_key_trace_plan(
@@ -4870,21 +4917,16 @@ impl WebPreviewView {
             .as_ref()
             .and_then(|target| target.pointer("/active_element"))
             .cloned();
-        let native_keyboard_focus = self.native_preview_has_keyboard_focus(window);
-        if !native_keyboard_focus {
-            blockers.push(serde_json::json!({
-                "code": "native_keyboard_focus_missing",
-                "message": "The WebPreview does not currently own native keyboard focus.",
-                "required_action": "Click inside the WebPreview body and rerun key preflight before enabling native key dispatch.",
-            }));
-        }
+        let (keyboard_focus_gate, mut keyboard_focus_blockers) =
+            self.native_keyboard_focus_gate(window, "key");
+        blockers.append(&mut keyboard_focus_blockers);
 
         (
             Some(serde_json::json!({
                 "coordinate_space": "trace_only_keyboard_focus",
                 "key": key,
                 "active_element": active_element,
-                "native_keyboard_focus": native_keyboard_focus,
+                "keyboard_focus": keyboard_focus_gate,
                 "scale_factor": window.scale_factor() as f64,
                 "zoom_factor": self.zoom_factor,
                 "viewport_mode": self.viewport_mode.snapshot(),

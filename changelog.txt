@@ -1,3 +1,12 @@
+[2026-05-16] - Web Preview Shared Keyboard Focus Gate
+
+CHANGED:
+- Native type and key traces now share one keyboard dispatch gate covering active window, active WebPreview item, GPUI focus, native WebView focus, and URL-editor focus state.
+- Key trace receipts now include the same structured keyboard-focus gate as type traces, so future type and key executors cannot drift in focus safety policy.
+
+NOTES:
+- This remains trace-only; no text or key input is dispatched.
+
 [2026-05-16] - Web Preview Keyboard Focus Readiness
 
 CHANGED:
