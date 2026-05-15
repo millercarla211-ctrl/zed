@@ -235,6 +235,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_dom_snapshot_to_agent",
     "copy_action_targets",
     "send_action_targets_to_agent",
+    "copy_readiness_probe",
+    "send_readiness_probe_to_agent",
     "take_screenshot",
     "inspect_element",
 ];
@@ -411,6 +413,7 @@ pub struct WebPreviewView {
     latest_runtime_events: Option<Value>,
     latest_dom_snapshot: Option<Value>,
     latest_action_targets: Option<Value>,
+    latest_readiness_probe: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -587,6 +590,7 @@ impl WebPreviewView {
             latest_runtime_events: None,
             latest_dom_snapshot: None,
             latest_action_targets: None,
+            latest_readiness_probe: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1038,6 +1042,7 @@ impl WebPreviewView {
             "runtime_events": self.latest_runtime_events_summary(),
             "dom_snapshot": self.latest_dom_snapshot_summary(),
             "action_targets": self.latest_action_targets_summary(),
+            "readiness_probe": self.latest_readiness_probe_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1056,6 +1061,8 @@ impl WebPreviewView {
                 "send_dom_snapshot_to_agent": true,
                 "copy_action_targets": true,
                 "send_action_targets_to_agent": true,
+                "copy_readiness_probe": true,
+                "send_readiness_probe_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1116,6 +1123,18 @@ impl WebPreviewView {
             "title": targets.pointer("/targets/title").and_then(Value::as_str),
             "ready_state": targets.pointer("/targets/ready_state").and_then(Value::as_str),
             "counts": targets.pointer("/targets/counts").cloned(),
+        }))
+    }
+
+    fn latest_readiness_probe_summary(&self) -> Option<Value> {
+        let probe = self.latest_readiness_probe.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at": probe.pointer("/probe/timestamp").and_then(Value::as_str),
+            "url": probe.pointer("/probe/url").and_then(Value::as_str),
+            "title": probe.pointer("/probe/title").and_then(Value::as_str),
+            "ready_state": probe.pointer("/probe/ready_state").and_then(Value::as_str),
+            "readiness": probe.pointer("/probe/readiness").cloned(),
+            "counts": probe.pointer("/probe/counts").cloned(),
         }))
     }
 
@@ -1446,6 +1465,65 @@ impl WebPreviewView {
 
     fn send_action_targets_to_agent(&mut self, cx: &mut Context<Self>) {
         self.request_action_targets("agent", cx);
+    }
+
+    fn readiness_probe_snapshot(&self, payload: &Value, window: &Window) -> Value {
+        let mut probe = payload.clone();
+        if let Some(probe) = probe.as_object_mut() {
+            probe.remove("kind");
+            probe.remove("action");
+        }
+
+        serde_json::json!({
+            "schema": "zed.web_preview.readiness_probe.v1",
+            "session": self.browser_session_snapshot(window),
+            "probe": probe,
+        })
+    }
+
+    fn readiness_probe_json(probe: &Value) -> String {
+        serde_json::to_string_pretty(probe).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn readiness_probe_agent_blocks(&self, probe: &Value) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = probe.pointer("/probe/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview readiness probe:\n\n```json\n{}\n```",
+            Self::readiness_probe_json(probe)
+        ))));
+        blocks
+    }
+
+    fn request_readiness_probe(&mut self, action: &'static str, cx: &mut Context<Self>) {
+        let script = format!(
+            "window.__zedWebPreview && window.__zedWebPreview.collectReadinessProbe('{action}');"
+        );
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(&script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Collecting web preview readiness probe", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("Readiness probe is unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic("Readiness probe crashed before collection", cx);
+            }
+        }
+    }
+
+    fn copy_readiness_probe(&mut self, cx: &mut Context<Self>) {
+        self.request_readiness_probe("copy", cx);
+    }
+
+    fn send_readiness_probe_to_agent(&mut self, cx: &mut Context<Self>) {
+        self.request_readiness_probe("agent", cx);
     }
 
     fn agent_browser_action_manifest(&self, window: &Window) -> Value {
@@ -1999,6 +2077,46 @@ impl WebPreviewView {
                     }
                 }
             }
+            "readiness-probe" => {
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let action = payload
+                        .get("action")
+                        .and_then(Value::as_str)
+                        .unwrap_or("copy");
+                    let probe = self.readiness_probe_snapshot(&payload, window);
+                    self.latest_readiness_probe = Some(probe.clone());
+
+                    match action {
+                        "agent" => {
+                            self.append_content_blocks_to_agent_panel(
+                                self.readiness_probe_agent_blocks(&probe),
+                                window,
+                                cx,
+                            );
+                            self.show_toast("Sent readiness probe to the agent panel", cx);
+                        }
+                        _ => {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                Self::readiness_probe_json(&probe),
+                            ));
+                            self.show_toast("Copied web preview readiness probe JSON", cx);
+                        }
+                    }
+
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.report_action_error("Readiness probe collection failed", error, cx);
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "Readiness probe crashed while collecting page data",
+                            cx,
+                        );
+                    }
+                }
+            }
             "capture-area" => {
                 match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
                     let scale = payload
@@ -2434,6 +2552,30 @@ impl WebPreviewView {
                                     move |_, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_action_targets_to_agent(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Readiness Probe")
+                                .icon(IconName::LoadCircle)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_readiness_probe(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Readiness Probe to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_readiness_probe_to_agent(cx);
                                         });
                                     }
                                 }),
@@ -3406,6 +3548,7 @@ impl Item for WebPreviewView {
                 latest_runtime_events: None,
                 latest_dom_snapshot: None,
                 latest_action_targets: None,
+                latest_readiness_probe: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
@@ -4607,6 +4750,17 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     console: [],
     network: []
   };
+  const runtimeState = {
+    pendingNetwork: 0
+  };
+
+  const beginNetworkRequest = () => {
+    runtimeState.pendingNetwork += 1;
+  };
+
+  const finishNetworkRequest = () => {
+    runtimeState.pendingNetwork = Math.max(0, runtimeState.pendingNetwork - 1);
+  };
 
   const pushRuntimeEvent = (bucket, event) => {
     const events = runtimeEvents[bucket];
@@ -4741,6 +4895,7 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
       const startedAt = performance.now();
       const url = requestUrl(input);
       const method = requestMethod(input, init);
+      beginNetworkRequest();
       try {
         const response = await nativeFetch(input, init);
         pushRuntimeEvent("network", {
@@ -4764,6 +4919,8 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
           duration: Math.round(performance.now() - startedAt)
         });
         throw error;
+      } finally {
+        finishNetworkRequest();
       }
     };
 
@@ -4792,7 +4949,11 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     prototype.send = function(...args) {
       const request = this.__zedWebPreviewRequest || {};
       const startedAt = performance.now();
+      let completed = false;
       const complete = () => {
+        if (completed) return;
+        completed = true;
+        finishNetworkRequest();
         pushRuntimeEvent("network", {
           kind: "xhr",
           method: request.method || "GET",
@@ -4804,7 +4965,25 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
         });
       };
       this.addEventListener("loadend", complete, { once: true });
-      return nativeSend.apply(this, args);
+      beginNetworkRequest();
+      try {
+        return nativeSend.apply(this, args);
+      } catch (error) {
+        if (!completed) {
+          completed = true;
+          finishNetworkRequest();
+        }
+        pushRuntimeEvent("network", {
+          kind: "xhr",
+          method: request.method || "GET",
+          url: request.url || null,
+          status: null,
+          ok: false,
+          error: serializeRuntimeValue(error),
+          duration: Math.round(performance.now() - startedAt)
+        });
+        throw error;
+      }
     };
 
     Object.defineProperty(prototype, "__zedWebPreviewCaptured", {
@@ -4813,11 +4992,49 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     });
   };
 
+  const mutationState = {
+    observerAvailable: typeof window.MutationObserver === "function",
+    observed: false,
+    count: 0,
+    lastMutationAt: null,
+    lastMutationMs: null,
+    observer: null
+  };
+
+  const noteMutation = (count = 1) => {
+    mutationState.count += count;
+    mutationState.lastMutationAt = new Date().toISOString();
+    mutationState.lastMutationMs = performance.now();
+  };
+
+  const installMutationCapture = () => {
+    if (!mutationState.observerAvailable || mutationState.observed) return;
+    const root = document.documentElement || document.body;
+    if (!root) {
+      document.addEventListener("DOMContentLoaded", () => {
+        try { installMutationCapture(); } catch (_error) {}
+      }, { once: true });
+      return;
+    }
+    const observer = new MutationObserver((mutations) => {
+      noteMutation(mutations.length || 1);
+    });
+    observer.observe(root, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      characterData: true
+    });
+    mutationState.observed = true;
+    mutationState.observer = observer;
+  };
+
   const installRuntimeCapture = () => {
     try { installConsoleCapture(); } catch (_error) {}
     try { installPageErrorCapture(); } catch (_error) {}
     try { installFetchCapture(); } catch (_error) {}
     try { installXhrCapture(); } catch (_error) {}
+    try { installMutationCapture(); } catch (_error) {}
   };
 
   const runtimeResourceSnapshot = () => {
@@ -5040,6 +5257,70 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     };
   };
 
+  const readinessSelectorSnapshot = () => {
+    const selectors = [
+      "body",
+      "main",
+      "form",
+      "input, textarea, select, [contenteditable='true']",
+      "button, [role='button']",
+      "a[href]",
+      "[data-testid], [data-test], [data-cy]",
+      "[aria-busy='true']",
+      "[aria-live]",
+      "[role='dialog']"
+    ];
+
+    return selectors.map((selector) => {
+      let elements = [];
+      try {
+        elements = Array.from(document.querySelectorAll(selector));
+      } catch (_error) {
+        elements = [];
+      }
+
+      const firstVisible = elements.find((element) => {
+        if (!(element instanceof Element)) return false;
+        return isVisibleElement(element, roundedRect(element));
+      });
+
+      return {
+        selector,
+        count: elements.length,
+        first_visible: firstVisible ? elementSnapshot(firstVisible) : null
+      };
+    });
+  };
+
+  const navigationTimingSnapshot = () => {
+    const navigation = performance.getEntriesByType ? performance.getEntriesByType("navigation")[0] : null;
+    if (!navigation) return null;
+    return {
+      type: navigation.type,
+      dom_content_loaded_ms: Math.round(navigation.domContentLoadedEventEnd || 0),
+      load_event_ms: Math.round(navigation.loadEventEnd || 0),
+      response_end_ms: Math.round(navigation.responseEnd || 0),
+      transfer_size: navigation.transferSize || 0,
+      encoded_body_size: navigation.encodedBodySize || 0,
+      decoded_body_size: navigation.decodedBodySize || 0
+    };
+  };
+
+  const readinessBusyCount = () => {
+    try {
+      return document.querySelectorAll("[aria-busy='true'], [data-loading='true'], [data-pending='true'], .loading, .spinner, [role='progressbar']").length;
+    } catch (_error) {
+      return 0;
+    }
+  };
+
+  const readinessQuietForMs = () => {
+    if (mutationState.lastMutationMs == null) {
+      return Math.round(performance.now());
+    }
+    return Math.max(0, Math.round(performance.now() - mutationState.lastMutationMs));
+  };
+
   installRuntimeCapture();
 
   window.__zedWebPreview = {
@@ -5133,6 +5414,7 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
           errors: errors.length,
           network: networkEvents.length,
           failed_network: failedNetwork.length,
+          pending_network: runtimeState.pendingNetwork,
           performance_resources: performance.getEntriesByType ? performance.getEntriesByType("resource").length : 0
         },
         console: consoleEvents,
@@ -5216,6 +5498,76 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
         },
         active_element: elementSnapshot(document.activeElement instanceof Element ? document.activeElement : null),
         targets: result.targets
+      });
+    },
+
+    collectReadinessProbe(action = "copy") {
+      try { installMutationCapture(); } catch (_error) {}
+      const html = document.documentElement;
+      const body = document.body;
+      const actionTargets = collectActionTargetRows();
+      const quietForMs = readinessQuietForMs();
+      const busyCount = readinessBusyCount();
+      const networkIdle = runtimeState.pendingNetwork === 0;
+      const domQuiet = quietForMs >= 500;
+      const documentInteractive = document.readyState === "interactive" || document.readyState === "complete";
+      const documentComplete = document.readyState === "complete";
+
+      post({
+        kind: "readiness-probe",
+        action,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState,
+        readiness: {
+          interactive: documentInteractive,
+          complete: documentComplete,
+          network_idle: networkIdle,
+          dom_quiet: domQuiet,
+          no_busy_indicators: busyCount === 0,
+          settled: documentComplete && networkIdle && domQuiet && busyCount === 0,
+          quiet_for_ms: quietForMs,
+          pending_network: runtimeState.pendingNetwork,
+          busy_indicators: busyCount
+        },
+        document: {
+          content_type: document.contentType,
+          character_set: document.characterSet,
+          language: html?.lang || null,
+          has_focus: document.hasFocus(),
+          visibility_state: document.visibilityState,
+          active_element: elementSnapshot(document.activeElement instanceof Element ? document.activeElement : null)
+        },
+        viewport: {
+          inner_width: window.innerWidth,
+          inner_height: window.innerHeight,
+          device_pixel_ratio: window.devicePixelRatio || 1,
+          scroll_x: Math.round(window.scrollX || 0),
+          scroll_y: Math.round(window.scrollY || 0),
+          scroll_width: Math.max(html?.scrollWidth || 0, body?.scrollWidth || 0),
+          scroll_height: Math.max(html?.scrollHeight || 0, body?.scrollHeight || 0)
+        },
+        mutation: {
+          observer_available: mutationState.observerAvailable,
+          observed: mutationState.observed,
+          count: mutationState.count,
+          last_mutation_at: mutationState.lastMutationAt,
+          quiet_for_ms: quietForMs
+        },
+        counts: {
+          action_targets: actionTargets.targets.length,
+          action_target_candidates: actionTargets.candidates,
+          links: document.links?.length || 0,
+          buttons: document.querySelectorAll("button, [role='button']").length,
+          inputs: document.querySelectorAll("input, textarea, select, [contenteditable='true']").length,
+          forms: document.forms?.length || 0,
+          busy_indicators: busyCount,
+          body_text_length: body?.innerText?.length || 0
+        },
+        navigation_timing: navigationTimingSnapshot(),
+        selector_probe: readinessSelectorSnapshot(),
+        action_target_sample: actionTargets.targets.slice(0, 24)
       });
     },
 

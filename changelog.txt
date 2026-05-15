@@ -1,3 +1,13 @@
+[2026-05-15] - Web Preview Readiness Probe
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Readiness Probe" and "Send Readiness Probe to Agent".
+- The WebPreview bridge now tracks pending fetch/XHR requests and DOM mutation quiet time for lightweight page-settled heuristics.
+- Readiness probes include document state, viewport state, mutation counters, selector probes, busy indicators, and a small action-target sample.
+
+NOTES:
+- This prepares the Agent Browser Command Center for future wait-for-selector/text behavior without introducing interactive browser control yet.
+
 [2026-05-15] - Web Preview Action Targets
 
 ADDED:
