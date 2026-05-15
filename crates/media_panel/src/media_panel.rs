@@ -44,6 +44,7 @@ const MEDIA_PANEL_KEY: &str = "MediaPanel";
 const MAX_MEDIA_RESULTS: usize = 320;
 const MAX_REMOTE_MEDIA_RESULTS: usize = 640;
 const MAX_REMOTE_MEDIA_CACHE_ENTRIES: usize = 24;
+const MAX_REMOTE_PROVIDER_SUMMARIES: usize = 4;
 const MAX_RECENT_MEDIA_ACTIONS: usize = 5;
 const MAX_PINNED_MEDIA_ACTIONS: usize = 8;
 const PINNED_MEDIA_ACTIONS_KEY: &str = "asset_panel_pinned_media_v1";
@@ -144,10 +145,17 @@ struct RemoteMediaFetchResult {
     health: RemoteMediaProviderHealth,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct RemoteMediaProviderHealth {
     direct_provider_count: usize,
     skipped_provider_count: usize,
+    asset_count: usize,
+    provider_summaries: Vec<RemoteMediaProviderSummary>,
+}
+
+#[derive(Clone)]
+struct RemoteMediaProviderSummary {
+    provider: SharedString,
     asset_count: usize,
 }
 
@@ -590,7 +598,7 @@ impl MediaPanel {
                 Some((
                     remote_kind_counts,
                     remote_entry.warning.clone(),
-                    remote_entry.health,
+                    remote_entry.health.clone(),
                 ))
             } else {
                 None
@@ -647,7 +655,7 @@ impl MediaPanel {
                                     MediaKindCounts::from_remote_assets(&result.assets);
                                 panel.remote_assets.clone_from(&result.assets);
                                 panel.remote_warning = result.warning.clone();
-                                panel.remote_health = Some(result.health);
+                                panel.remote_health = Some(result.health.clone());
                                 panel.cache_remote_assets(signature.clone(), result);
                                 panel.remote_kind_counts = remote_kind_counts;
                                 panel.remote_result_source = RemoteMediaResultSource::Live;
@@ -1592,7 +1600,7 @@ impl MediaPanel {
 
     fn render_remote_health_row(
         &self,
-        health: RemoteMediaProviderHealth,
+        health: &RemoteMediaProviderHealth,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let description = remote_provider_health_description(health, self.remote_result_source);
@@ -2130,7 +2138,7 @@ impl Render for MediaPanel {
         let provider_count = remote_provider_count(self.kind_filter);
         let remote_warning = self.remote_warning.clone();
         let show_remote_loading_row = self.remote_loading && remote_assets.is_empty();
-        let remote_health = self.remote_health;
+        let remote_health = self.remote_health.as_ref();
         let recent_media_section = if normalized_query.is_empty() {
             self.render_recent_media_section(cx)
         } else {
@@ -2742,7 +2750,7 @@ fn load_pinned_media(cx: &App) -> VecDeque<RecentMediaEntry> {
 }
 
 fn remote_provider_health_description(
-    health: RemoteMediaProviderHealth,
+    health: &RemoteMediaProviderHealth,
     source: RemoteMediaResultSource,
 ) -> SharedString {
     let healthy_count = health
@@ -2767,7 +2775,27 @@ fn remote_provider_health_description(
             health.direct_provider_count, health.skipped_provider_count, health.asset_count
         );
     }
+    append_remote_provider_summaries(&mut text, &health.provider_summaries);
     text.into()
+}
+
+fn append_remote_provider_summaries(text: &mut String, summaries: &[RemoteMediaProviderSummary]) {
+    if summaries.is_empty() {
+        return;
+    }
+
+    text.push_str("; top: ");
+    for (index, summary) in summaries.iter().enumerate() {
+        if index > 0 {
+            text.push_str(", ");
+        }
+        let _ = write!(
+            text,
+            "{} {}",
+            summary.provider.as_ref(),
+            summary.asset_count
+        );
+    }
 }
 
 fn remote_media_provider_warning(
@@ -2806,6 +2834,32 @@ fn remote_media_provider_warning(
         let _ = write!(text, "; +{} more", errors.len() - shown_error_count);
     }
     Some(text.into())
+}
+
+fn remote_provider_summaries(assets: &[RemoteMediaAsset]) -> Vec<RemoteMediaProviderSummary> {
+    let mut summaries = Vec::<RemoteMediaProviderSummary>::new();
+    for asset in assets {
+        if let Some(summary) = summaries
+            .iter_mut()
+            .find(|summary| summary.provider.as_ref() == asset.provider.as_ref())
+        {
+            summary.asset_count += 1;
+        } else {
+            summaries.push(RemoteMediaProviderSummary {
+                provider: asset.provider.as_ref().to_string().into(),
+                asset_count: 1,
+            });
+        }
+    }
+
+    summaries.sort_by(|left, right| {
+        right
+            .asset_count
+            .cmp(&left.asset_count)
+            .then_with(|| left.provider.as_ref().cmp(right.provider.as_ref()))
+    });
+    summaries.truncate(MAX_REMOTE_PROVIDER_SUMMARIES);
+    summaries
 }
 
 struct MediaUrlCandidate {
@@ -3329,10 +3383,12 @@ async fn fetch_remote_media_assets(
 
     dedupe_remote_assets(&mut assets);
     assets.truncate(MAX_REMOTE_MEDIA_RESULTS);
+    let provider_summaries = remote_provider_summaries(&assets);
     let health = RemoteMediaProviderHealth {
         direct_provider_count,
         skipped_provider_count: errors.len(),
         asset_count: assets.len(),
+        provider_summaries,
     };
 
     if assets.is_empty() && !errors.is_empty() {

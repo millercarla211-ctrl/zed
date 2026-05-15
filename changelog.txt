@@ -1,3 +1,14 @@
+[2026-05-15] - Media Provider Result Breakdown
+
+ADDED:
+- Media remote provider health now includes the top result-returning providers for the current live or cached query.
+
+CHANGED:
+- Remote media provider health is cloned into cache/display state with a compact provider breakdown after result de-dupe and truncation.
+
+NOTES:
+- This adds observability to remote media quality without changing provider fetch limits, search behavior, local indexing, editor input, or WebPreview routing.
+
 [2026-05-15] - UI Install Safety Copy
 
 CHANGED:
