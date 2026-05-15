@@ -1,3 +1,12 @@
+[2026-05-15] - Asset Panel Action Readiness Tooltips
+
+ADDED:
+- Media history rows now explain disabled Preview, Insert, and Pin actions when a local source file is missing.
+- UI catalog and history rows now explain install-only registry actions, copied commands/snippets, stale preview/insert actions, pinning, and removal.
+
+NOTES:
+- This improves action clarity with hover-only copy and does not change row behavior, editor input, WebPreview routing, catalog loading, or media provider fetches.
+
 [2026-05-15] - Asset Panel Readiness Status
 
 ADDED:

@@ -1867,6 +1867,9 @@ impl MediaPanel {
                         Button::new(preview_id, "Preview")
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
+                            .tooltip(Tooltip::text(media_history_preview_tooltip(
+                                source_available,
+                            )))
                             .disabled(!source_available)
                             .on_click(cx.listener(move |panel, _, window, cx| {
                                 panel.preview_media_asset(preview_asset.clone(), window, cx);
@@ -1886,6 +1889,9 @@ impl MediaPanel {
                         Button::new(insert_id, "Insert")
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
+                            .tooltip(Tooltip::text(media_history_insert_tooltip(
+                                source_available,
+                            )))
                             .disabled(!source_available)
                             .on_click(cx.listener(move |panel, _, window, cx| {
                                 panel.insert_media(insert_asset.clone(), window, cx);
@@ -1992,6 +1998,7 @@ impl MediaPanel {
                     Button::new(remove_id, "Remove")
                         .style(ButtonStyle::Subtle)
                         .size(ButtonSize::Compact)
+                        .tooltip(Tooltip::text("Remove this missing media entry"))
                         .on_click(cx.listener(move |panel, _, _, cx| {
                             panel.remove_media_history_entry(remove_entry.clone(), pinned, cx);
                         })),
@@ -2001,6 +2008,10 @@ impl MediaPanel {
                 Button::new(pin_id, pin_label)
                     .style(ButtonStyle::Subtle)
                     .size(ButtonSize::Compact)
+                    .tooltip(Tooltip::text(media_history_pin_tooltip(
+                        pinned,
+                        source_available,
+                    )))
                     .disabled(!pinned && !source_available)
                     .on_click(cx.listener(move |panel, _, _, cx| {
                         if pinned {
@@ -2557,6 +2568,36 @@ fn retain_available_media_entries(entries: &mut VecDeque<RecentMediaEntry>) -> u
     let before = entries.len();
     entries.retain(|entry| !media_history_entry_stale(entry));
     before.saturating_sub(entries.len())
+}
+
+fn media_history_preview_tooltip(source_available: bool) -> &'static str {
+    if source_available {
+        "Preview media"
+    } else {
+        "Source file is missing. Remove this row or use Clean."
+    }
+}
+
+fn media_history_insert_tooltip(source_available: bool) -> &'static str {
+    if source_available {
+        "Insert media into the active editor"
+    } else {
+        "Source file is missing. Remove this row or use Clean."
+    }
+}
+
+fn media_history_pin_tooltip(pinned: bool, source_available: bool) -> &'static str {
+    if pinned {
+        if source_available {
+            "Unpin from the media working set"
+        } else {
+            "Remove this missing pinned media entry"
+        }
+    } else if source_available {
+        "Pin to the media working set"
+    } else {
+        "Source file is missing. Remove this row or use Clean."
+    }
 }
 
 fn media_removed_stale_status(section: &str, removed: usize) -> SharedString {

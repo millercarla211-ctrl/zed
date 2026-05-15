@@ -1025,6 +1025,7 @@ impl ShadcnUiPanel {
                         Button::new(insert_id, primary_action)
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
+                            .tooltip(Tooltip::text(ui_catalog_primary_tooltip(&item)))
                             .on_click(cx.listener({
                                 let item = item.clone();
                                 move |panel, _, window, cx| {
@@ -1040,6 +1041,7 @@ impl ShadcnUiPanel {
                         Button::new(copy_id, copy_action)
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
+                            .tooltip(Tooltip::text(ui_catalog_copy_tooltip(&item)))
                             .on_click(cx.listener({
                                 let item = item.clone();
                                 move |panel, _, _, cx| {
@@ -1051,6 +1053,7 @@ impl ShadcnUiPanel {
                         Button::new(preview_id, "Preview")
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
+                            .tooltip(Tooltip::text("Preview in WebPreview"))
                             .on_click(cx.listener({
                                 let item = item.clone();
                                 move |panel, _, window, cx| {
@@ -1361,6 +1364,11 @@ impl ShadcnUiPanel {
                         Button::new(primary_id, primary_action)
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
+                            .tooltip(Tooltip::text(ui_history_primary_tooltip(
+                                item.install_only,
+                                can_insert,
+                                source_available,
+                            )))
                             .disabled(can_insert && !source_available)
                             .on_click(cx.listener({
                                 let item = item.clone();
@@ -1388,6 +1396,10 @@ impl ShadcnUiPanel {
                         Button::new(preview_id, "Preview")
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
+                            .tooltip(Tooltip::text(ui_history_preview_tooltip(
+                                can_insert,
+                                source_available,
+                            )))
                             .disabled(can_insert && !source_available)
                             .on_click(cx.listener({
                                 let item = item.clone();
@@ -1401,6 +1413,7 @@ impl ShadcnUiPanel {
                             Button::new(remove_id, "Remove")
                                 .style(ButtonStyle::Subtle)
                                 .size(ButtonSize::Compact)
+                                .tooltip(Tooltip::text("Remove this missing UI entry"))
                                 .on_click(cx.listener(move |panel, _, _, cx| {
                                     panel.remove_ui_history_entry(remove_item.clone(), pinned, cx);
                                 })),
@@ -1419,6 +1432,10 @@ impl ShadcnUiPanel {
                 Button::new(pin_id, pin_label)
                     .style(ButtonStyle::Subtle)
                     .size(ButtonSize::Compact)
+                    .tooltip(Tooltip::text(ui_history_pin_tooltip(
+                        pinned,
+                        source_available,
+                    )))
                     .disabled(!pinned && !source_available)
                     .on_click(cx.listener(move |panel, _, _, cx| {
                         if pinned {
@@ -1932,6 +1949,62 @@ fn ui_readiness_label(
             UiCatalogFreshness::Cached => ("cached", Color::Muted),
             UiCatalogFreshness::Hydrated => ("ready", Color::Success),
         }
+    }
+}
+
+fn ui_catalog_primary_tooltip(item: &CatalogItem) -> &'static str {
+    if item.install_only {
+        "Install writes this registry item into the active project"
+    } else if can_drag_into_editor(item.source) {
+        "Insert this UI snippet into the active React editor"
+    } else {
+        "Open this registry source"
+    }
+}
+
+fn ui_catalog_copy_tooltip(item: &CatalogItem) -> &'static str {
+    if item.install_only {
+        "Copy the shadcn add command"
+    } else {
+        "Copy the import and JSX snippet"
+    }
+}
+
+fn ui_history_primary_tooltip(
+    install_only: bool,
+    can_insert: bool,
+    source_available: bool,
+) -> &'static str {
+    if can_insert && !source_available {
+        "Source or registry manifest is missing. Remove this row or use Clean."
+    } else if install_only {
+        "Install writes this registry item into the active project"
+    } else if can_insert {
+        "Insert this UI snippet into the active React editor"
+    } else {
+        "Open this registry source"
+    }
+}
+
+fn ui_history_preview_tooltip(can_insert: bool, source_available: bool) -> &'static str {
+    if can_insert && !source_available {
+        "Source or registry manifest is missing. Remove this row or use Clean."
+    } else {
+        "Preview in WebPreview"
+    }
+}
+
+fn ui_history_pin_tooltip(pinned: bool, source_available: bool) -> &'static str {
+    if pinned {
+        if source_available {
+            "Unpin from the UI working set"
+        } else {
+            "Remove this missing pinned UI entry"
+        }
+    } else if source_available {
+        "Pin to the UI working set"
+    } else {
+        "Source or registry manifest is missing. Remove this row or use Clean."
     }
 }
 
