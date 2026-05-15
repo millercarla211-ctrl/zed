@@ -1,3 +1,17 @@
+[2026-05-16] - Web Preview First Native Type Executor
+
+ADDED:
+- Added a Windows WebView2 DevTools Protocol type executor that inserts only explicit payload text into the currently focused page input.
+- WebPreview's More menu now includes "Run Native Type Executor" and "Run Native Type Executor to Agent".
+- Native type execution requires interactive permission, fresh executor context/audit readiness, fresh type preflight, focused-target validation, the shared keyboard-focus gate, explicit payload text, and the native dispatch QA checklist before dispatch.
+
+CHANGED:
+- Browser plugin manifests now advertise `browser.action.type` as available when unlocked with an explicit payload requirement.
+- Executor readiness now treats click, type, scroll, key, history, and cache-only reset as wired action families, with `type_text` still payload-gated and focused-target-gated.
+
+NOTES:
+- This dispatch slice uses WebView2 DevTools Protocol `Input.insertText`; it does not click or focus the target, synthesize OS keyboard events, run page scripts, control external Chrome, or change editor keyboard routing.
+
 [2026-05-16] - Web Preview First Native Key Executor
 
 ADDED:
