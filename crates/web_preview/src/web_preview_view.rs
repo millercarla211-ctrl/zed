@@ -6,7 +6,7 @@ use editor::Editor;
 use gpui::{
     Action, Anchor, App, AppContext as _, Bounds, ClipboardItem, Context, Entity, EventEmitter,
     FocusHandle, Focusable, Image as GpuiImage, Pixels, Render, SharedString, Subscription, Task,
-    WeakEntity, Window, canvas,
+    WeakEntity, Window, canvas, point, size,
 };
 #[cfg(target_os = "windows")]
 use gpui::{AsyncApp, EntityId, ImageFormat as GpuiImageFormat};
@@ -118,6 +118,78 @@ enum PreviewLoadState {
     Loading,
     Ready,
     Error(SharedString),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PreviewViewportMode {
+    Full,
+    Fixed {
+        label: &'static str,
+        width: u32,
+        height: u32,
+    },
+}
+
+impl PreviewViewportMode {
+    const FULL: Self = Self::Full;
+    const IPHONE_15: Self = Self::Fixed {
+        label: "iPhone 15",
+        width: 393,
+        height: 852,
+    };
+    const IPAD_AIR: Self = Self::Fixed {
+        label: "iPad Air",
+        width: 820,
+        height: 1180,
+    };
+    const LAPTOP: Self = Self::Fixed {
+        label: "Laptop",
+        width: 1280,
+        height: 900,
+    };
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Full => "Full",
+            Self::Fixed { label, .. } => label,
+        }
+    }
+
+    fn dimensions(self) -> Option<(u32, u32)> {
+        match self {
+            Self::Full => None,
+            Self::Fixed { width, height, .. } => Some((width, height)),
+        }
+    }
+
+    fn rotated(self) -> Option<Self> {
+        match self {
+            Self::Full => None,
+            Self::Fixed {
+                label,
+                width,
+                height,
+            } => Some(Self::Fixed {
+                label,
+                width: height,
+                height: width,
+            }),
+        }
+    }
+
+    fn snapshot(self) -> Value {
+        let (mode, width, height) = match self {
+            Self::Full => ("full", None, None),
+            Self::Fixed { width, height, .. } => ("fixed", Some(width), Some(height)),
+        };
+
+        serde_json::json!({
+            "mode": mode,
+            "label": self.label(),
+            "width": width,
+            "height": height,
+        })
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -267,6 +339,7 @@ pub struct WebPreviewView {
     detected_extensions: Vec<DetectedExtension>,
     extensions_scanned: bool,
     load_state: PreviewLoadState,
+    layout_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
     host_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
     #[cfg(target_os = "macos")]
     last_applied_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
@@ -279,6 +352,7 @@ pub struct WebPreviewView {
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
+    viewport_mode: PreviewViewportMode,
     is_active_item: bool,
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     native_preview: Rc<RefCell<Option<NativeWebPreview>>>,
@@ -438,6 +512,7 @@ impl WebPreviewView {
             detected_extensions: Vec::new(),
             extensions_scanned: false,
             load_state: PreviewLoadState::Loading,
+            layout_bounds: Rc::new(RefCell::new(None)),
             host_bounds: Rc::new(RefCell::new(None)),
             #[cfg(target_os = "macos")]
             last_applied_bounds: Rc::new(RefCell::new(None)),
@@ -450,6 +525,7 @@ impl WebPreviewView {
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
+            viewport_mode: PreviewViewportMode::FULL,
             is_active_item: false,
             #[cfg(any(target_os = "windows", target_os = "macos"))]
             native_preview: Rc::new(RefCell::new(None)),
@@ -816,6 +892,7 @@ impl WebPreviewView {
                 "native_preview_mounted: {native_preview_mounted}\n",
                 "native_keyboard_focus: {native_keyboard_focus}\n",
                 "visible_bounds: {visible_bounds}\n",
+                "viewport: {viewport}\n",
                 "bookmarks: {bookmark_count}\n",
                 "project_file_preview: {project_file_preview}\n"
             ),
@@ -833,6 +910,7 @@ impl WebPreviewView {
             native_preview_mounted = native_preview_mounted,
             native_keyboard_focus = self.native_preview_has_keyboard_focus(window),
             visible_bounds = visible_bounds,
+            viewport = self.viewport_label(),
             bookmark_count = self.bookmarks.len(),
             project_file_preview = self.project_item.is_some(),
         )
@@ -880,6 +958,7 @@ impl WebPreviewView {
             },
             "profile_dir": self.workspace_context.profile_dir.display().to_string(),
             "zoom": self.zoom_factor,
+            "viewport": self.viewport_mode.snapshot(),
             "active_item": self.is_active_item,
             "project_file_preview": self.project_item.is_some(),
             "bookmarks": {
@@ -929,6 +1008,15 @@ impl WebPreviewView {
             "title": events.pointer("/events/title").and_then(Value::as_str),
             "counts": events.pointer("/events/counts").cloned(),
         }))
+    }
+
+    fn viewport_label(&self) -> String {
+        match self.viewport_mode.dimensions() {
+            Some((width, height)) => {
+                format!("{} ({}x{})", self.viewport_mode.label(), width, height)
+            }
+            None => self.viewport_mode.label().to_string(),
+        }
     }
 
     fn browser_session_json(&self, window: &Window) -> String {
@@ -1153,6 +1241,30 @@ impl WebPreviewView {
         self.zoom_factor = (self.zoom_factor - 0.1).max(0.25);
         let _ = self.apply_zoom();
         cx.notify();
+    }
+
+    fn set_viewport_mode(
+        &mut self,
+        mode: PreviewViewportMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.viewport_mode = mode;
+        if let Err(error) = self.sync_current_viewport_bounds(window) {
+            self.report_action_error("Viewport change failed", error, cx);
+        } else {
+            self.show_toast(format!("Viewport: {}", self.viewport_label()), cx);
+        }
+        cx.notify();
+    }
+
+    fn rotate_viewport(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(rotated) = self.viewport_mode.rotated() else {
+            self.show_toast("Select a fixed viewport before rotating", cx);
+            return;
+        };
+
+        self.set_viewport_mode(rotated, window, cx);
     }
 
     fn open_devtools(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -1980,6 +2092,83 @@ impl WebPreviewView {
                         )
                         .separator()
                         .item(
+                            ContextMenuEntry::new("Viewport: Full")
+                                .icon(IconName::Screen)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.set_viewport_mode(
+                                                PreviewViewportMode::FULL,
+                                                window,
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Viewport: iPhone 15")
+                                .icon(IconName::Screen)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.set_viewport_mode(
+                                                PreviewViewportMode::IPHONE_15,
+                                                window,
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Viewport: iPad Air")
+                                .icon(IconName::Screen)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.set_viewport_mode(
+                                                PreviewViewportMode::IPAD_AIR,
+                                                window,
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Viewport: Laptop")
+                                .icon(IconName::Screen)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.set_viewport_mode(
+                                                PreviewViewportMode::LAPTOP,
+                                                window,
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Rotate Viewport")
+                                .icon(IconName::RotateCw)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.rotate_viewport(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .separator()
+                        .item(
                             ContextMenuEntry::new("Clear Cache")
                                 .icon(IconName::Trash)
                                 .handler(move |window, cx| {
@@ -2182,6 +2371,39 @@ impl WebPreviewView {
     }
 
     #[cfg(any(target_os = "windows", target_os = "macos"))]
+    fn sync_current_viewport_bounds(&self, window: &Window) -> Result<()> {
+        let Some(layout_bounds) = *self.layout_bounds.borrow() else {
+            return Ok(());
+        };
+
+        let viewport_bounds = viewport_bounds_for_layout(layout_bounds, self.viewport_mode);
+        *self.host_bounds.borrow_mut() = Some(viewport_bounds);
+        let mut borrow = self.native_preview.borrow_mut();
+        if let Some(preview) = borrow.as_mut() {
+            #[cfg(target_os = "windows")]
+            {
+                preview.sync_bounds(viewport_bounds, window.scale_factor())?;
+            }
+
+            #[cfg(target_os = "macos")]
+            {
+                let _ = window;
+                set_webview_bounds(&preview.webview, viewport_bounds)?;
+                *self.last_applied_bounds.borrow_mut() = Some(viewport_bounds);
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    fn sync_current_viewport_bounds(&self, _window: &Window) -> Result<()> {
+        Err(anyhow!(
+            "Native web preview is not available on this platform"
+        ))
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     fn clear_all_browsing_data(&self) -> Result<()> {
         let borrow = self.native_preview.borrow();
         let preview = borrow
@@ -2362,36 +2584,41 @@ impl WebPreviewView {
     fn render_webview_body(&self, cx: &mut Context<Self>) -> AnyElement {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
+            let layout_bounds = self.layout_bounds.clone();
             let host_bounds = self.host_bounds.clone();
+            let viewport_mode = self.viewport_mode;
             #[cfg(target_os = "macos")]
             let last_applied_bounds = self.last_applied_bounds.clone();
             let native_preview = self.native_preview.clone();
 
             let canvas = canvas(
                 move |bounds, window, _cx| {
-                    *host_bounds.borrow_mut() = Some(bounds);
+                    *layout_bounds.borrow_mut() = Some(bounds);
+                    let viewport_bounds = viewport_bounds_for_layout(bounds, viewport_mode);
+                    *host_bounds.borrow_mut() = Some(viewport_bounds);
                     #[cfg(target_os = "windows")]
                     let preview_ready = native_preview.borrow().is_some();
                     if let Some(preview) = native_preview.borrow_mut().as_mut() {
                         #[cfg(target_os = "windows")]
                         {
-                            let _ = preview.sync_bounds(bounds, window.scale_factor());
+                            let _ = preview.sync_bounds(viewport_bounds, window.scale_factor());
                         }
 
                         #[cfg(target_os = "macos")]
                         {
                             let should_update_bounds =
-                                last_applied_bounds.borrow().as_ref().copied() != Some(bounds);
+                                last_applied_bounds.borrow().as_ref().copied()
+                                    != Some(viewport_bounds);
                             if should_update_bounds {
-                                let _ = set_webview_bounds(&preview.webview, bounds);
-                                *last_applied_bounds.borrow_mut() = Some(bounds);
+                                let _ = set_webview_bounds(&preview.webview, viewport_bounds);
+                                *last_applied_bounds.borrow_mut() = Some(viewport_bounds);
                             }
                         }
                     }
                     #[cfg(target_os = "windows")]
                     if preview_ready {
                         let passthrough_hitbox =
-                            window.insert_hitbox(bounds, gpui::HitboxBehavior::Normal);
+                            window.insert_hitbox(viewport_bounds, gpui::HitboxBehavior::Normal);
                         window.insert_mouse_passthrough_region(&passthrough_hitbox);
                     }
                     bounds
@@ -2701,6 +2928,7 @@ impl Item for WebPreviewView {
                 detected_extensions,
                 extensions_scanned: self.extensions_scanned,
                 load_state: PreviewLoadState::Loading,
+                layout_bounds: Rc::new(RefCell::new(None)),
                 host_bounds: Rc::new(RefCell::new(None)),
                 #[cfg(target_os = "macos")]
                 last_applied_bounds: Rc::new(RefCell::new(None)),
@@ -2713,6 +2941,7 @@ impl Item for WebPreviewView {
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
+                viewport_mode: self.viewport_mode,
                 is_active_item: false,
                 #[cfg(any(target_os = "windows", target_os = "macos"))]
                 native_preview: Rc::new(RefCell::new(None)),
@@ -3068,6 +3297,27 @@ fn parse_browser_rect(value: &Value) -> Option<BrowserRect> {
         width: value.get("width")?.as_f64()?,
         height: value.get("height")?.as_f64()?,
     })
+}
+
+fn viewport_bounds_for_layout(
+    layout_bounds: Bounds<Pixels>,
+    viewport_mode: PreviewViewportMode,
+) -> Bounds<Pixels> {
+    let Some((desired_width, desired_height)) = viewport_mode.dimensions() else {
+        return layout_bounds;
+    };
+
+    let available_width = layout_bounds.size.width.as_f32().max(1.0);
+    let available_height = layout_bounds.size.height.as_f32().max(1.0);
+    let width = (desired_width as f32).min(available_width).max(1.0);
+    let height = (desired_height as f32).min(available_height).max(1.0);
+    let offset_x = ((available_width - width) / 2.0).max(0.0);
+    let offset_y = ((available_height - height) / 2.0).max(0.0);
+
+    Bounds::new(
+        layout_bounds.origin + point(px(offset_x), px(offset_y)),
+        size(px(width), px(height)),
+    )
 }
 
 fn format_agent_note(payload: &BrowserAgentPayload) -> String {
