@@ -1,3 +1,12 @@
+[2026-05-15] - Media Warning Retry Action
+
+CHANGED:
+- Media panel partial remote-provider warning rows now include a compact `Retry` action.
+- The retry action reuses the existing remote-media refresh path, clearing the current query/kind cache entry and refetching provider rows without changing local media results or kind tabs.
+
+NOTES:
+- This makes provider failures actionable in-place while preserving the existing header refresh control and remote generation guard.
+
 [2026-05-15] - Media Direct Provider Warning Counts
 
 CHANGED:

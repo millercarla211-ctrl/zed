@@ -1191,10 +1191,20 @@ impl MediaPanel {
                     .color(Color::Warning),
             )
             .child(
-                Label::new(warning)
-                    .size(LabelSize::XSmall)
-                    .color(Color::Warning)
-                    .truncate(),
+                div().flex_1().child(
+                    Label::new(warning)
+                        .size(LabelSize::XSmall)
+                        .color(Color::Warning)
+                        .truncate(),
+                ),
+            )
+            .child(
+                Button::new("media-panel-retry-remote-warning", "Retry")
+                    .style(ButtonStyle::Subtle)
+                    .size(ButtonSize::Compact)
+                    .on_click(cx.listener(|panel, _, _, cx| {
+                        panel.refresh_remote_media(cx);
+                    })),
             )
     }
 }
