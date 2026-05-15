@@ -479,6 +479,7 @@ pub struct WebPreviewView {
     latest_agent_browser_clear_data_executor_attempt: Option<Value>,
     latest_agent_browser_navigation_executor_attempt: Option<Value>,
     latest_agent_browser_viewport_executor_attempt: Option<Value>,
+    latest_agent_browser_click_preflight_attempt: Option<Value>,
     latest_agent_browser_qa_runbook: Option<Value>,
     latest_agent_plugin_catalog: Option<Value>,
     latest_annotated_screenshot: Option<Value>,
@@ -673,6 +674,7 @@ impl WebPreviewView {
             latest_agent_browser_clear_data_executor_attempt: None,
             latest_agent_browser_navigation_executor_attempt: None,
             latest_agent_browser_viewport_executor_attempt: None,
+            latest_agent_browser_click_preflight_attempt: None,
             latest_agent_browser_qa_runbook: None,
             latest_agent_plugin_catalog: None,
             latest_annotated_screenshot: None,
@@ -1142,6 +1144,7 @@ impl WebPreviewView {
             "agent_browser_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
             "agent_browser_navigation_executor_attempt": self.latest_agent_browser_navigation_executor_attempt_summary(),
             "agent_browser_viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
+            "agent_browser_click_preflight_attempt": self.latest_agent_browser_click_preflight_attempt_summary(),
             "agent_browser_qa_runbook": self.latest_agent_browser_qa_runbook_summary(),
             "agent_plugin_catalog": self.latest_agent_plugin_catalog_summary(),
             "annotated_screenshot": self.latest_annotated_screenshot_summary(),
@@ -1193,6 +1196,8 @@ impl WebPreviewView {
                 "send_permissioned_navigation_executor_to_agent": self.agent_action_permission.interactive_enabled(),
                 "run_permissioned_viewport_executor": self.agent_action_permission.interactive_enabled(),
                 "send_permissioned_viewport_executor_to_agent": self.agent_action_permission.interactive_enabled(),
+                "copy_permissioned_click_preflight_attempt": true,
+                "send_permissioned_click_preflight_attempt_to_agent": true,
                 "copy_agent_browser_qa_runbook": true,
                 "send_agent_browser_qa_runbook_to_agent": true,
                 "copy_agent_plugin_catalog": true,
@@ -1476,6 +1481,23 @@ impl WebPreviewView {
         }))
     }
 
+    fn latest_agent_browser_click_preflight_attempt_summary(&self) -> Option<Value> {
+        let attempt = self.latest_agent_browser_click_preflight_attempt.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at_ms": attempt.pointer("/attempt/captured_at_ms").and_then(Value::as_u64),
+            "title": attempt.pointer("/attempt/title").and_then(Value::as_str),
+            "url": attempt.pointer("/attempt/url").and_then(Value::as_str),
+            "action": attempt.pointer("/attempt/action").and_then(Value::as_str),
+            "outcome": attempt.pointer("/attempt/outcome").and_then(Value::as_str),
+            "candidate_selector": attempt.pointer("/attempt/target_candidate/selector").and_then(Value::as_str),
+            "candidate_label": attempt.pointer("/attempt/target_candidate/label").and_then(Value::as_str),
+            "candidate_tag": attempt.pointer("/attempt/target_candidate/tag").and_then(Value::as_str),
+            "native_input_dispatched": attempt.pointer("/attempt/native_input_dispatched").and_then(Value::as_bool),
+            "receipt_outcome": attempt.pointer("/attempt/receipt/outcome").and_then(Value::as_str),
+            "blocker_count": attempt.pointer("/attempt/blockers").and_then(Value::as_array).map(Vec::len),
+        }))
+    }
+
     fn latest_agent_browser_qa_runbook_summary(&self) -> Option<Value> {
         let runbook = self.latest_agent_browser_qa_runbook.as_ref()?;
         Some(serde_json::json!({
@@ -1564,6 +1586,118 @@ impl WebPreviewView {
             }));
         }
         blockers
+    }
+
+    fn permissioned_executor_receipt(
+        &self,
+        schema: &'static str,
+        action: &'static str,
+        outcome: &'static str,
+        gate: AgentBrowserExecutorGate,
+        before: Value,
+        after: Value,
+        blockers: Vec<Value>,
+        dispatch_error: Option<String>,
+        browser_command_dispatched: bool,
+        native_input_dispatched: bool,
+        page_script_dispatched: bool,
+        gate_extra_fields: Vec<(&'static str, Value)>,
+        receipt_extra_fields: Vec<(&'static str, Value)>,
+    ) -> Value {
+        let mut gate_object = serde_json::Map::new();
+        gate_object.insert(
+            "interactive_unlocked".to_string(),
+            serde_json::json!(gate.interactive_unlocked),
+        );
+        gate_object.insert(
+            "context_ready".to_string(),
+            serde_json::json!(gate.context_ready),
+        );
+        gate_object.insert(
+            "audit_ready".to_string(),
+            serde_json::json!(gate.audit_ready),
+        );
+        gate_object.insert(
+            "gate_ready_for_executor".to_string(),
+            serde_json::json!(gate.ready_for_executor()),
+        );
+        for (key, value) in gate_extra_fields {
+            gate_object.insert(key.to_string(), value);
+        }
+
+        let mut receipt = serde_json::Map::new();
+        receipt.insert("schema".to_string(), serde_json::json!(schema));
+        receipt.insert(
+            "timestamp_ms".to_string(),
+            serde_json::json!(Self::current_epoch_millis()),
+        );
+        receipt.insert("action".to_string(), serde_json::json!(action));
+        receipt.insert("outcome".to_string(), serde_json::json!(outcome));
+        receipt.insert(
+            "session_id".to_string(),
+            serde_json::json!(self.session_id.as_ref()),
+        );
+        receipt.insert(
+            "url".to_string(),
+            serde_json::json!(self.active_url.as_ref()),
+        );
+        receipt.insert(
+            "title".to_string(),
+            serde_json::json!(self.current_tab_title().as_ref()),
+        );
+        receipt.insert(
+            "permission".to_string(),
+            self.agent_action_permission.snapshot(),
+        );
+        receipt.insert("gate".to_string(), Value::Object(gate_object));
+        for (key, value) in receipt_extra_fields {
+            receipt.insert(key.to_string(), value);
+        }
+        receipt.insert("before".to_string(), before);
+        receipt.insert("after".to_string(), after);
+        receipt.insert("blockers".to_string(), Value::Array(blockers));
+        receipt.insert(
+            "dispatch_error".to_string(),
+            dispatch_error.map_or(Value::Null, Value::String),
+        );
+        receipt.insert(
+            "browser_command_dispatched".to_string(),
+            serde_json::json!(browser_command_dispatched),
+        );
+        receipt.insert(
+            "native_input_dispatched".to_string(),
+            serde_json::json!(native_input_dispatched),
+        );
+        receipt.insert(
+            "page_script_dispatched".to_string(),
+            serde_json::json!(page_script_dispatched),
+        );
+
+        Value::Object(receipt)
+    }
+
+    fn first_click_action_target(&self) -> Option<Value> {
+        self.latest_action_targets
+            .as_ref()?
+            .pointer("/targets/targets")?
+            .as_array()?
+            .iter()
+            .find(|target| {
+                target.pointer("/action_kind").and_then(Value::as_str) == Some("click")
+                    && target
+                        .pointer("/visible")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false)
+                    && !target
+                        .pointer("/disabled")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false)
+                    && target
+                        .pointer("/selector")
+                        .and_then(Value::as_str)
+                        .is_some_and(|selector| !selector.trim().is_empty())
+            })
+            .cloned()
     }
 
     fn load_state_name(&self) -> &'static str {
@@ -2664,6 +2798,7 @@ impl WebPreviewView {
                     "agent_browser_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
                     "agent_browser_navigation_executor_attempt": self.latest_agent_browser_navigation_executor_attempt_summary(),
                     "agent_browser_viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
+                    "agent_browser_click_preflight_attempt": self.latest_agent_browser_click_preflight_attempt_summary(),
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 },
                 "handoff": {
@@ -2874,6 +3009,7 @@ impl WebPreviewView {
                 "clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
                 "navigation_executor_attempt": self.latest_agent_browser_navigation_executor_attempt_summary(),
                 "viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
+                "click_preflight_attempt": self.latest_agent_browser_click_preflight_attempt_summary(),
             },
             "notes": [
                 "This readiness contract is read-only and does not dispatch browser input.",
@@ -3105,9 +3241,6 @@ impl WebPreviewView {
             "load_state": self.load_state_name(),
         });
         let gate = self.agent_browser_executor_gate();
-        let interactive_unlocked = gate.interactive_unlocked;
-        let context_ready = gate.context_ready;
-        let audit_ready = gate.audit_ready;
         let gate_ready_for_executor = gate.ready_for_executor();
         let mut blockers = self.agent_browser_executor_gate_blockers(
             gate,
@@ -3144,29 +3277,21 @@ impl WebPreviewView {
             "title": self.current_tab_title().as_ref(),
             "load_state": self.load_state_name(),
         });
-        let receipt = serde_json::json!({
-            "schema": "zed.web_preview.permissioned_reload_executor_receipt.v1",
-            "timestamp_ms": Self::current_epoch_millis(),
-            "action": "reload",
-            "outcome": outcome,
-            "session_id": self.session_id.as_ref(),
-            "url": self.active_url.as_ref(),
-            "title": self.current_tab_title().as_ref(),
-            "permission": self.agent_action_permission.snapshot(),
-            "gate": {
-                "interactive_unlocked": interactive_unlocked,
-                "context_ready": context_ready,
-                "audit_ready": audit_ready,
-                "gate_ready_for_executor": gate_ready_for_executor,
-            },
-            "before": before,
-            "after": after,
-            "blockers": blockers,
-            "dispatch_error": dispatch_error,
-            "browser_command_dispatched": browser_command_dispatched,
-            "native_input_dispatched": false,
-            "page_script_dispatched": false,
-        });
+        let receipt = self.permissioned_executor_receipt(
+            "zed.web_preview.permissioned_reload_executor_receipt.v1",
+            "reload",
+            outcome,
+            gate,
+            before,
+            after,
+            blockers,
+            dispatch_error,
+            browser_command_dispatched,
+            false,
+            false,
+            Vec::new(),
+            Vec::new(),
+        );
         let receipt_blockers = receipt.pointer("/blockers").cloned();
 
         let attempt = serde_json::json!({
@@ -3261,9 +3386,6 @@ impl WebPreviewView {
             "load_state": self.load_state_name(),
         });
         let gate = self.agent_browser_executor_gate();
-        let interactive_unlocked = gate.interactive_unlocked;
-        let context_ready = gate.context_ready;
-        let audit_ready = gate.audit_ready;
         let gate_ready_for_executor = gate.ready_for_executor();
         let mut blockers = self.agent_browser_executor_gate_blockers(
             gate,
@@ -3300,35 +3422,29 @@ impl WebPreviewView {
             "title": self.current_tab_title().as_ref(),
             "load_state": self.load_state_name(),
         });
-        let receipt = serde_json::json!({
-            "schema": "zed.web_preview.permissioned_clear_data_executor_receipt.v1",
-            "timestamp_ms": Self::current_epoch_millis(),
-            "action": "clear_data",
-            "outcome": outcome,
-            "session_id": self.session_id.as_ref(),
-            "url": self.active_url.as_ref(),
-            "title": self.current_tab_title().as_ref(),
-            "permission": self.agent_action_permission.snapshot(),
-            "gate": {
-                "interactive_unlocked": interactive_unlocked,
-                "context_ready": context_ready,
-                "audit_ready": audit_ready,
-                "gate_ready_for_executor": gate_ready_for_executor,
-            },
-            "scope": {
-                "cache": true,
-                "cookies_and_site_data": true,
-                "storage_and_service_workers": true,
-                "profile_reset": false,
-            },
-            "before": before,
-            "after": after,
-            "blockers": blockers,
-            "dispatch_error": dispatch_error,
-            "browser_command_dispatched": browser_command_dispatched,
-            "native_input_dispatched": false,
-            "page_script_dispatched": false,
-        });
+        let receipt = self.permissioned_executor_receipt(
+            "zed.web_preview.permissioned_clear_data_executor_receipt.v1",
+            "clear_data",
+            outcome,
+            gate,
+            before,
+            after,
+            blockers,
+            dispatch_error,
+            browser_command_dispatched,
+            false,
+            false,
+            Vec::new(),
+            vec![(
+                "scope",
+                serde_json::json!({
+                    "cache": true,
+                    "cookies_and_site_data": true,
+                    "storage_and_service_workers": true,
+                    "profile_reset": false,
+                }),
+            )],
+        );
         let receipt_blockers = receipt.pointer("/blockers").cloned();
 
         let attempt = serde_json::json!({
@@ -3429,9 +3545,6 @@ impl WebPreviewView {
             "load_state": self.load_state_name(),
         });
         let gate = self.agent_browser_executor_gate();
-        let interactive_unlocked = gate.interactive_unlocked;
-        let context_ready = gate.context_ready;
-        let audit_ready = gate.audit_ready;
         let url_ready = normalized_url.is_ok();
         let gate_ready_for_executor = gate.ready_for_executor() && url_ready;
 
@@ -3484,32 +3597,30 @@ impl WebPreviewView {
             "title": self.current_tab_title().as_ref(),
             "load_state": self.load_state_name(),
         });
-        let receipt = serde_json::json!({
-            "schema": "zed.web_preview.permissioned_navigation_executor_receipt.v1",
-            "timestamp_ms": Self::current_epoch_millis(),
-            "action": "open_url",
-            "outcome": outcome,
-            "session_id": self.session_id.as_ref(),
-            "url": self.active_url.as_ref(),
-            "title": self.current_tab_title().as_ref(),
-            "requested_url": requested_url,
-            "normalized_url": normalized_url_text,
-            "permission": self.agent_action_permission.snapshot(),
-            "gate": {
-                "interactive_unlocked": interactive_unlocked,
-                "context_ready": context_ready,
-                "audit_ready": audit_ready,
-                "url_ready": url_ready,
-                "gate_ready_for_executor": gate_ready_for_executor,
-            },
-            "before": before,
-            "after": after,
-            "blockers": blockers,
-            "dispatch_error": dispatch_error,
-            "browser_command_dispatched": browser_command_dispatched,
-            "native_input_dispatched": false,
-            "page_script_dispatched": false,
-        });
+        let receipt = self.permissioned_executor_receipt(
+            "zed.web_preview.permissioned_navigation_executor_receipt.v1",
+            "open_url",
+            outcome,
+            gate,
+            before,
+            after,
+            blockers,
+            dispatch_error,
+            browser_command_dispatched,
+            false,
+            false,
+            vec![
+                ("url_ready", serde_json::json!(url_ready)),
+                (
+                    "gate_ready_for_executor",
+                    serde_json::json!(gate_ready_for_executor),
+                ),
+            ],
+            vec![
+                ("requested_url", serde_json::json!(requested_url)),
+                ("normalized_url", serde_json::json!(normalized_url_text)),
+            ],
+        );
         let receipt_blockers = receipt.pointer("/blockers").cloned();
         let requested_url_for_attempt = receipt
             .pointer("/requested_url")
@@ -3624,9 +3735,6 @@ impl WebPreviewView {
             "viewport": previous_viewport.clone(),
         });
         let gate = self.agent_browser_executor_gate();
-        let interactive_unlocked = gate.interactive_unlocked;
-        let context_ready = gate.context_ready;
-        let audit_ready = gate.audit_ready;
         let gate_ready_for_executor = gate.ready_for_executor();
         let mut blockers = self.agent_browser_executor_gate_blockers(
             gate,
@@ -3667,32 +3775,25 @@ impl WebPreviewView {
             "load_state": self.load_state_name(),
             "viewport": applied_viewport.clone(),
         });
-        let receipt = serde_json::json!({
-            "schema": "zed.web_preview.permissioned_viewport_executor_receipt.v1",
-            "timestamp_ms": Self::current_epoch_millis(),
-            "action": "set_viewport",
-            "outcome": outcome,
-            "session_id": self.session_id.as_ref(),
-            "url": self.active_url.as_ref(),
-            "title": self.current_tab_title().as_ref(),
-            "permission": self.agent_action_permission.snapshot(),
-            "gate": {
-                "interactive_unlocked": interactive_unlocked,
-                "context_ready": context_ready,
-                "audit_ready": audit_ready,
-                "gate_ready_for_executor": gate_ready_for_executor,
-            },
-            "previous_viewport": previous_viewport,
-            "target_viewport": target_viewport,
-            "applied_viewport": applied_viewport,
-            "before": before,
-            "after": after,
-            "blockers": blockers,
-            "dispatch_error": dispatch_error,
-            "browser_command_dispatched": browser_command_dispatched,
-            "native_input_dispatched": false,
-            "page_script_dispatched": false,
-        });
+        let receipt = self.permissioned_executor_receipt(
+            "zed.web_preview.permissioned_viewport_executor_receipt.v1",
+            "set_viewport",
+            outcome,
+            gate,
+            before,
+            after,
+            blockers,
+            dispatch_error,
+            browser_command_dispatched,
+            false,
+            false,
+            Vec::new(),
+            vec![
+                ("previous_viewport", previous_viewport),
+                ("target_viewport", target_viewport),
+                ("applied_viewport", applied_viewport),
+            ],
+        );
         let receipt_blockers = receipt.pointer("/blockers").cloned();
         let previous_viewport_for_attempt = receipt.pointer("/previous_viewport").cloned();
         let target_viewport_for_attempt = receipt.pointer("/target_viewport").cloned();
@@ -3785,6 +3886,163 @@ impl WebPreviewView {
         self.permissioned_viewport_executor_attempt(window, cx, true);
     }
 
+    fn permissioned_click_preflight_attempt(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+        send_to_agent: bool,
+    ) {
+        let captured_at_ms = Self::current_epoch_millis();
+        let target_candidate = self.first_click_action_target();
+        let target_ready = target_candidate.is_some();
+        let before = serde_json::json!({
+            "url": self.active_url.as_ref(),
+            "title": self.current_tab_title().as_ref(),
+            "load_state": self.load_state_name(),
+            "target_candidate": target_candidate.clone(),
+            "readiness_probe": self.latest_readiness_probe_summary(),
+            "interaction_preflight": self.latest_interaction_preflight_summary(),
+        });
+        let gate = self.agent_browser_executor_gate();
+        let gate_ready_for_executor = gate.ready_for_executor() && target_ready;
+        let mut blockers = self.agent_browser_executor_gate_blockers(
+            gate,
+            "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before click preflight.",
+            "Click preflight requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts.",
+        );
+        if !target_ready {
+            blockers.push(serde_json::json!({
+                "code": "click_target_not_ready",
+                "message": "No visible, enabled click target with a stable selector is available in the latest action-target snapshot.",
+                "required_action": "Collect action targets again after the page settles, then rerun click preflight.",
+            }));
+        }
+
+        let outcome = if gate_ready_for_executor {
+            "preflight_ready"
+        } else {
+            "blocked"
+        };
+        let after = serde_json::json!({
+            "url": self.active_url.as_ref(),
+            "title": self.current_tab_title().as_ref(),
+            "load_state": self.load_state_name(),
+            "target_candidate": target_candidate.clone(),
+        });
+        let receipt = self.permissioned_executor_receipt(
+            "zed.web_preview.permissioned_click_preflight_receipt.v1",
+            "click",
+            outcome,
+            gate,
+            before,
+            after,
+            blockers,
+            None,
+            false,
+            false,
+            false,
+            vec![
+                ("target_ready", serde_json::json!(target_ready)),
+                (
+                    "gate_ready_for_executor",
+                    serde_json::json!(gate_ready_for_executor),
+                ),
+            ],
+            vec![
+                ("target_candidate", serde_json::json!(target_candidate)),
+                ("dry_run_only", serde_json::json!(true)),
+                (
+                    "manual_qa_required_before_dispatch",
+                    serde_json::json!(true),
+                ),
+                (
+                    "dispatch_status",
+                    serde_json::json!("not_dispatched_by_design"),
+                ),
+            ],
+        );
+        let receipt_blockers = receipt.pointer("/blockers").cloned();
+        let target_candidate_for_attempt = receipt.pointer("/target_candidate").cloned();
+
+        let attempt = serde_json::json!({
+            "schema": "zed.web_preview.permissioned_click_preflight_attempt.v1",
+            "session": self.browser_session_snapshot(window),
+            "policy": self.agent_browser_policy_snapshot(),
+            "attempt": {
+                "captured_at_ms": captured_at_ms,
+                "session_id": self.session_id.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "url": self.active_url.as_ref(),
+                "action": "click",
+                "outcome": outcome,
+                "dry_run_only": true,
+                "target_ready": target_ready,
+                "target_candidate": target_candidate_for_attempt,
+                "gate_ready_for_executor": gate_ready_for_executor,
+                "browser_command_dispatched": false,
+                "native_input_dispatched": false,
+                "page_script_dispatched": false,
+                "blockers": receipt_blockers,
+                "receipt": receipt,
+                "latest_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
+            },
+            "notes": [
+                "This click executor slice is preflight-only.",
+                "It selects a visible enabled click target from the latest action-target snapshot and emits the receipt a future native click must satisfy.",
+                "It never sends mouse, pointer, keyboard, wheel, browser command, or page-script input."
+            ],
+        });
+        let blocks = self.permissioned_click_preflight_agent_blocks(&attempt);
+        self.latest_agent_browser_click_preflight_attempt = Some(attempt.clone());
+
+        if send_to_agent {
+            self.append_content_blocks_to_agent_panel(blocks, window, cx);
+            self.show_toast("Sent click preflight receipt to the agent panel", cx);
+        } else {
+            cx.write_to_clipboard(ClipboardItem::new_string(
+                Self::permissioned_click_preflight_json(&attempt),
+            ));
+            self.show_toast("Copied click preflight receipt", cx);
+        }
+        cx.notify();
+    }
+
+    fn permissioned_click_preflight_json(attempt: &Value) -> String {
+        serde_json::to_string_pretty(attempt).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn permissioned_click_preflight_agent_blocks(&self, attempt: &Value) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = attempt.pointer("/attempt/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview permissioned click preflight attempt:\n\n```json\n{}\n```",
+            Self::permissioned_click_preflight_json(attempt)
+        ))));
+        blocks
+    }
+
+    fn copy_permissioned_click_preflight_attempt(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.permissioned_click_preflight_attempt(window, cx, false);
+    }
+
+    fn send_permissioned_click_preflight_attempt_to_agent(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.permissioned_click_preflight_attempt(window, cx, true);
+    }
+
     fn agent_browser_qa_runbook(&self, window: &Window) -> Value {
         let interactive_unlocked = self.agent_action_permission.interactive_enabled();
         let context_ready = self.latest_page_diagnostics.is_some()
@@ -3828,6 +4086,7 @@ impl WebPreviewView {
                     "latest_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
                     "latest_navigation_executor_attempt": self.latest_agent_browser_navigation_executor_attempt_summary(),
                     "latest_viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
+                    "latest_click_preflight_attempt": self.latest_agent_browser_click_preflight_attempt_summary(),
                 },
                 "manual_gates": [
                     {
@@ -4067,6 +4326,7 @@ impl WebPreviewView {
                             {"id": "browser.action.reload", "state": "available_when_unlocked", "description": "Reload through the permissioned WebPreview executor shell."},
                             {"id": "browser.action.clear_data", "state": "available_when_unlocked", "description": "Clear WebPreview browsing data through the permissioned executor shell."},
                             {"id": "browser.action.set_viewport", "state": "available_when_unlocked", "description": "Switch to the next responsive viewport preset through the permissioned WebPreview executor shell."},
+                            {"id": "browser.action.click_preflight", "state": "available", "description": "Select a visible click target and emit the receipt a future native click must satisfy without dispatching input."},
                             {"id": "browser.action.click", "state": "planned_executor", "description": "Click visible page targets after unlock, fresh preflight, and receipt logging."},
                             {"id": "browser.action.type", "state": "planned_executor", "description": "Type into page inputs after unlock, fresh preflight, and receipt logging."},
                             {"id": "browser.action.key", "state": "planned_executor", "description": "Send key presses after unlock, fresh preflight, and receipt logging."},
@@ -5880,6 +6140,34 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Run Click Preflight")
+                                .icon(IconName::Crosshair)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_permissioned_click_preflight_attempt(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Run Click Preflight to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_permissioned_click_preflight_attempt_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Run Reload Executor")
                                 .icon(IconName::RotateCw)
                                 .handler({
@@ -7046,6 +7334,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_clear_data_executor_attempt: None,
                 latest_agent_browser_navigation_executor_attempt: None,
                 latest_agent_browser_viewport_executor_attempt: None,
+                latest_agent_browser_click_preflight_attempt: None,
                 latest_agent_browser_qa_runbook: None,
                 latest_agent_plugin_catalog: None,
                 latest_annotated_screenshot: None,

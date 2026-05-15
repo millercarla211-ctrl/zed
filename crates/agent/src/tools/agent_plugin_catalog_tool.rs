@@ -257,6 +257,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.action.reload", "available_when_unlocked", "Reload through the permissioned WebPreview executor shell."),
             capability("browser.action.clear_data", "available_when_unlocked", "Clear WebPreview browsing data through the permissioned executor shell."),
             capability("browser.action.set_viewport", "available_when_unlocked", "Switch to the next responsive viewport preset through the permissioned WebPreview executor shell."),
+            capability("browser.action.click_preflight", "available", "Select a visible click target and emit the receipt a future native click must satisfy without dispatching input."),
             capability("browser.action.click", "planned_executor", "Click visible page targets after unlock, fresh preflight, and receipt logging."),
             capability("browser.action.type", "planned_executor", "Type into page inputs after unlock, fresh preflight, and receipt logging."),
             capability("browser.action.key", "planned_executor", "Send key presses after unlock, fresh preflight, and receipt logging."),

@@ -1,3 +1,16 @@
+[2026-05-16] - Web Preview Click Preflight Receipt
+
+ADDED:
+- WebPreview's More menu now includes "Run Click Preflight" and "Run Click Preflight to Agent".
+- The click preflight selects a visible enabled click target from the latest action-target snapshot and emits the receipt a future native click executor must satisfy.
+- Browser plugin manifests now advertise `browser.action.click_preflight` as an available no-input capability.
+
+CHANGED:
+- Reload, clear-data, navigation, viewport, and click-preflight attempts now use a shared permissioned executor receipt builder.
+
+NOTES:
+- This slice deliberately does not send browser commands, mouse/pointer events, keyboard input, wheel input, or page scripts.
+
 [2026-05-16] - Web Preview Executor Gate Helpers
 
 CHANGED:
