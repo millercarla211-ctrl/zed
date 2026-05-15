@@ -1,3 +1,13 @@
+[2026-05-15] - Asset Panel Direct Pin Actions
+
+ADDED:
+- Icon panel now exposes a compact Pin Selected action in the header for the currently selected icon.
+- Font, Media, and UI rows now expose direct Pin actions that feed the existing bounded Pinned sections.
+- Direct pin entries get an explicit pinned action label while reusing the same in-memory pin/unpin, dedupe, and cap behavior as Recent rows.
+
+NOTES:
+- This keeps common assets reusable without adding persistence or touching editor input, WebPreview routing, provider fetches, or catalog loading.
+
 [2026-05-15] - Asset Panel Pinned Clear Actions
 
 ADDED:

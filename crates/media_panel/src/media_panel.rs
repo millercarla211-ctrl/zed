@@ -974,6 +974,37 @@ impl MediaPanel {
         });
     }
 
+    fn pin_local_media(&mut self, asset: &DraggedMediaAsset, cx: &mut Context<Self>) {
+        self.pin_media(
+            RecentMediaEntry {
+                label: asset.label.clone(),
+                kind: asset.kind,
+                source: RecentMediaSource::Local {
+                    path: asset.path.clone(),
+                    relative_display: asset.relative_display.clone(),
+                },
+            },
+            cx,
+        );
+    }
+
+    fn pin_remote_media(
+        &mut self,
+        url: &str,
+        kind: DraggedMediaKind,
+        label: &str,
+        cx: &mut Context<Self>,
+    ) {
+        self.pin_media(
+            RecentMediaEntry {
+                label: label.to_string().into(),
+                kind,
+                source: RecentMediaSource::Remote { url: url.into() },
+            },
+            cx,
+        );
+    }
+
     fn push_recent_media(&mut self, entry: RecentMediaEntry) {
         self.recent_media
             .retain(|existing| !recent_media_sources_match(existing, &entry));
@@ -1074,6 +1105,18 @@ impl MediaPanel {
                                 })),
                         )
                         .child(
+                            Button::new("media-panel-pin-url", "Pin")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener({
+                                    let url = url.clone();
+                                    let label = label.clone();
+                                    move |panel, _, _, cx| {
+                                        panel.pin_remote_media(&url, kind, &label, cx);
+                                    }
+                                })),
+                        )
+                        .child(
                             Button::new("media-panel-insert-url", "Insert URL")
                                 .style(ButtonStyle::Filled)
                                 .size(ButtonSize::Compact)
@@ -1101,9 +1144,11 @@ impl MediaPanel {
         let copy_path = payload.path.clone();
         let copy_label = label.clone();
         let copy_payload = payload.clone();
+        let pin_payload = payload.clone();
         let row_id = media_element_id("media-panel-row-", relative_display.as_ref());
         let preview_id = media_element_id("media-panel-preview-", relative_display.as_ref());
         let copy_id = media_element_id("media-panel-copy-path-", relative_display.as_ref());
+        let pin_id = media_element_id("media-panel-pin-local-", relative_display.as_ref());
 
         h_flex()
             .id(row_id)
@@ -1165,6 +1210,14 @@ impl MediaPanel {
                         panel.copy_media_source(copy_path, copy_label.clone(), cx);
                     })),
             )
+            .child(
+                Button::new(pin_id, "Pin")
+                    .style(ButtonStyle::Subtle)
+                    .size(ButtonSize::Compact)
+                    .on_click(cx.listener(move |panel, _, _, cx| {
+                        panel.pin_local_media(&pin_payload, cx);
+                    })),
+            )
     }
 
     fn render_remote_asset_row(
@@ -1183,6 +1236,7 @@ impl MediaPanel {
         let preview_id = media_element_id("media-panel-preview-remote-", id.as_str());
         let copy_id = media_element_id("media-panel-copy-remote-", id.as_str());
         let insert_id = media_element_id("media-panel-insert-remote-", id.as_str());
+        let pin_id = media_element_id("media-panel-pin-remote-", id.as_str());
         let attribution = media_attribution_label(provider.as_str(), license.as_str());
 
         h_flex()
@@ -1243,6 +1297,18 @@ impl MediaPanel {
                         move |panel, _, _, cx| {
                             panel.record_recent_remote_media(&url, kind, &label);
                             panel.copy_media_source(url.clone(), label.clone(), cx);
+                        }
+                    })),
+            )
+            .child(
+                Button::new(pin_id, "Pin")
+                    .style(ButtonStyle::Subtle)
+                    .size(ButtonSize::Compact)
+                    .on_click(cx.listener({
+                        let url = url.clone();
+                        let label = label.clone();
+                        move |panel, _, _, cx| {
+                            panel.pin_remote_media(&url, kind, &label, cx);
                         }
                     })),
             )

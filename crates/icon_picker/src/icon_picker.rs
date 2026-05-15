@@ -115,6 +115,7 @@ struct RecentIconEntry {
 enum RecentIconAction {
     Inserted,
     CopiedName,
+    Pinned,
 }
 
 #[derive(Clone)]
@@ -694,6 +695,22 @@ impl IconPickerPanel {
         cx.notify();
     }
 
+    fn pin_selected_icon(&mut self, cx: &mut Context<Self>) {
+        let Some(icon) = self.selected_icon.clone() else {
+            self.status = Some("Select an icon to pin".into());
+            cx.notify();
+            return;
+        };
+
+        self.pin_icon_action(
+            RecentIconEntry {
+                icon,
+                action: RecentIconAction::Pinned,
+            },
+            cx,
+        );
+    }
+
     fn copy_icon_name(&mut self, icon: PickerIcon, cx: &mut Context<Self>) {
         self.selected_icon = Some(icon.clone());
         let payload = self.payload_for_icon(&icon);
@@ -1271,10 +1288,24 @@ impl Render for IconPickerPanel {
                             .items_center()
                             .child(Label::new("Icons").size(LabelSize::Small))
                             .child(
-                                Label::new(count_label)
-                                    .size(LabelSize::XSmall)
-                                    .color(Color::Muted)
-                                    .truncate(),
+                                h_flex()
+                                    .gap_1()
+                                    .items_center()
+                                    .child(
+                                        IconButton::new("icon-picker-pin-selected", IconName::Star)
+                                            .shape(ui::IconButtonShape::Square)
+                                            .icon_size(IconSize::Small)
+                                            .tooltip(Tooltip::text("Pin selected icon"))
+                                            .on_click(cx.listener(|panel, _, _, cx| {
+                                                panel.pin_selected_icon(cx);
+                                            })),
+                                    )
+                                    .child(
+                                        Label::new(count_label)
+                                            .size(LabelSize::XSmall)
+                                            .color(Color::Muted)
+                                            .truncate(),
+                                    ),
                             ),
                     )
                     .child(self.filter_editor.clone()),
@@ -1416,6 +1447,7 @@ fn recent_icon_action_label(action: RecentIconAction) -> &'static str {
     match action {
         RecentIconAction::Inserted => "inserted",
         RecentIconAction::CopiedName => "copied name",
+        RecentIconAction::Pinned => "pinned",
     }
 }
 

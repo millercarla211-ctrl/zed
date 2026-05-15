@@ -158,6 +158,7 @@ enum RecentFontAction {
     AppliedEditor,
     AppliedUi,
     AddedProject,
+    Pinned,
 }
 
 #[derive(Clone)]
@@ -656,8 +657,10 @@ impl FontPanel {
         let id_font = font.name.clone();
         let source = font.source;
         let click_font = font.clone();
+        let pin_font = font.clone();
         let is_system_font = source == FontSource::System;
         let row_id = font_element_id("font-panel-row-", id_font.as_ref());
+        let pin_id = font_element_id("font-panel-pin-", id_font.as_ref());
 
         div()
             .id(row_id)
@@ -761,7 +764,21 @@ impl FontPanel {
                                         panel.add_selected_to_project(cx);
                                     })),
                             )
-                        }),
+                        })
+                        .child(
+                            Button::new(pin_id, "Pin")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(move |panel, _, _, cx| {
+                                    panel.pin_font_action(
+                                        RecentFontEntry {
+                                            font: pin_font.clone(),
+                                            action: RecentFontAction::Pinned,
+                                        },
+                                        cx,
+                                    );
+                                })),
+                        ),
                 )
             })
     }
@@ -1271,6 +1288,7 @@ fn recent_font_action_label(action: RecentFontAction) -> &'static str {
         RecentFontAction::AppliedEditor => "editor",
         RecentFontAction::AppliedUi => "UI",
         RecentFontAction::AddedProject => "added",
+        RecentFontAction::Pinned => "pinned",
     }
 }
 

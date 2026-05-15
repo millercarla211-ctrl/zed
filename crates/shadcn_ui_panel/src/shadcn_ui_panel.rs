@@ -176,6 +176,7 @@ enum RecentUiAction {
     Inserted,
     Installed,
     OpenedDocs,
+    Pinned,
 }
 
 #[derive(Archive, RkyvSerialize, RkyvDeserialize)]
@@ -750,6 +751,7 @@ impl ShadcnUiPanel {
         let copy_id = shadcn_element_id("shadcn-copy-", item.id.as_ref());
         let preview_id = shadcn_element_id("shadcn-preview-", item.id.as_ref());
         let docs_id = shadcn_element_id("shadcn-docs-", item.id.as_ref());
+        let pin_id = shadcn_element_id("shadcn-pin-", item.id.as_ref());
         let copy_action = if item.install_only {
             "Copy Command"
         } else {
@@ -901,6 +903,23 @@ impl ShadcnUiPanel {
                                 let item = item.clone();
                                 move |panel, _, _, cx| {
                                     panel.open_item_docs(item.clone(), cx);
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new(pin_id, "Pin")
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener({
+                                let item = item.clone();
+                                move |panel, _, _, cx| {
+                                    panel.pin_ui_action(
+                                        RecentUiEntry {
+                                            item: item.clone(),
+                                            action: RecentUiAction::Pinned,
+                                        },
+                                        cx,
+                                    );
                                 }
                             })),
                     ),
@@ -1429,6 +1448,7 @@ fn recent_ui_action_label(action: RecentUiAction) -> &'static str {
         RecentUiAction::Inserted => "inserted",
         RecentUiAction::Installed => "installed",
         RecentUiAction::OpenedDocs => "opened",
+        RecentUiAction::Pinned => "pinned",
     }
 }
 
