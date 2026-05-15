@@ -13,11 +13,16 @@ pub struct InstallReport {
     pub css_path: String,
     pub wrote_theme_css: bool,
     pub package_install_command: Option<String>,
+    pub insert_snippet: bool,
 }
 
 impl InstallReport {
     pub fn status_message(&self, title: &str) -> String {
-        let mut message = format!("Installed {title}");
+        let mut message = if self.insert_snippet {
+            format!("Installed {title}")
+        } else {
+            format!("Installed {title} into {}", self.installed_path)
+        };
         if self.wrote_theme_css {
             message.push_str("; added shadcn theme CSS");
         }
@@ -39,6 +44,7 @@ pub fn install_asset(asset: &DraggedShadcnAsset, project_root: &Path) -> Result<
 
     let components_dir = components_dir(project_root);
     let mut dependency_specs = base_dependency_specs();
+    let mut insert_snippet = true;
 
     match asset.kind {
         DraggedShadcnKind::Component => {
@@ -87,6 +93,8 @@ pub fn install_asset(asset: &DraggedShadcnAsset, project_root: &Path) -> Result<
                     .join("blocks")
                     .join(asset.target_file_name.as_ref());
                 copy_transformed_source_dir(&asset.source_path, &destination)?;
+            } else {
+                insert_snippet = registry_item_insert_snippet(asset);
             }
         }
     }
@@ -103,6 +111,7 @@ pub fn install_asset(asset: &DraggedShadcnAsset, project_root: &Path) -> Result<
         added_dependencies,
         css_path: project_relative_path(project_root, &scaffold.css_path),
         wrote_theme_css: scaffold.wrote_theme_css,
+        insert_snippet,
     })
 }
 
@@ -376,6 +385,26 @@ fn registry_install_display_path(
         .flatten()?;
     let primary_file = primary_registry_file_for_install(&item, asset.kind)?;
     destination_for_registry_file(project_root, primary_file)
+}
+
+fn registry_item_insert_snippet(asset: &DraggedShadcnAsset) -> bool {
+    if asset.kind != DraggedShadcnKind::Block {
+        return true;
+    }
+
+    let Some(item) = read_registry_item(asset.id.as_ref(), &asset.registry_root)
+        .ok()
+        .flatten()
+    else {
+        return true;
+    };
+    let Some(primary_file) = primary_registry_file_for_install(&item, asset.kind) else {
+        return true;
+    };
+    let Some(target) = primary_file.target.as_deref() else {
+        return true;
+    };
+    !target_is_route_file(target)
 }
 
 fn primary_registry_file_for_install(
@@ -752,6 +781,14 @@ fn project_relative_target_path(project_root: &Path, target: &str) -> Option<Pat
     }
 
     Some(project_root.join(relative_path))
+}
+
+fn target_is_route_file(target: &str) -> bool {
+    let mut components = Path::new(target).components();
+    matches!(
+        components.next(),
+        Some(Component::Normal(first)) if matches!(first.to_str(), Some("app" | "pages"))
+    )
 }
 
 fn registry_path_without_style_prefix(path: &str) -> &str {

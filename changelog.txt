@@ -1,3 +1,14 @@
+[2026-05-15] - UI Route Block Install-Only Insertions
+
+CHANGED:
+- `crates/shadcn_ui` now reports whether a shadcn asset should paste a JSX snippet after installation.
+- Route-targeted registry blocks under `app/` or `pages/` are now install-only, while component, Magic UI, fallback, and reusable component targets keep snippet insertion.
+- `crates/editor` now respects the install report for both click-insert and drag-drop shadcn flows, avoiding accidental edits to the active editor when installing full app/page blocks.
+
+NOTES:
+- Local manifest inspection found 58 route page targets and no component page targets in the active shadcn style registries, so page blocks are the right install-only class.
+- This keeps newly exposed shadcn app/sidebar/login blocks professional: they create project files without also inserting confusing `<Page />` snippets into unrelated source files.
+
 [2026-05-15] - UI Registry Target-Aware Installs
 
 CHANGED:

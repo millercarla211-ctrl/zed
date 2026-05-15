@@ -383,6 +383,9 @@ impl Editor {
         };
 
         let install_report = shadcn_ui::install_asset(asset, &project_root)?;
+        if !install_report.insert_snippet {
+            return Ok(install_report.status_message(asset.title.as_ref()).into());
+        }
 
         if is_react_editor_path(&active_path) {
             let text = self.text(cx);
@@ -435,6 +438,9 @@ impl Editor {
         };
 
         let install_report = shadcn_ui::install_asset(asset, &project_root)?;
+        if !install_report.insert_snippet {
+            return Ok(install_report.status_message(asset.title.as_ref()).into());
+        }
 
         if is_react_editor_path(&active_path) {
             let text = self.text(cx);
