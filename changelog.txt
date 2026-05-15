@@ -1,3 +1,17 @@
+[2026-05-16] - Web Preview First Native Scroll Executor
+
+ADDED:
+- Added a Windows WebView2 native scroll executor that sends wheel events through the existing CompositionController path.
+- WebPreview's More menu now includes "Run Native Scroll Executor" and "Run Native Scroll Executor to Agent".
+- Native scroll execution requires interactive permission, fresh executor context/audit readiness, a fresh scroll preflight, a native coordinate plan, and the native dispatch QA checklist before dispatch.
+
+CHANGED:
+- Browser plugin manifests now advertise `browser.action.scroll` as available when unlocked instead of only planned.
+- Executor readiness and QA handoffs now treat `click` and `scroll` as the first native input executors while keeping type, key, history, and scoped cache reset disabled.
+
+NOTES:
+- This dispatch slice only sends wheel events to the in-app WebPreview on Windows; no type, key, history, cache, page script, or external Chrome action is dispatched.
+
 [2026-05-16] - Web Preview First Native Click Executor
 
 ADDED:

@@ -272,7 +272,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.action.click", "available_when_unlocked", "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."),
             capability("browser.action.type", "planned_executor", "Type into page inputs after unlock, fresh preflight, and receipt logging."),
             capability("browser.action.key", "planned_executor", "Send key presses after unlock, fresh preflight, and receipt logging."),
-            capability("browser.action.scroll", "planned_executor", "Scroll page or element targets after unlock, fresh preflight, and receipt logging.")
+            capability("browser.action.scroll", "available_when_unlocked", "Scroll page or element targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging.")
         ],
         "safety": {
             "interactive_locked_by_default": true,

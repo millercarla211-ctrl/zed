@@ -166,6 +166,45 @@ impl WindowsVisualWebView {
         Ok(())
     }
 
+    pub(crate) fn scroll_at_viewport_point(
+        &self,
+        x: f64,
+        y: f64,
+        delta_x: i32,
+        delta_y: i32,
+    ) -> Result<()> {
+        let x = x.round().clamp(i32::MIN as f64, i32::MAX as f64) as i32;
+        let y = y.round().clamp(i32::MIN as f64, i32::MAX as f64) as i32;
+        let point = windows::Win32::Foundation::POINT { x, y };
+
+        self.focus_page()?;
+        unsafe {
+            self.composition_controller.SendMouseInput(
+                COREWEBVIEW2_MOUSE_EVENT_KIND_MOVE,
+                COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_NONE,
+                0,
+                point,
+            )?;
+            if delta_y != 0 {
+                self.composition_controller.SendMouseInput(
+                    COREWEBVIEW2_MOUSE_EVENT_KIND_WHEEL,
+                    COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_NONE,
+                    (delta_y as i16 as i32) as u32,
+                    point,
+                )?;
+            }
+            if delta_x != 0 {
+                self.composition_controller.SendMouseInput(
+                    COREWEBVIEW2_MOUSE_EVENT_KIND_HORIZONTAL_WHEEL,
+                    COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_NONE,
+                    (delta_x as i16 as i32) as u32,
+                    point,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn evaluate_script(&self, script: &str) -> Result<()> {
         let script = HSTRING::from(script);
         unsafe {
