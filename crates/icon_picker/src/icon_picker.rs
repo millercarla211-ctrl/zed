@@ -1,8 +1,9 @@
 use editor::{Editor, EditorEvent};
 use gpui::{
-    AnyElement, App, AppContext as _, AsyncWindowContext, Context, Entity, EventEmitter,
-    FocusHandle, Focusable, InteractiveElement, Pixels, Render, ScrollHandle, SharedString,
-    StatefulInteractiveElement, Subscription, WeakEntity, Window, actions, div, point, px,
+    AnyElement, App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity,
+    EventEmitter, FocusHandle, Focusable, InteractiveElement, Pixels, Render, ScrollHandle,
+    SharedString, StatefulInteractiveElement, Subscription, WeakEntity, Window, actions, div,
+    point, px,
 };
 use serde::Deserialize;
 use std::{
@@ -34,6 +35,7 @@ const DX_ICON_DATA_DIR: &str = "G:/Assets/icon/data";
 const ICON_PACK_INDEX: &str = include_str!("icon_pack_index.tsv");
 const ICON_REPRESENTATIVE_BODIES: &str = include_str!("icon_representative_bodies.tsv");
 const MAX_ICON_RESULTS: usize = 360;
+const MAX_RECENT_ICON_ACTIONS: usize = 5;
 const STARTUP_ICON_PREVIEW_WARM_LIMIT: usize = MAX_ICON_RESULTS;
 const SELECTED_PACK_PREVIEW_PRIME_LIMIT: usize = 96;
 const MAX_EXTERNAL_ICON_PREVIEW_CACHE_ENTRIES: usize = 4096;
@@ -103,6 +105,18 @@ impl ExternalIcon {
 }
 
 #[derive(Clone)]
+struct RecentIconEntry {
+    icon: PickerIcon,
+    action: RecentIconAction,
+}
+
+#[derive(Clone, Copy)]
+enum RecentIconAction {
+    Inserted,
+    CopiedName,
+}
+
+#[derive(Clone)]
 struct IconPackSummary {
     prefix: SharedString,
     name: SharedString,
@@ -139,6 +153,7 @@ pub struct IconPickerPanel {
     warmed_preview_signature_order: VecDeque<String>,
     representative_preview_warm_started: bool,
     pack_scroll_handle: ScrollHandle,
+    recent_icon_actions: VecDeque<RecentIconEntry>,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
 }
@@ -212,6 +227,7 @@ impl IconPickerPanel {
                 ),
                 representative_preview_warm_started: false,
                 pack_scroll_handle: ScrollHandle::new(),
+                recent_icon_actions: VecDeque::with_capacity(MAX_RECENT_ICON_ACTIONS),
                 status: None,
                 _subscriptions: vec![filter_subscription],
             }
@@ -635,6 +651,28 @@ impl IconPickerPanel {
         uncached_icons
     }
 
+    fn record_recent_icon_action(&mut self, icon: &PickerIcon, action: RecentIconAction) {
+        self.recent_icon_actions
+            .retain(|entry| !entry.icon.same_identity_as(icon));
+        self.recent_icon_actions.push_front(RecentIconEntry {
+            icon: icon.clone(),
+            action,
+        });
+        self.recent_icon_actions.truncate(MAX_RECENT_ICON_ACTIONS);
+    }
+
+    fn copy_icon_name(&mut self, icon: PickerIcon, cx: &mut Context<Self>) {
+        self.selected_icon = Some(icon.clone());
+        let payload = self.payload_for_icon(&icon);
+        cx.write_to_clipboard(ClipboardItem::new_string(payload.stem.to_string()));
+        self.status = Some(icon_status_label(
+            "Copied name for ",
+            payload.label.as_ref(),
+        ));
+        self.record_recent_icon_action(&icon, RecentIconAction::CopiedName);
+        cx.notify();
+    }
+
     fn insert_icon(&mut self, icon: PickerIcon, window: &mut Window, cx: &mut Context<Self>) {
         self.selected_icon = Some(icon.clone());
         let payload = self.payload_for_icon(&icon);
@@ -654,10 +692,15 @@ impl IconPickerPanel {
             editor.insert_icon_asset(&payload, window, cx)
         });
 
-        self.status = match result {
-            Ok(message) => Some(message),
-            Err(error) => Some(format!("{error:#}").into()),
-        };
+        match result {
+            Ok(message) => {
+                self.status = Some(message);
+                self.record_recent_icon_action(&icon, RecentIconAction::Inserted);
+            }
+            Err(error) => {
+                self.status = Some(format!("{error:#}").into());
+            }
+        }
         cx.notify();
     }
 
@@ -845,6 +888,128 @@ impl IconPickerPanel {
             )
     }
 
+    fn render_recent_icon_section(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.recent_icon_actions.is_empty() {
+            return None;
+        }
+
+        let mut rows =
+            Vec::with_capacity(self.recent_icon_actions.len().min(MAX_RECENT_ICON_ACTIONS));
+        for (index, entry) in self
+            .recent_icon_actions
+            .iter()
+            .take(MAX_RECENT_ICON_ACTIONS)
+            .cloned()
+            .enumerate()
+        {
+            rows.push(self.render_recent_icon_row(entry, index, cx));
+        }
+
+        Some(
+            v_flex()
+                .id("icon-picker-recent-actions-section")
+                .gap_1()
+                .child(
+                    h_flex()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .items_center()
+                                .child(Icon::new(IconName::Clock).size(IconSize::XSmall))
+                                .child(
+                                    Label::new("Recent")
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Muted),
+                                ),
+                        )
+                        .child(
+                            Label::new("last icon actions")
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted),
+                        ),
+                )
+                .children(rows)
+                .into_any_element(),
+        )
+    }
+
+    fn render_recent_icon_row(
+        &self,
+        entry: RecentIconEntry,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let id_suffix = index.to_string();
+        let row_id = icon_element_id("icon-picker-recent-row-", id_suffix.as_str());
+        let insert_id = icon_element_id("icon-picker-recent-insert-", id_suffix.as_str());
+        let copy_id = icon_element_id("icon-picker-recent-copy-", id_suffix.as_str());
+        let icon = entry.icon;
+        let payload = self.payload_for_icon(&icon);
+        let label = payload.label.clone();
+        let source_label = icon_source_label(&icon);
+        let action_label = recent_icon_action_label(entry.action);
+        let preview = self.render_icon_preview(&icon, IconSize::Medium, cx);
+
+        h_flex()
+            .id(row_id)
+            .gap_2()
+            .items_center()
+            .p_2()
+            .rounded_sm()
+            .border_1()
+            .border_color(cx.theme().colors().border_variant)
+            .bg(cx.theme().colors().element_background)
+            .child(preview)
+            .child(
+                v_flex()
+                    .flex_1()
+                    .gap_0p5()
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .child(Label::new(label).size(LabelSize::Small).truncate())
+                            .child(
+                                Label::new(action_label)
+                                    .size(LabelSize::XSmall)
+                                    .color(Color::Accent),
+                            ),
+                    )
+                    .child(
+                        Label::new(source_label)
+                            .size(LabelSize::XSmall)
+                            .color(Color::Muted)
+                            .truncate(),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .gap_1()
+                    .flex_wrap()
+                    .child(
+                        Button::new(insert_id, "Insert")
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener({
+                                let icon = icon.clone();
+                                move |panel, _, window, cx| {
+                                    panel.insert_icon(icon.clone(), window, cx);
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new(copy_id, "Copy Name")
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener(move |panel, _, _, cx| {
+                                panel.copy_icon_name(icon.clone(), cx);
+                            })),
+                    ),
+            )
+            .into_any_element()
+    }
+
     fn render_icon_preview(
         &self,
         icon: &PickerIcon,
@@ -951,7 +1116,6 @@ impl Render for IconPickerPanel {
         self.ensure_icon_data_loaded_for_view(query.as_str(), cx);
         let (icons, total_matches, total_count) = self.filtered_icons(query.as_str());
         self.ensure_visible_external_previews_warmed(&icons, cx);
-        let is_empty = icons.is_empty();
         let shown_count = icons.len();
         let count_label = self.status.clone().unwrap_or_else(|| {
             if self.loading_external_icons {
@@ -968,6 +1132,13 @@ impl Render for IconPickerPanel {
                 .into_iter()
                 .map(|icon| self.render_icon_tile(icon, cx).into_any_element()),
         );
+        let recent_icon_section = if query.is_empty() {
+            self.render_recent_icon_section(cx)
+        } else {
+            None
+        };
+        let has_content = !icon_tiles.is_empty() || recent_icon_section.is_some();
+        let is_empty = !has_content;
 
         v_flex()
             .id("icon-picker-panel")
@@ -1015,8 +1186,17 @@ impl Render for IconPickerPanel {
                             ),
                         )
                     })
-                    .when(!is_empty, |this| {
-                        this.child(div().grid().grid_cols(10).gap_1().children(icon_tiles))
+                    .when(has_content, |this| {
+                        this.child(
+                            v_flex()
+                                .gap_2()
+                                .when_some(recent_icon_section, |this, section| this.child(section))
+                                .when(!icon_tiles.is_empty(), |this| {
+                                    this.child(
+                                        div().grid().grid_cols(10).gap_1().children(icon_tiles),
+                                    )
+                                }),
+                        )
                     }),
             )
     }
@@ -1108,6 +1288,27 @@ fn icon_fraction_label(left: usize, right: usize) -> SharedString {
     let mut text = String::with_capacity(24);
     let _ = write!(text, "{left} / {right}");
     text.into()
+}
+
+fn icon_status_label(prefix: &str, value: &str) -> SharedString {
+    let mut text = String::with_capacity(prefix.len() + value.len());
+    text.push_str(prefix);
+    text.push_str(value);
+    text.into()
+}
+
+fn recent_icon_action_label(action: RecentIconAction) -> &'static str {
+    match action {
+        RecentIconAction::Inserted => "inserted",
+        RecentIconAction::CopiedName => "copied name",
+    }
+}
+
+fn icon_source_label(icon: &PickerIcon) -> SharedString {
+    match icon {
+        PickerIcon::Zed(_) => "zed".into(),
+        PickerIcon::External(icon) => icon.pack_name.clone(),
+    }
 }
 
 struct IconDragPreview {

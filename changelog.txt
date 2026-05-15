@@ -1,3 +1,12 @@
+[2026-05-15] - Icon Recent Action Reuse
+
+ADDED:
+- Icon panel now keeps a bounded in-memory Recent section for successful inserts and copied icon names.
+- Recent icon rows reuse the normal Insert path and add a Copy Name action for quickly reusing icon stems.
+
+NOTES:
+- Recent icon actions are shown only for empty searches and do not change main grid click, drag, preview warming, or editor insertion behavior.
+
 [2026-05-15] - Font Recent Action Reuse
 
 ADDED:
