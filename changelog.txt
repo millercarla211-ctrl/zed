@@ -1,3 +1,13 @@
+[2026-05-16] - Web Preview Agent Browser QA Runbook
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Agent Browser QA Runbook" and "Send Agent Browser QA Runbook".
+- WebPreview sessions now summarize the latest QA runbook alongside the status packet and executor readiness contract.
+- The QA runbook marks Agent Browser Command Center as 100/100 complete, lists editor/WebPreview/Agent Panel/permission validation gates, records known limits, and defines the next Permissioned Agent Browser Executor feature set.
+
+NOTES:
+- The next feature set is now explicit in todo.txt: wire real browser actions behind the completed readiness gate, starting with a no-op executor harness.
+
 [2026-05-16] - Web Preview Agent Browser Executor Readiness
 
 ADDED:

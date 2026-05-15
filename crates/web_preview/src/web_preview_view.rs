@@ -255,6 +255,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_status_packet_to_agent",
     "copy_agent_browser_executor_readiness",
     "send_agent_browser_executor_readiness_to_agent",
+    "copy_agent_browser_qa_runbook",
+    "send_agent_browser_qa_runbook_to_agent",
     "take_screenshot",
     "inspect_element",
 ];
@@ -441,6 +443,7 @@ pub struct WebPreviewView {
     latest_successful_interaction_receipt: Option<Value>,
     latest_agent_browser_status_packet: Option<Value>,
     latest_agent_browser_executor_readiness: Option<Value>,
+    latest_agent_browser_qa_runbook: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -627,6 +630,7 @@ impl WebPreviewView {
             latest_successful_interaction_receipt: None,
             latest_agent_browser_status_packet: None,
             latest_agent_browser_executor_readiness: None,
+            latest_agent_browser_qa_runbook: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1088,6 +1092,7 @@ impl WebPreviewView {
             "successful_interaction_receipt": self.latest_successful_interaction_receipt_summary(),
             "agent_browser_status_packet": self.latest_agent_browser_status_packet_summary(),
             "agent_browser_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
+            "agent_browser_qa_runbook": self.latest_agent_browser_qa_runbook_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1126,6 +1131,8 @@ impl WebPreviewView {
                 "send_agent_browser_status_packet_to_agent": true,
                 "copy_agent_browser_executor_readiness": true,
                 "send_agent_browser_executor_readiness_to_agent": true,
+                "copy_agent_browser_qa_runbook": true,
+                "send_agent_browser_qa_runbook_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1318,6 +1325,19 @@ impl WebPreviewView {
             "can_dispatch_now": readiness.pointer("/readiness/can_dispatch_now").and_then(Value::as_bool),
             "blocker_count": readiness.pointer("/readiness/blockers").and_then(Value::as_array).map(Vec::len),
             "next_step": readiness.pointer("/readiness/next_step").and_then(Value::as_str),
+        }))
+    }
+
+    fn latest_agent_browser_qa_runbook_summary(&self) -> Option<Value> {
+        let runbook = self.latest_agent_browser_qa_runbook.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at_ms": runbook.pointer("/runbook/captured_at_ms").and_then(Value::as_u64),
+            "url": runbook.pointer("/runbook/url").and_then(Value::as_str),
+            "title": runbook.pointer("/runbook/title").and_then(Value::as_str),
+            "status": runbook.pointer("/runbook/status").and_then(Value::as_str),
+            "manual_gate_count": runbook.pointer("/runbook/manual_gates").and_then(Value::as_array).map(Vec::len),
+            "known_limit_count": runbook.pointer("/runbook/known_limits").and_then(Value::as_array).map(Vec::len),
+            "next_feature_set": runbook.pointer("/runbook/next_feature_set/name").and_then(Value::as_str),
         }))
     }
 
@@ -2659,6 +2679,145 @@ impl WebPreviewView {
             "Sent agent browser executor readiness to the agent panel",
             cx,
         );
+        cx.notify();
+    }
+
+    fn agent_browser_qa_runbook(&self, window: &Window) -> Value {
+        let interactive_unlocked = self.agent_action_permission.interactive_enabled();
+        let context_ready = self.latest_page_diagnostics.is_some()
+            && self.latest_dom_snapshot.is_some()
+            && self.latest_action_targets.is_some()
+            && self.latest_readiness_probe.is_some();
+        let audit_ready = self.latest_wait_contract.is_some()
+            && self.latest_interaction_plan.is_some()
+            && self.latest_interaction_preflight.is_some()
+            && self.latest_interaction_receipt_template.is_some()
+            && self.latest_interaction_action_request.is_some()
+            && self.latest_blocked_interaction_receipt.is_some()
+            && self.latest_successful_interaction_receipt.is_some();
+
+        serde_json::json!({
+            "schema": "zed.web_preview.agent_browser_qa_runbook.v1",
+            "session": self.browser_session_snapshot(window),
+            "policy": self.agent_browser_policy_snapshot(),
+            "runbook": {
+                "captured_at_ms": Self::current_epoch_millis(),
+                "session_id": self.session_id.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "url": self.active_url.as_ref(),
+                "status": "agent_browser_command_center_complete_manual_qa_required",
+                "completion_claim": {
+                    "feature_set": "Agent Browser Command Center",
+                    "score": 100,
+                    "scope": "Read-only browser context, diagnostics, action planning, audit packets, and executor readiness gates are wired.",
+                    "out_of_scope": "Real click, type, key, scroll, navigation, viewport, and cache dispatch belongs to the next Permissioned Agent Browser Executor feature set."
+                },
+                "readiness_snapshot": {
+                    "context_ready": context_ready,
+                    "audit_ready": audit_ready,
+                    "interactive_unlocked": interactive_unlocked,
+                    "executor_wired": false,
+                    "latest_status_packet": self.latest_agent_browser_status_packet_summary(),
+                    "latest_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
+                },
+                "manual_gates": [
+                    {
+                        "name": "Editor regression guard",
+                        "checks": [
+                            "Type quickly in a normal Rust or text file; inserted text should appear immediately.",
+                            "Caret should remain visible while typing and after focus switches.",
+                            "Right-side panel copy/send commands must not steal editor text input."
+                        ]
+                    },
+                    {
+                        "name": "WebPreview interaction guard",
+                        "checks": [
+                            "Hover, click, right-click, mouse wheel, and keyboard input inside page fields continue to work.",
+                            "Switch WebPreview to editor and back; stale focus must not route keys to the wrong surface.",
+                            "Use the More menu Agent Browser commands; they should collect/copy/send context without reloading the page."
+                        ]
+                    },
+                    {
+                        "name": "Agent Panel handoff",
+                        "checks": [
+                            "Send session, diagnostics, DOM, action targets, readiness, wait contract, preflight, receipts, status packet, executor readiness, and this runbook to the Agent Panel.",
+                            "Each handoff should include the URL attachment when a valid page URL is active.",
+                            "JSON schemas should be readable and bounded for model context."
+                        ]
+                    },
+                    {
+                        "name": "Permission boundary",
+                        "checks": [
+                            "Interactive actions are locked by default.",
+                            "Executor readiness still reports can_dispatch_now=false because no real executor is wired.",
+                            "Unlocking the session changes policy/readiness state but does not execute browser input by itself."
+                        ]
+                    }
+                ],
+                "known_limits": [
+                    "The Command Center currently prepares context and audit contracts only.",
+                    "Real browser input dispatch is intentionally deferred to the next feature set.",
+                    "Cross-platform behavior is represented by shared state and capability contracts; Windows remains the local manual QA platform."
+                ],
+                "next_feature_set": {
+                    "name": "Permissioned Agent Browser Executor",
+                    "target_score": 100,
+                    "goal": "Wire real browser actions behind the readiness gate, preserving editor speed and WebPreview focus.",
+                    "first_slices": [
+                        "Add a no-op executor harness that records attempted actions and emits blocked receipts.",
+                        "Wire one low-risk action behind explicit permission, fresh preflight, and receipt emission.",
+                        "Expand action coverage only after manual QA confirms no editor or WebPreview input regression."
+                    ]
+                }
+            },
+            "notes": [
+                "This runbook is a read-only completion handoff.",
+                "It is safe to copy/send while editing because it does not evaluate page JavaScript or dispatch native input.",
+                "Use this as the starting checklist before moving into the next executor feature set."
+            ],
+        })
+    }
+
+    fn agent_browser_qa_runbook_json(runbook: &Value) -> String {
+        serde_json::to_string_pretty(runbook).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_qa_runbook_agent_blocks(&self, runbook: &Value) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = runbook.pointer("/runbook/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview Agent Browser QA runbook:\n\n```json\n{}\n```",
+            Self::agent_browser_qa_runbook_json(runbook)
+        ))));
+        blocks
+    }
+
+    fn copy_agent_browser_qa_runbook(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let runbook = self.agent_browser_qa_runbook(window);
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_qa_runbook_json(&runbook),
+        ));
+        self.latest_agent_browser_qa_runbook = Some(runbook);
+        self.show_toast("Copied agent browser QA runbook", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_qa_runbook_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let runbook = self.agent_browser_qa_runbook(window);
+        let blocks = self.agent_browser_qa_runbook_agent_blocks(&runbook);
+        self.latest_agent_browser_qa_runbook = Some(runbook);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent agent browser QA runbook to the agent panel", cx);
         cx.notify();
     }
 
@@ -4261,6 +4420,30 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Copy Agent Browser QA Runbook")
+                                .icon(IconName::Check)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_qa_runbook(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Agent Browser QA Runbook")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_qa_runbook_to_agent(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy Agent Browser Manifest")
                                 .icon(IconName::Info)
                                 .handler({
@@ -5238,6 +5421,7 @@ impl Item for WebPreviewView {
                 latest_successful_interaction_receipt: None,
                 latest_agent_browser_status_packet: None,
                 latest_agent_browser_executor_readiness: None,
+                latest_agent_browser_qa_runbook: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
