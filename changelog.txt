@@ -1,3 +1,13 @@
+[2026-05-15] - Asset Panel History Health Rollups
+
+ADDED:
+- Media pinned and recent headers now show ready/stale counts beside the section title.
+- UI pinned and recent headers now show the same ready/stale counts for restored shadcn/UI actions.
+
+NOTES:
+- The rollups use the same stale predicates as row recovery and Clean actions, so users can see what will be cleaned before they click.
+- This is header-only state presentation and does not touch catalogs, provider fetches, editor input, or WebPreview routing.
+
 [2026-05-15] - Asset Panel Stale Section Cleanup
 
 ADDED:

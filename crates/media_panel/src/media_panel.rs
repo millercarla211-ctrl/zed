@@ -1663,6 +1663,12 @@ impl MediaPanel {
             .iter()
             .filter(|entry| media_history_entry_stale(entry))
             .count();
+        let health_label = media_history_health_label(self.recent_media.len(), stale_count);
+        let health_color = if stale_count > 0 {
+            Color::Warning
+        } else {
+            Color::Muted
+        };
         let mut rows = Vec::with_capacity(self.recent_media.len().min(MAX_RECENT_MEDIA_ACTIONS));
         for (index, entry) in self
             .recent_media
@@ -1683,9 +1689,19 @@ impl MediaPanel {
                         .items_center()
                         .justify_between()
                         .child(
-                            Label::new("Recent")
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted),
+                            h_flex()
+                                .gap_1()
+                                .items_center()
+                                .child(
+                                    Label::new("Recent")
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Muted),
+                                )
+                                .child(
+                                    Label::new(health_label)
+                                        .size(LabelSize::XSmall)
+                                        .color(health_color),
+                                ),
                         )
                         .child(
                             h_flex()
@@ -1725,6 +1741,12 @@ impl MediaPanel {
             .iter()
             .filter(|entry| media_history_entry_stale(entry))
             .count();
+        let health_label = media_history_health_label(self.pinned_media.len(), stale_count);
+        let health_color = if stale_count > 0 {
+            Color::Warning
+        } else {
+            Color::Muted
+        };
         let mut rows = Vec::with_capacity(self.pinned_media.len().min(MAX_PINNED_MEDIA_ACTIONS));
         for (index, entry) in self
             .pinned_media
@@ -1753,6 +1775,11 @@ impl MediaPanel {
                                     Label::new("Pinned")
                                         .size(LabelSize::XSmall)
                                         .color(Color::Muted),
+                                )
+                                .child(
+                                    Label::new(health_label)
+                                        .size(LabelSize::XSmall)
+                                        .color(health_color),
                                 ),
                         )
                         .child(
@@ -2472,6 +2499,15 @@ fn media_removed_stale_status(section: &str, removed: usize) -> SharedString {
         0 => format!("No stale {section} entries").into(),
         1 => format!("Removed 1 stale {section} entry").into(),
         _ => format!("Removed {removed} stale {section} entries").into(),
+    }
+}
+
+fn media_history_health_label(total: usize, stale: usize) -> SharedString {
+    let ready = total.saturating_sub(stale);
+    if stale == 0 {
+        format!("{ready} ready").into()
+    } else {
+        format!("{ready} ready / {stale} stale").into()
     }
 }
 

@@ -1094,6 +1094,12 @@ impl ShadcnUiPanel {
             .iter()
             .filter(|entry| self.ui_history_entry_stale(entry))
             .count();
+        let health_label = ui_history_health_label(self.recent_ui_actions.len(), stale_count);
+        let health_color = if stale_count > 0 {
+            Color::Warning
+        } else {
+            Color::Muted
+        };
         let mut rows = Vec::with_capacity(self.recent_ui_actions.len().min(MAX_RECENT_UI_ACTIONS));
         for (index, entry) in self
             .recent_ui_actions
@@ -1122,6 +1128,11 @@ impl ShadcnUiPanel {
                                     Label::new("Recent")
                                         .size(LabelSize::XSmall)
                                         .color(Color::Muted),
+                                )
+                                .child(
+                                    Label::new(health_label)
+                                        .size(LabelSize::XSmall)
+                                        .color(health_color),
                                 ),
                         )
                         .child(
@@ -1162,6 +1173,12 @@ impl ShadcnUiPanel {
             .iter()
             .filter(|entry| self.ui_history_entry_stale(entry))
             .count();
+        let health_label = ui_history_health_label(self.pinned_ui_actions.len(), stale_count);
+        let health_color = if stale_count > 0 {
+            Color::Warning
+        } else {
+            Color::Muted
+        };
         let mut rows = Vec::with_capacity(self.pinned_ui_actions.len().min(MAX_PINNED_UI_ACTIONS));
         for (index, entry) in self
             .pinned_ui_actions
@@ -1190,6 +1207,11 @@ impl ShadcnUiPanel {
                                     Label::new("Pinned")
                                         .size(LabelSize::XSmall)
                                         .color(Color::Muted),
+                                )
+                                .child(
+                                    Label::new(health_label)
+                                        .size(LabelSize::XSmall)
+                                        .color(health_color),
                                 ),
                         )
                         .child(
@@ -3339,6 +3361,15 @@ fn ui_removed_stale_status(section: &str, removed: usize) -> SharedString {
         0 => format!("No stale {section} entries").into(),
         1 => format!("Removed 1 stale {section} entry").into(),
         _ => format!("Removed {removed} stale {section} entries").into(),
+    }
+}
+
+fn ui_history_health_label(total: usize, stale: usize) -> SharedString {
+    let ready = total.saturating_sub(stale);
+    if stale == 0 {
+        format!("{ready} ready").into()
+    } else {
+        format!("{ready} ready / {stale} stale").into()
     }
 }
 
