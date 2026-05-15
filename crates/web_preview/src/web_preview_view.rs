@@ -262,7 +262,11 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "copy_agent_plugin_catalog",
     "send_agent_plugin_catalog_to_agent",
     "take_screenshot",
+    "capture_selected_area_screenshot",
+    "annotate_screenshot",
     "inspect_element",
+    "open_devtools",
+    "set_responsive_viewport",
 ];
 
 const INTERACTIVE_AGENT_BROWSER_ACTIONS: &[&str] = &[
@@ -451,6 +455,7 @@ pub struct WebPreviewView {
     latest_agent_browser_reload_executor_attempt: Option<Value>,
     latest_agent_browser_qa_runbook: Option<Value>,
     latest_agent_plugin_catalog: Option<Value>,
+    latest_annotated_screenshot: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -641,6 +646,7 @@ impl WebPreviewView {
             latest_agent_browser_reload_executor_attempt: None,
             latest_agent_browser_qa_runbook: None,
             latest_agent_plugin_catalog: None,
+            latest_annotated_screenshot: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1106,6 +1112,7 @@ impl WebPreviewView {
             "agent_browser_reload_executor_attempt": self.latest_agent_browser_reload_executor_attempt_summary(),
             "agent_browser_qa_runbook": self.latest_agent_browser_qa_runbook_summary(),
             "agent_plugin_catalog": self.latest_agent_plugin_catalog_summary(),
+            "annotated_screenshot": self.latest_annotated_screenshot_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1156,8 +1163,11 @@ impl WebPreviewView {
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
                 "screenshot": true,
+                "capture_selected_area_screenshot": true,
+                "annotate_screenshot": true,
                 "inspect_element": true,
                 "open_devtools": true,
+                "responsive_viewport": true,
                 "clear_cache": true,
             },
         })
@@ -1396,6 +1406,17 @@ impl WebPreviewView {
             "plugin_count": catalog.pointer("/catalog/plugins").and_then(Value::as_array).map(Vec::len),
             "default_enabled_plugins": catalog.pointer("/catalog/default_enabled_plugins").cloned(),
             "available_to": catalog.pointer("/catalog/available_to").cloned(),
+        }))
+    }
+
+    fn latest_annotated_screenshot_summary(&self) -> Option<Value> {
+        let screenshot = self.latest_annotated_screenshot.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at_ms": screenshot.pointer("/capture/captured_at_ms").and_then(Value::as_u64),
+            "url": screenshot.pointer("/annotation/url").and_then(Value::as_str),
+            "title": screenshot.pointer("/annotation/title").and_then(Value::as_str),
+            "annotation_count": screenshot.pointer("/annotation/counts/annotations").and_then(Value::as_u64),
+            "viewport": screenshot.pointer("/annotation/viewport").cloned(),
         }))
     }
 
@@ -2501,6 +2522,7 @@ impl WebPreviewView {
                     "agent_browser_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
                     "agent_browser_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
                     "agent_browser_reload_executor_attempt": self.latest_agent_browser_reload_executor_attempt_summary(),
+                    "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 },
                 "handoff": {
                     "read_only_only": !interactive_unlocked,
@@ -3360,6 +3382,11 @@ impl WebPreviewView {
                             {"id": "browser.dom.snapshot", "state": "available", "description": "Collect a bounded DOM tree snapshot for model context."},
                             {"id": "browser.runtime.events", "state": "available", "description": "Read bounded console, page-error, fetch, and XHR event buffers."},
                             {"id": "browser.screenshot.capture", "state": "available", "description": "Capture WebPreview screenshots for Agent Panel attachments."},
+                            {"id": "browser.screenshot.area", "state": "available", "description": "Capture a selected WebPreview rectangle for Agent Panel attachments."},
+                            {"id": "browser.screenshot.annotate", "state": "available", "description": "Draw page annotations and capture the marked WebPreview screenshot with metadata."},
+                            {"id": "browser.element.inspect", "state": "available", "description": "Pick a page element and send selector, HTML, computed styles, rect, and screenshot context to the Agent Panel."},
+                            {"id": "browser.devtools.open", "state": "available", "description": "Open the native browser DevTools for the active WebPreview backend."},
+                            {"id": "browser.viewport.responsive", "state": "available", "description": "Switch the active WebPreview between full, phone, tablet, laptop, and rotated responsive viewports."},
                             {"id": "browser.action.reload", "state": "available_when_unlocked", "description": "Reload through the permissioned WebPreview executor shell."},
                             {"id": "browser.action.click", "state": "planned_executor", "description": "Click visible page targets after unlock, fresh preflight, and receipt logging."},
                             {"id": "browser.action.type", "state": "planned_executor", "description": "Type into page inputs after unlock, fresh preflight, and receipt logging."},
@@ -3589,6 +3616,39 @@ impl WebPreviewView {
         }
     }
 
+    fn capture_selected_area_screenshot(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let script = "window.__zedWebPreview && window.__zedWebPreview.captureAreaScreenshot();";
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Drag a page area to capture it for the agent.", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("Selected-area capture is unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic("Selected-area capture crashed before it could start", cx);
+            }
+        }
+    }
+
+    fn annotate_screenshot(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let script = "window.__zedWebPreview && window.__zedWebPreview.startAnnotationMode();";
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Drag to annotate. Enter captures; Escape cancels.", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("Annotated screenshot mode is unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic(
+                    "Annotated screenshot mode crashed before it could start",
+                    cx,
+                );
+            }
+        }
+    }
+
     fn clear_cache(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         if let Err(error) = self.clear_all_browsing_data() {
             self.load_state = PreviewLoadState::Error(error.to_string().into());
@@ -3644,6 +3704,27 @@ impl WebPreviewView {
             }
         }
         cx.notify();
+    }
+
+    fn annotated_screenshot_snapshot(&self, payload: &Value, window: &Window) -> Value {
+        let mut annotation = payload.clone();
+        if let Some(object) = annotation.as_object_mut() {
+            object.remove("kind");
+        }
+
+        serde_json::json!({
+            "schema": "zed.web_preview.annotated_screenshot.v1",
+            "capture": {
+                "captured_at_ms": Self::current_epoch_millis(),
+                "source": "web_preview_annotation_overlay",
+            },
+            "session": self.browser_session_snapshot(window),
+            "annotation": annotation,
+        })
+    }
+
+    fn annotated_screenshot_json(screenshot: &Value) -> String {
+        serde_json::to_string_pretty(screenshot).unwrap_or_else(|_| "{}".to_string())
     }
 
     fn report_action_error(&mut self, prefix: &str, error: anyhow::Error, cx: &mut Context<Self>) {
@@ -4366,6 +4447,43 @@ impl WebPreviewView {
                     Err(_) => {
                         self.report_action_panic(
                             "Successful interaction receipt crashed while collecting page data",
+                            cx,
+                        );
+                    }
+                }
+            }
+            "annotated-screenshot" => {
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let screenshot = self.annotated_screenshot_snapshot(&payload, window);
+                    self.latest_annotated_screenshot = Some(screenshot.clone());
+                    let captured = self.capture_screenshot_payload(None, window);
+                    let _ = self.evaluate_script(
+                        "window.__zedWebPreview && window.__zedWebPreview.clearActiveOverlay();",
+                    );
+                    let (_path, image, mut blocks) = captured?;
+                    blocks.push(acp::ContentBlock::Text(acp::TextContent::new(
+                        "\n\nAnnotated screenshot metadata:\n\n".to_string(),
+                    )));
+                    blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+                        "```json\n{}\n```",
+                        Self::annotated_screenshot_json(&screenshot)
+                    ))));
+                    cx.write_to_clipboard(ClipboardItem::new_image(&image));
+                    self.append_content_blocks_to_agent_panel(blocks, window, cx);
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {
+                        self.show_toast(
+                            "Captured annotated web preview screenshot to clipboard and AI input",
+                            cx,
+                        );
+                    }
+                    Ok(Err(error)) => {
+                        self.report_action_error("Annotated screenshot failed", error, cx);
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "Annotated screenshot crashed while processing",
                             cx,
                         );
                     }
@@ -5223,6 +5341,30 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.take_screenshot(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Capture Area")
+                                .icon(IconName::Crosshair)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.capture_selected_area_screenshot(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Annotate Screenshot")
+                                .icon(IconName::Pencil)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.annotate_screenshot(window, cx);
                                         });
                                     }
                                 }),
@@ -6140,6 +6282,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_reload_executor_attempt: None,
                 latest_agent_browser_qa_runbook: None,
                 latest_agent_plugin_catalog: None,
+                latest_annotated_screenshot: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
@@ -9354,6 +9497,187 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
       document.addEventListener("mousemove", mouseMove, true);
       document.addEventListener("mouseup", mouseUp, true);
       document.addEventListener("keydown", keydown, true);
+      window.__zedWebPreview.__cleanup = cleanup;
+    },
+
+    clearActiveOverlay() {
+      if (window.__zedWebPreview.__cleanup) {
+        window.__zedWebPreview.__cleanup();
+      }
+    },
+
+    startAnnotationMode() {
+      if (window.__zedWebPreview.__cleanup) {
+        window.__zedWebPreview.__cleanup();
+      }
+
+      const overlay = createOverlay();
+      overlay.style.pointerEvents = "auto";
+      overlay.style.background = "rgba(0, 0, 0, 0.04)";
+
+      const toolbar = document.createElement("div");
+      toolbar.textContent = "Drag to mark. Enter captures. Esc cancels.";
+      toolbar.style.position = "fixed";
+      toolbar.style.top = "14px";
+      toolbar.style.left = "50%";
+      toolbar.style.transform = "translateX(-50%)";
+      toolbar.style.padding = "7px 10px";
+      toolbar.style.border = "1px solid rgba(63, 185, 80, 0.55)";
+      toolbar.style.borderRadius = "999px";
+      toolbar.style.background = "rgba(13, 17, 23, 0.92)";
+      toolbar.style.color = "rgb(240, 246, 252)";
+      toolbar.style.font = "12px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      toolbar.style.boxShadow = "0 8px 24px rgba(0, 0, 0, 0.35)";
+      toolbar.style.pointerEvents = "none";
+      overlay.appendChild(toolbar);
+
+      const annotations = [];
+      let active = null;
+      let draft = null;
+
+      const annotationRect = (rect, label) => {
+        const box = document.createElement("div");
+        box.style.position = "fixed";
+        box.style.left = `${rect.x}px`;
+        box.style.top = `${rect.y}px`;
+        box.style.width = `${rect.width}px`;
+        box.style.height = `${rect.height}px`;
+        box.style.border = "2px solid #3fb950";
+        box.style.background = "rgba(63, 185, 80, 0.16)";
+        box.style.borderRadius = "8px";
+        box.style.pointerEvents = "none";
+        box.style.boxShadow = "0 0 0 1px rgba(13, 17, 23, 0.7), 0 0 22px rgba(63, 185, 80, 0.2)";
+
+        const tag = document.createElement("div");
+        tag.textContent = String(label);
+        tag.style.position = "absolute";
+        tag.style.left = "-2px";
+        tag.style.top = "-24px";
+        tag.style.minWidth = "20px";
+        tag.style.height = "20px";
+        tag.style.padding = "0 6px";
+        tag.style.borderRadius = "999px";
+        tag.style.background = "rgb(63, 185, 80)";
+        tag.style.color = "rgb(13, 17, 23)";
+        tag.style.font = "700 12px/20px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        tag.style.textAlign = "center";
+        tag.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.35)";
+        box.appendChild(tag);
+        return box;
+      };
+
+      const normalizedRect = (start, end) => {
+        const left = Math.min(start.x, end.x);
+        const top = Math.min(start.y, end.y);
+        const width = Math.abs(start.x - end.x);
+        const height = Math.abs(start.y - end.y);
+        return { x: left, y: top, width, height };
+      };
+
+      const setDraftRect = (rect) => {
+        if (!draft) {
+          draft = annotationRect({ x: 0, y: 0, width: 1, height: 1 }, annotations.length + 1);
+          draft.style.borderStyle = "dashed";
+          overlay.appendChild(draft);
+        }
+        draft.style.left = `${rect.x}px`;
+        draft.style.top = `${rect.y}px`;
+        draft.style.width = `${rect.width}px`;
+        draft.style.height = `${rect.height}px`;
+      };
+
+      const cleanup = () => {
+        document.removeEventListener("mousedown", mouseDown, true);
+        document.removeEventListener("mousemove", mouseMove, true);
+        document.removeEventListener("mouseup", mouseUp, true);
+        document.removeEventListener("keydown", keydown, true);
+        overlay.remove();
+        window.__zedWebPreview.__cleanup = null;
+      };
+
+      const mouseDown = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        active = { x: event.clientX, y: event.clientY };
+        setDraftRect({ x: active.x, y: active.y, width: 1, height: 1 });
+      };
+
+      const mouseMove = (event) => {
+        if (!active) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setDraftRect(normalizedRect(active, { x: event.clientX, y: event.clientY }));
+      };
+
+      const mouseUp = (event) => {
+        if (!active) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = normalizedRect(active, { x: event.clientX, y: event.clientY });
+        active = null;
+        if (draft) {
+          draft.remove();
+          draft = null;
+        }
+        if (rect.width < 6 || rect.height < 6) return;
+
+        const label = annotations.length + 1;
+        const box = annotationRect(rect, label);
+        overlay.appendChild(box);
+        annotations.push({
+          id: `annotation-${label}`,
+          label,
+          rect: {
+            x: Math.round(rect.x),
+            y: Math.round(rect.y),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height)
+          },
+          page: {
+            scroll_x: Math.round(window.scrollX || 0),
+            scroll_y: Math.round(window.scrollY || 0)
+          },
+          created_at: new Date().toISOString()
+        });
+      };
+
+      const keydown = (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          cleanup();
+          return;
+        }
+        if (event.key !== "Enter") return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        post({
+          kind: "annotated-screenshot",
+          timestamp_ms: Date.now(),
+          timestamp: new Date().toISOString(),
+          url: window.location.href,
+          title: document.title,
+          scale: window.devicePixelRatio || 1,
+          viewport: {
+            inner_width: window.innerWidth,
+            inner_height: window.innerHeight,
+            scroll_x: Math.round(window.scrollX || 0),
+            scroll_y: Math.round(window.scrollY || 0),
+            device_pixel_ratio: window.devicePixelRatio || 1
+          },
+          counts: {
+            annotations: annotations.length
+          },
+          annotations
+        });
+      };
+
+      document.addEventListener("mousedown", mouseDown, true);
+      document.addEventListener("mousemove", mouseMove, true);
+      document.addEventListener("mouseup", mouseUp, true);
+      document.addEventListener("keydown", keydown, true);
+      document.documentElement.appendChild(overlay);
       window.__zedWebPreview.__cleanup = cleanup;
     }
   };

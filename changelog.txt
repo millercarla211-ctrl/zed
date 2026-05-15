@@ -1,3 +1,16 @@
+[2026-05-16] - Web Preview Browser Function Wiring
+
+ADDED:
+- WebPreview's More menu now includes selected-area capture and annotated screenshot mode next to full screenshot, Inspect Element, DevTools, and responsive viewport controls.
+- Annotated screenshots keep a green overlay visible during capture, attach the screenshot to the Agent Panel, and include schema-versioned annotation metadata in the handoff.
+
+CHANGED:
+- Browser plugin catalogs now advertise real WebPreview Browser capabilities for screenshot capture, selected-area capture, annotation, element inspection, DevTools, and responsive viewport presets.
+- WebPreview session/status JSON now summarizes the latest annotated screenshot so agents can reference the current marked browser state.
+
+NOTES:
+- This connects the browser-function slice without changing editor input, WebPreview native focus routing, or permissioned click/type/key executors.
+
 [2026-05-16] - Agent Plugin Runtime Discovery
 
 ADDED:
