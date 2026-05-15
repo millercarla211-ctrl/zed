@@ -1,3 +1,12 @@
+[2026-05-15] - Media Recent Action Reuse
+
+ADDED:
+- Media panel now keeps a bounded in-memory Recent section for the last used local or remote media assets.
+- Recent media rows reuse the existing Preview, Copy, Insert, and Insert URL paths so recent actions stay behaviorally identical to the source rows.
+
+NOTES:
+- Recent entries dedupe by source and are only shown for empty searches, keeping active media queries focused on result rows.
+
 [2026-05-15] - Asset Command Center Kickoff
 
 ADDED:

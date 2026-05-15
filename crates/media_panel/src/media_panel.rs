@@ -1,10 +1,10 @@
 use editor::{Editor, EditorEvent};
 use futures::AsyncReadExt as _;
 use gpui::{
-    App, AppContext as _, AsyncWindowContext, BackgroundExecutor, ClipboardItem, Context, Entity,
-    EventEmitter, FocusHandle, Focusable, InteractiveElement, ObjectFit, Pixels, Render,
-    ScrollHandle, SharedString, StatefulInteractiveElement, Subscription, WeakEntity, Window,
-    actions, div, img, point, px,
+    AnyElement, App, AppContext as _, AsyncWindowContext, BackgroundExecutor, ClipboardItem,
+    Context, Entity, EventEmitter, FocusHandle, Focusable, InteractiveElement, ObjectFit, Pixels,
+    Render, ScrollHandle, SharedString, StatefulInteractiveElement, Subscription, WeakEntity,
+    Window, actions, div, img, point, px,
 };
 use http_client::{AsyncBody, HttpClient};
 use serde::Deserialize;
@@ -43,6 +43,7 @@ const MEDIA_PANEL_KEY: &str = "MediaPanel";
 const MAX_MEDIA_RESULTS: usize = 320;
 const MAX_REMOTE_MEDIA_RESULTS: usize = 640;
 const MAX_REMOTE_MEDIA_CACHE_ENTRIES: usize = 24;
+const MAX_RECENT_MEDIA_ACTIONS: usize = 5;
 const OPENVERSE_RESULT_LIMIT: usize = 90;
 const OPENVERSE_FOCUSED_RESULT_LIMIT: usize = 150;
 const WIKIMEDIA_RESULT_LIMIT: usize = 50;
@@ -313,6 +314,24 @@ fn static_remote_kind_counts() -> MediaKindCounts {
     *COUNTS.get_or_init(|| MediaKindCounts::from_remote_assets(remote_media_assets()))
 }
 
+#[derive(Clone)]
+struct RecentMediaEntry {
+    label: SharedString,
+    kind: DraggedMediaKind,
+    source: RecentMediaSource,
+}
+
+#[derive(Clone)]
+enum RecentMediaSource {
+    Local {
+        path: PathBuf,
+        relative_display: SharedString,
+    },
+    Remote {
+        url: SharedString,
+    },
+}
+
 pub struct MediaPanel {
     workspace: WeakEntity<Workspace>,
     filter_editor: Entity<Editor>,
@@ -333,6 +352,7 @@ pub struct MediaPanel {
     remote_signature: Option<SharedString>,
     remote_result_source: RemoteMediaResultSource,
     remote_generation: u64,
+    recent_media: VecDeque<RecentMediaEntry>,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
 }
@@ -395,6 +415,7 @@ impl MediaPanel {
                 remote_signature: None,
                 remote_result_source: RemoteMediaResultSource::None,
                 remote_generation: 0,
+                recent_media: VecDeque::with_capacity(MAX_RECENT_MEDIA_ACTIONS),
                 status: None,
                 _subscriptions: vec![filter_subscription],
             }
@@ -781,7 +802,10 @@ impl MediaPanel {
         });
 
         self.status = match result {
-            Ok(message) => Some(message),
+            Ok(message) => {
+                self.record_recent_local_media(&asset);
+                Some(message)
+            }
             Err(error) => Some(format!("{error:#}").into()),
         };
         cx.notify();
@@ -811,6 +835,7 @@ impl MediaPanel {
             editor.insert_media_url(&url, kind, &label, window, cx)
         });
 
+        self.record_recent_remote_media(&url, kind, &label);
         self.status = Some(message);
         cx.notify();
     }
@@ -832,6 +857,7 @@ impl MediaPanel {
             return;
         };
 
+        self.record_recent_local_media(&asset);
         self.open_media_preview(preview_url, label, window, cx);
     }
 
@@ -851,6 +877,7 @@ impl MediaPanel {
             return;
         };
 
+        self.record_recent_remote_media(&url, kind, &label);
         self.open_media_preview(preview_url, label, window, cx);
     }
 
@@ -903,6 +930,32 @@ impl MediaPanel {
         cx.write_to_clipboard(ClipboardItem::new_string(source));
         self.status = Some(media_status_label("Copied ", label.as_ref()));
         cx.notify();
+    }
+
+    fn record_recent_local_media(&mut self, asset: &DraggedMediaAsset) {
+        self.push_recent_media(RecentMediaEntry {
+            label: asset.label.clone(),
+            kind: asset.kind,
+            source: RecentMediaSource::Local {
+                path: asset.path.clone(),
+                relative_display: asset.relative_display.clone(),
+            },
+        });
+    }
+
+    fn record_recent_remote_media(&mut self, url: &str, kind: DraggedMediaKind, label: &str) {
+        self.push_recent_media(RecentMediaEntry {
+            label: label.to_string().into(),
+            kind,
+            source: RecentMediaSource::Remote { url: url.into() },
+        });
+    }
+
+    fn push_recent_media(&mut self, entry: RecentMediaEntry) {
+        self.recent_media
+            .retain(|existing| !recent_media_sources_match(existing, &entry));
+        self.recent_media.push_front(entry);
+        self.recent_media.truncate(MAX_RECENT_MEDIA_ACTIONS);
     }
 
     fn render_url_insert(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
@@ -963,6 +1016,7 @@ impl MediaPanel {
                                     let url = url.clone();
                                     let label = label.clone();
                                     move |panel, _, _, cx| {
+                                        panel.record_recent_remote_media(&url, kind, &label);
                                         panel.copy_media_source(url.clone(), label.clone(), cx);
                                     }
                                 })),
@@ -994,6 +1048,7 @@ impl MediaPanel {
         let preview_payload = payload.clone();
         let copy_path = payload.path.clone();
         let copy_label = label.clone();
+        let copy_payload = payload.clone();
         let row_id = media_element_id("media-panel-row-", relative_display.as_ref());
         let preview_id = media_element_id("media-panel-preview-", relative_display.as_ref());
         let copy_id = media_element_id("media-panel-copy-path-", relative_display.as_ref());
@@ -1053,6 +1108,7 @@ impl MediaPanel {
                     .style(ButtonStyle::Subtle)
                     .size(ButtonSize::Compact)
                     .on_click(cx.listener(move |panel, _, _, cx| {
+                        panel.record_recent_local_media(&copy_payload);
                         let copy_path = copy_path.to_string_lossy().into_owned();
                         panel.copy_media_source(copy_path, copy_label.clone(), cx);
                     })),
@@ -1133,6 +1189,7 @@ impl MediaPanel {
                         let url = url.clone();
                         let label = label.clone();
                         move |panel, _, _, cx| {
+                            panel.record_recent_remote_media(&url, kind, &label);
                             panel.copy_media_source(url.clone(), label.clone(), cx);
                         }
                     })),
@@ -1268,6 +1325,193 @@ impl MediaPanel {
                     ),
             )
     }
+
+    fn render_recent_media_section(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.recent_media.is_empty() {
+            return None;
+        }
+
+        let mut rows = Vec::with_capacity(self.recent_media.len().min(MAX_RECENT_MEDIA_ACTIONS));
+        for (index, entry) in self
+            .recent_media
+            .iter()
+            .take(MAX_RECENT_MEDIA_ACTIONS)
+            .cloned()
+            .enumerate()
+        {
+            rows.push(self.render_recent_media_row(entry, index, cx));
+        }
+
+        Some(
+            v_flex()
+                .id("media-panel-recent-media-section")
+                .gap_1()
+                .child(
+                    h_flex()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            Label::new("Recent")
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted),
+                        )
+                        .child(
+                            Label::new("last used media")
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted),
+                        ),
+                )
+                .children(rows)
+                .into_any_element(),
+        )
+    }
+
+    fn render_recent_media_row(
+        &self,
+        entry: RecentMediaEntry,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let id_suffix = index.to_string();
+        let row_id = media_element_id("media-panel-recent-row-", id_suffix.as_str());
+        let preview_id = media_element_id("media-panel-recent-preview-", id_suffix.as_str());
+        let copy_id = media_element_id("media-panel-recent-copy-", id_suffix.as_str());
+        let insert_id = media_element_id("media-panel-recent-insert-", id_suffix.as_str());
+        let source_label = recent_media_source_label(&entry.source);
+        let source_kind = recent_media_source_kind(&entry.source);
+        let actions = match entry.source.clone() {
+            RecentMediaSource::Local {
+                path,
+                relative_display,
+            } => {
+                let asset = DraggedMediaAsset {
+                    path,
+                    kind: entry.kind,
+                    label: entry.label.clone(),
+                    relative_display,
+                };
+                let preview_asset = asset.clone();
+                let copy_asset = asset.clone();
+                let insert_asset = asset;
+                h_flex()
+                    .gap_1()
+                    .child(
+                        Button::new(preview_id, "Preview")
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener(move |panel, _, window, cx| {
+                                panel.preview_media_asset(preview_asset.clone(), window, cx);
+                            })),
+                    )
+                    .child(
+                        Button::new(copy_id, "Copy")
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener(move |panel, _, _, cx| {
+                                panel.record_recent_local_media(&copy_asset);
+                                let source = copy_asset.path.to_string_lossy().into_owned();
+                                panel.copy_media_source(source, copy_asset.label.clone(), cx);
+                            })),
+                    )
+                    .child(
+                        Button::new(insert_id, "Insert")
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener(move |panel, _, window, cx| {
+                                panel.insert_media(insert_asset.clone(), window, cx);
+                            })),
+                    )
+                    .into_any_element()
+            }
+            RecentMediaSource::Remote { url } => {
+                let url = url.to_string();
+                let label = entry.label.to_string();
+                let kind = entry.kind;
+                h_flex()
+                    .gap_1()
+                    .child(
+                        Button::new(preview_id, "Preview")
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener({
+                                let url = url.clone();
+                                let label = label.clone();
+                                move |panel, _, window, cx| {
+                                    panel.preview_media_url(
+                                        url.clone(),
+                                        kind,
+                                        label.clone(),
+                                        window,
+                                        cx,
+                                    );
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new(copy_id, "Copy")
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener({
+                                let url = url.clone();
+                                let label = label.clone();
+                                move |panel, _, _, cx| {
+                                    panel.record_recent_remote_media(&url, kind, &label);
+                                    panel.copy_media_source(url.clone(), label.clone(), cx);
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new(insert_id, "Insert URL")
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener(move |panel, _, window, cx| {
+                                panel.insert_media_url(
+                                    url.clone(),
+                                    kind,
+                                    label.clone(),
+                                    window,
+                                    cx,
+                                );
+                            })),
+                    )
+                    .into_any_element()
+            }
+        };
+
+        h_flex()
+            .id(row_id)
+            .gap_2()
+            .items_center()
+            .p_2()
+            .rounded_sm()
+            .border_1()
+            .border_color(cx.theme().colors().border_variant)
+            .bg(cx.theme().colors().element_background)
+            .child(Icon::new(media_kind_icon(entry.kind)).size(IconSize::Small))
+            .child(
+                v_flex()
+                    .flex_1()
+                    .gap_0p5()
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .child(Label::new(entry.label).size(LabelSize::Small).truncate())
+                            .child(
+                                Label::new(source_kind)
+                                    .size(LabelSize::XSmall)
+                                    .color(Color::Accent),
+                            ),
+                    )
+                    .child(
+                        Label::new(source_label)
+                            .size(LabelSize::XSmall)
+                            .color(Color::Muted)
+                            .truncate(),
+                    ),
+            )
+            .child(actions)
+            .into_any_element()
+    }
 }
 
 impl Panel for MediaPanel {
@@ -1359,10 +1603,16 @@ impl Render for MediaPanel {
         let provider_count = remote_provider_count(self.kind_filter);
         let remote_warning = self.remote_warning.clone();
         let show_remote_loading_row = self.remote_loading && remote_assets.is_empty();
+        let recent_media_section = if normalized_query.is_empty() {
+            self.render_recent_media_section(cx)
+        } else {
+            None
+        };
         let mut asset_rows = Vec::with_capacity(
             usize::from(url_insert.is_some())
                 + usize::from(remote_warning.is_some())
                 + usize::from(show_remote_loading_row)
+                + usize::from(recent_media_section.is_some())
                 + remote_assets.len()
                 + assets.len()
                 + usize::from(provider_count > 0),
@@ -1378,6 +1628,9 @@ impl Render for MediaPanel {
         }
         if show_remote_loading_row {
             asset_rows.push(self.render_remote_loading_row(cx).into_any_element());
+        }
+        if let Some(recent_media_section) = recent_media_section {
+            asset_rows.push(recent_media_section);
         }
         asset_rows.extend(
             remote_assets
@@ -1676,6 +1929,35 @@ fn remote_loading_description(filter: MediaKindFilter) -> &'static str {
         MediaKindFilter::Images => "Remote image results will appear above local files.",
         MediaKindFilter::Videos => "Remote video results will appear above local files.",
         MediaKindFilter::Audio => "Remote audio results will appear above local files.",
+    }
+}
+
+fn recent_media_sources_match(existing: &RecentMediaEntry, entry: &RecentMediaEntry) -> bool {
+    match (&existing.source, &entry.source) {
+        (
+            RecentMediaSource::Local { path: existing, .. },
+            RecentMediaSource::Local { path, .. },
+        ) => existing == path,
+        (RecentMediaSource::Remote { url: existing }, RecentMediaSource::Remote { url }) => {
+            existing.as_ref() == url.as_ref()
+        }
+        _ => false,
+    }
+}
+
+fn recent_media_source_label(source: &RecentMediaSource) -> SharedString {
+    match source {
+        RecentMediaSource::Local {
+            relative_display, ..
+        } => relative_display.clone(),
+        RecentMediaSource::Remote { url } => url.clone(),
+    }
+}
+
+fn recent_media_source_kind(source: &RecentMediaSource) -> &'static str {
+    match source {
+        RecentMediaSource::Local { .. } => "local",
+        RecentMediaSource::Remote { .. } => "remote",
     }
 }
 
