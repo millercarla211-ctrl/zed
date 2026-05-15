@@ -486,8 +486,7 @@ impl MediaPanel {
                     panel.local_kind_counts = local_kind_counts;
                     panel.loading = false;
                     panel.index_loaded = true;
-                    panel.status =
-                        Some(format!("Indexed {} media files", panel.assets.len()).into());
+                    panel.status = Some(media_indexed_status(panel.assets.len()));
                     cx.notify();
                 })
                 .ok();
@@ -1221,7 +1220,7 @@ impl Render for MediaPanel {
             } else if self.remote_loading {
                 "fetching".into()
             } else {
-                format!("{shown_count} / {total_count}").into()
+                media_fraction_label(shown_count, total_count)
             }
         });
 
@@ -3274,6 +3273,18 @@ fn media_count_label(label: &str, count: usize) -> String {
     text.push_str(label);
     let _ = write!(text, " {count}");
     text
+}
+
+fn media_fraction_label(left: usize, right: usize) -> SharedString {
+    let mut text = String::with_capacity(24);
+    let _ = write!(text, "{left} / {right}");
+    text.into()
+}
+
+fn media_indexed_status(count: usize) -> SharedString {
+    let mut text = String::with_capacity("Indexed ".len() + 6 + " media files".len());
+    let _ = write!(text, "Indexed {count} media files");
+    text.into()
 }
 
 fn media_attribution_label(provider: &str, license: &str) -> String {

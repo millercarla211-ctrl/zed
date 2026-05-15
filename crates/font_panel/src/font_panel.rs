@@ -755,7 +755,7 @@ impl FontPanel {
         let count_label = if let Some(status) = self.status.clone() {
             status
         } else if self.fonts_loaded || self.source_filter == FontSourceFilter::Web {
-            format!("{total_matches} / {}", counts.count(self.source_filter)).into()
+            font_fraction_label(total_matches, counts.count(self.source_filter))
         } else {
             "loading".into()
         };
@@ -916,6 +916,12 @@ fn font_count_label(label: &str, count: usize) -> String {
     text.push_str(label);
     let _ = write!(text, " {count}");
     text
+}
+
+fn font_fraction_label(left: usize, right: usize) -> SharedString {
+    let mut text = String::with_capacity(24);
+    let _ = write!(text, "{left} / {right}");
+    text.into()
 }
 
 fn web_font_spec_by_name(name: &str) -> Option<WebFontSpec> {

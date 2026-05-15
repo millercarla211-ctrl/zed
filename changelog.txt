@@ -1,3 +1,11 @@
+[2026-05-15] - Panel Header Count Label Cleanup
+
+CHANGED:
+- `crates/icon_picker`, `crates/font_panel`, `crates/media_panel`, and `crates/shadcn_ui_panel` now build header fraction/status labels with small preallocated helpers instead of generic formatting during render or load completion.
+
+NOTES:
+- Preserved exact visible counter/status text, panel layout, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Panel Tab Count Label Cleanup
 
 CHANGED:

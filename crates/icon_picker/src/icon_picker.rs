@@ -940,9 +940,9 @@ impl Render for IconPickerPanel {
             if self.loading_external_icons {
                 "loading icons".into()
             } else if query.is_empty() {
-                format!("{shown_count} / {total_count}").into()
+                icon_fraction_label(shown_count, total_count)
             } else {
-                format!("{total_matches} / {total_count}").into()
+                icon_fraction_label(total_matches, total_count)
             }
         });
         let mut icon_tiles = Vec::with_capacity(icons.len());
@@ -1035,6 +1035,12 @@ fn icon_count_label(label: &str, count: usize) -> String {
     text.push_str(label);
     let _ = write!(text, " {count}");
     text
+}
+
+fn icon_fraction_label(left: usize, right: usize) -> SharedString {
+    let mut text = String::with_capacity(24);
+    let _ = write!(text, "{left} / {right}");
+    text.into()
 }
 
 struct IconDragPreview {

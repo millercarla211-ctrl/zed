@@ -306,7 +306,7 @@ impl ShadcnUiPanel {
                     panel.search_text_cache.borrow_mut().clear();
                     panel.loading_catalog = false;
                     panel.catalog_loaded = true;
-                    panel.status = Some(format!("Loaded {} UI entries", panel.items.len()).into());
+                    panel.status = Some(shadcn_loaded_status(panel.items.len()));
                     cx.notify();
                 })
                 .ok();
@@ -868,7 +868,7 @@ impl Render for ShadcnUiPanel {
             if self.loading_catalog {
                 "loading".into()
             } else {
-                format!("{total_matches} / {total_count}").into()
+                shadcn_fraction_label(total_matches, total_count)
             }
         });
 
@@ -1004,6 +1004,18 @@ fn shadcn_count_label(label: &str, count: usize) -> String {
     text.push_str(label);
     let _ = write!(text, " {count}");
     text
+}
+
+fn shadcn_fraction_label(left: usize, right: usize) -> SharedString {
+    let mut text = String::with_capacity(24);
+    let _ = write!(text, "{left} / {right}");
+    text.into()
+}
+
+fn shadcn_loaded_status(count: usize) -> SharedString {
+    let mut text = String::with_capacity("Loaded ".len() + 6 + " UI entries".len());
+    let _ = write!(text, "Loaded {count} UI entries");
+    text.into()
 }
 
 fn shadcn_thumbnail(
