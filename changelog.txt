@@ -1,3 +1,16 @@
+[2026-05-16] - Agent Plugin Runtime Provisioner Shell
+
+ADDED:
+- Added the `prepare_agent_plugin_runtime` Agent tool for dry-run planning or permissioned creation of managed plugin runtime roots.
+- The tool prepares only workspace/Zed-managed roots for Agent plugins, Playwright, DX Chrome extension files, and managed Chrome profiles.
+- The tool can write a small `agent-plugin-bootstrap.json` manifest so future download/executor steps have a stable local contract.
+
+CHANGED:
+- Enabled the new tool in default Write and Ask profiles and added it to the Tool Permissions UI.
+
+NOTES:
+- This shell does not download packages, launch Chrome, or write into real user browser profiles.
+
 [2026-05-16] - Agent Plugin Bootstrap Readiness
 
 ADDED:

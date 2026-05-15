@@ -1129,6 +1129,7 @@
           "update_plan": true,
           "search_web": true,
           "list_agent_plugins": true,
+          "prepare_agent_plugin_runtime": true,
         },
       },
       "ask": {
@@ -1152,6 +1153,7 @@
           "update_plan": true,
           "search_web": true,
           "list_agent_plugins": true,
+          "prepare_agent_plugin_runtime": true,
         },
       },
       "minimal": {

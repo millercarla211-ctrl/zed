@@ -1,3 +1,4 @@
+mod agent_plugin_bootstrap_tool;
 mod agent_plugin_catalog_tool;
 mod apply_code_action_tool;
 mod context_server_registry;
@@ -58,6 +59,7 @@ where
     }
 }
 
+pub use agent_plugin_bootstrap_tool::*;
 pub use agent_plugin_catalog_tool::*;
 pub use apply_code_action_tool::*;
 pub use context_server_registry::*;
@@ -154,6 +156,7 @@ macro_rules! tools {
 }
 
 tools! {
+    AgentPluginBootstrapTool,
     AgentPluginCatalogTool,
     ApplyCodeActionTool,
     CopyPathTool,
