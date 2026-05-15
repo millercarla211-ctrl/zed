@@ -1,3 +1,16 @@
+[2026-05-16] - Web Preview Permissioned Navigation Executor
+
+ADDED:
+- WebPreview's More menu now includes "Run Navigation Executor" and "Run Navigation Executor to Agent".
+- The navigation executor validates the current URL/search editor text, normalizes it through the existing WebPreview URL rules, and dispatches the native URL load path only after the interactive/context/audit gate passes.
+- Navigation attempts emit receipts with requested and normalized URL values, blockers, dispatch state, and proof that no keyboard, mouse, pointer, wheel, or page-script input was sent.
+
+CHANGED:
+- WebPreview session/status JSON, QA runbooks, readiness summaries, and Browser plugin manifests now advertise the permissioned navigation executor.
+
+NOTES:
+- This intentionally navigates only through the existing WebPreview URL-load path; click/type/key/page-script execution remains out of scope.
+
 [2026-05-16] - Web Preview Permissioned Clear Data Executor
 
 ADDED:

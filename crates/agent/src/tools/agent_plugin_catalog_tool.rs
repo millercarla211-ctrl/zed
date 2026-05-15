@@ -253,6 +253,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.element.inspect", "available", "Pick a page element and send selector, HTML, computed styles, rect, and screenshot context to the Agent Panel."),
             capability("browser.devtools.open", "available", "Open the native browser DevTools for the active WebPreview backend."),
             capability("browser.viewport.responsive", "available", "Switch the active WebPreview between full, phone, tablet, laptop, and rotated responsive viewports."),
+            capability("browser.action.open_url", "available_when_unlocked", "Open the current URL/search editor text through the permissioned WebPreview executor shell."),
             capability("browser.action.reload", "available_when_unlocked", "Reload through the permissioned WebPreview executor shell."),
             capability("browser.action.clear_data", "available_when_unlocked", "Clear WebPreview browsing data through the permissioned executor shell."),
             capability("browser.action.click", "planned_executor", "Click visible page targets after unlock, fresh preflight, and receipt logging."),
