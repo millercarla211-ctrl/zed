@@ -1,3 +1,11 @@
+[2026-05-15] - Panel Action Status Label Cleanup
+
+CHANGED:
+- `crates/font_panel`, `crates/media_panel`, and `crates/shadcn_ui_panel` now build common preview/copy/apply/open-doc status messages with preallocated helpers instead of generic formatting.
+
+NOTES:
+- Preserved exact visible status text, panel actions, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Icon Pack Tooltip Cache Cleanup
 
 CHANGED:

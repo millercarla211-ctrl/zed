@@ -594,7 +594,7 @@ impl ShadcnUiPanel {
             cx.open_url(&preview_url);
         }
 
-        self.status = Some(format!("Previewing {}", item.title.as_ref()).into());
+        self.status = Some(shadcn_status_label("Previewing ", item.title.as_ref()));
         cx.notify();
     }
 
@@ -611,13 +611,13 @@ impl ShadcnUiPanel {
         }
         code.push_str(item.jsx.as_ref());
         cx.write_to_clipboard(ClipboardItem::new_string(code));
-        self.status = Some(format!("Copied {}", item.title.as_ref()).into());
+        self.status = Some(shadcn_status_label("Copied ", item.title.as_ref()));
         cx.notify();
     }
 
     fn open_item_docs(&mut self, item: CatalogItem, cx: &mut Context<Self>) {
         cx.open_url(&preview_url_for_item(&item));
-        self.status = Some(format!("Opened docs for {}", item.title.as_ref()).into());
+        self.status = Some(shadcn_status_label("Opened docs for ", item.title.as_ref()));
         cx.notify();
     }
 
@@ -1015,6 +1015,13 @@ fn shadcn_fraction_label(left: usize, right: usize) -> SharedString {
 fn shadcn_loaded_status(count: usize) -> SharedString {
     let mut text = String::with_capacity("Loaded ".len() + 6 + " UI entries".len());
     let _ = write!(text, "Loaded {count} UI entries");
+    text.into()
+}
+
+fn shadcn_status_label(prefix: &str, value: &str) -> SharedString {
+    let mut text = String::with_capacity(prefix.len() + value.len());
+    text.push_str(prefix);
+    text.push_str(value);
     text.into()
 }
 

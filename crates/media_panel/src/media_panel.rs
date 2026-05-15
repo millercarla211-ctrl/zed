@@ -803,7 +803,7 @@ impl MediaPanel {
             cx.open_url(&preview_url);
         }
 
-        self.status = Some(format!("Previewing {label}").into());
+        self.status = Some(media_status_label("Previewing ", &label));
         cx.notify();
     }
 
@@ -814,7 +814,7 @@ impl MediaPanel {
         cx: &mut Context<Self>,
     ) {
         cx.write_to_clipboard(ClipboardItem::new_string(source));
-        self.status = Some(format!("Copied {}", label.as_ref()).into());
+        self.status = Some(media_status_label("Copied ", label.as_ref()));
         cx.notify();
     }
 
@@ -3284,6 +3284,13 @@ fn media_fraction_label(left: usize, right: usize) -> SharedString {
 fn media_indexed_status(count: usize) -> SharedString {
     let mut text = String::with_capacity("Indexed ".len() + 6 + " media files".len());
     let _ = write!(text, "Indexed {count} media files");
+    text.into()
+}
+
+fn media_status_label(prefix: &str, value: &str) -> SharedString {
+    let mut text = String::with_capacity(prefix.len() + value.len());
+    text.push_str(prefix);
+    text.push_str(value);
     text.into()
 }
 

@@ -404,7 +404,7 @@ impl FontPanel {
     fn select_font(&mut self, font: FontEntry, cx: &mut Context<Self>) {
         self.selected_font = Some(font.name.clone());
         self.selected_source = font.source;
-        self.status = Some(format!("Previewing {}", font.name.as_ref()).into());
+        self.status = Some(font_status_label("Previewing ", font.name.as_ref()));
         cx.notify();
     }
 
@@ -425,7 +425,7 @@ impl FontPanel {
             settings.theme.buffer_font_family = Some(FontFamilyName(Arc::from(font_name.as_str())));
         });
 
-        self.status = Some(format!("Editor font set to {}", font.as_ref()).into());
+        self.status = Some(font_status_label("Editor font set to ", font.as_ref()));
         cx.notify();
     }
 
@@ -446,7 +446,7 @@ impl FontPanel {
             settings.theme.ui_font_family = Some(FontFamilyName(Arc::from(font_name.as_str())));
         });
 
-        self.status = Some(format!("UI font set to {}", font.as_ref()).into());
+        self.status = Some(font_status_label("UI font set to ", font.as_ref()));
         cx.notify();
     }
 
@@ -474,14 +474,7 @@ impl FontPanel {
 
         match add_web_font_to_project(&root, &web_font) {
             Ok(path) => {
-                self.status = Some(
-                    format!(
-                        "Added {} to {}",
-                        web_font.name.as_str(),
-                        path.to_string_lossy().replace('\\', "/")
-                    )
-                    .into(),
-                );
+                self.status = Some(font_added_status(web_font.name.as_str(), &path));
             }
             Err(error) => {
                 self.status = Some(format!("Failed to add font CSS: {error}").into());
@@ -529,7 +522,11 @@ impl FontPanel {
             cx.open_url(&preview_url);
         }
 
-        self.status = Some(format!("Previewing {} in WebPreview", font.as_ref()).into());
+        self.status = Some(font_status_label_with_suffix(
+            "Previewing ",
+            font.as_ref(),
+            " in WebPreview",
+        ));
         cx.notify();
     }
 
@@ -550,7 +547,7 @@ impl FontPanel {
         };
 
         cx.write_to_clipboard(ClipboardItem::new_string(css));
-        self.status = Some(format!("Copied CSS for {}", font.as_ref()).into());
+        self.status = Some(font_status_label("Copied CSS for ", font.as_ref()));
         cx.notify();
     }
 
@@ -921,6 +918,34 @@ fn font_count_label(label: &str, count: usize) -> String {
 fn font_fraction_label(left: usize, right: usize) -> SharedString {
     let mut text = String::with_capacity(24);
     let _ = write!(text, "{left} / {right}");
+    text.into()
+}
+
+fn font_status_label(prefix: &str, value: &str) -> SharedString {
+    let mut text = String::with_capacity(prefix.len() + value.len());
+    text.push_str(prefix);
+    text.push_str(value);
+    text.into()
+}
+
+fn font_status_label_with_suffix(prefix: &str, value: &str, suffix: &str) -> SharedString {
+    let mut text = String::with_capacity(prefix.len() + value.len() + suffix.len());
+    text.push_str(prefix);
+    text.push_str(value);
+    text.push_str(suffix);
+    text.into()
+}
+
+fn font_added_status(font_name: &str, path: &Path) -> SharedString {
+    let path = path.to_string_lossy();
+    let mut text =
+        String::with_capacity("Added ".len() + font_name.len() + " to ".len() + path.len());
+    text.push_str("Added ");
+    text.push_str(font_name);
+    text.push_str(" to ");
+    for ch in path.chars() {
+        text.push(if ch == '\\' { '/' } else { ch });
+    }
     text.into()
 }
 
