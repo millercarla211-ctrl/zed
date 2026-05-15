@@ -688,6 +688,12 @@ impl IconPickerPanel {
         cx.notify();
     }
 
+    fn clear_pinned_icon_actions(&mut self, cx: &mut Context<Self>) {
+        self.pinned_icon_actions.clear();
+        self.status = Some("Cleared pinned icons".into());
+        cx.notify();
+    }
+
     fn copy_icon_name(&mut self, icon: PickerIcon, cx: &mut Context<Self>) {
         self.selected_icon = Some(icon.clone());
         let payload = self.payload_for_icon(&icon);
@@ -1002,9 +1008,12 @@ impl IconPickerPanel {
                                 ),
                         )
                         .child(
-                            Label::new("session working set")
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted),
+                            Button::new("icon-picker-clear-pinned", "Clear")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    panel.clear_pinned_icon_actions(cx);
+                                })),
                         ),
                 )
                 .children(rows)

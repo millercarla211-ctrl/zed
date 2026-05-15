@@ -467,6 +467,12 @@ impl FontPanel {
         cx.notify();
     }
 
+    fn clear_pinned_font_actions(&mut self, cx: &mut Context<Self>) {
+        self.pinned_font_actions.clear();
+        self.status = Some("Cleared pinned fonts".into());
+        cx.notify();
+    }
+
     fn selected_font_entry(&self) -> Option<FontEntry> {
         Some(FontEntry {
             name: self.selected_font.clone()?,
@@ -847,9 +853,12 @@ impl FontPanel {
                                 ),
                         )
                         .child(
-                            Label::new("session working set")
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted),
+                            Button::new("font-panel-clear-pinned", "Clear")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    panel.clear_pinned_font_actions(cx);
+                                })),
                         ),
                 )
                 .children(rows)

@@ -1004,6 +1004,12 @@ impl MediaPanel {
         cx.notify();
     }
 
+    fn clear_pinned_media(&mut self, cx: &mut Context<Self>) {
+        self.pinned_media.clear();
+        self.status = Some("Cleared pinned media".into());
+        cx.notify();
+    }
+
     fn render_url_insert(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
         let query = self.raw_query(cx);
         let candidate = media_url_candidate(&query, self.kind_filter.fallback_kind())?;
@@ -1495,9 +1501,12 @@ impl MediaPanel {
                                 ),
                         )
                         .child(
-                            Label::new("session working set")
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted),
+                            Button::new("media-panel-clear-pinned", "Clear")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    panel.clear_pinned_media(cx);
+                                })),
                         ),
                 )
                 .children(rows)

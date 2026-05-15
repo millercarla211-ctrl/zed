@@ -1,3 +1,12 @@
+[2026-05-15] - Asset Panel Pinned Clear Actions
+
+ADDED:
+- Icon, Font, Media, and UI pinned working-set sections now expose compact Clear actions.
+- Clear resets only the bounded in-memory pinned set for that panel, leaving Recent history, catalogs, provider caches, editor input, and WebPreview routing untouched.
+
+NOTES:
+- This keeps long panel sessions manageable while preserving the explicit per-row Unpin action.
+
 [2026-05-15] - Asset Panel Pinned Working Sets
 
 ADDED:

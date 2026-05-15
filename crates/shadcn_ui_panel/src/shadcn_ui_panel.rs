@@ -571,6 +571,12 @@ impl ShadcnUiPanel {
         cx.notify();
     }
 
+    fn clear_pinned_ui_actions(&mut self, cx: &mut Context<Self>) {
+        self.pinned_ui_actions.clear();
+        self.status = Some("Cleared pinned UI actions".into());
+        cx.notify();
+    }
+
     fn insert_item(&mut self, item: CatalogItem, window: &mut Window, cx: &mut Context<Self>) {
         if matches!(
             item.source,
@@ -986,9 +992,12 @@ impl ShadcnUiPanel {
                                 ),
                         )
                         .child(
-                            Label::new("session working set")
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted),
+                            Button::new("shadcn-ui-clear-pinned", "Clear")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    panel.clear_pinned_ui_actions(cx);
+                                })),
                         ),
                 )
                 .children(rows)
