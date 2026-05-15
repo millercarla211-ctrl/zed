@@ -245,6 +245,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_interaction_preflight_to_agent",
     "copy_interaction_receipt_template",
     "send_interaction_receipt_template_to_agent",
+    "copy_interaction_action_request",
+    "send_interaction_action_request_to_agent",
     "take_screenshot",
     "inspect_element",
 ];
@@ -426,6 +428,7 @@ pub struct WebPreviewView {
     latest_interaction_plan: Option<Value>,
     latest_interaction_preflight: Option<Value>,
     latest_interaction_receipt_template: Option<Value>,
+    latest_interaction_action_request: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -607,6 +610,7 @@ impl WebPreviewView {
             latest_interaction_plan: None,
             latest_interaction_preflight: None,
             latest_interaction_receipt_template: None,
+            latest_interaction_action_request: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1063,6 +1067,7 @@ impl WebPreviewView {
             "interaction_plan": self.latest_interaction_plan_summary(),
             "interaction_preflight": self.latest_interaction_preflight_summary(),
             "interaction_receipt_template": self.latest_interaction_receipt_template_summary(),
+            "interaction_action_request": self.latest_interaction_action_request_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1091,6 +1096,8 @@ impl WebPreviewView {
                 "send_interaction_preflight_to_agent": true,
                 "copy_interaction_receipt_template": true,
                 "send_interaction_receipt_template_to_agent": true,
+                "copy_interaction_action_request": true,
+                "send_interaction_action_request_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1213,6 +1220,20 @@ impl WebPreviewView {
             "permission": template.pointer("/template/permission").cloned(),
             "receipt_schema": template.pointer("/template/receipt/schema").and_then(Value::as_str),
             "counts": template.pointer("/template/counts").cloned(),
+        }))
+    }
+
+    fn latest_interaction_action_request_summary(&self) -> Option<Value> {
+        let request = self.latest_interaction_action_request.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at": request.pointer("/request/timestamp").and_then(Value::as_str),
+            "url": request.pointer("/request/url").and_then(Value::as_str),
+            "title": request.pointer("/request/title").and_then(Value::as_str),
+            "ready_state": request.pointer("/request/ready_state").and_then(Value::as_str),
+            "permission": request.pointer("/request/permission").cloned(),
+            "request_id": request.pointer("/request/envelope/request_id").and_then(Value::as_str),
+            "status": request.pointer("/request/envelope/status").and_then(Value::as_str),
+            "counts": request.pointer("/request/counts").cloned(),
         }))
     }
 
@@ -1888,6 +1909,88 @@ impl WebPreviewView {
 
     fn send_interaction_receipt_template_to_agent(&mut self, cx: &mut Context<Self>) {
         self.request_interaction_receipt_template("agent", cx);
+    }
+
+    fn interaction_action_request_snapshot(&self, payload: &Value, window: &Window) -> Value {
+        let mut request = payload.clone();
+        if let Some(request) = request.as_object_mut() {
+            request.remove("kind");
+            request.remove("action");
+            request.insert(
+                "permission".to_string(),
+                self.agent_action_permission.snapshot(),
+            );
+            request.insert(
+                "permission_gate".to_string(),
+                serde_json::json!({
+                    "interactive_unlocked": self.agent_action_permission.interactive_enabled(),
+                    "status": if self.agent_action_permission.interactive_enabled() {
+                        "unlocked"
+                    } else {
+                        "locked"
+                    },
+                    "message": if self.agent_action_permission.interactive_enabled() {
+                        "This request envelope can be used only after a fresh preflight confirms the selected target."
+                    } else {
+                        "Interactive actions are locked; this request envelope is planning-only."
+                    },
+                }),
+            );
+        }
+
+        serde_json::json!({
+            "schema": "zed.web_preview.interaction_action_request.v1",
+            "session": self.browser_session_snapshot(window),
+            "request": request,
+        })
+    }
+
+    fn interaction_action_request_json(request: &Value) -> String {
+        serde_json::to_string_pretty(request).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn interaction_action_request_agent_blocks(&self, request: &Value) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = request.pointer("/request/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview interaction action request:\n\n```json\n{}\n```",
+            Self::interaction_action_request_json(request)
+        ))));
+        blocks
+    }
+
+    fn request_interaction_action_request(&mut self, action: &'static str, cx: &mut Context<Self>) {
+        let script = format!(
+            "window.__zedWebPreview && window.__zedWebPreview.collectInteractionActionRequest('{action}');"
+        );
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(&script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Collecting web preview action request", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("Interaction action request is unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic(
+                    "Interaction action request crashed before collection",
+                    cx,
+                );
+            }
+        }
+    }
+
+    fn copy_interaction_action_request(&mut self, cx: &mut Context<Self>) {
+        self.request_interaction_action_request("copy", cx);
+    }
+
+    fn send_interaction_action_request_to_agent(&mut self, cx: &mut Context<Self>) {
+        self.request_interaction_action_request("agent", cx);
     }
 
     fn agent_browser_action_manifest(&self, window: &Window) -> Value {
@@ -2655,6 +2758,56 @@ impl WebPreviewView {
                     }
                 }
             }
+            "interaction-action-request" => {
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let action = payload
+                        .get("action")
+                        .and_then(Value::as_str)
+                        .unwrap_or("copy");
+                    let request = self.interaction_action_request_snapshot(&payload, window);
+                    self.latest_interaction_action_request = Some(request.clone());
+
+                    match action {
+                        "agent" => {
+                            self.append_content_blocks_to_agent_panel(
+                                self.interaction_action_request_agent_blocks(&request),
+                                window,
+                                cx,
+                            );
+                            self.show_toast(
+                                "Sent interaction action request to the agent panel",
+                                cx,
+                            );
+                        }
+                        _ => {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                Self::interaction_action_request_json(&request),
+                            ));
+                            self.show_toast(
+                                "Copied web preview interaction action request JSON",
+                                cx,
+                            );
+                        }
+                    }
+
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.report_action_error(
+                            "Interaction action request collection failed",
+                            error,
+                            cx,
+                        );
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "Interaction action request crashed while collecting page data",
+                            cx,
+                        );
+                    }
+                }
+            }
             "capture-area" => {
                 match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
                     let scale = payload
@@ -3210,6 +3363,30 @@ impl WebPreviewView {
                                     move |_, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_interaction_receipt_template_to_agent(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Action Request")
+                                .icon(IconName::QueueMessage)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_interaction_action_request(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Action Request to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_interaction_action_request_to_agent(cx);
                                         });
                                     }
                                 }),
@@ -4187,6 +4364,7 @@ impl Item for WebPreviewView {
                 latest_interaction_plan: None,
                 latest_interaction_preflight: None,
                 latest_interaction_receipt_template: None,
+                latest_interaction_action_request: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
@@ -6385,6 +6563,117 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     };
   };
 
+  const interactionActionRequestEnvelope = (actionTargets, recommended) => {
+    const requestId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `request-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const targets = actionTargets.targets || [];
+    const candidatesFor = (kind, limit) =>
+      targets
+        .filter((target) => target.action_kind === kind)
+        .slice(0, limit)
+        .map((target) => ({
+          selector: target.selector,
+          label: target.label,
+          tag: target.tag,
+          role: target.role,
+          rect: target.rect,
+          disabled: target.disabled,
+          focused: target.focused
+        }));
+    const preflight = interactionPreflight(actionTargets, recommended);
+    const receipt = interactionReceiptTemplate(actionTargets, recommended);
+    const actionRequests = [
+      {
+        action: "click",
+        requires_interactive_permission: true,
+        payload_schema: {
+          selector: "string",
+          button: "left|middle|right",
+          click_count: "number"
+        },
+        candidates: candidatesFor("click", 12)
+      },
+      {
+        action: "type_text",
+        requires_interactive_permission: true,
+        payload_schema: {
+          selector: "string",
+          text: "string",
+          clear_existing: "boolean"
+        },
+        candidates: candidatesFor("type", 12)
+      },
+      {
+        action: "select",
+        requires_interactive_permission: true,
+        payload_schema: {
+          selector: "string",
+          value_or_label: "string"
+        },
+        candidates: candidatesFor("select", 8)
+      },
+      {
+        action: "scroll",
+        requires_interactive_permission: true,
+        payload_schema: {
+          selector: "string|null",
+          delta_x: "number",
+          delta_y: "number"
+        },
+        candidates: interactionPlanScrollTargets().slice(0, 8)
+      },
+      {
+        action: "press_key",
+        requires_interactive_permission: true,
+        payload_schema: {
+          key: "Escape|Enter|Tab|ArrowDown|ArrowUp|custom",
+          modifiers: "array"
+        },
+        candidates: []
+      },
+      {
+        action: "media_control",
+        requires_interactive_permission: true,
+        payload_schema: {
+          selector: "string",
+          control: "play|pause|mute|unmute|seek"
+        },
+        candidates: candidatesFor("media", 8)
+      }
+    ];
+    return {
+      schema: "zed.web_preview.interaction_action_request.v1",
+      request_id: requestId,
+      status: preflight.status === "ready_for_permissioned_action"
+        ? "permission_required"
+        : "blocked_by_preflight",
+      dry_run_only: true,
+      generated_at: new Date().toISOString(),
+      preflight_status: preflight.status,
+      blockers: preflight.blockers,
+      action_requests: actionRequests,
+      receipt_template: receipt,
+      execution_contract: {
+        must_refresh_before_execution: [
+          "readiness_probe",
+          "wait_contract",
+          "action_targets",
+          "interaction_preflight"
+        ],
+        must_emit_after_execution: "interaction_receipt",
+        must_not_execute_from_this_payload: true,
+        requires_user_permission_gate: true
+      },
+      notes: [
+        "This envelope is a planning artifact for future interactive browser tools.",
+        "It intentionally does not click, type, scroll, or press keys.",
+        "A future executor must reject this envelope unless Zed's interactive permission is unlocked and a fresh preflight passes."
+      ]
+    };
+  };
+
   installRuntimeCapture();
 
   window.__zedWebPreview = {
@@ -6871,6 +7160,56 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
           "This receipt template is read-only and does not perform browser input.",
           "Future interactive browser actions must populate this receipt and attach fresh after-action context.",
           "Use this template to audit automation behavior before enabling real click, type, key, or scroll execution."
+        ]
+      });
+    },
+
+    collectInteractionActionRequest(action = "copy") {
+      try { installMutationCapture(); } catch (_error) {}
+      const actionTargets = collectActionTargetRows();
+      const selectorContracts = waitSelectorContracts();
+      const textCandidates = waitTextCandidates();
+      const recommended = recommendedWaitRecipe();
+      const envelope = interactionActionRequestEnvelope(actionTargets, recommended);
+
+      post({
+        kind: "interaction-action-request",
+        action,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState,
+        envelope,
+        recommended_wait: recommended,
+        permissions: {
+          required_for_interactive_actions: true,
+          current_payload_executes_actions: false,
+          user_must_unlock_interactive_actions_in_zed: true,
+          fresh_preflight_required_before_execution: true,
+          receipt_required_after_attempt: true
+        },
+        counts: {
+          action_requests: envelope.action_requests.length,
+          executable_action_requests: envelope.action_requests.filter((request) => request.candidates.length > 0 || request.action === "press_key").length,
+          action_targets: actionTargets.targets.length,
+          selector_contracts: selectorContracts.length,
+          text_candidates: textCandidates.length,
+          blockers: envelope.blockers.length,
+          pending_network: runtimeState.pendingNetwork,
+          busy_indicators: readinessBusyCount()
+        },
+        selector_contracts: selectorContracts.slice(0, 16),
+        text_candidates: textCandidates.slice(0, 16),
+        mutation: {
+          observed: mutationState.observed,
+          count: mutationState.count,
+          last_mutation_at: mutationState.lastMutationAt,
+          quiet_for_ms: readinessQuietForMs()
+        },
+        notes: [
+          "This action request envelope is read-only and does not perform browser input.",
+          "Future interactive tools should accept only this schema, refresh preflight, and emit the included receipt template.",
+          "Keep URL bar, tabs, and Zed overlay UI under GPUI priority; only browser body targets are eligible."
         ]
       });
     },

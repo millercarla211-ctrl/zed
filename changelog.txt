@@ -1,3 +1,13 @@
+[2026-05-16] - Web Preview Action Request Envelope
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Action Request" and "Send Action Request to Agent".
+- The WebPreview bridge now produces a read-only action request envelope for future click, type, select, scroll, key, and media-control tools.
+- Action request envelopes include payload schemas, target candidates, preflight blockers, permission requirements, a receipt template, and execution-contract rules.
+
+NOTES:
+- This gives future interactive browser tools one auditable request shape while keeping all current behavior read-only.
+
 [2026-05-16] - Web Preview Interaction Receipt Template
 
 ADDED:
