@@ -44,7 +44,7 @@ actions!(
 const SHADCN_UI_PANEL_KEY: &str = "ShadcnUiPanel";
 const MAX_SHADCN_ROWS: usize = 96;
 const PREVIEW_IMAGE_CACHE_INITIAL_CAPACITY: usize = MAX_SHADCN_ROWS * 4;
-const CATALOG_CACHE_FILE_NAME: &str = "catalog-v2.rkyv";
+const CATALOG_CACHE_FILE_NAME: &str = "catalog-v3.rkyv";
 const STATIC_SHADCN_CATALOG_INDEX: &str = include_str!("shadcn_catalog_index.tsv");
 static SHADCN_STATIC_CATALOG_CACHE: OnceLock<Vec<CatalogItem>> = OnceLock::new();
 static SHADCN_CATALOG_CACHE: OnceLock<Vec<CatalogItem>> = OnceLock::new();
@@ -1509,8 +1509,23 @@ fn shadcn_manifest_root() -> PathBuf {
         .join("new-york-v4")
 }
 
-fn shadcn_manifest_path(id: &str) -> PathBuf {
-    shadcn_manifest_root().join(format!("{id}.json"))
+fn shadcn_manifest_roots() -> [PathBuf; 2] {
+    let styles_root = repo_root()
+        .join("inspirations")
+        .join("shadcn-ui")
+        .join("apps")
+        .join("v4")
+        .join("public")
+        .join("r")
+        .join("styles");
+    [shadcn_manifest_root(), styles_root.join("new-york")]
+}
+
+fn shadcn_manifest_path(id: &str) -> Option<PathBuf> {
+    shadcn_manifest_roots()
+        .into_iter()
+        .map(|root| root.join(format!("{id}.json")))
+        .find(|path| path.is_file())
 }
 
 fn shadcn_examples_root() -> PathBuf {
@@ -2150,94 +2165,100 @@ struct RegistryManifestFileSummary {
 }
 
 fn manifest_catalog_items() -> Vec<CatalogItem> {
-    let manifest_root = shadcn_manifest_root();
-    let Ok(entries) = std_fs::read_dir(&manifest_root) else {
-        return Vec::new();
-    };
+    let mut items = Vec::with_capacity(256);
+    let mut seen_ids = HashSet::with_capacity(256);
 
-    let entries = entries.flatten();
-    let mut items = Vec::with_capacity(entries.size_hint().0);
-    for entry in entries {
-        let path = entry.path();
-        if path.extension().and_then(|extension| extension.to_str()) != Some("json") {
-            continue;
-        }
-        let Ok(text) = std_fs::read_to_string(&path) else {
-            continue;
-        };
-        let Ok(summary) = serde_json::from_str::<RegistryManifestSummary>(&text) else {
+    for manifest_root in shadcn_manifest_roots() {
+        let Ok(entries) = std_fs::read_dir(&manifest_root) else {
             continue;
         };
 
-        let name = summary.name.clone();
-        let title = titleize_id(&name);
-        let description = summary
-            .description
-            .clone()
-            .unwrap_or_else(|| format!("Install {title} from the shadcn registry"));
-        match summary.item_type.as_deref() {
-            Some("registry:block" | "registry:example") => {
-                let Some(primary_file) =
-                    primary_registry_file(&summary, CatalogSource::ShadcnBlock)
-                else {
-                    continue;
-                };
-                let category = if summary.item_type.as_deref() == Some("registry:example") {
-                    "example"
-                } else {
-                    "block"
-                };
-                let fallback_name = component_identifier(&name);
-                let import_reference =
-                    primary_export_reference(&primary_file.content, &fallback_name);
-                let import_name = import_reference.local_name();
-                let import_path = project_import_path_for_registry_file(&primary_file.path)
-                    .unwrap_or_else(|| format!("@/components/blocks/{name}/page"));
-                let source_path = source_path_for_registry_file(&primary_file.path)
-                    .unwrap_or_else(|| format!("blocks/{name}/page.tsx"));
-                let target_file_name = target_file_name_for_registry_file(&primary_file.path)
-                    .unwrap_or_else(|| name.clone());
-                items.push(CatalogItem {
-                    id: name.clone().into(),
-                    title: title.into(),
-                    description: description.into(),
-                    category: category.into(),
-                    source: CatalogSource::ShadcnBlock,
-                    source_path: source_path.into(),
-                    target_file_name: target_file_name.into(),
-                    import_statement: import_reference.import_statement(&import_path).into(),
-                    jsx: format!("<{import_name} />").into(),
-                });
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|extension| extension.to_str()) != Some("json") {
+                continue;
             }
-            Some("registry:ui") => {
-                let Some(primary_file) =
-                    primary_registry_file(&summary, CatalogSource::ShadcnComponent)
-                else {
-                    continue;
-                };
-                let fallback_name = component_identifier(&name);
-                let import_reference =
-                    primary_export_reference(&primary_file.content, &fallback_name);
-                let import_name = import_reference.local_name();
-                let import_path = project_import_path_for_registry_file(&primary_file.path)
-                    .unwrap_or_else(|| format!("@/components/ui/{name}"));
-                let source_path = source_path_for_registry_file(&primary_file.path)
-                    .unwrap_or_else(|| format!("ui/{name}.tsx"));
-                let target_file_name = target_file_name_for_registry_file(&primary_file.path)
-                    .unwrap_or_else(|| format!("{name}.tsx"));
-                items.push(CatalogItem {
-                    id: name.clone().into(),
-                    title: title.into(),
-                    description: description.into(),
-                    category: "ui".into(),
-                    source: CatalogSource::ShadcnComponent,
-                    source_path: source_path.into(),
-                    target_file_name: target_file_name.into(),
-                    import_statement: import_reference.import_statement(&import_path).into(),
-                    jsx: format!("<{import_name} />").into(),
-                });
+            let Ok(text) = std_fs::read_to_string(&path) else {
+                continue;
+            };
+            let Ok(summary) = serde_json::from_str::<RegistryManifestSummary>(&text) else {
+                continue;
+            };
+
+            let name = summary.name.clone();
+            if !seen_ids.insert(name.clone()) {
+                continue;
             }
-            _ => {}
+
+            let title = titleize_id(&name);
+            let description = summary
+                .description
+                .clone()
+                .unwrap_or_else(|| format!("Install {title} from the shadcn registry"));
+            match summary.item_type.as_deref() {
+                Some("registry:block" | "registry:example" | "registry:internal") => {
+                    let Some(primary_file) =
+                        primary_registry_file(&summary, CatalogSource::ShadcnBlock)
+                    else {
+                        continue;
+                    };
+                    let category = match summary.item_type.as_deref() {
+                        Some("registry:example") => "example",
+                        Some("registry:internal") => "internal",
+                        _ => "block",
+                    };
+                    let fallback_name = component_identifier(&name);
+                    let import_reference =
+                        primary_export_reference(&primary_file.content, &fallback_name);
+                    let import_name = import_reference.local_name();
+                    let import_path = project_import_path_for_registry_file(&primary_file.path)
+                        .unwrap_or_else(|| format!("@/components/blocks/{name}/page"));
+                    let source_path = source_path_for_registry_file(&primary_file.path)
+                        .unwrap_or_else(|| format!("blocks/{name}/page.tsx"));
+                    let target_file_name = target_file_name_for_registry_file(&primary_file.path)
+                        .unwrap_or_else(|| name.clone());
+                    items.push(CatalogItem {
+                        id: name.clone().into(),
+                        title: title.into(),
+                        description: description.into(),
+                        category: category.into(),
+                        source: CatalogSource::ShadcnBlock,
+                        source_path: source_path.into(),
+                        target_file_name: target_file_name.into(),
+                        import_statement: import_reference.import_statement(&import_path).into(),
+                        jsx: format!("<{import_name} />").into(),
+                    });
+                }
+                Some("registry:ui") => {
+                    let Some(primary_file) =
+                        primary_registry_file(&summary, CatalogSource::ShadcnComponent)
+                    else {
+                        continue;
+                    };
+                    let fallback_name = component_identifier(&name);
+                    let import_reference =
+                        primary_export_reference(&primary_file.content, &fallback_name);
+                    let import_name = import_reference.local_name();
+                    let import_path = project_import_path_for_registry_file(&primary_file.path)
+                        .unwrap_or_else(|| format!("@/components/ui/{name}"));
+                    let source_path = source_path_for_registry_file(&primary_file.path)
+                        .unwrap_or_else(|| format!("ui/{name}.tsx"));
+                    let target_file_name = target_file_name_for_registry_file(&primary_file.path)
+                        .unwrap_or_else(|| format!("{name}.tsx"));
+                    items.push(CatalogItem {
+                        id: name.clone().into(),
+                        title: title.into(),
+                        description: description.into(),
+                        category: "ui".into(),
+                        source: CatalogSource::ShadcnComponent,
+                        source_path: source_path.into(),
+                        target_file_name: target_file_name.into(),
+                        import_statement: import_reference.import_statement(&import_path).into(),
+                        jsx: format!("<{import_name} />").into(),
+                    });
+                }
+                _ => {}
+            }
         }
     }
 
@@ -2319,7 +2340,7 @@ fn primary_registry_file<'a>(
         CatalogSource::ShadcnComponent => summary
             .files
             .iter()
-            .find(|file| file.path.starts_with("registry/new-york-v4/ui/"))
+            .find(|file| registry_path_without_style_prefix(&file.path).starts_with("ui/"))
             .or_else(|| summary.files.first()),
         CatalogSource::ShadcnBlock => summary
             .files
@@ -2347,13 +2368,16 @@ fn primary_registry_file<'a>(
 }
 
 fn source_path_for_registry_file(path: &str) -> Option<String> {
-    path.strip_prefix("registry/new-york-v4/")
-        .map(ToOwned::to_owned)
+    let rest = registry_path_without_style_prefix(path);
+    if is_supported_registry_source_path(rest) {
+        Some(rest.to_string())
+    } else {
+        None
+    }
 }
 
 fn target_file_name_for_registry_file(path: &str) -> Option<String> {
-    const PREFIX: &str = "registry/new-york-v4/";
-    let rest = path.strip_prefix(PREFIX)?;
+    let rest = registry_path_without_style_prefix(path);
     if let Some(rest) = rest.strip_prefix("ui/") {
         return Some(rest.to_string());
     }
@@ -2382,11 +2406,32 @@ fn project_import_path_for_registry_file(path: &str) -> Option<String> {
         .or_else(|| target.strip_suffix(".js"))
         .unwrap_or(target.as_str());
 
-    if path.starts_with("registry/new-york-v4/ui/") {
+    if registry_path_without_style_prefix(path).starts_with("ui/") {
         Some(format!("@/components/ui/{without_extension}"))
     } else {
         Some(format!("@/components/blocks/{without_extension}"))
     }
+}
+
+fn registry_path_without_style_prefix(path: &str) -> &str {
+    path.strip_prefix("registry/new-york-v4/")
+        .or_else(|| path.strip_prefix("registry/new-york/"))
+        .or_else(|| path.strip_prefix("registry/default/"))
+        .unwrap_or(path)
+}
+
+fn is_supported_registry_source_path(path: &str) -> bool {
+    [
+        "ui/",
+        "blocks/",
+        "charts/",
+        "examples/",
+        "internal/",
+        "hooks/",
+        "lib/",
+    ]
+    .into_iter()
+    .any(|prefix| path.starts_with(prefix))
 }
 
 fn primary_export_reference(content: &str, fallback: &str) -> ExportReference {
@@ -2532,7 +2577,7 @@ fn item_source_available(item: &CatalogItem, payload: &DraggedShadcnAsset) -> bo
         || matches!(
             item.source,
             CatalogSource::ShadcnComponent | CatalogSource::ShadcnBlock
-        ) && shadcn_manifest_path(item.id.as_ref()).is_file()
+        ) && shadcn_manifest_path(item.id.as_ref()).is_some()
 }
 
 fn local_preview_url_for_item(item: &CatalogItem) -> Option<String> {
@@ -2552,17 +2597,39 @@ fn local_preview_url_for_item(item: &CatalogItem) -> Option<String> {
     }
 
     let source_path = absolute_source_path_for_item(item);
-    let source_file =
-        example_source_path_for_item(item).or_else(|| source_file_for_preview(&source_path))?;
-    let source = std_fs::read_to_string(&source_file).ok()?;
+    let source = example_source_path_for_item(item)
+        .or_else(|| source_file_for_preview(&source_path))
+        .and_then(|source_file| {
+            let source = std_fs::read_to_string(&source_file).ok()?;
+            Some((source_file, source))
+        })
+        .or_else(|| registry_preview_source_for_item(item))?;
     let preview_dir = repo_root().join("target").join("shadcn-previews");
     std_fs::create_dir_all(&preview_dir).ok()?;
     let preview_path = preview_dir.join(format!("{}.html", preview_file_stem(item)));
-    let html = preview_html(item, &source_file, &source);
+    let html = preview_html(item, &source.0, &source.1);
     std_fs::write(&preview_path, html).ok()?;
     Url::from_file_path(preview_path)
         .ok()
         .map(|url| url.to_string())
+}
+
+fn registry_preview_source_for_item(item: &CatalogItem) -> Option<(PathBuf, String)> {
+    let source = match item.source {
+        CatalogSource::ShadcnComponent => CatalogSource::ShadcnComponent,
+        CatalogSource::ShadcnBlock => CatalogSource::ShadcnBlock,
+        CatalogSource::MagicUi | CatalogSource::CommunityRegistry | CatalogSource::TwentyFirst => {
+            return None;
+        }
+    };
+    let manifest_path = shadcn_manifest_path(item.id.as_ref())?;
+    let text = std_fs::read_to_string(&manifest_path).ok()?;
+    let summary = serde_json::from_str::<RegistryManifestSummary>(&text).ok()?;
+    let primary_file = primary_registry_file(&summary, source)?;
+    Some((
+        PathBuf::from(&primary_file.path),
+        primary_file.content.clone(),
+    ))
 }
 
 fn absolute_source_path_for_item(item: &CatalogItem) -> PathBuf {

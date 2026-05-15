@@ -331,22 +331,27 @@ fn read_registry_item(name: &str, registry_root: &Path) -> Result<Option<Registr
     let Some(v4_root) = registry_root.parent().and_then(|path| path.parent()) else {
         return Ok(None);
     };
-    let manifest_path = v4_root
-        .join("public")
-        .join("r")
-        .join("styles")
-        .join("new-york-v4")
-        .join(format!("{name}.json"));
 
-    if !manifest_path.is_file() {
-        return Ok(None);
+    for style in ["new-york-v4", "new-york"] {
+        let manifest_path = v4_root
+            .join("public")
+            .join("r")
+            .join("styles")
+            .join(style)
+            .join(format!("{name}.json"));
+
+        if !manifest_path.is_file() {
+            continue;
+        }
+
+        let text = std_fs::read_to_string(&manifest_path)
+            .with_context(|| format!("reading {}", manifest_path.display()))?;
+        let item = serde_json::from_str::<RegistryItem>(&text)
+            .with_context(|| format!("parsing {}", manifest_path.display()))?;
+        return Ok(Some(item));
     }
 
-    let text = std_fs::read_to_string(&manifest_path)
-        .with_context(|| format!("reading {}", manifest_path.display()))?;
-    let item = serde_json::from_str::<RegistryItem>(&text)
-        .with_context(|| format!("parsing {}", manifest_path.display()))?;
-    Ok(Some(item))
+    Ok(None)
 }
 
 struct ThemeCssReport {
@@ -618,13 +623,14 @@ fn shadcn_theme_css_v3() -> String {
 }
 
 fn destination_for_registry_path(project_root: &Path, registry_path: &str) -> Option<PathBuf> {
-    const UI_PREFIX: &str = "registry/new-york-v4/ui/";
-    const BLOCK_PREFIX: &str = "registry/new-york-v4/blocks/";
-    const CHART_PREFIX: &str = "registry/new-york-v4/charts/";
-    const EXAMPLE_PREFIX: &str = "registry/new-york-v4/examples/";
-    const INTERNAL_PREFIX: &str = "registry/new-york-v4/internal/";
-    const HOOK_PREFIX: &str = "registry/new-york-v4/hooks/";
-    const LIB_PREFIX: &str = "registry/new-york-v4/lib/";
+    const UI_PREFIX: &str = "ui/";
+    const BLOCK_PREFIX: &str = "blocks/";
+    const CHART_PREFIX: &str = "charts/";
+    const EXAMPLE_PREFIX: &str = "examples/";
+    const INTERNAL_PREFIX: &str = "internal/";
+    const HOOK_PREFIX: &str = "hooks/";
+    const LIB_PREFIX: &str = "lib/";
+    let registry_path = registry_path_without_style_prefix(registry_path);
 
     if let Some(rest) = registry_path.strip_prefix(UI_PREFIX) {
         return Some(components_dir(project_root).join("ui").join(rest));
@@ -666,6 +672,13 @@ fn destination_for_registry_path(project_root: &Path, registry_path: &str) -> Op
     None
 }
 
+fn registry_path_without_style_prefix(path: &str) -> &str {
+    path.strip_prefix("registry/new-york-v4/")
+        .or_else(|| path.strip_prefix("registry/new-york/"))
+        .or_else(|| path.strip_prefix("registry/default/"))
+        .unwrap_or(path)
+}
+
 fn write_transformed_content_if_absent(destination: &Path, content: &str) -> Result<()> {
     if destination.exists() {
         return Ok(());
@@ -683,12 +696,15 @@ fn write_transformed_content_if_absent(destination: &Path, content: &str) -> Res
 
 fn registry_dependencies_from_content(content: &str) -> BTreeSet<String> {
     let mut dependencies = BTreeSet::new();
-    collect_registry_dependency_prefix(content, "@/registry/new-york-v4/ui/", &mut dependencies);
-    collect_registry_dependency_prefix(
-        content,
+    for prefix in [
+        "@/registry/new-york-v4/ui/",
+        "@/registry/new-york/ui/",
+        "@/registry/default/ui/",
         "@/registry/new-york-v4/blocks/",
-        &mut dependencies,
-    );
+        "@/registry/new-york/blocks/",
+    ] {
+        collect_registry_dependency_prefix(content, prefix, &mut dependencies);
+    }
     dependencies
 }
 
@@ -917,19 +933,35 @@ fn copy_transformed_source_file(source: &Path, destination: &Path) -> Result<()>
 
 fn rewrite_imports(text: &str) -> String {
     text.replace("@/registry/new-york-v4/ui/", "@/components/ui/")
+        .replace("@/registry/new-york/ui/", "@/components/ui/")
+        .replace("@/registry/default/ui/", "@/components/ui/")
         .replace("@/registry/new-york-v4/lib/", "@/lib/")
+        .replace("@/registry/new-york/lib/", "@/lib/")
+        .replace("@/registry/default/lib/", "@/lib/")
         .replace("@/registry/new-york-v4/hooks/", "@/hooks/")
+        .replace("@/registry/new-york/hooks/", "@/hooks/")
+        .replace("@/registry/default/hooks/", "@/hooks/")
         .replace("@/registry/new-york-v4/blocks/", "@/components/blocks/")
+        .replace("@/registry/new-york/blocks/", "@/components/blocks/")
         .replace(
             "@/registry/new-york-v4/charts/",
             "@/components/blocks/charts/",
         )
+        .replace("@/registry/new-york/charts/", "@/components/blocks/charts/")
         .replace(
             "@/registry/new-york-v4/examples/",
             "@/components/blocks/examples/",
         )
         .replace(
+            "@/registry/new-york/examples/",
+            "@/components/blocks/examples/",
+        )
+        .replace(
             "@/registry/new-york-v4/internal/",
+            "@/components/blocks/internal/",
+        )
+        .replace(
+            "@/registry/new-york/internal/",
             "@/components/blocks/internal/",
         )
         .replace("@/registry/bases/radix/ui/", "@/components/ui/")

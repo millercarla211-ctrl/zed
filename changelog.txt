@@ -1,3 +1,14 @@
+[2026-05-15] - UI Registry Coverage Expansion
+
+CHANGED:
+- `crates/shadcn_ui_panel` now hydrates shadcn catalog rows from both local `new-york-v4` and `new-york` registry manifests and bumps the rkyv catalog cache to `catalog-v3.rkyv`.
+- `crates/shadcn_ui_panel` now includes `registry:internal` rows and resolves preview source from registry manifest content when a source-backed file is not present in the cloned registry tree.
+- `crates/shadcn_ui` now installs registry items from either `new-york-v4` or `new-york` manifests and rewrites bare/new-york/default registry import paths into project component paths.
+
+NOTES:
+- Local manifest inspection found 476 source-backed shadcn UI/block/example/internal rows across the two style registries, with 178 screenshot PNGs available for preview warming.
+- This keeps the fast static/rkyv first paint while making newer app, v0, sidebar, login, button, and internal examples available in the UI panel.
+
 [2026-05-15] - UI Preview Warming Status
 
 CHANGED:
