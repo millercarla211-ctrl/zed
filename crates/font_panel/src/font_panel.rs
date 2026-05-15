@@ -1,14 +1,15 @@
 use editor::{Editor, EditorEvent};
 use fs::Fs;
 use gpui::{
-    App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity, EventEmitter,
-    FocusHandle, Focusable, InteractiveElement, Pixels, Render, ScrollHandle, SharedString,
-    StatefulInteractiveElement, Subscription, WeakEntity, Window, actions, div, point, px,
+    AnyElement, App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity,
+    EventEmitter, FocusHandle, Focusable, InteractiveElement, Pixels, Render, ScrollHandle,
+    SharedString, StatefulInteractiveElement, Subscription, WeakEntity, Window, actions, div,
+    point, px,
 };
 use settings::{FontFamilyName, Settings};
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     fmt::Write as _,
     fs as std_fs,
     path::{Path, PathBuf},
@@ -40,6 +41,7 @@ actions!(
 
 const FONT_PANEL_KEY: &str = "FontPanel";
 const MAX_FONT_RESULTS: usize = 160;
+const MAX_RECENT_FONT_ACTIONS: usize = 5;
 
 pub fn init(cx: &mut App) {
     cx.observe_new(|workspace: &mut Workspace, _, _| {
@@ -67,6 +69,7 @@ pub struct FontPanel {
     source_scroll_handle: ScrollHandle,
     selected_font: Option<SharedString>,
     selected_source: FontSource,
+    recent_font_actions: VecDeque<RecentFontEntry>,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
 }
@@ -141,6 +144,21 @@ struct FontEntry {
 }
 
 #[derive(Clone)]
+struct RecentFontEntry {
+    font: FontEntry,
+    action: RecentFontAction,
+}
+
+#[derive(Clone, Copy)]
+enum RecentFontAction {
+    Previewed,
+    CopiedCss,
+    AppliedEditor,
+    AppliedUi,
+    AddedProject,
+}
+
+#[derive(Clone)]
 struct WebFontSpec {
     name: String,
     family_query: String,
@@ -198,6 +216,7 @@ impl FontPanel {
                 source_scroll_handle: ScrollHandle::new(),
                 selected_font,
                 selected_source: FontSource::System,
+                recent_font_actions: VecDeque::with_capacity(MAX_RECENT_FONT_ACTIONS),
                 status: None,
                 _subscriptions: vec![filter_subscription],
             }
@@ -401,11 +420,32 @@ impl FontPanel {
         )
     }
 
-    fn select_font(&mut self, font: FontEntry, cx: &mut Context<Self>) {
+    fn set_selected_font(&mut self, font: &FontEntry) {
         self.selected_font = Some(font.name.clone());
         self.selected_source = font.source;
+    }
+
+    fn select_font(&mut self, font: FontEntry, cx: &mut Context<Self>) {
+        self.set_selected_font(&font);
         self.status = Some(font_status_label("Previewing ", font.name.as_ref()));
         cx.notify();
+    }
+
+    fn record_recent_font_action(&mut self, font: &FontEntry, action: RecentFontAction) {
+        self.recent_font_actions
+            .retain(|entry| entry.font.name.as_ref() != font.name.as_ref());
+        self.recent_font_actions.push_front(RecentFontEntry {
+            font: font.clone(),
+            action,
+        });
+        self.recent_font_actions.truncate(MAX_RECENT_FONT_ACTIONS);
+    }
+
+    fn selected_font_entry(&self) -> Option<FontEntry> {
+        Some(FontEntry {
+            name: self.selected_font.clone()?,
+            source: self.selected_source,
+        })
     }
 
     fn apply_selected_to_buffer(&mut self, cx: &mut Context<Self>) {
@@ -426,6 +466,9 @@ impl FontPanel {
         });
 
         self.status = Some(font_status_label("Editor font set to ", font.as_ref()));
+        if let Some(font) = self.selected_font_entry() {
+            self.record_recent_font_action(&font, RecentFontAction::AppliedEditor);
+        }
         cx.notify();
     }
 
@@ -447,6 +490,9 @@ impl FontPanel {
         });
 
         self.status = Some(font_status_label("UI font set to ", font.as_ref()));
+        if let Some(font) = self.selected_font_entry() {
+            self.record_recent_font_action(&font, RecentFontAction::AppliedUi);
+        }
         cx.notify();
     }
 
@@ -475,6 +521,9 @@ impl FontPanel {
         match add_web_font_to_project(&root, &web_font) {
             Ok(path) => {
                 self.status = Some(font_added_status(web_font.name.as_str(), &path));
+                if let Some(font) = self.selected_font_entry() {
+                    self.record_recent_font_action(&font, RecentFontAction::AddedProject);
+                }
             }
             Err(error) => {
                 self.status = Some(format!("Failed to add font CSS: {error}").into());
@@ -527,6 +576,9 @@ impl FontPanel {
             font.as_ref(),
             " in WebPreview",
         ));
+        if let Some(font) = self.selected_font_entry() {
+            self.record_recent_font_action(&font, RecentFontAction::Previewed);
+        }
         cx.notify();
     }
 
@@ -548,6 +600,9 @@ impl FontPanel {
 
         cx.write_to_clipboard(ClipboardItem::new_string(css));
         self.status = Some(font_status_label("Copied CSS for ", font.as_ref()));
+        if let Some(font) = self.selected_font_entry() {
+            self.record_recent_font_action(&font, RecentFontAction::CopiedCss);
+        }
         cx.notify();
     }
 
@@ -677,6 +732,186 @@ impl FontPanel {
                         }),
                 )
             })
+    }
+
+    fn render_recent_font_section(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.recent_font_actions.is_empty() {
+            return None;
+        }
+
+        let mut rows =
+            Vec::with_capacity(self.recent_font_actions.len().min(MAX_RECENT_FONT_ACTIONS));
+        for (index, entry) in self
+            .recent_font_actions
+            .iter()
+            .take(MAX_RECENT_FONT_ACTIONS)
+            .cloned()
+            .enumerate()
+        {
+            rows.push(self.render_recent_font_row(entry, index, cx));
+        }
+
+        Some(
+            v_flex()
+                .id("font-panel-recent-actions-section")
+                .gap_1()
+                .child(
+                    h_flex()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .items_center()
+                                .child(Icon::new(IconName::Clock).size(IconSize::XSmall))
+                                .child(
+                                    Label::new("Recent")
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Muted),
+                                ),
+                        )
+                        .child(
+                            Label::new("last font actions")
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted),
+                        ),
+                )
+                .children(rows)
+                .into_any_element(),
+        )
+    }
+
+    fn render_recent_font_row(
+        &self,
+        entry: RecentFontEntry,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let id_suffix = index.to_string();
+        let row_id = font_element_id("font-panel-recent-row-", id_suffix.as_str());
+        let select_id = font_element_id("font-panel-recent-select-", id_suffix.as_str());
+        let preview_id = font_element_id("font-panel-recent-preview-", id_suffix.as_str());
+        let copy_id = font_element_id("font-panel-recent-copy-", id_suffix.as_str());
+        let editor_id = font_element_id("font-panel-recent-editor-", id_suffix.as_str());
+        let ui_id = font_element_id("font-panel-recent-ui-", id_suffix.as_str());
+        let add_id = font_element_id("font-panel-recent-add-", id_suffix.as_str());
+        let font = entry.font;
+        let is_system_font = font.source == FontSource::System;
+        let action_label = recent_font_action_label(entry.action);
+
+        h_flex()
+            .id(row_id)
+            .gap_2()
+            .items_center()
+            .p_2()
+            .rounded_sm()
+            .border_1()
+            .border_color(cx.theme().colors().border_variant)
+            .bg(cx.theme().colors().element_background)
+            .child(Icon::new(IconName::Font).size(IconSize::Small))
+            .child(
+                v_flex()
+                    .flex_1()
+                    .gap_0p5()
+                    .font_family(font.name.clone())
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .child(
+                                Label::new(font.name.clone())
+                                    .size(LabelSize::Small)
+                                    .truncate(),
+                            )
+                            .child(
+                                Label::new(action_label)
+                                    .size(LabelSize::XSmall)
+                                    .color(Color::Accent),
+                            ),
+                    )
+                    .child(
+                        Label::new(font.source.label())
+                            .size(LabelSize::XSmall)
+                            .color(Color::Muted),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .gap_1()
+                    .flex_wrap()
+                    .child(
+                        Button::new(select_id, "Select")
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener({
+                                let font = font.clone();
+                                move |panel, _, _, cx| {
+                                    panel.select_font(font.clone(), cx);
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new(preview_id, "Preview")
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener({
+                                let font = font.clone();
+                                move |panel, _, window, cx| {
+                                    panel.set_selected_font(&font);
+                                    panel.preview_selected_font(window, cx);
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new(copy_id, "Copy CSS")
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener({
+                                let font = font.clone();
+                                move |panel, _, _, cx| {
+                                    panel.set_selected_font(&font);
+                                    panel.copy_selected_css(cx);
+                                }
+                            })),
+                    )
+                    .when(is_system_font, |this| {
+                        this.child(
+                            Button::new(editor_id, "Editor")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener({
+                                    let font = font.clone();
+                                    move |panel, _, _, cx| {
+                                        panel.set_selected_font(&font);
+                                        panel.apply_selected_to_buffer(cx);
+                                    }
+                                })),
+                        )
+                        .child(
+                            Button::new(ui_id, "UI")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener({
+                                    let font = font.clone();
+                                    move |panel, _, _, cx| {
+                                        panel.set_selected_font(&font);
+                                        panel.apply_selected_to_ui(cx);
+                                    }
+                                })),
+                        )
+                    })
+                    .when(!is_system_font, |this| {
+                        this.child(
+                            Button::new(add_id, "Add")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(move |panel, _, _, cx| {
+                                    panel.set_selected_font(&font);
+                                    panel.add_selected_to_project(cx);
+                                })),
+                        )
+                    }),
+            )
+            .into_any_element()
     }
 
     fn render_source_filters(
@@ -843,13 +1078,24 @@ impl Render for FontPanel {
         let query = self.query(cx);
         let (fonts, total_matches) = self.matching_fonts(query.as_str(), MAX_FONT_RESULTS);
         let source_counts = FontSourceCounts::from_panel(self);
-        let is_empty = total_matches == 0;
         let mut font_rows = Vec::with_capacity(fonts.len());
         font_rows.extend(
             fonts
                 .into_iter()
                 .map(|font| self.render_font_row(font, cx).into_any_element()),
         );
+        let recent_font_section = if query.is_empty() {
+            self.render_recent_font_section(cx)
+        } else {
+            None
+        };
+        let mut content_rows =
+            Vec::with_capacity(font_rows.len() + usize::from(recent_font_section.is_some()));
+        if let Some(recent_font_section) = recent_font_section {
+            content_rows.push(recent_font_section);
+        }
+        content_rows.extend(font_rows);
+        let is_empty = content_rows.is_empty() && total_matches == 0;
 
         v_flex()
             .id("font-panel")
@@ -876,8 +1122,8 @@ impl Render for FontPanel {
                             ),
                         )
                     })
-                    .when(!is_empty, |this| {
-                        this.child(v_flex().gap_2().children(font_rows))
+                    .when(!content_rows.is_empty(), |this| {
+                        this.child(v_flex().gap_2().children(content_rows))
                     }),
             )
     }
@@ -899,6 +1145,16 @@ fn scroll_tab_handle(handle: &ScrollHandle, direction: f32) {
 
 fn font_search_matches(searchable: &str, query_terms: &[&str]) -> bool {
     query_terms.iter().all(|term| searchable.contains(term))
+}
+
+fn recent_font_action_label(action: RecentFontAction) -> &'static str {
+    match action {
+        RecentFontAction::Previewed => "previewed",
+        RecentFontAction::CopiedCss => "copied CSS",
+        RecentFontAction::AppliedEditor => "editor",
+        RecentFontAction::AppliedUi => "UI",
+        RecentFontAction::AddedProject => "added",
+    }
 }
 
 fn lowercase_text(value: &str) -> String {
