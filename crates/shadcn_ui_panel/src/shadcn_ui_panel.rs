@@ -44,7 +44,7 @@ actions!(
 const SHADCN_UI_PANEL_KEY: &str = "ShadcnUiPanel";
 const MAX_SHADCN_ROWS: usize = 96;
 const PREVIEW_IMAGE_CACHE_INITIAL_CAPACITY: usize = MAX_SHADCN_ROWS * 4;
-const CATALOG_CACHE_FILE_NAME: &str = "catalog-v1.rkyv";
+const CATALOG_CACHE_FILE_NAME: &str = "catalog-v2.rkyv";
 const STATIC_SHADCN_CATALOG_INDEX: &str = include_str!("shadcn_catalog_index.tsv");
 static SHADCN_STATIC_CATALOG_CACHE: OnceLock<Vec<CatalogItem>> = OnceLock::new();
 static SHADCN_CATALOG_CACHE: OnceLock<Vec<CatalogItem>> = OnceLock::new();
@@ -252,17 +252,8 @@ impl ShadcnUiPanel {
                     }
                 },
             );
-            let should_write_initial_cache = !shadcn_catalog_cache_path().is_file();
-            let items = initial_shadcn_catalog();
+            let (items, catalog_loaded) = initial_shadcn_catalog();
             let filter_counts = CatalogFilterCounts::from_items(&items);
-            if should_write_initial_cache {
-                let cache_items = items.clone();
-                cx.background_executor()
-                    .spawn(async move {
-                        let _ = write_shadcn_catalog_rkyv_cache(&cache_items);
-                    })
-                    .detach();
-            }
 
             Self {
                 workspace: workspace_handle,
@@ -271,7 +262,7 @@ impl ShadcnUiPanel {
                 filter_counts,
                 search_text_cache: RefCell::default(),
                 loading_catalog: false,
-                catalog_loaded: true,
+                catalog_loaded,
                 source_filter: CatalogFilter::All,
                 warming_preview_image_keys: HashSet::with_capacity(MAX_SHADCN_ROWS),
                 filter_scroll_handle: ScrollHandle::new(),
@@ -1534,8 +1525,12 @@ fn shadcn_catalog_cached() -> Vec<CatalogItem> {
         .clone()
 }
 
-fn initial_shadcn_catalog() -> Vec<CatalogItem> {
-    load_shadcn_catalog_rkyv_cache().unwrap_or_else(static_shadcn_catalog)
+fn initial_shadcn_catalog() -> (Vec<CatalogItem>, bool) {
+    if let Some(items) = load_shadcn_catalog_rkyv_cache() {
+        (items, true)
+    } else {
+        (static_shadcn_catalog(), false)
+    }
 }
 
 fn static_shadcn_catalog() -> Vec<CatalogItem> {

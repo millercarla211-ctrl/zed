@@ -1,3 +1,12 @@
+[2026-05-15] - UI Catalog Background Hydration
+
+CHANGED:
+- `crates/shadcn_ui_panel` now treats the embedded static catalog as an instant first-paint fallback only when the rkyv cache is missing.
+- The UI panel now uses a `catalog-v2.rkyv` cache so older static-only cache files cannot keep the panel from hydrating the full source-backed shadcn, Magic UI, and registry catalog in the background.
+
+NOTES:
+- This keeps the UI panel responsive on cold open while allowing the complete local catalog to load and persist without touching editor input, WebPreview input, or the other right-side panels.
+
 [2026-05-15] - Media Remote Provider Warning Visibility
 
 ADDED:
