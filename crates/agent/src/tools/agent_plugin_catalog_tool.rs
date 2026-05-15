@@ -274,7 +274,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.dispatch.manual_qa_checklist", "available", "Generate the final manual QA checklist required before enabling native browser dispatch."),
             capability("browser.action.click", "available_when_unlocked", "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."),
             capability("browser.action.type", "planned_executor", "Type into page inputs after unlock, fresh preflight, and receipt logging."),
-            capability("browser.action.key", "planned_executor", "Send key presses after unlock, fresh preflight, and receipt logging."),
+            capability("browser.action.key", "available_when_unlocked", "Send allowlisted key presses through the WebView2 DevTools Protocol executor after unlock, fresh preflight, keyboard-focus gate, QA checklist, and receipt logging."),
             capability("browser.action.scroll", "available_when_unlocked", "Scroll page or element targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging.")
         ],
         "safety": {

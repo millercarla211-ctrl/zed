@@ -274,6 +274,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_native_key_trace_attempt_to_agent",
     "copy_native_scroll_trace_attempt",
     "send_native_scroll_trace_attempt_to_agent",
+    "copy_native_key_executor_attempt",
+    "send_native_key_executor_attempt_to_agent",
     "copy_native_history_trace_attempt",
     "send_native_history_trace_attempt_to_agent",
     "copy_native_cache_reset_trace_attempt",
@@ -442,6 +444,11 @@ impl NativeWebPreview {
         self.webview.evaluate_script(script)
     }
 
+    fn call_devtools_protocol_method(&self, method: &str, params_json: &str) -> Result<()> {
+        self.webview
+            .call_devtools_protocol_method(method, params_json)
+    }
+
     fn zoom(&self, zoom_factor: f64) -> Result<()> {
         self.webview.zoom(zoom_factor)
     }
@@ -575,6 +582,7 @@ pub struct WebPreviewView {
     latest_agent_browser_native_scroll_trace_attempt: Option<Value>,
     latest_agent_browser_native_click_executor_attempt: Option<Value>,
     latest_agent_browser_native_scroll_executor_attempt: Option<Value>,
+    latest_agent_browser_native_key_executor_attempt: Option<Value>,
     latest_agent_browser_native_history_trace_attempt: Option<Value>,
     latest_agent_browser_native_history_executor_attempt: Option<Value>,
     latest_agent_browser_native_cache_reset_trace_attempt: Option<Value>,
@@ -784,6 +792,7 @@ impl WebPreviewView {
             latest_agent_browser_native_scroll_trace_attempt: None,
             latest_agent_browser_native_click_executor_attempt: None,
             latest_agent_browser_native_scroll_executor_attempt: None,
+            latest_agent_browser_native_key_executor_attempt: None,
             latest_agent_browser_native_history_trace_attempt: None,
             latest_agent_browser_native_history_executor_attempt: None,
             latest_agent_browser_native_cache_reset_trace_attempt: None,
@@ -1268,6 +1277,7 @@ impl WebPreviewView {
             "agent_browser_native_scroll_trace_attempt": self.latest_agent_browser_native_scroll_trace_attempt_summary(),
             "agent_browser_native_click_executor_attempt": self.latest_agent_browser_native_click_executor_attempt_summary(),
             "agent_browser_native_scroll_executor_attempt": self.latest_agent_browser_native_scroll_executor_attempt_summary(),
+            "agent_browser_native_key_executor_attempt": self.latest_agent_browser_native_key_executor_attempt_summary(),
             "agent_browser_native_history_trace_attempt": self.latest_agent_browser_native_history_trace_attempt_summary(),
             "agent_browser_native_history_executor_attempt": self.latest_agent_browser_native_history_executor_attempt_summary(),
             "agent_browser_native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
@@ -1344,6 +1354,8 @@ impl WebPreviewView {
                 "send_permissioned_native_click_executor_to_agent": self.agent_action_permission.interactive_enabled(),
                 "run_permissioned_native_scroll_executor": self.agent_action_permission.interactive_enabled(),
                 "send_permissioned_native_scroll_executor_to_agent": self.agent_action_permission.interactive_enabled(),
+                "run_permissioned_native_key_executor": self.agent_action_permission.interactive_enabled(),
+                "send_permissioned_native_key_executor_to_agent": self.agent_action_permission.interactive_enabled(),
                 "copy_native_history_trace_attempt": true,
                 "send_native_history_trace_attempt_to_agent": true,
                 "run_permissioned_native_back_executor": self.agent_action_permission.interactive_enabled(),
@@ -1696,6 +1708,12 @@ impl WebPreviewView {
     fn latest_agent_browser_native_scroll_executor_attempt_summary(&self) -> Option<Value> {
         Self::latest_agent_browser_native_command_trace_attempt_summary(
             &self.latest_agent_browser_native_scroll_executor_attempt,
+        )
+    }
+
+    fn latest_agent_browser_native_key_executor_attempt_summary(&self) -> Option<Value> {
+        Self::latest_agent_browser_native_command_trace_attempt_summary(
+            &self.latest_agent_browser_native_key_executor_attempt,
         )
     }
 
@@ -3172,6 +3190,7 @@ impl WebPreviewView {
                     "agent_browser_native_scroll_trace_attempt": self.latest_agent_browser_native_scroll_trace_attempt_summary(),
                     "agent_browser_native_click_executor_attempt": self.latest_agent_browser_native_click_executor_attempt_summary(),
                     "agent_browser_native_scroll_executor_attempt": self.latest_agent_browser_native_scroll_executor_attempt_summary(),
+                    "agent_browser_native_key_executor_attempt": self.latest_agent_browser_native_key_executor_attempt_summary(),
                     "agent_browser_native_history_trace_attempt": self.latest_agent_browser_native_history_trace_attempt_summary(),
                     "agent_browser_native_history_executor_attempt": self.latest_agent_browser_native_history_executor_attempt_summary(),
                     "agent_browser_native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
@@ -3304,6 +3323,7 @@ impl WebPreviewView {
             "clear_data",
             "click",
             "scroll",
+            "press_key",
             "go_back",
             "go_forward",
             "clear_cache",
@@ -3326,7 +3346,7 @@ impl WebPreviewView {
         if !pending_executor_actions.is_empty() {
             blockers.push(serde_json::json!({
                 "code": "input_executors_pending",
-                "message": "Low-risk browser command executors plus native click, scroll, history, and cache-only reset executors are wired; type and key executors are still intentionally disabled.",
+                "message": "Low-risk browser command executors plus native click, scroll, key, history, and cache-only reset executors are wired; type executor is still intentionally disabled.",
                 "wired_actions": wired_executor_actions,
                 "trace_wired_actions": trace_wired_actions,
                 "pending_actions": pending_executor_actions.clone(),
@@ -3360,14 +3380,14 @@ impl WebPreviewView {
         } else if !interactive_unlocked {
             "Ask the user to explicitly unlock interactive browser actions for this session before any future executor dispatch."
         } else {
-            "Low-risk open_url, reload, set_viewport, clear_data, native click, native scroll, native history, and cache-only reset executors can run; keep type and key disabled until the Windows input bridge passes manual QA."
+            "Low-risk open_url, reload, set_viewport, clear_data, native click, native scroll, native key, native history, and cache-only reset executors can run; keep type disabled until the Windows input bridge passes manual QA."
         };
         let native_input_bridge = serde_json::json!({
             "schema": "zed.web_preview.native_input_bridge_readiness.v1",
             "status": "partial_dispatch_wired_manual_qa_required",
             "dispatch_enabled": gate_ready_for_executor,
-            "wired_dispatch_actions": ["click", "scroll", "go_back", "go_forward", "clear_cache"],
-            "pending_dispatch_actions": ["type_text", "press_key"],
+            "wired_dispatch_actions": ["click", "scroll", "press_key", "go_back", "go_forward", "clear_cache"],
+            "pending_dispatch_actions": ["type_text"],
             "platform_backend": if cfg!(target_os = "windows") {
                 "windows_webview2_composition_controller"
             } else if cfg!(target_os = "macos") {
@@ -3412,6 +3432,7 @@ impl WebPreviewView {
                 "scroll": self.latest_agent_browser_native_scroll_trace_attempt_summary(),
                 "click_executor": self.latest_agent_browser_native_click_executor_attempt_summary(),
                 "scroll_executor": self.latest_agent_browser_native_scroll_executor_attempt_summary(),
+                "key_executor": self.latest_agent_browser_native_key_executor_attempt_summary(),
                 "history": self.latest_agent_browser_native_history_trace_attempt_summary(),
                 "history_executor": self.latest_agent_browser_native_history_executor_attempt_summary(),
                 "cache_reset": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
@@ -3494,6 +3515,7 @@ impl WebPreviewView {
                 "native_scroll_trace_attempt": self.latest_agent_browser_native_scroll_trace_attempt_summary(),
                 "native_click_executor_attempt": self.latest_agent_browser_native_click_executor_attempt_summary(),
                 "native_scroll_executor_attempt": self.latest_agent_browser_native_scroll_executor_attempt_summary(),
+                "native_key_executor_attempt": self.latest_agent_browser_native_key_executor_attempt_summary(),
                 "native_history_trace_attempt": self.latest_agent_browser_native_history_trace_attempt_summary(),
                 "native_history_executor_attempt": self.latest_agent_browser_native_history_executor_attempt_summary(),
                 "native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
@@ -5739,6 +5761,268 @@ impl WebPreviewView {
         self.native_scroll_executor_attempt(window, cx, true);
     }
 
+    fn devtools_key_event_payload(key: &str, event_type: &str) -> Option<Value> {
+        let (key, code, virtual_key) = match key {
+            "Escape" => ("Escape", "Escape", 27),
+            "Enter" => ("Enter", "Enter", 13),
+            "Tab" => ("Tab", "Tab", 9),
+            "ArrowDown" => ("ArrowDown", "ArrowDown", 40),
+            "ArrowUp" => ("ArrowUp", "ArrowUp", 38),
+            "ArrowLeft" => ("ArrowLeft", "ArrowLeft", 37),
+            "ArrowRight" => ("ArrowRight", "ArrowRight", 39),
+            "Backspace" => ("Backspace", "Backspace", 8),
+            "Delete" => ("Delete", "Delete", 46),
+            "Home" => ("Home", "Home", 36),
+            "End" => ("End", "End", 35),
+            "PageUp" => ("PageUp", "PageUp", 33),
+            "PageDown" => ("PageDown", "PageDown", 34),
+            "Space" => (" ", "Space", 32),
+            _ => return None,
+        };
+
+        Some(serde_json::json!({
+            "type": event_type,
+            "key": key,
+            "code": code,
+            "windowsVirtualKeyCode": virtual_key,
+            "nativeVirtualKeyCode": virtual_key,
+        }))
+    }
+
+    fn dispatch_webview_key_via_devtools(&self, key: &str) -> Result<()> {
+        let down = Self::devtools_key_event_payload(key, "keyDown")
+            .ok_or_else(|| anyhow!("Unsupported WebPreview key for DevTools dispatch: {key}"))?;
+        let up = Self::devtools_key_event_payload(key, "keyUp")
+            .ok_or_else(|| anyhow!("Unsupported WebPreview key for DevTools dispatch: {key}"))?;
+        self.call_devtools_protocol_method(
+            "Input.dispatchKeyEvent",
+            &serde_json::to_string(&down)?,
+        )?;
+        self.call_devtools_protocol_method("Input.dispatchKeyEvent", &serde_json::to_string(&up)?)?;
+        Ok(())
+    }
+
+    fn native_key_executor_attempt(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+        send_to_agent: bool,
+    ) {
+        let captured_at_ms = Self::current_epoch_millis();
+        let config = Self::native_input_trace_config("key_native_trace");
+        let preflight = self.native_input_trace_preflight_attempt(config);
+        let preflight_ready = preflight
+            .as_ref()
+            .and_then(|attempt| attempt.pointer("/attempt/outcome"))
+            .and_then(Value::as_str)
+            == Some("preflight_ready");
+        let target_candidate = preflight
+            .as_ref()
+            .and_then(|attempt| attempt.pointer("/attempt/target_candidate"))
+            .cloned();
+        let (coordinate_plan, mut coordinate_blockers) =
+            self.native_input_trace_plan(window, config, &target_candidate);
+        let key = coordinate_plan
+            .as_ref()
+            .and_then(|plan| plan.pointer("/key"))
+            .and_then(Value::as_str)
+            .unwrap_or("Escape")
+            .to_string();
+        let keyboard_dispatch_ready = coordinate_plan
+            .as_ref()
+            .and_then(|plan| plan.pointer("/keyboard_focus/ready_for_keyboard_dispatch"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let key_supported = Self::devtools_key_event_payload(&key, "keyDown").is_some();
+        if !key_supported {
+            coordinate_blockers.push(serde_json::json!({
+                "code": "native_key_unsupported",
+                "message": format!("The key `{key}` is not in the supported DevTools key executor allowlist."),
+                "required_action": "Use one of Escape, Enter, Tab, ArrowDown, ArrowUp, ArrowLeft, ArrowRight, Backspace, Delete, Home, End, PageUp, PageDown, or Space.",
+            }));
+        }
+
+        let gate = self.agent_browser_executor_gate();
+        let qa_checklist_ready = self
+            .latest_agent_browser_native_dispatch_qa_checklist
+            .is_some();
+        let mut blockers = self.agent_browser_executor_gate_blockers(
+            gate,
+            "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before native key dispatch.",
+            "Native key dispatch requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts.",
+        );
+        if preflight.is_none() {
+            blockers.push(serde_json::json!({
+                "code": config.missing_code,
+                "message": config.missing_message,
+                "required_action": config.missing_required_action,
+            }));
+        } else if !preflight_ready {
+            blockers.push(serde_json::json!({
+                "code": config.stale_code,
+                "message": config.stale_message,
+                "required_action": "Collect fresh context and rerun key preflight until it reports preflight_ready.",
+            }));
+        }
+        if !qa_checklist_ready {
+            blockers.push(serde_json::json!({
+                "code": "native_dispatch_qa_checklist_missing",
+                "message": "The native dispatch QA checklist has not been generated for this WebPreview session.",
+                "required_action": "Copy or send the native dispatch QA checklist before enabling native key dispatch.",
+            }));
+        }
+        blockers.append(&mut coordinate_blockers);
+
+        let dispatch_ready = gate.ready_for_executor()
+            && preflight_ready
+            && keyboard_dispatch_ready
+            && key_supported
+            && qa_checklist_ready
+            && blockers.is_empty();
+        let trace_ready = preflight_ready && keyboard_dispatch_ready && key_supported;
+        let before = serde_json::json!({
+            "url": self.active_url.as_ref(),
+            "title": self.current_tab_title().as_ref(),
+            "load_state": self.load_state_name(),
+            "preflight": preflight.as_ref(),
+            "target_candidate": target_candidate.clone(),
+            "coordinate_plan": coordinate_plan.clone(),
+            "key": key,
+        });
+
+        let mut browser_command_dispatched = false;
+        let mut dispatch_error = None;
+        if dispatch_ready {
+            match self.dispatch_webview_key_via_devtools(&key) {
+                Ok(()) => {
+                    browser_command_dispatched = true;
+                }
+                Err(error) => {
+                    let message = error.to_string();
+                    dispatch_error = Some(message.clone());
+                    blockers.push(serde_json::json!({
+                        "code": "native_key_dispatch_failed",
+                        "message": message,
+                    }));
+                }
+            }
+        }
+
+        let outcome = if browser_command_dispatched {
+            "dispatched"
+        } else {
+            "blocked"
+        };
+        let after = serde_json::json!({
+            "url": self.active_url.as_ref(),
+            "title": self.current_tab_title().as_ref(),
+            "load_state": self.load_state_name(),
+            "coordinate_plan": coordinate_plan.clone(),
+            "key_dispatch_is_async": browser_command_dispatched,
+        });
+        let receipt = self.permissioned_executor_receipt(
+            "zed.web_preview.permissioned_native_key_executor_receipt.v1",
+            "press_key",
+            outcome,
+            gate,
+            before,
+            after,
+            blockers,
+            dispatch_error,
+            browser_command_dispatched,
+            false,
+            false,
+            vec![
+                ("trace_ready", serde_json::json!(trace_ready)),
+                ("input_preflight_ready", serde_json::json!(preflight_ready)),
+                (
+                    "keyboard_dispatch_ready",
+                    serde_json::json!(keyboard_dispatch_ready),
+                ),
+                (
+                    "native_dispatch_qa_checklist_ready",
+                    serde_json::json!(qa_checklist_ready),
+                ),
+                ("dispatch_enabled", serde_json::json!(dispatch_ready)),
+            ],
+            vec![
+                ("target_candidate", serde_json::json!(target_candidate)),
+                ("coordinate_plan", serde_json::json!(coordinate_plan)),
+                ("key", serde_json::json!(key)),
+                ("dry_run_only", serde_json::json!(false)),
+                (
+                    "dispatch_status",
+                    serde_json::json!(if browser_command_dispatched {
+                        "devtools_key_dispatched"
+                    } else {
+                        "not_dispatched"
+                    }),
+                ),
+            ],
+        );
+        let receipt_blockers = receipt.pointer("/blockers").cloned();
+        let receipt_target_candidate = receipt.pointer("/target_candidate").cloned();
+        let receipt_coordinate_plan = receipt.pointer("/coordinate_plan").cloned();
+        let receipt_key = receipt.pointer("/key").cloned();
+        let attempt = serde_json::json!({
+            "schema": "zed.web_preview.permissioned_native_key_executor_attempt.v1",
+            "session": self.browser_session_snapshot(window),
+            "policy": self.agent_browser_policy_snapshot(),
+            "attempt": {
+                "captured_at_ms": captured_at_ms,
+                "session_id": self.session_id.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "url": self.active_url.as_ref(),
+                "action": "press_key",
+                "outcome": outcome,
+                "gate_ready_for_executor": gate.ready_for_executor(),
+                "input_preflight_ready": preflight_ready,
+                "trace_ready": trace_ready,
+                "keyboard_dispatch_ready": keyboard_dispatch_ready,
+                "native_dispatch_qa_checklist_ready": qa_checklist_ready,
+                "dispatch_enabled": dispatch_ready,
+                "target_candidate": receipt_target_candidate,
+                "coordinate_plan": receipt_coordinate_plan,
+                "key": receipt_key,
+                "native_input_dispatched": false,
+                "browser_command_dispatched": browser_command_dispatched,
+                "page_script_dispatched": false,
+                "blockers": receipt_blockers,
+                "receipt": receipt,
+            },
+            "notes": [
+                "This is the first permissioned WebPreview key executor slice.",
+                "It dispatches only an allowlisted keyDown/keyUp pair through WebView2 DevTools Protocol after permission, context, key preflight, keyboard-focus gate, and QA checklist gates pass.",
+                "It does not dispatch text, mouse, wheel, history, cache, page-script, or external Chrome actions."
+            ],
+        });
+        let blocks = self.native_command_trace_agent_blocks(&attempt, "native key executor");
+        self.latest_agent_browser_native_key_executor_attempt = Some(attempt.clone());
+
+        if send_to_agent {
+            self.append_content_blocks_to_agent_panel(blocks, window, cx);
+            self.show_toast("Sent native key executor receipt to the agent panel", cx);
+        } else {
+            cx.write_to_clipboard(ClipboardItem::new_string(Self::native_command_trace_json(
+                &attempt,
+            )));
+            self.show_toast("Copied native key executor receipt", cx);
+        }
+        cx.notify();
+    }
+
+    fn copy_native_key_executor_attempt(&mut self, window: &Window, cx: &mut Context<Self>) {
+        self.native_key_executor_attempt(window, cx, false);
+    }
+
+    fn send_native_key_executor_attempt_to_agent(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.native_key_executor_attempt(window, cx, true);
+    }
+
     fn native_command_trace_json(attempt: &Value) -> String {
         serde_json::to_string_pretty(attempt).unwrap_or_else(|_| "{}".to_string())
     }
@@ -6621,10 +6905,10 @@ impl WebPreviewView {
                     }
                 ],
                 "blocking_items": [
-                    "Real native type/key dispatch is still disabled.",
-                    "Manual Windows QA must pass before extending dispatch beyond native click, scroll, history, and cache-only reset paths."
+                    "Native free-form text dispatch is still disabled.",
+                    "Manual Windows QA must pass before extending dispatch beyond native click, scroll, key, history, and cache-only reset paths."
                 ],
-                "next_target": "Manually validate the Windows native click, scroll, back, forward, cache-only reset, and keyboard-focus type trace receipts, then add type/key dispatch behind the same focus gates."
+                "next_target": "Manually validate the Windows native click, scroll, key, back, forward, cache-only reset, and keyboard-focus type trace receipts, then add free-form type dispatch behind the same focus gates."
             },
             "notes": [
                 "This checklist is safe to copy/send because it does not run page JavaScript or native browser commands.",
@@ -6707,14 +6991,14 @@ impl WebPreviewView {
                     "feature_set": "Agent Browser Command Center",
                     "score": 100,
                     "scope": "Read-only browser context, diagnostics, action planning, audit packets, readiness gates, and low-risk command executors are wired.",
-                    "out_of_scope": "Real type and key dispatch belongs to later Permissioned Agent Browser Executor slices."
+                    "out_of_scope": "Real free-form text dispatch belongs to a later Permissioned Agent Browser Executor slice."
                 },
                 "readiness_snapshot": {
                     "context_ready": context_ready,
                     "audit_ready": audit_ready,
                     "interactive_unlocked": interactive_unlocked,
                     "executor_wired": true,
-                    "executor_scope": "open_url, reload, set_viewport, clear_data, native click dispatch, native scroll dispatch, native history dispatch, cache-only reset dispatch, preflight-only type/key receipts, trace-only native input receipts, and native dispatch QA checklist",
+                    "executor_scope": "open_url, reload, set_viewport, clear_data, native click dispatch, native scroll dispatch, native key dispatch, native history dispatch, cache-only reset dispatch, preflight-only type receipts, trace-only native input receipts, and native dispatch QA checklist",
                     "latest_status_packet": self.latest_agent_browser_status_packet_summary(),
                     "latest_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
                     "latest_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
@@ -6774,7 +7058,7 @@ impl WebPreviewView {
                 ],
                 "known_limits": [
                     "The Command Center currently prepares context and audit contracts only.",
-                    "Real type and key dispatch remains intentionally deferred.",
+                    "Real free-form text dispatch remains intentionally deferred.",
                     "Cross-platform behavior is represented by shared state and capability contracts; Windows remains the local manual QA platform."
                 ],
                 "next_feature_set": {
@@ -6786,7 +7070,8 @@ impl WebPreviewView {
                         "Manually validate the first native wheel dispatch adapter for Windows WebView2 CompositionController.",
                         "Manually validate native back/forward history dispatch through CoreWebView2.",
                         "Manually validate scoped cache-only reset through the WebView2 profile API.",
-                        "Wire type/key dispatch only after each action has a fresh preflight receipt.",
+                        "Wire native key dispatch through the shared keyboard-focus gate.",
+                        "Wire type dispatch only after it has a fresh preflight receipt and a proven text-safety plan.",
                         "Expand action coverage only after manual QA confirms no editor or WebPreview input regression."
                     ]
                 }
@@ -6996,7 +7281,7 @@ impl WebPreviewView {
                             {"id": "browser.dispatch.manual_qa_checklist", "state": "available", "description": "Generate the final manual QA checklist required before enabling native browser dispatch."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},
                             {"id": "browser.action.type", "state": "planned_executor", "description": "Type into page inputs after unlock, fresh preflight, and receipt logging."},
-                            {"id": "browser.action.key", "state": "planned_executor", "description": "Send key presses after unlock, fresh preflight, and receipt logging."},
+                            {"id": "browser.action.key", "state": "available_when_unlocked", "description": "Send allowlisted key presses through the WebView2 DevTools Protocol executor after unlock, fresh preflight, keyboard-focus gate, QA checklist, and receipt logging."},
                             {"id": "browser.action.scroll", "state": "available_when_unlocked", "description": "Scroll page or element targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."}
                         ],
                         "safety": {
@@ -8995,6 +9280,32 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Run Native Key Executor")
+                                .icon(IconName::Keyboard)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_native_key_executor_attempt(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Run Native Key Executor to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_native_key_executor_attempt_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Run Scroll Preflight")
                                 .icon(IconName::ArrowDown)
                                 .handler({
@@ -9880,6 +10191,23 @@ impl WebPreviewView {
         ))
     }
 
+    #[cfg(target_os = "windows")]
+    fn call_devtools_protocol_method(&self, method: &str, params_json: &str) -> Result<()> {
+        let borrow = self.native_preview.borrow();
+        let preview = borrow
+            .as_ref()
+            .ok_or_else(|| anyhow!("The native web preview is not available"))?;
+        preview.call_devtools_protocol_method(method, params_json)?;
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn call_devtools_protocol_method(&self, _method: &str, _params_json: &str) -> Result<()> {
+        Err(anyhow!(
+            "DevTools protocol dispatch is currently wired only for Windows WebView2"
+        ))
+    }
+
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     fn apply_zoom(&self) -> Result<()> {
         let borrow = self.native_preview.borrow();
@@ -10509,6 +10837,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_native_scroll_trace_attempt: None,
                 latest_agent_browser_native_click_executor_attempt: None,
                 latest_agent_browser_native_scroll_executor_attempt: None,
+                latest_agent_browser_native_key_executor_attempt: None,
                 latest_agent_browser_native_history_trace_attempt: None,
                 latest_agent_browser_native_history_executor_attempt: None,
                 latest_agent_browser_native_cache_reset_trace_attempt: None,

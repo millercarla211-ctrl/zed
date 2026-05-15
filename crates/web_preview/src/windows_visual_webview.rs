@@ -11,7 +11,8 @@ use gpui_windows::{
     update_webview_passthrough_focus_for_controller,
 };
 use webview2_com::{
-    AddScriptToExecuteOnDocumentCreatedCompletedHandler, ClearBrowsingDataCompletedHandler,
+    AddScriptToExecuteOnDocumentCreatedCompletedHandler,
+    CallDevToolsProtocolMethodCompletedHandler, ClearBrowsingDataCompletedHandler,
     CoreWebView2EnvironmentOptions, CreateCoreWebView2CompositionControllerCompletedHandler,
     CreateCoreWebView2EnvironmentCompletedHandler, CursorChangedEventHandler,
     DocumentTitleChangedEventHandler, ExecuteScriptCompletedHandler, FocusChangedEventHandler,
@@ -231,6 +232,23 @@ impl WindowsVisualWebView {
             self.webview.ExecuteScript(
                 &script,
                 &ExecuteScriptCompletedHandler::create(Box::new(|_, _| Ok(()))),
+            )?
+        };
+        Ok(())
+    }
+
+    pub(crate) fn call_devtools_protocol_method(
+        &self,
+        method: &str,
+        params_json: &str,
+    ) -> Result<()> {
+        let method = HSTRING::from(method);
+        let params_json = HSTRING::from(params_json);
+        unsafe {
+            self.webview.CallDevToolsProtocolMethod(
+                &method,
+                &params_json,
+                &CallDevToolsProtocolMethodCompletedHandler::create(Box::new(|_, _| Ok(()))),
             )?
         };
         Ok(())

@@ -1,3 +1,17 @@
+[2026-05-16] - Web Preview First Native Key Executor
+
+ADDED:
+- Added a Windows WebView2 DevTools Protocol key executor for allowlisted non-text keys such as Escape, Enter, Tab, arrows, Backspace, Delete, Home, End, PageUp, PageDown, and Space.
+- WebPreview's More menu now includes "Run Native Key Executor" and "Run Native Key Executor to Agent".
+- Native key execution requires interactive permission, fresh executor context/audit readiness, a fresh key preflight, the shared keyboard-focus gate, and the native dispatch QA checklist before dispatch.
+
+CHANGED:
+- Browser plugin manifests now advertise `browser.action.key` as available when unlocked instead of only planned.
+- Executor readiness and QA handoffs now treat native click, scroll, key, history, and cache-only reset as wired while keeping free-form text dispatch disabled.
+
+NOTES:
+- This dispatch slice sends only allowlisted keyDown/keyUp events to the in-app WebPreview through WebView2 DevTools Protocol; it does not type arbitrary text, run page scripts, control external Chrome, or change editor keyboard routing.
+
 [2026-05-16] - Web Preview Keyboard Dispatch Contract
 
 ADDED:
