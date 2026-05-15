@@ -1,3 +1,13 @@
+[2026-05-16] - Web Preview Agent Browser Executor Readiness
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Executor Readiness" and "Send Executor Readiness".
+- WebPreview sessions now summarize the latest executor readiness contract alongside the status packet and other Agent Browser artifacts.
+- The executor readiness contract reports permission, page-context, observability, audit, and not-yet-wired executor blockers for every future interactive action family.
+
+NOTES:
+- This keeps real click, type, key, scroll, navigation, viewport, and cache dispatch disabled while defining the final readiness gate those executors must satisfy.
+
 [2026-05-16] - Web Preview Agent Browser Status Packet
 
 ADDED:

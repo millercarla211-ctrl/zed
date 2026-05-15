@@ -253,6 +253,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_successful_interaction_receipt_to_agent",
     "copy_agent_browser_status_packet",
     "send_agent_browser_status_packet_to_agent",
+    "copy_agent_browser_executor_readiness",
+    "send_agent_browser_executor_readiness_to_agent",
     "take_screenshot",
     "inspect_element",
 ];
@@ -438,6 +440,7 @@ pub struct WebPreviewView {
     latest_blocked_interaction_receipt: Option<Value>,
     latest_successful_interaction_receipt: Option<Value>,
     latest_agent_browser_status_packet: Option<Value>,
+    latest_agent_browser_executor_readiness: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -623,6 +626,7 @@ impl WebPreviewView {
             latest_blocked_interaction_receipt: None,
             latest_successful_interaction_receipt: None,
             latest_agent_browser_status_packet: None,
+            latest_agent_browser_executor_readiness: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1083,6 +1087,7 @@ impl WebPreviewView {
             "blocked_interaction_receipt": self.latest_blocked_interaction_receipt_summary(),
             "successful_interaction_receipt": self.latest_successful_interaction_receipt_summary(),
             "agent_browser_status_packet": self.latest_agent_browser_status_packet_summary(),
+            "agent_browser_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1119,6 +1124,8 @@ impl WebPreviewView {
                 "send_successful_interaction_receipt_to_agent": true,
                 "copy_agent_browser_status_packet": true,
                 "send_agent_browser_status_packet_to_agent": true,
+                "copy_agent_browser_executor_readiness": true,
+                "send_agent_browser_executor_readiness_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1297,6 +1304,20 @@ impl WebPreviewView {
             "audit_ready": packet.pointer("/packet/readiness/audit_ready").and_then(Value::as_bool),
             "interactive_unlocked": packet.pointer("/packet/readiness/interactive_unlocked").and_then(Value::as_bool),
             "next_step": packet.pointer("/packet/next_step").and_then(Value::as_str),
+        }))
+    }
+
+    fn latest_agent_browser_executor_readiness_summary(&self) -> Option<Value> {
+        let readiness = self.latest_agent_browser_executor_readiness.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at_ms": readiness.pointer("/readiness/captured_at_ms").and_then(Value::as_u64),
+            "url": readiness.pointer("/readiness/url").and_then(Value::as_str),
+            "title": readiness.pointer("/readiness/title").and_then(Value::as_str),
+            "status": readiness.pointer("/readiness/status").and_then(Value::as_str),
+            "gate_ready_for_executor": readiness.pointer("/readiness/gate_ready_for_executor").and_then(Value::as_bool),
+            "can_dispatch_now": readiness.pointer("/readiness/can_dispatch_now").and_then(Value::as_bool),
+            "blocker_count": readiness.pointer("/readiness/blockers").and_then(Value::as_array).map(Vec::len),
+            "next_step": readiness.pointer("/readiness/next_step").and_then(Value::as_str),
         }))
     }
 
@@ -2391,6 +2412,7 @@ impl WebPreviewView {
                     "interaction_action_request": self.latest_interaction_action_request_summary(),
                     "blocked_interaction_receipt": self.latest_blocked_interaction_receipt_summary(),
                     "successful_interaction_receipt": self.latest_successful_interaction_receipt_summary(),
+                    "agent_browser_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
                 },
                 "handoff": {
                     "read_only_only": !interactive_unlocked,
@@ -2448,6 +2470,195 @@ impl WebPreviewView {
         self.latest_agent_browser_status_packet = Some(packet);
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast("Sent agent browser status packet to the agent panel", cx);
+        cx.notify();
+    }
+
+    fn agent_browser_executor_readiness(&self, window: &Window) -> Value {
+        let interactive_unlocked = self.agent_action_permission.interactive_enabled();
+        let context_ready = self.latest_page_diagnostics.is_some()
+            && self.latest_dom_snapshot.is_some()
+            && self.latest_action_targets.is_some()
+            && self.latest_readiness_probe.is_some();
+        let observability_ready = self.latest_runtime_events.is_some();
+        let wait_contract_ready = self.latest_wait_contract.is_some();
+        let plan_ready = self.latest_interaction_plan.is_some();
+        let preflight_ready = self.latest_interaction_preflight.is_some();
+        let receipt_template_ready = self.latest_interaction_receipt_template.is_some();
+        let action_request_ready = self.latest_interaction_action_request.is_some();
+        let blocked_receipt_ready = self.latest_blocked_interaction_receipt.is_some();
+        let success_receipt_ready = self.latest_successful_interaction_receipt.is_some();
+        let audit_ready = wait_contract_ready
+            && plan_ready
+            && preflight_ready
+            && receipt_template_ready
+            && action_request_ready
+            && blocked_receipt_ready
+            && success_receipt_ready;
+        let gate_ready_for_executor = interactive_unlocked && context_ready && audit_ready;
+
+        let mut blockers = Vec::new();
+        if !interactive_unlocked {
+            blockers.push(serde_json::json!({
+                "code": "interactive_actions_locked",
+                "message": "The user has not unlocked interactive Agent Browser actions for this WebPreview session.",
+                "required_action": "Use Allow Interactive Agent Actions only after the user explicitly approves browser control.",
+            }));
+        }
+        if !context_ready {
+            blockers.push(serde_json::json!({
+                "code": "context_not_collected",
+                "message": "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before dispatch.",
+                "missing": {
+                    "page_diagnostics": self.latest_page_diagnostics.is_none(),
+                    "dom_snapshot": self.latest_dom_snapshot.is_none(),
+                    "action_targets": self.latest_action_targets.is_none(),
+                    "readiness_probe": self.latest_readiness_probe.is_none(),
+                },
+            }));
+        }
+        if !audit_ready {
+            blockers.push(serde_json::json!({
+                "code": "audit_contract_incomplete",
+                "message": "The executor must have the wait contract, plan, preflight, request envelope, and both receipt shapes before input dispatch.",
+                "missing": {
+                    "wait_contract": !wait_contract_ready,
+                    "interaction_plan": !plan_ready,
+                    "interaction_preflight": !preflight_ready,
+                    "receipt_template": !receipt_template_ready,
+                    "action_request": !action_request_ready,
+                    "blocked_receipt": !blocked_receipt_ready,
+                    "successful_receipt_template": !success_receipt_ready,
+                },
+            }));
+        }
+
+        blockers.push(serde_json::json!({
+            "code": "executor_not_wired",
+            "message": "This build exposes the readiness contract only; real click, type, key, scroll, navigation, viewport, and cache dispatch are still intentionally disabled.",
+            "required_action": "Wire each executor action behind this readiness gate and emit a receipt for every attempted action.",
+        }));
+
+        let interactive_actions = INTERACTIVE_AGENT_BROWSER_ACTIONS
+            .iter()
+            .map(|action| {
+                serde_json::json!({
+                    "action": action,
+                    "can_dispatch_now": false,
+                    "gate_ready_for_executor": gate_ready_for_executor,
+                    "requires_fresh_preflight": true,
+                    "requires_receipt": true,
+                    "executor_wired": false,
+                })
+            })
+            .collect::<Vec<_>>();
+        let status = if gate_ready_for_executor {
+            "gate_ready_executor_not_wired"
+        } else {
+            "blocked_until_ready"
+        };
+        let next_step = if !context_ready {
+            "Collect fresh diagnostics, DOM, action targets, and readiness context from the current page."
+        } else if !audit_ready {
+            "Collect the remaining wait, plan, preflight, request, and receipt artifacts before wiring execution."
+        } else if !interactive_unlocked {
+            "Ask the user to explicitly unlock interactive browser actions for this session before any future executor dispatch."
+        } else {
+            "Wire the first executor action behind this gate, then require fresh preflight and a receipt per dispatch."
+        };
+
+        serde_json::json!({
+            "schema": "zed.web_preview.agent_browser_executor_readiness.v1",
+            "session": self.browser_session_snapshot(window),
+            "policy": self.agent_browser_policy_snapshot(),
+            "readiness": {
+                "captured_at_ms": Self::current_epoch_millis(),
+                "session_id": self.session_id.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "url": self.active_url.as_ref(),
+                "status": status,
+                "next_step": next_step,
+                "can_dispatch_now": false,
+                "gate_ready_for_executor": gate_ready_for_executor,
+                "interactive_unlocked": interactive_unlocked,
+                "context_ready": context_ready,
+                "observability_ready": observability_ready,
+                "audit_ready": audit_ready,
+                "executor_wired": false,
+                "requires_user_permission": true,
+                "requires_fresh_preflight_before_every_action": true,
+                "requires_receipt_after_every_action": true,
+                "blockers": blockers,
+                "interactive_actions": interactive_actions,
+            },
+            "latest": {
+                "status_packet": self.latest_agent_browser_status_packet_summary(),
+                "page_diagnostics": self.latest_page_diagnostics_summary(),
+                "runtime_events": self.latest_runtime_events_summary(),
+                "dom_snapshot": self.latest_dom_snapshot_summary(),
+                "action_targets": self.latest_action_targets_summary(),
+                "readiness_probe": self.latest_readiness_probe_summary(),
+                "wait_contract": self.latest_wait_contract_summary(),
+                "interaction_plan": self.latest_interaction_plan_summary(),
+                "interaction_preflight": self.latest_interaction_preflight_summary(),
+                "interaction_receipt_template": self.latest_interaction_receipt_template_summary(),
+                "interaction_action_request": self.latest_interaction_action_request_summary(),
+                "blocked_interaction_receipt": self.latest_blocked_interaction_receipt_summary(),
+                "successful_interaction_receipt": self.latest_successful_interaction_receipt_summary(),
+            },
+            "notes": [
+                "This readiness contract is read-only and does not dispatch browser input.",
+                "Executors must stay disabled until they are wired behind this gate.",
+                "Every future executor action must run a fresh preflight immediately before dispatch and emit either a blocked or successful receipt."
+            ],
+        })
+    }
+
+    fn agent_browser_executor_readiness_json(readiness: &Value) -> String {
+        serde_json::to_string_pretty(readiness).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_executor_readiness_agent_blocks(
+        &self,
+        readiness: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = readiness.pointer("/readiness/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview agent browser executor readiness:\n\n```json\n{}\n```",
+            Self::agent_browser_executor_readiness_json(readiness)
+        ))));
+        blocks
+    }
+
+    fn copy_agent_browser_executor_readiness(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let readiness = self.agent_browser_executor_readiness(window);
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_executor_readiness_json(&readiness),
+        ));
+        self.latest_agent_browser_executor_readiness = Some(readiness);
+        self.show_toast("Copied agent browser executor readiness", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_executor_readiness_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let readiness = self.agent_browser_executor_readiness(window);
+        let blocks = self.agent_browser_executor_readiness_agent_blocks(&readiness);
+        self.latest_agent_browser_executor_readiness = Some(readiness);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast(
+            "Sent agent browser executor readiness to the agent panel",
+            cx,
+        );
         cx.notify();
     }
 
@@ -4024,6 +4235,32 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Copy Executor Readiness")
+                                .icon(IconName::Check)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_executor_readiness(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Executor Readiness")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_executor_readiness_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy Agent Browser Manifest")
                                 .icon(IconName::Info)
                                 .handler({
@@ -5000,6 +5237,7 @@ impl Item for WebPreviewView {
                 latest_blocked_interaction_receipt: None,
                 latest_successful_interaction_receipt: None,
                 latest_agent_browser_status_packet: None,
+                latest_agent_browser_executor_readiness: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
