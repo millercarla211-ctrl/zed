@@ -840,6 +840,8 @@ impl Render for ShadcnUiPanel {
         let (items, total_matches) = self.matching_items(query.as_str(), MAX_SHADCN_ROWS);
         let mut preview_images = cached_shadcn_preview_image_urls(&items);
         self.ensure_visible_preview_images_warmed(&items, &preview_images, cx);
+        let visible_preview_warming_count =
+            visible_preview_warming_count(&items, &self.warming_preview_image_keys);
         let is_empty = total_matches == 0;
         let filter_counts = self.filter_counts;
         let total_count = filter_counts.count(self.source_filter);
@@ -848,13 +850,20 @@ impl Render for ShadcnUiPanel {
             let image_url = preview_images.remove(item.id.as_ref()).flatten();
             self.render_item_row(item, image_url, cx).into_any_element()
         }));
-        let count_label = self.status.clone().unwrap_or_else(|| {
-            if self.loading_catalog {
-                "loading".into()
-            } else {
-                shadcn_fraction_label(total_matches, total_count)
-            }
-        });
+        let show_preview_warming_status = visible_preview_warming_count > 0
+            && self
+                .status
+                .as_ref()
+                .map_or(true, |status| status.as_ref().starts_with("Loaded "));
+        let count_label = if self.loading_catalog {
+            "loading".into()
+        } else if show_preview_warming_status {
+            shadcn_preview_warming_status(visible_preview_warming_count)
+        } else {
+            self.status
+                .clone()
+                .unwrap_or_else(|| shadcn_fraction_label(total_matches, total_count))
+        };
 
         v_flex()
             .id("shadcn-ui-panel")
@@ -1034,11 +1043,27 @@ fn shadcn_loaded_status(count: usize) -> SharedString {
     text.into()
 }
 
+fn shadcn_preview_warming_status(count: usize) -> SharedString {
+    let mut text = String::with_capacity("warming ".len() + 3 + " previews".len());
+    let _ = write!(text, "warming {count} previews");
+    text.into()
+}
+
 fn shadcn_status_label(prefix: &str, value: &str) -> SharedString {
     let mut text = String::with_capacity(prefix.len() + value.len());
     text.push_str(prefix);
     text.push_str(value);
     text.into()
+}
+
+fn visible_preview_warming_count(
+    items: &[CatalogItem],
+    warming_keys: &HashSet<SharedString>,
+) -> usize {
+    items
+        .iter()
+        .filter(|item| warming_keys.contains(item.id.as_ref()))
+        .count()
 }
 
 fn shadcn_thumbnail(

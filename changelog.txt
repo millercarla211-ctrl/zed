@@ -1,3 +1,12 @@
+[2026-05-15] - UI Preview Warming Status
+
+CHANGED:
+- `crates/shadcn_ui_panel` now reports visible screenshot-preview warming in the panel header when thumbnails are being resolved.
+- Preview warming status only replaces passive loaded/count text and preserves explicit user action statuses such as copy, insert, docs, and preview feedback.
+
+NOTES:
+- This makes cold opens and filtered UI searches feel alive while keeping thumbnail warming lazy and avoiding additional filesystem work in render.
+
 [2026-05-15] - UI Catalog Background Hydration
 
 CHANGED:
