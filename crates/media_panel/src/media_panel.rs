@@ -1073,6 +1073,7 @@ impl MediaPanel {
         let id = asset.id.into_owned();
         let row_id = media_element_id("media-panel-remote-row-", id.as_str());
         let preview_id = media_element_id("media-panel-preview-remote-", id.as_str());
+        let copy_id = media_element_id("media-panel-copy-remote-", id.as_str());
         let insert_id = media_element_id("media-panel-insert-remote-", id.as_str());
         let attribution = media_attribution_label(provider.as_str(), license.as_str());
 
@@ -1121,6 +1122,18 @@ impl MediaPanel {
                         let label = label.clone();
                         move |panel, _, window, cx| {
                             panel.preview_media_url(url.clone(), kind, label.clone(), window, cx);
+                        }
+                    })),
+            )
+            .child(
+                Button::new(copy_id, "Copy")
+                    .style(ButtonStyle::Subtle)
+                    .size(ButtonSize::Compact)
+                    .on_click(cx.listener({
+                        let url = url.clone();
+                        let label = label.clone();
+                        move |panel, _, _, cx| {
+                            panel.copy_media_source(url.clone(), label.clone(), cx);
                         }
                     })),
             )

@@ -1,3 +1,12 @@
+[2026-05-15] - Asset Command Center Kickoff
+
+ADDED:
+- `todo.txt` now defines the next 100-point Asset Command Center feature set for the right-side panels.
+- Media panel remote result rows now include a native `Copy` action beside `Preview` and `Insert URL`, matching the browser media view's quick URL-copy workflow.
+
+NOTES:
+- This starts the next product-quality loop while preserving local-row path copying, remote preview/insert behavior, editor input, and WebPreview input.
+
 [2026-05-15] - Media Kind-Specific Loading Copy
 
 CHANGED:
