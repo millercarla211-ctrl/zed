@@ -1,3 +1,16 @@
+[2026-05-16] - Web Preview Permissioned Clear Data Executor
+
+ADDED:
+- WebPreview's More menu now includes "Run Clear Data Executor" and "Run Clear Data Executor to Agent".
+- The clear-data executor shell checks interactive permission plus context/audit readiness before dispatching the native WebView clear browsing data command.
+- Clear-data attempts emit receipts with the clear scope, blockers, dispatch state, and proof that no keyboard, mouse, pointer, wheel, or page-script input was sent.
+
+CHANGED:
+- WebPreview session/status JSON and Browser plugin manifests now advertise the permissioned clear-data executor alongside reload.
+
+NOTES:
+- This clears the current WebPreview backend's browsing data only; full profile reset and imported/external browser profile cleanup remain future scoped actions.
+
 [2026-05-16] - Agent Plugin Runtime Catalog Tooling
 
 CHANGED:
