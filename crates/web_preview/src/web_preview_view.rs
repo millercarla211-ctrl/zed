@@ -905,6 +905,40 @@ impl WebPreviewView {
             .unwrap_or_else(|_| "{}".to_string())
     }
 
+    fn workspace_session_snapshots(&self, window: &Window, cx: &App) -> Vec<Value> {
+        let Some(workspace) = self.workspace.upgrade() else {
+            return vec![self.browser_session_snapshot(window)];
+        };
+
+        let mut snapshots = workspace.read_with(cx, |workspace, cx| {
+            workspace
+                .items(cx)
+                .filter_map(|item| {
+                    let preview = item.downcast::<WebPreviewView>()?;
+                    Some(preview.read(cx).browser_session_snapshot(window))
+                })
+                .collect::<Vec<_>>()
+        });
+
+        if snapshots.is_empty() {
+            snapshots.push(self.browser_session_snapshot(window));
+        }
+
+        snapshots
+    }
+
+    fn workspace_session_inventory_json(&self, window: &Window, cx: &App) -> String {
+        let sessions = self.workspace_session_snapshots(window, cx);
+        let inventory = serde_json::json!({
+            "schema": "zed.web_preview.session_inventory.v1",
+            "active_session_id": self.session_id.as_ref(),
+            "count": sessions.len(),
+            "sessions": sessions,
+        });
+
+        serde_json::to_string_pretty(&inventory).unwrap_or_else(|_| "{}".to_string())
+    }
+
     fn copy_browser_session_info(&mut self, window: &Window, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(self.browser_session_info(window)));
         self.show_toast("Copied web preview session info", cx);
@@ -913,6 +947,13 @@ impl WebPreviewView {
     fn copy_browser_session_json(&mut self, window: &Window, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(self.browser_session_json(window)));
         self.show_toast("Copied web preview session JSON", cx);
+    }
+
+    fn copy_workspace_session_inventory_json(&mut self, window: &Window, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            self.workspace_session_inventory_json(window, cx),
+        ));
+        self.show_toast("Copied web preview session inventory JSON", cx);
     }
 
     fn send_browser_session_info_to_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1544,6 +1585,18 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.copy_browser_session_json(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy All Session JSON")
+                                .icon(IconName::Blocks)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_workspace_session_inventory_json(window, cx);
                                         });
                                     }
                                 }),

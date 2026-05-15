@@ -1,3 +1,12 @@
+[2026-05-15] - Web Preview Session Inventory JSON
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy All Session JSON" for a schema-versioned inventory of every open WebPreview item in the workspace.
+- Session inventory reuses each preview's read-only structured snapshot and records the active session id and total session count.
+
+NOTES:
+- This introduces the first real workspace-level Agent Browser Command Center inventory surface without adding browser control actions or changing input routing.
+
 [2026-05-15] - Structured Web Preview Session Snapshot
 
 ADDED:
