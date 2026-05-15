@@ -1,4 +1,6 @@
 IN PROGRESS:
+- NEXT 100-POINT FEATURE SET: Agent Plugin Runtime. Goal: bring Codex-app-style plugin capability discovery into the Zed Agent, starting with Browser, Chrome/Playwright, and permissioned PC-use plugins available to every Agent Panel.
+- Agent Plugin Runtime first slice: add a read-only built-in agent tool plus WebPreview handoff catalog so agents can discover Browser, Chrome, DX Chrome extension, Playwright, and PC-use capabilities before executor/download wiring.
 - NEXT 100-POINT FEATURE SET: Permissioned Agent Browser Executor. Goal: wire real browser click, type, key, scroll, navigation, viewport, and cache actions behind the completed Agent Browser Command Center readiness gate, preserving editor speed and WebPreview focus.
 - Permissioned Agent Browser Executor reload-shell slice: WebPreview now has a permission-gated reload executor shell that checks interactive permission plus context/audit readiness, dispatches only the existing native WebView reload command when the gate passes, and emits a receipt either way without sending click/type/key input.
 - Permissioned Agent Browser Executor no-op harness slice: WebPreview now records a no-op executor attempt across all interactive action families, checks permission/context/audit readiness, emits a blocked receipt, and proves the executor path without dispatching native or page input.

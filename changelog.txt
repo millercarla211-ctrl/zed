@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Discovery
+
+ADDED:
+- Added the read-only `list_agent_plugins` built-in Agent tool so every Agent Panel/profile can discover DX/Zed plugin capabilities.
+- The plugin catalog now defines Browser, Chrome/Playwright/DX Chrome Extension, and PC-use manifests with default enablement, bootstrap roots, download/update policy, and safety gates.
+- WebPreview's More menu now exposes "Copy Agent Plugin Catalog" and "Send Agent Plugin Catalog", and session JSON remembers the latest catalog summary.
+
+NOTES:
+- This is the first Agent Plugin Runtime slice: discovery and handoff are wired; the next slice should add the Chrome/Playwright/DX-extension bootstrap downloader and then permissioned executors.
+
 [2026-05-16] - Web Preview Permissioned Reload Executor
 
 ADDED:

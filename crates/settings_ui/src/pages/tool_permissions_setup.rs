@@ -1403,6 +1403,7 @@ mod tests {
             "get_code_actions",
             "go_to_definition",
             "grep",
+            "list_agent_plugins",
             "list_directory",
             "open",
             "read_file",

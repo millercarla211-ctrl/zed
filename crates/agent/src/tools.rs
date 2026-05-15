@@ -1,3 +1,4 @@
+mod agent_plugin_catalog_tool;
 mod apply_code_action_tool;
 mod context_server_registry;
 mod copy_path_tool;
@@ -57,6 +58,7 @@ where
     }
 }
 
+pub use agent_plugin_catalog_tool::*;
 pub use apply_code_action_tool::*;
 pub use context_server_registry::*;
 pub use copy_path_tool::*;
@@ -152,6 +154,7 @@ macro_rules! tools {
 }
 
 tools! {
+    AgentPluginCatalogTool,
     ApplyCodeActionTool,
     CopyPathTool,
     CreateDirectoryTool,

@@ -1128,6 +1128,7 @@
           "thinking": true,
           "update_plan": true,
           "search_web": true,
+          "list_agent_plugins": true,
         },
       },
       "ask": {
@@ -1150,6 +1151,7 @@
           "thinking": true,
           "update_plan": true,
           "search_web": true,
+          "list_agent_plugins": true,
         },
       },
       "minimal": {

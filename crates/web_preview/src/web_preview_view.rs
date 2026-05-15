@@ -259,6 +259,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_noop_executor_attempt_to_agent",
     "copy_agent_browser_qa_runbook",
     "send_agent_browser_qa_runbook_to_agent",
+    "copy_agent_plugin_catalog",
+    "send_agent_plugin_catalog_to_agent",
     "take_screenshot",
     "inspect_element",
 ];
@@ -448,6 +450,7 @@ pub struct WebPreviewView {
     latest_agent_browser_noop_executor_attempt: Option<Value>,
     latest_agent_browser_reload_executor_attempt: Option<Value>,
     latest_agent_browser_qa_runbook: Option<Value>,
+    latest_agent_plugin_catalog: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -637,6 +640,7 @@ impl WebPreviewView {
             latest_agent_browser_noop_executor_attempt: None,
             latest_agent_browser_reload_executor_attempt: None,
             latest_agent_browser_qa_runbook: None,
+            latest_agent_plugin_catalog: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1101,6 +1105,7 @@ impl WebPreviewView {
             "agent_browser_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
             "agent_browser_reload_executor_attempt": self.latest_agent_browser_reload_executor_attempt_summary(),
             "agent_browser_qa_runbook": self.latest_agent_browser_qa_runbook_summary(),
+            "agent_plugin_catalog": self.latest_agent_plugin_catalog_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1145,6 +1150,8 @@ impl WebPreviewView {
                 "send_permissioned_reload_executor_to_agent": self.agent_action_permission.interactive_enabled(),
                 "copy_agent_browser_qa_runbook": true,
                 "send_agent_browser_qa_runbook_to_agent": true,
+                "copy_agent_plugin_catalog": true,
+                "send_agent_plugin_catalog_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1378,6 +1385,17 @@ impl WebPreviewView {
             "manual_gate_count": runbook.pointer("/runbook/manual_gates").and_then(Value::as_array).map(Vec::len),
             "known_limit_count": runbook.pointer("/runbook/known_limits").and_then(Value::as_array).map(Vec::len),
             "next_feature_set": runbook.pointer("/runbook/next_feature_set/name").and_then(Value::as_str),
+        }))
+    }
+
+    fn latest_agent_plugin_catalog_summary(&self) -> Option<Value> {
+        let catalog = self.latest_agent_plugin_catalog.as_ref()?;
+        Some(serde_json::json!({
+            "generated_at_ms": catalog.pointer("/catalog/generated_at_ms").and_then(Value::as_u64),
+            "status": catalog.pointer("/catalog/status").and_then(Value::as_str),
+            "plugin_count": catalog.pointer("/catalog/plugins").and_then(Value::as_array).map(Vec::len),
+            "default_enabled_plugins": catalog.pointer("/catalog/default_enabled_plugins").cloned(),
+            "available_to": catalog.pointer("/catalog/available_to").cloned(),
         }))
     }
 
@@ -3252,6 +3270,230 @@ impl WebPreviewView {
         self.show_toast("Sent agent browser action manifest to the agent panel", cx);
     }
 
+    fn agent_plugin_catalog(&self, window: &Window) -> Value {
+        let workspace_tools_root = self
+            .workspace_context
+            .root_path
+            .as_ref()
+            .map(|root| root.join("tools"));
+        let workspace_plugin_root = workspace_tools_root
+            .as_ref()
+            .map(|root| root.join("agent-plugins"));
+        let zed_plugin_root = data_dir().join("agent-plugins");
+
+        serde_json::json!({
+            "schema": "zed.agent_plugins.catalog.v1",
+            "session": self.browser_session_snapshot(window),
+            "catalog": {
+                "generated_at_ms": Self::current_epoch_millis(),
+                "name": "DX Agent Plugin Runtime",
+                "status": "discovery_layer_available",
+                "tool_name": "list_agent_plugins",
+                "default_enabled_plugins": ["zed.browser", "zed.chrome", "zed.pc_use"],
+                "available_to": [
+                    "agent_panel",
+                    "subagents",
+                    "acp_threads",
+                    "web_preview_agent_handoff"
+                ],
+                "bootstrap_plan": {
+                    "default_download": true,
+                    "download_policy": "download_or_update_on_first_use",
+                    "zed_data_plugin_root": zed_plugin_root.display().to_string(),
+                    "workspace_plugin_root": workspace_plugin_root
+                        .as_ref()
+                        .map(|path| path.display().to_string()),
+                    "workspace_tools_root": workspace_tools_root
+                        .as_ref()
+                        .map(|path| path.display().to_string()),
+                    "dx_chrome_extension": {
+                        "install_policy": "download_or_update_on_first_use",
+                        "preferred_root": workspace_plugin_root
+                            .as_ref()
+                            .map(|root| root.join("dx-chrome-extension"))
+                            .unwrap_or_else(|| zed_plugin_root.join("dx-chrome-extension"))
+                            .display()
+                            .to_string(),
+                        "load_mode": "unpacked_extension",
+                        "never_write_to_user_browser_profiles": true
+                    },
+                    "playwright": {
+                        "install_policy": "download_or_update_on_first_use",
+                        "preferred_root": workspace_tools_root
+                            .as_ref()
+                            .map(|root| root.join("playwright"))
+                            .unwrap_or_else(|| zed_plugin_root.join("playwright"))
+                            .display()
+                            .to_string(),
+                        "managed_by": "DX Code Editor"
+                    }
+                },
+                "permission_model": {
+                    "read_only_discovery_without_prompt": true,
+                    "browser_interactions_require_explicit_session_unlock": true,
+                    "external_chrome_and_pc_use_require_user_visible_permission": true,
+                    "receipts_required_for_every_mutating_action": true,
+                    "fresh_preflight_required_before_input": true
+                },
+                "plugins": [
+                    {
+                        "id": "zed.browser",
+                        "name": "Browser",
+                        "kind": "built_in",
+                        "status": "available",
+                        "default_enabled": true,
+                        "scope": "in_app_web_preview",
+                        "runtime": {
+                            "backend": "web_preview",
+                            "requires_external_process": false,
+                            "native_backend": self.browser_native_backend_name()
+                        },
+                        "entrypoints": [
+                            "WebPreview More menu",
+                            "Agent Panel content handoff",
+                            "list_agent_plugins tool"
+                        ],
+                        "capabilities": [
+                            {"id": "browser.sessions.list", "state": "available", "description": "List open WebPreview sessions and workspace inventory."},
+                            {"id": "browser.session.snapshot", "state": "available", "description": "Read the active WebPreview session metadata, bounds, profile, URL, and policy."},
+                            {"id": "browser.page.diagnostics", "state": "available", "description": "Collect ready state, title, URL, DOM counts, and page metadata."},
+                            {"id": "browser.dom.snapshot", "state": "available", "description": "Collect a bounded DOM tree snapshot for model context."},
+                            {"id": "browser.runtime.events", "state": "available", "description": "Read bounded console, page-error, fetch, and XHR event buffers."},
+                            {"id": "browser.screenshot.capture", "state": "available", "description": "Capture WebPreview screenshots for Agent Panel attachments."},
+                            {"id": "browser.action.reload", "state": "available_when_unlocked", "description": "Reload through the permissioned WebPreview executor shell."},
+                            {"id": "browser.action.click", "state": "planned_executor", "description": "Click visible page targets after unlock, fresh preflight, and receipt logging."},
+                            {"id": "browser.action.type", "state": "planned_executor", "description": "Type into page inputs after unlock, fresh preflight, and receipt logging."},
+                            {"id": "browser.action.key", "state": "planned_executor", "description": "Send key presses after unlock, fresh preflight, and receipt logging."},
+                            {"id": "browser.action.scroll", "state": "planned_executor", "description": "Scroll page or element targets after unlock, fresh preflight, and receipt logging."}
+                        ],
+                        "safety": {
+                            "interactive_locked_by_default": true,
+                            "uses_current_webpreview_profile": true,
+                            "does_not_mutate_external_browser_profiles": true,
+                            "requires_receipts": true
+                        }
+                    },
+                    {
+                        "id": "zed.chrome",
+                        "name": "Chrome",
+                        "kind": "built_in",
+                        "status": "requires_bootstrap",
+                        "default_enabled": true,
+                        "scope": "external_chrome_playwright_dx_extension",
+                        "runtime": {
+                            "backend": "playwright",
+                            "requires_node": true,
+                            "requires_managed_chrome": true,
+                            "requires_dx_chrome_extension": true,
+                            "profile_policy": "managed_profile_only"
+                        },
+                        "capabilities": [
+                            {"id": "chrome.session.launch", "state": "requires_bootstrap", "description": "Launch or attach to a managed Chrome profile."},
+                            {"id": "chrome.page.open_url", "state": "requires_bootstrap", "description": "Open URLs in managed Chrome tabs."},
+                            {"id": "chrome.page.click", "state": "requires_permission", "description": "Click elements through Playwright locators or extension targets."},
+                            {"id": "chrome.page.type", "state": "requires_permission", "description": "Type into focused inputs through Playwright or extension bridge."},
+                            {"id": "chrome.page.press_key", "state": "requires_permission", "description": "Press keyboard shortcuts in managed Chrome."},
+                            {"id": "chrome.page.scroll", "state": "requires_permission", "description": "Scroll pages and containers in managed Chrome."},
+                            {"id": "chrome.page.screenshot", "state": "requires_bootstrap", "description": "Capture full-page or viewport screenshots."},
+                            {"id": "chrome.page.dom_snapshot", "state": "requires_bootstrap", "description": "Read DOM/accessibility snapshots."},
+                            {"id": "chrome.runtime.console", "state": "requires_bootstrap", "description": "Read console, page errors, and network events."},
+                            {"id": "chrome.extension.bridge", "state": "requires_bootstrap", "description": "Use the DX Chrome extension bridge for pages where DevTools-only control is insufficient."}
+                        ],
+                        "safety": {
+                            "managed_profile_only": true,
+                            "explicit_permission_required_for_input": true,
+                            "receipts_required": true,
+                            "os_wide_control": false
+                        }
+                    },
+                    {
+                        "id": "zed.pc_use",
+                        "name": "PC Use",
+                        "kind": "built_in",
+                        "status": "planned_permission_gate",
+                        "default_enabled": true,
+                        "scope": "zed_window_and_permissioned_desktop",
+                        "runtime": {
+                            "backend": "zed_window_runtime",
+                            "os_wide_automation": "requires_separate_explicit_permission"
+                        },
+                        "capabilities": [
+                            {"id": "pc.zed_window.screenshot", "state": "planned", "description": "Capture Zed-window screenshots for agent context."},
+                            {"id": "pc.zed_window.focus", "state": "planned", "description": "Focus Zed panes, panels, and tabs by safe editor-native handles."},
+                            {"id": "pc.zed_window.click", "state": "planned_permission_gate", "description": "Click within Zed surfaces only after permission and target preflight."},
+                            {"id": "pc.zed_window.type", "state": "planned_permission_gate", "description": "Type within Zed surfaces only after permission and target preflight."},
+                            {"id": "pc.zed_window.inspect_ui", "state": "planned", "description": "Read safe UI metadata for currently visible Zed surfaces."},
+                            {"id": "pc.desktop.os_wide", "state": "blocked_by_default", "description": "OS-wide desktop automation remains unavailable until the user explicitly enables it."}
+                        ],
+                        "safety": {
+                            "zed_window_first": true,
+                            "os_wide_actions_blocked_by_default": true,
+                            "explicit_permission_required_for_input": true,
+                            "receipts_required": true
+                        }
+                    }
+                ]
+            },
+            "notes": [
+                "The Browser plugin is available now through WebPreview context and permissioned reload.",
+                "Chrome and PC Use are default-enabled plugin manifests with bootstrap and permission gates defined before executor wiring.",
+                "The Agent can also call the read-only list_agent_plugins tool to discover this catalog from any Agent Panel."
+            ]
+        })
+    }
+
+    fn browser_native_backend_name(&self) -> &'static str {
+        #[cfg(target_os = "windows")]
+        {
+            "webview2_composition"
+        }
+        #[cfg(target_os = "macos")]
+        {
+            "wkwebview"
+        }
+        #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+        {
+            "unavailable"
+        }
+    }
+
+    fn agent_plugin_catalog_json(catalog: &Value) -> String {
+        serde_json::to_string_pretty(catalog).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_plugin_catalog_agent_blocks(&self, catalog: &Value) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url_block) = self.current_url_attachment_block() {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "DX/Zed agent plugin catalog:\n\n```json\n{}\n```",
+            Self::agent_plugin_catalog_json(catalog)
+        ))));
+        blocks
+    }
+
+    fn copy_agent_plugin_catalog(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let catalog = self.agent_plugin_catalog(window);
+        cx.write_to_clipboard(ClipboardItem::new_string(Self::agent_plugin_catalog_json(
+            &catalog,
+        )));
+        self.latest_agent_plugin_catalog = Some(catalog);
+        self.show_toast("Copied agent plugin catalog", cx);
+        cx.notify();
+    }
+
+    fn send_agent_plugin_catalog_to_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let catalog = self.agent_plugin_catalog(window);
+        let blocks = self.agent_plugin_catalog_agent_blocks(&catalog);
+        self.latest_agent_plugin_catalog = Some(catalog);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent agent plugin catalog to the agent panel", cx);
+        cx.notify();
+    }
+
     fn set_agent_action_permission(
         &mut self,
         permission: AgentBrowserActionPermission,
@@ -4918,6 +5160,30 @@ impl WebPreviewView {
                                     }
                                 }),
                         )
+                        .item(
+                            ContextMenuEntry::new("Copy Agent Plugin Catalog")
+                                .icon(IconName::Blocks)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_plugin_catalog(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Agent Plugin Catalog")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_plugin_catalog_to_agent(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
                         .separator()
                         .item(
                             ContextMenuEntry::new("Allow Interactive Agent Actions")
@@ -5873,6 +6139,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_noop_executor_attempt: None,
                 latest_agent_browser_reload_executor_attempt: None,
                 latest_agent_browser_qa_runbook: None,
+                latest_agent_plugin_catalog: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
