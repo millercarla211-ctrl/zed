@@ -1120,6 +1120,15 @@ impl MediaPanel {
         cx.notify();
     }
 
+    fn remove_stale_recent_media(&mut self, cx: &mut Context<Self>) {
+        let before = self.recent_media.len();
+        self.recent_media
+            .retain(|entry| !media_history_entry_stale(entry));
+        let removed = before.saturating_sub(self.recent_media.len());
+        self.status = Some(media_removed_stale_status("recent media", removed));
+        cx.notify();
+    }
+
     fn pin_media(&mut self, entry: RecentMediaEntry, cx: &mut Context<Self>) {
         self.pinned_media
             .retain(|pinned| !recent_media_sources_match(pinned, &entry));
@@ -1142,6 +1151,16 @@ impl MediaPanel {
     fn clear_pinned_media(&mut self, cx: &mut Context<Self>) {
         self.pinned_media.clear();
         self.status = Some("Cleared pinned media".into());
+        self.persist_pinned_media(cx);
+        cx.notify();
+    }
+
+    fn remove_stale_pinned_media(&mut self, cx: &mut Context<Self>) {
+        let before = self.pinned_media.len();
+        self.pinned_media
+            .retain(|entry| !media_history_entry_stale(entry));
+        let removed = before.saturating_sub(self.pinned_media.len());
+        self.status = Some(media_removed_stale_status("pinned media", removed));
         self.persist_pinned_media(cx);
         cx.notify();
     }
@@ -1639,6 +1658,11 @@ impl MediaPanel {
             return None;
         }
 
+        let stale_count = self
+            .recent_media
+            .iter()
+            .filter(|entry| media_history_entry_stale(entry))
+            .count();
         let mut rows = Vec::with_capacity(self.recent_media.len().min(MAX_RECENT_MEDIA_ACTIONS));
         for (index, entry) in self
             .recent_media
@@ -1664,12 +1688,26 @@ impl MediaPanel {
                                 .color(Color::Muted),
                         )
                         .child(
-                            Button::new("media-panel-clear-recent", "Clear")
-                                .style(ButtonStyle::Subtle)
-                                .size(ButtonSize::Compact)
-                                .on_click(cx.listener(|panel, _, _, cx| {
-                                    panel.clear_recent_media(cx);
-                                })),
+                            h_flex()
+                                .gap_1()
+                                .when(stale_count > 0, |this| {
+                                    this.child(
+                                        Button::new("media-panel-remove-stale-recent", "Clean")
+                                            .style(ButtonStyle::Subtle)
+                                            .size(ButtonSize::Compact)
+                                            .on_click(cx.listener(|panel, _, _, cx| {
+                                                panel.remove_stale_recent_media(cx);
+                                            })),
+                                    )
+                                })
+                                .child(
+                                    Button::new("media-panel-clear-recent", "Clear")
+                                        .style(ButtonStyle::Subtle)
+                                        .size(ButtonSize::Compact)
+                                        .on_click(cx.listener(|panel, _, _, cx| {
+                                            panel.clear_recent_media(cx);
+                                        })),
+                                ),
                         ),
                 )
                 .children(rows)
@@ -1682,6 +1720,11 @@ impl MediaPanel {
             return None;
         }
 
+        let stale_count = self
+            .pinned_media
+            .iter()
+            .filter(|entry| media_history_entry_stale(entry))
+            .count();
         let mut rows = Vec::with_capacity(self.pinned_media.len().min(MAX_PINNED_MEDIA_ACTIONS));
         for (index, entry) in self
             .pinned_media
@@ -1713,12 +1756,26 @@ impl MediaPanel {
                                 ),
                         )
                         .child(
-                            Button::new("media-panel-clear-pinned", "Clear")
-                                .style(ButtonStyle::Subtle)
-                                .size(ButtonSize::Compact)
-                                .on_click(cx.listener(|panel, _, _, cx| {
-                                    panel.clear_pinned_media(cx);
-                                })),
+                            h_flex()
+                                .gap_1()
+                                .when(stale_count > 0, |this| {
+                                    this.child(
+                                        Button::new("media-panel-remove-stale-pinned", "Clean")
+                                            .style(ButtonStyle::Subtle)
+                                            .size(ButtonSize::Compact)
+                                            .on_click(cx.listener(|panel, _, _, cx| {
+                                                panel.remove_stale_pinned_media(cx);
+                                            })),
+                                    )
+                                })
+                                .child(
+                                    Button::new("media-panel-clear-pinned", "Clear")
+                                        .style(ButtonStyle::Subtle)
+                                        .size(ButtonSize::Compact)
+                                        .on_click(cx.listener(|panel, _, _, cx| {
+                                            panel.clear_pinned_media(cx);
+                                        })),
+                                ),
                         ),
                 )
                 .children(rows)
@@ -1750,7 +1807,7 @@ impl MediaPanel {
         let source_label = recent_media_source_label(&entry.source);
         let source_kind = recent_media_source_kind(&entry.source);
         let source_health = recent_media_source_health(&entry.source);
-        let source_available = recent_media_source_available(&entry.source);
+        let source_available = !media_history_entry_stale(&entry);
         let pin_label = if pinned {
             if source_available { "Unpin" } else { "Remove" }
         } else {
@@ -2403,6 +2460,18 @@ fn recent_media_source_available(source: &RecentMediaSource) -> bool {
     match source {
         RecentMediaSource::Local { path, .. } => path.exists(),
         RecentMediaSource::Remote { .. } => true,
+    }
+}
+
+fn media_history_entry_stale(entry: &RecentMediaEntry) -> bool {
+    !recent_media_source_available(&entry.source)
+}
+
+fn media_removed_stale_status(section: &str, removed: usize) -> SharedString {
+    match removed {
+        0 => format!("No stale {section} entries").into(),
+        1 => format!("Removed 1 stale {section} entry").into(),
+        _ => format!("Removed {removed} stale {section} entries").into(),
     }
 }
 

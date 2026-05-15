@@ -635,6 +635,26 @@ impl ShadcnUiPanel {
         cx.notify();
     }
 
+    fn remove_stale_recent_ui_actions(&mut self, cx: &mut Context<Self>) {
+        let before = self.recent_ui_actions.len();
+        let mut payloads = Vec::with_capacity(self.recent_ui_actions.len());
+        for entry in &self.recent_ui_actions {
+            payloads.push((entry.item.id.clone(), self.payload_for_item(&entry.item)));
+        }
+        self.recent_ui_actions.retain(|entry| {
+            match payloads
+                .iter()
+                .find(|(id, _)| id.as_ref() == entry.item.id.as_ref())
+            {
+                Some((_, payload)) => item_source_available(&entry.item, payload),
+                None => true,
+            }
+        });
+        let removed = before.saturating_sub(self.recent_ui_actions.len());
+        self.status = Some(ui_removed_stale_status("recent UI action", removed));
+        cx.notify();
+    }
+
     fn pin_ui_action(&mut self, entry: RecentUiEntry, cx: &mut Context<Self>) {
         self.pinned_ui_actions
             .retain(|pinned| pinned.item.id.as_ref() != entry.item.id.as_ref());
@@ -657,6 +677,27 @@ impl ShadcnUiPanel {
     fn clear_pinned_ui_actions(&mut self, cx: &mut Context<Self>) {
         self.pinned_ui_actions.clear();
         self.status = Some("Cleared pinned UI actions".into());
+        self.persist_pinned_ui_actions(cx);
+        cx.notify();
+    }
+
+    fn remove_stale_pinned_ui_actions(&mut self, cx: &mut Context<Self>) {
+        let before = self.pinned_ui_actions.len();
+        let mut payloads = Vec::with_capacity(self.pinned_ui_actions.len());
+        for entry in &self.pinned_ui_actions {
+            payloads.push((entry.item.id.clone(), self.payload_for_item(&entry.item)));
+        }
+        self.pinned_ui_actions.retain(|entry| {
+            match payloads
+                .iter()
+                .find(|(id, _)| id.as_ref() == entry.item.id.as_ref())
+            {
+                Some((_, payload)) => item_source_available(&entry.item, payload),
+                None => true,
+            }
+        });
+        let removed = before.saturating_sub(self.pinned_ui_actions.len());
+        self.status = Some(ui_removed_stale_status("pinned UI action", removed));
         self.persist_pinned_ui_actions(cx);
         cx.notify();
     }
@@ -1048,6 +1089,11 @@ impl ShadcnUiPanel {
             return None;
         }
 
+        let stale_count = self
+            .recent_ui_actions
+            .iter()
+            .filter(|entry| self.ui_history_entry_stale(entry))
+            .count();
         let mut rows = Vec::with_capacity(self.recent_ui_actions.len().min(MAX_RECENT_UI_ACTIONS));
         for (index, entry) in self
             .recent_ui_actions
@@ -1079,12 +1125,26 @@ impl ShadcnUiPanel {
                                 ),
                         )
                         .child(
-                            Button::new("shadcn-ui-clear-recent", "Clear")
-                                .style(ButtonStyle::Subtle)
-                                .size(ButtonSize::Compact)
-                                .on_click(cx.listener(|panel, _, _, cx| {
-                                    panel.clear_recent_ui_actions(cx);
-                                })),
+                            h_flex()
+                                .gap_1()
+                                .when(stale_count > 0, |this| {
+                                    this.child(
+                                        Button::new("shadcn-ui-remove-stale-recent", "Clean")
+                                            .style(ButtonStyle::Subtle)
+                                            .size(ButtonSize::Compact)
+                                            .on_click(cx.listener(|panel, _, _, cx| {
+                                                panel.remove_stale_recent_ui_actions(cx);
+                                            })),
+                                    )
+                                })
+                                .child(
+                                    Button::new("shadcn-ui-clear-recent", "Clear")
+                                        .style(ButtonStyle::Subtle)
+                                        .size(ButtonSize::Compact)
+                                        .on_click(cx.listener(|panel, _, _, cx| {
+                                            panel.clear_recent_ui_actions(cx);
+                                        })),
+                                ),
                         ),
                 )
                 .children(rows)
@@ -1097,6 +1157,11 @@ impl ShadcnUiPanel {
             return None;
         }
 
+        let stale_count = self
+            .pinned_ui_actions
+            .iter()
+            .filter(|entry| self.ui_history_entry_stale(entry))
+            .count();
         let mut rows = Vec::with_capacity(self.pinned_ui_actions.len().min(MAX_PINNED_UI_ACTIONS));
         for (index, entry) in self
             .pinned_ui_actions
@@ -1128,12 +1193,26 @@ impl ShadcnUiPanel {
                                 ),
                         )
                         .child(
-                            Button::new("shadcn-ui-clear-pinned", "Clear")
-                                .style(ButtonStyle::Subtle)
-                                .size(ButtonSize::Compact)
-                                .on_click(cx.listener(|panel, _, _, cx| {
-                                    panel.clear_pinned_ui_actions(cx);
-                                })),
+                            h_flex()
+                                .gap_1()
+                                .when(stale_count > 0, |this| {
+                                    this.child(
+                                        Button::new("shadcn-ui-remove-stale-pinned", "Clean")
+                                            .style(ButtonStyle::Subtle)
+                                            .size(ButtonSize::Compact)
+                                            .on_click(cx.listener(|panel, _, _, cx| {
+                                                panel.remove_stale_pinned_ui_actions(cx);
+                                            })),
+                                    )
+                                })
+                                .child(
+                                    Button::new("shadcn-ui-clear-pinned", "Clear")
+                                        .style(ButtonStyle::Subtle)
+                                        .size(ButtonSize::Compact)
+                                        .on_click(cx.listener(|panel, _, _, cx| {
+                                            panel.clear_pinned_ui_actions(cx);
+                                        })),
+                                ),
                         ),
                 )
                 .children(rows)
@@ -1165,10 +1244,7 @@ impl ShadcnUiPanel {
         let item = entry.item;
         let pin_item = item.clone();
         let remove_item = item.clone();
-        let source_available = {
-            let payload = self.payload_for_item(&item);
-            item_source_available(&item, &payload)
-        };
+        let source_available = !self.ui_item_stale(&item);
         let pin_label = if pinned {
             if source_available { "Unpin" } else { "Remove" }
         } else {
@@ -1330,6 +1406,15 @@ impl ShadcnUiPanel {
                     })),
             )
             .into_any_element()
+    }
+
+    fn ui_history_entry_stale(&self, entry: &RecentUiEntry) -> bool {
+        self.ui_item_stale(&entry.item)
+    }
+
+    fn ui_item_stale(&self, item: &CatalogItem) -> bool {
+        let payload = self.payload_for_item(item);
+        !item_source_available(item, &payload)
     }
 }
 
@@ -3247,6 +3332,14 @@ fn item_source_available(item: &CatalogItem, payload: &DraggedShadcnAsset) -> bo
             item.source,
             CatalogSource::ShadcnComponent | CatalogSource::ShadcnBlock
         ) && shadcn_manifest_path(item.id.as_ref()).is_some()
+}
+
+fn ui_removed_stale_status(section: &str, removed: usize) -> SharedString {
+    match removed {
+        0 => format!("No stale {section} entries").into(),
+        1 => format!("Removed 1 stale {section} entry").into(),
+        _ => format!("Removed {removed} stale {section} entries").into(),
+    }
 }
 
 fn local_preview_url_for_item(item: &CatalogItem) -> Option<String> {

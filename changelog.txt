@@ -1,3 +1,15 @@
+[2026-05-15] - Asset Panel Stale Section Cleanup
+
+ADDED:
+- Media pinned and recent sections now show a compact Clean action when stale local media entries are present.
+- UI pinned and recent sections now show the same Clean action when restored entries no longer have a valid local source or registry manifest.
+
+CHANGED:
+- Clean removes only stale entries, preserves valid rows, and persists pinned cleanup through the existing KeyValueStore path.
+
+NOTES:
+- This keeps restored working sets self-healing without scanning full catalogs, reloading providers, touching editor input, or changing WebPreview routing.
+
 [2026-05-15] - Asset Panel Stale Entry Recovery
 
 ADDED:
