@@ -1,3 +1,12 @@
+[2026-05-16] - Web Preview Executor Gate Helpers
+
+CHANGED:
+- WebPreview low-risk executors now share one permission, context, and audit readiness gate helper.
+- Reload, clear-data, navigation, and viewport executor blockers now reuse the same policy path while keeping action-specific messages.
+
+NOTES:
+- This is a maintainability slice before native click/type/key/scroll input work; no new browser input dispatch was added.
+
 [2026-05-16] - Web Preview Permissioned Viewport Executor
 
 ADDED:

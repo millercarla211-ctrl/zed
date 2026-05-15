@@ -292,6 +292,19 @@ const INTERACTIVE_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "clear_cache",
 ];
 
+#[derive(Clone, Copy, Debug)]
+struct AgentBrowserExecutorGate {
+    interactive_unlocked: bool,
+    context_ready: bool,
+    audit_ready: bool,
+}
+
+impl AgentBrowserExecutorGate {
+    fn ready_for_executor(self) -> bool {
+        self.interactive_unlocked && self.context_ready && self.audit_ready
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) enum BrowserEvent {
     UrlChanged(String),
@@ -1503,6 +1516,54 @@ impl WebPreviewView {
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_millis().min(u64::MAX as u128) as u64)
             .unwrap_or_default()
+    }
+
+    fn agent_browser_executor_gate(&self) -> AgentBrowserExecutorGate {
+        let context_ready = self.latest_page_diagnostics.is_some()
+            && self.latest_dom_snapshot.is_some()
+            && self.latest_action_targets.is_some()
+            && self.latest_readiness_probe.is_some();
+        let audit_ready = self.latest_wait_contract.is_some()
+            && self.latest_interaction_plan.is_some()
+            && self.latest_interaction_preflight.is_some()
+            && self.latest_interaction_receipt_template.is_some()
+            && self.latest_interaction_action_request.is_some()
+            && self.latest_blocked_interaction_receipt.is_some()
+            && self.latest_successful_interaction_receipt.is_some();
+
+        AgentBrowserExecutorGate {
+            interactive_unlocked: self.agent_action_permission.interactive_enabled(),
+            context_ready,
+            audit_ready,
+        }
+    }
+
+    fn agent_browser_executor_gate_blockers(
+        &self,
+        gate: AgentBrowserExecutorGate,
+        context_message: &'static str,
+        audit_message: &'static str,
+    ) -> Vec<Value> {
+        let mut blockers = Vec::new();
+        if !gate.interactive_unlocked {
+            blockers.push(serde_json::json!({
+                "code": "interactive_actions_locked",
+                "message": "Interactive Agent Browser actions are locked for this WebPreview session.",
+            }));
+        }
+        if !gate.context_ready {
+            blockers.push(serde_json::json!({
+                "code": "context_not_collected",
+                "message": context_message,
+            }));
+        }
+        if !gate.audit_ready {
+            blockers.push(serde_json::json!({
+                "code": "audit_contract_incomplete",
+                "message": audit_message,
+            }));
+        }
+        blockers
     }
 
     fn load_state_name(&self) -> &'static str {
@@ -3043,39 +3104,16 @@ impl WebPreviewView {
             "title": self.current_tab_title().as_ref(),
             "load_state": self.load_state_name(),
         });
-        let interactive_unlocked = self.agent_action_permission.interactive_enabled();
-        let context_ready = self.latest_page_diagnostics.is_some()
-            && self.latest_dom_snapshot.is_some()
-            && self.latest_action_targets.is_some()
-            && self.latest_readiness_probe.is_some();
-        let audit_ready = self.latest_wait_contract.is_some()
-            && self.latest_interaction_plan.is_some()
-            && self.latest_interaction_preflight.is_some()
-            && self.latest_interaction_receipt_template.is_some()
-            && self.latest_interaction_action_request.is_some()
-            && self.latest_blocked_interaction_receipt.is_some()
-            && self.latest_successful_interaction_receipt.is_some();
-        let gate_ready_for_executor = interactive_unlocked && context_ready && audit_ready;
-
-        let mut blockers = Vec::new();
-        if !interactive_unlocked {
-            blockers.push(serde_json::json!({
-                "code": "interactive_actions_locked",
-                "message": "Interactive Agent Browser actions are locked for this WebPreview session.",
-            }));
-        }
-        if !context_ready {
-            blockers.push(serde_json::json!({
-                "code": "context_not_collected",
-                "message": "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before reload dispatch.",
-            }));
-        }
-        if !audit_ready {
-            blockers.push(serde_json::json!({
-                "code": "audit_contract_incomplete",
-                "message": "Reload dispatch requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts.",
-            }));
-        }
+        let gate = self.agent_browser_executor_gate();
+        let interactive_unlocked = gate.interactive_unlocked;
+        let context_ready = gate.context_ready;
+        let audit_ready = gate.audit_ready;
+        let gate_ready_for_executor = gate.ready_for_executor();
+        let mut blockers = self.agent_browser_executor_gate_blockers(
+            gate,
+            "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before reload dispatch.",
+            "Reload dispatch requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts.",
+        );
 
         let mut browser_command_dispatched = false;
         let mut dispatch_error = None;
@@ -3222,39 +3260,16 @@ impl WebPreviewView {
             "title": self.current_tab_title().as_ref(),
             "load_state": self.load_state_name(),
         });
-        let interactive_unlocked = self.agent_action_permission.interactive_enabled();
-        let context_ready = self.latest_page_diagnostics.is_some()
-            && self.latest_dom_snapshot.is_some()
-            && self.latest_action_targets.is_some()
-            && self.latest_readiness_probe.is_some();
-        let audit_ready = self.latest_wait_contract.is_some()
-            && self.latest_interaction_plan.is_some()
-            && self.latest_interaction_preflight.is_some()
-            && self.latest_interaction_receipt_template.is_some()
-            && self.latest_interaction_action_request.is_some()
-            && self.latest_blocked_interaction_receipt.is_some()
-            && self.latest_successful_interaction_receipt.is_some();
-        let gate_ready_for_executor = interactive_unlocked && context_ready && audit_ready;
-
-        let mut blockers = Vec::new();
-        if !interactive_unlocked {
-            blockers.push(serde_json::json!({
-                "code": "interactive_actions_locked",
-                "message": "Interactive Agent Browser actions are locked for this WebPreview session.",
-            }));
-        }
-        if !context_ready {
-            blockers.push(serde_json::json!({
-                "code": "context_not_collected",
-                "message": "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before clearing browsing data.",
-            }));
-        }
-        if !audit_ready {
-            blockers.push(serde_json::json!({
-                "code": "audit_contract_incomplete",
-                "message": "Clear-data dispatch requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts.",
-            }));
-        }
+        let gate = self.agent_browser_executor_gate();
+        let interactive_unlocked = gate.interactive_unlocked;
+        let context_ready = gate.context_ready;
+        let audit_ready = gate.audit_ready;
+        let gate_ready_for_executor = gate.ready_for_executor();
+        let mut blockers = self.agent_browser_executor_gate_blockers(
+            gate,
+            "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before clearing browsing data.",
+            "Clear-data dispatch requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts.",
+        );
 
         let mut browser_command_dispatched = false;
         let mut dispatch_error = None;
@@ -3413,41 +3428,18 @@ impl WebPreviewView {
             "title": self.current_tab_title().as_ref(),
             "load_state": self.load_state_name(),
         });
-        let interactive_unlocked = self.agent_action_permission.interactive_enabled();
-        let context_ready = self.latest_page_diagnostics.is_some()
-            && self.latest_dom_snapshot.is_some()
-            && self.latest_action_targets.is_some()
-            && self.latest_readiness_probe.is_some();
-        let audit_ready = self.latest_wait_contract.is_some()
-            && self.latest_interaction_plan.is_some()
-            && self.latest_interaction_preflight.is_some()
-            && self.latest_interaction_receipt_template.is_some()
-            && self.latest_interaction_action_request.is_some()
-            && self.latest_blocked_interaction_receipt.is_some()
-            && self.latest_successful_interaction_receipt.is_some();
+        let gate = self.agent_browser_executor_gate();
+        let interactive_unlocked = gate.interactive_unlocked;
+        let context_ready = gate.context_ready;
+        let audit_ready = gate.audit_ready;
         let url_ready = normalized_url.is_ok();
-        let gate_ready_for_executor =
-            interactive_unlocked && context_ready && audit_ready && url_ready;
+        let gate_ready_for_executor = gate.ready_for_executor() && url_ready;
 
-        let mut blockers = Vec::new();
-        if !interactive_unlocked {
-            blockers.push(serde_json::json!({
-                "code": "interactive_actions_locked",
-                "message": "Interactive Agent Browser actions are locked for this WebPreview session.",
-            }));
-        }
-        if !context_ready {
-            blockers.push(serde_json::json!({
-                "code": "context_not_collected",
-                "message": "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before navigation dispatch.",
-            }));
-        }
-        if !audit_ready {
-            blockers.push(serde_json::json!({
-                "code": "audit_contract_incomplete",
-                "message": "Navigation dispatch requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts.",
-            }));
-        }
+        let mut blockers = self.agent_browser_executor_gate_blockers(
+            gate,
+            "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before navigation dispatch.",
+            "Navigation dispatch requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts.",
+        );
         if let Err(error) = &normalized_url {
             blockers.push(serde_json::json!({
                 "code": "invalid_url",
@@ -3631,39 +3623,16 @@ impl WebPreviewView {
             "load_state": self.load_state_name(),
             "viewport": previous_viewport.clone(),
         });
-        let interactive_unlocked = self.agent_action_permission.interactive_enabled();
-        let context_ready = self.latest_page_diagnostics.is_some()
-            && self.latest_dom_snapshot.is_some()
-            && self.latest_action_targets.is_some()
-            && self.latest_readiness_probe.is_some();
-        let audit_ready = self.latest_wait_contract.is_some()
-            && self.latest_interaction_plan.is_some()
-            && self.latest_interaction_preflight.is_some()
-            && self.latest_interaction_receipt_template.is_some()
-            && self.latest_interaction_action_request.is_some()
-            && self.latest_blocked_interaction_receipt.is_some()
-            && self.latest_successful_interaction_receipt.is_some();
-        let gate_ready_for_executor = interactive_unlocked && context_ready && audit_ready;
-
-        let mut blockers = Vec::new();
-        if !interactive_unlocked {
-            blockers.push(serde_json::json!({
-                "code": "interactive_actions_locked",
-                "message": "Interactive Agent Browser actions are locked for this WebPreview session.",
-            }));
-        }
-        if !context_ready {
-            blockers.push(serde_json::json!({
-                "code": "context_not_collected",
-                "message": "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before viewport dispatch.",
-            }));
-        }
-        if !audit_ready {
-            blockers.push(serde_json::json!({
-                "code": "audit_contract_incomplete",
-                "message": "Viewport dispatch requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts.",
-            }));
-        }
+        let gate = self.agent_browser_executor_gate();
+        let interactive_unlocked = gate.interactive_unlocked;
+        let context_ready = gate.context_ready;
+        let audit_ready = gate.audit_ready;
+        let gate_ready_for_executor = gate.ready_for_executor();
+        let mut blockers = self.agent_browser_executor_gate_blockers(
+            gate,
+            "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before viewport dispatch.",
+            "Viewport dispatch requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts.",
+        );
 
         let mut browser_command_dispatched = false;
         let mut dispatch_error = None;
