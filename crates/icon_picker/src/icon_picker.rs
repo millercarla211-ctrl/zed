@@ -105,6 +105,7 @@ impl ExternalIcon {
 struct IconPackSummary {
     prefix: SharedString,
     name: SharedString,
+    tooltip: SharedString,
     total: usize,
     width: u32,
     height: u32,
@@ -661,7 +662,7 @@ impl IconPickerPanel {
             self.render_pack_button(
                 "all",
                 "All sets",
-                None,
+                "All sets".into(),
                 self.external_icon_total_count(),
                 current,
                 cx,
@@ -669,15 +670,22 @@ impl IconPickerPanel {
             .into_any_element(),
         );
         pack_buttons.push(
-            self.render_pack_button("zed", "Zed", None, self.zed_icons.len(), current, cx)
-                .into_any_element(),
+            self.render_pack_button(
+                "zed",
+                "Zed",
+                "Zed".into(),
+                self.zed_icons.len(),
+                current,
+                cx,
+            )
+            .into_any_element(),
         );
         for pack in &self.packs {
             pack_buttons.push(
                 self.render_pack_button(
                     pack.prefix.as_ref(),
                     pack.name.as_ref(),
-                    Some(format!("{} ({})", pack.name.as_ref(), pack.prefix.as_ref()).into()),
+                    pack.tooltip.clone(),
                     pack.total,
                     current,
                     cx,
@@ -740,7 +748,7 @@ impl IconPickerPanel {
         &self,
         id: &str,
         label: &str,
-        tooltip: Option<SharedString>,
+        tooltip_label: SharedString,
         count: usize,
         current: &str,
         cx: &mut Context<Self>,
@@ -749,7 +757,6 @@ impl IconPickerPanel {
         let id_string = id.to_string();
         let button_id = icon_element_id("icon-picker-pack-", id);
         let button_label = icon_count_label(label, count);
-        let tooltip_label = tooltip.unwrap_or_else(|| label.to_string().into());
         div().flex_none().child(
             Button::new(button_id, button_label)
                 .style(ButtonStyle::Subtle)
@@ -1037,6 +1044,15 @@ fn icon_count_label(label: &str, count: usize) -> String {
     text
 }
 
+fn icon_pack_tooltip(name: &str, prefix: &str) -> SharedString {
+    let mut text = String::with_capacity(name.len() + prefix.len() + 3);
+    text.push_str(name);
+    text.push_str(" (");
+    text.push_str(prefix);
+    text.push(')');
+    text.into()
+}
+
 fn icon_fraction_label(left: usize, right: usize) -> SharedString {
     let mut text = String::with_capacity(24);
     let _ = write!(text, "{left} / {right}");
@@ -1239,6 +1255,7 @@ fn static_icon_pack_summaries() -> Vec<IconPackSummary> {
         packs.push(IconPackSummary {
             prefix: prefix.into(),
             name: name.into(),
+            tooltip: icon_pack_tooltip(name, prefix),
             total,
             width: width.max(1),
             height: height.max(1),

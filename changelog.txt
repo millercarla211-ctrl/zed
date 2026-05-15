@@ -1,3 +1,11 @@
+[2026-05-15] - Icon Pack Tooltip Cache Cleanup
+
+CHANGED:
+- `crates/icon_picker` now stores external pack tooltip labels in the hardcoded pack summaries so visible pack tabs reuse the same `Name (prefix)` text instead of formatting it during every render.
+
+NOTES:
+- Preserved exact pack tab labels, counts, hover text, selected states, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Panel Header Count Label Cleanup
 
 CHANGED:
