@@ -266,7 +266,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.action.scroll_preflight", "available", "Select a scrollable page or element target and emit the receipt a future native scroll action must satisfy without dispatching input."),
             capability("browser.action.native_input_bridge", "planned_manual_qa_gate", "Trace the disabled-by-default native input bridge readiness before click, type, key, or scroll dispatch can be enabled."),
             capability("browser.action.native_click_trace", "available", "Translate the latest click preflight target into native WebPreview coordinates and emit a trace receipt without dispatching input."),
-            capability("browser.action.native_type_trace", "available", "Translate the latest type preflight target into native WebPreview focus and coordinate planning without dispatching input."),
+            capability("browser.action.native_type_trace", "available", "Translate the latest type preflight target into native WebPreview coordinate and keyboard-focus planning without dispatching input."),
             capability("browser.action.native_key_trace", "available", "Translate the latest key preflight candidate into native keyboard-focus planning without dispatching input."),
             capability("browser.action.native_scroll_trace", "available", "Translate the latest scroll preflight target into native wheel-coordinate planning without dispatching input."),
             capability("browser.action.native_history_trace", "available", "Trace native back/forward readiness and receipt requirements without navigating the page."),

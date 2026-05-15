@@ -4780,47 +4780,79 @@ impl WebPreviewView {
             }));
         }
 
+        let native_keyboard_focus = self.native_preview_has_keyboard_focus(window);
+        let preview_focused = self.focus_handle.is_focused(window);
+        let url_editor_focused = self.url_editor_focus_handle.is_focused(window);
+        if config.action == "type_native_trace" {
+            if !native_keyboard_focus {
+                blockers.push(serde_json::json!({
+                    "code": "native_keyboard_focus_missing",
+                    "message": "The WebPreview does not currently own native keyboard focus.",
+                    "required_action": "Click inside the WebPreview body and rerun type preflight before enabling native type dispatch.",
+                }));
+            }
+            if url_editor_focused {
+                blockers.push(serde_json::json!({
+                    "code": "url_editor_focus_active",
+                    "message": "The WebPreview URL editor is focused, so typed text must stay in Zed UI instead of the page.",
+                    "required_action": "Leave the URL editor, focus the page body or a page input, and rerun type preflight.",
+                }));
+            }
+        }
+
         let scale_factor = window.scale_factor() as f64;
         let client_logical_x = bounds.origin.x.as_f32() as f64 + viewport_x;
         let client_logical_y = bounds.origin.y.as_f32() as f64 + viewport_y;
         let client_physical_x = client_logical_x * scale_factor;
         let client_physical_y = client_logical_y * scale_factor;
 
-        (
-            Some(serde_json::json!({
-                "coordinate_space": "trace_only_css_viewport_to_window_client",
-                "target_rect_css_viewport": {
-                    "x": rect.x,
-                    "y": rect.y,
-                    "width": rect.width,
-                    "height": rect.height,
-                },
-                "target_center_css_viewport": {
-                    "x": viewport_x,
-                    "y": viewport_y,
-                },
-                "host_bounds_logical": {
-                    "x": bounds.origin.x.as_f32(),
-                    "y": bounds.origin.y.as_f32(),
-                    "width": host_width,
-                    "height": host_height,
-                },
-                "window_client_logical_point": {
-                    "x": client_logical_x,
-                    "y": client_logical_y,
-                },
-                "window_client_physical_point": {
-                    "x": client_physical_x,
-                    "y": client_physical_y,
-                },
-                "scale_factor": scale_factor,
-                "zoom_factor": self.zoom_factor,
-                "viewport_mode": self.viewport_mode.snapshot(),
-                "target_inside_viewport": target_inside_viewport,
-                "dispatch_note": format!("Coordinates are calculated for audit only; no {} input is sent by this trace.", config.label),
-            })),
-            blockers,
-        )
+        let mut plan = serde_json::json!({
+            "coordinate_space": "trace_only_css_viewport_to_window_client",
+            "target_rect_css_viewport": {
+                "x": rect.x,
+                "y": rect.y,
+                "width": rect.width,
+                "height": rect.height,
+            },
+            "target_center_css_viewport": {
+                "x": viewport_x,
+                "y": viewport_y,
+            },
+            "host_bounds_logical": {
+                "x": bounds.origin.x.as_f32(),
+                "y": bounds.origin.y.as_f32(),
+                "width": host_width,
+                "height": host_height,
+            },
+            "window_client_logical_point": {
+                "x": client_logical_x,
+                "y": client_logical_y,
+            },
+            "window_client_physical_point": {
+                "x": client_physical_x,
+                "y": client_physical_y,
+            },
+            "scale_factor": scale_factor,
+            "zoom_factor": self.zoom_factor,
+            "viewport_mode": self.viewport_mode.snapshot(),
+            "target_inside_viewport": target_inside_viewport,
+            "dispatch_note": format!("Coordinates are calculated for audit only; no {} input is sent by this trace.", config.label),
+        });
+        if config.action == "type_native_trace"
+            && let Some(object) = plan.as_object_mut()
+        {
+            object.insert(
+                "keyboard_focus".to_string(),
+                serde_json::json!({
+                    "native_keyboard_focus": native_keyboard_focus,
+                    "preview_focused": preview_focused,
+                    "url_editor_focused": url_editor_focused,
+                    "required_before_dispatch": "WebPreview must own native keyboard focus and the URL editor must be unfocused before any type executor can send text.",
+                }),
+            );
+        }
+
+        (Some(plan), blockers)
     }
 
     fn native_key_trace_plan(
@@ -6535,7 +6567,7 @@ impl WebPreviewView {
                     "Real native type/key dispatch is still disabled.",
                     "Manual Windows QA must pass before extending dispatch beyond native click, scroll, history, and cache-only reset paths."
                 ],
-                "next_target": "Manually validate the Windows native click, scroll, back, forward, and cache-only reset executors, then add type/key dispatch behind fresh preflight and keyboard-focus receipt logging."
+                "next_target": "Manually validate the Windows native click, scroll, back, forward, cache-only reset, and keyboard-focus type trace receipts, then add type/key dispatch behind the same focus gates."
             },
             "notes": [
                 "This checklist is safe to copy/send because it does not run page JavaScript or native browser commands.",
@@ -6899,7 +6931,7 @@ impl WebPreviewView {
                             {"id": "browser.action.scroll_preflight", "state": "available", "description": "Select a scrollable page or element target and emit the receipt a future native scroll action must satisfy without dispatching input."},
                             {"id": "browser.action.native_input_bridge", "state": "planned_manual_qa_gate", "description": "Trace the disabled-by-default native input bridge readiness before click, type, key, or scroll dispatch can be enabled."},
                             {"id": "browser.action.native_click_trace", "state": "available", "description": "Translate the latest click preflight target into native WebPreview coordinates and emit a trace receipt without dispatching input."},
-                            {"id": "browser.action.native_type_trace", "state": "available", "description": "Translate the latest type preflight target into native WebPreview focus and coordinate planning without dispatching input."},
+                            {"id": "browser.action.native_type_trace", "state": "available", "description": "Translate the latest type preflight target into native WebPreview coordinate and keyboard-focus planning without dispatching input."},
                             {"id": "browser.action.native_key_trace", "state": "available", "description": "Translate the latest key preflight candidate into native keyboard-focus planning without dispatching input."},
                             {"id": "browser.action.native_scroll_trace", "state": "available", "description": "Translate the latest scroll preflight target into native wheel-coordinate planning without dispatching input."},
                             {"id": "browser.action.native_history_trace", "state": "available", "description": "Trace native back/forward readiness and receipt requirements without navigating the page."},

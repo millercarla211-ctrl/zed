@@ -1,3 +1,12 @@
+[2026-05-16] - Web Preview Keyboard Focus Readiness
+
+CHANGED:
+- Native type traces now record WebPreview native keyboard focus, preview focus, and URL-editor focus state before any future type executor can be considered ready.
+- Browser plugin manifests now describe native type tracing as coordinate plus keyboard-focus planning.
+
+NOTES:
+- This slice does not dispatch text or key input; it tightens the receipt gate so future type execution cannot reuse stale WebPreview focus state.
+
 [2026-05-16] - Web Preview Scoped Cache Reset Executor
 
 ADDED:
