@@ -579,7 +579,7 @@ impl MediaPanel {
         let mut match_count = 0;
         let mut seen_urls = HashSet::with_capacity(candidate_count);
 
-        for asset in static_assets.iter().chain(self.remote_assets.iter()) {
+        for asset in static_assets {
             if !kind_filter.matches(asset.kind) {
                 continue;
             }
@@ -589,6 +589,21 @@ impl MediaPanel {
             }
 
             if !query_terms.is_empty() && !remote_media_search_matches(asset, query_terms) {
+                continue;
+            }
+
+            match_count += 1;
+            if visible_assets.len() < limit {
+                visible_assets.push(asset.clone());
+            }
+        }
+
+        for asset in &self.remote_assets {
+            if !kind_filter.matches(asset.kind) {
+                continue;
+            }
+
+            if !seen_urls.insert(asset.url.as_ref()) {
                 continue;
             }
 

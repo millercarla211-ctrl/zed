@@ -1,3 +1,12 @@
+[2026-05-15] - Media Remote Provider Result Depth
+
+CHANGED:
+- `crates/media_panel` now preserves live provider-ranked remote rows after kind filtering and URL de-dupe instead of applying the panel's strict local substring matcher a second time.
+- Static curated remote rows still use the local text matcher so built-in samples remain searchable without flooding typed searches.
+
+NOTES:
+- This should make typed Media panel searches show richer Openverse, Wikimedia, NASA, museum, Library of Congress, and Internet Archive result sets while preserving local media matching, refresh behavior, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Media Remote Refresh Control
 
 ADDED:
