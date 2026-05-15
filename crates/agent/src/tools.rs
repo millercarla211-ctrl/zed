@@ -160,6 +160,7 @@ macro_rules! tools {
 tools! {
     AgentPluginBootstrapTool,
     AgentBrowserPayloadTool,
+    AgentBrowserPayloadStageTool,
     AgentPluginCatalogTool,
     ApplyCodeActionTool,
     CopyPathTool,

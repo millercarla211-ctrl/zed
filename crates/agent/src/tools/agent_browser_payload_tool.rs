@@ -1,7 +1,7 @@
-use crate::{AgentTool, ToolCallEventStream, ToolInput};
+use crate::{AgentTool, ToolCallEventStream, ToolInput, ToolPermissionContext};
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
-use gpui::{App, SharedString, Task};
+use gpui::{App, ClipboardItem, SharedString, Task};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -12,6 +12,7 @@ use std::{
 
 const MAX_TYPE_TEXT_CHARS: usize = 4096;
 pub const AGENT_BROWSER_PAYLOAD_TOOL_NAME: &str = "compose_agent_browser_action_payload";
+pub const AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME: &str = "stage_agent_browser_action_payload";
 const ALLOWED_KEYS: &[&str] = &[
     "Escape",
     "Enter",
@@ -141,6 +142,133 @@ impl AgentTool for AgentBrowserPayloadTool {
             }));
 
             if valid { Ok(output) } else { Err(output) }
+        })
+    }
+}
+
+/// Stages a validated WebPreview Browser payload packet onto the clipboard.
+///
+/// This tool does not import the payload into WebPreview or execute browser input. It only writes
+/// the validated packet returned by `compose_agent_browser_action_payload` to the clipboard after
+/// explicit authorization, so the user or Agent can invoke WebPreview's payload import action next.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct AgentBrowserPayloadStageToolInput {
+    /// The browser payload to compose and stage.
+    pub payload: AgentBrowserPayloadToolInput,
+}
+
+impl Default for AgentBrowserPayloadStageToolInput {
+    fn default() -> Self {
+        Self {
+            payload: AgentBrowserPayloadToolInput {
+                include_handoff_instructions: false,
+                ..Default::default()
+            },
+        }
+    }
+}
+
+pub struct AgentBrowserPayloadStageTool;
+
+impl AgentTool for AgentBrowserPayloadStageTool {
+    type Input = AgentBrowserPayloadStageToolInput;
+    type Output = String;
+
+    const NAME: &'static str = AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME;
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Execute
+    }
+
+    fn initial_title(
+        &self,
+        input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        match input.map(|input| input.payload.action) {
+            Ok(AgentBrowserPayloadAction::Click) => "Stage browser click payload".into(),
+            Ok(AgentBrowserPayloadAction::TypeText) => "Stage browser type payload".into(),
+            Ok(AgentBrowserPayloadAction::PressKey) => "Stage browser key payload".into(),
+            Ok(AgentBrowserPayloadAction::Scroll) => "Stage browser scroll payload".into(),
+            Err(_) => "Stage browser action payload".into(),
+        }
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |cx| {
+            let input = input.recv().await.map_err(|error| error.to_string())?;
+            let result = compose_agent_browser_payload(&input.payload);
+            let valid = result
+                .pointer("/result/valid")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            if !valid {
+                let output = serde_json::to_string_pretty(&result)
+                    .map_err(|error| format!("Failed to serialize browser payload: {error}"))?;
+                event_stream.update_fields(
+                    acp::ToolCallUpdateFields::new().title("Browser payload needs fixes"),
+                );
+                return Err(output);
+            }
+
+            let packet = result
+                .get("payload_packet")
+                .cloned()
+                .ok_or_else(|| "Missing payload_packet in composed browser payload".to_string())?;
+            let packet_json = serde_json::to_string_pretty(&packet)
+                .map_err(|error| format!("Failed to serialize browser payload packet: {error}"))?;
+
+            let context = ToolPermissionContext::new(
+                Self::NAME,
+                vec![
+                    action_name(input.payload.action).to_string(),
+                    format!("{} clipboard characters", packet_json.chars().count()),
+                ],
+            );
+            let authorize = cx
+                .update(|cx| {
+                    event_stream.authorize(self.initial_title(Ok(input.clone()), cx), context, cx)
+                })
+                .map_err(|error| error.to_string())?;
+            authorize.await.map_err(|error| error.to_string())?;
+
+            cx.update(|cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(packet_json.clone()));
+            })
+            .map_err(|error| error.to_string())?;
+
+            let output = serde_json::json!({
+                "schema": "zed.agent_plugins.browser_action_payload_stage_result.v1",
+                "result": {
+                    "generated_at_ms": current_epoch_millis(),
+                    "status": "staged_to_clipboard",
+                    "action": action_name(input.payload.action),
+                    "clipboard_characters": packet_json.chars().count(),
+                    "next_step": "Use WebPreview's Import Agent Payload from Clipboard action, then run the matching permissioned executor only after unlock, fresh preflight, focus, QA, and receipt gates pass."
+                },
+                "payload_packet": packet,
+                "safety": {
+                    "tool_dispatches_browser_input": false,
+                    "tool_imports_into_webpreview": false,
+                    "clipboard_written_after_authorization": true,
+                    "requires_webpreview_permission_gate": true,
+                    "receipts_required_for_execution": true
+                }
+            });
+            let output = serde_json::to_string_pretty(&output)
+                .map_err(|error| format!("Failed to serialize staging result: {error}"))?;
+
+            event_stream.update_fields(
+                acp::ToolCallUpdateFields::new().title("Staged browser payload"),
+            );
+
+            Ok(output)
         })
     }
 }

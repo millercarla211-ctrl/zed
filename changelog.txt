@@ -1,3 +1,12 @@
+[2026-05-16] - Agent Browser Payload Staging Tool
+
+ADDED:
+- Added the permissioned `stage_agent_browser_action_payload` Agent tool for writing validated Browser payload packets to the clipboard.
+- Registered the staging tool as a default Agent tool and advertised it through both plugin catalogs beside the read-only composer.
+
+NOTES:
+- Staging requires explicit tool authorization and only writes the validated `zed.web_preview.agent_browser_executor_payload.v1` packet to the clipboard; WebPreview import, permission unlock, preflight, focus gates, QA, and receipt logging remain separate requirements.
+
 [2026-05-16] - Agent Browser Payload Composer Tool
 
 ADDED:
