@@ -247,6 +247,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_interaction_receipt_template_to_agent",
     "copy_interaction_action_request",
     "send_interaction_action_request_to_agent",
+    "copy_blocked_interaction_receipt",
+    "send_blocked_interaction_receipt_to_agent",
     "take_screenshot",
     "inspect_element",
 ];
@@ -429,6 +431,7 @@ pub struct WebPreviewView {
     latest_interaction_preflight: Option<Value>,
     latest_interaction_receipt_template: Option<Value>,
     latest_interaction_action_request: Option<Value>,
+    latest_blocked_interaction_receipt: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -611,6 +614,7 @@ impl WebPreviewView {
             latest_interaction_preflight: None,
             latest_interaction_receipt_template: None,
             latest_interaction_action_request: None,
+            latest_blocked_interaction_receipt: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1068,6 +1072,7 @@ impl WebPreviewView {
             "interaction_preflight": self.latest_interaction_preflight_summary(),
             "interaction_receipt_template": self.latest_interaction_receipt_template_summary(),
             "interaction_action_request": self.latest_interaction_action_request_summary(),
+            "blocked_interaction_receipt": self.latest_blocked_interaction_receipt_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1098,6 +1103,8 @@ impl WebPreviewView {
                 "send_interaction_receipt_template_to_agent": true,
                 "copy_interaction_action_request": true,
                 "send_interaction_action_request_to_agent": true,
+                "copy_blocked_interaction_receipt": true,
+                "send_blocked_interaction_receipt_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1234,6 +1241,20 @@ impl WebPreviewView {
             "request_id": request.pointer("/request/envelope/request_id").and_then(Value::as_str),
             "status": request.pointer("/request/envelope/status").and_then(Value::as_str),
             "counts": request.pointer("/request/counts").cloned(),
+        }))
+    }
+
+    fn latest_blocked_interaction_receipt_summary(&self) -> Option<Value> {
+        let receipt = self.latest_blocked_interaction_receipt.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at": receipt.pointer("/receipt/timestamp").and_then(Value::as_str),
+            "url": receipt.pointer("/receipt/url").and_then(Value::as_str),
+            "title": receipt.pointer("/receipt/title").and_then(Value::as_str),
+            "ready_state": receipt.pointer("/receipt/ready_state").and_then(Value::as_str),
+            "permission": receipt.pointer("/receipt/permission").cloned(),
+            "outcome": receipt.pointer("/receipt/blocked_receipt/outcome").and_then(Value::as_str),
+            "blockers": receipt.pointer("/receipt/blocked_receipt/error/blockers").cloned(),
+            "counts": receipt.pointer("/receipt/counts").cloned(),
         }))
     }
 
@@ -1991,6 +2012,146 @@ impl WebPreviewView {
 
     fn send_interaction_action_request_to_agent(&mut self, cx: &mut Context<Self>) {
         self.request_interaction_action_request("agent", cx);
+    }
+
+    fn blocked_interaction_receipt_snapshot(&self, payload: &Value, window: &Window) -> Value {
+        let mut receipt = payload.clone();
+        if let Some(receipt) = receipt.as_object_mut() {
+            receipt.remove("kind");
+            receipt.remove("action");
+            let interactive_enabled = self.agent_action_permission.interactive_enabled();
+            receipt.insert(
+                "permission".to_string(),
+                self.agent_action_permission.snapshot(),
+            );
+            receipt.insert(
+                "permission_gate".to_string(),
+                serde_json::json!({
+                    "interactive_unlocked": interactive_enabled,
+                    "status": if interactive_enabled {
+                        "unlocked"
+                    } else {
+                        "locked"
+                    },
+                    "message": if interactive_enabled {
+                        "The Zed permission gate is unlocked; page preflight blockers may still block execution."
+                    } else {
+                        "Interactive actions are locked, so the attempted action must be recorded as blocked."
+                    },
+                }),
+            );
+            if let Some(blocked_receipt) = receipt
+                .get_mut("blocked_receipt")
+                .and_then(Value::as_object_mut)
+            {
+                blocked_receipt.insert(
+                    "permission_mode".to_string(),
+                    serde_json::json!(if interactive_enabled {
+                        "interactive"
+                    } else {
+                        "read_only"
+                    }),
+                );
+                if !interactive_enabled {
+                    blocked_receipt.insert("outcome".to_string(), serde_json::json!("blocked"));
+                    let permission_blocker = serde_json::json!({
+                        "code": "interactive_actions_locked",
+                        "message": "Zed interactive browser actions are locked for this WebPreview session.",
+                    });
+                    if let Some(error) = blocked_receipt
+                        .get_mut("error")
+                        .and_then(Value::as_object_mut)
+                    {
+                        error.insert(
+                            "code".to_string(),
+                            serde_json::json!("interactive_actions_locked"),
+                        );
+                        error.insert(
+                            "message".to_string(),
+                            serde_json::json!(
+                                "The browser action was blocked by Zed's interactive permission gate."
+                            ),
+                        );
+                        match error.get_mut("blockers").and_then(Value::as_array_mut) {
+                            Some(blockers) => blockers.push(permission_blocker),
+                            None => {
+                                error.insert(
+                                    "blockers".to_string(),
+                                    serde_json::json!([permission_blocker]),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            if !interactive_enabled {
+                receipt.insert(
+                    "zed_blocker".to_string(),
+                    serde_json::json!({
+                        "code": "interactive_actions_locked",
+                        "message": "Zed interactive browser actions are locked for this WebPreview session.",
+                    }),
+                );
+            }
+        }
+
+        serde_json::json!({
+            "schema": "zed.web_preview.blocked_interaction_receipt.v1",
+            "session": self.browser_session_snapshot(window),
+            "receipt": receipt,
+        })
+    }
+
+    fn blocked_interaction_receipt_json(receipt: &Value) -> String {
+        serde_json::to_string_pretty(receipt).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn blocked_interaction_receipt_agent_blocks(&self, receipt: &Value) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = receipt.pointer("/receipt/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview blocked interaction receipt:\n\n```json\n{}\n```",
+            Self::blocked_interaction_receipt_json(receipt)
+        ))));
+        blocks
+    }
+
+    fn request_blocked_interaction_receipt(
+        &mut self,
+        action: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let script = format!(
+            "window.__zedWebPreview && window.__zedWebPreview.collectBlockedInteractionReceipt('{action}');"
+        );
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(&script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Collecting blocked interaction receipt", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("Blocked interaction receipt is unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic(
+                    "Blocked interaction receipt crashed before collection",
+                    cx,
+                );
+            }
+        }
+    }
+
+    fn copy_blocked_interaction_receipt(&mut self, cx: &mut Context<Self>) {
+        self.request_blocked_interaction_receipt("copy", cx);
+    }
+
+    fn send_blocked_interaction_receipt_to_agent(&mut self, cx: &mut Context<Self>) {
+        self.request_blocked_interaction_receipt("agent", cx);
     }
 
     fn agent_browser_action_manifest(&self, window: &Window) -> Value {
@@ -2808,6 +2969,56 @@ impl WebPreviewView {
                     }
                 }
             }
+            "blocked-interaction-receipt" => {
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let action = payload
+                        .get("action")
+                        .and_then(Value::as_str)
+                        .unwrap_or("copy");
+                    let receipt = self.blocked_interaction_receipt_snapshot(&payload, window);
+                    self.latest_blocked_interaction_receipt = Some(receipt.clone());
+
+                    match action {
+                        "agent" => {
+                            self.append_content_blocks_to_agent_panel(
+                                self.blocked_interaction_receipt_agent_blocks(&receipt),
+                                window,
+                                cx,
+                            );
+                            self.show_toast(
+                                "Sent blocked interaction receipt to the agent panel",
+                                cx,
+                            );
+                        }
+                        _ => {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                Self::blocked_interaction_receipt_json(&receipt),
+                            ));
+                            self.show_toast(
+                                "Copied web preview blocked interaction receipt JSON",
+                                cx,
+                            );
+                        }
+                    }
+
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.report_action_error(
+                            "Blocked interaction receipt collection failed",
+                            error,
+                            cx,
+                        );
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "Blocked interaction receipt crashed while collecting page data",
+                            cx,
+                        );
+                    }
+                }
+            }
             "capture-area" => {
                 match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
                     let scale = payload
@@ -3387,6 +3598,30 @@ impl WebPreviewView {
                                     move |_, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_interaction_action_request_to_agent(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Blocked Receipt")
+                                .icon(IconName::Warning)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_blocked_interaction_receipt(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Blocked Receipt to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_blocked_interaction_receipt_to_agent(cx);
                                         });
                                     }
                                 }),
@@ -4365,6 +4600,7 @@ impl Item for WebPreviewView {
                 latest_interaction_preflight: None,
                 latest_interaction_receipt_template: None,
                 latest_interaction_action_request: None,
+                latest_blocked_interaction_receipt: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
@@ -6674,6 +6910,59 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     };
   };
 
+  const blockedInteractionReceipt = (actionTargets, recommended) => {
+    const actionEnvelope = interactionActionRequestEnvelope(actionTargets, recommended);
+    const preflight = interactionPreflight(actionTargets, recommended);
+    const baseReceipt = interactionReceiptTemplate(actionTargets, recommended);
+    const blockers = preflight.blockers.slice();
+    if (actionEnvelope.status === "blocked_by_preflight" && blockers.length === 0) {
+      blockers.push({
+        code: "preflight_not_ready",
+        message: "The action request envelope reported a blocked preflight."
+      });
+    }
+    return {
+      schema: "zed.web_preview.interaction_receipt.v1",
+      action_id: baseReceipt.action_id,
+      request_id: actionEnvelope.request_id,
+      action: "not_selected",
+      selector: null,
+      planned_at: actionEnvelope.generated_at,
+      attempted_at: new Date().toISOString(),
+      permission_mode: "unknown_until_rust_gate_is_applied",
+      preflight_timestamp: new Date().toISOString(),
+      before_context: baseReceipt.before_context,
+      after_context: {
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState,
+        focused_selector: document.activeElement instanceof Element ? cssSelector(document.activeElement) : null,
+        scroll_x: Math.round(window.scrollX || 0),
+        scroll_y: Math.round(window.scrollY || 0),
+        pending_network: runtimeState.pendingNetwork,
+        dom_quiet_for_ms: readinessQuietForMs(),
+        busy_indicators: readinessBusyCount(),
+        runtime_error_count: runtimeEvents.console.filter((event) => event.level === "error").length,
+        failed_network_count: runtimeEvents.network.filter((event) => event.ok === false || event.status >= 400).length
+      },
+      outcome: "blocked",
+      error: {
+        code: blockers.length > 0 ? "preflight_blocked" : "permission_gate_pending",
+        message: blockers.length > 0
+          ? "The browser action was blocked by page readiness or safety checks."
+          : "The browser action must be blocked unless Rust confirms interactive permission is unlocked.",
+        blockers
+      },
+      dry_run_only: true,
+      action_request: actionEnvelope,
+      notes: [
+        "This is a blocked-action audit receipt, not an executed browser action.",
+        "Rust adds the live Zed permission gate to this receipt snapshot.",
+        "Future executors should emit this shape whenever an action is denied before input dispatch."
+      ]
+    };
+  };
+
   installRuntimeCapture();
 
   window.__zedWebPreview = {
@@ -7210,6 +7499,55 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
           "This action request envelope is read-only and does not perform browser input.",
           "Future interactive tools should accept only this schema, refresh preflight, and emit the included receipt template.",
           "Keep URL bar, tabs, and Zed overlay UI under GPUI priority; only browser body targets are eligible."
+        ]
+      });
+    },
+
+    collectBlockedInteractionReceipt(action = "copy") {
+      try { installMutationCapture(); } catch (_error) {}
+      const actionTargets = collectActionTargetRows();
+      const selectorContracts = waitSelectorContracts();
+      const textCandidates = waitTextCandidates();
+      const recommended = recommendedWaitRecipe();
+      const blockedReceipt = blockedInteractionReceipt(actionTargets, recommended);
+
+      post({
+        kind: "blocked-interaction-receipt",
+        action,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState,
+        blocked_receipt: blockedReceipt,
+        recommended_wait: recommended,
+        permissions: {
+          required_for_interactive_actions: true,
+          current_payload_executes_actions: false,
+          user_must_unlock_interactive_actions_in_zed: true,
+          blocked_receipt_only: true
+        },
+        counts: {
+          action_targets: actionTargets.targets.length,
+          selector_contracts: selectorContracts.length,
+          text_candidates: textCandidates.length,
+          blockers: blockedReceipt.error.blockers.length,
+          pending_network: runtimeState.pendingNetwork,
+          busy_indicators: readinessBusyCount(),
+          runtime_errors: runtimeEvents.console.filter((event) => event.level === "error").length,
+          failed_network: runtimeEvents.network.filter((event) => event.ok === false || event.status >= 400).length
+        },
+        selector_contracts: selectorContracts.slice(0, 12),
+        text_candidates: textCandidates.slice(0, 12),
+        mutation: {
+          observed: mutationState.observed,
+          count: mutationState.count,
+          last_mutation_at: mutationState.lastMutationAt,
+          quiet_for_ms: readinessQuietForMs()
+        },
+        notes: [
+          "This blocked receipt is read-only and does not perform browser input.",
+          "Use it when a future interactive request is denied by Zed permission or page preflight.",
+          "A successful future action must emit a normal interaction receipt with after-action context."
         ]
       });
     },

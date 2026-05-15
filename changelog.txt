@@ -1,3 +1,13 @@
+[2026-05-16] - Web Preview Blocked Interaction Receipt
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Blocked Receipt" and "Send Blocked Receipt to Agent".
+- The WebPreview bridge now produces a read-only blocked interaction receipt with preflight blockers, before/after page context, runtime/network counts, and the related action request envelope.
+- Rust-side WebPreview snapshots enrich blocked receipts with the current Zed interactive-action permission gate and remember the latest blocked receipt in session JSON.
+
+NOTES:
+- This makes denied future browser actions auditable before any click, type, key, or scroll execution is enabled.
+
 [2026-05-16] - Web Preview Action Request Envelope
 
 ADDED:
