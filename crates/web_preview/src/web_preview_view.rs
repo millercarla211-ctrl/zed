@@ -274,6 +274,7 @@ pub struct WebPreviewView {
     browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
     deferred_ipc_messages: Vec<String>,
     ipc_flush_scheduled: bool,
+    latest_page_diagnostics: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -443,6 +444,7 @@ impl WebPreviewView {
             browser_events,
             deferred_ipc_messages: Vec::new(),
             ipc_flush_scheduled: false,
+            latest_page_diagnostics: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -882,6 +884,7 @@ impl WebPreviewView {
                 "count": self.bookmarks.len(),
                 "active_url_bookmarked": self.is_active_url_bookmarked(),
             },
+            "page_diagnostics": self.latest_page_diagnostics_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -892,12 +895,25 @@ impl WebPreviewView {
                 "copy_session_info": true,
                 "copy_session_json": true,
                 "send_session_to_agent": true,
+                "copy_page_diagnostics": true,
+                "send_page_diagnostics_to_agent": true,
                 "screenshot": true,
                 "inspect_element": true,
                 "open_devtools": true,
                 "clear_cache": true,
             },
         })
+    }
+
+    fn latest_page_diagnostics_summary(&self) -> Option<Value> {
+        let diagnostics = self.latest_page_diagnostics.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at": diagnostics.pointer("/page/timestamp").and_then(Value::as_str),
+            "url": diagnostics.pointer("/page/url").and_then(Value::as_str),
+            "title": diagnostics.pointer("/page/title").and_then(Value::as_str),
+            "ready_state": diagnostics.pointer("/page/document/ready_state").and_then(Value::as_str),
+            "counts": diagnostics.pointer("/page/counts").cloned(),
+        }))
     }
 
     fn browser_session_json(&self, window: &Window) -> String {
@@ -982,6 +998,65 @@ impl WebPreviewView {
         ))));
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast("Sent web preview session info to the agent panel", cx);
+    }
+
+    fn page_diagnostics_snapshot(&self, payload: &Value, window: &Window) -> Value {
+        let mut page = payload.clone();
+        if let Some(page) = page.as_object_mut() {
+            page.remove("kind");
+            page.remove("action");
+        }
+
+        serde_json::json!({
+            "schema": "zed.web_preview.page_diagnostics.v1",
+            "session": self.browser_session_snapshot(window),
+            "page": page,
+        })
+    }
+
+    fn page_diagnostics_json(diagnostics: &Value) -> String {
+        serde_json::to_string_pretty(diagnostics).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn page_diagnostics_agent_blocks(&self, diagnostics: &Value) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = diagnostics.pointer("/page/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview page diagnostics:\n\n```json\n{}\n```",
+            Self::page_diagnostics_json(diagnostics)
+        ))));
+        blocks
+    }
+
+    fn request_page_diagnostics(&mut self, action: &'static str, cx: &mut Context<Self>) {
+        let script = format!(
+            "window.__zedWebPreview && window.__zedWebPreview.collectPageDiagnostics('{action}');"
+        );
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(&script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Collecting web preview page diagnostics", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("Page diagnostics are unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic("Page diagnostics crashed before collection", cx);
+            }
+        }
+    }
+
+    fn copy_page_diagnostics(&mut self, cx: &mut Context<Self>) {
+        self.request_page_diagnostics("copy", cx);
+    }
+
+    fn send_page_diagnostics_to_agent(&mut self, cx: &mut Context<Self>) {
+        self.request_page_diagnostics("agent", cx);
     }
 
     fn go_back_in_history(&mut self, cx: &mut Context<Self>) {
@@ -1292,6 +1367,46 @@ impl WebPreviewView {
                     Err(_) => {
                         self.report_action_panic(
                             "Element selector crashed while collecting page data",
+                            cx,
+                        );
+                    }
+                }
+            }
+            "page-diagnostics" => {
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let action = payload
+                        .get("action")
+                        .and_then(Value::as_str)
+                        .unwrap_or("copy");
+                    let diagnostics = self.page_diagnostics_snapshot(&payload, window);
+                    self.latest_page_diagnostics = Some(diagnostics.clone());
+
+                    match action {
+                        "agent" => {
+                            self.append_content_blocks_to_agent_panel(
+                                self.page_diagnostics_agent_blocks(&diagnostics),
+                                window,
+                                cx,
+                            );
+                            self.show_toast("Sent page diagnostics to the agent panel", cx);
+                        }
+                        _ => {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                Self::page_diagnostics_json(&diagnostics),
+                            ));
+                            self.show_toast("Copied web preview page diagnostics JSON", cx);
+                        }
+                    }
+
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.report_action_error("Page diagnostics failed", error, cx);
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "Page diagnostics crashed while collecting page data",
                             cx,
                         );
                     }
@@ -1636,6 +1751,30 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_browser_session_info_to_agent(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Page Diagnostics")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_page_diagnostics(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Page Diagnostics to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_page_diagnostics_to_agent(cx);
                                         });
                                     }
                                 }),
@@ -2431,6 +2570,7 @@ impl Item for WebPreviewView {
                 browser_events,
                 deferred_ipc_messages: Vec::new(),
                 ipc_flush_scheduled: false,
+                latest_page_diagnostics: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
@@ -3539,7 +3679,142 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     return overlay;
   };
 
+  const elementSnapshot = (element) => {
+    if (!(element instanceof Element)) return null;
+    const rect = element.getBoundingClientRect();
+    return {
+      selector: cssSelector(element),
+      tag: element.tagName.toLowerCase(),
+      id: element.id || null,
+      classes: Array.from(element.classList || []).slice(0, 8),
+      name: element.getAttribute("name"),
+      type: element.getAttribute("type"),
+      role: element.getAttribute("role"),
+      ariaLabel: element.getAttribute("aria-label"),
+      text: limitText(element.innerText || element.textContent || element.getAttribute("alt"), 240),
+      href: element.getAttribute("href"),
+      src: element.getAttribute("src"),
+      disabled: Boolean(element.disabled),
+      rect: {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height)
+      }
+    };
+  };
+
+  const sampleElements = (selector, limit) => {
+    try {
+      return Array.from(document.querySelectorAll(selector)).slice(0, limit).map(elementSnapshot).filter(Boolean);
+    } catch (_error) {
+      return [];
+    }
+  };
+
+  const collectForms = () => Array.from(document.forms || []).slice(0, 12).map((form) => ({
+    selector: cssSelector(form),
+    action: form.getAttribute("action"),
+    method: form.getAttribute("method") || "get",
+    controls: Array.from(form.elements || []).slice(0, 24).map((control) => elementSnapshot(control)).filter(Boolean)
+  }));
+
+  const collectPerformance = () => {
+    const navigation = performance.getEntriesByType ? performance.getEntriesByType("navigation")[0] : null;
+    const resources = performance.getEntriesByType ? performance.getEntriesByType("resource") : [];
+    return {
+      navigation: navigation ? {
+        type: navigation.type,
+        domContentLoaded: Math.round(navigation.domContentLoadedEventEnd || 0),
+        loadEventEnd: Math.round(navigation.loadEventEnd || 0),
+        transferSize: navigation.transferSize || 0,
+        encodedBodySize: navigation.encodedBodySize || 0,
+        decodedBodySize: navigation.decodedBodySize || 0
+      } : null,
+      slowResources: Array.from(resources)
+        .filter((entry) => entry.duration > 250)
+        .sort((a, b) => b.duration - a.duration)
+        .slice(0, 24)
+        .map((entry) => ({
+          name: limitText(entry.name, 240),
+          initiatorType: entry.initiatorType,
+          duration: Math.round(entry.duration),
+          transferSize: entry.transferSize || 0
+        }))
+    };
+  };
+
   window.__zedWebPreview = {
+    collectPageDiagnostics(action = "copy") {
+      const root = document.documentElement;
+      const body = document.body;
+      const selection = window.getSelection ? window.getSelection() : null;
+      const activeElement = document.activeElement instanceof Element ? document.activeElement : null;
+      const headings = sampleElements("h1, h2, h3", 24).map((heading) => ({
+        level: heading.tag,
+        text: heading.text,
+        selector: heading.selector
+      }));
+      const payload = {
+        kind: "page-diagnostics",
+        action,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        document: {
+          ready_state: document.readyState,
+          content_type: document.contentType,
+          character_set: document.characterSet,
+          compat_mode: document.compatMode,
+          language: root?.lang || null,
+          direction: root ? window.getComputedStyle(root).direction : null,
+          referrer: document.referrer || null,
+          has_focus: document.hasFocus(),
+          visibility_state: document.visibilityState
+        },
+        viewport: {
+          inner_width: window.innerWidth,
+          inner_height: window.innerHeight,
+          outer_width: window.outerWidth,
+          outer_height: window.outerHeight,
+          device_pixel_ratio: window.devicePixelRatio || 1,
+          scroll_x: Math.round(window.scrollX || 0),
+          scroll_y: Math.round(window.scrollY || 0),
+          scroll_width: Math.max(root?.scrollWidth || 0, body?.scrollWidth || 0),
+          scroll_height: Math.max(root?.scrollHeight || 0, body?.scrollHeight || 0)
+        },
+        counts: {
+          links: document.links?.length || 0,
+          buttons: document.querySelectorAll("button, [role='button']").length,
+          inputs: document.querySelectorAll("input, textarea, select, [contenteditable='true']").length,
+          forms: document.forms?.length || 0,
+          images: document.images?.length || 0,
+          videos: document.querySelectorAll("video").length,
+          audio: document.querySelectorAll("audio").length,
+          iframes: document.querySelectorAll("iframe").length,
+          scripts: document.scripts?.length || 0,
+          stylesheets: document.styleSheets?.length || 0,
+          headings: document.querySelectorAll("h1, h2, h3, h4, h5, h6").length,
+          landmarks: document.querySelectorAll("main, nav, aside, header, footer, [role='main'], [role='navigation'], [role='complementary']").length
+        },
+        active_element: elementSnapshot(activeElement),
+        selection: selection && String(selection).trim() ? limitText(selection.toString(), 600) : null,
+        headings,
+        landmarks: sampleElements("main, nav, aside, header, footer, [role='main'], [role='navigation'], [role='complementary']", 18),
+        controls: sampleElements("button, [role='button'], input, textarea, select, [contenteditable='true']", 40),
+        links: sampleElements("a[href]", 30),
+        media: {
+          images: sampleElements("img", 20),
+          videos: sampleElements("video", 12),
+          audio: sampleElements("audio", 12),
+          iframes: sampleElements("iframe", 12)
+        },
+        forms: collectForms(),
+        performance: collectPerformance()
+      };
+      post(payload);
+    },
+
     inspectNextElement() {
       if (window.__zedWebPreview.__cleanup) {
         window.__zedWebPreview.__cleanup();

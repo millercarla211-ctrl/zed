@@ -1,3 +1,12 @@
+[2026-05-15] - Web Preview Page Diagnostics
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Page Diagnostics" and "Send Page Diagnostics to Agent" for bounded live-document diagnostics.
+- The page diagnostics bridge captures URL/title, document and viewport state, interactive element counts, active element, headings, landmarks, controls, forms, media samples, and slow resource timing.
+
+NOTES:
+- This advances Agent Browser Command Center context gathering without adding browser control actions or changing editor/WebPreview input routing.
+
 [2026-05-15] - Web Preview Agent Inventory Context
 
 ADDED:
