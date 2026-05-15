@@ -752,8 +752,9 @@ impl IconPickerPanel {
     }
 
     fn clear_recent_icon_actions(&mut self, cx: &mut Context<Self>) {
+        let cleared = self.recent_icon_actions.len();
         self.recent_icon_actions.clear();
-        self.status = Some("Cleared recent icons".into());
+        self.status = Some(icon_cleared_history_status("recent icon", cleared));
         cx.notify();
     }
 
@@ -778,8 +779,9 @@ impl IconPickerPanel {
     }
 
     fn clear_pinned_icon_actions(&mut self, cx: &mut Context<Self>) {
+        let cleared = self.pinned_icon_actions.len();
         self.pinned_icon_actions.clear();
-        self.status = Some("Cleared pinned icons".into());
+        self.status = Some(icon_cleared_history_status("pinned icon", cleared));
         self.persist_pinned_icon_actions(cx);
         cx.notify();
     }
@@ -1604,6 +1606,14 @@ fn icon_status_label(prefix: &str, value: &str) -> SharedString {
     text.push_str(prefix);
     text.push_str(value);
     text.into()
+}
+
+fn icon_cleared_history_status(section: &str, cleared: usize) -> SharedString {
+    match cleared {
+        0 => format!("No {section} entries to clear").into(),
+        1 => format!("Cleared 1 {section} entry").into(),
+        _ => format!("Cleared {cleared} {section} entries").into(),
+    }
 }
 
 fn load_pinned_icon_actions(cx: &App) -> VecDeque<RecentIconEntry> {

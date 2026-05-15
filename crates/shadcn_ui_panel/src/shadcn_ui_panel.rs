@@ -680,8 +680,9 @@ impl ShadcnUiPanel {
     }
 
     fn clear_recent_ui_actions(&mut self, cx: &mut Context<Self>) {
+        let cleared = self.recent_ui_actions.len();
         self.recent_ui_actions.clear();
-        self.status = Some("Cleared recent UI actions".into());
+        self.status = Some(ui_cleared_history_status("recent UI action", cleared));
         cx.notify();
     }
 
@@ -711,8 +712,9 @@ impl ShadcnUiPanel {
     }
 
     fn clear_pinned_ui_actions(&mut self, cx: &mut Context<Self>) {
+        let cleared = self.pinned_ui_actions.len();
         self.pinned_ui_actions.clear();
-        self.status = Some("Cleared pinned UI actions".into());
+        self.status = Some(ui_cleared_history_status("pinned UI action", cleared));
         self.persist_pinned_ui_actions(cx);
         cx.notify();
     }
@@ -3643,6 +3645,14 @@ fn ui_removed_stale_status(section: &str, removed: usize) -> SharedString {
         0 => format!("No stale {section} entries").into(),
         1 => format!("Removed 1 stale {section} entry").into(),
         _ => format!("Removed {removed} stale {section} entries").into(),
+    }
+}
+
+fn ui_cleared_history_status(section: &str, cleared: usize) -> SharedString {
+    match cleared {
+        0 => format!("No {section} entries to clear").into(),
+        1 => format!("Cleared 1 {section} entry").into(),
+        _ => format!("Cleared {cleared} {section} entries").into(),
     }
 }
 

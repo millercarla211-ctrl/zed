@@ -490,8 +490,9 @@ impl FontPanel {
     }
 
     fn clear_recent_font_actions(&mut self, cx: &mut Context<Self>) {
+        let cleared = self.recent_font_actions.len();
         self.recent_font_actions.clear();
-        self.status = Some("Cleared recent fonts".into());
+        self.status = Some(font_cleared_history_status("recent font", cleared));
         cx.notify();
     }
 
@@ -515,8 +516,9 @@ impl FontPanel {
     }
 
     fn clear_pinned_font_actions(&mut self, cx: &mut Context<Self>) {
+        let cleared = self.pinned_font_actions.len();
         self.pinned_font_actions.clear();
-        self.status = Some("Cleared pinned fonts".into());
+        self.status = Some(font_cleared_history_status("pinned font", cleared));
         self.persist_pinned_font_actions(cx);
         cx.notify();
     }
@@ -1533,6 +1535,14 @@ fn font_status_label(prefix: &str, value: &str) -> SharedString {
     text.push_str(prefix);
     text.push_str(value);
     text.into()
+}
+
+fn font_cleared_history_status(section: &str, cleared: usize) -> SharedString {
+    match cleared {
+        0 => format!("No {section} entries to clear").into(),
+        1 => format!("Cleared 1 {section} entry").into(),
+        _ => format!("Cleared {cleared} {section} entries").into(),
+    }
 }
 
 fn font_status_label_with_suffix(prefix: &str, value: &str, suffix: &str) -> SharedString {

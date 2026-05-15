@@ -1,3 +1,12 @@
+[2026-05-15] - Asset Panel Count-Aware Clear Feedback
+
+CHANGED:
+- Icon, Font, Media, and UI Recent/Pinned Clear actions now report how many entries were cleared instead of showing generic cleared messages.
+- Clear actions now also produce no-op feedback when the underlying working set is already empty.
+
+NOTES:
+- This improves action confirmation without changing clear behavior, persisted pins, catalogs, provider fetching, editor input, or WebPreview routing.
+
 [2026-05-15] - Asset Panel Clear Safety Tooltips
 
 ADDED:

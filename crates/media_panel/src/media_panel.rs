@@ -1121,8 +1121,9 @@ impl MediaPanel {
     }
 
     fn clear_recent_media(&mut self, cx: &mut Context<Self>) {
+        let cleared = self.recent_media.len();
         self.recent_media.clear();
-        self.status = Some("Cleared recent media".into());
+        self.status = Some(media_cleared_history_status("recent media", cleared));
         cx.notify();
     }
 
@@ -1152,8 +1153,9 @@ impl MediaPanel {
     }
 
     fn clear_pinned_media(&mut self, cx: &mut Context<Self>) {
+        let cleared = self.pinned_media.len();
         self.pinned_media.clear();
-        self.status = Some("Cleared pinned media".into());
+        self.status = Some(media_cleared_history_status("pinned media", cleared));
         self.persist_pinned_media(cx);
         cx.notify();
     }
@@ -2627,6 +2629,14 @@ fn media_removed_stale_status(section: &str, removed: usize) -> SharedString {
         0 => format!("No stale {section} entries").into(),
         1 => format!("Removed 1 stale {section} entry").into(),
         _ => format!("Removed {removed} stale {section} entries").into(),
+    }
+}
+
+fn media_cleared_history_status(section: &str, cleared: usize) -> SharedString {
+    match cleared {
+        0 => format!("No {section} entries to clear").into(),
+        1 => format!("Cleared 1 {section} entry").into(),
+        _ => format!("Cleared {cleared} {section} entries").into(),
     }
 }
 
