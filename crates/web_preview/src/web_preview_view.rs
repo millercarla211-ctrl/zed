@@ -255,6 +255,7 @@ struct NativePreviewMountRequest {
 pub struct WebPreviewView {
     workspace: WeakEntity<Workspace>,
     workspace_context: PreviewWorkspaceContext,
+    session_id: SharedString,
     focus_handle: FocusHandle,
     project_item: Option<Entity<WebPreviewFileItem>>,
     url_editor: Entity<Editor>,
@@ -423,6 +424,7 @@ impl WebPreviewView {
         let mut this = Self {
             workspace,
             workspace_context: workspace_context.clone(),
+            session_id: format!("web-preview-{}", cx.entity_id().as_non_zero_u64()).into(),
             focus_handle: cx.focus_handle(),
             project_item,
             url_editor,
@@ -786,12 +788,21 @@ impl WebPreviewView {
         #[cfg(not(any(target_os = "windows", target_os = "macos")))]
         let native_preview_mounted = false;
 
+        #[cfg(target_os = "windows")]
+        let native_backend = "webview2-composition";
+        #[cfg(target_os = "macos")]
+        let native_backend = "wkwebview";
+        #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+        let native_backend = "unavailable";
+
         format!(
             concat!(
                 "Web Preview Session\n",
+                "session_id: {session_id}\n",
                 "title: {title}\n",
                 "url: {url}\n",
                 "load_state: {load_state}\n",
+                "native_backend: {native_backend}\n",
                 "workspace: {workspace}\n",
                 "workspace_key: {workspace_key}\n",
                 "root_path: {root_path}\n",
@@ -804,9 +815,11 @@ impl WebPreviewView {
                 "bookmarks: {bookmark_count}\n",
                 "project_file_preview: {project_file_preview}\n"
             ),
+            session_id = self.session_id.as_ref(),
             title = self.current_tab_title(),
             url = self.active_url.as_ref(),
             load_state = load_state,
+            native_backend = native_backend,
             workspace = self.workspace_context.root_name.as_ref(),
             workspace_key = self.workspace_context.preview_key.as_ref(),
             root_path = root_path,
@@ -821,9 +834,85 @@ impl WebPreviewView {
         )
     }
 
+    fn browser_session_snapshot(&self, window: &Window) -> Value {
+        let (load_state, load_error) = match &self.load_state {
+            PreviewLoadState::Loading => ("loading", None),
+            PreviewLoadState::Ready => ("ready", None),
+            PreviewLoadState::Error(error) => ("error", Some(error.to_string())),
+        };
+        let visible_bounds = self.host_bounds.borrow().as_ref().map(|bounds| {
+            serde_json::json!({
+                "x": bounds.origin.x.as_f32(),
+                "y": bounds.origin.y.as_f32(),
+                "width": bounds.size.width.as_f32(),
+                "height": bounds.size.height.as_f32(),
+            })
+        });
+
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        let native_preview_mounted = self.native_preview.borrow().is_some();
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        let native_preview_mounted = false;
+
+        #[cfg(target_os = "windows")]
+        let native_backend = "webview2-composition";
+        #[cfg(target_os = "macos")]
+        let native_backend = "wkwebview";
+        #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+        let native_backend = "unavailable";
+
+        serde_json::json!({
+            "schema": "zed.web_preview.session.v1",
+            "session_id": self.session_id.as_ref(),
+            "title": self.current_tab_title().as_ref(),
+            "url": self.active_url.as_ref(),
+            "load_state": load_state,
+            "load_error": load_error,
+            "workspace": {
+                "name": self.workspace_context.root_name.as_ref(),
+                "key": self.workspace_context.preview_key.as_ref(),
+                "database_id": self.workspace_context.workspace_id.as_ref().map(|id| format!("{id:?}")),
+                "root_path": self.workspace_context.root_path.as_ref().map(|path| path.display().to_string()),
+            },
+            "profile_dir": self.workspace_context.profile_dir.display().to_string(),
+            "zoom": self.zoom_factor,
+            "active_item": self.is_active_item,
+            "project_file_preview": self.project_item.is_some(),
+            "bookmarks": {
+                "count": self.bookmarks.len(),
+                "active_url_bookmarked": self.is_active_url_bookmarked(),
+            },
+            "native_preview": {
+                "backend": native_backend,
+                "mounted": native_preview_mounted,
+                "keyboard_focus": self.native_preview_has_keyboard_focus(window),
+                "visible_bounds": visible_bounds,
+            },
+            "capabilities": {
+                "copy_session_info": true,
+                "copy_session_json": true,
+                "send_session_to_agent": true,
+                "screenshot": true,
+                "inspect_element": true,
+                "open_devtools": true,
+                "clear_cache": true,
+            },
+        })
+    }
+
+    fn browser_session_json(&self, window: &Window) -> String {
+        serde_json::to_string_pretty(&self.browser_session_snapshot(window))
+            .unwrap_or_else(|_| "{}".to_string())
+    }
+
     fn copy_browser_session_info(&mut self, window: &Window, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(self.browser_session_info(window)));
         self.show_toast("Copied web preview session info", cx);
+    }
+
+    fn copy_browser_session_json(&mut self, window: &Window, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(ClipboardItem::new_string(self.browser_session_json(window)));
+        self.show_toast("Copied web preview session JSON", cx);
     }
 
     fn send_browser_session_info_to_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -834,8 +923,8 @@ impl WebPreviewView {
         }
 
         blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
-            "Web preview session context:\n\n```text\n{}\n```",
-            self.browser_session_info(window)
+            "Web preview session context:\n\n```json\n{}\n```",
+            self.browser_session_json(window)
         ))));
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast("Sent web preview session info to the agent panel", cx);
@@ -1443,6 +1532,18 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.copy_browser_session_info(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Session JSON")
+                                .icon(IconName::Binary)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_browser_session_json(window, cx);
                                         });
                                     }
                                 }),
@@ -2231,6 +2332,7 @@ impl Item for WebPreviewView {
             let mut this = Self {
                 workspace,
                 workspace_context,
+                session_id: format!("web-preview-{}", cx.entity_id().as_non_zero_u64()).into(),
                 focus_handle: cx.focus_handle(),
                 project_item: None,
                 url_editor,

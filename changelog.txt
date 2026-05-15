@@ -1,3 +1,15 @@
+[2026-05-15] - Structured Web Preview Session Snapshot
+
+ADDED:
+- WebPreview sessions now carry a stable per-view session id for future browser-command and agent-tool wiring.
+- WebPreview's tab-bar More menu now includes "Copy Session JSON" with a schema-versioned read-only snapshot of URL, load state, workspace/profile context, backend, bounds, bookmark state, and current read-only capabilities.
+
+CHANGED:
+- "Send Session to Agent" now attaches the structured JSON snapshot instead of the earlier plain-text session note.
+
+NOTES:
+- This advances Agent Browser Command Center without adding browser control actions or touching editor/WebPreview input routing.
+
 [2026-05-15] - Web Preview Agent Session Context
 
 ADDED:
