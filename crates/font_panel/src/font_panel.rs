@@ -1195,6 +1195,10 @@ impl FontPanel {
             self.pinned_font_actions.len(),
             self.recent_font_actions.len(),
         );
+        let (readiness_label, readiness_color) = font_readiness_label(
+            self.fonts_loaded || self.source_filter == FontSourceFilter::Web,
+            counts.count(self.source_filter),
+        );
         v_flex()
             .gap_2()
             .p_2()
@@ -1204,7 +1208,18 @@ impl FontPanel {
                 h_flex()
                     .justify_between()
                     .items_center()
-                    .child(Label::new("Fonts").size(LabelSize::Small))
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .items_center()
+                            .child(Label::new("Fonts").size(LabelSize::Small))
+                            .child(
+                                Label::new(readiness_label)
+                                    .size(LabelSize::XSmall)
+                                    .color(readiness_color)
+                                    .truncate(),
+                            ),
+                    )
                     .child(
                         h_flex()
                             .gap_1()
@@ -1435,6 +1450,16 @@ fn history_working_set_label(pinned: usize, recent: usize) -> SharedString {
     let mut text = String::with_capacity("pins ".len() + 6 + " / recent ".len() + 6);
     let _ = write!(text, "pins {pinned} / recent {recent}");
     text.into()
+}
+
+fn font_readiness_label(loaded: bool, total_count: usize) -> (&'static str, Color) {
+    if !loaded {
+        ("loading", Color::Accent)
+    } else if total_count == 0 {
+        ("empty", Color::Warning)
+    } else {
+        ("ready", Color::Success)
+    }
 }
 
 fn lowercase_text(value: &str) -> String {

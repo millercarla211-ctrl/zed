@@ -2207,6 +2207,8 @@ impl Render for MediaPanel {
         } else {
             Color::Muted
         };
+        let (readiness_label, readiness_color) =
+            media_readiness_label(self.loading, self.remote_loading, stale_history_count);
 
         v_flex()
             .id("media-panel")
@@ -2223,7 +2225,18 @@ impl Render for MediaPanel {
                         h_flex()
                             .justify_between()
                             .items_center()
-                            .child(Label::new("Media").size(LabelSize::Small))
+                            .child(
+                                h_flex()
+                                    .gap_1()
+                                    .items_center()
+                                    .child(Label::new("Media").size(LabelSize::Small))
+                                    .child(
+                                        Label::new(readiness_label)
+                                            .size(LabelSize::XSmall)
+                                            .color(readiness_color)
+                                            .truncate(),
+                                    ),
+                            )
                             .child(
                                 h_flex()
                                     .gap_1()
@@ -2582,6 +2595,18 @@ fn history_working_set_label(pinned: usize, recent: usize, stale: usize) -> Shar
         );
         let _ = write!(text, "pins {pinned} / recent {recent} / stale {stale}");
         text.into()
+    }
+}
+
+fn media_readiness_label(indexing: bool, fetching: bool, stale: usize) -> (&'static str, Color) {
+    if indexing {
+        ("indexing", Color::Accent)
+    } else if fetching {
+        ("fetching", Color::Accent)
+    } else if stale > 0 {
+        ("cleanup", Color::Warning)
+    } else {
+        ("ready", Color::Success)
     }
 }
 

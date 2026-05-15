@@ -1576,6 +1576,11 @@ impl Render for ShadcnUiPanel {
         } else {
             Color::Muted
         };
+        let (readiness_label, readiness_color) = ui_readiness_label(
+            self.loading_catalog,
+            self.catalog_freshness,
+            stale_history_count,
+        );
 
         v_flex()
             .id("shadcn-ui-panel")
@@ -1592,7 +1597,18 @@ impl Render for ShadcnUiPanel {
                         h_flex()
                             .justify_between()
                             .items_center()
-                            .child(Label::new("UI").size(LabelSize::Small))
+                            .child(
+                                h_flex()
+                                    .gap_1()
+                                    .items_center()
+                                    .child(Label::new("UI").size(LabelSize::Small))
+                                    .child(
+                                        Label::new(readiness_label)
+                                            .size(LabelSize::XSmall)
+                                            .color(readiness_color)
+                                            .truncate(),
+                                    ),
+                            )
                             .child(
                                 h_flex()
                                     .gap_1()
@@ -1898,6 +1914,24 @@ fn ui_catalog_freshness_color(loading: bool, freshness: UiCatalogFreshness) -> C
     match freshness {
         UiCatalogFreshness::StaticFallback => Color::Warning,
         UiCatalogFreshness::Cached | UiCatalogFreshness::Hydrated => Color::Muted,
+    }
+}
+
+fn ui_readiness_label(
+    loading: bool,
+    freshness: UiCatalogFreshness,
+    stale: usize,
+) -> (&'static str, Color) {
+    if loading {
+        ("loading", Color::Accent)
+    } else if stale > 0 {
+        ("cleanup", Color::Warning)
+    } else {
+        match freshness {
+            UiCatalogFreshness::StaticFallback => ("fallback", Color::Warning),
+            UiCatalogFreshness::Cached => ("cached", Color::Muted),
+            UiCatalogFreshness::Hydrated => ("ready", Color::Success),
+        }
     }
 }
 

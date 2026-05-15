@@ -1376,6 +1376,8 @@ impl Render for IconPickerPanel {
             self.pinned_icon_actions.len(),
             self.recent_icon_actions.len(),
         );
+        let (readiness_label, readiness_color) =
+            icon_readiness_label(self.loading_external_icons, total_count);
         let mut icon_tiles = Vec::with_capacity(icons.len());
         icon_tiles.extend(
             icons
@@ -1412,7 +1414,18 @@ impl Render for IconPickerPanel {
                         h_flex()
                             .justify_between()
                             .items_center()
-                            .child(Label::new("Icons").size(LabelSize::Small))
+                            .child(
+                                h_flex()
+                                    .gap_1()
+                                    .items_center()
+                                    .child(Label::new("Icons").size(LabelSize::Small))
+                                    .child(
+                                        Label::new(readiness_label)
+                                            .size(LabelSize::XSmall)
+                                            .color(readiness_color)
+                                            .truncate(),
+                                    ),
+                            )
                             .child(
                                 h_flex()
                                     .gap_1()
@@ -1637,6 +1650,16 @@ fn history_working_set_label(pinned: usize, recent: usize) -> SharedString {
     let mut text = String::with_capacity("pins ".len() + 6 + " / recent ".len() + 6);
     let _ = write!(text, "pins {pinned} / recent {recent}");
     text.into()
+}
+
+fn icon_readiness_label(loading: bool, total_count: usize) -> (&'static str, Color) {
+    if loading {
+        ("loading", Color::Accent)
+    } else if total_count == 0 {
+        ("empty", Color::Warning)
+    } else {
+        ("ready", Color::Success)
+    }
 }
 
 fn icon_source_label(icon: &PickerIcon) -> SharedString {

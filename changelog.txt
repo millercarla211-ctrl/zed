@@ -1,3 +1,13 @@
+[2026-05-15] - Asset Panel Readiness Status
+
+ADDED:
+- Icon, Font, Media, and UI panel headers now show compact readiness labels beside the panel title.
+- Readiness states cover loading, indexing, fetching, cleanup-needed, fallback, cached, empty, and ready paths.
+
+NOTES:
+- The readiness signal is title-adjacent so existing count, refresh, pin, and cleanup actions stay grouped on the right.
+- This is display-only panel state and does not touch editor input, WebPreview routing, catalog loading, or media provider behavior.
+
 [2026-05-15] - Asset Panel Cleanup Consistency
 
 CHANGED:
