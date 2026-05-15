@@ -1,3 +1,17 @@
+[2026-05-16] - Web Preview Agent Payload Bridge
+
+ADDED:
+- Added WebPreview More menu actions to copy an Agent Browser payload bridge, send it to the Agent Panel, or import a JSON/plain-text action payload from the clipboard.
+- Added a schema-versioned payload bridge packet that exposes click/type/key/scroll payload templates, the latest action request summary, permission state, and execution rules.
+- Added Browser plugin catalog capabilities for payload bridge generation and explicit clipboard payload import.
+
+CHANGED:
+- The native type executor can now consume explicit `payload.text` from an imported Agent Browser payload bridge while still requiring the focused target, keyboard-focus gate, QA checklist, and receipt logging.
+- Executor readiness and status snapshots now include the latest payload bridge summary so agents can see whether a type payload is ready.
+
+NOTES:
+- The payload bridge is a handoff/import layer only; it does not click, type, scroll, press keys, run page scripts, control external Chrome, or bypass WebPreview focus/permission gates.
+
 [2026-05-16] - Web Preview First Native Type Executor
 
 ADDED:

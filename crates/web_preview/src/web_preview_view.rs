@@ -256,6 +256,9 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_interaction_receipt_template_to_agent",
     "copy_interaction_action_request",
     "send_interaction_action_request_to_agent",
+    "copy_agent_browser_action_payload_bridge",
+    "send_agent_browser_action_payload_bridge_to_agent",
+    "import_agent_browser_action_payload_from_clipboard",
     "copy_blocked_interaction_receipt",
     "send_blocked_interaction_receipt_to_agent",
     "copy_successful_interaction_receipt",
@@ -565,6 +568,7 @@ pub struct WebPreviewView {
     latest_interaction_preflight: Option<Value>,
     latest_interaction_receipt_template: Option<Value>,
     latest_interaction_action_request: Option<Value>,
+    latest_agent_browser_action_payload_bridge: Option<Value>,
     latest_blocked_interaction_receipt: Option<Value>,
     latest_successful_interaction_receipt: Option<Value>,
     latest_agent_browser_status_packet: Option<Value>,
@@ -776,6 +780,7 @@ impl WebPreviewView {
             latest_interaction_preflight: None,
             latest_interaction_receipt_template: None,
             latest_interaction_action_request: None,
+            latest_agent_browser_action_payload_bridge: None,
             latest_blocked_interaction_receipt: None,
             latest_successful_interaction_receipt: None,
             latest_agent_browser_status_packet: None,
@@ -1262,6 +1267,7 @@ impl WebPreviewView {
             "interaction_preflight": self.latest_interaction_preflight_summary(),
             "interaction_receipt_template": self.latest_interaction_receipt_template_summary(),
             "interaction_action_request": self.latest_interaction_action_request_summary(),
+            "agent_browser_action_payload_bridge": self.latest_agent_browser_action_payload_bridge_summary(),
             "blocked_interaction_receipt": self.latest_blocked_interaction_receipt_summary(),
             "successful_interaction_receipt": self.latest_successful_interaction_receipt_summary(),
             "agent_browser_status_packet": self.latest_agent_browser_status_packet_summary(),
@@ -1321,6 +1327,9 @@ impl WebPreviewView {
                 "send_interaction_receipt_template_to_agent": true,
                 "copy_interaction_action_request": true,
                 "send_interaction_action_request_to_agent": true,
+                "copy_agent_browser_action_payload_bridge": true,
+                "send_agent_browser_action_payload_bridge_to_agent": true,
+                "import_agent_browser_action_payload_from_clipboard": true,
                 "copy_blocked_interaction_receipt": true,
                 "send_blocked_interaction_receipt_to_agent": true,
                 "copy_successful_interaction_receipt": true,
@@ -1519,6 +1528,18 @@ impl WebPreviewView {
             "request_id": request.pointer("/request/envelope/request_id").and_then(Value::as_str),
             "status": request.pointer("/request/envelope/status").and_then(Value::as_str),
             "counts": request.pointer("/request/counts").cloned(),
+        }))
+    }
+
+    fn latest_agent_browser_action_payload_bridge_summary(&self) -> Option<Value> {
+        let bridge = self.latest_agent_browser_action_payload_bridge.as_ref()?;
+        Some(serde_json::json!({
+            "generated_at_ms": bridge.pointer("/bridge/generated_at_ms").and_then(Value::as_u64),
+            "status": bridge.pointer("/bridge/status").and_then(Value::as_str),
+            "payload_source": bridge.pointer("/bridge/payload_source").and_then(Value::as_str),
+            "type_text_payload_ready": bridge.pointer("/bridge/executor_payloads/type_text/payload_ready").and_then(Value::as_bool),
+            "action_request_ready": bridge.pointer("/bridge/action_request_ready").and_then(Value::as_bool),
+            "permission": bridge.pointer("/bridge/permission").cloned(),
         }))
     }
 
@@ -2859,6 +2880,224 @@ impl WebPreviewView {
         self.request_interaction_action_request("agent", cx);
     }
 
+    fn agent_browser_action_payload_bridge(
+        &self,
+        window: &Window,
+        imported_payload: Option<Value>,
+        payload_source: &'static str,
+    ) -> Value {
+        let type_target = self.first_type_action_target();
+        let click_target = self.first_click_action_target();
+        let scroll_target = self.first_scroll_action_target();
+        let imported_type_payload = imported_payload
+            .as_ref()
+            .and_then(Self::extract_type_text_payload_from_value);
+        let type_text = imported_type_payload
+            .as_ref()
+            .and_then(|payload| payload.get("text"))
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned);
+        let type_selector = imported_type_payload
+            .as_ref()
+            .and_then(|payload| payload.get("selector"))
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+            .or_else(|| {
+                type_target
+                    .as_ref()
+                    .and_then(|target| target.pointer("/selector"))
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned)
+            });
+
+        serde_json::json!({
+            "schema": "zed.web_preview.agent_browser_action_payload_bridge.v1",
+            "session": self.browser_session_snapshot(window),
+            "policy": self.agent_browser_policy_snapshot(),
+            "bridge": {
+                "generated_at_ms": Self::current_epoch_millis(),
+                "status": if imported_payload.is_some() { "payload_imported" } else { "payload_template_ready" },
+                "payload_source": payload_source,
+                "action_request_ready": self.latest_interaction_action_request.is_some(),
+                "latest_action_request": self.latest_interaction_action_request_summary(),
+                "permission": self.agent_action_permission.snapshot(),
+                "accepted_input_schemas": [
+                    "zed.web_preview.agent_browser_action_payload_bridge.v1",
+                    "zed.web_preview.agent_browser_executor_payload.v1",
+                    "plain clipboard text for type_text after explicit import"
+                ],
+                "executor_payloads": {
+                    "click": {
+                        "payload_ready": click_target.is_some(),
+                        "payload": {
+                            "action": "click",
+                            "selector": click_target.as_ref().and_then(|target| target.pointer("/selector")).and_then(Value::as_str),
+                            "button": "left",
+                            "click_count": 1
+                        },
+                        "target_candidate": click_target
+                    },
+                    "type_text": {
+                        "payload_ready": type_text.as_ref().is_some_and(|text| !text.trim().is_empty()),
+                        "payload": {
+                            "action": "type_text",
+                            "selector": type_selector,
+                            "text": type_text.clone().unwrap_or_default(),
+                            "clear_existing": false
+                        },
+                        "target_candidate": type_target,
+                        "required_user_or_agent_fields": ["payload.text"],
+                        "safety": {
+                            "requires_focused_target": true,
+                            "requires_keyboard_focus_gate": true,
+                            "does_not_click_or_focus_target": true
+                        }
+                    },
+                    "press_key": {
+                        "payload_ready": true,
+                        "payload": {
+                            "action": "press_key",
+                            "key": imported_payload
+                                .as_ref()
+                                .and_then(|payload| payload.pointer("/payload/key"))
+                                .and_then(Value::as_str)
+                                .unwrap_or("Escape"),
+                            "modifiers": []
+                        }
+                    },
+                    "scroll": {
+                        "payload_ready": scroll_target.is_some(),
+                        "payload": {
+                            "action": "scroll",
+                            "selector": scroll_target.as_ref().and_then(|target| target.pointer("/selector")).and_then(Value::as_str),
+                            "delta_x": 0,
+                            "delta_y": -480
+                        },
+                        "target_candidate": scroll_target
+                    }
+                },
+                "imported_payload": imported_payload,
+                "execution_rules": [
+                    "A payload bridge does not dispatch by itself.",
+                    "Executors must still require interactive unlock, fresh page context, action-specific preflight, QA checklist, and receipt logging.",
+                    "type_text dispatch must reject empty text and selector mismatches when selectors are supplied.",
+                    "Never import credentials or file paths from the clipboard without a separate explicit user instruction."
+                ]
+            }
+        })
+    }
+
+    fn agent_browser_action_payload_bridge_json(bridge: &Value) -> String {
+        serde_json::to_string_pretty(bridge).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_action_payload_bridge_agent_blocks(
+        &self,
+        bridge: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = bridge.pointer("/session/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview action payload bridge:\n\n```json\n{}\n```",
+            Self::agent_browser_action_payload_bridge_json(bridge)
+        ))));
+        blocks
+    }
+
+    fn copy_agent_browser_action_payload_bridge(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let bridge = self.agent_browser_action_payload_bridge(window, None, "webpreview_template");
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_action_payload_bridge_json(&bridge),
+        ));
+        self.latest_agent_browser_action_payload_bridge = Some(bridge);
+        self.show_toast("Copied browser action payload bridge", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_action_payload_bridge_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let bridge = self.agent_browser_action_payload_bridge(window, None, "webpreview_template");
+        let blocks = self.agent_browser_action_payload_bridge_agent_blocks(&bridge);
+        self.latest_agent_browser_action_payload_bridge = Some(bridge);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent browser action payload bridge to the agent panel", cx);
+        cx.notify();
+    }
+
+    fn import_agent_browser_action_payload_from_clipboard(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(clipboard_text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+            self.show_toast("No clipboard text available for browser payload import", cx);
+            return;
+        };
+        let imported_payload =
+            serde_json::from_str::<Value>(&clipboard_text).unwrap_or_else(|_| {
+                serde_json::json!({
+                    "schema": "zed.web_preview.agent_browser_executor_payload.v1",
+                    "payload": {
+                        "action": "type_text",
+                        "text": clipboard_text,
+                        "clear_existing": false
+                    },
+                    "source": "clipboard_plain_text"
+                })
+            });
+        let bridge = self.agent_browser_action_payload_bridge(
+            window,
+            Some(imported_payload),
+            "clipboard_import",
+        );
+        let type_ready = bridge
+            .pointer("/bridge/executor_payloads/type_text/payload_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        self.latest_agent_browser_action_payload_bridge = Some(bridge);
+        self.show_toast(
+            if type_ready {
+                "Imported browser action payload"
+            } else {
+                "Imported browser payload, but type text is not ready"
+            },
+            cx,
+        );
+        cx.notify();
+    }
+
+    fn extract_type_text_payload_from_value<'a>(
+        value: &'a Value,
+    ) -> Option<&'a serde_json::Map<String, Value>> {
+        let candidates = [
+            value.pointer("/bridge/executor_payloads/type_text/payload"),
+            value.pointer("/executor_payloads/type_text/payload"),
+            value.pointer("/payload"),
+            value.pointer("/action_payload/payload"),
+        ];
+        candidates.into_iter().flatten().find_map(|candidate| {
+            let object = candidate.as_object()?;
+            let action = object
+                .get("action")
+                .and_then(Value::as_str)
+                .unwrap_or("type_text");
+            (action == "type_text").then_some(object)
+        })
+    }
+
     fn blocked_interaction_receipt_snapshot(&self, payload: &Value, window: &Window) -> Value {
         let mut receipt = payload.clone();
         if let Some(receipt) = receipt.as_object_mut() {
@@ -3185,6 +3424,7 @@ impl WebPreviewView {
                     "interaction_preflight": self.latest_interaction_preflight_summary(),
                     "interaction_receipt_template": self.latest_interaction_receipt_template_summary(),
                     "interaction_action_request": self.latest_interaction_action_request_summary(),
+                    "agent_browser_action_payload_bridge": self.latest_agent_browser_action_payload_bridge_summary(),
                     "blocked_interaction_receipt": self.latest_blocked_interaction_receipt_summary(),
                     "successful_interaction_receipt": self.latest_successful_interaction_receipt_summary(),
                     "agent_browser_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
@@ -3516,6 +3756,7 @@ impl WebPreviewView {
                 "interaction_preflight": self.latest_interaction_preflight_summary(),
                 "interaction_receipt_template": self.latest_interaction_receipt_template_summary(),
                 "interaction_action_request": self.latest_interaction_action_request_summary(),
+                "agent_browser_action_payload_bridge": self.latest_agent_browser_action_payload_bridge_summary(),
                 "blocked_interaction_receipt": self.latest_blocked_interaction_receipt_summary(),
                 "successful_interaction_receipt": self.latest_successful_interaction_receipt_summary(),
                 "noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
@@ -5781,8 +6022,9 @@ impl WebPreviewView {
     }
 
     fn native_type_executor_text_payload(
+        &self,
         target_candidate: &Option<Value>,
-    ) -> (Option<String>, Option<&'static str>, Vec<Value>) {
+    ) -> (Option<String>, Option<String>, Vec<Value>) {
         let mut blockers = Vec::new();
         let payload_paths = [
             ("/payload/text", "payload.text"),
@@ -5800,11 +6042,39 @@ impl WebPreviewView {
             })
         });
 
+        let payload = payload
+            .map(|(text, source)| (text, source.to_string()))
+            .or_else(|| {
+                let bridge = self.latest_agent_browser_action_payload_bridge.as_ref()?;
+                let bridge_payload = Self::extract_type_text_payload_from_value(bridge)?;
+                let text = bridge_payload.get("text")?.as_str()?.to_string();
+                let payload_selector = bridge_payload.get("selector").and_then(Value::as_str);
+                let target_selector = target_candidate
+                    .as_ref()
+                    .and_then(|target| target.pointer("/selector"))
+                    .and_then(Value::as_str);
+                if let (Some(payload_selector), Some(target_selector)) =
+                    (payload_selector, target_selector)
+                {
+                    if payload_selector != target_selector {
+                        blockers.push(serde_json::json!({
+                            "code": "type_text_payload_selector_mismatch",
+                            "message": "The imported type payload selector does not match the latest focused type target.",
+                            "payload_selector": payload_selector,
+                            "target_selector": target_selector,
+                            "required_action": "Focus the intended page input, rerun type preflight, and import a payload whose selector matches that target.",
+                        }));
+                        return None;
+                    }
+                }
+                Some((text, "agent_payload_bridge".to_string()))
+            });
+
         let Some((text, source)) = payload else {
             blockers.push(serde_json::json!({
                 "code": "type_text_payload_missing",
-                "message": "No explicit text payload is attached to the latest type preflight target.",
-                "required_action": "Provide an explicit payload.text value for the focused type target before running the native type executor.",
+                "message": "No explicit text payload is attached to the latest type preflight target or imported payload bridge.",
+                "required_action": "Import an agent browser action payload with payload.text for the focused type target before running the native type executor.",
             }));
             return (None, None, blockers);
         };
@@ -5883,7 +6153,7 @@ impl WebPreviewView {
             }));
         }
         let (text_payload, text_payload_source, mut text_blockers) =
-            Self::native_type_executor_text_payload(&target_candidate);
+            self.native_type_executor_text_payload(&target_candidate);
 
         let gate = self.agent_browser_executor_gate();
         let qa_checklist_ready = self
@@ -5940,9 +6210,9 @@ impl WebPreviewView {
             "preflight": preflight.as_ref(),
             "target_candidate": target_candidate.clone(),
             "coordinate_plan": coordinate_plan.clone(),
-            "text_payload_source": text_payload_source,
+            "text_payload_source": text_payload_source.clone(),
             "text_length": text_length,
-            "text_preview": text_preview,
+            "text_preview": text_preview.clone(),
         });
 
         let mut browser_command_dispatched = false;
@@ -6012,10 +6282,10 @@ impl WebPreviewView {
                 ("coordinate_plan", serde_json::json!(coordinate_plan)),
                 (
                     "text_payload_source",
-                    serde_json::json!(text_payload_source),
+                    serde_json::json!(text_payload_source.clone()),
                 ),
                 ("text_length", serde_json::json!(text_length)),
-                ("text_preview", serde_json::json!(text_preview)),
+                ("text_preview", serde_json::json!(text_preview.clone())),
                 ("dry_run_only", serde_json::json!(false)),
                 (
                     "dispatch_status",
@@ -7618,6 +7888,8 @@ impl WebPreviewView {
                             {"id": "browser.action.native_history_trace", "state": "available", "description": "Trace native back/forward readiness and receipt requirements without navigating the page."},
                             {"id": "browser.action.native_cache_reset_trace", "state": "available", "description": "Trace scoped cache-reset readiness and profile-safety requirements without clearing browser data."},
                             {"id": "browser.dispatch.manual_qa_checklist", "state": "available", "description": "Generate the final manual QA checklist required before enabling native browser dispatch."},
+                            {"id": "browser.action.payload_bridge", "state": "available", "description": "Generate or send a schema-versioned payload bridge that maps Agent action payloads into WebPreview executors without dispatching by itself."},
+                            {"id": "browser.action.payload_import_clipboard", "state": "available_explicit_user_action", "description": "Import a JSON action payload or plain text from the clipboard into the active WebPreview payload bridge for the next type executor attempt."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},
                             {"id": "browser.action.type", "state": "available_when_unlocked_payload_required", "description": "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."},
                             {"id": "browser.action.key", "state": "available_when_unlocked", "description": "Send allowlisted key presses through the WebView2 DevTools Protocol executor after unlock, fresh preflight, keyboard-focus gate, QA checklist, and receipt logging."},
@@ -9298,6 +9570,48 @@ impl WebPreviewView {
                                     move |_, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_interaction_action_request_to_agent(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Agent Payload Bridge")
+                                .icon(IconName::Code)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_action_payload_bridge(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Agent Payload Bridge to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_action_payload_bridge_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Import Agent Payload from Clipboard")
+                                .icon(IconName::QueueMessage)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.import_agent_browser_action_payload_from_clipboard(
+                                                window, cx,
+                                            );
                                         });
                                     }
                                 }),
@@ -11183,6 +11497,7 @@ impl Item for WebPreviewView {
                 latest_interaction_preflight: None,
                 latest_interaction_receipt_template: None,
                 latest_interaction_action_request: None,
+                latest_agent_browser_action_payload_bridge: None,
                 latest_blocked_interaction_receipt: None,
                 latest_successful_interaction_receipt: None,
                 latest_agent_browser_status_packet: None,
