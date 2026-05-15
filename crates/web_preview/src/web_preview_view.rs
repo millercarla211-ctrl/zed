@@ -239,6 +239,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_readiness_probe_to_agent",
     "copy_wait_contract",
     "send_wait_contract_to_agent",
+    "copy_interaction_plan",
+    "send_interaction_plan_to_agent",
     "take_screenshot",
     "inspect_element",
 ];
@@ -417,6 +419,7 @@ pub struct WebPreviewView {
     latest_action_targets: Option<Value>,
     latest_readiness_probe: Option<Value>,
     latest_wait_contract: Option<Value>,
+    latest_interaction_plan: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -595,6 +598,7 @@ impl WebPreviewView {
             latest_action_targets: None,
             latest_readiness_probe: None,
             latest_wait_contract: None,
+            latest_interaction_plan: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1048,6 +1052,7 @@ impl WebPreviewView {
             "action_targets": self.latest_action_targets_summary(),
             "readiness_probe": self.latest_readiness_probe_summary(),
             "wait_contract": self.latest_wait_contract_summary(),
+            "interaction_plan": self.latest_interaction_plan_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1070,6 +1075,8 @@ impl WebPreviewView {
                 "send_readiness_probe_to_agent": true,
                 "copy_wait_contract": true,
                 "send_wait_contract_to_agent": true,
+                "copy_interaction_plan": true,
+                "send_interaction_plan_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1154,6 +1161,18 @@ impl WebPreviewView {
             "ready_state": contract.pointer("/contract/ready_state").and_then(Value::as_str),
             "recommended": contract.pointer("/contract/recommended").cloned(),
             "counts": contract.pointer("/contract/counts").cloned(),
+        }))
+    }
+
+    fn latest_interaction_plan_summary(&self) -> Option<Value> {
+        let plan = self.latest_interaction_plan.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at": plan.pointer("/plan/timestamp").and_then(Value::as_str),
+            "url": plan.pointer("/plan/url").and_then(Value::as_str),
+            "title": plan.pointer("/plan/title").and_then(Value::as_str),
+            "ready_state": plan.pointer("/plan/ready_state").and_then(Value::as_str),
+            "dry_run_only": plan.pointer("/plan/dry_run_only").and_then(Value::as_bool),
+            "counts": plan.pointer("/plan/counts").cloned(),
         }))
     }
 
@@ -1602,6 +1621,65 @@ impl WebPreviewView {
 
     fn send_wait_contract_to_agent(&mut self, cx: &mut Context<Self>) {
         self.request_wait_contract("agent", cx);
+    }
+
+    fn interaction_plan_snapshot(&self, payload: &Value, window: &Window) -> Value {
+        let mut plan = payload.clone();
+        if let Some(plan) = plan.as_object_mut() {
+            plan.remove("kind");
+            plan.remove("action");
+        }
+
+        serde_json::json!({
+            "schema": "zed.web_preview.interaction_plan.v1",
+            "session": self.browser_session_snapshot(window),
+            "plan": plan,
+        })
+    }
+
+    fn interaction_plan_json(plan: &Value) -> String {
+        serde_json::to_string_pretty(plan).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn interaction_plan_agent_blocks(&self, plan: &Value) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = plan.pointer("/plan/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview interaction plan:\n\n```json\n{}\n```",
+            Self::interaction_plan_json(plan)
+        ))));
+        blocks
+    }
+
+    fn request_interaction_plan(&mut self, action: &'static str, cx: &mut Context<Self>) {
+        let script = format!(
+            "window.__zedWebPreview && window.__zedWebPreview.collectInteractionPlan('{action}');"
+        );
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(&script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Collecting web preview interaction plan", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("Interaction plan is unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic("Interaction plan crashed before collection", cx);
+            }
+        }
+    }
+
+    fn copy_interaction_plan(&mut self, cx: &mut Context<Self>) {
+        self.request_interaction_plan("copy", cx);
+    }
+
+    fn send_interaction_plan_to_agent(&mut self, cx: &mut Context<Self>) {
+        self.request_interaction_plan("agent", cx);
     }
 
     fn agent_browser_action_manifest(&self, window: &Window) -> Value {
@@ -2235,6 +2313,46 @@ impl WebPreviewView {
                     }
                 }
             }
+            "interaction-plan" => {
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let action = payload
+                        .get("action")
+                        .and_then(Value::as_str)
+                        .unwrap_or("copy");
+                    let plan = self.interaction_plan_snapshot(&payload, window);
+                    self.latest_interaction_plan = Some(plan.clone());
+
+                    match action {
+                        "agent" => {
+                            self.append_content_blocks_to_agent_panel(
+                                self.interaction_plan_agent_blocks(&plan),
+                                window,
+                                cx,
+                            );
+                            self.show_toast("Sent interaction plan to the agent panel", cx);
+                        }
+                        _ => {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                Self::interaction_plan_json(&plan),
+                            ));
+                            self.show_toast("Copied web preview interaction plan JSON", cx);
+                        }
+                    }
+
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.report_action_error("Interaction plan collection failed", error, cx);
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "Interaction plan crashed while collecting page data",
+                            cx,
+                        );
+                    }
+                }
+            }
             "capture-area" => {
                 match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
                     let scale = payload
@@ -2718,6 +2836,30 @@ impl WebPreviewView {
                                     move |_, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_wait_contract_to_agent(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Interaction Plan")
+                                .icon(IconName::ToolThink)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_interaction_plan(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Interaction Plan to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_interaction_plan_to_agent(cx);
                                         });
                                     }
                                 }),
@@ -3692,6 +3834,7 @@ impl Item for WebPreviewView {
                 latest_action_targets: None,
                 latest_readiness_probe: None,
                 latest_wait_contract: None,
+                latest_interaction_plan: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
@@ -5568,6 +5711,166 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     };
   };
 
+  const interactionPlanWarnings = (actionTargets, recommended) => {
+    const warnings = [];
+    if (!recommended.document_complete) {
+      warnings.push({
+        code: "document_not_complete",
+        message: "The document has not reached readyState=complete."
+      });
+    }
+    if (!recommended.network_idle) {
+      warnings.push({
+        code: "network_pending",
+        message: "There are pending fetch/XHR requests."
+      });
+    }
+    if (!recommended.dom_quiet_500ms) {
+      warnings.push({
+        code: "dom_mutating",
+        message: "The DOM changed recently; wait for quiet_for_ms to pass 500ms."
+      });
+    }
+    if (!recommended.no_busy_indicators) {
+      warnings.push({
+        code: "busy_indicators_present",
+        message: "Loading or busy indicators are visible in the page."
+      });
+    }
+    if (actionTargets.truncated > 0) {
+      warnings.push({
+        code: "targets_truncated",
+        message: "The visible action target list was truncated; re-collect with a narrower page state if needed.",
+        count: actionTargets.truncated
+      });
+    }
+    if (document.querySelector("input[type='password']")) {
+      warnings.push({
+        code: "password_field_present",
+        message: "A password field exists; automation should not type credentials without explicit user approval."
+      });
+    }
+    if (document.querySelector("input[type='file']")) {
+      warnings.push({
+        code: "file_picker_present",
+        message: "A file picker exists; file upload actions require a separate explicit file permission."
+      });
+    }
+    if (document.querySelector("[role='dialog'], dialog, [aria-modal='true']")) {
+      warnings.push({
+        code: "dialog_present",
+        message: "A dialog or modal may intercept page interaction."
+      });
+    }
+    return warnings;
+  };
+
+  const interactionPlanScrollTargets = () => {
+    const candidates = [
+      document.scrollingElement,
+      document.documentElement,
+      document.body,
+      ...Array.from(document.querySelectorAll("main, [role='main'], [data-scroll-area], [data-radix-scroll-area-viewport], [style*='overflow']"))
+    ].filter(Boolean);
+    const seen = new Set();
+    const targets = [];
+
+    for (const element of candidates) {
+      if (!(element instanceof Element)) continue;
+      const selector = cssSelector(element) || element.tagName.toLowerCase();
+      if (seen.has(selector)) continue;
+      seen.add(selector);
+      const rect = roundedRect(element);
+      const scrollHeight = element.scrollHeight || 0;
+      const clientHeight = element.clientHeight || 0;
+      const scrollWidth = element.scrollWidth || 0;
+      const clientWidth = element.clientWidth || 0;
+      if (scrollHeight <= clientHeight && scrollWidth <= clientWidth) continue;
+      targets.push({
+        selector,
+        tag: element.tagName.toLowerCase(),
+        rect,
+        scroll_top: Math.round(element.scrollTop || 0),
+        scroll_left: Math.round(element.scrollLeft || 0),
+        scroll_height: scrollHeight,
+        client_height: clientHeight,
+        scroll_width: scrollWidth,
+        client_width: clientWidth
+      });
+      if (targets.length >= 16) break;
+    }
+
+    return targets;
+  };
+
+  const interactionPlanGroups = (actionTargets) => {
+    const targets = actionTargets.targets || [];
+    const clickTargets = targets.filter((target) => target.action_kind === "click").slice(0, 32);
+    const typeTargets = targets.filter((target) => target.action_kind === "type").slice(0, 24);
+    const selectTargets = targets.filter((target) => target.action_kind === "select").slice(0, 24);
+    const mediaTargets = targets.filter((target) => target.action_kind === "media").slice(0, 12);
+    const scrollTargets = interactionPlanScrollTargets();
+
+    return [
+      {
+        action: "wait",
+        dry_run_only: true,
+        available: true,
+        requires_interactive_permission: false,
+        reason: "Readiness checks must pass before browser control actions.",
+        target_count: 0
+      },
+      {
+        action: "click",
+        dry_run_only: true,
+        available: clickTargets.length > 0,
+        requires_interactive_permission: true,
+        target_count: clickTargets.length,
+        targets: clickTargets
+      },
+      {
+        action: "type_text",
+        dry_run_only: true,
+        available: typeTargets.length > 0,
+        requires_interactive_permission: true,
+        target_count: typeTargets.length,
+        targets: typeTargets
+      },
+      {
+        action: "select",
+        dry_run_only: true,
+        available: selectTargets.length > 0,
+        requires_interactive_permission: true,
+        target_count: selectTargets.length,
+        targets: selectTargets
+      },
+      {
+        action: "scroll",
+        dry_run_only: true,
+        available: scrollTargets.length > 0,
+        requires_interactive_permission: true,
+        target_count: scrollTargets.length,
+        targets: scrollTargets
+      },
+      {
+        action: "media_control",
+        dry_run_only: true,
+        available: mediaTargets.length > 0,
+        requires_interactive_permission: true,
+        target_count: mediaTargets.length,
+        targets: mediaTargets
+      },
+      {
+        action: "press_key",
+        dry_run_only: true,
+        available: true,
+        requires_interactive_permission: true,
+        target_count: 0,
+        allowed_examples: ["Escape", "Enter", "Tab", "ArrowDown", "ArrowUp"]
+      }
+    ];
+  };
+
   installRuntimeCapture();
 
   window.__zedWebPreview = {
@@ -5866,6 +6169,68 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
           "This is a read-only snapshot for agent planning.",
           "Automation should re-collect this contract immediately before interacting.",
           "Prefer data-testid/data-test/data-cy selectors or exact visible text candidates when available."
+        ]
+      });
+    },
+
+    collectInteractionPlan(action = "copy") {
+      try { installMutationCapture(); } catch (_error) {}
+      const html = document.documentElement;
+      const body = document.body;
+      const actionTargets = collectActionTargetRows();
+      const selectorContracts = waitSelectorContracts();
+      const textCandidates = waitTextCandidates();
+      const recommended = recommendedWaitRecipe();
+      const actionGroups = interactionPlanGroups(actionTargets);
+      const warnings = interactionPlanWarnings(actionTargets, recommended);
+
+      post({
+        kind: "interaction-plan",
+        action,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState,
+        dry_run_only: true,
+        recommended_wait: recommended,
+        permissions: {
+          required_for_interactive_actions: true,
+          current_payload_executes_actions: false,
+          user_must_unlock_interactive_actions_in_zed: true
+        },
+        viewport: {
+          inner_width: window.innerWidth,
+          inner_height: window.innerHeight,
+          device_pixel_ratio: window.devicePixelRatio || 1,
+          scroll_x: Math.round(window.scrollX || 0),
+          scroll_y: Math.round(window.scrollY || 0),
+          scroll_width: Math.max(html?.scrollWidth || 0, body?.scrollWidth || 0),
+          scroll_height: Math.max(html?.scrollHeight || 0, body?.scrollHeight || 0)
+        },
+        counts: {
+          action_groups: actionGroups.length,
+          available_action_groups: actionGroups.filter((group) => group.available).length,
+          action_targets: actionTargets.targets.length,
+          selector_contracts: selectorContracts.length,
+          text_candidates: textCandidates.length,
+          warnings: warnings.length,
+          pending_network: runtimeState.pendingNetwork,
+          busy_indicators: readinessBusyCount()
+        },
+        warnings,
+        action_groups: actionGroups,
+        selector_contracts: selectorContracts,
+        text_candidates: textCandidates,
+        mutation: {
+          observed: mutationState.observed,
+          count: mutationState.count,
+          last_mutation_at: mutationState.lastMutationAt,
+          quiet_for_ms: readinessQuietForMs()
+        },
+        notes: [
+          "This plan is intentionally dry-run only.",
+          "Re-collect readiness, wait contract, and action targets before executing any future interactive action.",
+          "The Rust-side session snapshot includes whether interactive agent actions are currently locked or unlocked."
         ]
       });
     },

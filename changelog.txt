@@ -1,3 +1,13 @@
+[2026-05-16] - Web Preview Interaction Plan
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Interaction Plan" and "Send Interaction Plan to Agent".
+- The WebPreview bridge now produces a dry-run-only plan for future wait, click, type, select, scroll, media-control, and key actions.
+- Interaction plans include permission requirements, readiness warnings, selector contracts, visible text candidates, scroll targets, and action-target samples.
+
+NOTES:
+- This advances Agent Browser Command Center toward interactive tools without executing browser input or changing WebPreview focus routing.
+
 [2026-05-16] - Web Preview Wait Contract
 
 ADDED:
