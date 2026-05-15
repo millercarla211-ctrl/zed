@@ -1,3 +1,11 @@
+[2026-05-15] - UI Install Safety Copy
+
+CHANGED:
+- UI/shadcn install-only row hints and primary-action tooltips now state that installs write missing registry files while keeping existing project files.
+
+NOTES:
+- This aligns the visible install guidance with the new install file accounting and the existing no-overwrite installer behavior.
+
 [2026-05-15] - UI Install File Accounting
 
 CHANGED:

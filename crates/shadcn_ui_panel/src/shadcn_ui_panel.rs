@@ -1889,11 +1889,13 @@ fn shadcn_add_command(item: &CatalogItem) -> String {
 fn shadcn_install_plan_label(item: &CatalogItem) -> SharedString {
     let target = item.target_file_name.as_ref();
     let mut text = String::with_capacity(
-        "Click row to preview. Install writes registry files; primary target: ".len()
+        "Click row to preview. Install writes missing registry files and keeps existing files; primary target: ".len()
             + target.len()
             + ". No editor paste.".len(),
     );
-    text.push_str("Click row to preview. Install writes registry files");
+    text.push_str(
+        "Click row to preview. Install writes missing registry files and keeps existing files",
+    );
     if !target.is_empty() {
         text.push_str("; primary target: ");
         text.push_str(target);
@@ -1997,7 +1999,7 @@ fn ui_readiness_label(
 
 fn ui_catalog_primary_tooltip(item: &CatalogItem) -> &'static str {
     if item.install_only {
-        "Install writes this registry item into the active project"
+        "Install writes missing registry files and keeps existing files"
     } else if can_drag_into_editor(item.source) {
         "Insert this UI snippet into the active React editor"
     } else {
@@ -2021,7 +2023,7 @@ fn ui_history_primary_tooltip(
     if can_insert && !source_available {
         "Source or registry manifest is missing. Remove this row or use Clean."
     } else if install_only {
-        "Install writes this registry item into the active project"
+        "Install writes missing registry files and keeps existing files"
     } else if can_insert {
         "Insert this UI snippet into the active React editor"
     } else {
