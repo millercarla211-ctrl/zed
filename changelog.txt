@@ -1,3 +1,17 @@
+[2026-05-16] - Web Preview Native Input Trace Family
+
+ADDED:
+- WebPreview's More menu now includes trace-only native type, key, and scroll adapter actions plus Agent Panel handoff entries.
+- The shared native input trace adapter now emits click, type, key, and scroll trace receipts without dispatching input.
+- Type traces plan target coordinates, key traces plan keyboard-focus requirements, and scroll traces plan element or window wheel coordinates.
+- Browser plugin manifests now advertise `browser.action.native_type_trace`, `browser.action.native_key_trace`, and `browser.action.native_scroll_trace`.
+
+CHANGED:
+- Native click tracing now uses the same typed trace configuration and receipt path as the new type, key, and scroll traces.
+
+NOTES:
+- All native input traces remain dry-run only; no mouse, pointer, keyboard, wheel, browser command, page script, or external Chrome input is sent.
+
 [2026-05-16] - Web Preview Native Click Trace Adapter
 
 ADDED:

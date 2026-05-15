@@ -268,6 +268,12 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_noop_executor_attempt_to_agent",
     "copy_native_click_trace_attempt",
     "send_native_click_trace_attempt_to_agent",
+    "copy_native_type_trace_attempt",
+    "send_native_type_trace_attempt_to_agent",
+    "copy_native_key_trace_attempt",
+    "send_native_key_trace_attempt_to_agent",
+    "copy_native_scroll_trace_attempt",
+    "send_native_scroll_trace_attempt_to_agent",
     "copy_agent_browser_qa_runbook",
     "send_agent_browser_qa_runbook_to_agent",
     "copy_agent_plugin_catalog",
@@ -341,6 +347,20 @@ struct BrowserRect {
     y: f64,
     width: f64,
     height: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct NativeInputTraceConfig {
+    action: &'static str,
+    label: &'static str,
+    receipt_schema: &'static str,
+    attempt_schema: &'static str,
+    missing_code: &'static str,
+    missing_message: &'static str,
+    missing_required_action: &'static str,
+    stale_code: &'static str,
+    stale_message: &'static str,
+    plan_kind: &'static str,
 }
 
 #[cfg(target_os = "windows")]
@@ -486,6 +506,9 @@ pub struct WebPreviewView {
     latest_agent_browser_key_preflight_attempt: Option<Value>,
     latest_agent_browser_scroll_preflight_attempt: Option<Value>,
     latest_agent_browser_native_click_trace_attempt: Option<Value>,
+    latest_agent_browser_native_type_trace_attempt: Option<Value>,
+    latest_agent_browser_native_key_trace_attempt: Option<Value>,
+    latest_agent_browser_native_scroll_trace_attempt: Option<Value>,
     latest_agent_browser_qa_runbook: Option<Value>,
     latest_agent_plugin_catalog: Option<Value>,
     latest_annotated_screenshot: Option<Value>,
@@ -685,6 +708,9 @@ impl WebPreviewView {
             latest_agent_browser_key_preflight_attempt: None,
             latest_agent_browser_scroll_preflight_attempt: None,
             latest_agent_browser_native_click_trace_attempt: None,
+            latest_agent_browser_native_type_trace_attempt: None,
+            latest_agent_browser_native_key_trace_attempt: None,
+            latest_agent_browser_native_scroll_trace_attempt: None,
             latest_agent_browser_qa_runbook: None,
             latest_agent_plugin_catalog: None,
             latest_annotated_screenshot: None,
@@ -1159,6 +1185,9 @@ impl WebPreviewView {
             "agent_browser_key_preflight_attempt": self.latest_agent_browser_key_preflight_attempt_summary(),
             "agent_browser_scroll_preflight_attempt": self.latest_agent_browser_scroll_preflight_attempt_summary(),
             "agent_browser_native_click_trace_attempt": self.latest_agent_browser_native_click_trace_attempt_summary(),
+            "agent_browser_native_type_trace_attempt": self.latest_agent_browser_native_type_trace_attempt_summary(),
+            "agent_browser_native_key_trace_attempt": self.latest_agent_browser_native_key_trace_attempt_summary(),
+            "agent_browser_native_scroll_trace_attempt": self.latest_agent_browser_native_scroll_trace_attempt_summary(),
             "agent_browser_qa_runbook": self.latest_agent_browser_qa_runbook_summary(),
             "agent_plugin_catalog": self.latest_agent_plugin_catalog_summary(),
             "annotated_screenshot": self.latest_annotated_screenshot_summary(),
@@ -1220,6 +1249,12 @@ impl WebPreviewView {
                 "send_permissioned_scroll_preflight_attempt_to_agent": true,
                 "copy_native_click_trace_attempt": true,
                 "send_native_click_trace_attempt_to_agent": true,
+                "copy_native_type_trace_attempt": true,
+                "send_native_type_trace_attempt_to_agent": true,
+                "copy_native_key_trace_attempt": true,
+                "send_native_key_trace_attempt_to_agent": true,
+                "copy_native_scroll_trace_attempt": true,
+                "send_native_scroll_trace_attempt_to_agent": true,
                 "copy_agent_browser_qa_runbook": true,
                 "send_agent_browser_qa_runbook_to_agent": true,
                 "copy_agent_plugin_catalog": true,
@@ -1528,19 +1563,46 @@ impl WebPreviewView {
     }
 
     fn latest_agent_browser_native_click_trace_attempt_summary(&self) -> Option<Value> {
-        let attempt = self
-            .latest_agent_browser_native_click_trace_attempt
-            .as_ref()?;
+        Self::latest_agent_browser_native_input_trace_attempt_summary(
+            &self.latest_agent_browser_native_click_trace_attempt,
+        )
+    }
+
+    fn latest_agent_browser_native_type_trace_attempt_summary(&self) -> Option<Value> {
+        Self::latest_agent_browser_native_input_trace_attempt_summary(
+            &self.latest_agent_browser_native_type_trace_attempt,
+        )
+    }
+
+    fn latest_agent_browser_native_key_trace_attempt_summary(&self) -> Option<Value> {
+        Self::latest_agent_browser_native_input_trace_attempt_summary(
+            &self.latest_agent_browser_native_key_trace_attempt,
+        )
+    }
+
+    fn latest_agent_browser_native_scroll_trace_attempt_summary(&self) -> Option<Value> {
+        Self::latest_agent_browser_native_input_trace_attempt_summary(
+            &self.latest_agent_browser_native_scroll_trace_attempt,
+        )
+    }
+
+    fn latest_agent_browser_native_input_trace_attempt_summary(
+        attempt: &Option<Value>,
+    ) -> Option<Value> {
+        let attempt = attempt.as_ref()?;
         Some(serde_json::json!({
             "captured_at_ms": attempt.pointer("/attempt/captured_at_ms").and_then(Value::as_u64),
             "title": attempt.pointer("/attempt/title").and_then(Value::as_str),
             "url": attempt.pointer("/attempt/url").and_then(Value::as_str),
+            "action": attempt.pointer("/attempt/action").and_then(Value::as_str),
             "outcome": attempt.pointer("/attempt/outcome").and_then(Value::as_str),
             "trace_ready": attempt.pointer("/attempt/trace_ready").and_then(Value::as_bool),
             "dispatch_enabled": attempt.pointer("/attempt/dispatch_enabled").and_then(Value::as_bool),
             "target_selector": attempt.pointer("/attempt/target_candidate/selector").and_then(Value::as_str),
             "client_logical_x": attempt.pointer("/attempt/coordinate_plan/window_client_logical_point/x").and_then(Value::as_f64),
             "client_logical_y": attempt.pointer("/attempt/coordinate_plan/window_client_logical_point/y").and_then(Value::as_f64),
+            "planned_key": attempt.pointer("/attempt/coordinate_plan/key").and_then(Value::as_str),
+            "planned_scroll_delta_y": attempt.pointer("/attempt/coordinate_plan/wheel_delta_logical/y").and_then(Value::as_i64),
             "blocker_count": attempt.pointer("/attempt/blockers").and_then(Value::as_array).map(Vec::len),
         }))
     }
@@ -2932,6 +2994,9 @@ impl WebPreviewView {
                     "agent_browser_key_preflight_attempt": self.latest_agent_browser_key_preflight_attempt_summary(),
                     "agent_browser_scroll_preflight_attempt": self.latest_agent_browser_scroll_preflight_attempt_summary(),
                     "agent_browser_native_click_trace_attempt": self.latest_agent_browser_native_click_trace_attempt_summary(),
+                    "agent_browser_native_type_trace_attempt": self.latest_agent_browser_native_type_trace_attempt_summary(),
+                    "agent_browser_native_key_trace_attempt": self.latest_agent_browser_native_key_trace_attempt_summary(),
+                    "agent_browser_native_scroll_trace_attempt": self.latest_agent_browser_native_scroll_trace_attempt_summary(),
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 },
                 "handoff": {
@@ -3190,6 +3255,9 @@ impl WebPreviewView {
                 "key_preflight_attempt": self.latest_agent_browser_key_preflight_attempt_summary(),
                 "scroll_preflight_attempt": self.latest_agent_browser_scroll_preflight_attempt_summary(),
                 "native_click_trace_attempt": self.latest_agent_browser_native_click_trace_attempt_summary(),
+                "native_type_trace_attempt": self.latest_agent_browser_native_type_trace_attempt_summary(),
+                "native_key_trace_attempt": self.latest_agent_browser_native_key_trace_attempt_summary(),
+                "native_scroll_trace_attempt": self.latest_agent_browser_native_scroll_trace_attempt_summary(),
             },
             "notes": [
                 "This readiness contract is read-only and does not dispatch browser input.",
@@ -4370,9 +4438,75 @@ impl WebPreviewView {
         self.permissioned_input_preflight_attempt("scroll", window, cx, true);
     }
 
-    fn native_click_trace_coordinate_plan(
+    fn native_input_trace_config(action: &'static str) -> NativeInputTraceConfig {
+        match action {
+            "type_native_trace" => NativeInputTraceConfig {
+                action,
+                label: "native type trace",
+                receipt_schema: "zed.web_preview.native_type_trace_receipt.v1",
+                attempt_schema: "zed.web_preview.native_type_trace_attempt.v1",
+                missing_code: "type_preflight_missing",
+                missing_message: "No type preflight receipt exists for this WebPreview session.",
+                missing_required_action: "Run Type Preflight before tracing the native type adapter.",
+                stale_code: "type_preflight_not_ready",
+                stale_message: "The latest type preflight receipt is blocked or stale.",
+                plan_kind: "point",
+            },
+            "key_native_trace" => NativeInputTraceConfig {
+                action,
+                label: "native key trace",
+                receipt_schema: "zed.web_preview.native_key_trace_receipt.v1",
+                attempt_schema: "zed.web_preview.native_key_trace_attempt.v1",
+                missing_code: "key_preflight_missing",
+                missing_message: "No key preflight receipt exists for this WebPreview session.",
+                missing_required_action: "Run Key Preflight before tracing the native key adapter.",
+                stale_code: "key_preflight_not_ready",
+                stale_message: "The latest key preflight receipt is blocked or stale.",
+                plan_kind: "key",
+            },
+            "scroll_native_trace" => NativeInputTraceConfig {
+                action,
+                label: "native scroll trace",
+                receipt_schema: "zed.web_preview.native_scroll_trace_receipt.v1",
+                attempt_schema: "zed.web_preview.native_scroll_trace_attempt.v1",
+                missing_code: "scroll_preflight_missing",
+                missing_message: "No scroll preflight receipt exists for this WebPreview session.",
+                missing_required_action: "Run Scroll Preflight before tracing the native scroll adapter.",
+                stale_code: "scroll_preflight_not_ready",
+                stale_message: "The latest scroll preflight receipt is blocked or stale.",
+                plan_kind: "scroll",
+            },
+            _ => NativeInputTraceConfig {
+                action: "click_native_trace",
+                label: "native click trace",
+                receipt_schema: "zed.web_preview.native_click_trace_receipt.v1",
+                attempt_schema: "zed.web_preview.native_click_trace_attempt.v1",
+                missing_code: "click_preflight_missing",
+                missing_message: "No click preflight receipt exists for this WebPreview session.",
+                missing_required_action: "Run Click Preflight before tracing the native click adapter.",
+                stale_code: "click_preflight_not_ready",
+                stale_message: "The latest click preflight receipt is blocked or stale.",
+                plan_kind: "point",
+            },
+        }
+    }
+
+    fn native_input_trace_preflight_attempt(
+        &self,
+        config: NativeInputTraceConfig,
+    ) -> Option<Value> {
+        match config.action {
+            "type_native_trace" => self.latest_agent_browser_type_preflight_attempt.clone(),
+            "key_native_trace" => self.latest_agent_browser_key_preflight_attempt.clone(),
+            "scroll_native_trace" => self.latest_agent_browser_scroll_preflight_attempt.clone(),
+            _ => self.latest_agent_browser_click_preflight_attempt.clone(),
+        }
+    }
+
+    fn native_input_trace_point_plan(
         &self,
         window: &Window,
+        config: NativeInputTraceConfig,
         target_candidate: &Option<Value>,
     ) -> (Option<Value>, Vec<Value>) {
         let mut blockers = Vec::new();
@@ -4383,8 +4517,8 @@ impl WebPreviewView {
         if rect.is_none() {
             blockers.push(serde_json::json!({
                 "code": "target_rect_missing",
-                "message": "The latest click preflight target does not include a viewport rectangle.",
-                "required_action": "Collect fresh action targets and rerun click preflight before tracing native dispatch.",
+                "message": format!("The latest {} target does not include a viewport rectangle.", config.label),
+                "required_action": format!("Collect fresh action targets and rerun {} before tracing native dispatch.", config.label),
             }));
         }
 
@@ -4393,7 +4527,7 @@ impl WebPreviewView {
             blockers.push(serde_json::json!({
                 "code": "native_host_bounds_missing",
                 "message": "The native WebPreview host bounds are not available.",
-                "required_action": "Render the WebPreview once and rerun the native click trace after bounds are registered.",
+                "required_action": format!("Render the WebPreview once and rerun the {} after bounds are registered.", config.label),
             }));
         }
 
@@ -4415,8 +4549,8 @@ impl WebPreviewView {
         if !target_inside_viewport {
             blockers.push(serde_json::json!({
                 "code": "target_center_outside_viewport",
-                "message": "The click target center is outside the current native WebPreview bounds.",
-                "required_action": "Scroll or resize the page so the target is visible, collect fresh targets, and rerun click preflight.",
+                "message": format!("The {} target center is outside the current native WebPreview bounds.", config.label),
+                "required_action": format!("Scroll or resize the page so the target is visible, collect fresh targets, and rerun {}.", config.label),
             }));
         }
 
@@ -4457,50 +4591,174 @@ impl WebPreviewView {
                 "zoom_factor": self.zoom_factor,
                 "viewport_mode": self.viewport_mode.snapshot(),
                 "target_inside_viewport": target_inside_viewport,
-                "dispatch_note": "Coordinates are calculated for audit only; no native click is sent by this trace.",
+                "dispatch_note": format!("Coordinates are calculated for audit only; no {} input is sent by this trace.", config.label),
             })),
             blockers,
         )
     }
 
-    fn native_click_trace_attempt(
+    fn native_key_trace_plan(
+        &self,
+        window: &Window,
+        target_candidate: &Option<Value>,
+    ) -> (Option<Value>, Vec<Value>) {
+        let mut blockers = Vec::new();
+        let key = target_candidate
+            .as_ref()
+            .and_then(|target| target.pointer("/key"))
+            .and_then(Value::as_str)
+            .unwrap_or("Escape");
+        let active_element = target_candidate
+            .as_ref()
+            .and_then(|target| target.pointer("/active_element"))
+            .cloned();
+        let native_keyboard_focus = self.native_preview_has_keyboard_focus(window);
+        if !native_keyboard_focus {
+            blockers.push(serde_json::json!({
+                "code": "native_keyboard_focus_missing",
+                "message": "The WebPreview does not currently own native keyboard focus.",
+                "required_action": "Click inside the WebPreview body and rerun key preflight before enabling native key dispatch.",
+            }));
+        }
+
+        (
+            Some(serde_json::json!({
+                "coordinate_space": "trace_only_keyboard_focus",
+                "key": key,
+                "active_element": active_element,
+                "native_keyboard_focus": native_keyboard_focus,
+                "scale_factor": window.scale_factor() as f64,
+                "zoom_factor": self.zoom_factor,
+                "viewport_mode": self.viewport_mode.snapshot(),
+                "dispatch_note": "Keyboard input is planned for audit only; no native key is sent by this trace.",
+            })),
+            blockers,
+        )
+    }
+
+    fn native_scroll_trace_plan(
+        &self,
+        window: &Window,
+        target_candidate: &Option<Value>,
+    ) -> (Option<Value>, Vec<Value>) {
+        let selector = target_candidate
+            .as_ref()
+            .and_then(|target| target.pointer("/selector"))
+            .and_then(Value::as_str);
+        if selector != Some("window") {
+            let config = Self::native_input_trace_config("scroll_native_trace");
+            let (mut plan, blockers) =
+                self.native_input_trace_point_plan(window, config, target_candidate);
+            if let Some(plan) = plan.as_mut()
+                && let Some(object) = plan.as_object_mut()
+            {
+                object.insert(
+                    "wheel_delta_logical".to_string(),
+                    serde_json::json!({ "x": 0, "y": -480 }),
+                );
+                object.insert("scroll_target".to_string(), serde_json::json!("element"));
+            }
+            return (plan, blockers);
+        }
+
+        let mut blockers = Vec::new();
+        let host_bounds = self.host_bounds.borrow().as_ref().copied();
+        if host_bounds.is_none() {
+            blockers.push(serde_json::json!({
+                "code": "native_host_bounds_missing",
+                "message": "The native WebPreview host bounds are not available.",
+                "required_action": "Render the WebPreview once and rerun the native scroll trace after bounds are registered.",
+            }));
+        }
+        let Some(bounds) = host_bounds else {
+            return (None, blockers);
+        };
+        let scale_factor = window.scale_factor() as f64;
+        let client_logical_x =
+            bounds.origin.x.as_f32() as f64 + bounds.size.width.as_f32() as f64 / 2.0;
+        let client_logical_y =
+            bounds.origin.y.as_f32() as f64 + bounds.size.height.as_f32() as f64 / 2.0;
+
+        (
+            Some(serde_json::json!({
+                "coordinate_space": "trace_only_window_scroll",
+                "scroll_target": "window",
+                "host_bounds_logical": {
+                    "x": bounds.origin.x.as_f32(),
+                    "y": bounds.origin.y.as_f32(),
+                    "width": bounds.size.width.as_f32(),
+                    "height": bounds.size.height.as_f32(),
+                },
+                "window_client_logical_point": {
+                    "x": client_logical_x,
+                    "y": client_logical_y,
+                },
+                "window_client_physical_point": {
+                    "x": client_logical_x * scale_factor,
+                    "y": client_logical_y * scale_factor,
+                },
+                "wheel_delta_logical": { "x": 0, "y": -480 },
+                "scale_factor": scale_factor,
+                "zoom_factor": self.zoom_factor,
+                "viewport_mode": self.viewport_mode.snapshot(),
+                "dispatch_note": "Scroll input is planned for audit only; no native wheel event is sent by this trace.",
+            })),
+            blockers,
+        )
+    }
+
+    fn native_input_trace_plan(
+        &self,
+        window: &Window,
+        config: NativeInputTraceConfig,
+        target_candidate: &Option<Value>,
+    ) -> (Option<Value>, Vec<Value>) {
+        match config.plan_kind {
+            "key" => self.native_key_trace_plan(window, target_candidate),
+            "scroll" => self.native_scroll_trace_plan(window, target_candidate),
+            _ => self.native_input_trace_point_plan(window, config, target_candidate),
+        }
+    }
+
+    fn native_input_trace_attempt(
         &mut self,
+        config: NativeInputTraceConfig,
         window: &Window,
         cx: &mut Context<Self>,
         send_to_agent: bool,
     ) {
         let captured_at_ms = Self::current_epoch_millis();
-        let click_preflight = self.latest_agent_browser_click_preflight_attempt.clone();
-        let click_preflight_ready = click_preflight
+        let preflight = self.native_input_trace_preflight_attempt(config);
+        let preflight_ready = preflight
             .as_ref()
             .and_then(|attempt| attempt.pointer("/attempt/outcome"))
             .and_then(Value::as_str)
             == Some("preflight_ready");
-        let target_candidate = click_preflight
+        let target_candidate = preflight
             .as_ref()
             .and_then(|attempt| attempt.pointer("/attempt/target_candidate"))
             .cloned();
         let (coordinate_plan, mut coordinate_blockers) =
-            self.native_click_trace_coordinate_plan(window, &target_candidate);
+            self.native_input_trace_plan(window, config, &target_candidate);
         let trace_ready =
-            click_preflight_ready && coordinate_plan.is_some() && coordinate_blockers.is_empty();
+            preflight_ready && coordinate_plan.is_some() && coordinate_blockers.is_empty();
         let gate = self.agent_browser_executor_gate();
         let mut blockers = self.agent_browser_executor_gate_blockers(
             gate,
-            "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before native click tracing.",
-            "Native click tracing requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts.",
+            "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before native input tracing.",
+            "Native input tracing requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts.",
         );
-        if click_preflight.is_none() {
+        if preflight.is_none() {
             blockers.push(serde_json::json!({
-                "code": "click_preflight_missing",
-                "message": "No click preflight receipt exists for this WebPreview session.",
-                "required_action": "Run Click Preflight before tracing the native click adapter.",
+                "code": config.missing_code,
+                "message": config.missing_message,
+                "required_action": config.missing_required_action,
             }));
-        } else if !click_preflight_ready {
+        } else if !preflight_ready {
             blockers.push(serde_json::json!({
-                "code": "click_preflight_not_ready",
-                "message": "The latest click preflight receipt is blocked or stale.",
-                "required_action": "Collect fresh context and rerun click preflight until it reports preflight_ready.",
+                "code": config.stale_code,
+                "message": config.stale_message,
+                "required_action": format!("Collect fresh context and rerun {} until it reports preflight_ready.", config.label),
             }));
         }
         blockers.append(&mut coordinate_blockers);
@@ -4519,7 +4777,7 @@ impl WebPreviewView {
             "url": self.active_url.as_ref(),
             "title": self.current_tab_title().as_ref(),
             "load_state": self.load_state_name(),
-            "click_preflight": click_preflight.as_ref(),
+            "preflight": preflight.as_ref(),
             "target_candidate": target_candidate.clone(),
         });
         let after = serde_json::json!({
@@ -4529,8 +4787,8 @@ impl WebPreviewView {
             "coordinate_plan": coordinate_plan.clone(),
         });
         let receipt = self.permissioned_executor_receipt(
-            "zed.web_preview.native_click_trace_receipt.v1",
-            "click_native_trace",
+            config.receipt_schema,
+            config.action,
             outcome,
             gate,
             before,
@@ -4551,10 +4809,7 @@ impl WebPreviewView {
             vec![
                 ("target_candidate", serde_json::json!(target_candidate)),
                 ("coordinate_plan", serde_json::json!(coordinate_plan)),
-                (
-                    "click_preflight_ready",
-                    serde_json::json!(click_preflight_ready),
-                ),
+                ("input_preflight_ready", serde_json::json!(preflight_ready)),
                 ("dry_run_only", serde_json::json!(true)),
                 (
                     "dispatch_status",
@@ -4566,7 +4821,7 @@ impl WebPreviewView {
         let receipt_target_candidate = receipt.pointer("/target_candidate").cloned();
         let receipt_coordinate_plan = receipt.pointer("/coordinate_plan").cloned();
         let attempt = serde_json::json!({
-            "schema": "zed.web_preview.native_click_trace_attempt.v1",
+            "schema": config.attempt_schema,
             "session": self.browser_session_snapshot(window),
             "policy": self.agent_browser_policy_snapshot(),
             "attempt": {
@@ -4574,12 +4829,12 @@ impl WebPreviewView {
                 "session_id": self.session_id.as_ref(),
                 "title": self.current_tab_title().as_ref(),
                 "url": self.active_url.as_ref(),
-                "action": "click_native_trace",
+                "action": config.action,
                 "outcome": outcome,
                 "trace_ready": trace_ready,
                 "dispatch_enabled": false,
                 "dry_run_only": true,
-                "click_preflight_ready": click_preflight_ready,
+                "input_preflight_ready": preflight_ready,
                 "target_candidate": receipt_target_candidate,
                 "coordinate_plan": receipt_coordinate_plan,
                 "native_input_dispatched": false,
@@ -4589,31 +4844,46 @@ impl WebPreviewView {
                 "receipt": receipt,
             },
             "notes": [
-                "This native click adapter slice is trace-only.",
-                "It translates the latest click preflight target rectangle into WebPreview host coordinates.",
+                format!("This {} adapter slice is trace-only.", config.label),
+                "It translates the latest input preflight candidate into a native WebPreview dispatch plan.",
                 "It never sends mouse, pointer, keyboard, wheel, browser command, or page-script input."
             ],
         });
-        let blocks = self.native_click_trace_agent_blocks(&attempt);
-        self.latest_agent_browser_native_click_trace_attempt = Some(attempt.clone());
+        let blocks = self.native_input_trace_agent_blocks(&attempt, config.label);
+        match config.action {
+            "type_native_trace" => {
+                self.latest_agent_browser_native_type_trace_attempt = Some(attempt.clone())
+            }
+            "key_native_trace" => {
+                self.latest_agent_browser_native_key_trace_attempt = Some(attempt.clone())
+            }
+            "scroll_native_trace" => {
+                self.latest_agent_browser_native_scroll_trace_attempt = Some(attempt.clone())
+            }
+            _ => self.latest_agent_browser_native_click_trace_attempt = Some(attempt.clone()),
+        }
 
         if send_to_agent {
             self.append_content_blocks_to_agent_panel(blocks, window, cx);
-            self.show_toast("Sent native click trace to the agent panel", cx);
+            self.show_toast(format!("Sent {} to the agent panel", config.label), cx);
         } else {
-            cx.write_to_clipboard(ClipboardItem::new_string(Self::native_click_trace_json(
+            cx.write_to_clipboard(ClipboardItem::new_string(Self::native_input_trace_json(
                 &attempt,
             )));
-            self.show_toast("Copied native click trace", cx);
+            self.show_toast(format!("Copied {}", config.label), cx);
         }
         cx.notify();
     }
 
-    fn native_click_trace_json(attempt: &Value) -> String {
+    fn native_input_trace_json(attempt: &Value) -> String {
         serde_json::to_string_pretty(attempt).unwrap_or_else(|_| "{}".to_string())
     }
 
-    fn native_click_trace_agent_blocks(&self, attempt: &Value) -> Vec<acp::ContentBlock> {
+    fn native_input_trace_agent_blocks(
+        &self,
+        attempt: &Value,
+        action_label: &str,
+    ) -> Vec<acp::ContentBlock> {
         let mut blocks = Vec::new();
         if let Some(url) = attempt.pointer("/attempt/url").and_then(Value::as_str)
             && let Some(url_block) = self.url_attachment_block(url)
@@ -4623,14 +4893,19 @@ impl WebPreviewView {
         }
 
         blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
-            "Web preview native click trace:\n\n```json\n{}\n```",
-            Self::native_click_trace_json(attempt)
+            "Web preview {action_label}:\n\n```json\n{}\n```",
+            Self::native_input_trace_json(attempt)
         ))));
         blocks
     }
 
     fn copy_native_click_trace_attempt(&mut self, window: &Window, cx: &mut Context<Self>) {
-        self.native_click_trace_attempt(window, cx, false);
+        self.native_input_trace_attempt(
+            Self::native_input_trace_config("click_native_trace"),
+            window,
+            cx,
+            false,
+        );
     }
 
     fn send_native_click_trace_attempt_to_agent(
@@ -4638,7 +4913,70 @@ impl WebPreviewView {
         window: &Window,
         cx: &mut Context<Self>,
     ) {
-        self.native_click_trace_attempt(window, cx, true);
+        self.native_input_trace_attempt(
+            Self::native_input_trace_config("click_native_trace"),
+            window,
+            cx,
+            true,
+        );
+    }
+
+    fn copy_native_type_trace_attempt(&mut self, window: &Window, cx: &mut Context<Self>) {
+        self.native_input_trace_attempt(
+            Self::native_input_trace_config("type_native_trace"),
+            window,
+            cx,
+            false,
+        );
+    }
+
+    fn send_native_type_trace_attempt_to_agent(&mut self, window: &Window, cx: &mut Context<Self>) {
+        self.native_input_trace_attempt(
+            Self::native_input_trace_config("type_native_trace"),
+            window,
+            cx,
+            true,
+        );
+    }
+
+    fn copy_native_key_trace_attempt(&mut self, window: &Window, cx: &mut Context<Self>) {
+        self.native_input_trace_attempt(
+            Self::native_input_trace_config("key_native_trace"),
+            window,
+            cx,
+            false,
+        );
+    }
+
+    fn send_native_key_trace_attempt_to_agent(&mut self, window: &Window, cx: &mut Context<Self>) {
+        self.native_input_trace_attempt(
+            Self::native_input_trace_config("key_native_trace"),
+            window,
+            cx,
+            true,
+        );
+    }
+
+    fn copy_native_scroll_trace_attempt(&mut self, window: &Window, cx: &mut Context<Self>) {
+        self.native_input_trace_attempt(
+            Self::native_input_trace_config("scroll_native_trace"),
+            window,
+            cx,
+            false,
+        );
+    }
+
+    fn send_native_scroll_trace_attempt_to_agent(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.native_input_trace_attempt(
+            Self::native_input_trace_config("scroll_native_trace"),
+            window,
+            cx,
+            true,
+        );
     }
 
     fn agent_browser_qa_runbook(&self, window: &Window) -> Value {
@@ -4689,6 +5027,9 @@ impl WebPreviewView {
                     "latest_key_preflight_attempt": self.latest_agent_browser_key_preflight_attempt_summary(),
                     "latest_scroll_preflight_attempt": self.latest_agent_browser_scroll_preflight_attempt_summary(),
                     "latest_native_click_trace_attempt": self.latest_agent_browser_native_click_trace_attempt_summary(),
+                    "latest_native_type_trace_attempt": self.latest_agent_browser_native_type_trace_attempt_summary(),
+                    "latest_native_key_trace_attempt": self.latest_agent_browser_native_key_trace_attempt_summary(),
+                    "latest_native_scroll_trace_attempt": self.latest_agent_browser_native_scroll_trace_attempt_summary(),
                 },
                 "manual_gates": [
                     {
@@ -4934,6 +5275,9 @@ impl WebPreviewView {
                             {"id": "browser.action.scroll_preflight", "state": "available", "description": "Select a scrollable page or element target and emit the receipt a future native scroll action must satisfy without dispatching input."},
                             {"id": "browser.action.native_input_bridge", "state": "planned_manual_qa_gate", "description": "Trace the disabled-by-default native input bridge readiness before click, type, key, or scroll dispatch can be enabled."},
                             {"id": "browser.action.native_click_trace", "state": "available", "description": "Translate the latest click preflight target into native WebPreview coordinates and emit a trace receipt without dispatching input."},
+                            {"id": "browser.action.native_type_trace", "state": "available", "description": "Translate the latest type preflight target into native WebPreview focus and coordinate planning without dispatching input."},
+                            {"id": "browser.action.native_key_trace", "state": "available", "description": "Translate the latest key preflight candidate into native keyboard-focus planning without dispatching input."},
+                            {"id": "browser.action.native_scroll_trace", "state": "available", "description": "Translate the latest scroll preflight target into native wheel-coordinate planning without dispatching input."},
                             {"id": "browser.action.click", "state": "planned_executor", "description": "Click visible page targets after unlock, fresh preflight, and receipt logging."},
                             {"id": "browser.action.type", "state": "planned_executor", "description": "Type into page inputs after unlock, fresh preflight, and receipt logging."},
                             {"id": "browser.action.key", "state": "planned_executor", "description": "Send key presses after unlock, fresh preflight, and receipt logging."},
@@ -6829,6 +7173,32 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Trace Native Type Adapter")
+                                .icon(IconName::CursorIBeam)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_native_type_trace_attempt(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Trace Native Type Adapter to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_native_type_trace_attempt_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Run Key Preflight")
                                 .icon(IconName::Keyboard)
                                 .handler({
@@ -6857,6 +7227,32 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Trace Native Key Adapter")
+                                .icon(IconName::Keyboard)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_native_key_trace_attempt(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Trace Native Key Adapter to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_native_key_trace_attempt_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Run Scroll Preflight")
                                 .icon(IconName::ArrowDown)
                                 .handler({
@@ -6878,6 +7274,32 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_permissioned_scroll_preflight_attempt_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Trace Native Scroll Adapter")
+                                .icon(IconName::ArrowDown)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_native_scroll_trace_attempt(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Trace Native Scroll Adapter to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_native_scroll_trace_attempt_to_agent(
                                                 window, cx,
                                             );
                                         });
@@ -8056,6 +8478,9 @@ impl Item for WebPreviewView {
                 latest_agent_browser_key_preflight_attempt: None,
                 latest_agent_browser_scroll_preflight_attempt: None,
                 latest_agent_browser_native_click_trace_attempt: None,
+                latest_agent_browser_native_type_trace_attempt: None,
+                latest_agent_browser_native_key_trace_attempt: None,
+                latest_agent_browser_native_scroll_trace_attempt: None,
                 latest_agent_browser_qa_runbook: None,
                 latest_agent_plugin_catalog: None,
                 latest_annotated_screenshot: None,
