@@ -1,3 +1,16 @@
+[2026-05-16] - Web Preview Native Input Bridge Readiness
+
+ADDED:
+- Executor readiness now includes a disabled-by-default native input bridge contract for click, type, key, and scroll actions.
+- The bridge readiness reports the local platform backend, required preflight receipts, manual QA gate, and future dispatch adapter plan.
+- Browser plugin manifests now advertise `browser.action.native_input_bridge` as a planned manual-QA-gated capability.
+
+CHANGED:
+- Executor readiness now distinguishes low-risk command executors from preflight-wired input actions and future native dispatch.
+
+NOTES:
+- This is still trace/readiness wiring only; no native click, key, text, wheel, pointer, browser command, page script, or external Chrome input dispatch was enabled.
+
 [2026-05-16] - Web Preview Input Preflight Receipts
 
 ADDED:

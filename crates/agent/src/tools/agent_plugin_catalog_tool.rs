@@ -261,6 +261,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.action.type_preflight", "available", "Select a visible text-entry target and emit the receipt a future native type action must satisfy without dispatching input."),
             capability("browser.action.key_preflight", "available", "Prepare a safe key candidate and emit the receipt a future native key action must satisfy without dispatching input."),
             capability("browser.action.scroll_preflight", "available", "Select a scrollable page or element target and emit the receipt a future native scroll action must satisfy without dispatching input."),
+            capability("browser.action.native_input_bridge", "planned_manual_qa_gate", "Trace the disabled-by-default native input bridge readiness before click, type, key, or scroll dispatch can be enabled."),
             capability("browser.action.click", "planned_executor", "Click visible page targets after unlock, fresh preflight, and receipt logging."),
             capability("browser.action.type", "planned_executor", "Type into page inputs after unlock, fresh preflight, and receipt logging."),
             capability("browser.action.key", "planned_executor", "Send key presses after unlock, fresh preflight, and receipt logging."),

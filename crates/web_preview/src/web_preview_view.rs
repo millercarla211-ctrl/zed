@@ -3027,6 +3027,7 @@ impl WebPreviewView {
         }
 
         let wired_executor_actions = ["open_url", "reload", "set_viewport", "clear_data"];
+        let preflight_wired_actions = ["click", "type_text", "press_key", "scroll"];
         let pending_executor_actions = INTERACTIVE_AGENT_BROWSER_ACTIONS
             .iter()
             .copied()
@@ -3068,8 +3069,48 @@ impl WebPreviewView {
         } else if !interactive_unlocked {
             "Ask the user to explicitly unlock interactive browser actions for this session before any future executor dispatch."
         } else {
-            "Low-risk open_url, reload, set_viewport, and clear_data executors can run; keep click, type, key, and scroll disabled until they have native-input receipts."
+            "Low-risk open_url, reload, set_viewport, and clear_data executors can run; keep native click, type, key, and scroll dispatch disabled until the Windows input bridge passes manual QA."
         };
+        let native_input_bridge = serde_json::json!({
+            "schema": "zed.web_preview.native_input_bridge_readiness.v1",
+            "status": "disabled_by_default_manual_qa_required",
+            "dispatch_enabled": false,
+            "platform_backend": if cfg!(target_os = "windows") {
+                "windows_webview2_composition_controller"
+            } else if cfg!(target_os = "macos") {
+                "macos_webview_contract_pending"
+            } else if cfg!(target_os = "linux") {
+                "linux_webkitgtk_contract_pending"
+            } else {
+                "unsupported_platform_contract_only"
+            },
+            "local_platform_supported_for_next_slice": cfg!(target_os = "windows"),
+            "safe_to_report_to_agents": true,
+            "manual_qa_gate": {
+                "required": true,
+                "reason": "Native click/type/key/scroll dispatch can affect editor focus and WebPreview input; keep it disabled until the bridge emits receipts and is manually validated on Windows."
+            },
+            "preflight_wired_actions": preflight_wired_actions,
+            "latest_preflight_receipts": {
+                "click": self.latest_agent_browser_click_preflight_attempt_summary(),
+                "type_text": self.latest_agent_browser_type_preflight_attempt_summary(),
+                "press_key": self.latest_agent_browser_key_preflight_attempt_summary(),
+                "scroll": self.latest_agent_browser_scroll_preflight_attempt_summary()
+            },
+            "required_before_dispatch": [
+                "interactive permission unlocked for the current WebPreview session",
+                "fresh page diagnostics, DOM snapshot, action targets, and readiness probe",
+                "fresh wait contract, interaction plan, preflight, request envelope, and receipt schemas",
+                "fresh action-specific preflight receipt for the exact target/candidate",
+                "manual Windows QA confirms editor typing, WebPreview focus, hover, right-click, wheel, and keyboard input remain stable"
+            ],
+            "dispatch_adapter_plan": [
+                "translate receipt target rects into current native WebView viewport coordinates",
+                "route click and wheel through the Windows WebView2 CompositionController native input path",
+                "route text and key dispatch only while WebPreview owns keyboard focus",
+                "capture before/after diagnostics and emit a receipt for every attempted dispatch"
+            ]
+        });
 
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_executor_readiness.v1",
@@ -3090,7 +3131,9 @@ impl WebPreviewView {
                 "audit_ready": audit_ready,
                 "executor_wired": true,
                 "wired_actions": wired_executor_actions,
+                "preflight_wired_actions": preflight_wired_actions,
                 "pending_actions": pending_executor_actions,
+                "native_input_bridge": native_input_bridge,
                 "requires_user_permission": true,
                 "requires_fresh_preflight_before_every_action": true,
                 "requires_receipt_after_every_action": true,
@@ -4590,6 +4633,7 @@ impl WebPreviewView {
                             {"id": "browser.action.type_preflight", "state": "available", "description": "Select a visible text-entry target and emit the receipt a future native type action must satisfy without dispatching input."},
                             {"id": "browser.action.key_preflight", "state": "available", "description": "Prepare a safe key candidate and emit the receipt a future native key action must satisfy without dispatching input."},
                             {"id": "browser.action.scroll_preflight", "state": "available", "description": "Select a scrollable page or element target and emit the receipt a future native scroll action must satisfy without dispatching input."},
+                            {"id": "browser.action.native_input_bridge", "state": "planned_manual_qa_gate", "description": "Trace the disabled-by-default native input bridge readiness before click, type, key, or scroll dispatch can be enabled."},
                             {"id": "browser.action.click", "state": "planned_executor", "description": "Click visible page targets after unlock, fresh preflight, and receipt logging."},
                             {"id": "browser.action.type", "state": "planned_executor", "description": "Type into page inputs after unlock, fresh preflight, and receipt logging."},
                             {"id": "browser.action.key", "state": "planned_executor", "description": "Send key presses after unlock, fresh preflight, and receipt logging."},
