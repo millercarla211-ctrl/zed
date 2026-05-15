@@ -237,6 +237,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_action_targets_to_agent",
     "copy_readiness_probe",
     "send_readiness_probe_to_agent",
+    "copy_wait_contract",
+    "send_wait_contract_to_agent",
     "take_screenshot",
     "inspect_element",
 ];
@@ -414,6 +416,7 @@ pub struct WebPreviewView {
     latest_dom_snapshot: Option<Value>,
     latest_action_targets: Option<Value>,
     latest_readiness_probe: Option<Value>,
+    latest_wait_contract: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -591,6 +594,7 @@ impl WebPreviewView {
             latest_dom_snapshot: None,
             latest_action_targets: None,
             latest_readiness_probe: None,
+            latest_wait_contract: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1043,6 +1047,7 @@ impl WebPreviewView {
             "dom_snapshot": self.latest_dom_snapshot_summary(),
             "action_targets": self.latest_action_targets_summary(),
             "readiness_probe": self.latest_readiness_probe_summary(),
+            "wait_contract": self.latest_wait_contract_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1063,6 +1068,8 @@ impl WebPreviewView {
                 "send_action_targets_to_agent": true,
                 "copy_readiness_probe": true,
                 "send_readiness_probe_to_agent": true,
+                "copy_wait_contract": true,
+                "send_wait_contract_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1135,6 +1142,18 @@ impl WebPreviewView {
             "ready_state": probe.pointer("/probe/ready_state").and_then(Value::as_str),
             "readiness": probe.pointer("/probe/readiness").cloned(),
             "counts": probe.pointer("/probe/counts").cloned(),
+        }))
+    }
+
+    fn latest_wait_contract_summary(&self) -> Option<Value> {
+        let contract = self.latest_wait_contract.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at": contract.pointer("/contract/timestamp").and_then(Value::as_str),
+            "url": contract.pointer("/contract/url").and_then(Value::as_str),
+            "title": contract.pointer("/contract/title").and_then(Value::as_str),
+            "ready_state": contract.pointer("/contract/ready_state").and_then(Value::as_str),
+            "recommended": contract.pointer("/contract/recommended").cloned(),
+            "counts": contract.pointer("/contract/counts").cloned(),
         }))
     }
 
@@ -1524,6 +1543,65 @@ impl WebPreviewView {
 
     fn send_readiness_probe_to_agent(&mut self, cx: &mut Context<Self>) {
         self.request_readiness_probe("agent", cx);
+    }
+
+    fn wait_contract_snapshot(&self, payload: &Value, window: &Window) -> Value {
+        let mut contract = payload.clone();
+        if let Some(contract) = contract.as_object_mut() {
+            contract.remove("kind");
+            contract.remove("action");
+        }
+
+        serde_json::json!({
+            "schema": "zed.web_preview.wait_contract.v1",
+            "session": self.browser_session_snapshot(window),
+            "contract": contract,
+        })
+    }
+
+    fn wait_contract_json(contract: &Value) -> String {
+        serde_json::to_string_pretty(contract).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn wait_contract_agent_blocks(&self, contract: &Value) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = contract.pointer("/contract/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview wait contract:\n\n```json\n{}\n```",
+            Self::wait_contract_json(contract)
+        ))));
+        blocks
+    }
+
+    fn request_wait_contract(&mut self, action: &'static str, cx: &mut Context<Self>) {
+        let script = format!(
+            "window.__zedWebPreview && window.__zedWebPreview.collectWaitContract('{action}');"
+        );
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(&script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Collecting web preview wait contract", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("Wait contract is unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic("Wait contract crashed before collection", cx);
+            }
+        }
+    }
+
+    fn copy_wait_contract(&mut self, cx: &mut Context<Self>) {
+        self.request_wait_contract("copy", cx);
+    }
+
+    fn send_wait_contract_to_agent(&mut self, cx: &mut Context<Self>) {
+        self.request_wait_contract("agent", cx);
     }
 
     fn agent_browser_action_manifest(&self, window: &Window) -> Value {
@@ -2117,6 +2195,46 @@ impl WebPreviewView {
                     }
                 }
             }
+            "wait-contract" => {
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let action = payload
+                        .get("action")
+                        .and_then(Value::as_str)
+                        .unwrap_or("copy");
+                    let contract = self.wait_contract_snapshot(&payload, window);
+                    self.latest_wait_contract = Some(contract.clone());
+
+                    match action {
+                        "agent" => {
+                            self.append_content_blocks_to_agent_panel(
+                                self.wait_contract_agent_blocks(&contract),
+                                window,
+                                cx,
+                            );
+                            self.show_toast("Sent wait contract to the agent panel", cx);
+                        }
+                        _ => {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                Self::wait_contract_json(&contract),
+                            ));
+                            self.show_toast("Copied web preview wait contract JSON", cx);
+                        }
+                    }
+
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.report_action_error("Wait contract collection failed", error, cx);
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "Wait contract crashed while collecting page data",
+                            cx,
+                        );
+                    }
+                }
+            }
             "capture-area" => {
                 match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
                     let scale = payload
@@ -2576,6 +2694,30 @@ impl WebPreviewView {
                                     move |_, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_readiness_probe_to_agent(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Wait Contract")
+                                .icon(IconName::Clock)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_wait_contract(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Wait Contract to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_wait_contract_to_agent(cx);
                                         });
                                     }
                                 }),
@@ -3549,6 +3691,7 @@ impl Item for WebPreviewView {
                 latest_dom_snapshot: None,
                 latest_action_targets: None,
                 latest_readiness_probe: None,
+                latest_wait_contract: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
@@ -5321,6 +5464,110 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     return Math.max(0, Math.round(performance.now() - mutationState.lastMutationMs));
   };
 
+  const waitSelectorContracts = () => {
+    const rules = [
+      { name: "body", selector: "body", reason: "Document body exists" },
+      { name: "app root", selector: '#root, #app, #__next, [data-reactroot]', reason: "Common app shell root" },
+      { name: "main content", selector: "main, [role='main']", reason: "Primary page content" },
+      { name: "headings", selector: "h1, h2, h3", reason: "Human-readable page section anchor" },
+      { name: "form controls", selector: "input, textarea, select, [contenteditable='true']", reason: "Typing/select targets" },
+      { name: "buttons", selector: "button, [role='button']", reason: "Click targets" },
+      { name: "links", selector: "a[href]", reason: "Navigation targets" },
+      { name: "test ids", selector: "[data-testid], [data-test], [data-cy]", reason: "Stable automation hooks" },
+      { name: "dialogs", selector: "[role='dialog'], dialog, [aria-modal='true']", reason: "Modal or blocking surfaces" },
+      { name: "busy indicators", selector: "[aria-busy='true'], [data-loading='true'], [data-pending='true'], .loading, .spinner, [role='progressbar']", reason: "Loading state indicators" }
+    ];
+
+    return rules.map((rule) => {
+      let elements = [];
+      try {
+        elements = Array.from(document.querySelectorAll(rule.selector));
+      } catch (_error) {
+        elements = [];
+      }
+
+      const visibleElements = elements.filter((element) => element instanceof Element && isVisibleElement(element, roundedRect(element)));
+      return {
+        name: rule.name,
+        selector: rule.selector,
+        reason: rule.reason,
+        present: elements.length > 0,
+        visible: visibleElements.length > 0,
+        count: elements.length,
+        visible_count: visibleElements.length,
+        first_visible: visibleElements[0] ? elementSnapshot(visibleElements[0]) : null
+      };
+    });
+  };
+
+  const waitTextCandidates = () => {
+    const sources = [
+      { source: "heading", selector: "h1, h2, h3" },
+      { source: "button", selector: "button, [role='button']" },
+      { source: "label", selector: "label, [aria-label], [placeholder]" },
+      { source: "link", selector: "a[href]" },
+      { source: "live-region", selector: "[aria-live]" },
+      { source: "dialog", selector: "[role='dialog'], dialog, [aria-modal='true']" },
+      { source: "main", selector: "main, [role='main']" }
+    ];
+    const seen = new Set();
+    const candidates = [];
+
+    for (const source of sources) {
+      let elements = [];
+      try {
+        elements = Array.from(document.querySelectorAll(source.selector)).slice(0, 36);
+      } catch (_error) {
+        elements = [];
+      }
+
+      for (const element of elements) {
+        if (!(element instanceof Element)) continue;
+        const rect = roundedRect(element);
+        if (!isVisibleElement(element, rect)) continue;
+        const text = limitText(
+          element.getAttribute("aria-label")
+            || element.getAttribute("placeholder")
+            || element.innerText
+            || element.textContent,
+          source.source === "main" ? 280 : 160
+        );
+        if (!text || seen.has(text)) continue;
+        seen.add(text);
+        candidates.push({
+          source: source.source,
+          text,
+          selector: cssSelector(element),
+          tag: element.tagName.toLowerCase(),
+          rect
+        });
+        if (candidates.length >= 60) return candidates;
+      }
+    }
+
+    return candidates;
+  };
+
+  const recommendedWaitRecipe = () => {
+    const quietForMs = readinessQuietForMs();
+    const busyCount = readinessBusyCount();
+    return {
+      document_complete: document.readyState === "complete",
+      network_idle: runtimeState.pendingNetwork === 0,
+      dom_quiet_500ms: quietForMs >= 500,
+      no_busy_indicators: busyCount === 0,
+      suggested_sequence: [
+        "wait for document readyState to be complete",
+        "wait for pending_network to be 0",
+        "wait for dom_quiet_500ms to be true",
+        "prefer a stable selector or exact visible text from this contract before interacting"
+      ],
+      quiet_for_ms: quietForMs,
+      pending_network: runtimeState.pendingNetwork,
+      busy_indicators: busyCount
+    };
+  };
+
   installRuntimeCapture();
 
   window.__zedWebPreview = {
@@ -5568,6 +5815,58 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
         navigation_timing: navigationTimingSnapshot(),
         selector_probe: readinessSelectorSnapshot(),
         action_target_sample: actionTargets.targets.slice(0, 24)
+      });
+    },
+
+    collectWaitContract(action = "copy") {
+      try { installMutationCapture(); } catch (_error) {}
+      const html = document.documentElement;
+      const body = document.body;
+      const actionTargets = collectActionTargetRows();
+      const selectorContracts = waitSelectorContracts();
+      const textCandidates = waitTextCandidates();
+      const recommended = recommendedWaitRecipe();
+
+      post({
+        kind: "wait-contract",
+        action,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState,
+        recommended,
+        viewport: {
+          inner_width: window.innerWidth,
+          inner_height: window.innerHeight,
+          device_pixel_ratio: window.devicePixelRatio || 1,
+          scroll_x: Math.round(window.scrollX || 0),
+          scroll_y: Math.round(window.scrollY || 0),
+          scroll_width: Math.max(html?.scrollWidth || 0, body?.scrollWidth || 0),
+          scroll_height: Math.max(html?.scrollHeight || 0, body?.scrollHeight || 0)
+        },
+        counts: {
+          selector_contracts: selectorContracts.length,
+          selector_contracts_present: selectorContracts.filter((contract) => contract.present).length,
+          selector_contracts_visible: selectorContracts.filter((contract) => contract.visible).length,
+          text_candidates: textCandidates.length,
+          action_targets: actionTargets.targets.length,
+          busy_indicators: readinessBusyCount(),
+          pending_network: runtimeState.pendingNetwork
+        },
+        mutation: {
+          observed: mutationState.observed,
+          count: mutationState.count,
+          last_mutation_at: mutationState.lastMutationAt,
+          quiet_for_ms: readinessQuietForMs()
+        },
+        selector_contracts: selectorContracts,
+        text_candidates: textCandidates,
+        action_target_sample: actionTargets.targets.slice(0, 24),
+        notes: [
+          "This is a read-only snapshot for agent planning.",
+          "Automation should re-collect this contract immediately before interacting.",
+          "Prefer data-testid/data-test/data-cy selectors or exact visible text candidates when available."
+        ]
       });
     },
 

@@ -1,3 +1,13 @@
+[2026-05-16] - Web Preview Wait Contract
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Wait Contract" and "Send Wait Contract to Agent".
+- The WebPreview bridge now collects selector contracts, visible text candidates, action-target samples, and a recommended wait sequence for future agent browser workflows.
+- WebPreview session JSON now summarizes the latest wait contract alongside readiness, DOM, runtime, and action-target context.
+
+NOTES:
+- This keeps browser automation planning read-only while establishing the selector/text waiting contract future interactive tools should follow.
+
 [2026-05-15] - Web Preview Readiness Probe
 
 ADDED:
