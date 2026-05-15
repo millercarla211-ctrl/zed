@@ -1,3 +1,11 @@
+[2026-05-15] - Media Health Row Refresh
+
+ADDED:
+- Media remote provider health rows now include a compact refresh action for the current remote search.
+
+NOTES:
+- This reuses the existing remote refresh path and does not change provider limits, cache signatures, local media rows, editor input, or WebPreview routing.
+
 [2026-05-15] - Media Provider Result Breakdown
 
 ADDED:

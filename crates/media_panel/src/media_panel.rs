@@ -1640,6 +1640,15 @@ impl MediaPanel {
                             .truncate(),
                     ),
             )
+            .child(
+                IconButton::new("media-panel-refresh-remote-health", IconName::RotateCw)
+                    .shape(ui::IconButtonShape::Square)
+                    .icon_size(IconSize::Small)
+                    .tooltip(Tooltip::text("Refresh this remote media search"))
+                    .on_click(cx.listener(|panel, _, _, cx| {
+                        panel.refresh_remote_media(cx);
+                    })),
+            )
     }
 
     fn render_remote_loading_row(&self, cx: &mut Context<Self>) -> impl IntoElement {
