@@ -1,3 +1,12 @@
+[2026-05-15] - Media Remote Loading Row
+
+CHANGED:
+- Media panel now shows a compact remote-loading row while direct providers are fetching and no remote result rows are visible yet.
+- The loading row appears after any warning and before result/provider-browser rows, so the Browse Remote fallback no longer hides active remote fetch progress.
+
+NOTES:
+- This preserves provider fetch behavior, row ordering after results arrive, local indexing, editor input, and WebPreview input.
+
 [2026-05-15] - Media Remote Loading Empty State
 
 CHANGED:

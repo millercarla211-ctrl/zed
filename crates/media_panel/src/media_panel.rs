@@ -1221,6 +1221,39 @@ impl MediaPanel {
                     })),
             )
     }
+
+    fn render_remote_loading_row(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        h_flex()
+            .id("media-panel-remote-loading-row")
+            .gap_2()
+            .items_center()
+            .p_2()
+            .rounded_sm()
+            .border_1()
+            .border_color(cx.theme().colors().border_variant)
+            .bg(cx.theme().colors().element_background)
+            .child(
+                Icon::new(IconName::RotateCw)
+                    .size(IconSize::Small)
+                    .color(Color::Muted),
+            )
+            .child(
+                v_flex()
+                    .flex_1()
+                    .gap_0p5()
+                    .child(
+                        Label::new("Fetching remote media")
+                            .size(LabelSize::XSmall)
+                            .color(Color::Muted),
+                    )
+                    .child(
+                        Label::new("Remote provider results will appear above local files.")
+                            .size(LabelSize::XSmall)
+                            .color(Color::Muted)
+                            .truncate(),
+                    ),
+            )
+    }
 }
 
 impl Panel for MediaPanel {
@@ -1311,9 +1344,11 @@ impl Render for MediaPanel {
         let total_count = kind_counts.count(self.kind_filter);
         let provider_count = remote_provider_count(self.kind_filter);
         let remote_warning = self.remote_warning.clone();
+        let show_remote_loading_row = self.remote_loading && remote_assets.is_empty();
         let mut asset_rows = Vec::with_capacity(
             usize::from(url_insert.is_some())
                 + usize::from(remote_warning.is_some())
+                + usize::from(show_remote_loading_row)
                 + remote_assets.len()
                 + assets.len()
                 + usize::from(provider_count > 0),
@@ -1326,6 +1361,9 @@ impl Render for MediaPanel {
                 self.render_remote_warning_row(warning, cx)
                     .into_any_element(),
             );
+        }
+        if show_remote_loading_row {
+            asset_rows.push(self.render_remote_loading_row(cx).into_any_element());
         }
         asset_rows.extend(
             remote_assets
