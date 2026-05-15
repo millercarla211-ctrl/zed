@@ -1,3 +1,12 @@
+[2026-05-15] - Media Browse Provider Context
+
+ADDED:
+- Media Browse Remote rows now name representative no-key providers for the active media kind.
+- Browse Remote rows now expose the full provider list in the row tooltip.
+
+NOTES:
+- This improves provider discoverability without changing remote fetch limits, direct provider search, local indexing, editor input, or WebPreview routing.
+
 [2026-05-15] - Media Health Row Refresh
 
 ADDED:

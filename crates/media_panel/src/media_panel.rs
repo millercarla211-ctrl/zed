@@ -45,6 +45,7 @@ const MAX_MEDIA_RESULTS: usize = 320;
 const MAX_REMOTE_MEDIA_RESULTS: usize = 640;
 const MAX_REMOTE_MEDIA_CACHE_ENTRIES: usize = 24;
 const MAX_REMOTE_PROVIDER_SUMMARIES: usize = 4;
+const MAX_REMOTE_BROWSER_PROVIDER_NAMES: usize = 5;
 const MAX_RECENT_MEDIA_ACTIONS: usize = 5;
 const MAX_PINNED_MEDIA_ACTIONS: usize = 8;
 const PINNED_MEDIA_ACTIONS_KEY: &str = "asset_panel_pinned_media_v1";
@@ -1515,7 +1516,8 @@ impl MediaPanel {
         provider_count: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let description = remote_browser_description(provider_count, self.kind_filter.label());
+        let description = remote_browser_description(provider_count, self.kind_filter);
+        let tooltip = remote_browser_tooltip(provider_count, self.kind_filter);
         h_flex()
             .id("media-panel-remote-browser-row")
             .gap_2()
@@ -1525,6 +1527,7 @@ impl MediaPanel {
             .border_1()
             .border_color(cx.theme().colors().border_variant)
             .bg(cx.theme().colors().element_background)
+            .tooltip(Tooltip::text(tooltip))
             .child(
                 div()
                     .w(px(64.))
@@ -2541,11 +2544,53 @@ fn matches_ascii_ignore_case(value: &str, candidates: &[&str]) -> bool {
         .any(|candidate| value.eq_ignore_ascii_case(candidate))
 }
 
-fn remote_browser_description(provider_count: usize, kind_label: &str) -> SharedString {
-    let mut text = String::with_capacity(32 + 6 + kind_label.len());
+fn remote_browser_description(provider_count: usize, filter: MediaKindFilter) -> SharedString {
+    let kind_label = filter.label();
+    let mut text = String::with_capacity(72 + 6 + kind_label.len());
     let _ = write!(text, "{provider_count} no-key remote sources for ");
     push_lowercase(&mut text, kind_label);
+    append_remote_browser_provider_names(&mut text, filter, MAX_REMOTE_BROWSER_PROVIDER_NAMES);
     text.into()
+}
+
+fn remote_browser_tooltip(provider_count: usize, filter: MediaKindFilter) -> SharedString {
+    let kind_label = filter.label();
+    let mut text = String::with_capacity(128);
+    let _ = write!(
+        text,
+        "Open provider search pages for {provider_count} no-key "
+    );
+    push_lowercase(&mut text, kind_label);
+    text.push_str(" sources");
+    append_remote_browser_provider_names(&mut text, filter, usize::MAX);
+    text.into()
+}
+
+fn append_remote_browser_provider_names(
+    text: &mut String,
+    filter: MediaKindFilter,
+    max_names: usize,
+) {
+    let mut names = free_media_sources()
+        .iter()
+        .filter(|source| source.search_template(filter).is_some())
+        .map(|source| source.name);
+
+    let mut shown_count = 0usize;
+    for name in names.by_ref().take(max_names) {
+        if shown_count == 0 {
+            text.push_str("; includes ");
+        } else {
+            text.push_str(", ");
+        }
+        text.push_str(name);
+        shown_count += 1;
+    }
+
+    let remaining_count = names.count();
+    if remaining_count > 0 {
+        let _ = write!(text, ", +{remaining_count} more");
+    }
 }
 
 fn remote_loading_description(filter: MediaKindFilter) -> &'static str {
