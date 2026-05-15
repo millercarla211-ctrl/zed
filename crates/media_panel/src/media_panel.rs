@@ -1586,12 +1586,15 @@ fn remote_browser_description(provider_count: usize, kind_label: &str) -> Shared
     text.into()
 }
 
-fn remote_media_provider_warning(errors: &[String], provider_count: usize) -> Option<SharedString> {
+fn remote_media_provider_warning(
+    errors: &[String],
+    direct_provider_count: usize,
+) -> Option<SharedString> {
     if errors.is_empty() {
         return None;
     }
 
-    let healthy_count = provider_count.saturating_sub(errors.len());
+    let healthy_count = direct_provider_count.saturating_sub(errors.len());
     let shown_error_count = errors.len().min(3);
     let mut text = String::with_capacity(
         96 + errors
@@ -1602,7 +1605,7 @@ fn remote_media_provider_warning(errors: &[String], provider_count: usize) -> Op
     );
     let _ = write!(
         text,
-        "{} of {provider_count} remote providers skipped",
+        "{} of {direct_provider_count} direct providers skipped",
         errors.len()
     );
     if healthy_count > 0 {
@@ -2132,6 +2135,7 @@ async fn fetch_remote_media_assets(
         ));
     }
 
+    let direct_provider_count = fetches.len();
     for (provider, result) in futures::future::join_all(fetches).await {
         match result {
             Ok(items) => assets.extend(items),
@@ -2146,7 +2150,7 @@ async fn fetch_remote_media_assets(
         anyhow::bail!(errors.join("; "));
     }
 
-    let warning = remote_media_provider_warning(&errors, provider_count);
+    let warning = remote_media_provider_warning(&errors, direct_provider_count);
     Ok(RemoteMediaFetchResult { assets, warning })
 }
 

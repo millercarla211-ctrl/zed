@@ -1,3 +1,12 @@
+[2026-05-15] - Media Direct Provider Warning Counts
+
+CHANGED:
+- Media panel partial-failure warnings now count only direct API providers that were actually fetched, rather than mixing them with browse-only provider links.
+- Browse Remote provider counts remain based on all configured no-key source links, so panel discovery and direct-fetch health are reported separately.
+
+NOTES:
+- This makes remote media warning rows more trustworthy without changing provider fetch breadth, result ordering, local indexing, editor input, or WebPreview behavior.
+
 [2026-05-15] - UI Route Block Copy Command
 
 CHANGED:
