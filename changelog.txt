@@ -1,3 +1,12 @@
+[2026-05-15] - Icon Representative Preview Seeding
+
+CHANGED:
+- `crates/icon_picker` now seeds bundled representative Iconify SVG previews into the panel preview cache during construction so the All Sets grid can show real icons immediately when embedded bodies are available.
+- `crates/icon_picker` now shares the same SVG body-to-preview writer between first-open representative seeding and background preview warming.
+
+NOTES:
+- Preserved the existing on-disk preview cache, background pack warming, selected icon behavior, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Panel Query Normalization Cleanup
 
 CHANGED:

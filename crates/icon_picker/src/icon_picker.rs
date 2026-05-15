@@ -184,6 +184,8 @@ impl IconPickerPanel {
             let selected_icon = zed_icons.first().copied().map(PickerIcon::Zed);
             let packs = static_icon_pack_summaries();
             let representative_external_icons = representative_icons_from_pack_summaries(&packs);
+            let (preview_cache, preview_cache_order) =
+                seed_representative_preview_cache(&representative_external_icons);
             Self {
                 workspace: workspace_handle,
                 filter_editor,
@@ -197,12 +199,8 @@ impl IconPickerPanel {
                 selected_icon,
                 loading_external_icons: false,
                 external_catalog_loaded: false,
-                preview_cache: RefCell::new(HashMap::with_capacity(
-                    MAX_EXTERNAL_ICON_PREVIEW_CACHE_ENTRIES,
-                )),
-                preview_cache_order: RefCell::new(VecDeque::with_capacity(
-                    MAX_EXTERNAL_ICON_PREVIEW_CACHE_ENTRIES,
-                )),
+                preview_cache: RefCell::new(preview_cache),
+                preview_cache_order: RefCell::new(preview_cache_order),
                 warming_preview_keys: HashSet::with_capacity(STARTUP_ICON_PREVIEW_WARM_LIMIT),
                 warming_preview_signature: None,
                 warmed_preview_signatures: HashSet::with_capacity(
@@ -1512,24 +1510,50 @@ fn warm_external_icon_previews(
             continue;
         };
 
-        let width = body.width.unwrap_or(icon.width).max(1);
-        let height = body.height.unwrap_or(icon.height).max(1);
-        let icon_body = transform_iconify_alias_body(
-            &body.body,
-            width,
-            height,
-            body.h_flip,
-            body.v_flip,
-            body.rotate,
-        );
-        let svg = wrap_icon_body(&icon_body, width, height);
-        let preview_path = write_external_icon_preview(&icon, &svg)
+        let preview_path = write_external_icon_body_preview(&icon, &body)
             .ok()
             .map(SharedString::from);
         previews.push((key, preview_path));
     }
 
     previews
+}
+
+fn seed_representative_preview_cache(
+    icons: &[ExternalIcon],
+) -> (
+    HashMap<SharedString, Option<ExternalSvg>>,
+    VecDeque<SharedString>,
+) {
+    let seed_count = icons.len().min(STARTUP_ICON_PREVIEW_WARM_LIMIT);
+    let mut preview_cache = HashMap::with_capacity(MAX_EXTERNAL_ICON_PREVIEW_CACHE_ENTRIES);
+    let mut preview_cache_order = VecDeque::with_capacity(MAX_EXTERNAL_ICON_PREVIEW_CACHE_ENTRIES);
+
+    for icon in icons.iter().take(seed_count) {
+        let key = icon.id();
+        if preview_cache.contains_key(&key) {
+            continue;
+        }
+
+        let preview_path = existing_external_icon_preview(icon).or_else(|| {
+            representative_icon_bodies()
+                .get(key.as_ref())
+                .and_then(|body| write_external_icon_body_preview(icon, body).ok())
+        });
+        let Some(preview_path) = preview_path else {
+            continue;
+        };
+
+        preview_cache.insert(
+            key.clone(),
+            Some(ExternalSvg {
+                preview_path: preview_path.into(),
+            }),
+        );
+        preview_cache_order.push_back(key);
+    }
+
+    (preview_cache, preview_cache_order)
 }
 
 fn representative_icon_bodies() -> &'static HashMap<String, ExternalIconBody> {
@@ -1679,6 +1703,24 @@ fn write_external_icon_preview(icon: &ExternalIcon, svg: &str) -> anyhow::Result
         std::fs::write(&path, svg)?;
     }
     Ok(path.to_string_lossy().replace('\\', "/"))
+}
+
+fn write_external_icon_body_preview(
+    icon: &ExternalIcon,
+    body: &ExternalIconBody,
+) -> anyhow::Result<String> {
+    let width = body.width.unwrap_or(icon.width).max(1);
+    let height = body.height.unwrap_or(icon.height).max(1);
+    let icon_body = transform_iconify_alias_body(
+        &body.body,
+        width,
+        height,
+        body.h_flip,
+        body.v_flip,
+        body.rotate,
+    );
+    let svg = wrap_icon_body(&icon_body, width, height);
+    write_external_icon_preview(icon, &svg)
 }
 
 fn wrap_icon_body(body: &str, width: u32, height: u32) -> String {
