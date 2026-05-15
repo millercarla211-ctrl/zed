@@ -231,6 +231,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_page_diagnostics_to_agent",
     "copy_runtime_events",
     "send_runtime_events_to_agent",
+    "copy_dom_snapshot",
+    "send_dom_snapshot_to_agent",
     "take_screenshot",
     "inspect_element",
 ];
@@ -405,6 +407,7 @@ pub struct WebPreviewView {
     ipc_flush_scheduled: bool,
     latest_page_diagnostics: Option<Value>,
     latest_runtime_events: Option<Value>,
+    latest_dom_snapshot: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -579,6 +582,7 @@ impl WebPreviewView {
             ipc_flush_scheduled: false,
             latest_page_diagnostics: None,
             latest_runtime_events: None,
+            latest_dom_snapshot: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1028,6 +1032,7 @@ impl WebPreviewView {
             },
             "page_diagnostics": self.latest_page_diagnostics_summary(),
             "runtime_events": self.latest_runtime_events_summary(),
+            "dom_snapshot": self.latest_dom_snapshot_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1042,6 +1047,8 @@ impl WebPreviewView {
                 "send_page_diagnostics_to_agent": true,
                 "copy_runtime_events": true,
                 "send_runtime_events_to_agent": true,
+                "copy_dom_snapshot": true,
+                "send_dom_snapshot_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1080,6 +1087,17 @@ impl WebPreviewView {
             "url": events.pointer("/events/url").and_then(Value::as_str),
             "title": events.pointer("/events/title").and_then(Value::as_str),
             "counts": events.pointer("/events/counts").cloned(),
+        }))
+    }
+
+    fn latest_dom_snapshot_summary(&self) -> Option<Value> {
+        let snapshot = self.latest_dom_snapshot.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at": snapshot.pointer("/dom/timestamp").and_then(Value::as_str),
+            "url": snapshot.pointer("/dom/url").and_then(Value::as_str),
+            "title": snapshot.pointer("/dom/title").and_then(Value::as_str),
+            "ready_state": snapshot.pointer("/dom/ready_state").and_then(Value::as_str),
+            "counts": snapshot.pointer("/dom/counts").cloned(),
         }))
     }
 
@@ -1292,6 +1310,65 @@ impl WebPreviewView {
 
     fn send_runtime_events_to_agent(&mut self, cx: &mut Context<Self>) {
         self.request_runtime_events("agent", cx);
+    }
+
+    fn dom_snapshot_snapshot(&self, payload: &Value, window: &Window) -> Value {
+        let mut dom = payload.clone();
+        if let Some(dom) = dom.as_object_mut() {
+            dom.remove("kind");
+            dom.remove("action");
+        }
+
+        serde_json::json!({
+            "schema": "zed.web_preview.dom_snapshot.v1",
+            "session": self.browser_session_snapshot(window),
+            "dom": dom,
+        })
+    }
+
+    fn dom_snapshot_json(snapshot: &Value) -> String {
+        serde_json::to_string_pretty(snapshot).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn dom_snapshot_agent_blocks(&self, snapshot: &Value) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = snapshot.pointer("/dom/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview DOM snapshot:\n\n```json\n{}\n```",
+            Self::dom_snapshot_json(snapshot)
+        ))));
+        blocks
+    }
+
+    fn request_dom_snapshot(&mut self, action: &'static str, cx: &mut Context<Self>) {
+        let script = format!(
+            "window.__zedWebPreview && window.__zedWebPreview.collectDomSnapshot('{action}');"
+        );
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(&script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Collecting web preview DOM snapshot", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("DOM snapshot is unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic("DOM snapshot crashed before collection", cx);
+            }
+        }
+    }
+
+    fn copy_dom_snapshot(&mut self, cx: &mut Context<Self>) {
+        self.request_dom_snapshot("copy", cx);
+    }
+
+    fn send_dom_snapshot_to_agent(&mut self, cx: &mut Context<Self>) {
+        self.request_dom_snapshot("agent", cx);
     }
 
     fn agent_browser_action_manifest(&self, window: &Window) -> Value {
@@ -1765,6 +1842,46 @@ impl WebPreviewView {
                     }
                 }
             }
+            "dom-snapshot" => {
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let action = payload
+                        .get("action")
+                        .and_then(Value::as_str)
+                        .unwrap_or("copy");
+                    let snapshot = self.dom_snapshot_snapshot(&payload, window);
+                    self.latest_dom_snapshot = Some(snapshot.clone());
+
+                    match action {
+                        "agent" => {
+                            self.append_content_blocks_to_agent_panel(
+                                self.dom_snapshot_agent_blocks(&snapshot),
+                                window,
+                                cx,
+                            );
+                            self.show_toast("Sent DOM snapshot to the agent panel", cx);
+                        }
+                        _ => {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                Self::dom_snapshot_json(&snapshot),
+                            ));
+                            self.show_toast("Copied web preview DOM snapshot JSON", cx);
+                        }
+                    }
+
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.report_action_error("DOM snapshot collection failed", error, cx);
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "DOM snapshot crashed while collecting page data",
+                            cx,
+                        );
+                    }
+                }
+            }
             "capture-area" => {
                 match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
                     let scale = payload
@@ -2152,6 +2269,30 @@ impl WebPreviewView {
                                     move |_, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_runtime_events_to_agent(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy DOM Snapshot")
+                                .icon(IconName::Code)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_dom_snapshot(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send DOM Snapshot to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_dom_snapshot_to_agent(cx);
                                         });
                                     }
                                 }),
@@ -3122,6 +3263,7 @@ impl Item for WebPreviewView {
                 ipc_flush_scheduled: false,
                 latest_page_diagnostics: None,
                 latest_runtime_events: None,
+                latest_dom_snapshot: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
@@ -4550,6 +4692,110 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
       }));
   };
 
+  const MAX_DOM_SNAPSHOT_NODES = 650;
+  const MAX_DOM_SNAPSHOT_DEPTH = 5;
+  const MAX_DOM_SNAPSHOT_CHILDREN = 24;
+
+  const roundedRect = (element) => {
+    try {
+      const rect = element.getBoundingClientRect();
+      return {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height)
+      };
+    } catch (_error) {
+      return null;
+    }
+  };
+
+  const isVisibleElement = (element, rect) => {
+    try {
+      if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+      const style = window.getComputedStyle(element);
+      return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+    } catch (_error) {
+      return rect && rect.width > 0 && rect.height > 0;
+    }
+  };
+
+  const isInteractiveElement = (element) => {
+    try {
+      return element.matches("a[href], button, input, textarea, select, option, summary, label, video, audio, [role='button'], [role='link'], [role='menuitem'], [role='tab'], [role='checkbox'], [role='radio'], [role='textbox'], [contenteditable='true']");
+    } catch (_error) {
+      return false;
+    }
+  };
+
+  const domAttributeSnapshot = (element) => {
+    const attributes = {};
+    for (const name of ["id", "class", "role", "aria-label", "name", "type", "placeholder", "title", "alt", "href", "src", "data-testid", "data-test", "data-cy"]) {
+      const value = element.getAttribute(name);
+      if (value) attributes[name] = limitText(value, 220);
+    }
+    return attributes;
+  };
+
+  const domTreeNode = (node, depth, siblingIndex, budget) => {
+    if (!node) return null;
+    if (budget.nodes >= MAX_DOM_SNAPSHOT_NODES) {
+      budget.truncated += 1;
+      return { type: "truncated", reason: "node_budget_exceeded" };
+    }
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = limitText(node.textContent, 180);
+      if (!text) return null;
+      budget.nodes += 1;
+      return { type: "text", text };
+    }
+
+    if (!(node instanceof Element)) return null;
+
+    const tag = node.tagName.toLowerCase();
+    if (["script", "style", "noscript", "template"].includes(tag)) {
+      return null;
+    }
+
+    budget.nodes += 1;
+    const rect = roundedRect(node);
+    const visible = isVisibleElement(node, rect);
+    const childNodes = Array.from(node.childNodes || []);
+    const children = [];
+
+    if (depth < MAX_DOM_SNAPSHOT_DEPTH) {
+      const childLimit = Math.min(childNodes.length, MAX_DOM_SNAPSHOT_CHILDREN);
+      for (let index = 0; index < childLimit; index += 1) {
+        const child = domTreeNode(childNodes[index], depth + 1, index, budget);
+        if (child) children.push(child);
+      }
+      if (childNodes.length > MAX_DOM_SNAPSHOT_CHILDREN) {
+        budget.truncated += childNodes.length - MAX_DOM_SNAPSHOT_CHILDREN;
+      }
+    } else if (childNodes.length) {
+      budget.truncated += childNodes.length;
+    }
+
+    return {
+      type: "element",
+      tag,
+      selector: cssSelector(node),
+      sibling_index: siblingIndex,
+      attributes: domAttributeSnapshot(node),
+      text_preview: limitText(node.textContent, 180),
+      rect: visible ? rect : null,
+      flags: {
+        visible,
+        interactive: isInteractiveElement(node),
+        disabled: Boolean(node.disabled),
+        focused: node === document.activeElement
+      },
+      child_count: childNodes.length,
+      children
+    };
+  };
+
   installRuntimeCapture();
 
   window.__zedWebPreview = {
@@ -4649,6 +4895,54 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
         network: networkEvents,
         failed_network: failedNetwork.slice(-40),
         performance_resources: runtimeResourceSnapshot()
+      });
+    },
+
+    collectDomSnapshot(action = "copy") {
+      const root = document.body || document.documentElement;
+      const html = document.documentElement;
+      const body = document.body;
+      const budget = { nodes: 0, truncated: 0 };
+      const rootSnapshot = domTreeNode(root, 0, 0, budget);
+
+      post({
+        kind: "dom-snapshot",
+        action,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState,
+        document: {
+          content_type: document.contentType,
+          character_set: document.characterSet,
+          language: html?.lang || null,
+          direction: html ? window.getComputedStyle(html).direction : null,
+          has_focus: document.hasFocus(),
+          visibility_state: document.visibilityState,
+          active_element: elementSnapshot(document.activeElement instanceof Element ? document.activeElement : null)
+        },
+        viewport: {
+          inner_width: window.innerWidth,
+          inner_height: window.innerHeight,
+          device_pixel_ratio: window.devicePixelRatio || 1,
+          scroll_x: Math.round(window.scrollX || 0),
+          scroll_y: Math.round(window.scrollY || 0),
+          scroll_width: Math.max(html?.scrollWidth || 0, body?.scrollWidth || 0),
+          scroll_height: Math.max(html?.scrollHeight || 0, body?.scrollHeight || 0)
+        },
+        counts: {
+          nodes: budget.nodes,
+          truncated_nodes: budget.truncated,
+          max_nodes: MAX_DOM_SNAPSHOT_NODES,
+          max_depth: MAX_DOM_SNAPSHOT_DEPTH,
+          max_children_per_node: MAX_DOM_SNAPSHOT_CHILDREN,
+          total_elements: document.getElementsByTagName("*").length,
+          links: document.links?.length || 0,
+          buttons: document.querySelectorAll("button, [role='button']").length,
+          inputs: document.querySelectorAll("input, textarea, select, [contenteditable='true']").length,
+          forms: document.forms?.length || 0
+        },
+        root: rootSnapshot
       });
     },
 

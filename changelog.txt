@@ -1,3 +1,13 @@
+[2026-05-15] - Web Preview DOM Snapshot
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy DOM Snapshot" and "Send DOM Snapshot to Agent".
+- The WebPreview bridge now collects a bounded DOM tree snapshot with document metadata, viewport state, active element, selected attributes, visible/interactable flags, and truncation counts.
+- WebPreview session JSON now summarizes the latest DOM snapshot for Agent Browser context.
+
+NOTES:
+- This keeps the Agent Browser Command Center read-only while giving future browser-agent tooling structured page context before any click/type automation.
+
 [2026-05-15] - Web Preview Agent Action Policy
 
 ADDED:
