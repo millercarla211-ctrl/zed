@@ -1,4 +1,5 @@
 IN PROGRESS:
+- Font panel lowercase query/sort/search text now goes through one preallocated helper instead of direct `to_lowercase` allocations in the hot typed-search and font-load paths; awaiting manual QA that source filtering and system/Google font search remain unchanged.
 - Media panel local indexing now checks ignored folder names and media file extensions with static ASCII-insensitive comparisons instead of allocating lowercase strings while walking the workspace; awaiting manual QA that ignored folders and media extension detection remain unchanged.
 - Media panel local asset search text now builds each indexed file's cached lowercase string in one preallocated buffer instead of allocating lowercase label/path strings and formatting them together; awaiting manual QA that local media searches still return the same rows.
 - Icon panel Zed and external Iconify search text now build cached lowercase search strings in one preallocated buffer instead of allocating per-field lowercase strings and formatting them together; awaiting manual QA that icon searches still return the same Zed and Iconify rows.

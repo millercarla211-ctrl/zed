@@ -1,3 +1,11 @@
+[2026-05-15] - Font Lowercase Helper Cleanup
+
+CHANGED:
+- `crates/font_panel` now routes font query, sort, and cached search text through a preallocated lowercase helper instead of direct `to_lowercase` calls in the Font panel paths.
+
+NOTES:
+- Preserved the same Unicode lowercase behavior, source filtering, system/Google font matching, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Media Local Indexing Case Check Cleanup
 
 CHANGED:

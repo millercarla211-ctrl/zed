@@ -260,13 +260,13 @@ impl FontPanel {
     }
 
     fn sort_fonts(mut fonts: Vec<SharedString>) -> Vec<SharedString> {
-        fonts.sort_by_cached_key(|font| font.as_ref().to_lowercase());
+        fonts.sort_by_cached_key(|font| lowercase_text(font.as_ref()));
         fonts.dedup();
         fonts
     }
 
     fn query(&self, cx: &App) -> String {
-        self.filter_editor.read(cx).text(cx).trim().to_lowercase()
+        lowercase_text(self.filter_editor.read(cx).text(cx).trim())
     }
 
     fn sample_text(&self, _cx: &App) -> SharedString {
@@ -371,7 +371,7 @@ impl FontPanel {
             return matches;
         }
 
-        let search_text: SharedString = font_name.to_lowercase().into();
+        let search_text: SharedString = lowercase_text(font_name).into();
         self.font_search_text_cache
             .borrow_mut()
             .insert(font_name.into(), search_text.clone());
@@ -899,6 +899,20 @@ fn scroll_tab_handle(handle: &ScrollHandle, direction: f32) {
 
 fn font_search_matches(searchable: &str, query_terms: &[&str]) -> bool {
     query_terms.iter().all(|term| searchable.contains(term))
+}
+
+fn lowercase_text(value: &str) -> String {
+    let mut text = String::with_capacity(value.len());
+    push_lowercase(&mut text, value);
+    text
+}
+
+fn push_lowercase(buffer: &mut String, value: &str) {
+    for ch in value.chars() {
+        for lower in ch.to_lowercase() {
+            buffer.push(lower);
+        }
+    }
 }
 
 fn font_element_id(prefix: &str, id: &str) -> String {
