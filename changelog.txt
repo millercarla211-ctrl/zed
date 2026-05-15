@@ -1,3 +1,16 @@
+[2026-05-16] - Web Preview Input Preflight Receipts
+
+ADDED:
+- WebPreview's More menu now includes type, key, and scroll preflight actions plus Agent Panel handoff entries.
+- Type, key, and scroll preflights emit no-input receipts with target readiness, candidate details, blockers, and the shared executor gate outcome.
+- Browser plugin manifests now advertise `browser.action.type_preflight`, `browser.action.key_preflight`, and `browser.action.scroll_preflight` as available no-input capabilities.
+
+CHANGED:
+- Click, type, key, and scroll preflights now share one input-preflight target-selection and receipt path before native input dispatch is enabled.
+
+NOTES:
+- This slice deliberately does not send keyboard input, wheel input, mouse/pointer events, browser commands, page scripts, or external Chrome actions.
+
 [2026-05-16] - Web Preview Click Preflight Receipt
 
 ADDED:

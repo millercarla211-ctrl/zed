@@ -480,6 +480,9 @@ pub struct WebPreviewView {
     latest_agent_browser_navigation_executor_attempt: Option<Value>,
     latest_agent_browser_viewport_executor_attempt: Option<Value>,
     latest_agent_browser_click_preflight_attempt: Option<Value>,
+    latest_agent_browser_type_preflight_attempt: Option<Value>,
+    latest_agent_browser_key_preflight_attempt: Option<Value>,
+    latest_agent_browser_scroll_preflight_attempt: Option<Value>,
     latest_agent_browser_qa_runbook: Option<Value>,
     latest_agent_plugin_catalog: Option<Value>,
     latest_annotated_screenshot: Option<Value>,
@@ -675,6 +678,9 @@ impl WebPreviewView {
             latest_agent_browser_navigation_executor_attempt: None,
             latest_agent_browser_viewport_executor_attempt: None,
             latest_agent_browser_click_preflight_attempt: None,
+            latest_agent_browser_type_preflight_attempt: None,
+            latest_agent_browser_key_preflight_attempt: None,
+            latest_agent_browser_scroll_preflight_attempt: None,
             latest_agent_browser_qa_runbook: None,
             latest_agent_plugin_catalog: None,
             latest_annotated_screenshot: None,
@@ -1145,6 +1151,9 @@ impl WebPreviewView {
             "agent_browser_navigation_executor_attempt": self.latest_agent_browser_navigation_executor_attempt_summary(),
             "agent_browser_viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
             "agent_browser_click_preflight_attempt": self.latest_agent_browser_click_preflight_attempt_summary(),
+            "agent_browser_type_preflight_attempt": self.latest_agent_browser_type_preflight_attempt_summary(),
+            "agent_browser_key_preflight_attempt": self.latest_agent_browser_key_preflight_attempt_summary(),
+            "agent_browser_scroll_preflight_attempt": self.latest_agent_browser_scroll_preflight_attempt_summary(),
             "agent_browser_qa_runbook": self.latest_agent_browser_qa_runbook_summary(),
             "agent_plugin_catalog": self.latest_agent_plugin_catalog_summary(),
             "annotated_screenshot": self.latest_annotated_screenshot_summary(),
@@ -1198,6 +1207,12 @@ impl WebPreviewView {
                 "send_permissioned_viewport_executor_to_agent": self.agent_action_permission.interactive_enabled(),
                 "copy_permissioned_click_preflight_attempt": true,
                 "send_permissioned_click_preflight_attempt_to_agent": true,
+                "copy_permissioned_type_preflight_attempt": true,
+                "send_permissioned_type_preflight_attempt_to_agent": true,
+                "copy_permissioned_key_preflight_attempt": true,
+                "send_permissioned_key_preflight_attempt_to_agent": true,
+                "copy_permissioned_scroll_preflight_attempt": true,
+                "send_permissioned_scroll_preflight_attempt_to_agent": true,
                 "copy_agent_browser_qa_runbook": true,
                 "send_agent_browser_qa_runbook_to_agent": true,
                 "copy_agent_plugin_catalog": true,
@@ -1482,16 +1497,44 @@ impl WebPreviewView {
     }
 
     fn latest_agent_browser_click_preflight_attempt_summary(&self) -> Option<Value> {
-        let attempt = self.latest_agent_browser_click_preflight_attempt.as_ref()?;
+        Self::latest_agent_browser_input_preflight_attempt_summary(
+            &self.latest_agent_browser_click_preflight_attempt,
+        )
+    }
+
+    fn latest_agent_browser_type_preflight_attempt_summary(&self) -> Option<Value> {
+        Self::latest_agent_browser_input_preflight_attempt_summary(
+            &self.latest_agent_browser_type_preflight_attempt,
+        )
+    }
+
+    fn latest_agent_browser_key_preflight_attempt_summary(&self) -> Option<Value> {
+        Self::latest_agent_browser_input_preflight_attempt_summary(
+            &self.latest_agent_browser_key_preflight_attempt,
+        )
+    }
+
+    fn latest_agent_browser_scroll_preflight_attempt_summary(&self) -> Option<Value> {
+        Self::latest_agent_browser_input_preflight_attempt_summary(
+            &self.latest_agent_browser_scroll_preflight_attempt,
+        )
+    }
+
+    fn latest_agent_browser_input_preflight_attempt_summary(
+        attempt: &Option<Value>,
+    ) -> Option<Value> {
+        let attempt = attempt.as_ref()?;
         Some(serde_json::json!({
             "captured_at_ms": attempt.pointer("/attempt/captured_at_ms").and_then(Value::as_u64),
             "title": attempt.pointer("/attempt/title").and_then(Value::as_str),
             "url": attempt.pointer("/attempt/url").and_then(Value::as_str),
             "action": attempt.pointer("/attempt/action").and_then(Value::as_str),
             "outcome": attempt.pointer("/attempt/outcome").and_then(Value::as_str),
+            "target_ready": attempt.pointer("/attempt/target_ready").and_then(Value::as_bool),
             "candidate_selector": attempt.pointer("/attempt/target_candidate/selector").and_then(Value::as_str),
             "candidate_label": attempt.pointer("/attempt/target_candidate/label").and_then(Value::as_str),
             "candidate_tag": attempt.pointer("/attempt/target_candidate/tag").and_then(Value::as_str),
+            "candidate_key": attempt.pointer("/attempt/target_candidate/key").and_then(Value::as_str),
             "native_input_dispatched": attempt.pointer("/attempt/native_input_dispatched").and_then(Value::as_bool),
             "receipt_outcome": attempt.pointer("/attempt/receipt/outcome").and_then(Value::as_str),
             "blocker_count": attempt.pointer("/attempt/blockers").and_then(Value::as_array).map(Vec::len),
@@ -1676,14 +1719,14 @@ impl WebPreviewView {
         Value::Object(receipt)
     }
 
-    fn first_click_action_target(&self) -> Option<Value> {
+    fn first_action_target(&self, action_kind: &'static str) -> Option<Value> {
         self.latest_action_targets
             .as_ref()?
             .pointer("/targets/targets")?
             .as_array()?
             .iter()
             .find(|target| {
-                target.pointer("/action_kind").and_then(Value::as_str) == Some("click")
+                target.pointer("/action_kind").and_then(Value::as_str) == Some(action_kind)
                     && target
                         .pointer("/visible")
                         .and_then(Value::as_bool)
@@ -1698,6 +1741,67 @@ impl WebPreviewView {
                         .is_some_and(|selector| !selector.trim().is_empty())
             })
             .cloned()
+    }
+
+    fn first_click_action_target(&self) -> Option<Value> {
+        self.first_action_target("click")
+    }
+
+    fn first_type_action_target(&self) -> Option<Value> {
+        self.first_action_target("type")
+    }
+
+    fn first_scroll_action_target(&self) -> Option<Value> {
+        if let Some(target) = self
+            .latest_interaction_plan
+            .as_ref()
+            .and_then(|plan| plan.pointer("/plan/action_groups"))
+            .and_then(Value::as_array)
+            .and_then(|groups| {
+                groups.iter().find(|group| {
+                    group.pointer("/action").and_then(Value::as_str) == Some("scroll")
+                })
+            })
+            .and_then(|group| group.pointer("/targets"))
+            .and_then(Value::as_array)
+            .and_then(|targets| targets.first())
+            .cloned()
+        {
+            return Some(target);
+        }
+
+        let viewport = self
+            .latest_page_diagnostics
+            .as_ref()
+            .and_then(|page| page.pointer("/page/viewport"))?;
+        let inner_height = viewport.pointer("/inner_height").and_then(Value::as_u64)?;
+        let scroll_height = viewport.pointer("/scroll_height").and_then(Value::as_u64)?;
+        if scroll_height <= inner_height {
+            return None;
+        }
+
+        Some(serde_json::json!({
+            "selector": "window",
+            "tag": "window",
+            "label": "Page viewport",
+            "rect": null,
+            "scroll_x": viewport.pointer("/scroll_x").cloned(),
+            "scroll_y": viewport.pointer("/scroll_y").cloned(),
+            "inner_height": inner_height,
+            "scroll_height": scroll_height,
+        }))
+    }
+
+    fn key_preflight_candidate(&self) -> Value {
+        serde_json::json!({
+            "key": "Escape",
+            "reason": "Safe default planning key; no key event is dispatched by this preflight.",
+            "allowed_examples": ["Escape", "Enter", "Tab", "ArrowDown", "ArrowUp"],
+            "active_element": self.latest_action_targets
+                .as_ref()
+                .and_then(|targets| targets.pointer("/targets/active_element"))
+                .cloned(),
+        })
     }
 
     fn load_state_name(&self) -> &'static str {
@@ -2799,6 +2903,9 @@ impl WebPreviewView {
                     "agent_browser_navigation_executor_attempt": self.latest_agent_browser_navigation_executor_attempt_summary(),
                     "agent_browser_viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
                     "agent_browser_click_preflight_attempt": self.latest_agent_browser_click_preflight_attempt_summary(),
+                    "agent_browser_type_preflight_attempt": self.latest_agent_browser_type_preflight_attempt_summary(),
+                    "agent_browser_key_preflight_attempt": self.latest_agent_browser_key_preflight_attempt_summary(),
+                    "agent_browser_scroll_preflight_attempt": self.latest_agent_browser_scroll_preflight_attempt_summary(),
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 },
                 "handoff": {
@@ -3010,6 +3117,9 @@ impl WebPreviewView {
                 "navigation_executor_attempt": self.latest_agent_browser_navigation_executor_attempt_summary(),
                 "viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
                 "click_preflight_attempt": self.latest_agent_browser_click_preflight_attempt_summary(),
+                "type_preflight_attempt": self.latest_agent_browser_type_preflight_attempt_summary(),
+                "key_preflight_attempt": self.latest_agent_browser_key_preflight_attempt_summary(),
+                "scroll_preflight_attempt": self.latest_agent_browser_scroll_preflight_attempt_summary(),
             },
             "notes": [
                 "This readiness contract is read-only and does not dispatch browser input.",
@@ -3886,15 +3996,108 @@ impl WebPreviewView {
         self.permissioned_viewport_executor_attempt(window, cx, true);
     }
 
-    fn permissioned_click_preflight_attempt(
+    fn permissioned_input_preflight_target(&self, action: &'static str) -> (Option<Value>, bool) {
+        match action {
+            "click" => {
+                let target = self.first_click_action_target();
+                let ready = target.is_some();
+                (target, ready)
+            }
+            "type_text" => {
+                let target = self.first_type_action_target();
+                let ready = target.is_some();
+                (target, ready)
+            }
+            "press_key" => (Some(self.key_preflight_candidate()), true),
+            "scroll" => {
+                let target = self.first_scroll_action_target();
+                let ready = target.is_some();
+                (target, ready)
+            }
+            _ => (None, false),
+        }
+    }
+
+    fn permissioned_input_preflight_attempt(
         &mut self,
+        action: &'static str,
         window: &Window,
         cx: &mut Context<Self>,
         send_to_agent: bool,
     ) {
+        let action_label = match action {
+            "click" => "click preflight",
+            "type_text" => "type preflight",
+            "press_key" => "key preflight",
+            "scroll" => "scroll preflight",
+            _ => "input preflight",
+        };
+        let receipt_schema = match action {
+            "click" => "zed.web_preview.permissioned_click_preflight_receipt.v1",
+            "type_text" => "zed.web_preview.permissioned_type_preflight_receipt.v1",
+            "press_key" => "zed.web_preview.permissioned_key_preflight_receipt.v1",
+            "scroll" => "zed.web_preview.permissioned_scroll_preflight_receipt.v1",
+            _ => "zed.web_preview.permissioned_input_preflight_receipt.v1",
+        };
+        let attempt_schema = match action {
+            "click" => "zed.web_preview.permissioned_click_preflight_attempt.v1",
+            "type_text" => "zed.web_preview.permissioned_type_preflight_attempt.v1",
+            "press_key" => "zed.web_preview.permissioned_key_preflight_attempt.v1",
+            "scroll" => "zed.web_preview.permissioned_scroll_preflight_attempt.v1",
+            _ => "zed.web_preview.permissioned_input_preflight_attempt.v1",
+        };
+        let context_message = match action {
+            "type_text" => {
+                "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before type preflight."
+            }
+            "press_key" => {
+                "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before key preflight."
+            }
+            "scroll" => {
+                "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before scroll preflight."
+            }
+            _ => {
+                "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before click preflight."
+            }
+        };
+        let audit_message = match action {
+            "type_text" => {
+                "Type preflight requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts."
+            }
+            "press_key" => {
+                "Key preflight requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts."
+            }
+            "scroll" => {
+                "Scroll preflight requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts."
+            }
+            _ => {
+                "Click preflight requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts."
+            }
+        };
+        let target_not_ready = match action {
+            "type_text" => (
+                "type_target_not_ready",
+                "No visible, enabled type target with a stable selector is available in the latest action-target snapshot.",
+                "Collect action targets again after the page settles or focus a text input, then rerun type preflight.",
+            ),
+            "press_key" => (
+                "key_target_not_ready",
+                "No key candidate is available for this preflight.",
+                "Collect fresh page context, then rerun key preflight.",
+            ),
+            "scroll" => (
+                "scroll_target_not_ready",
+                "No scrollable page or element target is available in the latest interaction plan or page diagnostics.",
+                "Collect interaction plan and page diagnostics again after the page settles, then rerun scroll preflight.",
+            ),
+            _ => (
+                "click_target_not_ready",
+                "No visible, enabled click target with a stable selector is available in the latest action-target snapshot.",
+                "Collect action targets again after the page settles, then rerun click preflight.",
+            ),
+        };
         let captured_at_ms = Self::current_epoch_millis();
-        let target_candidate = self.first_click_action_target();
-        let target_ready = target_candidate.is_some();
+        let (target_candidate, target_ready) = self.permissioned_input_preflight_target(action);
         let before = serde_json::json!({
             "url": self.active_url.as_ref(),
             "title": self.current_tab_title().as_ref(),
@@ -3905,16 +4108,13 @@ impl WebPreviewView {
         });
         let gate = self.agent_browser_executor_gate();
         let gate_ready_for_executor = gate.ready_for_executor() && target_ready;
-        let mut blockers = self.agent_browser_executor_gate_blockers(
-            gate,
-            "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before click preflight.",
-            "Click preflight requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts.",
-        );
+        let mut blockers =
+            self.agent_browser_executor_gate_blockers(gate, context_message, audit_message);
         if !target_ready {
             blockers.push(serde_json::json!({
-                "code": "click_target_not_ready",
-                "message": "No visible, enabled click target with a stable selector is available in the latest action-target snapshot.",
-                "required_action": "Collect action targets again after the page settles, then rerun click preflight.",
+                "code": target_not_ready.0,
+                "message": target_not_ready.1,
+                "required_action": target_not_ready.2,
             }));
         }
 
@@ -3930,8 +4130,8 @@ impl WebPreviewView {
             "target_candidate": target_candidate.clone(),
         });
         let receipt = self.permissioned_executor_receipt(
-            "zed.web_preview.permissioned_click_preflight_receipt.v1",
-            "click",
+            receipt_schema,
+            action,
             outcome,
             gate,
             before,
@@ -3965,7 +4165,7 @@ impl WebPreviewView {
         let target_candidate_for_attempt = receipt.pointer("/target_candidate").cloned();
 
         let attempt = serde_json::json!({
-            "schema": "zed.web_preview.permissioned_click_preflight_attempt.v1",
+            "schema": attempt_schema,
             "session": self.browser_session_snapshot(window),
             "policy": self.agent_browser_policy_snapshot(),
             "attempt": {
@@ -3973,7 +4173,7 @@ impl WebPreviewView {
                 "session_id": self.session_id.as_ref(),
                 "title": self.current_tab_title().as_ref(),
                 "url": self.active_url.as_ref(),
-                "action": "click",
+                "action": action,
                 "outcome": outcome,
                 "dry_run_only": true,
                 "target_ready": target_ready,
@@ -3987,31 +4187,44 @@ impl WebPreviewView {
                 "latest_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
             },
             "notes": [
-                "This click executor slice is preflight-only.",
-                "It selects a visible enabled click target from the latest action-target snapshot and emits the receipt a future native click must satisfy.",
-                "It never sends mouse, pointer, keyboard, wheel, browser command, or page-script input."
+                format!("This {action_label} executor slice is preflight-only."),
+                "It selects the safest available target/candidate from existing WebPreview context and emits the receipt a future native input executor must satisfy.".to_string(),
+                "It never sends mouse, pointer, keyboard, wheel, browser command, or page-script input.".to_string()
             ],
         });
-        let blocks = self.permissioned_click_preflight_agent_blocks(&attempt);
-        self.latest_agent_browser_click_preflight_attempt = Some(attempt.clone());
+        let blocks = self.permissioned_input_preflight_agent_blocks(&attempt, action_label);
+        match action {
+            "click" => self.latest_agent_browser_click_preflight_attempt = Some(attempt.clone()),
+            "type_text" => self.latest_agent_browser_type_preflight_attempt = Some(attempt.clone()),
+            "press_key" => self.latest_agent_browser_key_preflight_attempt = Some(attempt.clone()),
+            "scroll" => self.latest_agent_browser_scroll_preflight_attempt = Some(attempt.clone()),
+            _ => {}
+        }
 
         if send_to_agent {
             self.append_content_blocks_to_agent_panel(blocks, window, cx);
-            self.show_toast("Sent click preflight receipt to the agent panel", cx);
+            self.show_toast(
+                format!("Sent {action_label} receipt to the agent panel"),
+                cx,
+            );
         } else {
             cx.write_to_clipboard(ClipboardItem::new_string(
-                Self::permissioned_click_preflight_json(&attempt),
+                Self::permissioned_input_preflight_json(&attempt),
             ));
-            self.show_toast("Copied click preflight receipt", cx);
+            self.show_toast(format!("Copied {action_label} receipt"), cx);
         }
         cx.notify();
     }
 
-    fn permissioned_click_preflight_json(attempt: &Value) -> String {
+    fn permissioned_input_preflight_json(attempt: &Value) -> String {
         serde_json::to_string_pretty(attempt).unwrap_or_else(|_| "{}".to_string())
     }
 
-    fn permissioned_click_preflight_agent_blocks(&self, attempt: &Value) -> Vec<acp::ContentBlock> {
+    fn permissioned_input_preflight_agent_blocks(
+        &self,
+        attempt: &Value,
+        action_label: &str,
+    ) -> Vec<acp::ContentBlock> {
         let mut blocks = Vec::new();
         if let Some(url) = attempt.pointer("/attempt/url").and_then(Value::as_str)
             && let Some(url_block) = self.url_attachment_block(url)
@@ -4021,8 +4234,8 @@ impl WebPreviewView {
         }
 
         blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
-            "Web preview permissioned click preflight attempt:\n\n```json\n{}\n```",
-            Self::permissioned_click_preflight_json(attempt)
+            "Web preview permissioned {action_label} attempt:\n\n```json\n{}\n```",
+            Self::permissioned_input_preflight_json(attempt)
         ))));
         blocks
     }
@@ -4032,7 +4245,7 @@ impl WebPreviewView {
         window: &Window,
         cx: &mut Context<Self>,
     ) {
-        self.permissioned_click_preflight_attempt(window, cx, false);
+        self.permissioned_input_preflight_attempt("click", window, cx, false);
     }
 
     fn send_permissioned_click_preflight_attempt_to_agent(
@@ -4040,7 +4253,51 @@ impl WebPreviewView {
         window: &Window,
         cx: &mut Context<Self>,
     ) {
-        self.permissioned_click_preflight_attempt(window, cx, true);
+        self.permissioned_input_preflight_attempt("click", window, cx, true);
+    }
+
+    fn copy_permissioned_type_preflight_attempt(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.permissioned_input_preflight_attempt("type_text", window, cx, false);
+    }
+
+    fn send_permissioned_type_preflight_attempt_to_agent(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.permissioned_input_preflight_attempt("type_text", window, cx, true);
+    }
+
+    fn copy_permissioned_key_preflight_attempt(&mut self, window: &Window, cx: &mut Context<Self>) {
+        self.permissioned_input_preflight_attempt("press_key", window, cx, false);
+    }
+
+    fn send_permissioned_key_preflight_attempt_to_agent(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.permissioned_input_preflight_attempt("press_key", window, cx, true);
+    }
+
+    fn copy_permissioned_scroll_preflight_attempt(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.permissioned_input_preflight_attempt("scroll", window, cx, false);
+    }
+
+    fn send_permissioned_scroll_preflight_attempt_to_agent(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.permissioned_input_preflight_attempt("scroll", window, cx, true);
     }
 
     fn agent_browser_qa_runbook(&self, window: &Window) -> Value {
@@ -4078,7 +4335,7 @@ impl WebPreviewView {
                     "audit_ready": audit_ready,
                     "interactive_unlocked": interactive_unlocked,
                     "executor_wired": true,
-                    "executor_scope": "open_url, reload, set_viewport, and clear_data only",
+                    "executor_scope": "open_url, reload, set_viewport, clear_data, and preflight-only click/type/key/scroll receipts",
                     "latest_status_packet": self.latest_agent_browser_status_packet_summary(),
                     "latest_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
                     "latest_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
@@ -4087,6 +4344,9 @@ impl WebPreviewView {
                     "latest_navigation_executor_attempt": self.latest_agent_browser_navigation_executor_attempt_summary(),
                     "latest_viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
                     "latest_click_preflight_attempt": self.latest_agent_browser_click_preflight_attempt_summary(),
+                    "latest_type_preflight_attempt": self.latest_agent_browser_type_preflight_attempt_summary(),
+                    "latest_key_preflight_attempt": self.latest_agent_browser_key_preflight_attempt_summary(),
+                    "latest_scroll_preflight_attempt": self.latest_agent_browser_scroll_preflight_attempt_summary(),
                 },
                 "manual_gates": [
                     {
@@ -4132,8 +4392,8 @@ impl WebPreviewView {
                     "target_score": 100,
                     "goal": "Wire real browser actions behind the readiness gate, preserving editor speed and WebPreview focus.",
                     "first_slices": [
-                        "Add a no-op executor harness that records attempted actions and emits blocked receipts.",
-                        "Wire one low-risk action behind explicit permission, fresh preflight, and receipt emission.",
+                        "Add a disabled-by-default native input dispatch adapter for Windows WebView2 CompositionController.",
+                        "Wire click/type/key/scroll dispatch only after each action has a fresh preflight receipt.",
                         "Expand action coverage only after manual QA confirms no editor or WebPreview input regression."
                     ]
                 }
@@ -4327,6 +4587,9 @@ impl WebPreviewView {
                             {"id": "browser.action.clear_data", "state": "available_when_unlocked", "description": "Clear WebPreview browsing data through the permissioned executor shell."},
                             {"id": "browser.action.set_viewport", "state": "available_when_unlocked", "description": "Switch to the next responsive viewport preset through the permissioned WebPreview executor shell."},
                             {"id": "browser.action.click_preflight", "state": "available", "description": "Select a visible click target and emit the receipt a future native click must satisfy without dispatching input."},
+                            {"id": "browser.action.type_preflight", "state": "available", "description": "Select a visible text-entry target and emit the receipt a future native type action must satisfy without dispatching input."},
+                            {"id": "browser.action.key_preflight", "state": "available", "description": "Prepare a safe key candidate and emit the receipt a future native key action must satisfy without dispatching input."},
+                            {"id": "browser.action.scroll_preflight", "state": "available", "description": "Select a scrollable page or element target and emit the receipt a future native scroll action must satisfy without dispatching input."},
                             {"id": "browser.action.click", "state": "planned_executor", "description": "Click visible page targets after unlock, fresh preflight, and receipt logging."},
                             {"id": "browser.action.type", "state": "planned_executor", "description": "Type into page inputs after unlock, fresh preflight, and receipt logging."},
                             {"id": "browser.action.key", "state": "planned_executor", "description": "Send key presses after unlock, fresh preflight, and receipt logging."},
@@ -6168,6 +6431,90 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Run Type Preflight")
+                                .icon(IconName::CursorIBeam)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_permissioned_type_preflight_attempt(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Run Type Preflight to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_permissioned_type_preflight_attempt_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Run Key Preflight")
+                                .icon(IconName::Keyboard)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_permissioned_key_preflight_attempt(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Run Key Preflight to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_permissioned_key_preflight_attempt_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Run Scroll Preflight")
+                                .icon(IconName::ArrowDown)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_permissioned_scroll_preflight_attempt(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Run Scroll Preflight to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_permissioned_scroll_preflight_attempt_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Run Reload Executor")
                                 .icon(IconName::RotateCw)
                                 .handler({
@@ -7335,6 +7682,9 @@ impl Item for WebPreviewView {
                 latest_agent_browser_navigation_executor_attempt: None,
                 latest_agent_browser_viewport_executor_attempt: None,
                 latest_agent_browser_click_preflight_attempt: None,
+                latest_agent_browser_type_preflight_attempt: None,
+                latest_agent_browser_key_preflight_attempt: None,
+                latest_agent_browser_scroll_preflight_attempt: None,
                 latest_agent_browser_qa_runbook: None,
                 latest_agent_plugin_catalog: None,
                 latest_annotated_screenshot: None,
