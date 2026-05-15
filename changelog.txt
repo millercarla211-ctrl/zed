@@ -1,3 +1,12 @@
+[2026-05-15] - UI Recent Action Reuse
+
+ADDED:
+- UI/shadcn panel now keeps a bounded in-memory Recent section for the last preview, copy, insert, install, and docs actions.
+- Recent UI rows reuse the same explicit Preview, Copy, Install/Insert, and Docs handlers as normal catalog rows.
+
+NOTES:
+- Recent UI actions are only shown for an empty search and do not persist, write files, or alter editor/WebPreview input routing.
+
 [2026-05-15] - UI Install Safety Hint
 
 CHANGED:

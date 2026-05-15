@@ -13,7 +13,7 @@ use rkyv::{
 use serde::Deserialize;
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     fmt::Write as _,
     fs::{self as std_fs, File},
     path::{Component, Path, PathBuf},
@@ -43,6 +43,7 @@ actions!(
 
 const SHADCN_UI_PANEL_KEY: &str = "ShadcnUiPanel";
 const MAX_SHADCN_ROWS: usize = 96;
+const MAX_RECENT_UI_ACTIONS: usize = 5;
 const PREVIEW_IMAGE_CACHE_INITIAL_CAPACITY: usize = MAX_SHADCN_ROWS * 4;
 const CATALOG_CACHE_FILE_NAME: &str = "catalog-v4.rkyv";
 const STATIC_SHADCN_CATALOG_INDEX: &str = include_str!("shadcn_catalog_index.tsv");
@@ -161,6 +162,21 @@ struct CatalogItem {
     jsx: SharedString,
 }
 
+#[derive(Clone)]
+struct RecentUiEntry {
+    item: CatalogItem,
+    action: RecentUiAction,
+}
+
+#[derive(Clone, Copy)]
+enum RecentUiAction {
+    Previewed,
+    Copied,
+    Inserted,
+    Installed,
+    OpenedDocs,
+}
+
 #[derive(Archive, RkyvSerialize, RkyvDeserialize)]
 struct CachedCatalogItem {
     id: String,
@@ -218,6 +234,7 @@ pub struct ShadcnUiPanel {
     source_filter: CatalogFilter,
     warming_preview_image_keys: HashSet<SharedString>,
     filter_scroll_handle: ScrollHandle,
+    recent_ui_actions: VecDeque<RecentUiEntry>,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
 }
@@ -270,6 +287,7 @@ impl ShadcnUiPanel {
                 source_filter: CatalogFilter::All,
                 warming_preview_image_keys: HashSet::with_capacity(MAX_SHADCN_ROWS),
                 filter_scroll_handle: ScrollHandle::new(),
+                recent_ui_actions: VecDeque::with_capacity(MAX_RECENT_UI_ACTIONS),
                 status: None,
                 _subscriptions: vec![filter_subscription],
             }
@@ -517,6 +535,16 @@ impl ShadcnUiPanel {
         cx.notify();
     }
 
+    fn record_recent_ui_action(&mut self, item: &CatalogItem, action: RecentUiAction) {
+        self.recent_ui_actions
+            .retain(|entry| entry.item.id.as_ref() != item.id.as_ref());
+        self.recent_ui_actions.push_front(RecentUiEntry {
+            item: item.clone(),
+            action,
+        });
+        self.recent_ui_actions.truncate(MAX_RECENT_UI_ACTIONS);
+    }
+
     fn insert_item(&mut self, item: CatalogItem, window: &mut Window, cx: &mut Context<Self>) {
         if matches!(
             item.source,
@@ -554,10 +582,22 @@ impl ShadcnUiPanel {
             editor.insert_shadcn_asset(&payload, window, cx)
         });
 
-        self.status = match result {
-            Ok(message) => Some(message),
-            Err(error) => Some(format!("{error:#}").into()),
-        };
+        match result {
+            Ok(message) => {
+                self.status = Some(message);
+                self.record_recent_ui_action(
+                    &item,
+                    if item.install_only {
+                        RecentUiAction::Installed
+                    } else {
+                        RecentUiAction::Inserted
+                    },
+                );
+            }
+            Err(error) => {
+                self.status = Some(format!("{error:#}").into());
+            }
+        }
         cx.notify();
     }
 
@@ -583,6 +623,7 @@ impl ShadcnUiPanel {
         }
 
         self.status = Some(shadcn_status_label("Previewing ", item.title.as_ref()));
+        self.record_recent_ui_action(&item, RecentUiAction::Previewed);
         cx.notify();
     }
 
@@ -593,6 +634,7 @@ impl ShadcnUiPanel {
                 "Copied install command for ",
                 item.title.as_ref(),
             ));
+            self.record_recent_ui_action(&item, RecentUiAction::Copied);
             cx.notify();
             return;
         }
@@ -610,12 +652,14 @@ impl ShadcnUiPanel {
         code.push_str(item.jsx.as_ref());
         cx.write_to_clipboard(ClipboardItem::new_string(code));
         self.status = Some(shadcn_status_label("Copied ", item.title.as_ref()));
+        self.record_recent_ui_action(&item, RecentUiAction::Copied);
         cx.notify();
     }
 
     fn open_item_docs(&mut self, item: CatalogItem, cx: &mut Context<Self>) {
         cx.open_url(&preview_url_for_item(&item));
         self.status = Some(shadcn_status_label("Opened docs for ", item.title.as_ref()));
+        self.record_recent_ui_action(&item, RecentUiAction::OpenedDocs);
         cx.notify();
     }
 
@@ -830,6 +874,187 @@ impl ShadcnUiPanel {
                     ),
             )
     }
+
+    fn render_recent_ui_section(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.recent_ui_actions.is_empty() {
+            return None;
+        }
+
+        let mut rows = Vec::with_capacity(self.recent_ui_actions.len().min(MAX_RECENT_UI_ACTIONS));
+        for (index, entry) in self
+            .recent_ui_actions
+            .iter()
+            .take(MAX_RECENT_UI_ACTIONS)
+            .cloned()
+            .enumerate()
+        {
+            rows.push(self.render_recent_ui_row(entry, index, cx));
+        }
+
+        Some(
+            v_flex()
+                .id("shadcn-ui-recent-actions-section")
+                .gap_1()
+                .child(
+                    h_flex()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .items_center()
+                                .child(Icon::new(IconName::Clock).size(IconSize::XSmall))
+                                .child(
+                                    Label::new("Recent")
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Muted),
+                                ),
+                        )
+                        .child(
+                            Label::new("last UI actions")
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted),
+                        ),
+                )
+                .children(rows)
+                .into_any_element(),
+        )
+    }
+
+    fn render_recent_ui_row(
+        &self,
+        entry: RecentUiEntry,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let id_suffix = index.to_string();
+        let row_id = shadcn_element_id("shadcn-recent-row-", id_suffix.as_str());
+        let primary_id = shadcn_element_id("shadcn-recent-primary-", id_suffix.as_str());
+        let copy_id = shadcn_element_id("shadcn-recent-copy-", id_suffix.as_str());
+        let preview_id = shadcn_element_id("shadcn-recent-preview-", id_suffix.as_str());
+        let docs_id = shadcn_element_id("shadcn-recent-docs-", id_suffix.as_str());
+        let item = entry.item;
+        let can_insert = can_drag_into_editor(item.source);
+        let primary_action = if item.install_only {
+            "Install"
+        } else if can_insert {
+            "Insert"
+        } else {
+            "Open"
+        };
+        let copy_action = if item.install_only {
+            "Copy Command"
+        } else {
+            "Copy"
+        };
+        let action_label = recent_ui_action_label(entry.action);
+        let source_label = catalog_source_label(item.source);
+        let category_label: SharedString = if item.install_only {
+            "route install".into()
+        } else {
+            item.category.clone()
+        };
+
+        h_flex()
+            .id(row_id)
+            .gap_2()
+            .items_center()
+            .p_2()
+            .rounded_sm()
+            .border_1()
+            .border_color(cx.theme().colors().border_variant)
+            .bg(cx.theme().colors().element_background)
+            .child(
+                Icon::new(icon_for_item(&item))
+                    .size(IconSize::Small)
+                    .color(Color::Muted),
+            )
+            .child(
+                v_flex()
+                    .flex_1()
+                    .gap_0p5()
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .child(
+                                Label::new(item.title.clone())
+                                    .size(LabelSize::Small)
+                                    .truncate(),
+                            )
+                            .child(
+                                Label::new(action_label)
+                                    .size(LabelSize::XSmall)
+                                    .color(Color::Accent),
+                            ),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .child(
+                                Label::new(source_label)
+                                    .size(LabelSize::XSmall)
+                                    .color(Color::Muted),
+                            )
+                            .child(
+                                Label::new(category_label)
+                                    .size(LabelSize::XSmall)
+                                    .color(Color::Muted)
+                                    .truncate(),
+                            ),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .gap_1()
+                    .flex_wrap()
+                    .child(
+                        Button::new(primary_id, primary_action)
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener({
+                                let item = item.clone();
+                                move |panel, _, window, cx| {
+                                    if can_insert {
+                                        panel.insert_item(item.clone(), window, cx);
+                                    } else {
+                                        panel.open_item_docs(item.clone(), cx);
+                                    }
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new(copy_id, copy_action)
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener({
+                                let item = item.clone();
+                                move |panel, _, _, cx| {
+                                    panel.copy_item_code(item.clone(), cx);
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new(preview_id, "Preview")
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener({
+                                let item = item.clone();
+                                move |panel, _, window, cx| {
+                                    panel.preview_item(item.clone(), window, cx);
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new(docs_id, "Docs")
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener(move |panel, _, _, cx| {
+                                panel.open_item_docs(item.clone(), cx);
+                            })),
+                    ),
+            )
+            .into_any_element()
+    }
 }
 
 impl Panel for ShadcnUiPanel {
@@ -899,7 +1124,6 @@ impl Render for ShadcnUiPanel {
         self.ensure_visible_preview_images_warmed(&items, &preview_images, cx);
         let visible_preview_warming_count =
             visible_preview_warming_count(&items, &self.warming_preview_image_keys);
-        let is_empty = total_matches == 0;
         let filter_counts = self.filter_counts;
         let total_count = filter_counts.count(self.source_filter);
         let mut item_rows = Vec::with_capacity(items.len());
@@ -907,6 +1131,18 @@ impl Render for ShadcnUiPanel {
             let image_url = preview_images.remove(item.id.as_ref()).flatten();
             self.render_item_row(item, image_url, cx).into_any_element()
         }));
+        let recent_ui_section = if query.is_empty() {
+            self.render_recent_ui_section(cx)
+        } else {
+            None
+        };
+        let mut content_rows =
+            Vec::with_capacity(item_rows.len() + usize::from(recent_ui_section.is_some()));
+        if let Some(recent_ui_section) = recent_ui_section {
+            content_rows.push(recent_ui_section);
+        }
+        content_rows.extend(item_rows);
+        let is_empty = content_rows.is_empty() && total_matches == 0;
         let show_preview_warming_status = visible_preview_warming_count > 0
             && self
                 .status
@@ -963,8 +1199,8 @@ impl Render for ShadcnUiPanel {
                             ),
                         )
                     })
-                    .when(!is_empty, |this| {
-                        this.child(v_flex().gap_2().children(item_rows))
+                    .when(!content_rows.is_empty(), |this| {
+                        this.child(v_flex().gap_2().children(content_rows))
                     }),
             )
     }
@@ -1067,6 +1303,16 @@ fn catalog_source_label(source: CatalogSource) -> &'static str {
         CatalogSource::MagicUi => "magic-ui",
         CatalogSource::CommunityRegistry => "registry",
         CatalogSource::TwentyFirst => "21st",
+    }
+}
+
+fn recent_ui_action_label(action: RecentUiAction) -> &'static str {
+    match action {
+        RecentUiAction::Previewed => "previewed",
+        RecentUiAction::Copied => "copied",
+        RecentUiAction::Inserted => "inserted",
+        RecentUiAction::Installed => "installed",
+        RecentUiAction::OpenedDocs => "opened",
     }
 }
 
