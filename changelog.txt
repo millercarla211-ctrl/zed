@@ -1,3 +1,12 @@
+[2026-05-15] - UI Route Block Copy Command
+
+CHANGED:
+- Install-only shadcn route rows now label the secondary copy action as `Copy Command`.
+- Copying a route-install row now writes the matching `npx shadcn@latest add <item>` command instead of copying a synthetic import and JSX snippet.
+
+NOTES:
+- Snippet-backed component, block, and Magic UI rows still copy import and JSX code exactly as before.
+
 [2026-05-15] - UI Route Block Search Clarity
 
 CHANGED:

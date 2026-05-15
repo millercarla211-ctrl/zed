@@ -587,6 +587,16 @@ impl ShadcnUiPanel {
     }
 
     fn copy_item_code(&mut self, item: CatalogItem, cx: &mut Context<Self>) {
+        if item.install_only {
+            cx.write_to_clipboard(ClipboardItem::new_string(shadcn_add_command(&item)));
+            self.status = Some(shadcn_status_label(
+                "Copied install command for ",
+                item.title.as_ref(),
+            ));
+            cx.notify();
+            return;
+        }
+
         let import_len = if item.import_statement.is_empty() {
             0
         } else {
@@ -664,6 +674,11 @@ impl ShadcnUiPanel {
         let copy_id = shadcn_element_id("shadcn-copy-", item.id.as_ref());
         let preview_id = shadcn_element_id("shadcn-preview-", item.id.as_ref());
         let docs_id = shadcn_element_id("shadcn-docs-", item.id.as_ref());
+        let copy_action = if item.install_only {
+            "Copy Command"
+        } else {
+            "Copy"
+        };
 
         div()
             .id(row_id)
@@ -755,7 +770,7 @@ impl ShadcnUiPanel {
                             })),
                     )
                     .child(
-                        Button::new(copy_id, "Copy")
+                        Button::new(copy_id, copy_action)
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
                             .on_click(cx.listener({
@@ -1043,6 +1058,14 @@ fn registry_target_is_route_file(target: &str) -> bool {
         Some(Component::Normal(component))
             if matches!(component.to_str(), Some("app" | "pages"))
     )
+}
+
+fn shadcn_add_command(item: &CatalogItem) -> String {
+    let id = item.id.as_ref();
+    let mut command = String::with_capacity("npx shadcn@latest add ".len() + id.len());
+    command.push_str("npx shadcn@latest add ");
+    command.push_str(id);
+    command
 }
 
 fn shadcn_element_id(prefix: &str, id: &str) -> String {
