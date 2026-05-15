@@ -275,6 +275,7 @@ pub struct WebPreviewView {
     deferred_ipc_messages: Vec<String>,
     ipc_flush_scheduled: bool,
     latest_page_diagnostics: Option<Value>,
+    latest_runtime_events: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -445,6 +446,7 @@ impl WebPreviewView {
             deferred_ipc_messages: Vec::new(),
             ipc_flush_scheduled: false,
             latest_page_diagnostics: None,
+            latest_runtime_events: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -885,6 +887,7 @@ impl WebPreviewView {
                 "active_url_bookmarked": self.is_active_url_bookmarked(),
             },
             "page_diagnostics": self.latest_page_diagnostics_summary(),
+            "runtime_events": self.latest_runtime_events_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -897,6 +900,8 @@ impl WebPreviewView {
                 "send_session_to_agent": true,
                 "copy_page_diagnostics": true,
                 "send_page_diagnostics_to_agent": true,
+                "copy_runtime_events": true,
+                "send_runtime_events_to_agent": true,
                 "screenshot": true,
                 "inspect_element": true,
                 "open_devtools": true,
@@ -913,6 +918,16 @@ impl WebPreviewView {
             "title": diagnostics.pointer("/page/title").and_then(Value::as_str),
             "ready_state": diagnostics.pointer("/page/document/ready_state").and_then(Value::as_str),
             "counts": diagnostics.pointer("/page/counts").cloned(),
+        }))
+    }
+
+    fn latest_runtime_events_summary(&self) -> Option<Value> {
+        let events = self.latest_runtime_events.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at": events.pointer("/events/timestamp").and_then(Value::as_str),
+            "url": events.pointer("/events/url").and_then(Value::as_str),
+            "title": events.pointer("/events/title").and_then(Value::as_str),
+            "counts": events.pointer("/events/counts").cloned(),
         }))
     }
 
@@ -1057,6 +1072,65 @@ impl WebPreviewView {
 
     fn send_page_diagnostics_to_agent(&mut self, cx: &mut Context<Self>) {
         self.request_page_diagnostics("agent", cx);
+    }
+
+    fn runtime_events_snapshot(&self, payload: &Value, window: &Window) -> Value {
+        let mut events = payload.clone();
+        if let Some(events) = events.as_object_mut() {
+            events.remove("kind");
+            events.remove("action");
+        }
+
+        serde_json::json!({
+            "schema": "zed.web_preview.runtime_events.v1",
+            "session": self.browser_session_snapshot(window),
+            "events": events,
+        })
+    }
+
+    fn runtime_events_json(events: &Value) -> String {
+        serde_json::to_string_pretty(events).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn runtime_events_agent_blocks(&self, events: &Value) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = events.pointer("/events/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview runtime events:\n\n```json\n{}\n```",
+            Self::runtime_events_json(events)
+        ))));
+        blocks
+    }
+
+    fn request_runtime_events(&mut self, action: &'static str, cx: &mut Context<Self>) {
+        let script = format!(
+            "window.__zedWebPreview && window.__zedWebPreview.collectRuntimeEvents('{action}');"
+        );
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(&script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Collecting web preview runtime events", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("Runtime events are unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic("Runtime events crashed before collection", cx);
+            }
+        }
+    }
+
+    fn copy_runtime_events(&mut self, cx: &mut Context<Self>) {
+        self.request_runtime_events("copy", cx);
+    }
+
+    fn send_runtime_events_to_agent(&mut self, cx: &mut Context<Self>) {
+        self.request_runtime_events("agent", cx);
     }
 
     fn go_back_in_history(&mut self, cx: &mut Context<Self>) {
@@ -1407,6 +1481,46 @@ impl WebPreviewView {
                     Err(_) => {
                         self.report_action_panic(
                             "Page diagnostics crashed while collecting page data",
+                            cx,
+                        );
+                    }
+                }
+            }
+            "runtime-events" => {
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let action = payload
+                        .get("action")
+                        .and_then(Value::as_str)
+                        .unwrap_or("copy");
+                    let events = self.runtime_events_snapshot(&payload, window);
+                    self.latest_runtime_events = Some(events.clone());
+
+                    match action {
+                        "agent" => {
+                            self.append_content_blocks_to_agent_panel(
+                                self.runtime_events_agent_blocks(&events),
+                                window,
+                                cx,
+                            );
+                            self.show_toast("Sent runtime events to the agent panel", cx);
+                        }
+                        _ => {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                Self::runtime_events_json(&events),
+                            ));
+                            self.show_toast("Copied web preview runtime events JSON", cx);
+                        }
+                    }
+
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.report_action_error("Runtime event collection failed", error, cx);
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "Runtime events crashed while collecting page data",
                             cx,
                         );
                     }
@@ -1775,6 +1889,30 @@ impl WebPreviewView {
                                     move |_, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_page_diagnostics_to_agent(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Runtime Events")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_runtime_events(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Runtime Events to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_runtime_events_to_agent(cx);
                                         });
                                     }
                                 }),
@@ -2571,6 +2709,7 @@ impl Item for WebPreviewView {
                 deferred_ipc_messages: Vec::new(),
                 ipc_flush_scheduled: false,
                 latest_page_diagnostics: None,
+                latest_runtime_events: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
@@ -3740,9 +3879,243 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
           initiatorType: entry.initiatorType,
           duration: Math.round(entry.duration),
           transferSize: entry.transferSize || 0
-        }))
+      }))
     };
   };
+
+  const MAX_RUNTIME_EVENTS = 200;
+  const runtimeEvents = {
+    console: [],
+    network: []
+  };
+
+  const pushRuntimeEvent = (bucket, event) => {
+    const events = runtimeEvents[bucket];
+    if (!events) return;
+    events.push({
+      timestamp: new Date().toISOString(),
+      ...event
+    });
+    if (events.length > MAX_RUNTIME_EVENTS) {
+      events.splice(0, events.length - MAX_RUNTIME_EVENTS);
+    }
+  };
+
+  const requestUrl = (input) => {
+    try {
+      if (typeof input === "string") return input;
+      if (input instanceof URL) return input.href;
+      if (input && typeof input.url === "string") return input.url;
+      return input == null ? null : String(input);
+    } catch (_error) {
+      return null;
+    }
+  };
+
+  const requestMethod = (input, init) => {
+    try {
+      return String(init?.method || input?.method || "GET").toUpperCase();
+    } catch (_error) {
+      return "GET";
+    }
+  };
+
+  const serializeRuntimeValue = (value) => {
+    try {
+      if (value == null) return value;
+      if (typeof value === "string") return limitText(value, 1200);
+      if (typeof value === "number" || typeof value === "boolean") return value;
+      if (typeof value === "bigint") return `${value.toString()}n`;
+      if (typeof value === "symbol") return value.toString();
+      if (typeof value === "function") return `[Function ${value.name || "anonymous"}]`;
+      if (value instanceof Error) {
+        return {
+          name: value.name,
+          message: limitText(value.message, 1200),
+          stack: limitText(value.stack, 4000)
+        };
+      }
+      if (value instanceof Element) return elementSnapshot(value);
+      const seen = new WeakSet();
+      const json = JSON.stringify(value, (_key, nestedValue) => {
+        if (typeof nestedValue === "bigint") return `${nestedValue.toString()}n`;
+        if (typeof nestedValue === "function") return `[Function ${nestedValue.name || "anonymous"}]`;
+        if (nestedValue instanceof Element) return elementSnapshot(nestedValue);
+        if (nestedValue && typeof nestedValue === "object") {
+          if (seen.has(nestedValue)) return "[Circular]";
+          seen.add(nestedValue);
+        }
+        return nestedValue;
+      });
+      if (!json) return String(value);
+      return json.length > 5000 ? `${json.slice(0, 5000)}...` : JSON.parse(json);
+    } catch (_error) {
+      try {
+        return limitText(String(value), 1200);
+      } catch (_innerError) {
+        return "[Unserializable]";
+      }
+    }
+  };
+
+  const installConsoleCapture = () => {
+    if (!window.console || window.console.__zedWebPreviewCaptured) return;
+
+    const levels = ["debug", "log", "info", "warn", "error"];
+    for (const level of levels) {
+      const original = typeof window.console[level] === "function"
+        ? window.console[level].bind(window.console)
+        : null;
+      window.console[level] = (...args) => {
+        pushRuntimeEvent("console", {
+          level,
+          text: limitText(args.map((arg) => {
+            if (typeof arg === "string") return arg;
+            try {
+              return JSON.stringify(serializeRuntimeValue(arg));
+            } catch (_error) {
+              return String(arg);
+            }
+          }).join(" "), 2400),
+          args: args.slice(0, 12).map(serializeRuntimeValue)
+        });
+        if (original) {
+          return original(...args);
+        }
+      };
+    }
+
+    Object.defineProperty(window.console, "__zedWebPreviewCaptured", {
+      value: true,
+      configurable: false
+    });
+  };
+
+  const installPageErrorCapture = () => {
+    window.addEventListener("error", (event) => {
+      pushRuntimeEvent("console", {
+        level: "error",
+        source: "window.error",
+        text: limitText(event.message, 2400),
+        filename: event.filename || null,
+        line: event.lineno || null,
+        column: event.colno || null,
+        error: serializeRuntimeValue(event.error)
+      });
+    }, true);
+
+    window.addEventListener("unhandledrejection", (event) => {
+      pushRuntimeEvent("console", {
+        level: "error",
+        source: "unhandledrejection",
+        text: limitText(event.reason?.message || String(event.reason), 2400),
+        error: serializeRuntimeValue(event.reason)
+      });
+    }, true);
+  };
+
+  const installFetchCapture = () => {
+    if (typeof window.fetch !== "function" || window.fetch.__zedWebPreviewCaptured) return;
+
+    const nativeFetch = window.fetch.bind(window);
+    const capturedFetch = async (input, init) => {
+      const startedAt = performance.now();
+      const url = requestUrl(input);
+      const method = requestMethod(input, init);
+      try {
+        const response = await nativeFetch(input, init);
+        pushRuntimeEvent("network", {
+          kind: "fetch",
+          method,
+          url: response.url || url,
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok,
+          duration: Math.round(performance.now() - startedAt)
+        });
+        return response;
+      } catch (error) {
+        pushRuntimeEvent("network", {
+          kind: "fetch",
+          method,
+          url,
+          status: null,
+          ok: false,
+          error: serializeRuntimeValue(error),
+          duration: Math.round(performance.now() - startedAt)
+        });
+        throw error;
+      }
+    };
+
+    Object.defineProperty(capturedFetch, "__zedWebPreviewCaptured", {
+      value: true,
+      configurable: false
+    });
+    window.fetch = capturedFetch;
+  };
+
+  const installXhrCapture = () => {
+    if (!window.XMLHttpRequest?.prototype || window.XMLHttpRequest.prototype.__zedWebPreviewCaptured) return;
+
+    const prototype = window.XMLHttpRequest.prototype;
+    const nativeOpen = prototype.open;
+    const nativeSend = prototype.send;
+
+    prototype.open = function(method, url, ...rest) {
+      this.__zedWebPreviewRequest = {
+        method: String(method || "GET").toUpperCase(),
+        url: requestUrl(url)
+      };
+      return nativeOpen.call(this, method, url, ...rest);
+    };
+
+    prototype.send = function(...args) {
+      const request = this.__zedWebPreviewRequest || {};
+      const startedAt = performance.now();
+      const complete = () => {
+        pushRuntimeEvent("network", {
+          kind: "xhr",
+          method: request.method || "GET",
+          url: request.url || this.responseURL || null,
+          status: this.status || null,
+          statusText: this.statusText || null,
+          ok: this.status >= 200 && this.status < 400,
+          duration: Math.round(performance.now() - startedAt)
+        });
+      };
+      this.addEventListener("loadend", complete, { once: true });
+      return nativeSend.apply(this, args);
+    };
+
+    Object.defineProperty(prototype, "__zedWebPreviewCaptured", {
+      value: true,
+      configurable: false
+    });
+  };
+
+  const installRuntimeCapture = () => {
+    try { installConsoleCapture(); } catch (_error) {}
+    try { installPageErrorCapture(); } catch (_error) {}
+    try { installFetchCapture(); } catch (_error) {}
+    try { installXhrCapture(); } catch (_error) {}
+  };
+
+  const runtimeResourceSnapshot = () => {
+    const resources = performance.getEntriesByType ? performance.getEntriesByType("resource") : [];
+    return Array.from(resources)
+      .slice(-80)
+      .map((entry) => ({
+        name: limitText(entry.name, 240),
+        initiatorType: entry.initiatorType,
+        duration: Math.round(entry.duration || 0),
+        transferSize: entry.transferSize || 0,
+        encodedBodySize: entry.encodedBodySize || 0,
+        decodedBodySize: entry.decodedBodySize || 0
+      }));
+  };
+
+  installRuntimeCapture();
 
   window.__zedWebPreview = {
     collectPageDiagnostics(action = "copy") {
@@ -3813,6 +4186,35 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
         performance: collectPerformance()
       };
       post(payload);
+    },
+
+    collectRuntimeEvents(action = "copy") {
+      const consoleEvents = runtimeEvents.console.slice(-MAX_RUNTIME_EVENTS);
+      const networkEvents = runtimeEvents.network.slice(-MAX_RUNTIME_EVENTS);
+      const failedNetwork = networkEvents.filter((event) => event.ok === false || event.status >= 400);
+      const warnings = consoleEvents.filter((event) => event.level === "warn");
+      const errors = consoleEvents.filter((event) => event.level === "error");
+
+      post({
+        kind: "runtime-events",
+        action,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState,
+        counts: {
+          console: consoleEvents.length,
+          warnings: warnings.length,
+          errors: errors.length,
+          network: networkEvents.length,
+          failed_network: failedNetwork.length,
+          performance_resources: performance.getEntriesByType ? performance.getEntriesByType("resource").length : 0
+        },
+        console: consoleEvents,
+        network: networkEvents,
+        failed_network: failedNetwork.slice(-40),
+        performance_resources: runtimeResourceSnapshot()
+      });
     },
 
     inspectNextElement() {

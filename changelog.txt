@@ -1,3 +1,12 @@
+[2026-05-15] - Web Preview Runtime Events
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Runtime Events" and "Send Runtime Events to Agent".
+- The WebPreview bridge now keeps bounded in-page buffers for console calls, page errors, unhandled promise rejections, fetch outcomes, XHR outcomes, failed network summaries, and recent performance resources.
+
+NOTES:
+- This adds read-only console/network context for Agent Browser workflows without introducing browser control actions or touching input/focus routing.
+
 [2026-05-15] - Web Preview Page Diagnostics
 
 ADDED:

@@ -1,5 +1,6 @@
 IN PROGRESS:
 - NEXT 100-POINT FEATURE SET: Agent Browser Command Center. Goal: turn the now-stable WebPreview and asset panels into a safe agent-operable browser workflow with session inventory, screenshots, DOM/console/network context, viewport controls, and permissioned actions that do not regress editor input or WebPreview focus.
+- Agent Browser Command Center runtime-events slice: WebPreview now keeps bounded console/page-error/fetch/XHR runtime buffers and can copy or send them to the Agent Panel as schema-versioned JSON; awaiting manual QA on pages with logs, failed requests, and SPA navigation.
 - Agent Browser Command Center page-diagnostics slice: WebPreview can now collect bounded page diagnostics from the live document, copy them as schema-versioned JSON, or send them to the Agent Panel with active URL context; awaiting manual QA.
 - Agent Browser Command Center inventory-agent slice: WebPreview can now send the full workspace session inventory JSON to the Agent Panel, giving the AI multi-preview context before any control tools are added; awaiting manual QA.
 - Agent Browser Command Center inventory slice: WebPreview can now copy a schema-versioned JSON inventory for all open WebPreview sessions in the workspace, using existing pane item handles and read-only snapshots; awaiting manual QA with multiple preview tabs/splits.
