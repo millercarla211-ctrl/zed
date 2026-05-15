@@ -2213,6 +2213,11 @@ impl Render for MediaPanel {
             self.recent_media.len(),
             stale_history_count,
         );
+        let working_set_tooltip = media_working_set_tooltip(
+            self.pinned_media.len(),
+            self.recent_media.len(),
+            stale_history_count,
+        );
         let working_set_color = if stale_history_count > 0 {
             Color::Warning
         } else {
@@ -2270,10 +2275,14 @@ impl Render for MediaPanel {
                                     )
                                     .when_some(working_set_label, |this, working_set_label| {
                                         this.child(
-                                            Label::new(working_set_label)
-                                                .size(LabelSize::XSmall)
-                                                .color(working_set_color)
-                                                .truncate(),
+                                            div()
+                                                .tooltip(Tooltip::text(working_set_tooltip))
+                                                .child(
+                                                    Label::new(working_set_label)
+                                                        .size(LabelSize::XSmall)
+                                                        .color(working_set_color)
+                                                        .truncate(),
+                                                ),
                                         )
                                     })
                                     .when(stale_history_count > 0, |this| {
@@ -2625,6 +2634,18 @@ fn media_working_set_label(pinned: usize, recent: usize, stale: usize) -> Option
     }
 
     Some(history_working_set_label(pinned, recent, stale))
+}
+
+fn media_working_set_tooltip(pinned: usize, recent: usize, stale: usize) -> &'static str {
+    if stale > 0 {
+        "Pinned or recent media includes missing local files. Use Clean to remove stale rows."
+    } else if pinned > 0 && recent > 0 {
+        "Pinned and recent media are available when search is empty."
+    } else if pinned > 0 {
+        "Pinned media is saved for quick reuse."
+    } else {
+        "Recent media appears after preview, copy, or insert actions."
+    }
 }
 
 fn history_working_set_label(pinned: usize, recent: usize, stale: usize) -> SharedString {

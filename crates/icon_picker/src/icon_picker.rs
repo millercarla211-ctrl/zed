@@ -1376,6 +1376,10 @@ impl Render for IconPickerPanel {
             self.pinned_icon_actions.len(),
             self.recent_icon_actions.len(),
         );
+        let working_set_tooltip = icon_working_set_tooltip(
+            self.pinned_icon_actions.len(),
+            self.recent_icon_actions.len(),
+        );
         let (readiness_label, readiness_color, readiness_tooltip) =
             icon_readiness_label(self.loading_external_icons, total_count);
         let mut icon_tiles = Vec::with_capacity(icons.len());
@@ -1443,10 +1447,14 @@ impl Render for IconPickerPanel {
                                     )
                                     .when_some(working_set_label, |this, working_set_label| {
                                         this.child(
-                                            Label::new(working_set_label)
-                                                .size(LabelSize::XSmall)
-                                                .color(Color::Muted)
-                                                .truncate(),
+                                            div()
+                                                .tooltip(Tooltip::text(working_set_tooltip))
+                                                .child(
+                                                    Label::new(working_set_label)
+                                                        .size(LabelSize::XSmall)
+                                                        .color(Color::Muted)
+                                                        .truncate(),
+                                                ),
                                         )
                                     })
                                     .child(
@@ -1646,6 +1654,16 @@ fn icon_working_set_label(pinned: usize, recent: usize) -> Option<SharedString> 
     }
 
     Some(history_working_set_label(pinned, recent))
+}
+
+fn icon_working_set_tooltip(pinned: usize, recent: usize) -> &'static str {
+    if pinned > 0 && recent > 0 {
+        "Pinned and recent icons are available when search is empty."
+    } else if pinned > 0 {
+        "Pinned icons are saved for quick reuse."
+    } else {
+        "Recent icons appear after insert or copy actions."
+    }
 }
 
 fn history_working_set_label(pinned: usize, recent: usize) -> SharedString {

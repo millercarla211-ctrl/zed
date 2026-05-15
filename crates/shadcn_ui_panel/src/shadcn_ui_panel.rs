@@ -1588,6 +1588,11 @@ impl Render for ShadcnUiPanel {
             self.recent_ui_actions.len(),
             stale_history_count,
         );
+        let working_set_tooltip = ui_working_set_tooltip(
+            self.pinned_ui_actions.len(),
+            self.recent_ui_actions.len(),
+            stale_history_count,
+        );
         let working_set_color = if stale_history_count > 0 {
             Color::Warning
         } else {
@@ -1655,10 +1660,14 @@ impl Render for ShadcnUiPanel {
                                     )
                                     .when_some(working_set_label, |this, working_set_label| {
                                         this.child(
-                                            Label::new(working_set_label)
-                                                .size(LabelSize::XSmall)
-                                                .color(working_set_color)
-                                                .truncate(),
+                                            div()
+                                                .tooltip(Tooltip::text(working_set_tooltip))
+                                                .child(
+                                                    Label::new(working_set_label)
+                                                        .size(LabelSize::XSmall)
+                                                        .color(working_set_color)
+                                                        .truncate(),
+                                                ),
                                         )
                                     })
                                     .when(stale_history_count > 0, |this| {
@@ -3642,6 +3651,18 @@ fn ui_working_set_label(pinned: usize, recent: usize, stale: usize) -> Option<Sh
     }
 
     Some(history_working_set_label(pinned, recent, stale))
+}
+
+fn ui_working_set_tooltip(pinned: usize, recent: usize, stale: usize) -> &'static str {
+    if stale > 0 {
+        "Pinned or recent UI entries include missing source or registry files. Use Clean to remove stale rows."
+    } else if pinned > 0 && recent > 0 {
+        "Pinned and recent UI components are available when search is empty."
+    } else if pinned > 0 {
+        "Pinned UI components are saved for quick reuse."
+    } else {
+        "Recent UI components appear after preview, install, insert, copy, or docs actions."
+    }
 }
 
 fn history_working_set_label(pinned: usize, recent: usize, stale: usize) -> SharedString {

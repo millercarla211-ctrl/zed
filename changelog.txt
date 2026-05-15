@@ -1,3 +1,12 @@
+[2026-05-15] - Asset Panel Working-Set Tooltips
+
+ADDED:
+- Icon, Font, Media, and UI header pinned/recent summaries now expose hover copy explaining what the counts mean.
+- Media and UI stale-count summaries now explain that Clean removes restored rows whose local source or registry files are missing.
+
+NOTES:
+- This keeps the header compact while making the working-set state easier to trust, without changing panel actions, catalog loading, provider fetches, editor input, or WebPreview routing.
+
 [2026-05-15] - Asset Panel Readiness Tooltips
 
 ADDED:

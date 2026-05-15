@@ -1195,6 +1195,10 @@ impl FontPanel {
             self.pinned_font_actions.len(),
             self.recent_font_actions.len(),
         );
+        let working_set_tooltip = font_working_set_tooltip(
+            self.pinned_font_actions.len(),
+            self.recent_font_actions.len(),
+        );
         let (readiness_label, readiness_color, readiness_tooltip) = font_readiness_label(
             self.fonts_loaded || self.source_filter == FontSourceFilter::Web,
             counts.count(self.source_filter),
@@ -1228,10 +1232,12 @@ impl FontPanel {
                             .items_center()
                             .when_some(working_set_label, |this, working_set_label| {
                                 this.child(
-                                    Label::new(working_set_label)
-                                        .size(LabelSize::XSmall)
-                                        .color(Color::Muted)
-                                        .truncate(),
+                                    div().tooltip(Tooltip::text(working_set_tooltip)).child(
+                                        Label::new(working_set_label)
+                                            .size(LabelSize::XSmall)
+                                            .color(Color::Muted)
+                                            .truncate(),
+                                    ),
                                 )
                             })
                             .child(
@@ -1446,6 +1452,16 @@ fn font_working_set_label(pinned: usize, recent: usize) -> Option<SharedString> 
     }
 
     Some(history_working_set_label(pinned, recent))
+}
+
+fn font_working_set_tooltip(pinned: usize, recent: usize) -> &'static str {
+    if pinned > 0 && recent > 0 {
+        "Pinned and recent fonts are available when search is empty."
+    } else if pinned > 0 {
+        "Pinned fonts are saved for quick reuse."
+    } else {
+        "Recent fonts appear after preview, copy, apply, or add actions."
+    }
 }
 
 fn history_working_set_label(pinned: usize, recent: usize) -> SharedString {
