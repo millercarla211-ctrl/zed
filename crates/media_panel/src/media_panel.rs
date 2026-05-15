@@ -1,3 +1,4 @@
+use db::kvp::KeyValueStore;
 use editor::{Editor, EditorEvent};
 use futures::AsyncReadExt as _;
 use gpui::{
@@ -7,7 +8,7 @@ use gpui::{
     Window, actions, div, img, point, px,
 };
 use http_client::{AsyncBody, HttpClient};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet, VecDeque},
@@ -45,6 +46,8 @@ const MAX_REMOTE_MEDIA_RESULTS: usize = 640;
 const MAX_REMOTE_MEDIA_CACHE_ENTRIES: usize = 24;
 const MAX_RECENT_MEDIA_ACTIONS: usize = 5;
 const MAX_PINNED_MEDIA_ACTIONS: usize = 8;
+const PINNED_MEDIA_ACTIONS_KEY: &str = "asset_panel_pinned_media_v1";
+const PINNED_MEDIA_ACTIONS_STATE_VERSION: u32 = 1;
 const OPENVERSE_RESULT_LIMIT: usize = 90;
 const OPENVERSE_FOCUSED_RESULT_LIMIT: usize = 150;
 const WIKIMEDIA_RESULT_LIMIT: usize = 50;
@@ -342,6 +345,105 @@ enum RecentMediaSource {
     },
 }
 
+#[derive(Serialize, Deserialize)]
+struct SerializedPinnedMediaActions {
+    version: u32,
+    entries: Vec<SerializedRecentMediaEntry>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SerializedRecentMediaEntry {
+    label: String,
+    kind: SerializedMediaKind,
+    source: SerializedRecentMediaSource,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SerializedMediaKind {
+    Image,
+    Video,
+    Audio,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum SerializedRecentMediaSource {
+    Local {
+        path: String,
+        relative_display: String,
+    },
+    Remote {
+        url: String,
+    },
+}
+
+impl SerializedRecentMediaEntry {
+    fn from_entry(entry: &RecentMediaEntry) -> Self {
+        Self {
+            label: entry.label.as_ref().to_string(),
+            kind: SerializedMediaKind::from_kind(entry.kind),
+            source: SerializedRecentMediaSource::from_source(&entry.source),
+        }
+    }
+
+    fn into_entry(self) -> RecentMediaEntry {
+        RecentMediaEntry {
+            label: self.label.into(),
+            kind: self.kind.into_kind(),
+            source: self.source.into_source(),
+        }
+    }
+}
+
+impl SerializedMediaKind {
+    fn from_kind(kind: DraggedMediaKind) -> Self {
+        match kind {
+            DraggedMediaKind::Image => Self::Image,
+            DraggedMediaKind::Video => Self::Video,
+            DraggedMediaKind::Audio => Self::Audio,
+        }
+    }
+
+    fn into_kind(self) -> DraggedMediaKind {
+        match self {
+            Self::Image => DraggedMediaKind::Image,
+            Self::Video => DraggedMediaKind::Video,
+            Self::Audio => DraggedMediaKind::Audio,
+        }
+    }
+}
+
+impl SerializedRecentMediaSource {
+    fn from_source(source: &RecentMediaSource) -> Self {
+        match source {
+            RecentMediaSource::Local {
+                path,
+                relative_display,
+            } => Self::Local {
+                path: path.to_string_lossy().into_owned(),
+                relative_display: relative_display.as_ref().to_string(),
+            },
+            RecentMediaSource::Remote { url } => Self::Remote {
+                url: url.as_ref().to_string(),
+            },
+        }
+    }
+
+    fn into_source(self) -> RecentMediaSource {
+        match self {
+            Self::Local {
+                path,
+                relative_display,
+            } => RecentMediaSource::Local {
+                path: PathBuf::from(path),
+                relative_display: relative_display.into(),
+            },
+            Self::Remote { url } => RecentMediaSource::Remote { url: url.into() },
+        }
+    }
+}
+
 pub struct MediaPanel {
     workspace: WeakEntity<Workspace>,
     filter_editor: Entity<Editor>,
@@ -428,7 +530,7 @@ impl MediaPanel {
                 remote_result_source: RemoteMediaResultSource::None,
                 remote_generation: 0,
                 remote_health: None,
-                pinned_media: VecDeque::with_capacity(MAX_PINNED_MEDIA_ACTIONS),
+                pinned_media: load_pinned_media(cx),
                 recent_media: VecDeque::with_capacity(MAX_RECENT_MEDIA_ACTIONS),
                 status: None,
                 _subscriptions: vec![filter_subscription],
@@ -1025,6 +1127,7 @@ impl MediaPanel {
         self.pinned_media.push_front(entry);
         self.pinned_media.truncate(MAX_PINNED_MEDIA_ACTIONS);
         self.status = Some(media_status_label("Pinned ", label.as_ref()));
+        self.persist_pinned_media(cx);
         cx.notify();
     }
 
@@ -1032,13 +1135,37 @@ impl MediaPanel {
         self.pinned_media
             .retain(|pinned| !recent_media_sources_match(pinned, &entry));
         self.status = Some(media_status_label("Unpinned ", entry.label.as_ref()));
+        self.persist_pinned_media(cx);
         cx.notify();
     }
 
     fn clear_pinned_media(&mut self, cx: &mut Context<Self>) {
         self.pinned_media.clear();
         self.status = Some("Cleared pinned media".into());
+        self.persist_pinned_media(cx);
         cx.notify();
+    }
+
+    fn persist_pinned_media(&self, cx: &mut Context<Self>) {
+        let entries = self
+            .pinned_media
+            .iter()
+            .take(MAX_PINNED_MEDIA_ACTIONS)
+            .map(SerializedRecentMediaEntry::from_entry)
+            .collect();
+        let Ok(json) = serde_json::to_string(&SerializedPinnedMediaActions {
+            version: PINNED_MEDIA_ACTIONS_STATE_VERSION,
+            entries,
+        }) else {
+            return;
+        };
+        let kvp = KeyValueStore::global(cx);
+        cx.background_spawn(async move {
+            let _ = kvp
+                .write_kvp(PINNED_MEDIA_ACTIONS_KEY.to_string(), json)
+                .await;
+        })
+        .detach();
     }
 
     fn render_url_insert(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
@@ -2210,6 +2337,32 @@ fn recent_media_source_kind(source: &RecentMediaSource) -> &'static str {
         RecentMediaSource::Local { .. } => "local",
         RecentMediaSource::Remote { .. } => "remote",
     }
+}
+
+fn load_pinned_media(cx: &App) -> VecDeque<RecentMediaEntry> {
+    let mut entries = VecDeque::with_capacity(MAX_PINNED_MEDIA_ACTIONS);
+    let Some(json) = KeyValueStore::global(cx)
+        .read_kvp(PINNED_MEDIA_ACTIONS_KEY)
+        .ok()
+        .flatten()
+    else {
+        return entries;
+    };
+    let Ok(state) = serde_json::from_str::<SerializedPinnedMediaActions>(&json) else {
+        return entries;
+    };
+    if state.version != PINNED_MEDIA_ACTIONS_STATE_VERSION {
+        return entries;
+    }
+
+    entries.extend(
+        state
+            .entries
+            .into_iter()
+            .take(MAX_PINNED_MEDIA_ACTIONS)
+            .map(SerializedRecentMediaEntry::into_entry),
+    );
+    entries
 }
 
 fn remote_provider_health_description(

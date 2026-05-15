@@ -1,3 +1,4 @@
+use db::kvp::KeyValueStore;
 use editor::{Editor, EditorEvent};
 use gpui::{
     AnyElement, App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity,
@@ -10,7 +11,7 @@ use rkyv::{
     Archive, Deserialize as RkyvDeserialize, Infallible, Serialize as RkyvSerialize, archived_root,
     ser::{Serializer, serializers::AllocSerializer},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet, VecDeque},
@@ -45,6 +46,8 @@ const SHADCN_UI_PANEL_KEY: &str = "ShadcnUiPanel";
 const MAX_SHADCN_ROWS: usize = 96;
 const MAX_RECENT_UI_ACTIONS: usize = 5;
 const MAX_PINNED_UI_ACTIONS: usize = 8;
+const PINNED_UI_ACTIONS_KEY: &str = "asset_panel_pinned_ui_v1";
+const PINNED_UI_ACTIONS_STATE_VERSION: u32 = 1;
 const PREVIEW_IMAGE_CACHE_INITIAL_CAPACITY: usize = MAX_SHADCN_ROWS * 4;
 const CATALOG_CACHE_FILE_NAME: &str = "catalog-v4.rkyv";
 const STATIC_SHADCN_CATALOG_INDEX: &str = include_str!("shadcn_catalog_index.tsv");
@@ -67,7 +70,8 @@ pub fn init(cx: &mut App) {
     .detach();
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 enum CatalogSource {
     ShadcnComponent,
     ShadcnBlock,
@@ -169,7 +173,8 @@ struct RecentUiEntry {
     action: RecentUiAction,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 enum RecentUiAction {
     Previewed,
     Copied,
@@ -177,6 +182,80 @@ enum RecentUiAction {
     Installed,
     OpenedDocs,
     Pinned,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SerializedPinnedUiActions {
+    version: u32,
+    entries: Vec<SerializedPinnedUiAction>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SerializedPinnedUiAction {
+    item: SerializedCatalogItem,
+    action: RecentUiAction,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SerializedCatalogItem {
+    id: String,
+    title: String,
+    description: String,
+    category: String,
+    source: CatalogSource,
+    install_only: bool,
+    source_path: String,
+    target_file_name: String,
+    import_statement: String,
+    jsx: String,
+}
+
+impl SerializedPinnedUiAction {
+    fn from_entry(entry: &RecentUiEntry) -> Self {
+        Self {
+            item: SerializedCatalogItem::from_item(&entry.item),
+            action: entry.action,
+        }
+    }
+
+    fn into_entry(self) -> RecentUiEntry {
+        RecentUiEntry {
+            item: self.item.into_item(),
+            action: self.action,
+        }
+    }
+}
+
+impl SerializedCatalogItem {
+    fn from_item(item: &CatalogItem) -> Self {
+        Self {
+            id: item.id.as_ref().to_string(),
+            title: item.title.as_ref().to_string(),
+            description: item.description.as_ref().to_string(),
+            category: item.category.as_ref().to_string(),
+            source: item.source,
+            install_only: item.install_only,
+            source_path: item.source_path.as_ref().to_string(),
+            target_file_name: item.target_file_name.as_ref().to_string(),
+            import_statement: item.import_statement.as_ref().to_string(),
+            jsx: item.jsx.as_ref().to_string(),
+        }
+    }
+
+    fn into_item(self) -> CatalogItem {
+        CatalogItem {
+            id: self.id.into(),
+            title: self.title.into(),
+            description: self.description.into(),
+            category: self.category.into(),
+            source: self.source,
+            install_only: self.install_only,
+            source_path: self.source_path.into(),
+            target_file_name: self.target_file_name.into(),
+            import_statement: self.import_statement.into(),
+            jsx: self.jsx.into(),
+        }
+    }
 }
 
 #[derive(Archive, RkyvSerialize, RkyvDeserialize)]
@@ -278,6 +357,7 @@ impl ShadcnUiPanel {
             );
             let (items, catalog_loaded) = initial_shadcn_catalog();
             let filter_counts = CatalogFilterCounts::from_items(&items);
+            let pinned_ui_actions = load_pinned_ui_actions(cx);
 
             Self {
                 workspace: workspace_handle,
@@ -290,7 +370,7 @@ impl ShadcnUiPanel {
                 source_filter: CatalogFilter::All,
                 warming_preview_image_keys: HashSet::with_capacity(MAX_SHADCN_ROWS),
                 filter_scroll_handle: ScrollHandle::new(),
-                pinned_ui_actions: VecDeque::with_capacity(MAX_PINNED_UI_ACTIONS),
+                pinned_ui_actions,
                 recent_ui_actions: VecDeque::with_capacity(MAX_RECENT_UI_ACTIONS),
                 status: None,
                 _subscriptions: vec![filter_subscription],
@@ -562,6 +642,7 @@ impl ShadcnUiPanel {
         self.pinned_ui_actions.push_front(entry);
         self.pinned_ui_actions.truncate(MAX_PINNED_UI_ACTIONS);
         self.status = Some(shadcn_status_label("Pinned ", title.as_ref()));
+        self.persist_pinned_ui_actions(cx);
         cx.notify();
     }
 
@@ -569,13 +650,35 @@ impl ShadcnUiPanel {
         self.pinned_ui_actions
             .retain(|pinned| pinned.item.id.as_ref() != item.id.as_ref());
         self.status = Some(shadcn_status_label("Unpinned ", item.title.as_ref()));
+        self.persist_pinned_ui_actions(cx);
         cx.notify();
     }
 
     fn clear_pinned_ui_actions(&mut self, cx: &mut Context<Self>) {
         self.pinned_ui_actions.clear();
         self.status = Some("Cleared pinned UI actions".into());
+        self.persist_pinned_ui_actions(cx);
         cx.notify();
+    }
+
+    fn persist_pinned_ui_actions(&self, cx: &mut Context<Self>) {
+        let entries = self
+            .pinned_ui_actions
+            .iter()
+            .take(MAX_PINNED_UI_ACTIONS)
+            .map(SerializedPinnedUiAction::from_entry)
+            .collect();
+        let Ok(json) = serde_json::to_string(&SerializedPinnedUiActions {
+            version: PINNED_UI_ACTIONS_STATE_VERSION,
+            entries,
+        }) else {
+            return;
+        };
+        let kvp = KeyValueStore::global(cx);
+        cx.background_spawn(async move {
+            let _ = kvp.write_kvp(PINNED_UI_ACTIONS_KEY.to_string(), json).await;
+        })
+        .detach();
     }
 
     fn insert_item(&mut self, item: CatalogItem, window: &mut Window, cx: &mut Context<Self>) {
@@ -1450,6 +1553,32 @@ fn recent_ui_action_label(action: RecentUiAction) -> &'static str {
         RecentUiAction::OpenedDocs => "opened",
         RecentUiAction::Pinned => "pinned",
     }
+}
+
+fn load_pinned_ui_actions(cx: &App) -> VecDeque<RecentUiEntry> {
+    let mut entries = VecDeque::with_capacity(MAX_PINNED_UI_ACTIONS);
+    let Some(json) = KeyValueStore::global(cx)
+        .read_kvp(PINNED_UI_ACTIONS_KEY)
+        .ok()
+        .flatten()
+    else {
+        return entries;
+    };
+    let Ok(state) = serde_json::from_str::<SerializedPinnedUiActions>(&json) else {
+        return entries;
+    };
+    if state.version != PINNED_UI_ACTIONS_STATE_VERSION {
+        return entries;
+    }
+
+    entries.extend(
+        state
+            .entries
+            .into_iter()
+            .take(MAX_PINNED_UI_ACTIONS)
+            .map(SerializedPinnedUiAction::into_entry),
+    );
+    entries
 }
 
 fn can_drag_into_editor(source: CatalogSource) -> bool {

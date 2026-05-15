@@ -1,3 +1,4 @@
+use db::kvp::KeyValueStore;
 use editor::{Editor, EditorEvent};
 use fs::Fs;
 use gpui::{
@@ -6,6 +7,7 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Subscription, WeakEntity, Window, actions, div,
     point, px,
 };
+use serde::{Deserialize, Serialize};
 use settings::{FontFamilyName, Settings};
 use std::{
     cell::RefCell,
@@ -43,6 +45,8 @@ const FONT_PANEL_KEY: &str = "FontPanel";
 const MAX_FONT_RESULTS: usize = 160;
 const MAX_RECENT_FONT_ACTIONS: usize = 5;
 const MAX_PINNED_FONT_ACTIONS: usize = 8;
+const PINNED_FONT_ACTIONS_KEY: &str = "asset_panel_pinned_fonts_v1";
+const PINNED_FONT_ACTIONS_STATE_VERSION: u32 = 1;
 
 pub fn init(cx: &mut App) {
     cx.observe_new(|workspace: &mut Workspace, _, _| {
@@ -76,7 +80,8 @@ pub struct FontPanel {
     _subscriptions: Vec<Subscription>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 enum FontSource {
     System,
     Web,
@@ -151,7 +156,8 @@ struct RecentFontEntry {
     action: RecentFontAction,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 enum RecentFontAction {
     Previewed,
     CopiedCss,
@@ -159,6 +165,39 @@ enum RecentFontAction {
     AppliedUi,
     AddedProject,
     Pinned,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SerializedPinnedFontActions {
+    version: u32,
+    entries: Vec<SerializedPinnedFontAction>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SerializedPinnedFontAction {
+    name: String,
+    source: FontSource,
+    action: RecentFontAction,
+}
+
+impl SerializedPinnedFontAction {
+    fn from_entry(entry: &RecentFontEntry) -> Self {
+        Self {
+            name: entry.font.name.as_ref().to_string(),
+            source: entry.font.source,
+            action: entry.action,
+        }
+    }
+
+    fn into_entry(self) -> RecentFontEntry {
+        RecentFontEntry {
+            font: FontEntry {
+                name: self.name.into(),
+                source: self.source,
+            },
+            action: self.action,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -206,6 +245,7 @@ impl FontPanel {
 
             let selected_font = Some(Self::current_buffer_font(cx));
             let (fonts, fonts_loaded) = Self::cached_fonts(cx, selected_font.clone());
+            let pinned_font_actions = load_pinned_font_actions(cx);
 
             Self {
                 workspace: workspace_handle,
@@ -219,7 +259,7 @@ impl FontPanel {
                 source_scroll_handle: ScrollHandle::new(),
                 selected_font,
                 selected_source: FontSource::System,
-                pinned_font_actions: VecDeque::with_capacity(MAX_PINNED_FONT_ACTIONS),
+                pinned_font_actions,
                 recent_font_actions: VecDeque::with_capacity(MAX_RECENT_FONT_ACTIONS),
                 status: None,
                 _subscriptions: vec![filter_subscription],
@@ -458,6 +498,7 @@ impl FontPanel {
         self.pinned_font_actions.push_front(entry);
         self.pinned_font_actions.truncate(MAX_PINNED_FONT_ACTIONS);
         self.status = Some(font_status_label("Pinned ", name.as_ref()));
+        self.persist_pinned_font_actions(cx);
         cx.notify();
     }
 
@@ -465,13 +506,37 @@ impl FontPanel {
         self.pinned_font_actions
             .retain(|pinned| pinned.font.name.as_ref() != font.name.as_ref());
         self.status = Some(font_status_label("Unpinned ", font.name.as_ref()));
+        self.persist_pinned_font_actions(cx);
         cx.notify();
     }
 
     fn clear_pinned_font_actions(&mut self, cx: &mut Context<Self>) {
         self.pinned_font_actions.clear();
         self.status = Some("Cleared pinned fonts".into());
+        self.persist_pinned_font_actions(cx);
         cx.notify();
+    }
+
+    fn persist_pinned_font_actions(&self, cx: &mut Context<Self>) {
+        let entries = self
+            .pinned_font_actions
+            .iter()
+            .take(MAX_PINNED_FONT_ACTIONS)
+            .map(SerializedPinnedFontAction::from_entry)
+            .collect();
+        let Ok(json) = serde_json::to_string(&SerializedPinnedFontActions {
+            version: PINNED_FONT_ACTIONS_STATE_VERSION,
+            entries,
+        }) else {
+            return;
+        };
+        let kvp = KeyValueStore::global(cx);
+        cx.background_spawn(async move {
+            let _ = kvp
+                .write_kvp(PINNED_FONT_ACTIONS_KEY.to_string(), json)
+                .await;
+        })
+        .detach();
     }
 
     fn selected_font_entry(&self) -> Option<FontEntry> {
@@ -1279,6 +1344,32 @@ fn scroll_tab_handle(handle: &ScrollHandle, direction: f32) {
 
 fn font_search_matches(searchable: &str, query_terms: &[&str]) -> bool {
     query_terms.iter().all(|term| searchable.contains(term))
+}
+
+fn load_pinned_font_actions(cx: &App) -> VecDeque<RecentFontEntry> {
+    let mut entries = VecDeque::with_capacity(MAX_PINNED_FONT_ACTIONS);
+    let Some(json) = KeyValueStore::global(cx)
+        .read_kvp(PINNED_FONT_ACTIONS_KEY)
+        .ok()
+        .flatten()
+    else {
+        return entries;
+    };
+    let Ok(state) = serde_json::from_str::<SerializedPinnedFontActions>(&json) else {
+        return entries;
+    };
+    if state.version != PINNED_FONT_ACTIONS_STATE_VERSION {
+        return entries;
+    }
+
+    entries.extend(
+        state
+            .entries
+            .into_iter()
+            .take(MAX_PINNED_FONT_ACTIONS)
+            .map(SerializedPinnedFontAction::into_entry),
+    );
+    entries
 }
 
 fn recent_font_action_label(action: RecentFontAction) -> &'static str {

@@ -1,3 +1,15 @@
+[2026-05-15] - Asset Panel Pinned Persistence
+
+ADDED:
+- Icon, Font, Media, and UI pinned working sets now persist through Zed's existing app KeyValueStore.
+- Each panel saves a small versioned pinned-state record and reloads it when the panel is recreated.
+
+CHANGED:
+- Pin, Unpin, and Clear pinned actions now update persisted state while keeping Recent history in-memory only.
+
+NOTES:
+- Persistence stays inside Zed's database layer instead of adding sidecar JSON files, and it does not touch editor input, WebPreview routing, catalog loading, or provider fetch paths.
+
 [2026-05-15] - Asset Panel Direct Pin Actions
 
 ADDED:

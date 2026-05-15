@@ -1,3 +1,4 @@
+use db::kvp::KeyValueStore;
 use editor::{Editor, EditorEvent};
 use gpui::{
     AnyElement, App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity,
@@ -5,7 +6,7 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Subscription, WeakEntity, Window, actions, div,
     point, px,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet, VecDeque},
@@ -42,6 +43,8 @@ const SELECTED_PACK_PREVIEW_PRIME_LIMIT: usize = 96;
 const MAX_EXTERNAL_ICON_PREVIEW_CACHE_ENTRIES: usize = 4096;
 const MAX_WARMED_ICON_PREVIEW_SIGNATURES: usize = 128;
 const EXTERNAL_ICON_PREVIEW_CACHE_VERSION: &str = "v3";
+const PINNED_ICON_ACTIONS_KEY: &str = "asset_panel_pinned_icons_v1";
+const PINNED_ICON_ACTIONS_STATE_VERSION: u32 = 1;
 static EXTERNAL_ICON_CATALOG_CACHE: OnceLock<ExternalIconCatalog> = OnceLock::new();
 static REPRESENTATIVE_ICON_BODY_CACHE: OnceLock<HashMap<String, ExternalIconBody>> =
     OnceLock::new();
@@ -111,11 +114,89 @@ struct RecentIconEntry {
     action: RecentIconAction,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 enum RecentIconAction {
     Inserted,
     CopiedName,
     Pinned,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SerializedPinnedIconActions {
+    version: u32,
+    entries: Vec<SerializedPinnedIconAction>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SerializedPinnedIconAction {
+    icon: SerializedPickerIcon,
+    action: RecentIconAction,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum SerializedPickerIcon {
+    Zed {
+        name: IconName,
+    },
+    External {
+        id: String,
+        pack: String,
+        pack_name: String,
+        name: String,
+        label: String,
+        stem: String,
+        width: u32,
+        height: u32,
+    },
+}
+
+impl SerializedPickerIcon {
+    fn from_icon(icon: &PickerIcon) -> Self {
+        match icon {
+            PickerIcon::Zed(name) => Self::Zed { name: *name },
+            PickerIcon::External(icon) => Self::External {
+                id: icon.id.as_ref().to_string(),
+                pack: icon.pack.as_ref().to_string(),
+                pack_name: icon.pack_name.as_ref().to_string(),
+                name: icon.name.as_ref().to_string(),
+                label: icon.label.as_ref().to_string(),
+                stem: icon.stem.as_ref().to_string(),
+                width: icon.width,
+                height: icon.height,
+            },
+        }
+    }
+
+    fn into_icon(self) -> PickerIcon {
+        match self {
+            Self::Zed { name } => PickerIcon::Zed(name),
+            Self::External {
+                id,
+                pack,
+                pack_name,
+                name,
+                label,
+                stem,
+                width,
+                height,
+            } => {
+                let search_text = external_icon_search_text(&name, &label, &pack, &pack_name);
+                PickerIcon::External(ExternalIcon {
+                    id: id.into(),
+                    pack: pack.into(),
+                    pack_name: pack_name.into(),
+                    name: name.into(),
+                    label: label.into(),
+                    stem: stem.into(),
+                    width: width.max(1),
+                    height: height.max(1),
+                    search_text,
+                })
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -205,6 +286,7 @@ impl IconPickerPanel {
             let representative_external_icons = representative_icons_from_pack_summaries(&packs);
             let (preview_cache, preview_cache_order) =
                 seed_representative_preview_cache(&representative_external_icons);
+            let pinned_icon_actions = load_pinned_icon_actions(cx);
             Self {
                 workspace: workspace_handle,
                 filter_editor,
@@ -230,7 +312,7 @@ impl IconPickerPanel {
                 ),
                 representative_preview_warm_started: false,
                 pack_scroll_handle: ScrollHandle::new(),
-                pinned_icon_actions: VecDeque::with_capacity(MAX_PINNED_ICON_ACTIONS),
+                pinned_icon_actions,
                 recent_icon_actions: VecDeque::with_capacity(MAX_RECENT_ICON_ACTIONS),
                 status: None,
                 _subscriptions: vec![filter_subscription],
@@ -678,6 +760,7 @@ impl IconPickerPanel {
         self.pinned_icon_actions.push_front(entry);
         self.pinned_icon_actions.truncate(MAX_PINNED_ICON_ACTIONS);
         self.status = Some(icon_status_label("Pinned ", label.as_ref()));
+        self.persist_pinned_icon_actions(cx);
         cx.notify();
     }
 
@@ -686,13 +769,40 @@ impl IconPickerPanel {
         self.pinned_icon_actions
             .retain(|pinned| !pinned.icon.same_identity_as(&icon));
         self.status = Some(icon_status_label("Unpinned ", label.as_ref()));
+        self.persist_pinned_icon_actions(cx);
         cx.notify();
     }
 
     fn clear_pinned_icon_actions(&mut self, cx: &mut Context<Self>) {
         self.pinned_icon_actions.clear();
         self.status = Some("Cleared pinned icons".into());
+        self.persist_pinned_icon_actions(cx);
         cx.notify();
+    }
+
+    fn persist_pinned_icon_actions(&self, cx: &mut Context<Self>) {
+        let entries = self
+            .pinned_icon_actions
+            .iter()
+            .take(MAX_PINNED_ICON_ACTIONS)
+            .map(|entry| SerializedPinnedIconAction {
+                icon: SerializedPickerIcon::from_icon(&entry.icon),
+                action: entry.action,
+            })
+            .collect();
+        let Ok(json) = serde_json::to_string(&SerializedPinnedIconActions {
+            version: PINNED_ICON_ACTIONS_STATE_VERSION,
+            entries,
+        }) else {
+            return;
+        };
+        let kvp = KeyValueStore::global(cx);
+        cx.background_spawn(async move {
+            let _ = kvp
+                .write_kvp(PINNED_ICON_ACTIONS_KEY.to_string(), json)
+                .await;
+        })
+        .detach();
     }
 
     fn pin_selected_icon(&mut self, cx: &mut Context<Self>) {
@@ -1441,6 +1551,35 @@ fn icon_status_label(prefix: &str, value: &str) -> SharedString {
     text.push_str(prefix);
     text.push_str(value);
     text.into()
+}
+
+fn load_pinned_icon_actions(cx: &App) -> VecDeque<RecentIconEntry> {
+    let mut entries = VecDeque::with_capacity(MAX_PINNED_ICON_ACTIONS);
+    let Some(json) = KeyValueStore::global(cx)
+        .read_kvp(PINNED_ICON_ACTIONS_KEY)
+        .ok()
+        .flatten()
+    else {
+        return entries;
+    };
+    let Ok(state) = serde_json::from_str::<SerializedPinnedIconActions>(&json) else {
+        return entries;
+    };
+    if state.version != PINNED_ICON_ACTIONS_STATE_VERSION {
+        return entries;
+    }
+
+    entries.extend(
+        state
+            .entries
+            .into_iter()
+            .take(MAX_PINNED_ICON_ACTIONS)
+            .map(|entry| RecentIconEntry {
+                icon: entry.icon.into_icon(),
+                action: entry.action,
+            }),
+    );
+    entries
 }
 
 fn recent_icon_action_label(action: RecentIconAction) -> &'static str {
