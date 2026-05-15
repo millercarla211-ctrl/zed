@@ -1,3 +1,13 @@
+[2026-05-16] - Web Preview Permissioned Reload Executor
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Run Reload Executor" and "Run Reload Executor to Agent".
+- The reload executor shell checks interactive permission plus context/audit readiness before dispatching the existing native WebView reload command.
+- Reload executor attempts emit receipts whether blocked or dispatched and record that no click, type, key, pointer, wheel, or page-script input was sent.
+
+NOTES:
+- This is the first low-risk permissioned executor shell in the new Permissioned Agent Browser Executor set.
+
 [2026-05-16] - Web Preview No-op Executor Harness
 
 ADDED:
