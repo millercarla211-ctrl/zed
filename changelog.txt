@@ -1,3 +1,12 @@
+[2026-05-15] - Media Focused Remote Detail Depth
+
+CHANGED:
+- `crates/media_panel` now uses deeper detail-fetch limits for focused Images, Videos, and Audio remote searches while keeping the broad All tab on the previous conservative limits.
+- NASA video/audio, The Met image, and Internet Archive image/video/audio providers now receive explicit search/detail limits instead of reading only the global constants inside their fetch helpers.
+
+NOTES:
+- This should make focused remote media tabs feel richer without making the broad All tab heavier, while preserving refresh behavior, local media matching, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Media Remote Provider Result Depth
 
 CHANGED:
