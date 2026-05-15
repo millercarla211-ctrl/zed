@@ -1,3 +1,17 @@
+[2026-05-16] - Web Preview Permissioned Viewport Executor
+
+ADDED:
+- WebPreview's More menu now includes "Run Viewport Executor" and "Run Viewport Executor to Agent".
+- The viewport executor cycles through the existing Full, iPhone 15, iPad Air, and Laptop responsive presets only after the interactive/context/audit readiness gate passes.
+- Viewport attempts emit receipts with previous, target, and applied viewport state plus blockers and proof that no click, type, key, pointer, wheel, or page-script input was sent.
+
+CHANGED:
+- WebPreview session/status JSON, executor readiness, QA runbooks, and Browser plugin manifests now advertise the permissioned viewport executor.
+- Executor readiness now reports the currently wired low-risk command executors separately from the still-pending native input executors.
+
+NOTES:
+- This intentionally changes only WebPreview viewport state and native WebView bounds; risky click/type/key/scroll dispatch remains deferred.
+
 [2026-05-16] - Web Preview Permissioned Navigation Executor
 
 ADDED:
