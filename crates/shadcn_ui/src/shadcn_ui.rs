@@ -14,6 +14,8 @@ pub struct InstallReport {
     pub wrote_theme_css: bool,
     pub package_install_command: Option<String>,
     pub insert_snippet: bool,
+    pub wrote_file_count: usize,
+    pub skipped_existing_file_count: usize,
 }
 
 impl InstallReport {
@@ -26,6 +28,12 @@ impl InstallReport {
         if self.wrote_theme_css {
             message.push_str("; added shadcn theme CSS");
         }
+        append_file_count(&mut message, "wrote", self.wrote_file_count);
+        append_file_count(
+            &mut message,
+            "kept existing",
+            self.skipped_existing_file_count,
+        );
         if !self.added_dependencies.is_empty() {
             message.push_str(&format!(
                 "; added {} package deps",
@@ -39,12 +47,46 @@ impl InstallReport {
     }
 }
 
+fn append_file_count(message: &mut String, verb: &str, count: usize) {
+    if count == 0 {
+        return;
+    }
+
+    message.push_str("; ");
+    message.push_str(verb);
+    message.push(' ');
+    message.push_str(&count.to_string());
+    message.push_str(if count == 1 { " file" } else { " files" });
+}
+
+#[derive(Default)]
+struct InstallFileCounts {
+    wrote_file_count: usize,
+    skipped_existing_file_count: usize,
+}
+
+impl InstallFileCounts {
+    fn record(&mut self, wrote_file: bool) {
+        if wrote_file {
+            self.wrote_file_count += 1;
+        } else {
+            self.skipped_existing_file_count += 1;
+        }
+    }
+
+    fn merge(&mut self, other: Self) {
+        self.wrote_file_count += other.wrote_file_count;
+        self.skipped_existing_file_count += other.skipped_existing_file_count;
+    }
+}
+
 pub fn install_asset(asset: &DraggedShadcnAsset, project_root: &Path) -> Result<InstallReport> {
     let scaffold = ensure_scaffold(project_root, &asset.registry_root)?;
 
     let components_dir = components_dir(project_root);
     let mut dependency_specs = base_dependency_specs();
     let mut insert_snippet = true;
+    let mut file_counts = InstallFileCounts::default();
 
     match asset.kind {
         DraggedShadcnKind::Component => {
@@ -54,18 +96,25 @@ pub fn install_asset(asset: &DraggedShadcnAsset, project_root: &Path) -> Result<
                 &asset.registry_root,
                 &mut dependency_specs,
                 &mut HashSet::new(),
+                &mut file_counts,
             )? {
                 let destination = components_dir
                     .join("ui")
                     .join(asset.target_file_name.as_ref());
-                copy_transformed_source_file(&asset.source_path, &destination)?;
+                file_counts.record(copy_transformed_source_file(
+                    &asset.source_path,
+                    &destination,
+                )?);
             }
         }
         DraggedShadcnKind::Magic => {
             let destination = components_dir
                 .join("magicui")
                 .join(asset.target_file_name.as_ref());
-            copy_transformed_source_file(&asset.source_path, &destination)?;
+            file_counts.record(copy_transformed_source_file(
+                &asset.source_path,
+                &destination,
+            )?);
             if let Ok(content) = std_fs::read_to_string(&asset.source_path) {
                 for dependency in project_ui_dependencies_from_content(&content) {
                     install_registry_item_by_name(
@@ -74,6 +123,7 @@ pub fn install_asset(asset: &DraggedShadcnAsset, project_root: &Path) -> Result<
                         &asset.registry_root,
                         &mut dependency_specs,
                         &mut HashSet::new(),
+                        &mut file_counts,
                     )?;
                 }
             }
@@ -88,11 +138,15 @@ pub fn install_asset(asset: &DraggedShadcnAsset, project_root: &Path) -> Result<
                 &asset.registry_root,
                 &mut dependency_specs,
                 &mut HashSet::new(),
+                &mut file_counts,
             )? {
                 let destination = components_dir
                     .join("blocks")
                     .join(asset.target_file_name.as_ref());
-                copy_transformed_source_dir(&asset.source_path, &destination)?;
+                file_counts.merge(copy_transformed_source_dir(
+                    &asset.source_path,
+                    &destination,
+                )?);
             } else {
                 insert_snippet = registry_item_insert_snippet(asset);
             }
@@ -112,6 +166,8 @@ pub fn install_asset(asset: &DraggedShadcnAsset, project_root: &Path) -> Result<
         css_path: project_relative_path(project_root, &scaffold.css_path),
         wrote_theme_css: scaffold.wrote_theme_css,
         insert_snippet,
+        wrote_file_count: file_counts.wrote_file_count,
+        skipped_existing_file_count: file_counts.skipped_existing_file_count,
     })
 }
 
@@ -176,7 +232,7 @@ fn ensure_scaffold(project_root: &Path, registry_root: &Path) -> Result<Scaffold
 
     let registry_hooks = registry_root.join("hooks");
     if registry_hooks.is_dir() {
-        copy_transformed_source_dir(&registry_hooks, &hooks_dir(project_root))?;
+        let _ = copy_transformed_source_dir(&registry_hooks, &hooks_dir(project_root))?;
     }
 
     let components_json = project_root.join("components.json");
@@ -310,6 +366,7 @@ fn install_registry_item_by_name(
     registry_root: &Path,
     dependency_specs: &mut BTreeSet<String>,
     installed: &mut HashSet<String>,
+    file_counts: &mut InstallFileCounts,
 ) -> Result<bool> {
     if !installed.insert(name.to_string()) {
         return Ok(true);
@@ -336,6 +393,7 @@ fn install_registry_item_by_name(
             registry_root,
             dependency_specs,
             installed,
+            file_counts,
         )?;
     }
 
@@ -343,7 +401,10 @@ fn install_registry_item_by_name(
         let Some(destination) = destination_for_registry_file(project_root, &file) else {
             continue;
         };
-        write_transformed_content_if_absent(&destination, &file.content)?;
+        file_counts.record(write_transformed_content_if_absent(
+            &destination,
+            &file.content,
+        )?);
     }
 
     Ok(true)
@@ -798,9 +859,9 @@ fn registry_path_without_style_prefix(path: &str) -> &str {
         .unwrap_or(path)
 }
 
-fn write_transformed_content_if_absent(destination: &Path, content: &str) -> Result<()> {
+fn write_transformed_content_if_absent(destination: &Path, content: &str) -> Result<bool> {
     if destination.exists() {
-        return Ok(());
+        return Ok(false);
     }
 
     if let Some(parent) = destination.parent() {
@@ -810,7 +871,7 @@ fn write_transformed_content_if_absent(destination: &Path, content: &str) -> Res
     std_fs::write(destination, rewrite_imports(content))
         .with_context(|| format!("writing {}", destination.display()))?;
 
-    Ok(())
+    Ok(true)
 }
 
 fn registry_dependencies_from_content(content: &str) -> BTreeSet<String> {
@@ -1004,9 +1065,13 @@ fn package_install_command(project_root: &Path) -> Option<String> {
     Some("npm install".to_string())
 }
 
-fn copy_transformed_source_dir(source_dir: &Path, destination_dir: &Path) -> Result<()> {
+fn copy_transformed_source_dir(
+    source_dir: &Path,
+    destination_dir: &Path,
+) -> Result<InstallFileCounts> {
     std_fs::create_dir_all(destination_dir)
         .with_context(|| format!("creating {}", destination_dir.display()))?;
+    let mut file_counts = InstallFileCounts::default();
     for entry in std_fs::read_dir(source_dir)
         .with_context(|| format!("reading {}", source_dir.display()))?
         .flatten()
@@ -1014,18 +1079,18 @@ fn copy_transformed_source_dir(source_dir: &Path, destination_dir: &Path) -> Res
         let source = entry.path();
         let destination = destination_dir.join(entry.file_name());
         if source.is_dir() {
-            copy_transformed_source_dir(&source, &destination)?;
+            file_counts.merge(copy_transformed_source_dir(&source, &destination)?);
         } else {
-            copy_transformed_source_file(&source, &destination)?;
+            file_counts.record(copy_transformed_source_file(&source, &destination)?);
         }
     }
 
-    Ok(())
+    Ok(file_counts)
 }
 
-fn copy_transformed_source_file(source: &Path, destination: &Path) -> Result<()> {
+fn copy_transformed_source_file(source: &Path, destination: &Path) -> Result<bool> {
     if destination.exists() {
-        return Ok(());
+        return Ok(false);
     }
 
     if let Some(parent) = destination.parent() {
@@ -1051,7 +1116,7 @@ fn copy_transformed_source_file(source: &Path, destination: &Path) -> Result<()>
         })?;
     }
 
-    Ok(())
+    Ok(true)
 }
 
 fn rewrite_imports(text: &str) -> String {

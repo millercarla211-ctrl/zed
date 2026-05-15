@@ -1,3 +1,12 @@
+[2026-05-15] - UI Install File Accounting
+
+CHANGED:
+- UI/shadcn install reports now include written-file and kept-existing-file counts for registry, Magic, component, and block installs.
+- Repeated installs now surface that existing project files were preserved instead of silently appearing unchanged.
+
+NOTES:
+- This reports the existing no-overwrite behavior without changing install destinations, dependency wiring, editor insertion, catalog loading, or WebPreview routing.
+
 [2026-05-15] - Asset Panel Count-Aware Clear Feedback
 
 CHANGED:
