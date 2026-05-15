@@ -233,6 +233,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_runtime_events_to_agent",
     "copy_dom_snapshot",
     "send_dom_snapshot_to_agent",
+    "copy_action_targets",
+    "send_action_targets_to_agent",
     "take_screenshot",
     "inspect_element",
 ];
@@ -408,6 +410,7 @@ pub struct WebPreviewView {
     latest_page_diagnostics: Option<Value>,
     latest_runtime_events: Option<Value>,
     latest_dom_snapshot: Option<Value>,
+    latest_action_targets: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -583,6 +586,7 @@ impl WebPreviewView {
             latest_page_diagnostics: None,
             latest_runtime_events: None,
             latest_dom_snapshot: None,
+            latest_action_targets: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1033,6 +1037,7 @@ impl WebPreviewView {
             "page_diagnostics": self.latest_page_diagnostics_summary(),
             "runtime_events": self.latest_runtime_events_summary(),
             "dom_snapshot": self.latest_dom_snapshot_summary(),
+            "action_targets": self.latest_action_targets_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1049,6 +1054,8 @@ impl WebPreviewView {
                 "send_runtime_events_to_agent": true,
                 "copy_dom_snapshot": true,
                 "send_dom_snapshot_to_agent": true,
+                "copy_action_targets": true,
+                "send_action_targets_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1098,6 +1105,17 @@ impl WebPreviewView {
             "title": snapshot.pointer("/dom/title").and_then(Value::as_str),
             "ready_state": snapshot.pointer("/dom/ready_state").and_then(Value::as_str),
             "counts": snapshot.pointer("/dom/counts").cloned(),
+        }))
+    }
+
+    fn latest_action_targets_summary(&self) -> Option<Value> {
+        let targets = self.latest_action_targets.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at": targets.pointer("/targets/timestamp").and_then(Value::as_str),
+            "url": targets.pointer("/targets/url").and_then(Value::as_str),
+            "title": targets.pointer("/targets/title").and_then(Value::as_str),
+            "ready_state": targets.pointer("/targets/ready_state").and_then(Value::as_str),
+            "counts": targets.pointer("/targets/counts").cloned(),
         }))
     }
 
@@ -1369,6 +1387,65 @@ impl WebPreviewView {
 
     fn send_dom_snapshot_to_agent(&mut self, cx: &mut Context<Self>) {
         self.request_dom_snapshot("agent", cx);
+    }
+
+    fn action_targets_snapshot(&self, payload: &Value, window: &Window) -> Value {
+        let mut targets = payload.clone();
+        if let Some(targets) = targets.as_object_mut() {
+            targets.remove("kind");
+            targets.remove("action");
+        }
+
+        serde_json::json!({
+            "schema": "zed.web_preview.action_targets.v1",
+            "session": self.browser_session_snapshot(window),
+            "targets": targets,
+        })
+    }
+
+    fn action_targets_json(targets: &Value) -> String {
+        serde_json::to_string_pretty(targets).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn action_targets_agent_blocks(&self, targets: &Value) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = targets.pointer("/targets/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview action targets:\n\n```json\n{}\n```",
+            Self::action_targets_json(targets)
+        ))));
+        blocks
+    }
+
+    fn request_action_targets(&mut self, action: &'static str, cx: &mut Context<Self>) {
+        let script = format!(
+            "window.__zedWebPreview && window.__zedWebPreview.collectActionTargets('{action}');"
+        );
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(&script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Collecting web preview action targets", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("Action targets are unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic("Action targets crashed before collection", cx);
+            }
+        }
+    }
+
+    fn copy_action_targets(&mut self, cx: &mut Context<Self>) {
+        self.request_action_targets("copy", cx);
+    }
+
+    fn send_action_targets_to_agent(&mut self, cx: &mut Context<Self>) {
+        self.request_action_targets("agent", cx);
     }
 
     fn agent_browser_action_manifest(&self, window: &Window) -> Value {
@@ -1882,6 +1959,46 @@ impl WebPreviewView {
                     }
                 }
             }
+            "action-targets" => {
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let action = payload
+                        .get("action")
+                        .and_then(Value::as_str)
+                        .unwrap_or("copy");
+                    let targets = self.action_targets_snapshot(&payload, window);
+                    self.latest_action_targets = Some(targets.clone());
+
+                    match action {
+                        "agent" => {
+                            self.append_content_blocks_to_agent_panel(
+                                self.action_targets_agent_blocks(&targets),
+                                window,
+                                cx,
+                            );
+                            self.show_toast("Sent action targets to the agent panel", cx);
+                        }
+                        _ => {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                Self::action_targets_json(&targets),
+                            ));
+                            self.show_toast("Copied web preview action targets JSON", cx);
+                        }
+                    }
+
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.report_action_error("Action target collection failed", error, cx);
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "Action targets crashed while collecting page data",
+                            cx,
+                        );
+                    }
+                }
+            }
             "capture-area" => {
                 match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
                     let scale = payload
@@ -2293,6 +2410,30 @@ impl WebPreviewView {
                                     move |_, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_dom_snapshot_to_agent(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Action Targets")
+                                .icon(IconName::Crosshair)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_action_targets(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Action Targets to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_action_targets_to_agent(cx);
                                         });
                                     }
                                 }),
@@ -3264,6 +3405,7 @@ impl Item for WebPreviewView {
                 latest_page_diagnostics: None,
                 latest_runtime_events: None,
                 latest_dom_snapshot: None,
+                latest_action_targets: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
@@ -4796,6 +4938,108 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     };
   };
 
+  const ACTION_TARGET_SELECTOR = "a[href], button, input, textarea, select, option, summary, label, video, audio, [role='button'], [role='link'], [role='menuitem'], [role='tab'], [role='checkbox'], [role='radio'], [role='textbox'], [contenteditable='true']";
+  const MAX_ACTION_TARGETS = 180;
+
+  const actionKindForElement = (element) => {
+    try {
+      const tag = element.tagName.toLowerCase();
+      const role = element.getAttribute("role");
+      if (tag === "input" || tag === "textarea" || role === "textbox" || element.getAttribute("contenteditable") === "true") {
+        return "type";
+      }
+      if (tag === "select" || tag === "option" || role === "checkbox" || role === "radio") {
+        return "select";
+      }
+      if (tag === "video" || tag === "audio") {
+        return "media";
+      }
+      return "click";
+    } catch (_error) {
+      return "click";
+    }
+  };
+
+  const actionTargetLabel = (element) => {
+    const value = element.getAttribute("aria-label")
+      || element.getAttribute("title")
+      || element.getAttribute("placeholder")
+      || element.getAttribute("alt")
+      || element.getAttribute("name")
+      || element.getAttribute("value")
+      || element.innerText
+      || element.textContent
+      || element.getAttribute("href")
+      || element.getAttribute("src");
+    return limitText(value, 180);
+  };
+
+  const actionTargetSnapshot = (element, index) => {
+    const rect = roundedRect(element);
+    const visible = isVisibleElement(element, rect);
+    return {
+      index,
+      action_kind: actionKindForElement(element),
+      selector: cssSelector(element),
+      tag: element.tagName.toLowerCase(),
+      role: element.getAttribute("role"),
+      label: actionTargetLabel(element),
+      name: element.getAttribute("name"),
+      type: element.getAttribute("type"),
+      href: element.getAttribute("href"),
+      src: element.getAttribute("src"),
+      text: limitText(element.innerText || element.textContent, 240),
+      rect: visible ? rect : null,
+      visible,
+      disabled: Boolean(element.disabled) || element.getAttribute("aria-disabled") === "true",
+      focused: element === document.activeElement,
+      attributes: domAttributeSnapshot(element)
+    };
+  };
+
+  const collectActionTargetRows = () => {
+    let candidates = [];
+    try {
+      candidates = Array.from(document.querySelectorAll(ACTION_TARGET_SELECTOR));
+    } catch (_error) {
+      candidates = [];
+    }
+
+    const seen = new Set();
+    const targets = [];
+    let hiddenSkipped = 0;
+    let duplicateSkipped = 0;
+
+    for (const element of candidates) {
+      if (!(element instanceof Element)) continue;
+      const rect = roundedRect(element);
+      const visible = isVisibleElement(element, rect);
+      if (!visible && element !== document.activeElement) {
+        hiddenSkipped += 1;
+        continue;
+      }
+
+      const selector = cssSelector(element);
+      const key = selector || `${element.tagName}:${actionTargetLabel(element) || ""}:${targets.length}`;
+      if (seen.has(key)) {
+        duplicateSkipped += 1;
+        continue;
+      }
+      seen.add(key);
+
+      targets.push(actionTargetSnapshot(element, targets.length));
+      if (targets.length >= MAX_ACTION_TARGETS) break;
+    }
+
+    return {
+      candidates: candidates.length,
+      targets,
+      hidden_skipped: hiddenSkipped,
+      duplicate_skipped: duplicateSkipped,
+      truncated: Math.max(0, candidates.length - hiddenSkipped - duplicateSkipped - targets.length)
+    };
+  };
+
   installRuntimeCapture();
 
   window.__zedWebPreview = {
@@ -4943,6 +5187,35 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
           forms: document.forms?.length || 0
         },
         root: rootSnapshot
+      });
+    },
+
+    collectActionTargets(action = "copy") {
+      const result = collectActionTargetRows();
+      post({
+        kind: "action-targets",
+        action,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState,
+        viewport: {
+          inner_width: window.innerWidth,
+          inner_height: window.innerHeight,
+          device_pixel_ratio: window.devicePixelRatio || 1,
+          scroll_x: Math.round(window.scrollX || 0),
+          scroll_y: Math.round(window.scrollY || 0)
+        },
+        counts: {
+          candidates: result.candidates,
+          targets: result.targets.length,
+          hidden_skipped: result.hidden_skipped,
+          duplicate_skipped: result.duplicate_skipped,
+          truncated: result.truncated,
+          max_targets: MAX_ACTION_TARGETS
+        },
+        active_element: elementSnapshot(document.activeElement instanceof Element ? document.activeElement : null),
+        targets: result.targets
       });
     },
 

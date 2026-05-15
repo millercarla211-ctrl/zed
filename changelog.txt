@@ -1,3 +1,13 @@
+[2026-05-15] - Web Preview Action Targets
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Action Targets" and "Send Action Targets to Agent".
+- The WebPreview bridge now collects a bounded visible-action target map with selectors, labels, action kinds, rects, disabled/focused state, and skipped/truncated counts.
+- WebPreview session JSON now summarizes the latest action-target collection for Agent Browser context.
+
+NOTES:
+- This gives future click/type automation a read-only target inventory before any interactive tool is wired.
+
 [2026-05-15] - Web Preview DOM Snapshot
 
 ADDED:
