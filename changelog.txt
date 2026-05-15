@@ -1,3 +1,14 @@
+[2026-05-15] - Media Remote Refresh Control
+
+ADDED:
+- `crates/media_panel` now shows a compact refresh control in the Media panel header for refetching the current remote-provider result set.
+
+CHANGED:
+- Refreshing remote media now removes the current query/kind cache entry and uses the existing generation guard so stale in-flight remote provider responses cannot overwrite the new request.
+
+NOTES:
+- Preserved local media indexing, kind filters, remote cache behavior for non-refreshed queries, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Icon Selected Pack Preview Priming
 
 CHANGED:

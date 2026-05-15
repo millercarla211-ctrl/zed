@@ -384,6 +384,18 @@ impl MediaPanel {
         self.remote_kind_counts = MediaKindCounts::default();
     }
 
+    fn refresh_remote_media(&mut self, cx: &mut Context<Self>) {
+        let raw_query = self.raw_query(cx);
+        let query = remote_media_query(&raw_query, self.kind_filter);
+        let signature = media_remote_signature(self.kind_filter.label(), &query);
+        self.remote_cache.remove(&signature);
+        self.remote_cache_order
+            .retain(|entry| entry.as_ref() != signature.as_ref());
+        self.invalidate_remote_media();
+        self.status = Some("Refreshing remote media".into());
+        cx.notify();
+    }
+
     fn ensure_remote_media_loaded(&mut self, raw_query: &str, cx: &mut Context<Self>) {
         let query = remote_media_query(raw_query, self.kind_filter);
         let signature = media_remote_signature(self.kind_filter.label(), &query);
@@ -1254,10 +1266,29 @@ impl Render for MediaPanel {
                             .items_center()
                             .child(Label::new("Media").size(LabelSize::Small))
                             .child(
-                                Label::new(count_label)
-                                    .size(LabelSize::XSmall)
-                                    .color(Color::Muted)
-                                    .truncate(),
+                                h_flex()
+                                    .gap_1()
+                                    .items_center()
+                                    .child(
+                                        IconButton::new(
+                                            "media-panel-refresh-remote",
+                                            IconName::RotateCw,
+                                        )
+                                        .shape(ui::IconButtonShape::Square)
+                                        .icon_size(IconSize::Small)
+                                        .tooltip(Tooltip::text("Refresh remote media"))
+                                        .on_click(
+                                            cx.listener(|panel, _, _, cx| {
+                                                panel.refresh_remote_media(cx);
+                                            }),
+                                        ),
+                                    )
+                                    .child(
+                                        Label::new(count_label)
+                                            .size(LabelSize::XSmall)
+                                            .color(Color::Muted)
+                                            .truncate(),
+                                    ),
                             ),
                     )
                     .child(self.filter_editor.clone()),
