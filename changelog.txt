@@ -1,3 +1,12 @@
+[2026-05-15] - Asset Panel Cleanup Safety Tooltips
+
+ADDED:
+- Media header, Recent, and Pinned Clean actions now explain that they remove only stale rows whose local files are missing.
+- UI header, Recent, and Pinned Clean actions now explain that they remove only stale rows whose source or registry files are missing.
+
+NOTES:
+- This clarifies cleanup safety without changing cleanup behavior, valid pins/recent rows, catalog loading, provider fetching, editor input, or WebPreview routing.
+
 [2026-05-15] - Asset Panel Working-Set Tooltips
 
 ADDED:

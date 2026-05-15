@@ -48,6 +48,8 @@ const MAX_RECENT_MEDIA_ACTIONS: usize = 5;
 const MAX_PINNED_MEDIA_ACTIONS: usize = 8;
 const PINNED_MEDIA_ACTIONS_KEY: &str = "asset_panel_pinned_media_v1";
 const PINNED_MEDIA_ACTIONS_STATE_VERSION: u32 = 1;
+const CLEAN_STALE_MEDIA_TOOLTIP: &str =
+    "Remove only stale media rows whose local files are missing. Valid pins and recent rows stay.";
 const OPENVERSE_RESULT_LIMIT: usize = 90;
 const OPENVERSE_FOCUSED_RESULT_LIMIT: usize = 150;
 const WIKIMEDIA_RESULT_LIMIT: usize = 50;
@@ -1718,6 +1720,7 @@ impl MediaPanel {
                                         Button::new("media-panel-remove-stale-recent", "Clean")
                                             .style(ButtonStyle::Subtle)
                                             .size(ButtonSize::Compact)
+                                            .tooltip(Tooltip::text(CLEAN_STALE_MEDIA_TOOLTIP))
                                             .on_click(cx.listener(|panel, _, _, cx| {
                                                 panel.remove_stale_recent_media(cx);
                                             })),
@@ -1797,6 +1800,7 @@ impl MediaPanel {
                                         Button::new("media-panel-remove-stale-pinned", "Clean")
                                             .style(ButtonStyle::Subtle)
                                             .size(ButtonSize::Compact)
+                                            .tooltip(Tooltip::text(CLEAN_STALE_MEDIA_TOOLTIP))
                                             .on_click(cx.listener(|panel, _, _, cx| {
                                                 panel.remove_stale_pinned_media(cx);
                                             })),
@@ -2293,6 +2297,7 @@ impl Render for MediaPanel {
                                             )
                                             .style(ButtonStyle::Subtle)
                                             .size(ButtonSize::Compact)
+                                            .tooltip(Tooltip::text(CLEAN_STALE_MEDIA_TOOLTIP))
                                             .on_click(
                                                 cx.listener(|panel, _, _, cx| {
                                                     panel.remove_stale_media_history(cx);

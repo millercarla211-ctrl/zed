@@ -48,6 +48,7 @@ const MAX_RECENT_UI_ACTIONS: usize = 5;
 const MAX_PINNED_UI_ACTIONS: usize = 8;
 const PINNED_UI_ACTIONS_KEY: &str = "asset_panel_pinned_ui_v1";
 const PINNED_UI_ACTIONS_STATE_VERSION: u32 = 1;
+const CLEAN_STALE_UI_TOOLTIP: &str = "Remove only stale UI rows whose source or registry files are missing. Valid pins and recent rows stay.";
 const PREVIEW_IMAGE_CACHE_INITIAL_CAPACITY: usize = MAX_SHADCN_ROWS * 4;
 const CATALOG_CACHE_FILE_NAME: &str = "catalog-v4.rkyv";
 const STATIC_SHADCN_CATALOG_INDEX: &str = include_str!("shadcn_catalog_index.tsv");
@@ -1151,6 +1152,7 @@ impl ShadcnUiPanel {
                                         Button::new("shadcn-ui-remove-stale-recent", "Clean")
                                             .style(ButtonStyle::Subtle)
                                             .size(ButtonSize::Compact)
+                                            .tooltip(Tooltip::text(CLEAN_STALE_UI_TOOLTIP))
                                             .on_click(cx.listener(|panel, _, _, cx| {
                                                 panel.remove_stale_recent_ui_actions(cx);
                                             })),
@@ -1230,6 +1232,7 @@ impl ShadcnUiPanel {
                                         Button::new("shadcn-ui-remove-stale-pinned", "Clean")
                                             .style(ButtonStyle::Subtle)
                                             .size(ButtonSize::Compact)
+                                            .tooltip(Tooltip::text(CLEAN_STALE_UI_TOOLTIP))
                                             .on_click(cx.listener(|panel, _, _, cx| {
                                                 panel.remove_stale_pinned_ui_actions(cx);
                                             })),
@@ -1675,6 +1678,7 @@ impl Render for ShadcnUiPanel {
                                             Button::new("shadcn-ui-remove-stale-history", "Clean")
                                                 .style(ButtonStyle::Subtle)
                                                 .size(ButtonSize::Compact)
+                                                .tooltip(Tooltip::text(CLEAN_STALE_UI_TOOLTIP))
                                                 .on_click(cx.listener(|panel, _, _, cx| {
                                                     panel.remove_stale_ui_history(cx);
                                                 })),
