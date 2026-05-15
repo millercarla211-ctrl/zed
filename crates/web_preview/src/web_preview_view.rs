@@ -7858,6 +7858,7 @@ impl WebPreviewView {
                             "list_agent_plugins tool"
                         ],
                         "action_payload_contract": {
+                            "payload_tool_name": "compose_agent_browser_action_payload",
                             "bridge_schema": "zed.web_preview.agent_browser_action_payload_bridge.v1",
                             "executor_payload_schema": "zed.web_preview.agent_browser_executor_payload.v1",
                             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
@@ -7923,6 +7924,7 @@ impl WebPreviewView {
                             {"id": "browser.action.native_history_trace", "state": "available", "description": "Trace native back/forward readiness and receipt requirements without navigating the page."},
                             {"id": "browser.action.native_cache_reset_trace", "state": "available", "description": "Trace scoped cache-reset readiness and profile-safety requirements without clearing browser data."},
                             {"id": "browser.dispatch.manual_qa_checklist", "state": "available", "description": "Generate the final manual QA checklist required before enabling native browser dispatch."},
+                            {"id": "browser.action.payload_compose", "state": "available", "description": "Use compose_agent_browser_action_payload to generate validated WebPreview action payload packets before importing them into the payload bridge."},
                             {"id": "browser.action.payload_bridge", "state": "available", "description": "Generate or send a schema-versioned payload bridge that maps Agent action payloads into WebPreview executors without dispatching by itself."},
                             {"id": "browser.action.payload_import_clipboard", "state": "available_explicit_user_action", "description": "Import a JSON action payload or plain text from the clipboard into the active WebPreview payload bridge for the next type executor attempt."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},
