@@ -956,6 +956,19 @@ impl WebPreviewView {
         self.show_toast("Copied web preview session inventory JSON", cx);
     }
 
+    fn send_workspace_session_inventory_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let blocks = vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview session inventory:\n\n```json\n{}\n```",
+            self.workspace_session_inventory_json(window, cx)
+        )))];
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent web preview session inventory to the agent panel", cx);
+    }
+
     fn send_browser_session_info_to_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let mut blocks = Vec::new();
         if let Some(url_block) = self.current_url_attachment_block() {
@@ -1597,6 +1610,20 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.copy_workspace_session_inventory_json(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send All Sessions to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_workspace_session_inventory_to_agent(
+                                                window, cx,
+                                            );
                                         });
                                     }
                                 }),

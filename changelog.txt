@@ -1,3 +1,11 @@
+[2026-05-15] - Web Preview Agent Inventory Context
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Send All Sessions to Agent" for attaching the full workspace WebPreview inventory JSON to the Agent Panel.
+
+NOTES:
+- This keeps Agent Browser Command Center read-only while letting the agent reason across multiple preview tabs or splits.
+
 [2026-05-15] - Web Preview Session Inventory JSON
 
 ADDED:
