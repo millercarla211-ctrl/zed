@@ -1,3 +1,16 @@
+[2026-05-15] - UI Registry Target-Aware Installs
+
+CHANGED:
+- `crates/shadcn_ui` now reads registry file `target` metadata and uses it as the install destination when it is a safe project-relative path.
+- Registry installs still fall back to the previous path-derived destination when a manifest has no target or an invalid target.
+- Install status paths now resolve from the same primary registry file destination used by the manifest-backed install path.
+- Registry dependency discovery now follows shadcn hook imports such as `use-mobile` and `use-toast` in addition to UI and block imports.
+- Import rewriting now covers default-style block, chart, example, and internal registry imports alongside the existing new-york paths.
+
+NOTES:
+- Local manifest inspection found 62 non-empty target paths across the two active shadcn style registries and no absolute or parent-directory targets.
+- Existing files are still preserved because registry writes continue to use the no-overwrite write path.
+
 [2026-05-15] - UI Registry Coverage Expansion
 
 CHANGED:

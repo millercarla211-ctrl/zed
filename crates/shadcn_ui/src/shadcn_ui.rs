@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::{
     collections::{BTreeSet, HashSet},
     fs as std_fs,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 use workspace::{DraggedShadcnAsset, DraggedShadcnKind};
 
@@ -108,6 +108,15 @@ pub fn install_asset(asset: &DraggedShadcnAsset, project_root: &Path) -> Result<
 
 pub fn install_display(asset: &DraggedShadcnAsset, project_root: &Path) -> String {
     let components_dir = components_dir(project_root);
+    if matches!(
+        asset.kind,
+        DraggedShadcnKind::Component | DraggedShadcnKind::Block
+    ) {
+        if let Some(path) = registry_install_display_path(asset, project_root) {
+            return path.to_string_lossy().replace('\\', "/");
+        }
+    }
+
     let path = match asset.kind {
         DraggedShadcnKind::Component => components_dir
             .join("ui")
@@ -280,6 +289,10 @@ struct RegistryItem {
 struct RegistryFile {
     path: String,
     content: String,
+    #[serde(rename = "type", default)]
+    file_type: Option<String>,
+    #[serde(default)]
+    target: Option<String>,
 }
 
 fn install_registry_item_by_name(
@@ -318,7 +331,7 @@ fn install_registry_item_by_name(
     }
 
     for file in item.files {
-        let Some(destination) = destination_for_registry_path(project_root, &file.path) else {
+        let Some(destination) = destination_for_registry_file(project_root, &file) else {
             continue;
         };
         write_transformed_content_if_absent(&destination, &file.content)?;
@@ -352,6 +365,42 @@ fn read_registry_item(name: &str, registry_root: &Path) -> Result<Option<Registr
     }
 
     Ok(None)
+}
+
+fn registry_install_display_path(
+    asset: &DraggedShadcnAsset,
+    project_root: &Path,
+) -> Option<PathBuf> {
+    let item = read_registry_item(asset.id.as_ref(), &asset.registry_root)
+        .ok()
+        .flatten()?;
+    let primary_file = primary_registry_file_for_install(&item, asset.kind)?;
+    destination_for_registry_file(project_root, primary_file)
+}
+
+fn primary_registry_file_for_install(
+    item: &RegistryItem,
+    kind: DraggedShadcnKind,
+) -> Option<&RegistryFile> {
+    match kind {
+        DraggedShadcnKind::Component => item
+            .files
+            .iter()
+            .find(|file| registry_path_without_style_prefix(&file.path).starts_with("ui/"))
+            .or_else(|| item.files.first()),
+        DraggedShadcnKind::Block => item
+            .files
+            .iter()
+            .find(|file| file.file_type.as_deref() == Some("registry:page"))
+            .or_else(|| {
+                item.files.iter().find(|file| {
+                    let path = registry_path_without_style_prefix(&file.path);
+                    path == "page.tsx" || path.ends_with("/page.tsx")
+                })
+            })
+            .or_else(|| item.files.first()),
+        DraggedShadcnKind::Magic => None,
+    }
 }
 
 struct ThemeCssReport {
@@ -622,6 +671,18 @@ fn shadcn_theme_css_v3() -> String {
     .to_string()
 }
 
+fn destination_for_registry_file(project_root: &Path, file: &RegistryFile) -> Option<PathBuf> {
+    if let Some(destination) = file
+        .target
+        .as_deref()
+        .and_then(|target| project_relative_target_path(project_root, target))
+    {
+        return Some(destination);
+    }
+
+    destination_for_registry_path(project_root, &file.path)
+}
+
 fn destination_for_registry_path(project_root: &Path, registry_path: &str) -> Option<PathBuf> {
     const UI_PREFIX: &str = "ui/";
     const BLOCK_PREFIX: &str = "blocks/";
@@ -672,6 +733,27 @@ fn destination_for_registry_path(project_root: &Path, registry_path: &str) -> Op
     None
 }
 
+fn project_relative_target_path(project_root: &Path, target: &str) -> Option<PathBuf> {
+    let target = target.trim();
+    if target.is_empty() {
+        return None;
+    }
+
+    let mut relative_path = PathBuf::new();
+    for component in Path::new(target).components() {
+        match component {
+            Component::Normal(segment) => relative_path.push(segment),
+            _ => return None,
+        }
+    }
+
+    if relative_path.as_os_str().is_empty() {
+        return None;
+    }
+
+    Some(project_root.join(relative_path))
+}
+
 fn registry_path_without_style_prefix(path: &str) -> &str {
     path.strip_prefix("registry/new-york-v4/")
         .or_else(|| path.strip_prefix("registry/new-york/"))
@@ -702,6 +784,10 @@ fn registry_dependencies_from_content(content: &str) -> BTreeSet<String> {
         "@/registry/default/ui/",
         "@/registry/new-york-v4/blocks/",
         "@/registry/new-york/blocks/",
+        "@/registry/default/blocks/",
+        "@/registry/new-york-v4/hooks/",
+        "@/registry/new-york/hooks/",
+        "@/registry/default/hooks/",
     ] {
         collect_registry_dependency_prefix(content, prefix, &mut dependencies);
     }
@@ -943,11 +1029,13 @@ fn rewrite_imports(text: &str) -> String {
         .replace("@/registry/default/hooks/", "@/hooks/")
         .replace("@/registry/new-york-v4/blocks/", "@/components/blocks/")
         .replace("@/registry/new-york/blocks/", "@/components/blocks/")
+        .replace("@/registry/default/blocks/", "@/components/blocks/")
         .replace(
             "@/registry/new-york-v4/charts/",
             "@/components/blocks/charts/",
         )
         .replace("@/registry/new-york/charts/", "@/components/blocks/charts/")
+        .replace("@/registry/default/charts/", "@/components/blocks/charts/")
         .replace(
             "@/registry/new-york-v4/examples/",
             "@/components/blocks/examples/",
@@ -957,11 +1045,19 @@ fn rewrite_imports(text: &str) -> String {
             "@/components/blocks/examples/",
         )
         .replace(
+            "@/registry/default/examples/",
+            "@/components/blocks/examples/",
+        )
+        .replace(
             "@/registry/new-york-v4/internal/",
             "@/components/blocks/internal/",
         )
         .replace(
             "@/registry/new-york/internal/",
+            "@/components/blocks/internal/",
+        )
+        .replace(
+            "@/registry/default/internal/",
             "@/components/blocks/internal/",
         )
         .replace("@/registry/bases/radix/ui/", "@/components/ui/")
