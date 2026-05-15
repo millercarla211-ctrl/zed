@@ -747,6 +747,46 @@ impl ShadcnUiPanel {
         cx.notify();
     }
 
+    fn remove_stale_ui_history(&mut self, cx: &mut Context<Self>) {
+        let recent_before = self.recent_ui_actions.len();
+        let mut recent_payloads = Vec::with_capacity(self.recent_ui_actions.len());
+        for entry in &self.recent_ui_actions {
+            recent_payloads.push((entry.item.id.clone(), self.payload_for_item(&entry.item)));
+        }
+        self.recent_ui_actions.retain(|entry| {
+            match recent_payloads
+                .iter()
+                .find(|(id, _)| id.as_ref() == entry.item.id.as_ref())
+            {
+                Some((_, payload)) => item_source_available(&entry.item, payload),
+                None => true,
+            }
+        });
+
+        let pinned_before = self.pinned_ui_actions.len();
+        let mut pinned_payloads = Vec::with_capacity(self.pinned_ui_actions.len());
+        for entry in &self.pinned_ui_actions {
+            pinned_payloads.push((entry.item.id.clone(), self.payload_for_item(&entry.item)));
+        }
+        self.pinned_ui_actions.retain(|entry| {
+            match pinned_payloads
+                .iter()
+                .find(|(id, _)| id.as_ref() == entry.item.id.as_ref())
+            {
+                Some((_, payload)) => item_source_available(&entry.item, payload),
+                None => true,
+            }
+        });
+
+        let removed = recent_before.saturating_sub(self.recent_ui_actions.len())
+            + pinned_before.saturating_sub(self.pinned_ui_actions.len());
+        self.status = Some(ui_removed_stale_status("UI action", removed));
+        if pinned_before != self.pinned_ui_actions.len() {
+            self.persist_pinned_ui_actions(cx);
+        }
+        cx.notify();
+    }
+
     fn remove_ui_history_entry(&mut self, item: CatalogItem, pinned: bool, cx: &mut Context<Self>) {
         if pinned {
             self.pinned_ui_actions
@@ -1664,6 +1704,16 @@ impl Render for ShadcnUiPanel {
                                                 .size(LabelSize::XSmall)
                                                 .color(working_set_color)
                                                 .truncate(),
+                                        )
+                                    })
+                                    .when(stale_history_count > 0, |this| {
+                                        this.child(
+                                            Button::new("shadcn-ui-remove-stale-history", "Clean")
+                                                .style(ButtonStyle::Subtle)
+                                                .size(ButtonSize::Compact)
+                                                .on_click(cx.listener(|panel, _, _, cx| {
+                                                    panel.remove_stale_ui_history(cx);
+                                                })),
                                         )
                                     })
                                     .child(

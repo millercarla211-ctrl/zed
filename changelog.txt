@@ -1,3 +1,14 @@
+[2026-05-15] - Asset Panel Header Cleanup Actions
+
+ADDED:
+- Media and UI panel headers now show a compact Clean action when stale pinned or recent working-set entries exist.
+
+CHANGED:
+- Header Clean removes stale recent and pinned entries in one action and persists pinned cleanup when needed.
+
+NOTES:
+- This keeps stale recovery available while searching, when the normal Pinned and Recent sections are hidden, without changing catalog loading, provider fetching, editor input, or WebPreview routing.
+
 [2026-05-15] - Asset Panel Header Working-Set Summaries
 
 ADDED:

@@ -1165,6 +1165,22 @@ impl MediaPanel {
         cx.notify();
     }
 
+    fn remove_stale_media_history(&mut self, cx: &mut Context<Self>) {
+        let recent_before = self.recent_media.len();
+        self.recent_media
+            .retain(|entry| !media_history_entry_stale(entry));
+        let pinned_before = self.pinned_media.len();
+        self.pinned_media
+            .retain(|entry| !media_history_entry_stale(entry));
+        let removed = recent_before.saturating_sub(self.recent_media.len())
+            + pinned_before.saturating_sub(self.pinned_media.len());
+        self.status = Some(media_removed_stale_status("media", removed));
+        if pinned_before != self.pinned_media.len() {
+            self.persist_pinned_media(cx);
+        }
+        cx.notify();
+    }
+
     fn remove_media_history_entry(
         &mut self,
         entry: RecentMediaEntry,
@@ -2241,6 +2257,21 @@ impl Render for MediaPanel {
                                                 .size(LabelSize::XSmall)
                                                 .color(working_set_color)
                                                 .truncate(),
+                                        )
+                                    })
+                                    .when(stale_history_count > 0, |this| {
+                                        this.child(
+                                            Button::new(
+                                                "media-panel-remove-stale-history",
+                                                "Clean",
+                                            )
+                                            .style(ButtonStyle::Subtle)
+                                            .size(ButtonSize::Compact)
+                                            .on_click(
+                                                cx.listener(|panel, _, _, cx| {
+                                                    panel.remove_stale_media_history(cx);
+                                                }),
+                                            ),
                                         )
                                     })
                                     .child(
