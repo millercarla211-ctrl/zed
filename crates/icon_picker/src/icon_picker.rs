@@ -35,6 +35,7 @@ const ICON_PACK_INDEX: &str = include_str!("icon_pack_index.tsv");
 const ICON_REPRESENTATIVE_BODIES: &str = include_str!("icon_representative_bodies.tsv");
 const MAX_ICON_RESULTS: usize = 360;
 const STARTUP_ICON_PREVIEW_WARM_LIMIT: usize = MAX_ICON_RESULTS;
+const SELECTED_PACK_PREVIEW_PRIME_LIMIT: usize = 96;
 const MAX_EXTERNAL_ICON_PREVIEW_CACHE_ENTRIES: usize = 4096;
 const MAX_WARMED_ICON_PREVIEW_SIGNATURES: usize = 128;
 const EXTERNAL_ICON_PREVIEW_CACHE_VERSION: &str = "v3";
@@ -272,8 +273,24 @@ impl IconPickerPanel {
             let icons = executor
                 .spawn(async move { load_external_icon_pack_catalog(&pack_summary) })
                 .await;
+            let prime_count = icons.len().min(SELECTED_PACK_PREVIEW_PRIME_LIMIT);
+            let mut preview_icons = Vec::with_capacity(prime_count);
+            preview_icons.extend(icons.iter().take(prime_count).cloned());
+            let previews = if preview_icons.is_empty() {
+                Vec::new()
+            } else {
+                executor
+                    .spawn(async move { warm_external_icon_previews(preview_icons) })
+                    .await
+            };
             panel
                 .update(cx, |panel, cx| {
+                    for (key, preview_path) in previews {
+                        panel.cache_external_svg(
+                            key,
+                            preview_path.map(|preview_path| ExternalSvg { preview_path }),
+                        );
+                    }
                     if !icons.is_empty() {
                         let pack = icons[0].pack.to_string();
                         panel.external_icons_by_pack.insert(pack, icons);

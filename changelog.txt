@@ -1,3 +1,11 @@
+[2026-05-15] - Icon Selected Pack Preview Priming
+
+CHANGED:
+- `crates/icon_picker` now primes the first visible selected-pack Iconify SVG previews during the background pack-catalog load, so opening a specific icon set can show real SVG previews sooner.
+
+NOTES:
+- Preserved selected pack loading, lazy warming for the rest of the visible icons, the on-disk SVG preview cache, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Icon Representative Preview Seeding
 
 CHANGED:
