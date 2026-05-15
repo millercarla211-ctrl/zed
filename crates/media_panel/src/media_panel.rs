@@ -57,6 +57,22 @@ const INTERNET_ARCHIVE_DETAIL_LIMIT: usize = 24;
 const MAX_REMOTE_JSON_BODY_RESERVE: usize = 2 * 1024 * 1024;
 const REMOTE_MEDIA_FETCH_DEBOUNCE: Duration = Duration::from_millis(275);
 const REMOTE_MEDIA_PROVIDER_TIMEOUT: Duration = Duration::from_secs(4);
+const IGNORED_MEDIA_SEGMENTS: &[&str] = &[
+    ".git",
+    ".cache",
+    "target",
+    "tmp",
+    "trash",
+    "models",
+    "tools",
+    "tool",
+    "mcp",
+    "node_modules",
+];
+const IMAGE_MEDIA_EXTENSIONS: &[&str] =
+    &["png", "jpg", "jpeg", "webp", "gif", "bmp", "avif", "svg"];
+const VIDEO_MEDIA_EXTENSIONS: &[&str] = &["mp4", "webm", "mov", "m4v", "avi"];
+const AUDIO_MEDIA_EXTENSIONS: &[&str] = &["mp3", "wav", "ogg", "flac", "m4a", "aac", "opus"];
 
 pub fn init(cx: &mut App) {
     cx.observe_new(|workspace: &mut Workspace, _, _| {
@@ -1400,20 +1416,10 @@ fn gather_media_assets_in_root(root: &PathBuf, path: &Path, assets: &mut Vec<Med
 
 fn has_ignored_media_segment(path: &Path) -> bool {
     path.components().any(|component| {
-        let segment = component.as_os_str().to_string_lossy().to_lowercase();
-        matches!(
-            segment.as_str(),
-            ".git"
-                | ".cache"
-                | "target"
-                | "tmp"
-                | "trash"
-                | "models"
-                | "tools"
-                | "tool"
-                | "mcp"
-                | "node_modules"
-        )
+        let segment = component.as_os_str().to_string_lossy();
+        IGNORED_MEDIA_SEGMENTS
+            .iter()
+            .any(|ignored| segment.eq_ignore_ascii_case(ignored))
     })
 }
 
@@ -1441,14 +1447,21 @@ fn media_kind_for_path(path: &Path) -> Option<DraggedMediaKind> {
 }
 
 fn media_kind_for_extension(extension: &str) -> Option<DraggedMediaKind> {
-    match extension.to_lowercase().as_str() {
-        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "avif" | "svg" => {
-            Some(DraggedMediaKind::Image)
-        }
-        "mp4" | "webm" | "mov" | "m4v" | "avi" => Some(DraggedMediaKind::Video),
-        "mp3" | "wav" | "ogg" | "flac" | "m4a" | "aac" | "opus" => Some(DraggedMediaKind::Audio),
-        _ => None,
+    if matches_ascii_ignore_case(extension, IMAGE_MEDIA_EXTENSIONS) {
+        Some(DraggedMediaKind::Image)
+    } else if matches_ascii_ignore_case(extension, VIDEO_MEDIA_EXTENSIONS) {
+        Some(DraggedMediaKind::Video)
+    } else if matches_ascii_ignore_case(extension, AUDIO_MEDIA_EXTENSIONS) {
+        Some(DraggedMediaKind::Audio)
+    } else {
+        None
     }
+}
+
+fn matches_ascii_ignore_case(value: &str, candidates: &[&str]) -> bool {
+    candidates
+        .iter()
+        .any(|candidate| value.eq_ignore_ascii_case(candidate))
 }
 
 struct MediaUrlCandidate {
