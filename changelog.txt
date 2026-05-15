@@ -1,3 +1,11 @@
+[2026-05-15] - Media Remote Signature Allocation Cleanup
+
+CHANGED:
+- `crates/media_panel` now builds remote search cache signatures with a small preallocated helper instead of generic formatting in the render/search path.
+
+NOTES:
+- Preserved exact `kind:query` signature text, remote cache behavior, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Panel Action Status Label Cleanup
 
 CHANGED:

@@ -370,7 +370,7 @@ impl MediaPanel {
 
     fn ensure_remote_media_loaded(&mut self, raw_query: &str, cx: &mut Context<Self>) {
         let query = remote_media_query(raw_query, self.kind_filter);
-        let signature: SharedString = format!("{}:{query}", self.kind_filter.label()).into();
+        let signature = media_remote_signature(self.kind_filter.label(), &query);
 
         if self.remote_loading || self.remote_signature.as_deref() == Some(signature.as_ref()) {
             return;
@@ -3292,6 +3292,14 @@ fn media_status_label(prefix: &str, value: &str) -> SharedString {
     text.push_str(prefix);
     text.push_str(value);
     text.into()
+}
+
+fn media_remote_signature(kind_label: &str, query: &str) -> SharedString {
+    let mut signature = String::with_capacity(kind_label.len() + 1 + query.len());
+    signature.push_str(kind_label);
+    signature.push(':');
+    signature.push_str(query);
+    signature.into()
 }
 
 fn media_attribution_label(provider: &str, license: &str) -> String {
