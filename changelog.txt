@@ -1,3 +1,12 @@
+[2026-05-15] - UI Install Safety Hint
+
+CHANGED:
+- UI/shadcn install-only route rows now preview on row click instead of writing files immediately.
+- Install-only rows now show a compact install-plan hint with the primary target file and clarify that no editor paste will happen.
+
+NOTES:
+- The explicit `Install` button still performs the install, while normal component/block rows keep their existing insert behavior.
+
 [2026-05-15] - Media Provider Health Row
 
 ADDED:

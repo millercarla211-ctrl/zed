@@ -679,6 +679,7 @@ impl ShadcnUiPanel {
         } else {
             "Copy"
         };
+        let install_plan = item.install_only.then(|| shadcn_install_plan_label(&item));
 
         div()
             .id(row_id)
@@ -695,7 +696,9 @@ impl ShadcnUiPanel {
             .on_click(cx.listener({
                 let item = item.clone();
                 move |panel, _, window, cx| {
-                    if can_insert {
+                    if item.install_only {
+                        panel.preview_item(item.clone(), window, cx);
+                    } else if can_insert {
                         panel.insert_item(item.clone(), window, cx);
                     } else {
                         panel.open_item_docs(item.clone(), cx);
@@ -750,6 +753,29 @@ impl ShadcnUiPanel {
                             ),
                     ),
             )
+            .when_some(install_plan, |this, install_plan| {
+                this.child(
+                    h_flex()
+                        .gap_1()
+                        .items_center()
+                        .p_1()
+                        .rounded_sm()
+                        .border_1()
+                        .border_color(cx.theme().colors().border_variant)
+                        .bg(cx.theme().colors().elevated_surface_background)
+                        .child(
+                            Icon::new(IconName::Info)
+                                .size(IconSize::XSmall)
+                                .color(Color::Accent),
+                        )
+                        .child(
+                            Label::new(install_plan)
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted)
+                                .truncate(),
+                        ),
+                )
+            })
             .child(
                 h_flex()
                     .gap_1()
@@ -1066,6 +1092,22 @@ fn shadcn_add_command(item: &CatalogItem) -> String {
     command.push_str("npx shadcn@latest add ");
     command.push_str(id);
     command
+}
+
+fn shadcn_install_plan_label(item: &CatalogItem) -> SharedString {
+    let target = item.target_file_name.as_ref();
+    let mut text = String::with_capacity(
+        "Click row to preview. Install writes registry files; primary target: ".len()
+            + target.len()
+            + ". No editor paste.".len(),
+    );
+    text.push_str("Click row to preview. Install writes registry files");
+    if !target.is_empty() {
+        text.push_str("; primary target: ");
+        text.push_str(target);
+    }
+    text.push_str(". No editor paste.");
+    text.into()
 }
 
 fn shadcn_element_id(prefix: &str, id: &str) -> String {
