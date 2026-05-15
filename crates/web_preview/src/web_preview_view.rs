@@ -450,6 +450,10 @@ impl NativeWebPreview {
         self.webview.clear_all_browsing_data()
     }
 
+    fn clear_cache_data(&self) -> Result<()> {
+        self.webview.clear_cache_data()
+    }
+
     fn open_devtools(&self) {
         self.webview.open_devtools()
     }
@@ -574,6 +578,7 @@ pub struct WebPreviewView {
     latest_agent_browser_native_history_trace_attempt: Option<Value>,
     latest_agent_browser_native_history_executor_attempt: Option<Value>,
     latest_agent_browser_native_cache_reset_trace_attempt: Option<Value>,
+    latest_agent_browser_native_cache_reset_executor_attempt: Option<Value>,
     latest_agent_browser_native_dispatch_qa_checklist: Option<Value>,
     latest_agent_browser_qa_runbook: Option<Value>,
     latest_agent_plugin_catalog: Option<Value>,
@@ -782,6 +787,7 @@ impl WebPreviewView {
             latest_agent_browser_native_history_trace_attempt: None,
             latest_agent_browser_native_history_executor_attempt: None,
             latest_agent_browser_native_cache_reset_trace_attempt: None,
+            latest_agent_browser_native_cache_reset_executor_attempt: None,
             latest_agent_browser_native_dispatch_qa_checklist: None,
             latest_agent_browser_qa_runbook: None,
             latest_agent_plugin_catalog: None,
@@ -1265,6 +1271,7 @@ impl WebPreviewView {
             "agent_browser_native_history_trace_attempt": self.latest_agent_browser_native_history_trace_attempt_summary(),
             "agent_browser_native_history_executor_attempt": self.latest_agent_browser_native_history_executor_attempt_summary(),
             "agent_browser_native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
+            "agent_browser_native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
             "agent_browser_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
             "agent_browser_qa_runbook": self.latest_agent_browser_qa_runbook_summary(),
             "agent_plugin_catalog": self.latest_agent_plugin_catalog_summary(),
@@ -1345,6 +1352,8 @@ impl WebPreviewView {
                 "send_permissioned_native_forward_executor_to_agent": self.agent_action_permission.interactive_enabled(),
                 "copy_native_cache_reset_trace_attempt": true,
                 "send_native_cache_reset_trace_attempt_to_agent": true,
+                "run_permissioned_native_cache_reset_executor": self.agent_action_permission.interactive_enabled(),
+                "send_permissioned_native_cache_reset_executor_to_agent": self.agent_action_permission.interactive_enabled(),
                 "copy_native_dispatch_qa_checklist": true,
                 "send_native_dispatch_qa_checklist_to_agent": true,
                 "copy_agent_browser_qa_runbook": true,
@@ -1705,6 +1714,12 @@ impl WebPreviewView {
     fn latest_agent_browser_native_cache_reset_trace_attempt_summary(&self) -> Option<Value> {
         Self::latest_agent_browser_native_command_trace_attempt_summary(
             &self.latest_agent_browser_native_cache_reset_trace_attempt,
+        )
+    }
+
+    fn latest_agent_browser_native_cache_reset_executor_attempt_summary(&self) -> Option<Value> {
+        Self::latest_agent_browser_native_command_trace_attempt_summary(
+            &self.latest_agent_browser_native_cache_reset_executor_attempt,
         )
     }
 
@@ -3160,6 +3175,7 @@ impl WebPreviewView {
                     "agent_browser_native_history_trace_attempt": self.latest_agent_browser_native_history_trace_attempt_summary(),
                     "agent_browser_native_history_executor_attempt": self.latest_agent_browser_native_history_executor_attempt_summary(),
                     "agent_browser_native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
+                    "agent_browser_native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                     "agent_browser_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 },
@@ -3290,6 +3306,7 @@ impl WebPreviewView {
             "scroll",
             "go_back",
             "go_forward",
+            "clear_cache",
         ];
         let preflight_wired_actions = ["click", "type_text", "press_key", "scroll"];
         let trace_wired_actions = [
@@ -3309,7 +3326,7 @@ impl WebPreviewView {
         if !pending_executor_actions.is_empty() {
             blockers.push(serde_json::json!({
                 "code": "input_executors_pending",
-                "message": "Low-risk browser command executors plus native click, scroll, and history executors are wired; type, key, and narrower cache executors are still intentionally disabled.",
+                "message": "Low-risk browser command executors plus native click, scroll, history, and cache-only reset executors are wired; type and key executors are still intentionally disabled.",
                 "wired_actions": wired_executor_actions,
                 "trace_wired_actions": trace_wired_actions,
                 "pending_actions": pending_executor_actions.clone(),
@@ -3343,14 +3360,14 @@ impl WebPreviewView {
         } else if !interactive_unlocked {
             "Ask the user to explicitly unlock interactive browser actions for this session before any future executor dispatch."
         } else {
-            "Low-risk open_url, reload, set_viewport, clear_data, native click, native scroll, and native history executors can run; keep type, key, and scoped cache reset disabled until the Windows input bridge passes manual QA."
+            "Low-risk open_url, reload, set_viewport, clear_data, native click, native scroll, native history, and cache-only reset executors can run; keep type and key disabled until the Windows input bridge passes manual QA."
         };
         let native_input_bridge = serde_json::json!({
             "schema": "zed.web_preview.native_input_bridge_readiness.v1",
             "status": "partial_dispatch_wired_manual_qa_required",
             "dispatch_enabled": gate_ready_for_executor,
-            "wired_dispatch_actions": ["click", "scroll", "go_back", "go_forward"],
-            "pending_dispatch_actions": ["type_text", "press_key", "clear_cache"],
+            "wired_dispatch_actions": ["click", "scroll", "go_back", "go_forward", "clear_cache"],
+            "pending_dispatch_actions": ["type_text", "press_key"],
             "platform_backend": if cfg!(target_os = "windows") {
                 "windows_webview2_composition_controller"
             } else if cfg!(target_os = "macos") {
@@ -3384,6 +3401,7 @@ impl WebPreviewView {
                 "history": self.latest_agent_browser_native_history_trace_attempt_summary(),
                 "history_executor": self.latest_agent_browser_native_history_executor_attempt_summary(),
                 "cache_reset": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
+                "cache_reset_executor": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                 "dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary()
             },
             "required_before_dispatch": [
@@ -3397,6 +3415,7 @@ impl WebPreviewView {
                 "translate receipt target rects into current native WebView viewport coordinates",
                 "route click and wheel through the Windows WebView2 CompositionController native input path",
                 "route back and forward through the native WebView history API after checking current history availability",
+                "route cache-only reset through WebView2 profile browsing-data kinds without touching cookies, storage, or external profiles",
                 "route text and key dispatch only while WebPreview owns keyboard focus",
                 "capture before/after diagnostics and emit a receipt for every attempted dispatch"
             ]
@@ -3463,6 +3482,7 @@ impl WebPreviewView {
                 "native_history_trace_attempt": self.latest_agent_browser_native_history_trace_attempt_summary(),
                 "native_history_executor_attempt": self.latest_agent_browser_native_history_executor_attempt_summary(),
                 "native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
+                "native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                 "native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
             },
             "notes": [
@@ -6246,6 +6266,192 @@ impl WebPreviewView {
         self.native_cache_reset_trace_attempt(window, cx, true);
     }
 
+    fn native_cache_reset_executor_attempt(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+        send_to_agent: bool,
+    ) {
+        let captured_at_ms = Self::current_epoch_millis();
+        let gate = self.agent_browser_executor_gate();
+        let cache_trace_ready = self
+            .latest_agent_browser_native_cache_reset_trace_attempt
+            .is_some();
+        let qa_checklist_ready = self
+            .latest_agent_browser_native_dispatch_qa_checklist
+            .is_some();
+        let mut blockers = self.agent_browser_executor_gate_blockers(
+            gate,
+            "Fresh page diagnostics, DOM, action targets, and readiness probe context are required before cache-only reset dispatch.",
+            "Cache-only reset dispatch requires the wait contract, interaction plan, preflight, request envelope, and receipt artifacts.",
+        );
+        if !cache_trace_ready {
+            blockers.push(serde_json::json!({
+                "code": "native_cache_reset_trace_missing",
+                "message": "The native cache-reset trace has not been generated for this WebPreview session.",
+                "required_action": "Copy or send the native cache-reset trace before enabling cache-only reset dispatch.",
+            }));
+        }
+        if !qa_checklist_ready {
+            blockers.push(serde_json::json!({
+                "code": "native_dispatch_qa_checklist_missing",
+                "message": "The native dispatch QA checklist has not been generated for this WebPreview session.",
+                "required_action": "Copy or send the native dispatch QA checklist before enabling cache-only reset dispatch.",
+            }));
+        }
+
+        let dispatch_ready = gate.ready_for_executor()
+            && cache_trace_ready
+            && qa_checklist_ready
+            && blockers.is_empty();
+        let before = serde_json::json!({
+            "url": self.active_url.as_ref(),
+            "title": self.current_tab_title().as_ref(),
+            "load_state": self.load_state_name(),
+            "cache_reset_trace": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
+            "scope": {
+                "kind": "cache_only",
+                "native_data_kinds": ["disk_cache", "cache_storage"],
+                "cookies_cleared": false,
+                "dom_storage_cleared": false,
+                "external_browser_profiles_mutated": false,
+            },
+        });
+
+        let mut browser_command_dispatched = false;
+        let mut dispatch_error = None;
+        if dispatch_ready {
+            match self.clear_cache_data() {
+                Ok(()) => {
+                    browser_command_dispatched = true;
+                }
+                Err(error) => {
+                    let message = error.to_string();
+                    dispatch_error = Some(message.clone());
+                    blockers.push(serde_json::json!({
+                        "code": "native_cache_reset_dispatch_failed",
+                        "message": message,
+                    }));
+                }
+            }
+        }
+
+        let outcome = if browser_command_dispatched {
+            "dispatched"
+        } else {
+            "blocked"
+        };
+        let after = serde_json::json!({
+            "url": self.active_url.as_ref(),
+            "title": self.current_tab_title().as_ref(),
+            "load_state": self.load_state_name(),
+            "cache_reset_is_async": browser_command_dispatched,
+        });
+        let receipt = self.permissioned_executor_receipt(
+            "zed.web_preview.permissioned_native_cache_reset_executor_receipt.v1",
+            "clear_cache",
+            outcome,
+            gate,
+            before,
+            after,
+            blockers,
+            dispatch_error,
+            browser_command_dispatched,
+            false,
+            false,
+            vec![
+                (
+                    "native_cache_reset_trace_ready",
+                    serde_json::json!(cache_trace_ready),
+                ),
+                (
+                    "native_dispatch_qa_checklist_ready",
+                    serde_json::json!(qa_checklist_ready),
+                ),
+                ("dispatch_enabled", serde_json::json!(dispatch_ready)),
+            ],
+            vec![
+                ("scope", serde_json::json!("cache_only")),
+                (
+                    "native_data_kinds",
+                    serde_json::json!(["disk_cache", "cache_storage"]),
+                ),
+                ("dry_run_only", serde_json::json!(false)),
+                (
+                    "dispatch_status",
+                    serde_json::json!(if browser_command_dispatched {
+                        "native_cache_reset_dispatched"
+                    } else {
+                        "not_dispatched"
+                    }),
+                ),
+            ],
+        );
+        let receipt_blockers = receipt.pointer("/blockers").cloned();
+        let attempt = serde_json::json!({
+            "schema": "zed.web_preview.permissioned_native_cache_reset_executor_attempt.v1",
+            "session": self.browser_session_snapshot(window),
+            "policy": self.agent_browser_policy_snapshot(),
+            "attempt": {
+                "captured_at_ms": captured_at_ms,
+                "session_id": self.session_id.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "url": self.active_url.as_ref(),
+                "action": "clear_cache",
+                "scope": "cache_only",
+                "outcome": outcome,
+                "gate_ready_for_executor": gate.ready_for_executor(),
+                "native_cache_reset_trace_ready": cache_trace_ready,
+                "native_dispatch_qa_checklist_ready": qa_checklist_ready,
+                "dispatch_enabled": dispatch_ready,
+                "browser_command_dispatched": browser_command_dispatched,
+                "native_input_dispatched": false,
+                "page_script_dispatched": false,
+                "external_browser_profiles_mutated": false,
+                "blockers": receipt_blockers,
+                "receipt": receipt,
+            },
+            "notes": [
+                "This is the first permissioned scoped cache-reset executor slice.",
+                "It dispatches only WebView2 profile disk-cache and cache-storage clearing after permission, context, cache trace, and QA checklist gates pass.",
+                "It does not clear cookies, local storage, IndexedDB, service workers, imported browser profiles, page scripts, or external Chrome data."
+            ],
+        });
+        let blocks =
+            self.native_command_trace_agent_blocks(&attempt, "native cache-reset executor");
+        self.latest_agent_browser_native_cache_reset_executor_attempt = Some(attempt.clone());
+
+        if send_to_agent {
+            self.append_content_blocks_to_agent_panel(blocks, window, cx);
+            self.show_toast(
+                "Sent native cache-reset executor receipt to the agent panel",
+                cx,
+            );
+        } else {
+            cx.write_to_clipboard(ClipboardItem::new_string(Self::native_command_trace_json(
+                &attempt,
+            )));
+            self.show_toast("Copied native cache-reset executor receipt", cx);
+        }
+        cx.notify();
+    }
+
+    fn copy_native_cache_reset_executor_attempt(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.native_cache_reset_executor_attempt(window, cx, false);
+    }
+
+    fn send_native_cache_reset_executor_attempt_to_agent(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.native_cache_reset_executor_attempt(window, cx, true);
+    }
+
     fn native_dispatch_qa_checklist(&self, window: &Window) -> Value {
         let gate = self.agent_browser_executor_gate();
         let trace_receipts_ready = self
@@ -6275,8 +6481,8 @@ impl WebPreviewView {
                 "title": self.current_tab_title().as_ref(),
                 "url": self.active_url.as_ref(),
                 "feature_set": "Permissioned Agent Browser Executor",
-                "status": "native_click_scroll_history_executors_wired_manual_qa_required",
-                "estimated_score": 92,
+                "status": "native_click_scroll_history_cache_executors_wired_manual_qa_required",
+                "estimated_score": 94,
                 "gate_ready_for_executor": gate.ready_for_executor(),
                 "trace_receipts_ready": trace_receipts_ready,
                 "latest_traces": {
@@ -6289,6 +6495,7 @@ impl WebPreviewView {
                     "history": self.latest_agent_browser_native_history_trace_attempt_summary(),
                     "history_executor": self.latest_agent_browser_native_history_executor_attempt_summary(),
                     "cache_reset": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
+                    "cache_reset_executor": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                 },
                 "manual_gates": [
                     {
@@ -6326,10 +6533,9 @@ impl WebPreviewView {
                 ],
                 "blocking_items": [
                     "Real native type/key dispatch is still disabled.",
-                    "Scoped cache reset dispatch is still disabled.",
-                    "Manual Windows QA must pass before extending dispatch beyond native click, scroll, and history paths."
+                    "Manual Windows QA must pass before extending dispatch beyond native click, scroll, history, and cache-only reset paths."
                 ],
-                "next_target": "Manually validate the Windows native click, scroll, back, and forward executors, then add scoped cache reset or type/key dispatch behind fresh preflight and receipt logging."
+                "next_target": "Manually validate the Windows native click, scroll, back, forward, and cache-only reset executors, then add type/key dispatch behind fresh preflight and keyboard-focus receipt logging."
             },
             "notes": [
                 "This checklist is safe to copy/send because it does not run page JavaScript or native browser commands.",
@@ -6412,14 +6618,14 @@ impl WebPreviewView {
                     "feature_set": "Agent Browser Command Center",
                     "score": 100,
                     "scope": "Read-only browser context, diagnostics, action planning, audit packets, readiness gates, and low-risk command executors are wired.",
-                    "out_of_scope": "Real type, key, and scoped cache-reset dispatch belongs to later Permissioned Agent Browser Executor slices."
+                    "out_of_scope": "Real type and key dispatch belongs to later Permissioned Agent Browser Executor slices."
                 },
                 "readiness_snapshot": {
                     "context_ready": context_ready,
                     "audit_ready": audit_ready,
                     "interactive_unlocked": interactive_unlocked,
                     "executor_wired": true,
-                    "executor_scope": "open_url, reload, set_viewport, clear_data, native click dispatch, native scroll dispatch, native history dispatch, preflight-only type/key receipts, trace-only native input/cache receipts, and native dispatch QA checklist",
+                    "executor_scope": "open_url, reload, set_viewport, clear_data, native click dispatch, native scroll dispatch, native history dispatch, cache-only reset dispatch, preflight-only type/key receipts, trace-only native input receipts, and native dispatch QA checklist",
                     "latest_status_packet": self.latest_agent_browser_status_packet_summary(),
                     "latest_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
                     "latest_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
@@ -6440,6 +6646,7 @@ impl WebPreviewView {
                     "latest_native_history_trace_attempt": self.latest_agent_browser_native_history_trace_attempt_summary(),
                     "latest_native_history_executor_attempt": self.latest_agent_browser_native_history_executor_attempt_summary(),
                     "latest_native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
+                    "latest_native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                     "latest_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
                 },
                 "manual_gates": [
@@ -6478,7 +6685,7 @@ impl WebPreviewView {
                 ],
                 "known_limits": [
                     "The Command Center currently prepares context and audit contracts only.",
-                    "Real type, key, and scoped cache-reset dispatch remains intentionally deferred.",
+                    "Real type and key dispatch remains intentionally deferred.",
                     "Cross-platform behavior is represented by shared state and capability contracts; Windows remains the local manual QA platform."
                 ],
                 "next_feature_set": {
@@ -6489,7 +6696,7 @@ impl WebPreviewView {
                         "Manually validate the first native click dispatch adapter for Windows WebView2 CompositionController.",
                         "Manually validate the first native wheel dispatch adapter for Windows WebView2 CompositionController.",
                         "Manually validate native back/forward history dispatch through CoreWebView2.",
-                        "Add scoped cache reset behind the same receipt discipline.",
+                        "Manually validate scoped cache-only reset through the WebView2 profile API.",
                         "Wire type/key dispatch only after each action has a fresh preflight receipt.",
                         "Expand action coverage only after manual QA confirms no editor or WebPreview input regression."
                     ]
@@ -6684,6 +6891,7 @@ impl WebPreviewView {
                             {"id": "browser.action.go_back", "state": "available_when_unlocked", "description": "Navigate back through the native WebPreview history executor after unlock, native history trace, QA checklist, and receipt logging."},
                             {"id": "browser.action.go_forward", "state": "available_when_unlocked", "description": "Navigate forward through the native WebPreview history executor after unlock, native history trace, QA checklist, and receipt logging."},
                             {"id": "browser.action.clear_data", "state": "available_when_unlocked", "description": "Clear WebPreview browsing data through the permissioned executor shell."},
+                            {"id": "browser.action.clear_cache", "state": "available_when_unlocked", "description": "Clear only WebPreview disk cache and cache storage through the scoped native executor after unlock, cache-reset trace, QA checklist, and receipt logging."},
                             {"id": "browser.action.set_viewport", "state": "available_when_unlocked", "description": "Switch to the next responsive viewport preset through the permissioned WebPreview executor shell."},
                             {"id": "browser.action.click_preflight", "state": "available", "description": "Select a visible click target and emit the receipt a future native click must satisfy without dispatching input."},
                             {"id": "browser.action.type_preflight", "state": "available", "description": "Select a visible text-entry target and emit the receipt a future native type action must satisfy without dispatching input."},
@@ -8884,6 +9092,34 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Run Native Cache Reset Executor")
+                                .icon(IconName::Trash)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_native_cache_reset_executor_attempt(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Run Native Cache Reset Executor to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_native_cache_reset_executor_attempt_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy Native Dispatch QA Checklist")
                                 .icon(IconName::Check)
                                 .handler({
@@ -9615,6 +9851,23 @@ impl WebPreviewView {
         Ok(())
     }
 
+    #[cfg(target_os = "windows")]
+    fn clear_cache_data(&self) -> Result<()> {
+        let borrow = self.native_preview.borrow();
+        let preview = borrow
+            .as_ref()
+            .ok_or_else(|| anyhow!("The native web preview is not available"))?;
+        preview.clear_cache_data()?;
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn clear_cache_data(&self) -> Result<()> {
+        Err(anyhow!(
+            "Scoped cache reset is currently wired only for Windows WebView2"
+        ))
+    }
+
     #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     fn clear_all_browsing_data(&self) -> Result<()> {
         Err(anyhow!(
@@ -10170,6 +10423,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_native_history_trace_attempt: None,
                 latest_agent_browser_native_history_executor_attempt: None,
                 latest_agent_browser_native_cache_reset_trace_attempt: None,
+                latest_agent_browser_native_cache_reset_executor_attempt: None,
                 latest_agent_browser_native_dispatch_qa_checklist: None,
                 latest_agent_browser_qa_runbook: None,
                 latest_agent_plugin_catalog: None,

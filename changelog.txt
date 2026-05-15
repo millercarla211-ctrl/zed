@@ -1,3 +1,17 @@
+[2026-05-16] - Web Preview Scoped Cache Reset Executor
+
+ADDED:
+- Added a Windows WebView2 cache-only reset executor that clears only disk cache and cache storage through the profile browsing-data API.
+- WebPreview's More menu now includes "Run Native Cache Reset Executor" and "Run Native Cache Reset Executor to Agent".
+- Cache-only reset execution requires interactive permission, fresh executor context/audit readiness, the native cache-reset trace, and the native dispatch QA checklist before dispatch.
+
+CHANGED:
+- Browser plugin manifests now advertise `browser.action.clear_cache` as available when unlocked.
+- Executor readiness and QA handoffs now treat native click, scroll, history, and cache-only reset as wired while keeping type and key disabled.
+
+NOTES:
+- This dispatch slice does not clear cookies, DOM storage, IndexedDB, service workers, imported browser profiles, page scripts, or external Chrome data.
+
 [2026-05-16] - Web Preview First Native History Executor
 
 ADDED:

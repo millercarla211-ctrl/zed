@@ -253,6 +253,22 @@ impl WindowsVisualWebView {
         }
     }
 
+    pub(crate) fn clear_cache_data(&self) -> Result<()> {
+        let data_kinds = COREWEBVIEW2_BROWSING_DATA_KINDS_DISK_CACHE
+            | COREWEBVIEW2_BROWSING_DATA_KINDS_CACHE_STORAGE;
+        unsafe {
+            self.webview
+                .cast::<ICoreWebView2_13>()?
+                .Profile()?
+                .cast::<ICoreWebView2Profile2>()?
+                .ClearBrowsingData(
+                    data_kinds,
+                    &ClearBrowsingDataCompletedHandler::create(Box::new(move |_| Ok(()))),
+                )
+                .map_err(Into::into)
+        }
+    }
+
     pub(crate) fn open_devtools(&self) {
         unsafe {
             let _ = self.webview.OpenDevToolsWindow();

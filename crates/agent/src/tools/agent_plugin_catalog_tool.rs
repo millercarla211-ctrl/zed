@@ -258,6 +258,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.action.go_back", "available_when_unlocked", "Navigate back through the native WebPreview history executor after unlock, native history trace, QA checklist, and receipt logging."),
             capability("browser.action.go_forward", "available_when_unlocked", "Navigate forward through the native WebPreview history executor after unlock, native history trace, QA checklist, and receipt logging."),
             capability("browser.action.clear_data", "available_when_unlocked", "Clear WebPreview browsing data through the permissioned executor shell."),
+            capability("browser.action.clear_cache", "available_when_unlocked", "Clear only WebPreview disk cache and cache storage through the scoped native executor after unlock, cache-reset trace, QA checklist, and receipt logging."),
             capability("browser.action.set_viewport", "available_when_unlocked", "Switch to the next responsive viewport preset through the permissioned WebPreview executor shell."),
             capability("browser.action.click_preflight", "available", "Select a visible click target and emit the receipt a future native click must satisfy without dispatching input."),
             capability("browser.action.type_preflight", "available", "Select a visible text-entry target and emit the receipt a future native type action must satisfy without dispatching input."),
