@@ -4334,13 +4334,15 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
         let Some(search_url) = source.search_url(query, filter) else {
             continue;
         };
+        let provider_title = remote_provider_title(source);
         let _ = write!(
             provider_links,
-            r#"<a class="provider" data-provider="{}" title="{}" href="{}">{}</a>"#,
+            r#"<a class="provider" data-provider="{}" title="{}" href="{}"><span>{}</span><span class="provider-kinds">{}</span></a>"#,
             escape_attr(source.id),
-            escape_attr(source.description),
+            escape_attr(&provider_title),
             escape_attr(&search_url),
-            escape_html(source.name)
+            escape_html(source.name),
+            escape_html(source.capability_label())
         );
     }
 
@@ -4438,6 +4440,13 @@ fn remote_media_search_html(query: &str, filter: MediaKindFilter) -> String {
       border-radius: 999px;
       padding: 4px 10px;
       text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }}
+    .provider-kinds {{
+      color: var(--muted-foreground);
+      font-size: 11px;
     }}
     .status {{ padding: 10px 12px; color: var(--muted-foreground); }}
     .grid {{
@@ -5409,6 +5418,25 @@ impl FreeMediaSource {
             MediaKindFilter::All | MediaKindFilter::Images => Some(self.image_search),
         }
     }
+
+    fn capability_label(&self) -> &'static str {
+        match (self.video_search.is_some(), self.audio_search.is_some()) {
+            (true, true) => "images/video/audio",
+            (true, false) => "images/video",
+            (false, true) => "images/audio",
+            (false, false) => "images",
+        }
+    }
+}
+
+fn remote_provider_title(source: &FreeMediaSource) -> String {
+    let capability_label = source.capability_label();
+    let mut title =
+        String::with_capacity(source.description.len() + " - ".len() + capability_label.len());
+    title.push_str(source.description);
+    title.push_str(" - ");
+    title.push_str(capability_label);
+    title
 }
 
 fn remote_provider_count(filter: MediaKindFilter) -> usize {

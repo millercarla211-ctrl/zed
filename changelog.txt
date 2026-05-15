@@ -1,3 +1,12 @@
+[2026-05-15] - Remote Browser Provider Capabilities
+
+ADDED:
+- Generated Remote Media browser provider chips now show whether each source supports images, video, audio, or combinations of those media kinds.
+- Provider chip tooltips now include the same capability label alongside the provider description.
+
+NOTES:
+- This improves remote-source selection inside WebPreview without changing direct provider fetching, local media indexing, editor input, or WebPreview routing.
+
 [2026-05-15] - Media Browse Provider Context
 
 ADDED:
