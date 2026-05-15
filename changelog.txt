@@ -1,3 +1,17 @@
+[2026-05-16] - Web Preview Native History And Cache Trace Readiness
+
+ADDED:
+- WebPreview's More menu now includes trace-only native history, scoped cache-reset, and native-dispatch QA checklist actions plus Agent Panel handoff entries.
+- Native history traces now define go-back/go-forward readiness, native backend state, host bounds, and receipt requirements without navigating the page.
+- Native cache-reset traces now define cache, cookies/site data, storage, IndexedDB, service worker, full-profile-reset, and external-profile safety scopes without clearing data.
+- Browser plugin manifests now advertise `browser.action.native_history_trace`, `browser.action.native_cache_reset_trace`, and `browser.dispatch.manual_qa_checklist`.
+
+CHANGED:
+- Executor readiness, WebPreview session snapshots, status packets, and QA runbooks now include latest native history/cache trace summaries and the final dispatch QA checklist.
+
+NOTES:
+- These actions remain dry-run only; no history navigation, cache clearing, native input, browser command, page script, or external Chrome action is dispatched.
+
 [2026-05-16] - Web Preview Native Input Trace Family
 
 ADDED:
