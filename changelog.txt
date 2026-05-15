@@ -1,3 +1,12 @@
+[2026-05-15] - Media Remote Loading Empty State
+
+CHANGED:
+- Media panel empty-state copy now shows `Fetching remote media` while direct providers are loading and no result rows are visible yet.
+- The existing `Indexing media` and `No matching media` empty states remain unchanged for local indexing and completed empty searches.
+
+NOTES:
+- This prevents remote searches from looking falsely empty during the debounce/fetch window without changing provider fetch behavior or row ordering.
+
 [2026-05-15] - Media Remote Source Header Status
 
 CHANGED:

@@ -1344,6 +1344,13 @@ impl Render for MediaPanel {
             );
         }
         let is_empty = asset_rows.is_empty();
+        let empty_label = if self.loading {
+            "Indexing media"
+        } else if self.remote_loading {
+            "Fetching remote media"
+        } else {
+            "No matching media"
+        };
         let count_label = self.status.clone().unwrap_or_else(|| {
             if self.loading {
                 "indexing".into()
@@ -1414,13 +1421,9 @@ impl Render for MediaPanel {
                     .when(is_empty, |this| {
                         this.child(
                             div().h_full().flex().items_center().justify_center().child(
-                                Label::new(if self.loading {
-                                    "Indexing media"
-                                } else {
-                                    "No matching media"
-                                })
-                                .size(LabelSize::Small)
-                                .color(Color::Muted),
+                                Label::new(empty_label)
+                                    .size(LabelSize::Small)
+                                    .color(Color::Muted),
                             ),
                         )
                     })
