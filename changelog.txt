@@ -1,3 +1,15 @@
+[2026-05-15] - UI Catalog Freshness and Refresh
+
+ADDED:
+- UI/shadcn panel header now labels the active catalog source as bundled fallback, cached catalog, hydrating sources, or source catalog.
+- UI/shadcn panel header now exposes a refresh action that rebuilds the catalog from local source manifests and rewrites the rkyv cache.
+
+CHANGED:
+- Manual UI catalog refresh clears cached search text and preview-warming state before showing the rebuilt source-backed catalog.
+
+NOTES:
+- This improves source freshness visibility without changing editor insertion, WebPreview routing, provider fetching, or normal panel action history.
+
 [2026-05-15] - Asset Panel History Health Rollups
 
 ADDED:

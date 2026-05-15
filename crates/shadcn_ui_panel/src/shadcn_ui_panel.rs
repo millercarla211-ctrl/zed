@@ -116,6 +116,13 @@ impl CatalogFilter {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum UiCatalogFreshness {
+    StaticFallback,
+    Cached,
+    Hydrated,
+}
+
 #[derive(Clone, Copy, Default)]
 struct CatalogFilterCounts {
     all: usize,
@@ -312,6 +319,7 @@ pub struct ShadcnUiPanel {
     search_text_cache: RefCell<HashMap<SharedString, SharedString>>,
     loading_catalog: bool,
     catalog_loaded: bool,
+    catalog_freshness: UiCatalogFreshness,
     source_filter: CatalogFilter,
     warming_preview_image_keys: HashSet<SharedString>,
     filter_scroll_handle: ScrollHandle,
@@ -355,7 +363,7 @@ impl ShadcnUiPanel {
                     }
                 },
             );
-            let (items, catalog_loaded) = initial_shadcn_catalog();
+            let (items, catalog_loaded, catalog_freshness) = initial_shadcn_catalog();
             let filter_counts = CatalogFilterCounts::from_items(&items);
             let pinned_ui_actions = load_pinned_ui_actions(cx);
 
@@ -367,6 +375,7 @@ impl ShadcnUiPanel {
                 search_text_cache: RefCell::default(),
                 loading_catalog: false,
                 catalog_loaded,
+                catalog_freshness,
                 source_filter: CatalogFilter::All,
                 warming_preview_image_keys: HashSet::with_capacity(MAX_SHADCN_ROWS),
                 filter_scroll_handle: ScrollHandle::new(),
@@ -403,12 +412,48 @@ impl ShadcnUiPanel {
                     panel.search_text_cache.borrow_mut().clear();
                     panel.loading_catalog = false;
                     panel.catalog_loaded = true;
+                    panel.catalog_freshness = UiCatalogFreshness::Hydrated;
                     panel.status = Some(shadcn_loaded_status(panel.items.len()));
                     cx.notify();
                 })
                 .ok();
         })
         .detach();
+    }
+
+    fn refresh_catalog(&mut self, cx: &mut Context<Self>) {
+        if self.loading_catalog {
+            return;
+        }
+
+        self.loading_catalog = true;
+        self.catalog_loaded = false;
+        self.status = Some("Refreshing UI catalog...".into());
+        let executor = cx.background_executor().clone();
+        cx.spawn(async move |panel, cx| {
+            let items = executor
+                .spawn(async move {
+                    let items = shadcn_catalog();
+                    let _ = write_shadcn_catalog_rkyv_cache(&items);
+                    items
+                })
+                .await;
+            panel
+                .update(cx, |panel, cx| {
+                    panel.items = items;
+                    panel.filter_counts = CatalogFilterCounts::from_items(&panel.items);
+                    panel.search_text_cache.borrow_mut().clear();
+                    panel.warming_preview_image_keys.clear();
+                    panel.loading_catalog = false;
+                    panel.catalog_loaded = true;
+                    panel.catalog_freshness = UiCatalogFreshness::Hydrated;
+                    panel.status = Some(shadcn_loaded_status(panel.items.len()));
+                    cx.notify();
+                })
+                .ok();
+        })
+        .detach();
+        cx.notify();
     }
 
     fn query(&self, cx: &App) -> String {
@@ -1551,6 +1596,10 @@ impl Render for ShadcnUiPanel {
                 .clone()
                 .unwrap_or_else(|| shadcn_fraction_label(total_matches, total_count))
         };
+        let catalog_freshness_label =
+            ui_catalog_freshness_label(self.loading_catalog, self.catalog_freshness);
+        let catalog_freshness_color =
+            ui_catalog_freshness_color(self.loading_catalog, self.catalog_freshness);
 
         v_flex()
             .id("shadcn-ui-panel")
@@ -1569,10 +1618,36 @@ impl Render for ShadcnUiPanel {
                             .items_center()
                             .child(Label::new("UI").size(LabelSize::Small))
                             .child(
-                                Label::new(count_label)
-                                    .size(LabelSize::XSmall)
-                                    .color(Color::Muted)
-                                    .truncate(),
+                                h_flex()
+                                    .gap_1()
+                                    .items_center()
+                                    .child(
+                                        IconButton::new(
+                                            "shadcn-ui-refresh-catalog",
+                                            IconName::RotateCw,
+                                        )
+                                        .shape(ui::IconButtonShape::Square)
+                                        .icon_size(IconSize::Small)
+                                        .tooltip(Tooltip::text("Refresh UI catalog sources"))
+                                        .disabled(self.loading_catalog)
+                                        .on_click(
+                                            cx.listener(|panel, _, _, cx| {
+                                                panel.refresh_catalog(cx);
+                                            }),
+                                        ),
+                                    )
+                                    .child(
+                                        Label::new(catalog_freshness_label)
+                                            .size(LabelSize::XSmall)
+                                            .color(catalog_freshness_color)
+                                            .truncate(),
+                                    )
+                                    .child(
+                                        Label::new(count_label)
+                                            .size(LabelSize::XSmall)
+                                            .color(Color::Muted)
+                                            .truncate(),
+                                    ),
                             ),
                     )
                     .child(self.filter_editor.clone()),
@@ -1807,6 +1882,29 @@ fn shadcn_preview_warming_status(count: usize) -> SharedString {
     let mut text = String::with_capacity("warming ".len() + 3 + " previews".len());
     let _ = write!(text, "warming {count} previews");
     text.into()
+}
+
+fn ui_catalog_freshness_label(loading: bool, freshness: UiCatalogFreshness) -> &'static str {
+    if loading {
+        return "hydrating sources";
+    }
+
+    match freshness {
+        UiCatalogFreshness::StaticFallback => "bundled fallback",
+        UiCatalogFreshness::Cached => "cached catalog",
+        UiCatalogFreshness::Hydrated => "source catalog",
+    }
+}
+
+fn ui_catalog_freshness_color(loading: bool, freshness: UiCatalogFreshness) -> Color {
+    if loading {
+        return Color::Accent;
+    }
+
+    match freshness {
+        UiCatalogFreshness::StaticFallback => Color::Warning,
+        UiCatalogFreshness::Cached | UiCatalogFreshness::Hydrated => Color::Muted,
+    }
 }
 
 fn shadcn_status_label(prefix: &str, value: &str) -> SharedString {
@@ -2325,11 +2423,15 @@ fn shadcn_catalog_cached() -> Vec<CatalogItem> {
         .clone()
 }
 
-fn initial_shadcn_catalog() -> (Vec<CatalogItem>, bool) {
+fn initial_shadcn_catalog() -> (Vec<CatalogItem>, bool, UiCatalogFreshness) {
     if let Some(items) = load_shadcn_catalog_rkyv_cache() {
-        (items, true)
+        (items, true, UiCatalogFreshness::Cached)
     } else {
-        (static_shadcn_catalog(), false)
+        (
+            static_shadcn_catalog(),
+            false,
+            UiCatalogFreshness::StaticFallback,
+        )
     }
 }
 
