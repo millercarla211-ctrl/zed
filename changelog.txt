@@ -1,3 +1,12 @@
+[2026-05-15] - Panel Query Normalization Cleanup
+
+CHANGED:
+- `crates/icon_picker`, `crates/media_panel`, and `crates/shadcn_ui_panel` now normalize typed panel queries through preallocated lowercase helpers instead of direct `to_lowercase` calls in render/search paths.
+- `crates/media_panel` now builds the remote-provider browser row description with a small helper that preserves the same lowercase kind label without generic formatting allocation.
+
+NOTES:
+- Preserved panel search semantics, Media remote-provider row text, editor input, and WebPreview input behavior.
+
 [2026-05-15] - Font Lowercase Helper Cleanup
 
 CHANGED:

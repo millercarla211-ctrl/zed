@@ -315,7 +315,7 @@ impl ShadcnUiPanel {
     }
 
     fn query(&self, cx: &App) -> String {
-        self.filter_editor.read(cx).text(cx).trim().to_lowercase()
+        lowercase_text(self.filter_editor.read(cx).text(cx).trim())
     }
 
     fn matching_items(&self, query: &str, limit: usize) -> (Vec<CatalogItem>, usize) {
@@ -947,6 +947,12 @@ fn catalog_item_search_text(item: &CatalogItem) -> SharedString {
     text.push(' ');
     push_lowercase(&mut text, item.description.as_ref());
     text.into()
+}
+
+fn lowercase_text(value: &str) -> String {
+    let mut text = String::with_capacity(value.len());
+    push_lowercase(&mut text, value);
+    text
 }
 
 fn push_lowercase(buffer: &mut String, value: &str) {

@@ -318,7 +318,7 @@ impl IconPickerPanel {
     }
 
     fn query(&self, cx: &App) -> String {
-        self.filter_editor.read(cx).text(cx).trim().to_lowercase()
+        lowercase_text(self.filter_editor.read(cx).text(cx).trim())
     }
 
     fn filtered_icons(&self, query: &str) -> (Vec<PickerIcon>, usize, usize) {
@@ -1050,6 +1050,12 @@ fn external_icon_search_text(
     text.push(' ');
     push_lowercase(&mut text, pack_name);
     text.into()
+}
+
+fn lowercase_text(value: &str) -> String {
+    let mut text = String::with_capacity(value.len());
+    push_lowercase(&mut text, value);
+    text
 }
 
 fn push_lowercase(buffer: &mut String, value: &str) {

@@ -1068,10 +1068,7 @@ impl MediaPanel {
         provider_count: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let description = format!(
-            "{provider_count} no-key remote sources for {}",
-            self.kind_filter.label().to_lowercase()
-        );
+        let description = remote_browser_description(provider_count, self.kind_filter.label());
         h_flex()
             .id("media-panel-remote-browser-row")
             .gap_2()
@@ -1179,7 +1176,7 @@ impl Render for MediaPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.ensure_media_index_loaded(cx);
         let raw_query = self.raw_query(cx);
-        let normalized_query = raw_query.trim().to_lowercase();
+        let normalized_query = lowercase_text(raw_query.trim());
         let mut query_terms_storage;
         let query_terms: &[&str] = if normalized_query.is_empty() {
             &[]
@@ -1434,6 +1431,12 @@ fn local_media_search_text(label: &str, relative_display: &str, kind_label: &str
     text.into()
 }
 
+fn lowercase_text(value: &str) -> String {
+    let mut text = String::with_capacity(value.len());
+    push_lowercase(&mut text, value);
+    text
+}
+
 fn push_lowercase(buffer: &mut String, value: &str) {
     for ch in value.chars() {
         for lower in ch.to_lowercase() {
@@ -1462,6 +1465,13 @@ fn matches_ascii_ignore_case(value: &str, candidates: &[&str]) -> bool {
     candidates
         .iter()
         .any(|candidate| value.eq_ignore_ascii_case(candidate))
+}
+
+fn remote_browser_description(provider_count: usize, kind_label: &str) -> SharedString {
+    let mut text = String::with_capacity(32 + 6 + kind_label.len());
+    let _ = write!(text, "{provider_count} no-key remote sources for ");
+    push_lowercase(&mut text, kind_label);
+    text.into()
 }
 
 struct MediaUrlCandidate {
