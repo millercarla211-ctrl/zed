@@ -978,6 +978,12 @@ impl MediaPanel {
         self.recent_media.truncate(MAX_RECENT_MEDIA_ACTIONS);
     }
 
+    fn clear_recent_media(&mut self, cx: &mut Context<Self>) {
+        self.recent_media.clear();
+        self.status = Some("Cleared recent media".into());
+        cx.notify();
+    }
+
     fn render_url_insert(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
         let query = self.raw_query(cx);
         let candidate = media_url_candidate(&query, self.kind_filter.fallback_kind())?;
@@ -1420,9 +1426,12 @@ impl MediaPanel {
                                 .color(Color::Muted),
                         )
                         .child(
-                            Label::new("last used media")
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted),
+                            Button::new("media-panel-clear-recent", "Clear")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    panel.clear_recent_media(cx);
+                                })),
                         ),
                 )
                 .children(rows)

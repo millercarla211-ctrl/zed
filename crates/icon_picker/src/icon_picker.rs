@@ -661,6 +661,12 @@ impl IconPickerPanel {
         self.recent_icon_actions.truncate(MAX_RECENT_ICON_ACTIONS);
     }
 
+    fn clear_recent_icon_actions(&mut self, cx: &mut Context<Self>) {
+        self.recent_icon_actions.clear();
+        self.status = Some("Cleared recent icons".into());
+        cx.notify();
+    }
+
     fn copy_icon_name(&mut self, icon: PickerIcon, cx: &mut Context<Self>) {
         self.selected_icon = Some(icon.clone());
         let payload = self.payload_for_icon(&icon);
@@ -925,9 +931,12 @@ impl IconPickerPanel {
                                 ),
                         )
                         .child(
-                            Label::new("last icon actions")
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted),
+                            Button::new("icon-picker-clear-recent", "Clear")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    panel.clear_recent_icon_actions(cx);
+                                })),
                         ),
                 )
                 .children(rows)

@@ -1,3 +1,12 @@
+[2026-05-15] - Asset Panel Recent Clear Actions
+
+ADDED:
+- Icon, Font, Media, and UI panels now expose compact Clear actions on their Recent sections.
+- Clear actions reset only the bounded in-memory recent history and leave catalogs, provider caches, selection, editor input, and WebPreview routing unchanged.
+
+NOTES:
+- This keeps recent-action reuse manageable during long sessions while preserving normal row actions.
+
 [2026-05-15] - Icon Recent Action Reuse
 
 ADDED:

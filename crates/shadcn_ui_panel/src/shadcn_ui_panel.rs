@@ -545,6 +545,12 @@ impl ShadcnUiPanel {
         self.recent_ui_actions.truncate(MAX_RECENT_UI_ACTIONS);
     }
 
+    fn clear_recent_ui_actions(&mut self, cx: &mut Context<Self>) {
+        self.recent_ui_actions.clear();
+        self.status = Some("Cleared recent UI actions".into());
+        cx.notify();
+    }
+
     fn insert_item(&mut self, item: CatalogItem, window: &mut Window, cx: &mut Context<Self>) {
         if matches!(
             item.source,
@@ -911,9 +917,12 @@ impl ShadcnUiPanel {
                                 ),
                         )
                         .child(
-                            Label::new("last UI actions")
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted),
+                            Button::new("shadcn-ui-clear-recent", "Clear")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    panel.clear_recent_ui_actions(cx);
+                                })),
                         ),
                 )
                 .children(rows)

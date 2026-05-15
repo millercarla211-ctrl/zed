@@ -441,6 +441,12 @@ impl FontPanel {
         self.recent_font_actions.truncate(MAX_RECENT_FONT_ACTIONS);
     }
 
+    fn clear_recent_font_actions(&mut self, cx: &mut Context<Self>) {
+        self.recent_font_actions.clear();
+        self.status = Some("Cleared recent fonts".into());
+        cx.notify();
+    }
+
     fn selected_font_entry(&self) -> Option<FontEntry> {
         Some(FontEntry {
             name: self.selected_font.clone()?,
@@ -771,9 +777,12 @@ impl FontPanel {
                                 ),
                         )
                         .child(
-                            Label::new("last font actions")
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted),
+                            Button::new("font-panel-clear-recent", "Clear")
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    panel.clear_recent_font_actions(cx);
+                                })),
                         ),
                 )
                 .children(rows)
