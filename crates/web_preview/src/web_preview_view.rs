@@ -243,6 +243,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_interaction_plan_to_agent",
     "copy_interaction_preflight",
     "send_interaction_preflight_to_agent",
+    "copy_interaction_receipt_template",
+    "send_interaction_receipt_template_to_agent",
     "take_screenshot",
     "inspect_element",
 ];
@@ -423,6 +425,7 @@ pub struct WebPreviewView {
     latest_wait_contract: Option<Value>,
     latest_interaction_plan: Option<Value>,
     latest_interaction_preflight: Option<Value>,
+    latest_interaction_receipt_template: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -603,6 +606,7 @@ impl WebPreviewView {
             latest_wait_contract: None,
             latest_interaction_plan: None,
             latest_interaction_preflight: None,
+            latest_interaction_receipt_template: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1058,6 +1062,7 @@ impl WebPreviewView {
             "wait_contract": self.latest_wait_contract_summary(),
             "interaction_plan": self.latest_interaction_plan_summary(),
             "interaction_preflight": self.latest_interaction_preflight_summary(),
+            "interaction_receipt_template": self.latest_interaction_receipt_template_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1084,6 +1089,8 @@ impl WebPreviewView {
                 "send_interaction_plan_to_agent": true,
                 "copy_interaction_preflight": true,
                 "send_interaction_preflight_to_agent": true,
+                "copy_interaction_receipt_template": true,
+                "send_interaction_receipt_template_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1193,6 +1200,19 @@ impl WebPreviewView {
             "permission": preflight.pointer("/preflight/permission").cloned(),
             "decision": preflight.pointer("/preflight/decision").cloned(),
             "counts": preflight.pointer("/preflight/counts").cloned(),
+        }))
+    }
+
+    fn latest_interaction_receipt_template_summary(&self) -> Option<Value> {
+        let template = self.latest_interaction_receipt_template.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at": template.pointer("/template/timestamp").and_then(Value::as_str),
+            "url": template.pointer("/template/url").and_then(Value::as_str),
+            "title": template.pointer("/template/title").and_then(Value::as_str),
+            "ready_state": template.pointer("/template/ready_state").and_then(Value::as_str),
+            "permission": template.pointer("/template/permission").cloned(),
+            "receipt_schema": template.pointer("/template/receipt/schema").and_then(Value::as_str),
+            "counts": template.pointer("/template/counts").cloned(),
         }))
     }
 
@@ -1779,6 +1799,95 @@ impl WebPreviewView {
 
     fn send_interaction_preflight_to_agent(&mut self, cx: &mut Context<Self>) {
         self.request_interaction_preflight("agent", cx);
+    }
+
+    fn interaction_receipt_template_snapshot(&self, payload: &Value, window: &Window) -> Value {
+        let mut template = payload.clone();
+        if let Some(template) = template.as_object_mut() {
+            template.remove("kind");
+            template.remove("action");
+            template.insert(
+                "permission".to_string(),
+                self.agent_action_permission.snapshot(),
+            );
+            template.insert(
+                "permission_gate".to_string(),
+                serde_json::json!({
+                    "interactive_unlocked": self.agent_action_permission.interactive_enabled(),
+                    "status": if self.agent_action_permission.interactive_enabled() {
+                        "unlocked"
+                    } else {
+                        "locked"
+                    },
+                    "message": if self.agent_action_permission.interactive_enabled() {
+                        "Future interactive actions may proceed only after a fresh preflight and user-approved target."
+                    } else {
+                        "Interactive actions are locked; use this receipt template for planning only."
+                    },
+                }),
+            );
+        }
+
+        serde_json::json!({
+            "schema": "zed.web_preview.interaction_receipt_template.v1",
+            "session": self.browser_session_snapshot(window),
+            "template": template,
+        })
+    }
+
+    fn interaction_receipt_template_json(template: &Value) -> String {
+        serde_json::to_string_pretty(template).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn interaction_receipt_template_agent_blocks(
+        &self,
+        template: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = template.pointer("/template/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview interaction receipt template:\n\n```json\n{}\n```",
+            Self::interaction_receipt_template_json(template)
+        ))));
+        blocks
+    }
+
+    fn request_interaction_receipt_template(
+        &mut self,
+        action: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let script = format!(
+            "window.__zedWebPreview && window.__zedWebPreview.collectInteractionReceiptTemplate('{action}');"
+        );
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(&script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Collecting web preview interaction receipt template", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("Interaction receipt template is unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic(
+                    "Interaction receipt template crashed before collection",
+                    cx,
+                );
+            }
+        }
+    }
+
+    fn copy_interaction_receipt_template(&mut self, cx: &mut Context<Self>) {
+        self.request_interaction_receipt_template("copy", cx);
+    }
+
+    fn send_interaction_receipt_template_to_agent(&mut self, cx: &mut Context<Self>) {
+        self.request_interaction_receipt_template("agent", cx);
     }
 
     fn agent_browser_action_manifest(&self, window: &Window) -> Value {
@@ -2496,6 +2605,56 @@ impl WebPreviewView {
                     }
                 }
             }
+            "interaction-receipt-template" => {
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let action = payload
+                        .get("action")
+                        .and_then(Value::as_str)
+                        .unwrap_or("copy");
+                    let template = self.interaction_receipt_template_snapshot(&payload, window);
+                    self.latest_interaction_receipt_template = Some(template.clone());
+
+                    match action {
+                        "agent" => {
+                            self.append_content_blocks_to_agent_panel(
+                                self.interaction_receipt_template_agent_blocks(&template),
+                                window,
+                                cx,
+                            );
+                            self.show_toast(
+                                "Sent interaction receipt template to the agent panel",
+                                cx,
+                            );
+                        }
+                        _ => {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                Self::interaction_receipt_template_json(&template),
+                            ));
+                            self.show_toast(
+                                "Copied web preview interaction receipt template JSON",
+                                cx,
+                            );
+                        }
+                    }
+
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.report_action_error(
+                            "Interaction receipt template collection failed",
+                            error,
+                            cx,
+                        );
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "Interaction receipt template crashed while collecting page data",
+                            cx,
+                        );
+                    }
+                }
+            }
             "capture-area" => {
                 match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
                     let scale = payload
@@ -3027,6 +3186,30 @@ impl WebPreviewView {
                                     move |_, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_interaction_preflight_to_agent(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Receipt Template")
+                                .icon(IconName::FileTextOutlined)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_interaction_receipt_template(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Receipt Template to Agent")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_interaction_receipt_template_to_agent(cx);
                                         });
                                     }
                                 }),
@@ -4003,6 +4186,7 @@ impl Item for WebPreviewView {
                 latest_wait_contract: None,
                 latest_interaction_plan: None,
                 latest_interaction_preflight: None,
+                latest_interaction_receipt_template: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
@@ -6127,6 +6311,80 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     };
   };
 
+  const interactionReceiptTemplate = (actionTargets, recommended) => {
+    const actionId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `interaction-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const targetCandidates = (actionTargets.targets || []).slice(0, 12).map((target) => ({
+      action_kind: target.action_kind,
+      selector: target.selector,
+      label: target.label,
+      tag: target.tag,
+      role: target.role,
+      rect: target.rect,
+      disabled: target.disabled,
+      focused: target.focused
+    }));
+    return {
+      schema: "zed.web_preview.interaction_receipt.v1",
+      action_id: actionId,
+      dry_run_only: true,
+      planned_at: new Date().toISOString(),
+      target_candidates: targetCandidates,
+      before_context: {
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState,
+        scroll_x: Math.round(window.scrollX || 0),
+        scroll_y: Math.round(window.scrollY || 0),
+        pending_network: runtimeState.pendingNetwork,
+        dom_quiet_for_ms: readinessQuietForMs(),
+        busy_indicators: readinessBusyCount(),
+        recommended_wait: recommended
+      },
+      required_receipt_fields: [
+        "session_id",
+        "action_id",
+        "action",
+        "selector",
+        "planned_at",
+        "attempted_at",
+        "permission_mode",
+        "preflight_timestamp",
+        "before_context",
+        "after_context",
+        "outcome",
+        "error"
+      ],
+      after_context_fields: [
+        "url",
+        "title",
+        "ready_state",
+        "focused_selector",
+        "scroll_x",
+        "scroll_y",
+        "pending_network",
+        "dom_quiet_for_ms",
+        "busy_indicators",
+        "runtime_error_count",
+        "failed_network_count"
+      ],
+      outcome_values: ["not_attempted", "succeeded", "blocked", "failed", "timed_out"],
+      blocking_rules: [
+        "Block when Zed interactive actions are locked.",
+        "Block when the target selector is missing or no longer visible.",
+        "Block credential or file picker actions without a separate explicit user instruction.",
+        "Block when a fresh preflight reports document, network, DOM, or busy-indicator blockers."
+      ],
+      notes: [
+        "This is a receipt template only; it does not execute browser input.",
+        "Interactive tools should fill this receipt after every attempted action.",
+        "Receipts must include before and after context so regressions can be audited."
+      ]
+    };
+  };
+
   installRuntimeCapture();
 
   window.__zedWebPreview = {
@@ -6562,6 +6820,57 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
           "This preflight is read-only and does not perform browser input.",
           "A future interactive action must compare its target against a fresh preflight and then emit a receipt.",
           "The Rust-side snapshot adds the current Zed permission gate for this WebPreview session."
+        ]
+      });
+    },
+
+    collectInteractionReceiptTemplate(action = "copy") {
+      try { installMutationCapture(); } catch (_error) {}
+      const actionTargets = collectActionTargetRows();
+      const selectorContracts = waitSelectorContracts();
+      const textCandidates = waitTextCandidates();
+      const recommended = recommendedWaitRecipe();
+      const actionGroups = interactionPlanGroups(actionTargets);
+      const receipt = interactionReceiptTemplate(actionTargets, recommended);
+
+      post({
+        kind: "interaction-receipt-template",
+        action,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        ready_state: document.readyState,
+        receipt,
+        recommended_wait: recommended,
+        permissions: {
+          required_for_interactive_actions: true,
+          current_payload_executes_actions: false,
+          user_must_unlock_interactive_actions_in_zed: true,
+          receipt_required_after_attempt: true
+        },
+        counts: {
+          action_groups: actionGroups.length,
+          available_action_groups: actionGroups.filter((group) => group.available).length,
+          action_targets: actionTargets.targets.length,
+          selector_contracts: selectorContracts.length,
+          text_candidates: textCandidates.length,
+          target_candidates: receipt.target_candidates.length,
+          pending_network: runtimeState.pendingNetwork,
+          busy_indicators: readinessBusyCount()
+        },
+        action_groups: actionGroups,
+        selector_contracts: selectorContracts.slice(0, 16),
+        text_candidates: textCandidates.slice(0, 16),
+        mutation: {
+          observed: mutationState.observed,
+          count: mutationState.count,
+          last_mutation_at: mutationState.lastMutationAt,
+          quiet_for_ms: readinessQuietForMs()
+        },
+        notes: [
+          "This receipt template is read-only and does not perform browser input.",
+          "Future interactive browser actions must populate this receipt and attach fresh after-action context.",
+          "Use this template to audit automation behavior before enabling real click, type, key, or scroll execution."
         ]
       });
     },

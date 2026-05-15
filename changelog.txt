@@ -1,3 +1,13 @@
+[2026-05-16] - Web Preview Interaction Receipt Template
+
+ADDED:
+- WebPreview's tab-bar More menu now includes "Copy Receipt Template" and "Send Receipt Template to Agent".
+- The WebPreview bridge now produces a read-only receipt template with action ids, target candidates, before/after context fields, outcome values, blocking rules, and required audit fields for future interactive browser tools.
+- Rust-side WebPreview session snapshots now remember the latest receipt template and include the current interactive-action permission gate.
+
+NOTES:
+- This adds the audit contract future click, type, key, and scroll execution must satisfy before interactive browser control is enabled.
+
 [2026-05-16] - Web Preview Interaction Preflight
 
 ADDED:
