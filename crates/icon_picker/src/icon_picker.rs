@@ -36,6 +36,7 @@ const ICON_PACK_INDEX: &str = include_str!("icon_pack_index.tsv");
 const ICON_REPRESENTATIVE_BODIES: &str = include_str!("icon_representative_bodies.tsv");
 const MAX_ICON_RESULTS: usize = 360;
 const MAX_RECENT_ICON_ACTIONS: usize = 5;
+const MAX_PINNED_ICON_ACTIONS: usize = 8;
 const STARTUP_ICON_PREVIEW_WARM_LIMIT: usize = MAX_ICON_RESULTS;
 const SELECTED_PACK_PREVIEW_PRIME_LIMIT: usize = 96;
 const MAX_EXTERNAL_ICON_PREVIEW_CACHE_ENTRIES: usize = 4096;
@@ -153,6 +154,7 @@ pub struct IconPickerPanel {
     warmed_preview_signature_order: VecDeque<String>,
     representative_preview_warm_started: bool,
     pack_scroll_handle: ScrollHandle,
+    pinned_icon_actions: VecDeque<RecentIconEntry>,
     recent_icon_actions: VecDeque<RecentIconEntry>,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
@@ -227,6 +229,7 @@ impl IconPickerPanel {
                 ),
                 representative_preview_warm_started: false,
                 pack_scroll_handle: ScrollHandle::new(),
+                pinned_icon_actions: VecDeque::with_capacity(MAX_PINNED_ICON_ACTIONS),
                 recent_icon_actions: VecDeque::with_capacity(MAX_RECENT_ICON_ACTIONS),
                 status: None,
                 _subscriptions: vec![filter_subscription],
@@ -667,6 +670,24 @@ impl IconPickerPanel {
         cx.notify();
     }
 
+    fn pin_icon_action(&mut self, entry: RecentIconEntry, cx: &mut Context<Self>) {
+        self.pinned_icon_actions
+            .retain(|pinned| !pinned.icon.same_identity_as(&entry.icon));
+        let label = self.payload_for_icon(&entry.icon).label;
+        self.pinned_icon_actions.push_front(entry);
+        self.pinned_icon_actions.truncate(MAX_PINNED_ICON_ACTIONS);
+        self.status = Some(icon_status_label("Pinned ", label.as_ref()));
+        cx.notify();
+    }
+
+    fn unpin_icon_action(&mut self, icon: PickerIcon, cx: &mut Context<Self>) {
+        let label = self.payload_for_icon(&icon).label;
+        self.pinned_icon_actions
+            .retain(|pinned| !pinned.icon.same_identity_as(&icon));
+        self.status = Some(icon_status_label("Unpinned ", label.as_ref()));
+        cx.notify();
+    }
+
     fn copy_icon_name(&mut self, icon: PickerIcon, cx: &mut Context<Self>) {
         self.selected_icon = Some(icon.clone());
         let payload = self.payload_for_icon(&icon);
@@ -908,7 +929,7 @@ impl IconPickerPanel {
             .cloned()
             .enumerate()
         {
-            rows.push(self.render_recent_icon_row(entry, index, cx));
+            rows.push(self.render_icon_history_row(entry, index, false, cx));
         }
 
         Some(
@@ -944,17 +965,73 @@ impl IconPickerPanel {
         )
     }
 
-    fn render_recent_icon_row(
+    fn render_pinned_icon_section(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.pinned_icon_actions.is_empty() {
+            return None;
+        }
+
+        let mut rows =
+            Vec::with_capacity(self.pinned_icon_actions.len().min(MAX_PINNED_ICON_ACTIONS));
+        for (index, entry) in self
+            .pinned_icon_actions
+            .iter()
+            .take(MAX_PINNED_ICON_ACTIONS)
+            .cloned()
+            .enumerate()
+        {
+            rows.push(self.render_icon_history_row(entry, index, true, cx));
+        }
+
+        Some(
+            v_flex()
+                .id("icon-picker-pinned-actions-section")
+                .gap_1()
+                .child(
+                    h_flex()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .items_center()
+                                .child(Icon::new(IconName::Star).size(IconSize::XSmall))
+                                .child(
+                                    Label::new("Pinned")
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Muted),
+                                ),
+                        )
+                        .child(
+                            Label::new("session working set")
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted),
+                        ),
+                )
+                .children(rows)
+                .into_any_element(),
+        )
+    }
+
+    fn render_icon_history_row(
         &self,
         entry: RecentIconEntry,
         index: usize,
+        pinned: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let id_suffix = index.to_string();
-        let row_id = icon_element_id("icon-picker-recent-row-", id_suffix.as_str());
-        let insert_id = icon_element_id("icon-picker-recent-insert-", id_suffix.as_str());
-        let copy_id = icon_element_id("icon-picker-recent-copy-", id_suffix.as_str());
+        let id_prefix = if pinned {
+            "icon-picker-pinned-"
+        } else {
+            "icon-picker-recent-"
+        };
+        let row_id = icon_element_id(id_prefix, id_suffix.as_str());
+        let insert_id = icon_element_id(id_prefix, &format!("insert-{id_suffix}"));
+        let copy_id = icon_element_id(id_prefix, &format!("copy-{id_suffix}"));
+        let pin_id = icon_element_id(id_prefix, &format!("pin-{id_suffix}"));
+        let pin_entry = entry.clone();
         let icon = entry.icon;
+        let pin_icon = icon.clone();
         let payload = self.payload_for_icon(&icon);
         let label = payload.label.clone();
         let source_label = icon_source_label(&icon);
@@ -1015,6 +1092,18 @@ impl IconPickerPanel {
                                 panel.copy_icon_name(icon.clone(), cx);
                             })),
                     ),
+            )
+            .child(
+                Button::new(pin_id, if pinned { "Unpin" } else { "Pin" })
+                    .style(ButtonStyle::Subtle)
+                    .size(ButtonSize::Compact)
+                    .on_click(cx.listener(move |panel, _, _, cx| {
+                        if pinned {
+                            panel.unpin_icon_action(pin_icon.clone(), cx);
+                        } else {
+                            panel.pin_icon_action(pin_entry.clone(), cx);
+                        }
+                    })),
             )
             .into_any_element()
     }
@@ -1146,7 +1235,14 @@ impl Render for IconPickerPanel {
         } else {
             None
         };
-        let has_content = !icon_tiles.is_empty() || recent_icon_section.is_some();
+        let pinned_icon_section = if query.is_empty() {
+            self.render_pinned_icon_section(cx)
+        } else {
+            None
+        };
+        let has_content = !icon_tiles.is_empty()
+            || pinned_icon_section.is_some()
+            || recent_icon_section.is_some();
         let is_empty = !has_content;
 
         v_flex()
@@ -1199,6 +1295,7 @@ impl Render for IconPickerPanel {
                         this.child(
                             v_flex()
                                 .gap_2()
+                                .when_some(pinned_icon_section, |this, section| this.child(section))
                                 .when_some(recent_icon_section, |this, section| this.child(section))
                                 .when(!icon_tiles.is_empty(), |this| {
                                     this.child(

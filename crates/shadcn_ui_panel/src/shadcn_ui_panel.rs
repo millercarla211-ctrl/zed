@@ -44,6 +44,7 @@ actions!(
 const SHADCN_UI_PANEL_KEY: &str = "ShadcnUiPanel";
 const MAX_SHADCN_ROWS: usize = 96;
 const MAX_RECENT_UI_ACTIONS: usize = 5;
+const MAX_PINNED_UI_ACTIONS: usize = 8;
 const PREVIEW_IMAGE_CACHE_INITIAL_CAPACITY: usize = MAX_SHADCN_ROWS * 4;
 const CATALOG_CACHE_FILE_NAME: &str = "catalog-v4.rkyv";
 const STATIC_SHADCN_CATALOG_INDEX: &str = include_str!("shadcn_catalog_index.tsv");
@@ -234,6 +235,7 @@ pub struct ShadcnUiPanel {
     source_filter: CatalogFilter,
     warming_preview_image_keys: HashSet<SharedString>,
     filter_scroll_handle: ScrollHandle,
+    pinned_ui_actions: VecDeque<RecentUiEntry>,
     recent_ui_actions: VecDeque<RecentUiEntry>,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
@@ -287,6 +289,7 @@ impl ShadcnUiPanel {
                 source_filter: CatalogFilter::All,
                 warming_preview_image_keys: HashSet::with_capacity(MAX_SHADCN_ROWS),
                 filter_scroll_handle: ScrollHandle::new(),
+                pinned_ui_actions: VecDeque::with_capacity(MAX_PINNED_UI_ACTIONS),
                 recent_ui_actions: VecDeque::with_capacity(MAX_RECENT_UI_ACTIONS),
                 status: None,
                 _subscriptions: vec![filter_subscription],
@@ -548,6 +551,23 @@ impl ShadcnUiPanel {
     fn clear_recent_ui_actions(&mut self, cx: &mut Context<Self>) {
         self.recent_ui_actions.clear();
         self.status = Some("Cleared recent UI actions".into());
+        cx.notify();
+    }
+
+    fn pin_ui_action(&mut self, entry: RecentUiEntry, cx: &mut Context<Self>) {
+        self.pinned_ui_actions
+            .retain(|pinned| pinned.item.id.as_ref() != entry.item.id.as_ref());
+        let title = entry.item.title.clone();
+        self.pinned_ui_actions.push_front(entry);
+        self.pinned_ui_actions.truncate(MAX_PINNED_UI_ACTIONS);
+        self.status = Some(shadcn_status_label("Pinned ", title.as_ref()));
+        cx.notify();
+    }
+
+    fn unpin_ui_action(&mut self, item: CatalogItem, cx: &mut Context<Self>) {
+        self.pinned_ui_actions
+            .retain(|pinned| pinned.item.id.as_ref() != item.id.as_ref());
+        self.status = Some(shadcn_status_label("Unpinned ", item.title.as_ref()));
         cx.notify();
     }
 
@@ -894,7 +914,7 @@ impl ShadcnUiPanel {
             .cloned()
             .enumerate()
         {
-            rows.push(self.render_recent_ui_row(entry, index, cx));
+            rows.push(self.render_ui_history_row(entry, index, false, cx));
         }
 
         Some(
@@ -930,19 +950,74 @@ impl ShadcnUiPanel {
         )
     }
 
-    fn render_recent_ui_row(
+    fn render_pinned_ui_section(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.pinned_ui_actions.is_empty() {
+            return None;
+        }
+
+        let mut rows = Vec::with_capacity(self.pinned_ui_actions.len().min(MAX_PINNED_UI_ACTIONS));
+        for (index, entry) in self
+            .pinned_ui_actions
+            .iter()
+            .take(MAX_PINNED_UI_ACTIONS)
+            .cloned()
+            .enumerate()
+        {
+            rows.push(self.render_ui_history_row(entry, index, true, cx));
+        }
+
+        Some(
+            v_flex()
+                .id("shadcn-ui-pinned-actions-section")
+                .gap_1()
+                .child(
+                    h_flex()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .items_center()
+                                .child(Icon::new(IconName::Star).size(IconSize::XSmall))
+                                .child(
+                                    Label::new("Pinned")
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Muted),
+                                ),
+                        )
+                        .child(
+                            Label::new("session working set")
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted),
+                        ),
+                )
+                .children(rows)
+                .into_any_element(),
+        )
+    }
+
+    fn render_ui_history_row(
         &self,
         entry: RecentUiEntry,
         index: usize,
+        pinned: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let id_suffix = index.to_string();
-        let row_id = shadcn_element_id("shadcn-recent-row-", id_suffix.as_str());
-        let primary_id = shadcn_element_id("shadcn-recent-primary-", id_suffix.as_str());
-        let copy_id = shadcn_element_id("shadcn-recent-copy-", id_suffix.as_str());
-        let preview_id = shadcn_element_id("shadcn-recent-preview-", id_suffix.as_str());
-        let docs_id = shadcn_element_id("shadcn-recent-docs-", id_suffix.as_str());
+        let id_prefix = if pinned {
+            "shadcn-pinned-"
+        } else {
+            "shadcn-recent-"
+        };
+        let row_id = shadcn_element_id(id_prefix, id_suffix.as_str());
+        let primary_id = shadcn_element_id(id_prefix, &format!("primary-{id_suffix}"));
+        let copy_id = shadcn_element_id(id_prefix, &format!("copy-{id_suffix}"));
+        let preview_id = shadcn_element_id(id_prefix, &format!("preview-{id_suffix}"));
+        let docs_id = shadcn_element_id(id_prefix, &format!("docs-{id_suffix}"));
+        let pin_id = shadcn_element_id(id_prefix, &format!("pin-{id_suffix}"));
+        let pin_entry = entry.clone();
         let item = entry.item;
+        let pin_item = item.clone();
         let can_insert = can_drag_into_editor(item.source);
         let primary_action = if item.install_only {
             "Install"
@@ -1062,6 +1137,18 @@ impl ShadcnUiPanel {
                             })),
                     ),
             )
+            .child(
+                Button::new(pin_id, if pinned { "Unpin" } else { "Pin" })
+                    .style(ButtonStyle::Subtle)
+                    .size(ButtonSize::Compact)
+                    .on_click(cx.listener(move |panel, _, _, cx| {
+                        if pinned {
+                            panel.unpin_ui_action(pin_item.clone(), cx);
+                        } else {
+                            panel.pin_ui_action(pin_entry.clone(), cx);
+                        }
+                    })),
+            )
             .into_any_element()
     }
 }
@@ -1145,8 +1232,19 @@ impl Render for ShadcnUiPanel {
         } else {
             None
         };
-        let mut content_rows =
-            Vec::with_capacity(item_rows.len() + usize::from(recent_ui_section.is_some()));
+        let pinned_ui_section = if query.is_empty() {
+            self.render_pinned_ui_section(cx)
+        } else {
+            None
+        };
+        let mut content_rows = Vec::with_capacity(
+            item_rows.len()
+                + usize::from(pinned_ui_section.is_some())
+                + usize::from(recent_ui_section.is_some()),
+        );
+        if let Some(pinned_ui_section) = pinned_ui_section {
+            content_rows.push(pinned_ui_section);
+        }
         if let Some(recent_ui_section) = recent_ui_section {
             content_rows.push(recent_ui_section);
         }

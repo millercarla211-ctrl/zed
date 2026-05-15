@@ -1,3 +1,12 @@
+[2026-05-15] - Asset Panel Pinned Working Sets
+
+ADDED:
+- Icon, Font, Media, and UI panels now keep bounded session Pinned sections above Recent history.
+- Recent rows can be pinned, and pinned rows expose Unpin while reusing the same Insert, Copy, Preview, Apply, Install, and Docs actions as their source rows.
+
+NOTES:
+- Pinned sets are in-memory for this slice, keeping the workflow fast and reversible without adding a new persisted settings format or touching editor/WebPreview input routing.
+
 [2026-05-15] - Asset Panel Recent Clear Actions
 
 ADDED:

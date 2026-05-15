@@ -42,6 +42,7 @@ actions!(
 const FONT_PANEL_KEY: &str = "FontPanel";
 const MAX_FONT_RESULTS: usize = 160;
 const MAX_RECENT_FONT_ACTIONS: usize = 5;
+const MAX_PINNED_FONT_ACTIONS: usize = 8;
 
 pub fn init(cx: &mut App) {
     cx.observe_new(|workspace: &mut Workspace, _, _| {
@@ -69,6 +70,7 @@ pub struct FontPanel {
     source_scroll_handle: ScrollHandle,
     selected_font: Option<SharedString>,
     selected_source: FontSource,
+    pinned_font_actions: VecDeque<RecentFontEntry>,
     recent_font_actions: VecDeque<RecentFontEntry>,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
@@ -216,6 +218,7 @@ impl FontPanel {
                 source_scroll_handle: ScrollHandle::new(),
                 selected_font,
                 selected_source: FontSource::System,
+                pinned_font_actions: VecDeque::with_capacity(MAX_PINNED_FONT_ACTIONS),
                 recent_font_actions: VecDeque::with_capacity(MAX_RECENT_FONT_ACTIONS),
                 status: None,
                 _subscriptions: vec![filter_subscription],
@@ -444,6 +447,23 @@ impl FontPanel {
     fn clear_recent_font_actions(&mut self, cx: &mut Context<Self>) {
         self.recent_font_actions.clear();
         self.status = Some("Cleared recent fonts".into());
+        cx.notify();
+    }
+
+    fn pin_font_action(&mut self, entry: RecentFontEntry, cx: &mut Context<Self>) {
+        self.pinned_font_actions
+            .retain(|pinned| pinned.font.name.as_ref() != entry.font.name.as_ref());
+        let name = entry.font.name.clone();
+        self.pinned_font_actions.push_front(entry);
+        self.pinned_font_actions.truncate(MAX_PINNED_FONT_ACTIONS);
+        self.status = Some(font_status_label("Pinned ", name.as_ref()));
+        cx.notify();
+    }
+
+    fn unpin_font_action(&mut self, font: FontEntry, cx: &mut Context<Self>) {
+        self.pinned_font_actions
+            .retain(|pinned| pinned.font.name.as_ref() != font.name.as_ref());
+        self.status = Some(font_status_label("Unpinned ", font.name.as_ref()));
         cx.notify();
     }
 
@@ -754,7 +774,7 @@ impl FontPanel {
             .cloned()
             .enumerate()
         {
-            rows.push(self.render_recent_font_row(entry, index, cx));
+            rows.push(self.render_font_history_row(entry, index, false, cx));
         }
 
         Some(
@@ -790,21 +810,77 @@ impl FontPanel {
         )
     }
 
-    fn render_recent_font_row(
+    fn render_pinned_font_section(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.pinned_font_actions.is_empty() {
+            return None;
+        }
+
+        let mut rows =
+            Vec::with_capacity(self.pinned_font_actions.len().min(MAX_PINNED_FONT_ACTIONS));
+        for (index, entry) in self
+            .pinned_font_actions
+            .iter()
+            .take(MAX_PINNED_FONT_ACTIONS)
+            .cloned()
+            .enumerate()
+        {
+            rows.push(self.render_font_history_row(entry, index, true, cx));
+        }
+
+        Some(
+            v_flex()
+                .id("font-panel-pinned-actions-section")
+                .gap_1()
+                .child(
+                    h_flex()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .items_center()
+                                .child(Icon::new(IconName::Star).size(IconSize::XSmall))
+                                .child(
+                                    Label::new("Pinned")
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Muted),
+                                ),
+                        )
+                        .child(
+                            Label::new("session working set")
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted),
+                        ),
+                )
+                .children(rows)
+                .into_any_element(),
+        )
+    }
+
+    fn render_font_history_row(
         &self,
         entry: RecentFontEntry,
         index: usize,
+        pinned: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let id_suffix = index.to_string();
-        let row_id = font_element_id("font-panel-recent-row-", id_suffix.as_str());
-        let select_id = font_element_id("font-panel-recent-select-", id_suffix.as_str());
-        let preview_id = font_element_id("font-panel-recent-preview-", id_suffix.as_str());
-        let copy_id = font_element_id("font-panel-recent-copy-", id_suffix.as_str());
-        let editor_id = font_element_id("font-panel-recent-editor-", id_suffix.as_str());
-        let ui_id = font_element_id("font-panel-recent-ui-", id_suffix.as_str());
-        let add_id = font_element_id("font-panel-recent-add-", id_suffix.as_str());
+        let id_prefix = if pinned {
+            "font-panel-pinned-"
+        } else {
+            "font-panel-recent-"
+        };
+        let row_id = font_element_id(id_prefix, id_suffix.as_str());
+        let select_id = font_element_id(id_prefix, &format!("select-{id_suffix}"));
+        let preview_id = font_element_id(id_prefix, &format!("preview-{id_suffix}"));
+        let copy_id = font_element_id(id_prefix, &format!("copy-{id_suffix}"));
+        let editor_id = font_element_id(id_prefix, &format!("editor-{id_suffix}"));
+        let ui_id = font_element_id(id_prefix, &format!("ui-{id_suffix}"));
+        let add_id = font_element_id(id_prefix, &format!("add-{id_suffix}"));
+        let pin_id = font_element_id(id_prefix, &format!("pin-{id_suffix}"));
+        let pin_entry = entry.clone();
         let font = entry.font;
+        let pin_font = font.clone();
         let is_system_font = font.source == FontSource::System;
         let action_label = recent_font_action_label(entry.action);
 
@@ -918,7 +994,19 @@ impl FontPanel {
                                     panel.add_selected_to_project(cx);
                                 })),
                         )
-                    }),
+                    })
+                    .child(
+                        Button::new(pin_id, if pinned { "Unpin" } else { "Pin" })
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .on_click(cx.listener(move |panel, _, _, cx| {
+                                if pinned {
+                                    panel.unpin_font_action(pin_font.clone(), cx);
+                                } else {
+                                    panel.pin_font_action(pin_entry.clone(), cx);
+                                }
+                            })),
+                    ),
             )
             .into_any_element()
     }
@@ -1098,8 +1186,19 @@ impl Render for FontPanel {
         } else {
             None
         };
-        let mut content_rows =
-            Vec::with_capacity(font_rows.len() + usize::from(recent_font_section.is_some()));
+        let pinned_font_section = if query.is_empty() {
+            self.render_pinned_font_section(cx)
+        } else {
+            None
+        };
+        let mut content_rows = Vec::with_capacity(
+            font_rows.len()
+                + usize::from(pinned_font_section.is_some())
+                + usize::from(recent_font_section.is_some()),
+        );
+        if let Some(pinned_font_section) = pinned_font_section {
+            content_rows.push(pinned_font_section);
+        }
         if let Some(recent_font_section) = recent_font_section {
             content_rows.push(recent_font_section);
         }

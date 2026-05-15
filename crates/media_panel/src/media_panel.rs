@@ -44,6 +44,7 @@ const MAX_MEDIA_RESULTS: usize = 320;
 const MAX_REMOTE_MEDIA_RESULTS: usize = 640;
 const MAX_REMOTE_MEDIA_CACHE_ENTRIES: usize = 24;
 const MAX_RECENT_MEDIA_ACTIONS: usize = 5;
+const MAX_PINNED_MEDIA_ACTIONS: usize = 8;
 const OPENVERSE_RESULT_LIMIT: usize = 90;
 const OPENVERSE_FOCUSED_RESULT_LIMIT: usize = 150;
 const WIKIMEDIA_RESULT_LIMIT: usize = 50;
@@ -362,6 +363,7 @@ pub struct MediaPanel {
     remote_result_source: RemoteMediaResultSource,
     remote_generation: u64,
     remote_health: Option<RemoteMediaProviderHealth>,
+    pinned_media: VecDeque<RecentMediaEntry>,
     recent_media: VecDeque<RecentMediaEntry>,
     status: Option<SharedString>,
     _subscriptions: Vec<Subscription>,
@@ -426,6 +428,7 @@ impl MediaPanel {
                 remote_result_source: RemoteMediaResultSource::None,
                 remote_generation: 0,
                 remote_health: None,
+                pinned_media: VecDeque::with_capacity(MAX_PINNED_MEDIA_ACTIONS),
                 recent_media: VecDeque::with_capacity(MAX_RECENT_MEDIA_ACTIONS),
                 status: None,
                 _subscriptions: vec![filter_subscription],
@@ -984,6 +987,23 @@ impl MediaPanel {
         cx.notify();
     }
 
+    fn pin_media(&mut self, entry: RecentMediaEntry, cx: &mut Context<Self>) {
+        self.pinned_media
+            .retain(|pinned| !recent_media_sources_match(pinned, &entry));
+        let label = entry.label.clone();
+        self.pinned_media.push_front(entry);
+        self.pinned_media.truncate(MAX_PINNED_MEDIA_ACTIONS);
+        self.status = Some(media_status_label("Pinned ", label.as_ref()));
+        cx.notify();
+    }
+
+    fn unpin_media(&mut self, entry: RecentMediaEntry, cx: &mut Context<Self>) {
+        self.pinned_media
+            .retain(|pinned| !recent_media_sources_match(pinned, &entry));
+        self.status = Some(media_status_label("Unpinned ", entry.label.as_ref()));
+        cx.notify();
+    }
+
     fn render_url_insert(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
         let query = self.raw_query(cx);
         let candidate = media_url_candidate(&query, self.kind_filter.fallback_kind())?;
@@ -1409,7 +1429,7 @@ impl MediaPanel {
             .cloned()
             .enumerate()
         {
-            rows.push(self.render_recent_media_row(entry, index, cx));
+            rows.push(self.render_media_history_row(entry, index, false, cx));
         }
 
         Some(
@@ -1439,17 +1459,71 @@ impl MediaPanel {
         )
     }
 
-    fn render_recent_media_row(
+    fn render_pinned_media_section(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.pinned_media.is_empty() {
+            return None;
+        }
+
+        let mut rows = Vec::with_capacity(self.pinned_media.len().min(MAX_PINNED_MEDIA_ACTIONS));
+        for (index, entry) in self
+            .pinned_media
+            .iter()
+            .take(MAX_PINNED_MEDIA_ACTIONS)
+            .cloned()
+            .enumerate()
+        {
+            rows.push(self.render_media_history_row(entry, index, true, cx));
+        }
+
+        Some(
+            v_flex()
+                .id("media-panel-pinned-media-section")
+                .gap_1()
+                .child(
+                    h_flex()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .items_center()
+                                .child(Icon::new(IconName::Star).size(IconSize::XSmall))
+                                .child(
+                                    Label::new("Pinned")
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Muted),
+                                ),
+                        )
+                        .child(
+                            Label::new("session working set")
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted),
+                        ),
+                )
+                .children(rows)
+                .into_any_element(),
+        )
+    }
+
+    fn render_media_history_row(
         &self,
         entry: RecentMediaEntry,
         index: usize,
+        pinned: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let id_suffix = index.to_string();
-        let row_id = media_element_id("media-panel-recent-row-", id_suffix.as_str());
-        let preview_id = media_element_id("media-panel-recent-preview-", id_suffix.as_str());
-        let copy_id = media_element_id("media-panel-recent-copy-", id_suffix.as_str());
-        let insert_id = media_element_id("media-panel-recent-insert-", id_suffix.as_str());
+        let id_prefix = if pinned {
+            "media-panel-pinned-"
+        } else {
+            "media-panel-recent-"
+        };
+        let row_id = media_element_id(id_prefix, id_suffix.as_str());
+        let preview_id = media_element_id(id_prefix, &format!("preview-{id_suffix}"));
+        let copy_id = media_element_id(id_prefix, &format!("copy-{id_suffix}"));
+        let insert_id = media_element_id(id_prefix, &format!("insert-{id_suffix}"));
+        let pin_id = media_element_id(id_prefix, &format!("pin-{id_suffix}"));
+        let pin_entry = entry.clone();
         let source_label = recent_media_source_label(&entry.source);
         let source_kind = recent_media_source_kind(&entry.source);
         let actions = match entry.source.clone() {
@@ -1583,6 +1657,18 @@ impl MediaPanel {
                     ),
             )
             .child(actions)
+            .child(
+                Button::new(pin_id, if pinned { "Unpin" } else { "Pin" })
+                    .style(ButtonStyle::Subtle)
+                    .size(ButtonSize::Compact)
+                    .on_click(cx.listener(move |panel, _, _, cx| {
+                        if pinned {
+                            panel.unpin_media(pin_entry.clone(), cx);
+                        } else {
+                            panel.pin_media(pin_entry.clone(), cx);
+                        }
+                    })),
+            )
             .into_any_element()
     }
 }
@@ -1682,11 +1768,17 @@ impl Render for MediaPanel {
         } else {
             None
         };
+        let pinned_media_section = if normalized_query.is_empty() {
+            self.render_pinned_media_section(cx)
+        } else {
+            None
+        };
         let mut asset_rows = Vec::with_capacity(
             usize::from(url_insert.is_some())
                 + usize::from(remote_warning.is_some())
                 + usize::from(show_remote_loading_row)
                 + usize::from(remote_health.is_some())
+                + usize::from(pinned_media_section.is_some())
                 + usize::from(recent_media_section.is_some())
                 + remote_assets.len()
                 + assets.len()
@@ -1709,6 +1801,9 @@ impl Render for MediaPanel {
                 self.render_remote_health_row(remote_health, cx)
                     .into_any_element(),
             );
+        }
+        if let Some(pinned_media_section) = pinned_media_section {
+            asset_rows.push(pinned_media_section);
         }
         if let Some(recent_media_section) = recent_media_section {
             asset_rows.push(recent_media_section);
