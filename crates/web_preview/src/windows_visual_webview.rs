@@ -20,7 +20,7 @@ use webview2_com::{
 };
 use windows::{
     Win32::{
-        Foundation::{E_POINTER, HWND, RECT},
+        Foundation::{BOOL, E_POINTER, HWND, RECT},
         Globalization::{
             GetUserDefaultUILanguage, LCIDToLocaleName, LOCALE_ALLOW_NEUTRAL_NAMES, MAX_LOCALE_NAME,
         },
@@ -135,6 +135,26 @@ impl WindowsVisualWebView {
 
     pub(crate) fn reload(&self) -> Result<()> {
         unsafe { self.webview.Reload() }.map_err(Into::into)
+    }
+
+    pub(crate) fn can_go_back(&self) -> Result<bool> {
+        let mut can_go_back = BOOL(0);
+        unsafe { self.webview.CanGoBack(&mut can_go_back)? };
+        Ok(can_go_back.as_bool())
+    }
+
+    pub(crate) fn can_go_forward(&self) -> Result<bool> {
+        let mut can_go_forward = BOOL(0);
+        unsafe { self.webview.CanGoForward(&mut can_go_forward)? };
+        Ok(can_go_forward.as_bool())
+    }
+
+    pub(crate) fn go_back(&self) -> Result<()> {
+        unsafe { self.webview.GoBack() }.map_err(Into::into)
+    }
+
+    pub(crate) fn go_forward(&self) -> Result<()> {
+        unsafe { self.webview.GoForward() }.map_err(Into::into)
     }
 
     pub(crate) fn click_at_viewport_point(&self, x: f64, y: f64) -> Result<()> {

@@ -1,3 +1,17 @@
+[2026-05-16] - Web Preview First Native History Executor
+
+ADDED:
+- Added Windows WebView2 native back and forward executors that call the CoreWebView2 history API after checking current back/forward availability.
+- WebPreview's More menu now includes native Back and Forward executor actions plus Agent Panel handoff entries.
+- Native history execution requires interactive permission, fresh executor context/audit readiness, the native history trace, and the native dispatch QA checklist before dispatch.
+
+CHANGED:
+- Browser plugin manifests now advertise `browser.action.go_back` and `browser.action.go_forward` as available when unlocked.
+- Executor readiness and QA handoffs now treat native click, scroll, and history as wired while keeping type, key, and scoped cache reset disabled.
+
+NOTES:
+- This dispatch slice only sends native WebView history commands; no click, wheel, type, key, cache, page script, or external Chrome action is dispatched.
+
 [2026-05-16] - Web Preview First Native Scroll Executor
 
 ADDED:
