@@ -50,6 +50,10 @@ const PINNED_MEDIA_ACTIONS_KEY: &str = "asset_panel_pinned_media_v1";
 const PINNED_MEDIA_ACTIONS_STATE_VERSION: u32 = 1;
 const CLEAN_STALE_MEDIA_TOOLTIP: &str =
     "Remove only stale media rows whose local files are missing. Valid pins and recent rows stay.";
+const CLEAR_RECENT_MEDIA_TOOLTIP: &str =
+    "Clear recent media actions. Pinned media, local index, and remote cache stay.";
+const CLEAR_PINNED_MEDIA_TOOLTIP: &str =
+    "Clear pinned media. Recent media, local index, and remote cache stay.";
 const OPENVERSE_RESULT_LIMIT: usize = 90;
 const OPENVERSE_FOCUSED_RESULT_LIMIT: usize = 150;
 const WIKIMEDIA_RESULT_LIMIT: usize = 50;
@@ -1730,6 +1734,7 @@ impl MediaPanel {
                                     Button::new("media-panel-clear-recent", "Clear")
                                         .style(ButtonStyle::Subtle)
                                         .size(ButtonSize::Compact)
+                                        .tooltip(Tooltip::text(CLEAR_RECENT_MEDIA_TOOLTIP))
                                         .on_click(cx.listener(|panel, _, _, cx| {
                                             panel.clear_recent_media(cx);
                                         })),
@@ -1810,6 +1815,7 @@ impl MediaPanel {
                                     Button::new("media-panel-clear-pinned", "Clear")
                                         .style(ButtonStyle::Subtle)
                                         .size(ButtonSize::Compact)
+                                        .tooltip(Tooltip::text(CLEAR_PINNED_MEDIA_TOOLTIP))
                                         .on_click(cx.listener(|panel, _, _, cx| {
                                             panel.clear_pinned_media(cx);
                                         })),

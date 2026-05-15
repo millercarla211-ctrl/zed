@@ -45,6 +45,10 @@ const MAX_WARMED_ICON_PREVIEW_SIGNATURES: usize = 128;
 const EXTERNAL_ICON_PREVIEW_CACHE_VERSION: &str = "v3";
 const PINNED_ICON_ACTIONS_KEY: &str = "asset_panel_pinned_icons_v1";
 const PINNED_ICON_ACTIONS_STATE_VERSION: u32 = 1;
+const CLEAR_RECENT_ICONS_TOOLTIP: &str =
+    "Clear recent icon actions. Pinned icons and the icon catalog stay.";
+const CLEAR_PINNED_ICONS_TOOLTIP: &str =
+    "Clear pinned icons. Recent icons and the icon catalog stay.";
 static EXTERNAL_ICON_CATALOG_CACHE: OnceLock<ExternalIconCatalog> = OnceLock::new();
 static REPRESENTATIVE_ICON_BODY_CACHE: OnceLock<HashMap<String, ExternalIconBody>> =
     OnceLock::new();
@@ -1094,6 +1098,7 @@ impl IconPickerPanel {
                             Button::new("icon-picker-clear-recent", "Clear")
                                 .style(ButtonStyle::Subtle)
                                 .size(ButtonSize::Compact)
+                                .tooltip(Tooltip::text(CLEAR_RECENT_ICONS_TOOLTIP))
                                 .on_click(cx.listener(|panel, _, _, cx| {
                                     panel.clear_recent_icon_actions(cx);
                                 })),
@@ -1150,6 +1155,7 @@ impl IconPickerPanel {
                             Button::new("icon-picker-clear-pinned", "Clear")
                                 .style(ButtonStyle::Subtle)
                                 .size(ButtonSize::Compact)
+                                .tooltip(Tooltip::text(CLEAR_PINNED_ICONS_TOOLTIP))
                                 .on_click(cx.listener(|panel, _, _, cx| {
                                     panel.clear_pinned_icon_actions(cx);
                                 })),

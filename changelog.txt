@@ -1,3 +1,12 @@
+[2026-05-15] - Asset Panel Clear Safety Tooltips
+
+ADDED:
+- Icon, Font, Media, and UI Recent/Pinned Clear actions now explain the exact working set they reset.
+- Clear tooltips now state that catalogs, provider caches, loaded font lists, and the sibling pinned/recent section stay intact.
+
+NOTES:
+- This clarifies the difference between Clear and Clean without changing clear behavior, persisted pins, catalogs, provider fetches, editor input, or WebPreview routing.
+
 [2026-05-15] - Asset Panel Cleanup Safety Tooltips
 
 ADDED:

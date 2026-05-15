@@ -47,6 +47,10 @@ const MAX_RECENT_FONT_ACTIONS: usize = 5;
 const MAX_PINNED_FONT_ACTIONS: usize = 8;
 const PINNED_FONT_ACTIONS_KEY: &str = "asset_panel_pinned_fonts_v1";
 const PINNED_FONT_ACTIONS_STATE_VERSION: u32 = 1;
+const CLEAR_RECENT_FONTS_TOOLTIP: &str =
+    "Clear recent font actions. Pinned fonts and loaded font lists stay.";
+const CLEAR_PINNED_FONTS_TOOLTIP: &str =
+    "Clear pinned fonts. Recent fonts and loaded font lists stay.";
 
 pub fn init(cx: &mut App) {
     cx.observe_new(|workspace: &mut Workspace, _, _| {
@@ -894,6 +898,7 @@ impl FontPanel {
                             Button::new("font-panel-clear-recent", "Clear")
                                 .style(ButtonStyle::Subtle)
                                 .size(ButtonSize::Compact)
+                                .tooltip(Tooltip::text(CLEAR_RECENT_FONTS_TOOLTIP))
                                 .on_click(cx.listener(|panel, _, _, cx| {
                                     panel.clear_recent_font_actions(cx);
                                 })),
@@ -950,6 +955,7 @@ impl FontPanel {
                             Button::new("font-panel-clear-pinned", "Clear")
                                 .style(ButtonStyle::Subtle)
                                 .size(ButtonSize::Compact)
+                                .tooltip(Tooltip::text(CLEAR_PINNED_FONTS_TOOLTIP))
                                 .on_click(cx.listener(|panel, _, _, cx| {
                                     panel.clear_pinned_font_actions(cx);
                                 })),
