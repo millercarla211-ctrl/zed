@@ -7857,6 +7857,41 @@ impl WebPreviewView {
                             "Agent Panel content handoff",
                             "list_agent_plugins tool"
                         ],
+                        "action_payload_contract": {
+                            "bridge_schema": "zed.web_preview.agent_browser_action_payload_bridge.v1",
+                            "executor_payload_schema": "zed.web_preview.agent_browser_executor_payload.v1",
+                            "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
+                            "examples": [
+                                {
+                                    "action": "type_text",
+                                    "payload": {
+                                        "schema": "zed.web_preview.agent_browser_executor_payload.v1",
+                                        "payload": {
+                                            "action": "type_text",
+                                            "selector": "optional CSS selector from the latest type preflight",
+                                            "text": "Text to insert",
+                                            "clear_existing": false
+                                        }
+                                    }
+                                },
+                                {
+                                    "action": "press_key",
+                                    "payload": {
+                                        "schema": "zed.web_preview.agent_browser_executor_payload.v1",
+                                        "payload": {
+                                            "action": "press_key",
+                                            "key": "Escape",
+                                            "modifiers": []
+                                        }
+                                    }
+                                }
+                            ],
+                            "rules": [
+                                "Payload bridges are handoff artifacts and never dispatch by themselves.",
+                                "Interactive executors still require unlock, fresh preflight, action-specific gates, and receipts.",
+                                "type_text requires non-empty payload.text and rejects selector mismatches when a selector is supplied."
+                            ]
+                        },
                         "capabilities": [
                             {"id": "browser.sessions.list", "state": "available", "description": "List open WebPreview sessions and workspace inventory."},
                             {"id": "browser.session.snapshot", "state": "available", "description": "Read the active WebPreview session metadata, bounds, profile, URL, and policy."},

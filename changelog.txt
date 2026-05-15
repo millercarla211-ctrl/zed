@@ -1,3 +1,12 @@
+[2026-05-16] - Agent Browser Payload Contract Discovery
+
+ADDED:
+- Added Browser plugin action payload contract metadata to both WebPreview handoff catalog and the `list_agent_plugins` tool.
+- The contract now exposes the payload bridge schema, executor payload schema, clipboard import action, type/key examples, and safety rules for Agent Browser payload generation.
+
+NOTES:
+- This is a discovery-only slice; it does not dispatch browser input or change WebPreview/editor focus routing.
+
 [2026-05-16] - Web Preview Agent Payload Bridge
 
 ADDED:
