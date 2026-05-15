@@ -1,3 +1,12 @@
+[2026-05-15] - Asset Panel Cleanup Consistency
+
+CHANGED:
+- Media stale cleanup now uses one shared retain path for recent, pinned, and header-level cleanup.
+- UI stale cleanup now uses one shared source-availability retain path for recent, pinned, and header-level cleanup.
+
+NOTES:
+- This keeps header Clean and section Clean behavior aligned while avoiding extra catalog, provider, editor input, or WebPreview changes.
+
 [2026-05-15] - Asset Panel Header Cleanup Actions
 
 ADDED:

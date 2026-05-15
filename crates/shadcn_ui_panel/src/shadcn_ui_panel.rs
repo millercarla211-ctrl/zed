@@ -681,21 +681,7 @@ impl ShadcnUiPanel {
     }
 
     fn remove_stale_recent_ui_actions(&mut self, cx: &mut Context<Self>) {
-        let before = self.recent_ui_actions.len();
-        let mut payloads = Vec::with_capacity(self.recent_ui_actions.len());
-        for entry in &self.recent_ui_actions {
-            payloads.push((entry.item.id.clone(), self.payload_for_item(&entry.item)));
-        }
-        self.recent_ui_actions.retain(|entry| {
-            match payloads
-                .iter()
-                .find(|(id, _)| id.as_ref() == entry.item.id.as_ref())
-            {
-                Some((_, payload)) => item_source_available(&entry.item, payload),
-                None => true,
-            }
-        });
-        let removed = before.saturating_sub(self.recent_ui_actions.len());
+        let removed = retain_available_ui_entries(&mut self.recent_ui_actions);
         self.status = Some(ui_removed_stale_status("recent UI action", removed));
         cx.notify();
     }
@@ -727,61 +713,20 @@ impl ShadcnUiPanel {
     }
 
     fn remove_stale_pinned_ui_actions(&mut self, cx: &mut Context<Self>) {
-        let before = self.pinned_ui_actions.len();
-        let mut payloads = Vec::with_capacity(self.pinned_ui_actions.len());
-        for entry in &self.pinned_ui_actions {
-            payloads.push((entry.item.id.clone(), self.payload_for_item(&entry.item)));
-        }
-        self.pinned_ui_actions.retain(|entry| {
-            match payloads
-                .iter()
-                .find(|(id, _)| id.as_ref() == entry.item.id.as_ref())
-            {
-                Some((_, payload)) => item_source_available(&entry.item, payload),
-                None => true,
-            }
-        });
-        let removed = before.saturating_sub(self.pinned_ui_actions.len());
+        let removed = retain_available_ui_entries(&mut self.pinned_ui_actions);
         self.status = Some(ui_removed_stale_status("pinned UI action", removed));
-        self.persist_pinned_ui_actions(cx);
+        if removed > 0 {
+            self.persist_pinned_ui_actions(cx);
+        }
         cx.notify();
     }
 
     fn remove_stale_ui_history(&mut self, cx: &mut Context<Self>) {
-        let recent_before = self.recent_ui_actions.len();
-        let mut recent_payloads = Vec::with_capacity(self.recent_ui_actions.len());
-        for entry in &self.recent_ui_actions {
-            recent_payloads.push((entry.item.id.clone(), self.payload_for_item(&entry.item)));
-        }
-        self.recent_ui_actions.retain(|entry| {
-            match recent_payloads
-                .iter()
-                .find(|(id, _)| id.as_ref() == entry.item.id.as_ref())
-            {
-                Some((_, payload)) => item_source_available(&entry.item, payload),
-                None => true,
-            }
-        });
-
-        let pinned_before = self.pinned_ui_actions.len();
-        let mut pinned_payloads = Vec::with_capacity(self.pinned_ui_actions.len());
-        for entry in &self.pinned_ui_actions {
-            pinned_payloads.push((entry.item.id.clone(), self.payload_for_item(&entry.item)));
-        }
-        self.pinned_ui_actions.retain(|entry| {
-            match pinned_payloads
-                .iter()
-                .find(|(id, _)| id.as_ref() == entry.item.id.as_ref())
-            {
-                Some((_, payload)) => item_source_available(&entry.item, payload),
-                None => true,
-            }
-        });
-
-        let removed = recent_before.saturating_sub(self.recent_ui_actions.len())
-            + pinned_before.saturating_sub(self.pinned_ui_actions.len());
+        let recent_removed = retain_available_ui_entries(&mut self.recent_ui_actions);
+        let pinned_removed = retain_available_ui_entries(&mut self.pinned_ui_actions);
+        let removed = recent_removed + pinned_removed;
         self.status = Some(ui_removed_stale_status("UI action", removed));
-        if pinned_before != self.pinned_ui_actions.len() {
+        if pinned_removed > 0 {
             self.persist_pinned_ui_actions(cx);
         }
         cx.notify();
@@ -940,32 +885,7 @@ impl ShadcnUiPanel {
     }
 
     fn payload_for_item(&self, item: &CatalogItem) -> DraggedShadcnAsset {
-        let shadcn_root = shadcn_registry_root();
-        let source_path = match item.source {
-            CatalogSource::MagicUi => magic_registry_root().join(item.source_path.as_ref()),
-            CatalogSource::ShadcnComponent | CatalogSource::ShadcnBlock => {
-                shadcn_root.join(item.source_path.as_ref())
-            }
-            CatalogSource::CommunityRegistry | CatalogSource::TwentyFirst => PathBuf::new(),
-        };
-        let kind = match item.source {
-            CatalogSource::ShadcnComponent => DraggedShadcnKind::Component,
-            CatalogSource::ShadcnBlock => DraggedShadcnKind::Block,
-            CatalogSource::MagicUi
-            | CatalogSource::CommunityRegistry
-            | CatalogSource::TwentyFirst => DraggedShadcnKind::Magic,
-        };
-
-        DraggedShadcnAsset::new(
-            item.id.clone(),
-            item.title.clone(),
-            kind,
-            source_path,
-            shadcn_root,
-            item.target_file_name.clone(),
-            item.import_statement.clone(),
-            item.jsx.clone(),
-        )
+        shadcn_payload_for_item(item)
     }
 
     fn render_item_row(
@@ -3530,6 +3450,44 @@ fn item_source_available(item: &CatalogItem, payload: &DraggedShadcnAsset) -> bo
             item.source,
             CatalogSource::ShadcnComponent | CatalogSource::ShadcnBlock
         ) && shadcn_manifest_path(item.id.as_ref()).is_some()
+}
+
+fn shadcn_payload_for_item(item: &CatalogItem) -> DraggedShadcnAsset {
+    let shadcn_root = shadcn_registry_root();
+    let source_path = match item.source {
+        CatalogSource::MagicUi => magic_registry_root().join(item.source_path.as_ref()),
+        CatalogSource::ShadcnComponent | CatalogSource::ShadcnBlock => {
+            shadcn_root.join(item.source_path.as_ref())
+        }
+        CatalogSource::CommunityRegistry | CatalogSource::TwentyFirst => PathBuf::new(),
+    };
+    let kind = match item.source {
+        CatalogSource::ShadcnComponent => DraggedShadcnKind::Component,
+        CatalogSource::ShadcnBlock => DraggedShadcnKind::Block,
+        CatalogSource::MagicUi | CatalogSource::CommunityRegistry | CatalogSource::TwentyFirst => {
+            DraggedShadcnKind::Magic
+        }
+    };
+
+    DraggedShadcnAsset::new(
+        item.id.clone(),
+        item.title.clone(),
+        kind,
+        source_path,
+        shadcn_root,
+        item.target_file_name.clone(),
+        item.import_statement.clone(),
+        item.jsx.clone(),
+    )
+}
+
+fn retain_available_ui_entries(entries: &mut VecDeque<RecentUiEntry>) -> usize {
+    let before = entries.len();
+    entries.retain(|entry| {
+        let payload = shadcn_payload_for_item(&entry.item);
+        item_source_available(&entry.item, &payload)
+    });
+    before.saturating_sub(entries.len())
 }
 
 fn ui_removed_stale_status(section: &str, removed: usize) -> SharedString {

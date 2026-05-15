@@ -1121,10 +1121,7 @@ impl MediaPanel {
     }
 
     fn remove_stale_recent_media(&mut self, cx: &mut Context<Self>) {
-        let before = self.recent_media.len();
-        self.recent_media
-            .retain(|entry| !media_history_entry_stale(entry));
-        let removed = before.saturating_sub(self.recent_media.len());
+        let removed = retain_available_media_entries(&mut self.recent_media);
         self.status = Some(media_removed_stale_status("recent media", removed));
         cx.notify();
     }
@@ -1156,26 +1153,20 @@ impl MediaPanel {
     }
 
     fn remove_stale_pinned_media(&mut self, cx: &mut Context<Self>) {
-        let before = self.pinned_media.len();
-        self.pinned_media
-            .retain(|entry| !media_history_entry_stale(entry));
-        let removed = before.saturating_sub(self.pinned_media.len());
+        let removed = retain_available_media_entries(&mut self.pinned_media);
         self.status = Some(media_removed_stale_status("pinned media", removed));
-        self.persist_pinned_media(cx);
+        if removed > 0 {
+            self.persist_pinned_media(cx);
+        }
         cx.notify();
     }
 
     fn remove_stale_media_history(&mut self, cx: &mut Context<Self>) {
-        let recent_before = self.recent_media.len();
-        self.recent_media
-            .retain(|entry| !media_history_entry_stale(entry));
-        let pinned_before = self.pinned_media.len();
-        self.pinned_media
-            .retain(|entry| !media_history_entry_stale(entry));
-        let removed = recent_before.saturating_sub(self.recent_media.len())
-            + pinned_before.saturating_sub(self.pinned_media.len());
+        let recent_removed = retain_available_media_entries(&mut self.recent_media);
+        let pinned_removed = retain_available_media_entries(&mut self.pinned_media);
+        let removed = recent_removed + pinned_removed;
         self.status = Some(media_removed_stale_status("media", removed));
-        if pinned_before != self.pinned_media.len() {
+        if pinned_removed > 0 {
             self.persist_pinned_media(cx);
         }
         cx.notify();
@@ -2547,6 +2538,12 @@ fn recent_media_source_available(source: &RecentMediaSource) -> bool {
 
 fn media_history_entry_stale(entry: &RecentMediaEntry) -> bool {
     !recent_media_source_available(&entry.source)
+}
+
+fn retain_available_media_entries(entries: &mut VecDeque<RecentMediaEntry>) -> usize {
+    let before = entries.len();
+    entries.retain(|entry| !media_history_entry_stale(entry));
+    before.saturating_sub(entries.len())
 }
 
 fn media_removed_stale_status(section: &str, removed: usize) -> SharedString {
