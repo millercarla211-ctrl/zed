@@ -120,6 +120,17 @@ struct RemoteMediaAsset {
 type RemoteMediaFetch =
     Pin<Box<dyn Future<Output = (&'static str, anyhow::Result<Vec<RemoteMediaAsset>>)>>>;
 
+#[derive(Clone)]
+struct RemoteMediaCacheEntry {
+    assets: Vec<RemoteMediaAsset>,
+    warning: Option<SharedString>,
+}
+
+struct RemoteMediaFetchResult {
+    assets: Vec<RemoteMediaAsset>,
+    warning: Option<SharedString>,
+}
+
 impl RemoteMediaAsset {
     const fn borrowed(
         id: &'static str,
@@ -304,8 +315,9 @@ pub struct MediaPanel {
     local_kind_counts: MediaKindCounts,
     remote_assets: Vec<RemoteMediaAsset>,
     remote_kind_counts: MediaKindCounts,
-    remote_cache: HashMap<SharedString, Vec<RemoteMediaAsset>>,
+    remote_cache: HashMap<SharedString, RemoteMediaCacheEntry>,
     remote_cache_order: VecDeque<SharedString>,
+    remote_warning: Option<SharedString>,
     kind_filter: MediaKindFilter,
     kind_scroll_handle: ScrollHandle,
     loading: bool,
@@ -366,6 +378,7 @@ impl MediaPanel {
                 remote_kind_counts: MediaKindCounts::default(),
                 remote_cache: HashMap::with_capacity(MAX_REMOTE_MEDIA_CACHE_ENTRIES),
                 remote_cache_order: VecDeque::with_capacity(MAX_REMOTE_MEDIA_CACHE_ENTRIES),
+                remote_warning: None,
                 kind_filter: MediaKindFilter::Images,
                 kind_scroll_handle: ScrollHandle::new(),
                 loading: false,
@@ -393,6 +406,7 @@ impl MediaPanel {
         self.remote_signature = None;
         self.remote_assets.clear();
         self.remote_kind_counts = MediaKindCounts::default();
+        self.remote_warning = None;
     }
 
     fn refresh_remote_media(&mut self, cx: &mut Context<Self>) {
@@ -415,17 +429,18 @@ impl MediaPanel {
             return;
         }
 
-        if let Some(remote_kind_counts) = {
-            if let Some(remote_assets) = self.remote_cache.get(&signature) {
-                let remote_kind_counts = MediaKindCounts::from_remote_assets(remote_assets);
-                self.remote_assets.clone_from(remote_assets);
-                Some(remote_kind_counts)
+        if let Some((remote_kind_counts, warning)) = {
+            if let Some(remote_entry) = self.remote_cache.get(&signature) {
+                let remote_kind_counts = MediaKindCounts::from_remote_assets(&remote_entry.assets);
+                self.remote_assets.clone_from(&remote_entry.assets);
+                Some((remote_kind_counts, remote_entry.warning.clone()))
             } else {
                 None
             }
         } {
             self.remote_kind_counts = remote_kind_counts;
             self.remote_signature = Some(signature.clone());
+            self.remote_warning = warning;
             self.touch_remote_cache_entry(&signature);
             self.status = None;
             return;
@@ -466,17 +481,19 @@ impl MediaPanel {
                     {
                         panel.remote_loading = false;
                         match result {
-                            Ok(remote_assets) => {
+                            Ok(result) => {
                                 let remote_kind_counts =
-                                    MediaKindCounts::from_remote_assets(&remote_assets);
-                                panel.remote_assets.clone_from(&remote_assets);
-                                panel.cache_remote_assets(signature.clone(), remote_assets);
+                                    MediaKindCounts::from_remote_assets(&result.assets);
+                                panel.remote_assets.clone_from(&result.assets);
+                                panel.remote_warning = result.warning.clone();
+                                panel.cache_remote_assets(signature.clone(), result);
                                 panel.remote_kind_counts = remote_kind_counts;
                                 panel.status = None;
                             }
                             Err(error) => {
                                 panel.remote_assets.clear();
                                 panel.remote_kind_counts = MediaKindCounts::default();
+                                panel.remote_warning = None;
                                 panel.status = Some(format!("Remote media: {error:#}").into());
                             }
                         }
@@ -488,12 +505,14 @@ impl MediaPanel {
         .detach();
     }
 
-    fn cache_remote_assets(
-        &mut self,
-        signature: SharedString,
-        remote_assets: Vec<RemoteMediaAsset>,
-    ) {
-        self.remote_cache.insert(signature.clone(), remote_assets);
+    fn cache_remote_assets(&mut self, signature: SharedString, result: RemoteMediaFetchResult) {
+        self.remote_cache.insert(
+            signature.clone(),
+            RemoteMediaCacheEntry {
+                assets: result.assets,
+                warning: result.warning,
+            },
+        );
         self.touch_remote_cache_entry(&signature);
 
         while self.remote_cache_order.len() > MAX_REMOTE_MEDIA_CACHE_ENTRIES {
@@ -1150,6 +1169,34 @@ impl MediaPanel {
                     })),
             )
     }
+
+    fn render_remote_warning_row(
+        &self,
+        warning: SharedString,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        h_flex()
+            .id("media-panel-remote-warning-row")
+            .gap_2()
+            .items_center()
+            .p_2()
+            .rounded_sm()
+            .border_1()
+            .border_color(cx.theme().colors().border_variant)
+            .bg(cx.theme().colors().element_background)
+            .tooltip(Tooltip::text(warning.clone()))
+            .child(
+                Icon::new(IconName::Warning)
+                    .size(IconSize::Small)
+                    .color(Color::Warning),
+            )
+            .child(
+                Label::new(warning)
+                    .size(LabelSize::XSmall)
+                    .color(Color::Warning)
+                    .truncate(),
+            )
+    }
 }
 
 impl Panel for MediaPanel {
@@ -1239,14 +1286,22 @@ impl Render for MediaPanel {
         let kind_counts = MediaKindCounts::from_panel(self);
         let total_count = kind_counts.count(self.kind_filter);
         let provider_count = remote_provider_count(self.kind_filter);
+        let remote_warning = self.remote_warning.clone();
         let mut asset_rows = Vec::with_capacity(
             usize::from(url_insert.is_some())
+                + usize::from(remote_warning.is_some())
                 + remote_assets.len()
                 + assets.len()
                 + usize::from(provider_count > 0),
         );
         if let Some(url_insert) = url_insert {
             asset_rows.push(url_insert);
+        }
+        if let Some(warning) = remote_warning {
+            asset_rows.push(
+                self.render_remote_warning_row(warning, cx)
+                    .into_any_element(),
+            );
         }
         asset_rows.extend(
             remote_assets
@@ -1531,6 +1586,41 @@ fn remote_browser_description(provider_count: usize, kind_label: &str) -> Shared
     text.into()
 }
 
+fn remote_media_provider_warning(errors: &[String], provider_count: usize) -> Option<SharedString> {
+    if errors.is_empty() {
+        return None;
+    }
+
+    let healthy_count = provider_count.saturating_sub(errors.len());
+    let shown_error_count = errors.len().min(3);
+    let mut text = String::with_capacity(
+        96 + errors
+            .iter()
+            .take(shown_error_count)
+            .map(String::len)
+            .sum::<usize>(),
+    );
+    let _ = write!(
+        text,
+        "{} of {provider_count} remote providers skipped",
+        errors.len()
+    );
+    if healthy_count > 0 {
+        let _ = write!(text, "; {healthy_count} returned results");
+    }
+    text.push_str(": ");
+    for (index, error) in errors.iter().take(shown_error_count).enumerate() {
+        if index > 0 {
+            text.push_str("; ");
+        }
+        text.push_str(error);
+    }
+    if errors.len() > shown_error_count {
+        let _ = write!(text, "; +{} more", errors.len() - shown_error_count);
+    }
+    Some(text.into())
+}
+
 struct MediaUrlCandidate {
     url: String,
     kind: DraggedMediaKind,
@@ -1740,7 +1830,7 @@ async fn fetch_remote_media_assets(
     query: String,
     filter: MediaKindFilter,
     executor: BackgroundExecutor,
-) -> anyhow::Result<Vec<RemoteMediaAsset>> {
+) -> anyhow::Result<RemoteMediaFetchResult> {
     let provider_count = remote_provider_count(filter);
     let mut fetches: Vec<RemoteMediaFetch> = Vec::with_capacity(provider_count);
 
@@ -2056,7 +2146,8 @@ async fn fetch_remote_media_assets(
         anyhow::bail!(errors.join("; "));
     }
 
-    Ok(assets)
+    let warning = remote_media_provider_warning(&errors, provider_count);
+    Ok(RemoteMediaFetchResult { assets, warning })
 }
 
 fn remote_media_fetch<F>(

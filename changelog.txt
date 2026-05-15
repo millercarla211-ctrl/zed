@@ -1,3 +1,14 @@
+[2026-05-15] - Media Remote Provider Warning Visibility
+
+ADDED:
+- `crates/media_panel` now keeps partial remote-provider warnings alongside cached remote results and shows a compact warning row when some no-key providers fail while others still return usable media.
+
+CHANGED:
+- Remote media cache entries now preserve both assets and provider-warning state so revisiting a cached query keeps the same operational context instead of silently hiding partial provider failures.
+
+NOTES:
+- This improves Media panel trust and debuggability without changing local indexing, provider search breadth, editor input, or WebPreview input.
+
 [2026-05-15] - Media Focused Direct Provider Depth
 
 CHANGED:
