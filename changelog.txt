@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Catalog Tooling
+
+CHANGED:
+- `list_agent_plugins` now advertises the `prepare_agent_plugin_runtime` tool alongside the discovery tool.
+- The bootstrap plan now includes dry-run, workspace, and Zed-data payloads so agents can request managed root setup without inventing paths.
+- Bootstrap readiness next actions now point to the prepare tool before Playwright/DX-extension provisioning.
+
+NOTES:
+- This remains a non-downloading, non-browser-launching wiring pass; external Chrome execution stays gated for later slices.
+
 [2026-05-16] - Agent Plugin Runtime Provisioner Shell
 
 ADDED:

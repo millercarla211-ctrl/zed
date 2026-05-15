@@ -14,6 +14,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+const PREPARE_AGENT_PLUGIN_RUNTIME_TOOL: &str = "prepare_agent_plugin_runtime";
+
 /// Lists the built-in DX/Zed agent plugin catalog for browser, Chrome, and PC-use workflows.
 ///
 /// Use this before trying to control the in-app WebPreview browser, external Chrome through
@@ -137,6 +139,10 @@ fn agent_plugin_catalog(
             "status": "discovery_layer_available",
             "default_enabled_plugins": ["zed.browser", "zed.chrome", "zed.pc_use"],
             "tool_name": AgentPluginCatalogTool::NAME,
+            "tools": {
+                "discovery": AgentPluginCatalogTool::NAME,
+                "prepare_runtime": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL
+            },
             "available_to": [
                 "agent_panel",
                 "subagents",
@@ -146,6 +152,26 @@ fn agent_plugin_catalog(
             "bootstrap_plan": input.include_bootstrap_plan.then(|| serde_json::json!({
                 "default_download": true,
                 "download_policy": "download_or_update_on_first_use",
+                "prepare_tool": {
+                    "name": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL,
+                    "dry_run_payload": {
+                        "root_mode": "workspace",
+                        "create_managed_roots": false,
+                        "write_bootstrap_manifest": false
+                    },
+                    "workspace_payload": {
+                        "root_mode": "workspace",
+                        "create_managed_roots": true,
+                        "write_bootstrap_manifest": true
+                    },
+                    "zed_data_payload": {
+                        "root_mode": "zed_data",
+                        "create_managed_roots": true,
+                        "write_bootstrap_manifest": true
+                    },
+                    "requires_permission_for_writes": true,
+                    "downloads_or_launches_browser": false
+                },
                 "zed_data_plugin_root": default_plugin_root.display().to_string(),
                 "workspace_plugin_root": workspace_plugin_root.as_ref().map(|path| path.display().to_string()),
                 "workspace_tools_root": workspace_tools_root.as_ref().map(|path| path.display().to_string()),
@@ -449,6 +475,7 @@ fn agent_plugin_bootstrap_readiness(
         "schema": "zed.agent_plugins.bootstrap_readiness.v1",
         "generated_at_ms": current_epoch_millis(),
         "status": status,
+        "prepare_tool_name": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL,
         "project_root": project_root.map(path_string),
         "roots": {
             "zed_data_plugin_root": path_string(default_plugin_root),
@@ -514,10 +541,10 @@ fn bootstrap_next_actions(status: &str) -> Vec<&'static str> {
             "Re-run list_agent_plugins with include_bootstrap_readiness=true before provisioning.",
         ],
         "ready_to_provision" => vec![
-            "Create managed workspace tools roots under the project or Zed data directory.",
+            "Run prepare_agent_plugin_runtime with create_managed_roots=true and write_bootstrap_manifest=true to create the managed roots.",
             "Install Playwright into the managed tools root.",
             "Download or unpack the DX Chrome extension into the managed agent plugin root.",
-            "Create the managed Chrome profile root without touching real user browser profiles.",
+            "Keep managed Chrome profile data in the prepared profile root; never touch real user browser profiles.",
         ],
         _ => vec![
             "Chrome plugin bootstrap assets are present.",
