@@ -16,7 +16,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Write as _,
     fs::{self as std_fs, File},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::{Mutex, OnceLock},
 };
 use ui::{TintColor, Tooltip, prelude::*};
@@ -44,7 +44,7 @@ actions!(
 const SHADCN_UI_PANEL_KEY: &str = "ShadcnUiPanel";
 const MAX_SHADCN_ROWS: usize = 96;
 const PREVIEW_IMAGE_CACHE_INITIAL_CAPACITY: usize = MAX_SHADCN_ROWS * 4;
-const CATALOG_CACHE_FILE_NAME: &str = "catalog-v3.rkyv";
+const CATALOG_CACHE_FILE_NAME: &str = "catalog-v4.rkyv";
 const STATIC_SHADCN_CATALOG_INDEX: &str = include_str!("shadcn_catalog_index.tsv");
 static SHADCN_STATIC_CATALOG_CACHE: OnceLock<Vec<CatalogItem>> = OnceLock::new();
 static SHADCN_CATALOG_CACHE: OnceLock<Vec<CatalogItem>> = OnceLock::new();
@@ -154,6 +154,7 @@ struct CatalogItem {
     description: SharedString,
     category: SharedString,
     source: CatalogSource,
+    install_only: bool,
     source_path: SharedString,
     target_file_name: SharedString,
     import_statement: SharedString,
@@ -167,6 +168,7 @@ struct CachedCatalogItem {
     description: String,
     category: String,
     source: u8,
+    install_only: bool,
     source_path: String,
     target_file_name: String,
     import_statement: String,
@@ -181,6 +183,7 @@ impl CachedCatalogItem {
             description: item.description.to_string(),
             category: item.category.to_string(),
             source: catalog_source_to_u8(item.source),
+            install_only: item.install_only,
             source_path: item.source_path.to_string(),
             target_file_name: item.target_file_name.to_string(),
             import_statement: item.import_statement.to_string(),
@@ -195,6 +198,7 @@ impl CachedCatalogItem {
             description: self.description.into(),
             category: self.category.into(),
             source: catalog_source_from_u8(self.source),
+            install_only: self.install_only,
             source_path: self.source_path.into(),
             target_file_name: self.target_file_name.into(),
             import_statement: self.import_statement.into(),
@@ -640,8 +644,15 @@ impl ShadcnUiPanel {
         image_url: Option<String>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let can_drag = can_drag_into_editor(item.source);
-        let primary_action = if can_drag { "Insert" } else { "Open" };
+        let can_insert = can_drag_into_editor(item.source);
+        let can_drag = can_insert && !item.install_only;
+        let primary_action = if item.install_only {
+            "Install"
+        } else if can_insert {
+            "Insert"
+        } else {
+            "Open"
+        };
         let source_label = catalog_source_label(item.source);
         let row_id = shadcn_element_id("shadcn-item-", item.id.as_ref());
         let insert_id = shadcn_element_id("shadcn-insert-", item.id.as_ref());
@@ -664,7 +675,7 @@ impl ShadcnUiPanel {
             .on_click(cx.listener({
                 let item = item.clone();
                 move |panel, _, window, cx| {
-                    if can_drag {
+                    if can_insert {
                         panel.insert_item(item.clone(), window, cx);
                     } else {
                         panel.open_item_docs(item.clone(), cx);
@@ -706,7 +717,7 @@ impl ShadcnUiPanel {
                             .gap_0p5()
                             .items_end()
                             .child(Label::new(source_label).size(LabelSize::XSmall).color(
-                                if can_drag {
+                                if can_insert {
                                     Color::Accent
                                 } else {
                                     Color::Warning
@@ -730,7 +741,7 @@ impl ShadcnUiPanel {
                             .on_click(cx.listener({
                                 let item = item.clone();
                                 move |panel, _, window, cx| {
-                                    if can_drag {
+                                    if can_insert {
                                         panel.insert_item(item.clone(), window, cx);
                                     } else {
                                         panel.open_item_docs(item.clone(), cx);
@@ -1014,6 +1025,15 @@ fn can_drag_into_editor(source: CatalogSource) -> bool {
     !matches!(
         source,
         CatalogSource::CommunityRegistry | CatalogSource::TwentyFirst
+    )
+}
+
+fn registry_target_is_route_file(target: &str) -> bool {
+    let mut components = Path::new(target).components();
+    matches!(
+        components.next(),
+        Some(Component::Normal(component))
+            if matches!(component.to_str(), Some("app" | "pages"))
     )
 }
 
@@ -1660,6 +1680,7 @@ fn static_catalog_index_items() -> Vec<CatalogItem> {
             description: decode_static_catalog_field(description).into(),
             category: decode_static_catalog_field(category).into(),
             source: catalog_source_from_u8(source),
+            install_only: false,
             source_path: decode_static_catalog_field(source_path).into(),
             target_file_name: decode_static_catalog_field(target_file_name).into(),
             import_statement: decode_static_catalog_field(import_statement).into(),
@@ -2058,6 +2079,7 @@ fn component(
         description: description.into(),
         category: "ui".into(),
         source: CatalogSource::ShadcnComponent,
+        install_only: false,
         source_path: source_path.into(),
         target_file_name: target_file_name.into(),
         import_statement: import_statement.into(),
@@ -2080,6 +2102,7 @@ fn block(
         description: description.into(),
         category: "block".into(),
         source: CatalogSource::ShadcnBlock,
+        install_only: false,
         source_path: source_path.into(),
         target_file_name: target_file_name.into(),
         import_statement: import_statement.into(),
@@ -2102,6 +2125,7 @@ fn magic(
         description: description.into(),
         category: "magic".into(),
         source: CatalogSource::MagicUi,
+        install_only: false,
         source_path: source_path.into(),
         target_file_name: target_file_name.into(),
         import_statement: import_statement.into(),
@@ -2121,6 +2145,7 @@ fn registry_directory_items() -> Vec<CatalogItem> {
             description: "External UI registry".into(),
             category: "registry".into(),
             source: CatalogSource::CommunityRegistry,
+            install_only: false,
             source_path: registry.homepage.into(),
             target_file_name: registry.name.into(),
             import_statement: format!("npx shadcn@latest add {}/<component>", registry.name).into(),
@@ -2137,6 +2162,7 @@ fn twenty_first_items() -> Vec<CatalogItem> {
         description: "21st.dev component source and Magic MCP reference".into(),
         category: "registry".into(),
         source: CatalogSource::TwentyFirst,
+        install_only: false,
         source_path: "https://21st.dev/magic".into(),
         target_file_name: "@21st-dev/magic-mcp".into(),
         import_statement: "npx -y @21st-dev/magic-mcp".into(),
@@ -2158,6 +2184,8 @@ struct RegistryManifestSummary {
 #[derive(Deserialize)]
 struct RegistryManifestFileSummary {
     path: String,
+    #[serde(default)]
+    target: Option<String>,
     #[serde(default)]
     content: String,
     #[serde(rename = "type", default)]
@@ -2217,12 +2245,18 @@ fn manifest_catalog_items() -> Vec<CatalogItem> {
                         .unwrap_or_else(|| format!("blocks/{name}/page.tsx"));
                     let target_file_name = target_file_name_for_registry_file(&primary_file.path)
                         .unwrap_or_else(|| name.clone());
+                    let install_only = primary_file
+                        .target
+                        .as_deref()
+                        .map(registry_target_is_route_file)
+                        .unwrap_or(false);
                     items.push(CatalogItem {
                         id: name.clone().into(),
                         title: title.into(),
                         description: description.into(),
                         category: category.into(),
                         source: CatalogSource::ShadcnBlock,
+                        install_only,
                         source_path: source_path.into(),
                         target_file_name: target_file_name.into(),
                         import_statement: import_reference.import_statement(&import_path).into(),
@@ -2251,6 +2285,7 @@ fn manifest_catalog_items() -> Vec<CatalogItem> {
                         description: description.into(),
                         category: "ui".into(),
                         source: CatalogSource::ShadcnComponent,
+                        install_only: false,
                         source_path: source_path.into(),
                         target_file_name: target_file_name.into(),
                         import_statement: import_reference.import_statement(&import_path).into(),
@@ -2298,6 +2333,7 @@ fn magic_catalog_items() -> Vec<CatalogItem> {
             description: format!("Install {title} from Magic UI").into(),
             category: "magic".into(),
             source: CatalogSource::MagicUi,
+            install_only: false,
             source_path: format!("{stem}.tsx").into(),
             target_file_name: format!("{stem}.tsx").into(),
             import_statement: import_reference

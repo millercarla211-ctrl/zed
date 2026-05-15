@@ -1,3 +1,14 @@
+[2026-05-15] - UI Route Block Action Labels
+
+CHANGED:
+- `crates/shadcn_ui_panel` catalog rows now carry install-only metadata for shadcn registry files whose manifest target lands under `app/` or `pages/`.
+- Route-targeted shadcn blocks now show `Install` instead of `Insert` and no longer advertise drag-to-editor behavior, while component, Magic UI, and reusable block rows still use `Insert`.
+- Bumped the UI catalog rkyv cache to `catalog-v4.rkyv` so older cached rows cannot miss the new install-only metadata.
+
+NOTES:
+- This aligns the panel action language with the installer behavior added for full route/app blocks and keeps snippet-backed rows unchanged.
+- Local manifest inspection found 57 primary block/example/internal targets under `app/` or `pages/`, with the remaining primary targets staying snippet-capable.
+
 [2026-05-15] - UI Route Block Install-Only Insertions
 
 CHANGED:
