@@ -1,3 +1,12 @@
+[2026-05-15] - Asset Panel Restored Pin Health
+
+ADDED:
+- Media history rows now mark missing local files and disable unsafe Preview and Insert actions while keeping Copy and Unpin available.
+- UI history rows now mark missing local source or registry manifests and disable unsafe Install, Insert, and Preview actions while keeping Copy, Docs, and Unpin available.
+
+NOTES:
+- This makes persisted pins safer after a project move, deleted media file, or missing UI registry source without changing normal catalog loading, remote media providers, editor input, or WebPreview routing.
+
 [2026-05-15] - Asset Panel Pinned Persistence
 
 ADDED:

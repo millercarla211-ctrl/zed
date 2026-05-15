@@ -1149,6 +1149,10 @@ impl ShadcnUiPanel {
         let pin_entry = entry.clone();
         let item = entry.item;
         let pin_item = item.clone();
+        let source_available = {
+            let payload = self.payload_for_item(&item);
+            item_source_available(&item, &payload)
+        };
         let can_insert = can_drag_into_editor(item.source);
         let primary_action = if item.install_only {
             "Install"
@@ -1215,7 +1219,14 @@ impl ShadcnUiPanel {
                                     .size(LabelSize::XSmall)
                                     .color(Color::Muted)
                                     .truncate(),
-                            ),
+                            )
+                            .when(!source_available, |this| {
+                                this.child(
+                                    Label::new("missing source")
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Warning),
+                                )
+                            }),
                     ),
             )
             .child(
@@ -1226,6 +1237,7 @@ impl ShadcnUiPanel {
                         Button::new(primary_id, primary_action)
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
+                            .disabled(can_insert && !source_available)
                             .on_click(cx.listener({
                                 let item = item.clone();
                                 move |panel, _, window, cx| {
@@ -1252,6 +1264,7 @@ impl ShadcnUiPanel {
                         Button::new(preview_id, "Preview")
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
+                            .disabled(can_insert && !source_available)
                             .on_click(cx.listener({
                                 let item = item.clone();
                                 move |panel, _, window, cx| {

@@ -1728,11 +1728,13 @@ impl MediaPanel {
         let pin_entry = entry.clone();
         let source_label = recent_media_source_label(&entry.source);
         let source_kind = recent_media_source_kind(&entry.source);
+        let source_health = recent_media_source_health(&entry.source);
         let actions = match entry.source.clone() {
             RecentMediaSource::Local {
                 path,
                 relative_display,
             } => {
+                let source_available = path.exists();
                 let asset = DraggedMediaAsset {
                     path,
                     kind: entry.kind,
@@ -1748,6 +1750,7 @@ impl MediaPanel {
                         Button::new(preview_id, "Preview")
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
+                            .disabled(!source_available)
                             .on_click(cx.listener(move |panel, _, window, cx| {
                                 panel.preview_media_asset(preview_asset.clone(), window, cx);
                             })),
@@ -1766,6 +1769,7 @@ impl MediaPanel {
                         Button::new(insert_id, "Insert")
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
+                            .disabled(!source_available)
                             .on_click(cx.listener(move |panel, _, window, cx| {
                                 panel.insert_media(insert_asset.clone(), window, cx);
                             })),
@@ -1849,7 +1853,14 @@ impl MediaPanel {
                                 Label::new(source_kind)
                                     .size(LabelSize::XSmall)
                                     .color(Color::Accent),
-                            ),
+                            )
+                            .when_some(source_health, |this, source_health| {
+                                this.child(
+                                    Label::new(source_health)
+                                        .size(LabelSize::XSmall)
+                                        .color(Color::Warning),
+                                )
+                            }),
                     )
                     .child(
                         Label::new(source_label)
@@ -2336,6 +2347,13 @@ fn recent_media_source_kind(source: &RecentMediaSource) -> &'static str {
     match source {
         RecentMediaSource::Local { .. } => "local",
         RecentMediaSource::Remote { .. } => "remote",
+    }
+}
+
+fn recent_media_source_health(source: &RecentMediaSource) -> Option<&'static str> {
+    match source {
+        RecentMediaSource::Local { path, .. } if !path.exists() => Some("missing"),
+        _ => None,
     }
 }
 
