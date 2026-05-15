@@ -1,3 +1,11 @@
+[2026-05-16] - Web Preview Keyboard Dispatch Contract
+
+ADDED:
+- Executor readiness now exposes the shared keyboard dispatch gate contract for `type_text` and `press_key`, including required focus fields and the trace receipt field future dispatchers must honor.
+
+NOTES:
+- This is a read-only contract update for agents and future executors; no keyboard input is dispatched.
+
 [2026-05-16] - Web Preview Shared Keyboard Focus Gate
 
 CHANGED:

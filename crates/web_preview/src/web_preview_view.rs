@@ -3383,6 +3383,20 @@ impl WebPreviewView {
                 "required": true,
                 "reason": "Native input dispatch can affect editor focus and WebPreview input; keep expanding it one action family at a time after receipts and manual Windows validation."
             },
+            "keyboard_dispatch_gate": {
+                "source": "native_keyboard_focus_gate",
+                "applies_to": ["type_text", "press_key"],
+                "required_state": {
+                    "window_active": true,
+                    "preview_is_active_item": true,
+                    "preview_gpui_focused": true,
+                    "native_webview_keyboard_focused": true,
+                    "url_editor_focused": false,
+                    "url_editor_focus_requested": false
+                },
+                "receipt_field": "coordinate_plan.keyboard_focus",
+                "dispatch_policy": "blocked unless ready_for_keyboard_dispatch is true in the latest action-specific trace receipt"
+            },
             "preflight_wired_actions": preflight_wired_actions,
             "trace_wired_actions": trace_wired_actions,
             "latest_preflight_receipts": {
@@ -3409,6 +3423,7 @@ impl WebPreviewView {
                 "fresh page diagnostics, DOM snapshot, action targets, and readiness probe",
                 "fresh wait contract, interaction plan, preflight, request envelope, and receipt schemas",
                 "fresh action-specific preflight receipt for the exact target/candidate",
+                "fresh keyboard dispatch gate receipt for type_text and press_key",
                 "manual Windows QA confirms editor typing, WebPreview focus, hover, right-click, wheel, and keyboard input remain stable"
             ],
             "dispatch_adapter_plan": [
