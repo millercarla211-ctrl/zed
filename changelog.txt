@@ -1,3 +1,17 @@
+[2026-05-16] - Web Preview First Native Click Executor
+
+ADDED:
+- Added a Windows WebView2 native click executor that sends a focused move/down/up click sequence through the existing CompositionController path.
+- WebPreview's More menu now includes "Run Native Click Executor" and "Run Native Click Executor to Agent".
+- Native click execution requires interactive permission, fresh executor context/audit readiness, a fresh click preflight, a native coordinate plan, and the native dispatch QA checklist before dispatch.
+
+CHANGED:
+- Browser plugin manifests now advertise `browser.action.click` as available when unlocked instead of only planned.
+- Executor readiness now treats `click` as the first native input executor while keeping type, key, scroll, history, and scoped cache reset disabled.
+
+NOTES:
+- This first dispatch slice only sends a left-click sequence to the in-app WebPreview on Windows; no type, key, scroll, history, cache, page script, or external Chrome action is dispatched.
+
 [2026-05-16] - Web Preview Native History And Cache Trace Readiness
 
 ADDED:

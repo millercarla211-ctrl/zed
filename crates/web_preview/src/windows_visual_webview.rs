@@ -137,6 +137,35 @@ impl WindowsVisualWebView {
         unsafe { self.webview.Reload() }.map_err(Into::into)
     }
 
+    pub(crate) fn click_at_viewport_point(&self, x: f64, y: f64) -> Result<()> {
+        let x = x.round().clamp(i32::MIN as f64, i32::MAX as f64) as i32;
+        let y = y.round().clamp(i32::MIN as f64, i32::MAX as f64) as i32;
+        let point = windows::Win32::Foundation::POINT { x, y };
+
+        self.focus_page()?;
+        unsafe {
+            self.composition_controller.SendMouseInput(
+                COREWEBVIEW2_MOUSE_EVENT_KIND_MOVE,
+                COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_NONE,
+                0,
+                point,
+            )?;
+            self.composition_controller.SendMouseInput(
+                COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_DOWN,
+                COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_LEFT_BUTTON,
+                0,
+                point,
+            )?;
+            self.composition_controller.SendMouseInput(
+                COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_UP,
+                COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_NONE,
+                0,
+                point,
+            )?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn evaluate_script(&self, script: &str) -> Result<()> {
         let script = HSTRING::from(script);
         unsafe {
