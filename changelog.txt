@@ -1,3 +1,12 @@
+[2026-05-15] - Media Focused Direct Provider Depth
+
+CHANGED:
+- `crates/media_panel` now passes explicit result limits into Openverse, Wikimedia, NASA image, Library of Congress, Art Institute, and Cleveland Art fetch helpers instead of reading only broad-tab constants inside each provider.
+- Focused Images, Audio, and Video tabs can request richer direct-provider pages while the broad All tab keeps its previous conservative result limits; Wikimedia remains at its safe API cap.
+
+NOTES:
+- This continues the remote media depth work without changing local indexing, refresh behavior, editor input, or WebPreview input.
+
 [2026-05-15] - Media Focused Remote Detail Depth
 
 CHANGED:

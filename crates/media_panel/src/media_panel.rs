@@ -44,15 +44,21 @@ const MAX_MEDIA_RESULTS: usize = 320;
 const MAX_REMOTE_MEDIA_RESULTS: usize = 640;
 const MAX_REMOTE_MEDIA_CACHE_ENTRIES: usize = 24;
 const OPENVERSE_RESULT_LIMIT: usize = 90;
+const OPENVERSE_FOCUSED_RESULT_LIMIT: usize = 150;
 const WIKIMEDIA_RESULT_LIMIT: usize = 50;
+const WIKIMEDIA_FOCUSED_RESULT_LIMIT: usize = 50;
 const NASA_IMAGE_RESULT_LIMIT: usize = 90;
+const NASA_IMAGE_FOCUSED_RESULT_LIMIT: usize = 120;
 const NASA_MEDIA_SEARCH_LIMIT: usize = 36;
 const NASA_MEDIA_FOCUSED_SEARCH_LIMIT: usize = 54;
 const NASA_MEDIA_DETAIL_LIMIT: usize = 20;
 const NASA_MEDIA_FOCUSED_DETAIL_LIMIT: usize = 32;
 const LIBRARY_OF_CONGRESS_RESULT_LIMIT: usize = 90;
+const LIBRARY_OF_CONGRESS_FOCUSED_RESULT_LIMIT: usize = 120;
 const ART_INSTITUTE_RESULT_LIMIT: usize = 90;
+const ART_INSTITUTE_FOCUSED_RESULT_LIMIT: usize = 120;
 const CLEVELAND_ART_RESULT_LIMIT: usize = 90;
+const CLEVELAND_ART_FOCUSED_RESULT_LIMIT: usize = 120;
 const MET_MUSEUM_DETAIL_LIMIT: usize = 24;
 const MET_MUSEUM_FOCUSED_DETAIL_LIMIT: usize = 40;
 const INTERNET_ARCHIVE_SEARCH_LIMIT: usize = 42;
@@ -1740,6 +1746,21 @@ async fn fetch_remote_media_assets(
 
     let mut assets = Vec::with_capacity(MAX_REMOTE_MEDIA_RESULTS);
     let mut errors = Vec::with_capacity(provider_count);
+    let openverse_result_limit = focused_remote_limit(
+        filter,
+        OPENVERSE_RESULT_LIMIT,
+        OPENVERSE_FOCUSED_RESULT_LIMIT,
+    );
+    let wikimedia_result_limit = focused_remote_limit(
+        filter,
+        WIKIMEDIA_RESULT_LIMIT,
+        WIKIMEDIA_FOCUSED_RESULT_LIMIT,
+    );
+    let nasa_image_result_limit = focused_remote_limit(
+        filter,
+        NASA_IMAGE_RESULT_LIMIT,
+        NASA_IMAGE_FOCUSED_RESULT_LIMIT,
+    );
     let nasa_media_search_limit = focused_remote_limit(
         filter,
         NASA_MEDIA_SEARCH_LIMIT,
@@ -1755,6 +1776,21 @@ async fn fetch_remote_media_assets(
         MET_MUSEUM_DETAIL_LIMIT,
         MET_MUSEUM_FOCUSED_DETAIL_LIMIT,
     );
+    let library_of_congress_result_limit = focused_remote_limit(
+        filter,
+        LIBRARY_OF_CONGRESS_RESULT_LIMIT,
+        LIBRARY_OF_CONGRESS_FOCUSED_RESULT_LIMIT,
+    );
+    let art_institute_result_limit = focused_remote_limit(
+        filter,
+        ART_INSTITUTE_RESULT_LIMIT,
+        ART_INSTITUTE_FOCUSED_RESULT_LIMIT,
+    );
+    let cleveland_art_result_limit = focused_remote_limit(
+        filter,
+        CLEVELAND_ART_RESULT_LIMIT,
+        CLEVELAND_ART_FOCUSED_RESULT_LIMIT,
+    );
     let internet_archive_search_limit = focused_remote_limit(
         filter,
         INTERNET_ARCHIVE_SEARCH_LIMIT,
@@ -1767,17 +1803,31 @@ async fn fetch_remote_media_assets(
     );
 
     if matches!(filter, MediaKindFilter::All | MediaKindFilter::Images) {
-        fetches.push(remote_media_fetch("Openverse images", {
-            let http_client = http_client.clone();
-            let query = query.clone();
-            async move { fetch_openverse_media(http_client, &query, DraggedMediaKind::Image).await }
-        }, executor.clone()));
+        fetches.push(remote_media_fetch(
+            "Openverse images",
+            {
+                let http_client = http_client.clone();
+                let query = query.clone();
+                async move {
+                    fetch_openverse_media(
+                        http_client,
+                        &query,
+                        DraggedMediaKind::Image,
+                        openverse_result_limit,
+                    )
+                    .await
+                }
+            },
+            executor.clone(),
+        ));
         fetches.push(remote_media_fetch(
             "Wikimedia",
             {
                 let http_client = http_client.clone();
                 let query = query.clone();
-                async move { fetch_wikimedia_media(http_client, &query, filter).await }
+                async move {
+                    fetch_wikimedia_media(http_client, &query, filter, wikimedia_result_limit).await
+                }
             },
             executor.clone(),
         ));
@@ -1786,7 +1836,7 @@ async fn fetch_remote_media_assets(
             {
                 let http_client = http_client.clone();
                 let query = query.clone();
-                async move { fetch_nasa_images(http_client, &query).await }
+                async move { fetch_nasa_images(http_client, &query, nasa_image_result_limit).await }
             },
             executor.clone(),
         ));
@@ -1795,7 +1845,14 @@ async fn fetch_remote_media_assets(
             {
                 let http_client = http_client.clone();
                 let query = query.clone();
-                async move { fetch_library_of_congress_images(http_client, &query).await }
+                async move {
+                    fetch_library_of_congress_images(
+                        http_client,
+                        &query,
+                        library_of_congress_result_limit,
+                    )
+                    .await
+                }
             },
             executor.clone(),
         ));
@@ -1804,7 +1861,10 @@ async fn fetch_remote_media_assets(
             {
                 let http_client = http_client.clone();
                 let query = query.clone();
-                async move { fetch_art_institute_images(http_client, &query).await }
+                async move {
+                    fetch_art_institute_images(http_client, &query, art_institute_result_limit)
+                        .await
+                }
             },
             executor.clone(),
         ));
@@ -1813,7 +1873,10 @@ async fn fetch_remote_media_assets(
             {
                 let http_client = http_client.clone();
                 let query = query.clone();
-                async move { fetch_cleveland_art_images(http_client, &query).await }
+                async move {
+                    fetch_cleveland_art_images(http_client, &query, cleveland_art_result_limit)
+                        .await
+                }
             },
             executor.clone(),
         ));
@@ -1849,11 +1912,23 @@ async fn fetch_remote_media_assets(
     }
 
     if matches!(filter, MediaKindFilter::All | MediaKindFilter::Audio) {
-        fetches.push(remote_media_fetch("Openverse audio", {
-            let http_client = http_client.clone();
-            let query = query.clone();
-            async move { fetch_openverse_media(http_client, &query, DraggedMediaKind::Audio).await }
-        }, executor.clone()));
+        fetches.push(remote_media_fetch(
+            "Openverse audio",
+            {
+                let http_client = http_client.clone();
+                let query = query.clone();
+                async move {
+                    fetch_openverse_media(
+                        http_client,
+                        &query,
+                        DraggedMediaKind::Audio,
+                        openverse_result_limit,
+                    )
+                    .await
+                }
+            },
+            executor.clone(),
+        ));
         fetches.push(remote_media_fetch(
             "NASA audio",
             {
@@ -1879,7 +1954,13 @@ async fn fetch_remote_media_assets(
                     let http_client = http_client.clone();
                     let query = query.clone();
                     async move {
-                        fetch_wikimedia_media(http_client, &query, MediaKindFilter::Audio).await
+                        fetch_wikimedia_media(
+                            http_client,
+                            &query,
+                            MediaKindFilter::Audio,
+                            wikimedia_result_limit,
+                        )
+                        .await
                     }
                 },
                 executor.clone(),
@@ -1924,11 +2005,23 @@ async fn fetch_remote_media_assets(
             },
             executor.clone(),
         ));
-        fetches.push(remote_media_fetch("Wikimedia video", {
-            let http_client = http_client.clone();
-            let query = query.clone();
-            async move { fetch_wikimedia_media(http_client, &query, MediaKindFilter::Videos).await }
-        }, executor.clone()));
+        fetches.push(remote_media_fetch(
+            "Wikimedia video",
+            {
+                let http_client = http_client.clone();
+                let query = query.clone();
+                async move {
+                    fetch_wikimedia_media(
+                        http_client,
+                        &query,
+                        MediaKindFilter::Videos,
+                        wikimedia_result_limit,
+                    )
+                    .await
+                }
+            },
+            executor.clone(),
+        ));
         fetches.push(remote_media_fetch(
             "Internet Archive videos",
             {
@@ -1994,6 +2087,7 @@ async fn fetch_openverse_media(
     http_client: Arc<dyn HttpClient>,
     query: &str,
     kind: DraggedMediaKind,
+    result_limit: usize,
 ) -> anyhow::Result<Vec<RemoteMediaAsset>> {
     let endpoint = match kind {
         DraggedMediaKind::Image => "images",
@@ -2001,7 +2095,7 @@ async fn fetch_openverse_media(
         DraggedMediaKind::Video => return Ok(Vec::new()),
     };
     let url = format!(
-        "https://api.openverse.org/v1/{endpoint}/?q={}&page_size={OPENVERSE_RESULT_LIMIT}",
+        "https://api.openverse.org/v1/{endpoint}/?q={}&page_size={result_limit}",
         encode_query(query)
     );
     let response: OpenverseResponse = fetch_json(http_client, &url).await?;
@@ -2059,9 +2153,10 @@ async fn fetch_wikimedia_media(
     http_client: Arc<dyn HttpClient>,
     query: &str,
     filter: MediaKindFilter,
+    result_limit: usize,
 ) -> anyhow::Result<Vec<RemoteMediaAsset>> {
     let url = format!(
-        "https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch={}&gsrlimit={WIKIMEDIA_RESULT_LIMIT}&prop=imageinfo&iiprop=url%7Cmime&iiurlwidth=360&format=json&origin=*",
+        "https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch={}&gsrlimit={result_limit}&prop=imageinfo&iiprop=url%7Cmime&iiurlwidth=360&format=json&origin=*",
         encode_query(query)
     );
     let response: WikimediaResponse = fetch_json(http_client, &url).await?;
@@ -2107,9 +2202,10 @@ async fn fetch_wikimedia_media(
 async fn fetch_nasa_images(
     http_client: Arc<dyn HttpClient>,
     query: &str,
+    result_limit: usize,
 ) -> anyhow::Result<Vec<RemoteMediaAsset>> {
     let url = format!(
-        "https://images-api.nasa.gov/search?q={}&media_type=image&page_size={NASA_IMAGE_RESULT_LIMIT}",
+        "https://images-api.nasa.gov/search?q={}&media_type=image&page_size={result_limit}",
         encode_query(query)
     );
     let response: NasaResponse = fetch_json(http_client, &url).await?;
@@ -2154,7 +2250,9 @@ async fn fetch_nasa_media(
     let media_type = match kind {
         DraggedMediaKind::Video => "video",
         DraggedMediaKind::Audio => "audio",
-        DraggedMediaKind::Image => return fetch_nasa_images(http_client, query).await,
+        DraggedMediaKind::Image => {
+            return fetch_nasa_images(http_client, query, NASA_IMAGE_RESULT_LIMIT).await;
+        }
     };
     let url = format!(
         "https://images-api.nasa.gov/search?q={}&media_type={media_type}&page_size={search_limit}",
@@ -2295,9 +2393,10 @@ fn nasa_media_file_rank(url: &str, kind: DraggedMediaKind) -> usize {
 async fn fetch_library_of_congress_images(
     http_client: Arc<dyn HttpClient>,
     query: &str,
+    result_limit: usize,
 ) -> anyhow::Result<Vec<RemoteMediaAsset>> {
     let url = format!(
-        "https://www.loc.gov/photos/?fo=json&c={LIBRARY_OF_CONGRESS_RESULT_LIMIT}&q={}",
+        "https://www.loc.gov/photos/?fo=json&c={result_limit}&q={}",
         encode_query(query)
     );
     let response: LibraryOfCongressResponse = fetch_json(http_client, &url).await?;
@@ -2330,9 +2429,10 @@ async fn fetch_library_of_congress_images(
 async fn fetch_art_institute_images(
     http_client: Arc<dyn HttpClient>,
     query: &str,
+    result_limit: usize,
 ) -> anyhow::Result<Vec<RemoteMediaAsset>> {
     let url = format!(
-        "https://api.artic.edu/api/v1/artworks/search?q={}&query%5Bterm%5D%5Bis_public_domain%5D=true&limit={ART_INSTITUTE_RESULT_LIMIT}&fields=id,title,image_id,artist_display",
+        "https://api.artic.edu/api/v1/artworks/search?q={}&query%5Bterm%5D%5Bis_public_domain%5D=true&limit={result_limit}&fields=id,title,image_id,artist_display",
         encode_query(query)
     );
     let response: ArtInstituteResponse = fetch_json(http_client, &url).await?;
@@ -2360,9 +2460,10 @@ async fn fetch_art_institute_images(
 async fn fetch_cleveland_art_images(
     http_client: Arc<dyn HttpClient>,
     query: &str,
+    result_limit: usize,
 ) -> anyhow::Result<Vec<RemoteMediaAsset>> {
     let url = format!(
-        "https://openaccess-api.clevelandart.org/api/artworks/?q={}&cc0=1&has_image=1&limit={CLEVELAND_ART_RESULT_LIMIT}",
+        "https://openaccess-api.clevelandart.org/api/artworks/?q={}&cc0=1&has_image=1&limit={result_limit}",
         encode_query(query)
     );
     let response: ClevelandArtResponse = fetch_json(http_client, &url).await?;
