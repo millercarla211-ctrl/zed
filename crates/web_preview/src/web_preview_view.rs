@@ -192,6 +192,62 @@ impl PreviewViewportMode {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AgentBrowserActionPermission {
+    ReadOnly,
+    Interactive,
+}
+
+impl AgentBrowserActionPermission {
+    fn label(self) -> &'static str {
+        match self {
+            Self::ReadOnly => "Read-only",
+            Self::Interactive => "Interactive allowed",
+        }
+    }
+
+    fn interactive_enabled(self) -> bool {
+        matches!(self, Self::Interactive)
+    }
+
+    fn snapshot(self) -> Value {
+        serde_json::json!({
+            "mode": match self {
+                Self::ReadOnly => "read_only",
+                Self::Interactive => "interactive",
+            },
+            "label": self.label(),
+            "interactive_enabled": self.interactive_enabled(),
+        })
+    }
+}
+
+const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
+    "copy_session_info",
+    "copy_session_json",
+    "copy_workspace_session_inventory_json",
+    "send_workspace_session_inventory_to_agent",
+    "copy_page_diagnostics",
+    "send_page_diagnostics_to_agent",
+    "copy_runtime_events",
+    "send_runtime_events_to_agent",
+    "take_screenshot",
+    "inspect_element",
+];
+
+const INTERACTIVE_AGENT_BROWSER_ACTIONS: &[&str] = &[
+    "open_url",
+    "reload",
+    "go_back",
+    "go_forward",
+    "click",
+    "type_text",
+    "press_key",
+    "scroll",
+    "set_viewport",
+    "clear_cache",
+];
+
 #[derive(Clone, Debug)]
 pub(crate) enum BrowserEvent {
     UrlChanged(String),
@@ -353,6 +409,7 @@ pub struct WebPreviewView {
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
     viewport_mode: PreviewViewportMode,
+    agent_action_permission: AgentBrowserActionPermission,
     is_active_item: bool,
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     native_preview: Rc<RefCell<Option<NativeWebPreview>>>,
@@ -526,6 +583,7 @@ impl WebPreviewView {
             native_mount_task: None,
             zoom_factor: 1.0,
             viewport_mode: PreviewViewportMode::FULL,
+            agent_action_permission: AgentBrowserActionPermission::ReadOnly,
             is_active_item: false,
             #[cfg(any(target_os = "windows", target_os = "macos"))]
             native_preview: Rc::new(RefCell::new(None)),
@@ -893,6 +951,7 @@ impl WebPreviewView {
                 "native_keyboard_focus: {native_keyboard_focus}\n",
                 "visible_bounds: {visible_bounds}\n",
                 "viewport: {viewport}\n",
+                "agent_action_policy: {agent_action_policy}\n",
                 "bookmarks: {bookmark_count}\n",
                 "project_file_preview: {project_file_preview}\n"
             ),
@@ -911,6 +970,7 @@ impl WebPreviewView {
             native_keyboard_focus = self.native_preview_has_keyboard_focus(window),
             visible_bounds = visible_bounds,
             viewport = self.viewport_label(),
+            agent_action_policy = self.agent_action_permission.label(),
             bookmark_count = self.bookmarks.len(),
             project_file_preview = self.project_item.is_some(),
         )
@@ -961,6 +1021,7 @@ impl WebPreviewView {
             "viewport": self.viewport_mode.snapshot(),
             "active_item": self.is_active_item,
             "project_file_preview": self.project_item.is_some(),
+            "agent_browser": self.agent_browser_policy_snapshot(),
             "bookmarks": {
                 "count": self.bookmarks.len(),
                 "active_url_bookmarked": self.is_active_url_bookmarked(),
@@ -981,11 +1042,23 @@ impl WebPreviewView {
                 "send_page_diagnostics_to_agent": true,
                 "copy_runtime_events": true,
                 "send_runtime_events_to_agent": true,
+                "copy_agent_browser_action_manifest": true,
+                "send_agent_browser_action_manifest_to_agent": true,
+                "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
                 "screenshot": true,
                 "inspect_element": true,
                 "open_devtools": true,
                 "clear_cache": true,
             },
+        })
+    }
+
+    fn agent_browser_policy_snapshot(&self) -> Value {
+        serde_json::json!({
+            "permission": self.agent_action_permission.snapshot(),
+            "read_only_actions": READ_ONLY_AGENT_BROWSER_ACTIONS,
+            "interactive_actions": INTERACTIVE_AGENT_BROWSER_ACTIONS,
+            "interactive_actions_require_explicit_unlock": true,
         })
     }
 
@@ -1219,6 +1292,60 @@ impl WebPreviewView {
 
     fn send_runtime_events_to_agent(&mut self, cx: &mut Context<Self>) {
         self.request_runtime_events("agent", cx);
+    }
+
+    fn agent_browser_action_manifest(&self, window: &Window) -> Value {
+        serde_json::json!({
+            "schema": "zed.web_preview.agent_browser_actions.v1",
+            "session": self.browser_session_snapshot(window),
+            "policy": self.agent_browser_policy_snapshot(),
+            "notes": [
+                "Read-only actions are always available for context gathering.",
+                "Interactive actions must remain locked until the user explicitly allows them for this WebPreview session.",
+                "Automation callers should re-read this manifest before running click, type, key, scroll, navigation, viewport, cache, or other mutating browser actions."
+            ],
+        })
+    }
+
+    fn agent_browser_action_manifest_json(&self, window: &Window) -> String {
+        serde_json::to_string_pretty(&self.agent_browser_action_manifest(window))
+            .unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn copy_agent_browser_action_manifest(&mut self, window: &Window, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            self.agent_browser_action_manifest_json(window),
+        ));
+        self.show_toast("Copied agent browser action manifest", cx);
+    }
+
+    fn send_agent_browser_action_manifest_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let blocks = vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview agent browser action manifest:\n\n```json\n{}\n```",
+            self.agent_browser_action_manifest_json(window)
+        )))];
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent agent browser action manifest to the agent panel", cx);
+    }
+
+    fn set_agent_action_permission(
+        &mut self,
+        permission: AgentBrowserActionPermission,
+        cx: &mut Context<Self>,
+    ) {
+        self.agent_action_permission = permission;
+        self.show_toast(
+            format!(
+                "Agent browser actions: {}",
+                self.agent_action_permission.label()
+            ),
+            cx,
+        );
+        cx.notify();
     }
 
     fn go_back_in_history(&mut self, cx: &mut Context<Self>) {
@@ -2025,6 +2152,63 @@ impl WebPreviewView {
                                     move |_, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_runtime_events_to_agent(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Agent Browser Manifest")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_action_manifest(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Agent Browser Manifest")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_action_manifest_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .separator()
+                        .item(
+                            ContextMenuEntry::new("Allow Interactive Agent Actions")
+                                .icon(IconName::Warning)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.set_agent_action_permission(
+                                                AgentBrowserActionPermission::Interactive,
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Lock Agent Browser Actions")
+                                .icon(IconName::LockOutlined)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.set_agent_action_permission(
+                                                AgentBrowserActionPermission::ReadOnly,
+                                                cx,
+                                            );
                                         });
                                     }
                                 }),
@@ -2942,6 +3126,7 @@ impl Item for WebPreviewView {
                 native_mount_task: None,
                 zoom_factor: 1.0,
                 viewport_mode: self.viewport_mode,
+                agent_action_permission: self.agent_action_permission,
                 is_active_item: false,
                 #[cfg(any(target_os = "windows", target_os = "macos"))]
                 native_preview: Rc::new(RefCell::new(None)),

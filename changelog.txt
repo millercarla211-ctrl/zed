@@ -1,3 +1,13 @@
+[2026-05-15] - Web Preview Agent Action Policy
+
+ADDED:
+- WebPreview sessions now include an agent browser action policy with read-only and interactive action groups.
+- WebPreview's tab-bar More menu now includes copy/send actions for the agent browser action manifest.
+- WebPreview now has explicit "Allow Interactive Agent Actions" and "Lock Agent Browser Actions" controls for the current session.
+
+NOTES:
+- This establishes a single permission boundary for future browser automation tools before adding click/type/scroll actions.
+
 [2026-05-15] - Web Preview Viewport Presets
 
 ADDED:
