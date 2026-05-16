@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Chrome PC Observability
+
+ADDED:
+- Added managed Chrome observability profiles to the Agent `list_agent_plugins` catalog and WebPreview plugin handoff catalog.
+- Added PC-use observability profiles to the same Agent/WebPreview catalogs.
+- The new profiles record proof handoff tool names, runtime-green blockers, safety watch surfaces, and the next Windows validation action for each plugin.
+
+NOTES:
+- This is read-only catalog metadata only; it does not run `just run`, launch Chrome, run Node, dispatch browser input, take screenshots, focus Zed, or change editor/WebPreview input paths.
+
 [2026-05-16] - Agent Plugin Runtime Observability Start
 
 ADDED:

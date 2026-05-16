@@ -598,6 +598,28 @@ fn chrome_plugin_manifest(
             ],
             "never_write_to_user_real_chrome_profile": true
         },
+        "observability_profile": {
+            "status": "managed_adapter_ready_pending_windows_runtime_validation",
+            "code_score": 92,
+            "runtime_green_blocker": "Validate the managed Chrome queue, runner gate, Playwright adapter invoke path, and execution receipt inspection on Windows without touching real browser profiles.",
+            "proof_handoffs": {
+                "queue_inspection_tool": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                "runner_gate_tool": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
+                "adapter_prepare_tool": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+                "adapter_invoke_tool": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
+                "execution_inspect_tool": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
+                "webpreview_status_copy": "copy_managed_chrome_execution_status",
+                "webpreview_status_send": "send_managed_chrome_execution_status_to_agent"
+            },
+            "watch_surfaces": [
+                "managed workspace or Zed-data roots only",
+                "real Chrome, Edge, and Firefox profiles stay untouched",
+                "adapter execution remains limited to open_url, screenshot, set_viewport, and wait_for_selector",
+                "click, type, key, and scroll stay blocked in the managed adapter",
+                "runner and execution receipts stay inspectable from Agent and WebPreview catalogs"
+            ],
+            "next_action": "Run the readiness and receipt chain from queue inspection through execution inspection during final Windows validation."
+        },
         "action_payload_contract": {
             "payload_tool_name": AGENT_CHROME_PAYLOAD_TOOL_NAME,
             "payload_queue_tool_name": AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
@@ -790,6 +812,30 @@ fn pc_use_plugin_manifest(
                 .display()
                 .to_string(),
             "os_wide_automation": "requires_separate_explicit_permission"
+        },
+        "observability_profile": {
+            "status": "payload_and_receipt_gates_ready_pending_ui_executor_validation",
+            "code_score": 90,
+            "runtime_green_blocker": "Validate PC-use context, target, UI snapshot, payload queue, runner receipt, and WebPreview status handoff without screenshots, focus, input dispatch, process launch, or OS-wide control.",
+            "proof_handoffs": {
+                "context_tool": AGENT_PC_USE_INSPECT_TOOL_NAME,
+                "target_manifest_tool": AGENT_PC_USE_TARGET_MANIFEST_TOOL_NAME,
+                "target_snapshot_tool": AGENT_PC_USE_TARGET_SNAPSHOT_TOOL_NAME,
+                "ui_snapshot_contract_tool": AGENT_PC_USE_UI_SNAPSHOT_CONTRACT_TOOL_NAME,
+                "ui_snapshot_tool": AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME,
+                "payload_queue_inspect_tool": AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                "runner_receipts_tool": AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
+                "webpreview_status_copy": "copy_pc_use_status",
+                "webpreview_status_send": "send_pc_use_status_to_agent"
+            },
+            "watch_surfaces": [
+                "read-only or managed-root-scoped operations only",
+                "future UI snapshot target ids require matching snapshot receipt ids",
+                "no OS-wide desktop control",
+                "no focus, click, type, screenshot, or process launch in the current gate",
+                "runner receipts stay auditable before any future executor exists"
+            ],
+            "next_action": "Validate the PC-use context, target, queue, runner, and receipt chain in the final Windows pass."
         },
         "capabilities": [
             capability("pc.zed_window.inspect_context", "available", "Use inspect_zed_window_context to read safe workspace and managed-root context before any future PC-use action."),

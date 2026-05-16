@@ -9629,6 +9629,28 @@ impl WebPreviewView {
                                 .to_string(),
                             "profile_policy": "managed_profile_only"
                         },
+                        "observability_profile": {
+                            "status": "managed_adapter_ready_pending_windows_runtime_validation",
+                            "code_score": 92,
+                            "runtime_green_blocker": "Validate the managed Chrome queue, runner gate, Playwright adapter invoke path, and execution receipt inspection on Windows without touching real browser profiles.",
+                            "proof_handoffs": {
+                                "queue_inspection_tool": "inspect_managed_chrome_payload_queue",
+                                "runner_gate_tool": "request_managed_chrome_payload_run",
+                                "adapter_prepare_tool": "prepare_managed_chrome_playwright_adapter",
+                                "adapter_invoke_tool": "invoke_managed_chrome_playwright_adapter",
+                                "execution_inspect_tool": "inspect_managed_chrome_playwright_executions",
+                                "webpreview_status_copy": "copy_managed_chrome_execution_status",
+                                "webpreview_status_send": "send_managed_chrome_execution_status_to_agent"
+                            },
+                            "watch_surfaces": [
+                                "managed workspace or Zed-data roots only",
+                                "real Chrome, Edge, and Firefox profiles stay untouched",
+                                "adapter execution remains limited to open_url, screenshot, set_viewport, and wait_for_selector",
+                                "click, type, key, and scroll stay blocked in the managed adapter",
+                                "runner and execution receipts stay inspectable from Agent and WebPreview catalogs"
+                            ],
+                            "next_action": "Run the readiness and receipt chain from queue inspection through execution inspection during final Windows validation."
+                        },
                         "action_payload_contract": {
                             "payload_tool_name": "compose_managed_chrome_action_payload",
                             "payload_queue_tool_name": "queue_managed_chrome_action_payload",
@@ -9766,6 +9788,30 @@ impl WebPreviewView {
                             "runner_receipt_inspection_schema": "zed.agent_plugins.pc_use.runner_receipt_inspection.v1",
                             "future_input_payload_requires_target_snapshot_id": true,
                             "os_wide_automation": "requires_separate_explicit_permission"
+                        },
+                        "observability_profile": {
+                            "status": "payload_and_receipt_gates_ready_pending_ui_executor_validation",
+                            "code_score": 90,
+                            "runtime_green_blocker": "Validate PC-use context, target, UI snapshot, payload queue, runner receipt, and WebPreview status handoff without screenshots, focus, input dispatch, process launch, or OS-wide control.",
+                            "proof_handoffs": {
+                                "context_tool": "inspect_zed_window_context",
+                                "target_manifest_tool": "inspect_zed_pc_use_targets",
+                                "target_snapshot_tool": "inspect_zed_pc_use_target_snapshot",
+                                "ui_snapshot_contract_tool": "inspect_zed_pc_use_ui_snapshot_contract",
+                                "ui_snapshot_tool": "inspect_zed_pc_use_ui_snapshot",
+                                "payload_queue_inspect_tool": "inspect_zed_pc_use_payload_queue",
+                                "runner_receipts_tool": "inspect_zed_pc_use_runner_receipts",
+                                "webpreview_status_copy": "copy_pc_use_status",
+                                "webpreview_status_send": "send_pc_use_status_to_agent"
+                            },
+                            "watch_surfaces": [
+                                "read-only or managed-root-scoped operations only",
+                                "future UI snapshot target ids require matching snapshot receipt ids",
+                                "no OS-wide desktop control",
+                                "no focus, click, type, screenshot, or process launch in the current gate",
+                                "runner receipts stay auditable before any future executor exists"
+                            ],
+                            "next_action": "Validate the PC-use context, target, queue, runner, and receipt chain in the final Windows pass."
                         },
                         "capabilities": [
                             {"id": "pc.zed_window.inspect_context", "state": "available", "description": "Use inspect_zed_window_context to read safe workspace and managed-root context before any future PC-use action."},
