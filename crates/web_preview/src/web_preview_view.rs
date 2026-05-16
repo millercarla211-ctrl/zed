@@ -124,8 +124,12 @@ const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_proof_guide_summary.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_report_packet.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_final_report_packet_summary.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_report_readiness_card.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_report_readiness_card_summary.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_proof_audit_summary.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA: &str =
@@ -3442,6 +3446,8 @@ impl WebPreviewView {
                 },
                 "runtime_green_final_report_packet": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+                    "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
+                    "runtime_status_summary_field": "runtime_green_final_report_packet_summary",
                     "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
                     "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
                     "current_status": runtime_green_final_report_packet.pointer("/status").and_then(Value::as_str),
@@ -3452,6 +3458,8 @@ impl WebPreviewView {
                 },
                 "runtime_green_report_readiness_card": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
+                    "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
+                    "runtime_status_summary_field": "runtime_green_report_readiness_card_summary",
                     "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
                     "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
                     "current_status": runtime_green_report_readiness_card.pointer("/status").and_then(Value::as_str),
@@ -5591,6 +5599,14 @@ impl WebPreviewView {
             .pointer("/audit/status")
             .and_then(Value::as_str)
             .unwrap_or("unknown");
+        let final_result_present = final_proof_audit
+            .pointer("/latest/final_validation_result")
+            .map(|result| !result.is_null())
+            .unwrap_or(false);
+        let final_result_runtime_green = final_proof_audit
+            .pointer("/audit/runtime_green_candidate")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let status = if may_report_runtime_green && report_gate_can_report {
             "ready_to_report_runtime_green"
         } else if audit_status == "awaiting_final_runtime_result_import" {
@@ -5675,6 +5691,8 @@ impl WebPreviewView {
                 "runtime_green_candidate": final_proof_audit
                     .pointer("/audit/runtime_green_candidate")
                     .and_then(Value::as_bool),
+                "final_result_present": final_result_present,
+                "final_result_runtime_green": final_result_runtime_green,
                 "may_report_runtime_green": final_proof_audit
                     .pointer("/audit/may_report_runtime_green")
                     .and_then(Value::as_bool),
@@ -7384,56 +7402,97 @@ impl WebPreviewView {
 
     fn agent_plugin_runtime_green_final_report_packet_summary(packet: &Value) -> Value {
         serde_json::json!({
-            "schema": packet.get("schema").and_then(Value::as_str),
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
+            "source_schema": packet.get("schema").and_then(Value::as_str),
             "status": packet.get("status").and_then(Value::as_str),
+            "root_mode": packet.get("root_mode").and_then(Value::as_str),
             "may_report_runtime_green": packet
                 .get("may_report_runtime_green")
                 .and_then(Value::as_bool),
             "blocker": packet.get("blocker").and_then(Value::as_str),
             "next_action": packet.get("next_action").and_then(Value::as_str),
+            "final_manual_command": packet
+                .get("final_manual_command")
+                .and_then(Value::as_str),
             "report_gate_status": packet.pointer("/report_gate/status").and_then(Value::as_str),
             "report_gate_can_report": packet
                 .pointer("/report_gate/can_report_runtime_green")
                 .and_then(Value::as_bool),
+            "report_gate_next_action": packet
+                .pointer("/report_gate/next_action")
+                .and_then(Value::as_str),
+            "final_proof_guide_status": packet
+                .pointer("/final_proof_guide/status")
+                .and_then(Value::as_str),
+            "final_proof_guide_next_action": packet
+                .pointer("/final_proof_guide/next_action")
+                .and_then(Value::as_str),
             "import_receipt_present": packet
                 .pointer("/final_result_import_receipt/present_in_session")
                 .and_then(Value::as_bool),
             "final_validation_observability_status": packet
                 .pointer("/final_validation_observability/status")
                 .and_then(Value::as_str),
-            "final_proof_guide_status": packet
-                .pointer("/final_proof_guide/status")
-                .and_then(Value::as_str),
             "regression_watch_status": packet.pointer("/regression_watch/status").and_then(Value::as_str),
             "regression_watch_lane_count": packet
                 .pointer("/regression_watch/watched_plugin_count")
                 .and_then(Value::as_u64),
+            "first_regression_watch_status": packet
+                .pointer("/regression_watch/first_watch/status")
+                .and_then(Value::as_str),
+            "webpreview_copy_action": packet
+                .get("webpreview_copy_action")
+                .or_else(|| packet.get("copy_action"))
+                .and_then(Value::as_str),
+            "webpreview_send_action": packet
+                .get("webpreview_send_action")
+                .or_else(|| packet.get("send_action"))
+                .and_then(Value::as_str),
+            "report_gate_copy_action": packet
+                .pointer("/report_gate/copy_action")
+                .and_then(Value::as_str),
+            "final_proof_guide_copy_action": packet
+                .pointer("/final_proof_guide/copy_action")
+                .and_then(Value::as_str),
+            "import_receipt_copy_action": packet
+                .pointer("/final_result_import_receipt/copy_action")
+                .or_else(|| packet.pointer("/webpreview_import_receipt/copy_action"))
+                .and_then(Value::as_str),
+            "read_only": packet.get("read_only").and_then(Value::as_bool),
+            "writes_files": packet.get("writes_files").and_then(Value::as_bool),
+            "runs_node": packet.get("runs_node").and_then(Value::as_bool),
+            "launches_browser": packet.get("launches_browser").and_then(Value::as_bool),
+            "dispatches_input": packet.get("dispatches_input").and_then(Value::as_bool),
         })
     }
 
     fn agent_plugin_runtime_green_report_readiness_card_summary(card: &Value) -> Value {
         serde_json::json!({
-            "schema": card.get("schema").and_then(Value::as_str),
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
+            "source_schema": card.get("schema").and_then(Value::as_str),
             "status": card.get("status").and_then(Value::as_str),
             "may_report_runtime_green": card
                 .get("may_report_runtime_green")
                 .and_then(Value::as_bool),
             "blocker": card.get("blocker").and_then(Value::as_str),
             "next_action": card.get("next_action").and_then(Value::as_str),
-            "copy_action": card.get("copy_action").and_then(Value::as_str),
-            "send_action": card.get("send_action").and_then(Value::as_str),
-            "final_report_packet_copy_action": card
-                .get("final_report_packet_copy_action")
-                .and_then(Value::as_str),
-            "report_gate_copy_action": card
-                .get("report_gate_copy_action")
-                .and_then(Value::as_str),
-            "audit_copy_action": card.get("audit_copy_action").and_then(Value::as_str),
             "final_manual_command": card
                 .get("final_manual_command")
                 .and_then(Value::as_str),
             "claim_readiness_status": card
                 .pointer("/claim_readiness/status")
+                .and_then(Value::as_str),
+            "ready_lane_fraction": card
+                .pointer("/claim_readiness/ready_lane_fraction")
+                .and_then(Value::as_str),
+            "first_pending_lane_label": card
+                .pointer("/claim_readiness/first_pending_lane_label")
+                .and_then(Value::as_str),
+            "first_pending_lane_status": card
+                .pointer("/claim_readiness/first_pending_lane_status")
+                .and_then(Value::as_str),
+            "next_required_proof_id": card
+                .pointer("/claim_readiness/next_required_proof_id")
                 .and_then(Value::as_str),
             "report_gate_status": card.pointer("/report_gate/status").and_then(Value::as_str),
             "report_gate_can_report": card
@@ -7442,9 +7501,18 @@ impl WebPreviewView {
             "final_report_packet_status": card
                 .pointer("/final_report_packet/status")
                 .and_then(Value::as_str),
+            "final_report_packet_may_report": card
+                .pointer("/final_report_packet/may_report_runtime_green")
+                .and_then(Value::as_bool),
             "final_proof_audit_status": card
                 .pointer("/final_proof_audit/status")
                 .and_then(Value::as_str),
+            "final_result_present": card
+                .pointer("/final_proof_audit/final_result_present")
+                .and_then(Value::as_bool),
+            "final_result_runtime_green": card
+                .pointer("/final_proof_audit/final_result_runtime_green")
+                .and_then(Value::as_bool),
             "missing_required_check_count": card
                 .pointer("/final_proof_audit/missing_required_check_count")
                 .and_then(Value::as_u64),
@@ -7455,7 +7523,22 @@ impl WebPreviewView {
             "regression_watch_lane_count": card
                 .pointer("/regression_watch/watched_plugin_count")
                 .and_then(Value::as_u64),
+            "first_regression_watch_status": card
+                .pointer("/regression_watch/first_watch_status")
+                .and_then(Value::as_str),
+            "copy_action": card.get("copy_action").and_then(Value::as_str),
+            "send_action": card.get("send_action").and_then(Value::as_str),
+            "final_report_packet_copy_action": card
+                .get("final_report_packet_copy_action")
+                .and_then(Value::as_str),
+            "report_gate_copy_action": card
+                .get("report_gate_copy_action")
+                .and_then(Value::as_str),
+            "audit_copy_action": card.get("audit_copy_action").and_then(Value::as_str),
             "read_only": card.get("read_only").and_then(Value::as_bool),
+            "writes_files": card.get("writes_files").and_then(Value::as_bool),
+            "runs_node": card.get("runs_node").and_then(Value::as_bool),
+            "launches_browser": card.get("launches_browser").and_then(Value::as_bool),
             "dispatches_input": card.get("dispatches_input").and_then(Value::as_bool),
         })
     }
@@ -9714,6 +9797,9 @@ impl WebPreviewView {
                     "runtime_green_report_badge": runtime_green_report_badge,
                     "runtime_green_final_proof_guide": runtime_green_final_proof_guide,
                     "runtime_green_final_report_packet_visible": true,
+                    "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+                    "runtime_green_final_report_packet_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
+                    "runtime_green_final_report_packet_runtime_status_summary_field": "runtime_green_final_report_packet_summary",
                     "runtime_green_final_report_packet_copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
                     "runtime_green_final_report_packet_send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
                     "runtime_green_final_report_packet_status": runtime_green_final_report_packet.get("status").and_then(Value::as_str),
@@ -9721,6 +9807,8 @@ impl WebPreviewView {
                     "runtime_green_final_report_packet": Self::agent_plugin_runtime_green_final_report_packet_summary(&runtime_green_final_report_packet),
                     "runtime_green_report_readiness_card_visible": true,
                     "runtime_green_report_readiness_card_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
+                    "runtime_green_report_readiness_card_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
+                    "runtime_green_report_readiness_card_runtime_status_summary_field": "runtime_green_report_readiness_card_summary",
                     "runtime_green_report_readiness_card_copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
                     "runtime_green_report_readiness_card_send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
                     "runtime_green_report_readiness_card_status": runtime_green_report_readiness_card.get("status").and_then(Value::as_str),
@@ -14638,7 +14726,9 @@ impl WebPreviewView {
                     "runtime_green_final_proof_guide_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
                     "runtime_green_final_proof_guide_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
                     "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+                    "runtime_green_final_report_packet_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
                     "runtime_green_report_readiness_card_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
+                    "runtime_green_report_readiness_card_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
                     "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                     "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
                     "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
@@ -14731,6 +14821,8 @@ impl WebPreviewView {
                     },
                     "runtime_green_final_report_packet": {
                         "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+                        "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
+                        "runtime_status_summary_field": "runtime_green_final_report_packet_summary",
                         "source": "runtime_green_report_gate + final_validation_result_import_receipt",
                         "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
                         "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
@@ -14739,6 +14831,8 @@ impl WebPreviewView {
                     },
                     "runtime_green_report_readiness_card": {
                         "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
+                        "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
+                        "runtime_status_summary_field": "runtime_green_report_readiness_card_summary",
                         "source": "runtime_green_claim_readiness + runtime_green_report_gate + runtime_green_final_report_packet + runtime_green_final_proof_audit",
                         "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
                         "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
@@ -14974,7 +15068,9 @@ impl WebPreviewView {
                             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
                             "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+                            "runtime_green_final_report_packet_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
                             "runtime_green_report_readiness_card_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
+                            "runtime_green_report_readiness_card_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
                             "final_validation_observability_schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
                             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
                             "managed_queue_import_action": "import_agent_browser_action_payload_from_managed_queue",
@@ -15138,6 +15234,8 @@ impl WebPreviewView {
                         },
                         "runtime_green_final_report_packet_handoff": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+                            "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
+                            "runtime_status_summary_field": "runtime_green_final_report_packet_summary",
                             "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
                             "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
                             "read_only": true,
@@ -15146,6 +15244,8 @@ impl WebPreviewView {
                         },
                         "runtime_green_report_readiness_card_handoff": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
+                            "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
+                            "runtime_status_summary_field": "runtime_green_report_readiness_card_summary",
                             "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
                             "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
                             "read_only": true,

@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime WebPreview Report Summary Schemas
+
+ADDED:
+- WebPreview final-report packet and report-readiness card summaries now carry dedicated summary schemas plus `source_schema` references to their full payload schemas.
+- WebPreview action manifests, status handoffs, and plugin catalogs now advertise the final-report/report-readiness summary schemas and runtime-status summary fields beside the full handoffs.
+
+CHANGED:
+- Right-side panel consumers can now distinguish compact report summaries from full proof payloads and read aligned status/action/safety fields from either Agent runtime status or WebPreview surfaces.
+
+NOTES:
+- This is read-only metadata only. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime WebPreview Final Proof Guide Summary
 
 ADDED:
