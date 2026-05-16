@@ -629,6 +629,7 @@ pub struct WebPreviewView {
     latest_agent_browser_status_packet: Option<Value>,
     latest_agent_browser_executor_readiness: Option<Value>,
     latest_agent_browser_executor_validation_progress: Option<Value>,
+    latest_agent_browser_final_validation_bundle: Option<Value>,
     latest_agent_browser_noop_executor_attempt: Option<Value>,
     latest_agent_browser_reload_executor_attempt: Option<Value>,
     latest_agent_browser_clear_data_executor_attempt: Option<Value>,
@@ -843,6 +844,7 @@ impl WebPreviewView {
             latest_agent_browser_status_packet: None,
             latest_agent_browser_executor_readiness: None,
             latest_agent_browser_executor_validation_progress: None,
+            latest_agent_browser_final_validation_bundle: None,
             latest_agent_browser_noop_executor_attempt: None,
             latest_agent_browser_reload_executor_attempt: None,
             latest_agent_browser_clear_data_executor_attempt: None,
@@ -1332,6 +1334,7 @@ impl WebPreviewView {
             "agent_browser_status_packet": self.latest_agent_browser_status_packet_summary(),
             "agent_browser_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
             "agent_browser_executor_validation_progress": self.latest_agent_browser_executor_validation_progress_summary(),
+            "agent_browser_final_validation_bundle": self.latest_agent_browser_final_validation_bundle_summary(),
             "agent_browser_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
             "agent_browser_reload_executor_attempt": self.latest_agent_browser_reload_executor_attempt_summary(),
             "agent_browser_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
@@ -1708,6 +1711,23 @@ impl WebPreviewView {
             "ready_group_count": progress.pointer("/ready_group_count").and_then(Value::as_u64),
             "total_group_count": progress.pointer("/total_group_count").and_then(Value::as_u64),
             "next_step": progress.pointer("/next_step").and_then(Value::as_str),
+        }))
+    }
+
+    fn latest_agent_browser_final_validation_bundle_summary(&self) -> Option<Value> {
+        let bundle = self.latest_agent_browser_final_validation_bundle.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at_ms": bundle.pointer("/captured_at_ms").and_then(Value::as_u64),
+            "url": bundle.pointer("/session/url").and_then(Value::as_str),
+            "title": bundle.pointer("/session/title").and_then(Value::as_str),
+            "status": bundle.pointer("/status").and_then(Value::as_str),
+            "estimated_code_score": bundle.pointer("/estimated_code_score").and_then(Value::as_u64),
+            "executor_readiness_status": bundle.pointer("/current_readiness/executor_readiness_status").and_then(Value::as_str),
+            "validation_status": bundle.pointer("/current_readiness/validation_status").and_then(Value::as_str),
+            "ready_item_count": bundle.pointer("/current_readiness/ready_item_count").and_then(Value::as_u64),
+            "total_item_count": bundle.pointer("/current_readiness/total_item_count").and_then(Value::as_u64),
+            "success_criteria_count": bundle.pointer("/success_criteria").and_then(Value::as_array).map(Vec::len),
+            "manual_proof_step_count": bundle.pointer("/manual_windows_proof_order").and_then(Value::as_array).map(Vec::len),
         }))
     }
 
@@ -2415,6 +2435,7 @@ impl WebPreviewView {
         cx.write_to_clipboard(ClipboardItem::new_string(
             Self::agent_browser_final_validation_bundle_json(&bundle),
         ));
+        self.latest_agent_browser_final_validation_bundle = Some(bundle);
         self.show_toast("Copied final validation bundle", cx);
         cx.notify();
     }
@@ -2426,6 +2447,7 @@ impl WebPreviewView {
     ) {
         let bundle = self.agent_browser_final_validation_bundle(window);
         let blocks = self.agent_browser_final_validation_bundle_agent_blocks(&bundle);
+        self.latest_agent_browser_final_validation_bundle = Some(bundle);
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast("Sent final validation bundle to the agent panel", cx);
         cx.notify();
@@ -4552,6 +4574,7 @@ impl WebPreviewView {
                     "agent_browser_native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                     "agent_browser_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
                     "agent_browser_executor_validation_progress": self.agent_browser_executor_validation_progress(),
+                    "agent_browser_final_validation_bundle": self.latest_agent_browser_final_validation_bundle_summary(),
                     "managed_chrome_execution": managed_chrome_execution,
                     "pc_use_status": pc_use_status,
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
@@ -8873,6 +8896,7 @@ impl WebPreviewView {
                     "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
                     "copy_action": "copy_agent_browser_final_validation_bundle",
                     "send_action": "send_agent_browser_final_validation_bundle_to_agent",
+                    "latest_summary": self.latest_agent_browser_final_validation_bundle_summary(),
                     "read_only": true,
                     "purpose": "Share one final proof packet that ties readiness, validation progress, QA runbook, action manifest, plugin catalog, and manual Windows proof order together."
                 }
@@ -13099,6 +13123,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_status_packet: None,
                 latest_agent_browser_executor_readiness: None,
                 latest_agent_browser_executor_validation_progress: None,
+                latest_agent_browser_final_validation_bundle: None,
                 latest_agent_browser_noop_executor_attempt: None,
                 latest_agent_browser_reload_executor_attempt: None,
                 latest_agent_browser_clear_data_executor_attempt: None,
