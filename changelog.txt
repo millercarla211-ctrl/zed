@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Runtime-Green Operator Handoff
+
+ADDED:
+- Runtime status now emits a schema-versioned runtime-green operator handoff packet beside the blocker summary and scorecard.
+- The handoff identifies the current best next lane, lane-specific recovery steps, canonical runtime-status inspect payloads, and final manual runtime validation instructions.
+- Agent and WebPreview plugin catalogs now advertise the runtime-green operator handoff schema.
+
+NOTES:
+- This is read-only handoff metadata only; it does not write files, run Node, launch Chrome, dispatch browser or OS input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Runtime-Green Scorecard
 
 ADDED:

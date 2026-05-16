@@ -88,6 +88,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_BLOCKERS_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_blocker_summary.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_readiness_scorecard.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_operator_handoff.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
@@ -391,6 +393,12 @@ fn inspect_runtime_status(
     let runtime_green_blocker_summary = runtime_green_blocker_summary(status, roots);
     let runtime_green_readiness_scorecard =
         runtime_green_readiness_scorecard(status, &runtime_green_blocker_summary);
+    let runtime_green_operator_handoff = runtime_green_operator_handoff(
+        runtime_request_root_mode(roots),
+        status,
+        &runtime_green_blocker_summary,
+        &runtime_green_readiness_scorecard,
+    );
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA,
@@ -418,6 +426,7 @@ fn inspect_runtime_status(
         "bootstrap_readiness": bootstrap_readiness,
         "runtime_green_blocker_summary": runtime_green_blocker_summary,
         "runtime_green_readiness_scorecard": runtime_green_readiness_scorecard,
+        "runtime_green_operator_handoff": runtime_green_operator_handoff,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
         "observability_profiles": input
@@ -1895,6 +1904,289 @@ fn scorecard_bool_at(value: &Value, pointer: &str) -> bool {
         .pointer(pointer)
         .and_then(Value::as_bool)
         .unwrap_or(false)
+}
+
+fn runtime_green_operator_handoff(
+    root_mode: &str,
+    runtime_status: &str,
+    blocker_summary: &Value,
+    scorecard: &Value,
+) -> Value {
+    let lanes = scorecard
+        .get("lanes")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let lane_handoffs = lanes
+        .iter()
+        .map(|lane| runtime_green_lane_operator_handoff(root_mode, lane))
+        .collect::<Vec<_>>();
+    let current_best_next = lane_handoffs
+        .iter()
+        .find(|lane| {
+            lane.get("ready")
+                .and_then(Value::as_bool)
+                .map(|ready| !ready)
+                .unwrap_or(true)
+        })
+        .cloned()
+        .unwrap_or_else(|| runtime_green_final_operator_handoff(root_mode));
+    let runtime_green_candidate = scorecard
+        .get("runtime_green_candidate")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let ready_lane_count = scorecard
+        .pointer("/totals/ready_lane_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let lane_count = scorecard
+        .pointer("/totals/lane_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let status = if runtime_green_candidate {
+        "runtime_green_candidate"
+    } else if lane_count > 0 && ready_lane_count == lane_count {
+        "ready_for_final_runtime_validation"
+    } else {
+        "operator_action_required"
+    };
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+        "status": status,
+        "runtime_status": runtime_status,
+        "root_mode": root_mode,
+        "runtime_green_candidate": runtime_green_candidate,
+        "scorecard_status": scorecard.get("status").and_then(Value::as_str),
+        "blocker_summary_status": blocker_summary.get("status").and_then(Value::as_str),
+        "current_best_next": current_best_next,
+        "lane_handoffs": lane_handoffs,
+        "canonical_inspect_payload": runtime_green_status_inspect_payload(root_mode),
+        "final_runtime_validation": runtime_green_final_operator_handoff(root_mode),
+        "handoff_consumers": [
+            "agent_panel",
+            "subagents",
+            "web_preview_status_packets",
+            "future_plugin_operator_ui"
+        ],
+        "reads_from": [
+            "runtime_green_blocker_summary",
+            "runtime_green_readiness_scorecard"
+        ],
+        "safety": {
+            "handoff_is_read_only_metadata": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+            "touches_real_browser_profiles": false,
+            "permissioned_steps_require_user_visible_authorization": true
+        }
+    })
+}
+
+fn runtime_green_lane_operator_handoff(root_mode: &str, lane: &Value) -> Value {
+    let lane_id = lane.get("id").and_then(Value::as_str).unwrap_or("unknown");
+    let ready = lane.get("ready").and_then(Value::as_bool).unwrap_or(false);
+    let status = lane
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("pending_runtime_evidence");
+    let primary_next_actions = lane
+        .get("primary_next_actions")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
+
+    serde_json::json!({
+        "lane_id": lane_id,
+        "label": lane.get("label").and_then(Value::as_str),
+        "status": status,
+        "ready": ready,
+        "blocker_count": lane.get("blocker_count").and_then(Value::as_u64).unwrap_or(0),
+        "blockers": lane
+            .get("blockers")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([])),
+        "primary_next_actions": primary_next_actions,
+        "operator_steps": runtime_green_lane_operator_steps(root_mode, lane_id),
+        "post_step_verification": {
+            "tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+            "payload": runtime_green_status_inspect_payload(root_mode),
+            "expected_field": format!("runtime_green_readiness_scorecard.lanes.{lane_id}.ready"),
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false
+        }
+    })
+}
+
+fn runtime_green_lane_operator_steps(root_mode: &str, lane_id: &str) -> Value {
+    match lane_id {
+        "browser_webpreview" => serde_json::json!([
+            {
+                "id": "inspect_browser_queue",
+                "tool": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                "purpose": "Confirm the latest managed Browser payload exists before WebPreview import validation.",
+                "payload": {
+                    "root_mode": root_mode,
+                    "include_payload_packet": false
+                },
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "webpreview_final_result",
+                "webpreview_actions": [
+                    "copy_agent_browser_final_validation_bundle",
+                    "copy_agent_browser_final_validation_result_template",
+                    "import_agent_browser_final_validation_result_from_clipboard",
+                    "send_agent_browser_final_validation_result_to_agent"
+                ],
+                "purpose": "Import the managed WebPreview final validation result only after manual runtime proof is available.",
+                "writes_files": false,
+                "managed_proof_write": "only after explicit WebPreview import action",
+                "dispatches_input": false
+            }
+        ]),
+        "managed_chrome" => serde_json::json!([
+            {
+                "id": "prepare_managed_roots",
+                "tool": AgentPluginBootstrapTool::NAME,
+                "payload": {
+                    "root_mode": root_mode,
+                    "create_managed_roots": true,
+                    "write_bootstrap_manifest": true
+                },
+                "requires_authorization": true,
+                "writes_files": true,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "write_asset_receipt",
+                "tool": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
+                "payload": {
+                    "root_mode": root_mode,
+                    "write_asset_receipt": true,
+                    "copy_dx_chrome_extension": false,
+                    "dx_chrome_extension_source_root": Value::Null,
+                    "overwrite_existing_files": false,
+                    "include_file_preview": true
+                },
+                "requires_authorization": true,
+                "writes_files": true,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "prepare_playwright_adapter",
+                "tool": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+                "payload": {
+                    "root_mode": root_mode,
+                    "write_adapter_files": true,
+                    "include_script_preview": false
+                },
+                "requires_authorization": true,
+                "writes_files": true,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "inspect_execution_receipts",
+                "tool": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
+                "purpose": "Read the latest managed Chrome execution request and receipt before claiming this lane is green.",
+                "writes_files": false,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            }
+        ]),
+        "pc_use" => serde_json::json!([
+            {
+                "id": "inspect_ui_snapshot",
+                "tool": AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME,
+                "purpose": "Read safe current Zed UI targets before composing any future PC-use payload.",
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "inspect_pc_use_queue",
+                "tool": AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                "purpose": "Confirm the latest managed PC-use payload before the runner gate writes a receipt.",
+                "payload": {
+                    "root_mode": root_mode,
+                    "include_payload_packet": false
+                },
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "request_pc_use_runner_gate",
+                "tool": AGENT_PC_USE_RUNNER_GATE_TOOL_NAME,
+                "payload": {
+                    "root_mode": root_mode,
+                    "include_payload_packet": false
+                },
+                "purpose": "Write only a future-executor readiness receipt; this does not take screenshots or dispatch OS input.",
+                "requires_authorization": true,
+                "writes_files": true,
+                "takes_screenshot": false,
+                "dispatches_input": false
+            }
+        ]),
+        _ => serde_json::json!([
+            {
+                "id": "inspect_runtime_status",
+                "tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                "payload": runtime_green_status_inspect_payload(root_mode),
+                "writes_files": false,
+                "dispatches_input": false
+            }
+        ]),
+    }
+}
+
+fn runtime_green_status_inspect_payload(root_mode: &str) -> Value {
+    serde_json::json!({
+        "root_mode": root_mode,
+        "include_latest_handoffs": true,
+        "include_host_checks": true,
+        "include_next_actions": true,
+        "include_workflows": true,
+        "include_validation_matrix": true,
+        "include_observability_profiles": true
+    })
+}
+
+fn runtime_green_final_operator_handoff(root_mode: &str) -> Value {
+    serde_json::json!({
+        "lane_id": "final_runtime_validation",
+        "label": "Final Windows runtime validation",
+        "status": "manual_required",
+        "ready": false,
+        "operator_steps": [
+            {
+                "id": "inspect_runtime_status_before_final_pass",
+                "tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                "payload": runtime_green_status_inspect_payload(root_mode),
+                "writes_files": false,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "manual_just_run",
+                "manual_command": "just run",
+                "when": "Only after Browser/WebPreview, managed Chrome, and PC-use lanes are ready and the user wants one final runtime pass.",
+                "writes_files": false,
+                "dispatches_input": "manual_validation_only"
+            }
+        ]
+    })
 }
 
 fn observability_profiles(runtime_status: &str, roots: &AgentPluginRuntimeRoots) -> Value {

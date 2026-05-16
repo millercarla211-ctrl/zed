@@ -1,5 +1,6 @@
 IN PROGRESS:
 - NEXT 100-POINT FEATURE SET: Agent Plugin Runtime. Goal: bring Codex-app-style plugin capability discovery into the Zed Agent, starting with Browser, Chrome/Playwright, and permissioned PC-use plugins available to every Agent Panel.
+- Agent Plugin Runtime runtime-green operator handoff slice: runtime status now emits a compact operator handoff packet that packages the scorecard, current best next lane, lane recovery steps, canonical inspect payload, and final validation instructions for Agent/WebPreview consumers.
 - Agent Plugin Runtime runtime-green scorecard slice: `inspect_agent_plugin_runtime_status` now derives a compact Browser/WebPreview, managed Chrome, and PC-use readiness scorecard from the blocker summary so agents can see lane pass/block/manual state without parsing full receipts.
 - Agent Plugin Runtime receipt-outcome classification slice: runtime status now classifies managed Chrome runner receipts, managed Chrome execution receipts, and PC-use runner receipts by their ready outcomes before allowing the runtime-green blocker summary to clear.
 - Agent Plugin Runtime durable final-proof slice: WebPreview now persists imported final validation results into managed `browser-final-validation` proof files, and runtime status can read that durable result to clear or report the Browser/WebPreview runtime-green blocker.
