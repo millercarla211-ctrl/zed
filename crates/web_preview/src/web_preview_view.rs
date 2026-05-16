@@ -316,6 +316,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_native_dispatch_qa_checklist_to_agent",
     "copy_agent_browser_qa_runbook",
     "send_agent_browser_qa_runbook_to_agent",
+    "copy_agent_browser_action_manifest",
+    "send_agent_browser_action_manifest_to_agent",
     "copy_agent_plugin_catalog",
     "send_agent_plugin_catalog_to_agent",
     "copy_managed_chrome_execution_status",

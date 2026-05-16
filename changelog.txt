@@ -1,3 +1,11 @@
+[2026-05-16] - Agent Browser Action Manifest Policy
+
+FIXED:
+- Added Copy/Send Agent Browser Action Manifest to the WebPreview read-only action policy list so the policy matches the implemented menu actions and advertised action-manifest handoff.
+
+NOTES:
+- This is read-only policy metadata only; it does not dispatch browser input, launch Chrome, run Node, inspect the live page, or change editor/WebPreview focus paths.
+
 [2026-05-16] - Agent Browser Final Validation Result Template
 
 ADDED:
