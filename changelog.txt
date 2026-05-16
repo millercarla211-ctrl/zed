@@ -1,3 +1,17 @@
+[2026-05-17] - Agent Plugin Runtime Status Final Proof Audit
+
+ADDED:
+- `inspect_agent_plugin_runtime_status` now emits `runtime_green_final_proof_audit`, a compact final-proof audit with final-result presence, missing checks, missing evidence, required-check blockers, report-gate status, and next action.
+
+CHANGED:
+- Agent and WebPreview plugin catalog runtime-status descriptions now name the final-proof audit as a first-class read-only status surface.
+
+FIXED:
+- Agent runtime-status durable final-result summaries now require non-empty evidence on every required manual check before reporting `runtime_green_candidate=true`, matching the WebPreview final-result import gate.
+
+NOTES:
+- This is read-only runtime-status metadata only. It does not run `just run`, launch Chrome, dispatch browser or OS input, write proof files, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Final Proof Audit Summary
 
 CHANGED:

@@ -110,6 +110,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result_import_receipt.v1";
+const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_proof_audit.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME: &str =
     "latest-agent-browser-final-validation-result.json";
@@ -462,6 +464,11 @@ fn inspect_runtime_status(
         &runtime_green_final_proof_guide_value,
         roots.root_mode_label(),
     );
+    let runtime_green_final_proof_audit_value = runtime_green_final_proof_audit(
+        &runtime_green_claim_readiness_value,
+        &runtime_green_report_gate_value,
+        &runtime_green_final_report_packet_value,
+    );
     let runtime_green_claim_gate = input
         .include_runtime_green_claim_gate
         .then(|| runtime_green_claim_gate_value.clone());
@@ -504,6 +511,7 @@ fn inspect_runtime_status(
         "runtime_green_report_gate": runtime_green_report_gate_value,
         "runtime_green_report_badge": runtime_green_report_badge_value,
         "runtime_green_final_proof_guide": runtime_green_final_proof_guide_value,
+        "runtime_green_final_proof_audit": runtime_green_final_proof_audit_value,
         "runtime_green_final_report_packet": runtime_green_final_report_packet_value,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
@@ -542,6 +550,7 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
             "payload_queue_inspection": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECTION_SCHEMA,
             "final_validation_result": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
             "final_validation_result_import_receipt": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
+            "final_proof_audit": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
             "runtime_green_final_proof_guide": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
             "runtime_green_final_report_packet": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
         },
@@ -2286,6 +2295,7 @@ fn runtime_green_proof_path(
                     "runtime_green_report_gate",
                     "runtime_green_report_badge",
                     "runtime_green_final_proof_guide",
+                    "runtime_green_final_proof_audit",
                     "runtime_green_final_report_packet"
                 ],
                 "writes_files": false,
@@ -2352,6 +2362,12 @@ fn runtime_green_proof_path(
                 "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
                 "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent"
             },
+            "runtime_green_final_proof_audit": {
+                "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
+                "source": "runtime_green_claim_readiness + runtime_green_report_gate",
+                "copy_action": "copy_agent_browser_final_proof_audit",
+                "send_action": "send_agent_browser_final_proof_audit_to_agent"
+            },
             "runtime_green_final_report_packet": {
                 "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
                 "source": "runtime_green_report_gate + final_validation_result_import_receipt",
@@ -2374,6 +2390,7 @@ fn runtime_green_proof_path(
             "runtime_green_operator_handoff",
             "runtime_green_blocker_summary",
             "runtime_green_readiness_scorecard",
+            "runtime_green_final_proof_audit",
             "runtime_green_final_report_packet"
         ],
         "safety": {
@@ -3012,6 +3029,130 @@ fn runtime_green_final_report_packet(
         },
         "webpreview_copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
         "webpreview_send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
+        "read_only": true,
+        "writes_files": false,
+        "runs_node": false,
+        "launches_browser": false,
+        "dispatches_input": false,
+    })
+}
+
+fn runtime_green_final_proof_audit(
+    claim_readiness: &Value,
+    report_gate: &Value,
+    final_report_packet: &Value,
+) -> Value {
+    let final_result_summary = claim_readiness
+        .get("final_validation_result_summary")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let final_result_present = claim_readiness
+        .get("final_result_present")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let final_result_runtime_green = claim_readiness
+        .get("final_result_runtime_green")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let overall_runtime_green_candidate = claim_readiness
+        .get("runtime_green_candidate")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let runtime_green_candidate = final_result_runtime_green;
+    let may_report_runtime_green = report_gate
+        .get("can_report_runtime_green")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let missing_required_checks = final_result_summary
+        .get("missing_required_checks")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
+    let missing_required_evidence = final_result_summary
+        .get("missing_required_evidence")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
+    let required_check_blocker_count = final_result_summary
+        .get("required_check_blocker_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let overall_blocker = final_result_summary.get("overall_blocker").cloned();
+    let has_overall_blocker = overall_blocker
+        .as_ref()
+        .map(|blocker| !blocker.is_null())
+        .unwrap_or(false);
+    let status = if may_report_runtime_green {
+        "ready_to_report_runtime_green"
+    } else if !final_result_present {
+        "awaiting_final_runtime_result_import"
+    } else if final_result_runtime_green || runtime_green_candidate {
+        "runtime_green_result_waiting_for_report_gate"
+    } else {
+        "final_result_needs_evidence_or_blocker_fix"
+    };
+    let next_action = if may_report_runtime_green {
+        "copy_agent_plugin_runtime_green_final_report_packet"
+    } else if !final_result_present {
+        "copy_agent_browser_final_validation_result_template"
+    } else if final_result_runtime_green || runtime_green_candidate {
+        "copy_agent_plugin_runtime_green_report_gate"
+    } else {
+        "copy_agent_browser_final_validation_result"
+    };
+
+    serde_json::json!({
+        "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
+        "audit": {
+            "generated_at_ms": current_epoch_millis(),
+            "status": status,
+            "runtime_green_candidate": runtime_green_candidate,
+            "overall_runtime_green_candidate": overall_runtime_green_candidate,
+            "final_result_present": final_result_present,
+            "final_result_runtime_green": final_result_runtime_green,
+            "may_report_runtime_green": may_report_runtime_green,
+            "next_action": next_action,
+            "missing_required_checks": missing_required_checks,
+            "missing_required_evidence": missing_required_evidence,
+            "required_check_blocker_count": required_check_blocker_count,
+            "overall_blocker": overall_blocker,
+            "has_overall_blocker": has_overall_blocker,
+            "report_gate": {
+                "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
+                "status": report_gate.get("status").and_then(Value::as_str),
+                "blocker": report_gate.get("blocker").and_then(Value::as_str),
+                "can_report_runtime_green": may_report_runtime_green,
+                "next_action": report_gate.get("next_action").and_then(Value::as_str),
+                "badge": report_gate.get("badge").cloned(),
+            }
+        },
+        "latest": {
+            "final_validation_result": final_result_summary,
+            "claim_readiness": {
+                "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
+                "status": claim_readiness.get("status").and_then(Value::as_str),
+                "ready_lane_fraction": claim_readiness.get("ready_lane_fraction").and_then(Value::as_str),
+                "next_required_proof_id": claim_readiness.get("next_required_proof_id").and_then(Value::as_str),
+                "next_recommended_action": claim_readiness.get("next_recommended_action").and_then(Value::as_str),
+            },
+            "final_report_packet": {
+                "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+                "status": final_report_packet.get("status").and_then(Value::as_str),
+                "may_report_runtime_green": final_report_packet
+                    .get("may_report_runtime_green")
+                    .and_then(Value::as_bool),
+                "next_action": final_report_packet.get("next_action").and_then(Value::as_str),
+            }
+        },
+        "required_before_runtime_green_claim": [
+            "final_validation_result.status == pass",
+            "all required checks have status pass",
+            "all required checks include non-empty evidence",
+            "overall_blocker is null",
+            "every required check blocker is null",
+            "runtime_green_report_gate.can_report_runtime_green == true"
+        ],
+        "source_tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+        "webpreview_copy_action": "copy_agent_browser_final_proof_audit",
+        "webpreview_send_action": "send_agent_browser_final_proof_audit_to_agent",
         "read_only": true,
         "writes_files": false,
         "runs_node": false,
@@ -4027,6 +4168,19 @@ fn browser_final_validation_result_summary(result: &Value) -> Value {
         .filter_map(Value::as_str)
         .filter(|check_id| checks.and_then(|checks| checks.get(*check_id)).is_none())
         .collect::<Vec<_>>();
+    let missing_required_evidence = required_check_ids
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|check_id| {
+            checks
+                .and_then(|checks| checks.get(*check_id))
+                .and_then(|check| check.pointer("/evidence"))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|evidence| !evidence.is_empty())
+                .is_none()
+        })
+        .collect::<Vec<_>>();
     let required_check_blocker_count = required_check_ids
         .iter()
         .filter_map(Value::as_str)
@@ -4048,7 +4202,8 @@ fn browser_final_validation_result_summary(result: &Value) -> Value {
             .map(Value::is_null)
             .unwrap_or(true)
         && required_check_blocker_count == 0
-        && missing_required_checks.is_empty();
+        && missing_required_checks.is_empty()
+        && missing_required_evidence.is_empty();
 
     serde_json::json!({
         "state": "parsed_result",
@@ -4063,6 +4218,7 @@ fn browser_final_validation_result_summary(result: &Value) -> Value {
         "pass_required_check_count": pass_required_check_count,
         "required_check_blocker_count": required_check_blocker_count,
         "missing_required_checks": missing_required_checks,
+        "missing_required_evidence": missing_required_evidence,
         "runtime_green_candidate": runtime_green_candidate,
         "overall_blocker": result.pointer("/overall_blocker").cloned(),
     })

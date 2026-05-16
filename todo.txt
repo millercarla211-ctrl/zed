@@ -1,5 +1,6 @@
 IN PROGRESS:
 - NEXT 100-POINT FEATURE SET: Agent Plugin Runtime. Goal: bring Codex-app-style plugin capability discovery into the Zed Agent, starting with Browser, Chrome/Playwright, and permissioned PC-use plugins available to every Agent Panel.
+- Agent Plugin Runtime runtime-status audit slice: `inspect_agent_plugin_runtime_status` now emits a compact final-proof audit and enforces non-empty evidence in durable final-result summaries before allowing runtime-green status.
 - Agent Plugin Runtime final-proof audit summary slice: WebPreview final-proof audit Agent Panel handoffs now lead with a human-readable status summary, and final validation bundles include that audit headline before the raw JSON.
 - Agent Plugin Runtime final-proof audit slice: WebPreview now exposes a compact read-only final proof audit that reports missing checks, missing evidence, blockers, import receipt state, and report-gate status before any runtime-green claim.
 - Agent Plugin Runtime final-proof evidence enforcement slice: runtime-green final-result summaries now require non-empty evidence for every required manual check before marking an imported final validation result as a runtime-green candidate.

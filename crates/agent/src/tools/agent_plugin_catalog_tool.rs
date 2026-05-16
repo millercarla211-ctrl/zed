@@ -282,7 +282,7 @@ fn agent_plugin_catalog(
                     "include_runtime_green_proof_path": true,
                     "include_runtime_green_claim_gate": true
                 },
-                "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, runtime-green proof path, final report packet, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
+                "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, runtime-green proof path, final proof audit, final report packet, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
             },
             "webpreview_handoffs": {
                 "runtime_observability_digest": {
