@@ -1,3 +1,14 @@
+[2026-05-16] - Agent Plugin Runtime Workflow Recipes
+
+ADDED:
+- Added optional workflow recipes to `inspect_agent_plugin_runtime_status` for Browser WebPreview payload handoff, managed Chrome safe Playwright actions, and future Zed-window PC-use input gates.
+
+CHANGED:
+- Agent and WebPreview plugin catalogs now request workflow recipes from the runtime status tool by default.
+
+NOTES:
+- Recipes are read-only orchestration metadata; they do not add new dispatch paths, launch browsers, run Node, take screenshots, or write files.
+
 [2026-05-16] - Browser Payload Queue Inspection
 
 ADDED:

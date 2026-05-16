@@ -89,6 +89,8 @@ pub struct AgentPluginRuntimeStatusToolInput {
     pub include_host_checks: bool,
     /// Include suggested next actions for blocked or partially provisioned runtimes.
     pub include_next_actions: bool,
+    /// Include ordered safe workflow recipes for Browser, managed Chrome, and PC-use.
+    pub include_workflows: bool,
 }
 
 impl Default for AgentPluginRuntimeStatusToolInput {
@@ -98,6 +100,7 @@ impl Default for AgentPluginRuntimeStatusToolInput {
             include_latest_handoffs: true,
             include_host_checks: true,
             include_next_actions: true,
+            include_workflows: true,
         }
     }
 }
@@ -351,6 +354,7 @@ fn inspect_runtime_status(
             "pc_use": pc_use,
         },
         "host": host_checks,
+        "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "next_actions": input.include_next_actions.then(|| next_actions(status, roots)),
         "safety": {
             "read_only": true,
@@ -608,6 +612,144 @@ fn next_actions(status: &str, roots: &AgentPluginRuntimeRoots) -> Vec<&'static s
         actions.push("Use the plugin-specific inspect tools before any permissioned execution.");
     }
     actions
+}
+
+fn workflow_recipes() -> Value {
+    serde_json::json!({
+        "browser_webpreview_payload": {
+            "goal": "Move a validated Agent Browser action into the in-app WebPreview without dispatching input from Agent tools.",
+            "safe_for": ["click", "type_text", "press_key", "scroll"],
+            "ordered_steps": [
+                {
+                    "step": "compose",
+                    "tool": AGENT_BROWSER_PAYLOAD_TOOL_NAME,
+                    "writes_files": false,
+                    "dispatches_input": false,
+                    "notes": "Validate selector/text/key/scroll payload shape first."
+                },
+                {
+                    "step": "queue",
+                    "tool": AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME,
+                    "writes_files": true,
+                    "dispatches_input": false,
+                    "notes": "Writes only a managed handoff file after permission."
+                },
+                {
+                    "step": "inspect_queue",
+                    "tool": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                    "writes_files": false,
+                    "dispatches_input": false,
+                    "notes": "Confirm queue item schema/action before WebPreview import."
+                },
+                {
+                    "step": "webpreview_import",
+                    "surface": "WebPreview More menu",
+                    "writes_files": false,
+                    "dispatches_input": false,
+                    "notes": "Import creates an import receipt but still does not execute input."
+                },
+                {
+                    "step": "webpreview_execute",
+                    "surface": "permissioned WebPreview executor",
+                    "required_gates": [
+                        "interactive permission unlock",
+                        "fresh action preflight",
+                        "native trace receipt",
+                        "dispatch QA checklist",
+                        "executor receipt"
+                    ]
+                }
+            ],
+        },
+        "chrome_managed_playwright_safe_actions": {
+            "goal": "Run managed external Chrome only for currently allowlisted Playwright actions.",
+            "safe_for": ["open_url", "screenshot", "set_viewport", "wait_for_selector"],
+            "blocked_actions": ["click", "type_text", "press_key", "scroll"],
+            "ordered_steps": [
+                {
+                    "step": "inspect_runtime",
+                    "tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                    "notes": "Check host, Playwright, DX extension, adapter, and managed profile readiness."
+                },
+                {
+                    "step": "compose_and_queue_payload",
+                    "tools": [AGENT_CHROME_PAYLOAD_TOOL_NAME, AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME],
+                    "notes": "Queue only managed-profile payloads."
+                },
+                {
+                    "step": "inspect_queue",
+                    "tool": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                    "notes": "Confirm queue item and managed asset readiness."
+                },
+                {
+                    "step": "request_runner_gate",
+                    "tool": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
+                    "notes": "Write a permissioned runner-gate receipt without launching Chrome."
+                },
+                {
+                    "step": "prepare_adapter",
+                    "tool": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+                    "notes": "Write or verify the managed adapter artifact."
+                },
+                {
+                    "step": "invoke_adapter",
+                    "tool": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
+                    "required_gates": [
+                        "execute_adapter=true",
+                        "safe action only",
+                        "managed profile root",
+                        "runner-gate receipt"
+                    ]
+                },
+                {
+                    "step": "inspect_execution",
+                    "tool": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
+                    "notes": "Read request and receipt summaries after execution."
+                }
+            ],
+        },
+        "pc_use_zed_window_future_input": {
+            "goal": "Prepare future Zed-window PC-use input while keeping current tools read-only or receipt-gated.",
+            "safe_for_now": ["inspect_context", "inspect_targets", "inspect_snapshots", "compose_payload", "queue_payload", "runner_gate_receipt"],
+            "still_blocked": ["actual_focus", "actual_click", "actual_type", "actual_os_desktop_control"],
+            "ordered_steps": [
+                {
+                    "step": "inspect_contract",
+                    "tools": [
+                        AGENT_PC_USE_TARGET_MANIFEST_TOOL_NAME,
+                        AGENT_PC_USE_TARGET_SNAPSHOT_TOOL_NAME,
+                        AGENT_PC_USE_UI_SNAPSHOT_CONTRACT_TOOL_NAME,
+                        AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME
+                    ],
+                    "notes": "Use live snapshot target ids and keep the producing snapshot id."
+                },
+                {
+                    "step": "compose_payload",
+                    "tool": AGENT_PC_USE_PAYLOAD_TOOL_NAME,
+                    "required_fields": ["target_id", "target_snapshot_id"],
+                    "notes": "Focus/click/type payloads require a snapshot receipt for future input-ready target ids."
+                },
+                {
+                    "step": "queue_and_inspect",
+                    "tools": [
+                        AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME,
+                        AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME
+                    ],
+                    "notes": "Managed handoff only; no desktop action is dispatched."
+                },
+                {
+                    "step": "request_runner_gate",
+                    "tool": AGENT_PC_USE_RUNNER_GATE_TOOL_NAME,
+                    "notes": "Writes an auditable future-executor gate receipt without controlling Zed."
+                },
+                {
+                    "step": "inspect_receipts",
+                    "tool": AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
+                    "notes": "Report latest blocked or ready-future receipt state."
+                }
+            ],
+        }
+    })
 }
 
 fn dir_probe(path: &Path) -> Value {

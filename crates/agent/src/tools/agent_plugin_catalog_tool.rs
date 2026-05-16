@@ -202,7 +202,8 @@ fn agent_plugin_catalog(
                     "root_mode": "workspace",
                     "include_latest_handoffs": true,
                     "include_host_checks": true,
-                    "include_next_actions": true
+                    "include_next_actions": true,
+                    "include_workflows": true
                 },
                 "purpose": "Summarize Browser, managed Chrome, and PC-use readiness without launching browsers, running Node, screenshots, or input dispatch."
             },
