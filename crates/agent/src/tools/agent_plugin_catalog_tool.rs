@@ -1,6 +1,10 @@
 use crate::{
     AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME, AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME,
-    AGENT_BROWSER_PAYLOAD_TOOL_NAME, AgentTool, ToolCallEventStream, ToolInput,
+    AGENT_BROWSER_PAYLOAD_TOOL_NAME, AGENT_CHROME_EXECUTOR_PAYLOAD_SCHEMA,
+    AGENT_CHROME_PAYLOAD_QUEUE_FILE_NAME, AGENT_CHROME_PAYLOAD_QUEUE_ITEM_SCHEMA,
+    AGENT_CHROME_PAYLOAD_QUEUE_RESULT_SCHEMA, AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
+    AGENT_CHROME_PAYLOAD_RESULT_SCHEMA, AGENT_CHROME_PAYLOAD_TOOL_NAME, AgentTool,
+    ToolCallEventStream, ToolInput,
 };
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
@@ -147,6 +151,8 @@ fn agent_plugin_catalog(
                 "compose_browser_action_payload": AGENT_BROWSER_PAYLOAD_TOOL_NAME,
                 "stage_browser_action_payload": AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME,
                 "queue_browser_action_payload": AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME,
+                "compose_chrome_action_payload": AGENT_CHROME_PAYLOAD_TOOL_NAME,
+                "queue_chrome_action_payload": AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
                 "prepare_runtime": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL
             },
             "available_to": [
@@ -383,7 +389,79 @@ fn chrome_plugin_manifest(
             ],
             "never_write_to_user_real_chrome_profile": true
         },
+        "action_payload_contract": {
+            "payload_tool_name": AGENT_CHROME_PAYLOAD_TOOL_NAME,
+            "payload_queue_tool_name": AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
+            "payload_result_schema": AGENT_CHROME_PAYLOAD_RESULT_SCHEMA,
+            "executor_payload_schema": AGENT_CHROME_EXECUTOR_PAYLOAD_SCHEMA,
+            "payload_queue_item_schema": AGENT_CHROME_PAYLOAD_QUEUE_ITEM_SCHEMA,
+            "payload_queue_result_schema": AGENT_CHROME_PAYLOAD_QUEUE_RESULT_SCHEMA,
+            "latest_queue_file": AGENT_CHROME_PAYLOAD_QUEUE_FILE_NAME,
+            "managed_queue_roots": {
+                "workspace": workspace_plugin_root
+                    .as_ref()
+                    .map(|root| root.join("chrome-payloads").display().to_string()),
+                "zed_data": default_plugin_root
+                    .join("chrome-payloads")
+                    .display()
+                    .to_string()
+            },
+            "supported_actions": [
+                "open_url",
+                "click",
+                "type_text",
+                "press_key",
+                "scroll",
+                "screenshot",
+                "wait_for_selector",
+                "set_viewport"
+            ],
+            "examples": [
+                {
+                    "action": "open_url",
+                    "payload": {
+                        "schema": AGENT_CHROME_EXECUTOR_PAYLOAD_SCHEMA,
+                        "payload": {
+                            "action": "open_url",
+                            "url": "http://localhost:3000"
+                        }
+                    }
+                },
+                {
+                    "action": "type_text",
+                    "payload": {
+                        "schema": AGENT_CHROME_EXECUTOR_PAYLOAD_SCHEMA,
+                        "payload": {
+                            "action": "type_text",
+                            "selector": "input[name='email']",
+                            "text": "user@example.com"
+                        }
+                    }
+                },
+                {
+                    "action": "set_viewport",
+                    "payload": {
+                        "schema": AGENT_CHROME_EXECUTOR_PAYLOAD_SCHEMA,
+                        "payload": {
+                            "action": "set_viewport",
+                            "width": 390,
+                            "height": 844,
+                            "device_scale_factor": 3.0
+                        }
+                    }
+                }
+            ],
+            "rules": [
+                "Payload tools never launch Chrome, install Playwright, dispatch input, or run page scripts.",
+                "Queued payloads are written only to managed workspace or Zed-data plugin roots after authorization.",
+                "Future execution must use managed profiles, explicit permission, fresh preflight, and receipts.",
+                "The runner must never write into the user's real Chrome, Edge, or Firefox profile."
+            ]
+        },
         "capabilities": [
+            capability("chrome.action.payload_compose", "available", "Use compose_managed_chrome_action_payload to generate validated managed Chrome/Playwright action packets."),
+            capability("chrome.action.payload_queue_managed", "available_requires_authorization", "Use queue_managed_chrome_action_payload to write a validated Chrome action packet into the managed workspace or Zed-data queue."),
+            capability("chrome.action.payload_queue_schema", "available", "Read the managed Chrome payload packet, queue item, queue result, and latest-file schemas for future runner execution."),
             capability("chrome.session.launch", "requires_bootstrap", "Launch or attach to a managed Chrome profile."),
             capability("chrome.page.open_url", "requires_bootstrap", "Open URLs in managed Chrome tabs."),
             capability("chrome.page.click", "requires_permission", "Click elements through Playwright locators or extension targets."),

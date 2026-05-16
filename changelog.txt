@@ -1,3 +1,15 @@
+[2026-05-16] - Managed Chrome Payload Queue
+
+ADDED:
+- Added read-only and permissioned Agent tools for composing and queueing managed Chrome/Playwright action payloads.
+- Added managed Chrome payload, queue item, queue result, latest-file, and supported-action metadata to the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- The Agent Plugin Runtime now exposes safe Chrome payload handoff alongside the in-app Browser payload bridge, giving future Chrome/Playwright execution a schema-versioned queue before any runner dispatch is enabled.
+
+NOTES:
+- The managed Chrome queue does not launch Chrome, install Playwright, run page scripts, dispatch input, or touch real browser profiles; it only writes authorized payload packets under managed workspace or Zed-data plugin roots.
+
 [2026-05-16] - Agent Browser Managed Payload Queue
 
 ADDED:

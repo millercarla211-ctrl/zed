@@ -8102,6 +8102,15 @@ impl WebPreviewView {
                 "status": "discovery_layer_available",
                 "tool_name": "list_agent_plugins",
                 "default_enabled_plugins": ["zed.browser", "zed.chrome", "zed.pc_use"],
+                "tools": {
+                    "discovery": "list_agent_plugins",
+                    "compose_browser_action_payload": "compose_agent_browser_action_payload",
+                    "stage_browser_action_payload": "stage_agent_browser_action_payload",
+                    "queue_browser_action_payload": "queue_agent_browser_action_payload",
+                    "compose_chrome_action_payload": "compose_managed_chrome_action_payload",
+                    "queue_chrome_action_payload": "queue_managed_chrome_action_payload",
+                    "prepare_runtime": "prepare_agent_plugin_runtime"
+                },
                 "available_to": [
                     "agent_panel",
                     "subagents",
@@ -8270,7 +8279,44 @@ impl WebPreviewView {
                             "requires_dx_chrome_extension": true,
                             "profile_policy": "managed_profile_only"
                         },
+                        "action_payload_contract": {
+                            "payload_tool_name": "compose_managed_chrome_action_payload",
+                            "payload_queue_tool_name": "queue_managed_chrome_action_payload",
+                            "payload_result_schema": "zed.agent_plugins.managed_chrome_payload_result.v1",
+                            "executor_payload_schema": "zed.agent_plugins.managed_chrome_executor_payload.v1",
+                            "payload_queue_item_schema": "zed.agent_plugins.managed_chrome_payload_queue_item.v1",
+                            "payload_queue_result_schema": "zed.agent_plugins.managed_chrome_payload_queue_result.v1",
+                            "latest_queue_file": "latest-managed-chrome-payload.json",
+                            "managed_queue_roots": {
+                                "workspace": workspace_plugin_root
+                                    .as_ref()
+                                    .map(|root| root.join("chrome-payloads").display().to_string()),
+                                "zed_data": zed_plugin_root
+                                    .join("chrome-payloads")
+                                    .display()
+                                    .to_string()
+                            },
+                            "supported_actions": [
+                                "open_url",
+                                "click",
+                                "type_text",
+                                "press_key",
+                                "scroll",
+                                "screenshot",
+                                "wait_for_selector",
+                                "set_viewport"
+                            ],
+                            "rules": [
+                                "Payload tools never launch Chrome, install Playwright, dispatch input, or run page scripts.",
+                                "Queued payloads are written only to managed workspace or Zed-data plugin roots after authorization.",
+                                "Future execution must use managed profiles, explicit permission, fresh preflight, and receipts.",
+                                "The runner must never write into the user's real Chrome, Edge, or Firefox profile."
+                            ]
+                        },
                         "capabilities": [
+                            {"id": "chrome.action.payload_compose", "state": "available", "description": "Use compose_managed_chrome_action_payload to generate validated managed Chrome/Playwright action packets."},
+                            {"id": "chrome.action.payload_queue_managed", "state": "available_requires_authorization", "description": "Use queue_managed_chrome_action_payload to write a validated Chrome action packet into the managed workspace or Zed-data queue."},
+                            {"id": "chrome.action.payload_queue_schema", "state": "available", "description": "Read the managed Chrome payload packet, queue item, queue result, and latest-file schemas for future runner execution."},
                             {"id": "chrome.session.launch", "state": "requires_bootstrap", "description": "Launch or attach to a managed Chrome profile."},
                             {"id": "chrome.page.open_url", "state": "requires_bootstrap", "description": "Open URLs in managed Chrome tabs."},
                             {"id": "chrome.page.click", "state": "requires_permission", "description": "Click elements through Playwright locators or extension targets."},
