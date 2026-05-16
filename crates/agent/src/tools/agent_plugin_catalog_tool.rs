@@ -6,7 +6,9 @@ use crate::{
     AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME, AGENT_CHROME_PAYLOAD_RESULT_SCHEMA,
     AGENT_CHROME_PAYLOAD_TOOL_NAME, AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA,
     AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME, AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
-    AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA, AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME,
+    AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA,
+    AGENT_CHROME_PLAYWRIGHT_INVOCATION_RESULT_SCHEMA, AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
+    AGENT_CHROME_PLAYWRIGHT_RUN_REQUEST_SCHEMA, AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME,
     AGENT_CHROME_RUNNER_GATE_TOOL_NAME, AGENT_CHROME_RUNNER_RECEIPT_FILE_NAME,
     AGENT_CHROME_RUNNER_RECEIPT_SCHEMA, AgentTool, ToolCallEventStream, ToolInput,
 };
@@ -160,6 +162,7 @@ fn agent_plugin_catalog(
                 "inspect_chrome_action_payload_queue": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
                 "request_chrome_payload_run": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
                 "prepare_chrome_playwright_adapter": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+                "invoke_chrome_playwright_adapter": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
                 "prepare_runtime": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL
             },
             "available_to": [
@@ -212,6 +215,26 @@ fn agent_plugin_catalog(
                     "installs_packages": false,
                     "launches_browser": false,
                     "runs_node": false
+                },
+                "playwright_adapter_invoke_tool": {
+                    "name": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
+                    "dry_run_payload": {
+                        "root_mode": "workspace",
+                        "execute_adapter": false,
+                        "timeout_ms": 60000,
+                        "include_process_output": false,
+                        "include_payload_packet": false
+                    },
+                    "execute_payload": {
+                        "root_mode": "workspace",
+                        "execute_adapter": true,
+                        "timeout_ms": 60000,
+                        "include_process_output": false,
+                        "include_payload_packet": false
+                    },
+                    "requires_permission_for_execution": true,
+                    "safe_actions_only": ["open_url", "screenshot", "set_viewport", "wait_for_selector"],
+                    "input_actions_blocked": ["click", "type_text", "press_key", "scroll"]
                 },
                 "zed_data_plugin_root": default_plugin_root.display().to_string(),
                 "workspace_plugin_root": workspace_plugin_root.as_ref().map(|path| path.display().to_string()),
@@ -449,6 +472,9 @@ fn chrome_plugin_manifest(
             "payload_queue_inspect_tool_name": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
             "runner_gate_tool_name": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
             "playwright_adapter_tool_name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+            "playwright_invoke_tool_name": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
+            "playwright_run_request_schema": AGENT_CHROME_PLAYWRIGHT_RUN_REQUEST_SCHEMA,
+            "playwright_invocation_result_schema": AGENT_CHROME_PLAYWRIGHT_INVOCATION_RESULT_SCHEMA,
             "playwright_adapter_manifest_schema": AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA,
             "playwright_execution_receipt_schema": AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA,
             "playwright_adapter_root_name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME,
@@ -531,6 +557,7 @@ fn chrome_plugin_manifest(
                 "Payload tools never launch Chrome, install Playwright, dispatch input, or run page scripts.",
                 "Queued payloads are written only to managed workspace or Zed-data plugin roots after authorization.",
                 "The Playwright adapter preparation tool writes only versioned adapter files under managed roots and does not run Node.",
+                "The Playwright invocation tool can run only open_url, screenshot, set_viewport, and wait_for_selector after authorization and a ready runner receipt.",
                 "Future execution must use managed profiles, explicit permission, fresh preflight, and receipts.",
                 "The runner must never write into the user's real Chrome, Edge, or Firefox profile."
             ]
@@ -541,6 +568,7 @@ fn chrome_plugin_manifest(
             capability("chrome.action.payload_queue_inspect", "available", "Use inspect_managed_chrome_payload_queue to validate the latest queued Chrome payload and runner prerequisites before launch or dispatch exists."),
             capability("chrome.action.runner_gate", "available_requires_authorization", "Use request_managed_chrome_payload_run to write a permissioned runner receipt that blocks until queue, bootstrap, managed-profile, and future adapter requirements are satisfied."),
             capability("chrome.runtime.playwright_adapter_prepare", "available_requires_authorization", "Use prepare_managed_chrome_playwright_adapter to write a versioned managed Playwright adapter artifact without installing packages, launching Chrome, or dispatching input."),
+            capability("chrome.runtime.playwright_adapter_invoke", "available_requires_authorization", "Use invoke_managed_chrome_playwright_adapter to run the prepared adapter for open_url, screenshot, set_viewport, or wait_for_selector after a ready runner receipt."),
             capability("chrome.action.payload_queue_schema", "available", "Read the managed Chrome payload packet, queue item, queue result, and latest-file schemas for future runner execution."),
             capability("chrome.session.launch", "requires_bootstrap", "Launch or attach to a managed Chrome profile."),
             capability("chrome.page.open_url", "requires_bootstrap", "Open URLs in managed Chrome tabs."),

@@ -1,3 +1,15 @@
+[2026-05-16] - Managed Chrome Adapter Invocation
+
+ADDED:
+- Added the permissioned `invoke_managed_chrome_playwright_adapter` Agent tool for running the prepared managed Playwright adapter after a ready queue and runner-gate receipt.
+- Advertised the invocation tool, run-request schema, invocation-result schema, and safe action set through both the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- External Chrome plugin wiring now has a real non-input execution path for `open_url`, `screenshot`, `set_viewport`, and `wait_for_selector` while keeping `click`, `type_text`, `press_key`, and `scroll` blocked behind future input gates.
+
+NOTES:
+- Invocation requires explicit authorization, managed profile roots, the prepared adapter artifact, a ready runner receipt, and writes request/receipt files only under managed roots.
+
 [2026-05-16] - Managed Chrome Adapter Readiness
 
 ADDED:

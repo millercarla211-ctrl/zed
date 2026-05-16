@@ -8112,6 +8112,7 @@ impl WebPreviewView {
                     "inspect_chrome_action_payload_queue": "inspect_managed_chrome_payload_queue",
                     "request_chrome_payload_run": "request_managed_chrome_payload_run",
                     "prepare_chrome_playwright_adapter": "prepare_managed_chrome_playwright_adapter",
+                    "invoke_chrome_playwright_adapter": "invoke_managed_chrome_playwright_adapter",
                     "prepare_runtime": "prepare_agent_plugin_runtime"
                 },
                 "available_to": [
@@ -8144,6 +8145,26 @@ impl WebPreviewView {
                         "installs_packages": false,
                         "launches_browser": false,
                         "runs_node": false
+                    },
+                    "playwright_adapter_invoke_tool": {
+                        "name": "invoke_managed_chrome_playwright_adapter",
+                        "dry_run_payload": {
+                            "root_mode": "workspace",
+                            "execute_adapter": false,
+                            "timeout_ms": 60000,
+                            "include_process_output": false,
+                            "include_payload_packet": false
+                        },
+                        "execute_payload": {
+                            "root_mode": "workspace",
+                            "execute_adapter": true,
+                            "timeout_ms": 60000,
+                            "include_process_output": false,
+                            "include_payload_packet": false
+                        },
+                        "requires_permission_for_execution": true,
+                        "safe_actions_only": ["open_url", "screenshot", "set_viewport", "wait_for_selector"],
+                        "input_actions_blocked": ["click", "type_text", "press_key", "scroll"]
                     },
                     "zed_data_plugin_root": zed_plugin_root.display().to_string(),
                     "workspace_plugin_root": workspace_plugin_root
@@ -8327,6 +8348,9 @@ impl WebPreviewView {
                             "payload_queue_inspect_tool_name": "inspect_managed_chrome_payload_queue",
                             "runner_gate_tool_name": "request_managed_chrome_payload_run",
                             "playwright_adapter_tool_name": "prepare_managed_chrome_playwright_adapter",
+                            "playwright_invoke_tool_name": "invoke_managed_chrome_playwright_adapter",
+                            "playwright_run_request_schema": "zed.agent_plugins.managed_chrome_playwright_run_request.v1",
+                            "playwright_invocation_result_schema": "zed.agent_plugins.managed_chrome_playwright_invocation_result.v1",
                             "playwright_adapter_manifest_schema": "zed.agent_plugins.managed_chrome_playwright_adapter_manifest.v1",
                             "playwright_execution_receipt_schema": "zed.agent_plugins.managed_chrome_playwright_execution_receipt.v1",
                             "playwright_adapter_root_name": "zed-managed-chrome-runner",
@@ -8371,6 +8395,7 @@ impl WebPreviewView {
                                 "Payload tools never launch Chrome, install Playwright, dispatch input, or run page scripts.",
                                 "Queued payloads are written only to managed workspace or Zed-data plugin roots after authorization.",
                                 "The Playwright adapter preparation tool writes only versioned adapter files under managed roots and does not run Node.",
+                                "The Playwright invocation tool can run only open_url, screenshot, set_viewport, and wait_for_selector after authorization and a ready runner receipt.",
                                 "Future execution must use managed profiles, explicit permission, fresh preflight, and receipts.",
                                 "The runner must never write into the user's real Chrome, Edge, or Firefox profile."
                             ]
@@ -8381,6 +8406,7 @@ impl WebPreviewView {
                             {"id": "chrome.action.payload_queue_inspect", "state": "available", "description": "Use inspect_managed_chrome_payload_queue to validate the latest queued Chrome payload and runner prerequisites before launch or dispatch exists."},
                             {"id": "chrome.action.runner_gate", "state": "available_requires_authorization", "description": "Use request_managed_chrome_payload_run to write a permissioned runner receipt that blocks until queue, bootstrap, managed-profile, and future adapter requirements are satisfied."},
                             {"id": "chrome.runtime.playwright_adapter_prepare", "state": "available_requires_authorization", "description": "Use prepare_managed_chrome_playwright_adapter to write a versioned managed Playwright adapter artifact without installing packages, launching Chrome, or dispatching input."},
+                            {"id": "chrome.runtime.playwright_adapter_invoke", "state": "available_requires_authorization", "description": "Use invoke_managed_chrome_playwright_adapter to run the prepared adapter for open_url, screenshot, set_viewport, or wait_for_selector after a ready runner receipt."},
                             {"id": "chrome.action.payload_queue_schema", "state": "available", "description": "Read the managed Chrome payload packet, queue item, queue result, and latest-file schemas for future runner execution."},
                             {"id": "chrome.session.launch", "state": "requires_bootstrap", "description": "Launch or attach to a managed Chrome profile."},
                             {"id": "chrome.page.open_url", "state": "requires_bootstrap", "description": "Open URLs in managed Chrome tabs."},
