@@ -43,6 +43,8 @@ use std::{
 };
 
 const PREPARE_AGENT_PLUGIN_RUNTIME_TOOL: &str = "prepare_agent_plugin_runtime";
+const AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA: &str =
+    "zed.web_preview.agent_browser_executor_validation_progress.v1";
 
 /// Lists the built-in DX/Zed agent plugin catalog for browser, Chrome, and PC-use workflows.
 ///
@@ -370,6 +372,7 @@ fn browser_plugin_manifest() -> Value {
             "payload_queue_inspection_schema": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECTION_SCHEMA,
             "payload_queue_inspect_tool_name": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
             "payload_import_receipt_schema": "zed.web_preview.agent_browser_action_payload_import_receipt.v1",
+            "executor_validation_progress_schema": AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA,
             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
             "managed_queue_import_action": "import_agent_browser_action_payload_from_managed_queue",
             "examples": [
@@ -403,6 +406,14 @@ fn browser_plugin_manifest() -> Value {
                 "Interactive executors still require unlock, fresh preflight, action-specific gates, and receipts.",
                 "type_text requires non-empty payload.text and rejects selector mismatches when a selector is supplied."
             ]
+        },
+        "validation_progress_handoff": {
+            "schema": AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA,
+            "copy_action": "copy_agent_browser_executor_validation_progress",
+            "send_action": "send_agent_browser_executor_validation_progress_to_agent",
+            "read_only": true,
+            "source": "WebPreview More menu",
+            "purpose": "Copy or send grouped Browser executor evidence without requiring larger status/readiness/runbook packets."
         },
         "capabilities": [
             capability("browser.sessions.list", "available", "List open WebPreview sessions and workspace inventory."),
@@ -442,6 +453,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.action.payload_import_clipboard", "available_explicit_user_action", "Import a JSON action payload or plain text from the clipboard into the active WebPreview payload bridge for the next type executor attempt."),
             capability("browser.action.payload_import_queue", "available_explicit_user_action", "Import the latest managed Agent Browser payload queue item into the active WebPreview payload bridge without dispatching input."),
             capability("browser.action.payload_import_receipt", "available", "Copy or send the latest WebPreview payload import receipt, with accepted schema, action metadata, redacted text length, permission state, and next-step safety notes."),
+            capability("browser.action.executor_validation_progress", "available", "Copy or send grouped Browser executor validation progress for final Windows proof without dispatching input."),
             capability("browser.action.click", "available_when_unlocked", "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."),
             capability("browser.action.type", "available_when_unlocked_payload_required", "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."),
             capability("browser.action.key", "available_when_unlocked", "Send allowlisted key presses through the WebView2 DevTools Protocol executor after unlock, fresh preflight, keyboard-focus gate, QA checklist, and receipt logging."),

@@ -1,3 +1,12 @@
+[2026-05-16] - Agent Browser Executor Validation Progress Discovery
+
+ADDED:
+- Advertised the executor validation-progress schema, copy action, and send action in the WebPreview action manifest.
+- Added validation-progress handoff metadata and a Browser capability entry to both the WebPreview plugin catalog and the Agent `list_agent_plugins` catalog.
+
+NOTES:
+- This is discovery metadata only; it does not dispatch browser input, launch Chrome, take screenshots, run page JavaScript, or touch editor/WebPreview focus paths.
+
 [2026-05-16] - Agent Browser Executor Validation Progress Handoff
 
 ADDED:

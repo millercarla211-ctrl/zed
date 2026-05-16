@@ -74,6 +74,8 @@ const PC_USE_RUNNER_RECEIPT_PREFIX: &str = "zed-pc-use-runner-receipt-";
 const PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA: &str =
     "zed.agent_plugins.pc_use.action_payload_queue_item.v1";
 const PC_USE_RUNNER_RECEIPT_SCHEMA: &str = "zed.agent_plugins.pc_use.runner_receipt.v1";
+const AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA: &str =
+    "zed.web_preview.agent_browser_executor_validation_progress.v1";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
@@ -8696,6 +8698,16 @@ impl WebPreviewView {
             "schema": "zed.web_preview.agent_browser_actions.v1",
             "session": self.browser_session_snapshot(window),
             "policy": self.agent_browser_policy_snapshot(),
+            "handoffs": {
+                "executor_validation_progress": {
+                    "schema": AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA,
+                    "copy_action": "copy_agent_browser_executor_validation_progress",
+                    "send_action": "send_agent_browser_executor_validation_progress_to_agent",
+                    "latest_summary": self.latest_agent_browser_executor_validation_progress_summary(),
+                    "read_only": true,
+                    "purpose": "Share grouped executor evidence before the final Windows runtime pass without sending browser input."
+                }
+            },
             "notes": [
                 "Read-only actions are always available for context gathering.",
                 "Interactive actions must remain locked until the user explicitly allows them for this WebPreview session.",
@@ -8917,6 +8929,7 @@ impl WebPreviewView {
                             "payload_queue_item_schema": "zed.agent_plugins.browser_action_payload_queue_item.v1",
                             "payload_queue_inspection_schema": "zed.agent_plugins.browser_action_payload_queue_inspection.v1",
                             "payload_import_receipt_schema": "zed.web_preview.agent_browser_action_payload_import_receipt.v1",
+                            "executor_validation_progress_schema": AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA,
                             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
                             "managed_queue_import_action": "import_agent_browser_action_payload_from_managed_queue",
                             "examples": [
@@ -8950,6 +8963,14 @@ impl WebPreviewView {
                                 "Interactive executors still require unlock, fresh preflight, action-specific gates, and receipts.",
                                 "type_text requires non-empty payload.text and rejects selector mismatches when a selector is supplied."
                             ]
+                        },
+                        "validation_progress_handoff": {
+                            "schema": AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA,
+                            "copy_action": "copy_agent_browser_executor_validation_progress",
+                            "send_action": "send_agent_browser_executor_validation_progress_to_agent",
+                            "read_only": true,
+                            "source": "WebPreview More menu",
+                            "purpose": "Copy or send grouped Browser executor evidence without requiring larger status/readiness/runbook packets."
                         },
                         "capabilities": [
                             {"id": "browser.sessions.list", "state": "available", "description": "List open WebPreview sessions and workspace inventory."},
@@ -8989,6 +9010,7 @@ impl WebPreviewView {
                             {"id": "browser.action.payload_import_clipboard", "state": "available_explicit_user_action", "description": "Import a JSON action payload or plain text from the clipboard into the active WebPreview payload bridge for the next type executor attempt."},
                             {"id": "browser.action.payload_import_queue", "state": "available_explicit_user_action", "description": "Import the latest managed Agent Browser payload queue item into the active WebPreview payload bridge without dispatching input."},
                             {"id": "browser.action.payload_import_receipt", "state": "available", "description": "Copy or send the latest WebPreview payload import receipt, with accepted schema, action metadata, redacted text length, permission state, and next-step safety notes."},
+                            {"id": "browser.action.executor_validation_progress", "state": "available", "description": "Copy or send grouped Browser executor validation progress for final Windows proof without dispatching input."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},
                             {"id": "browser.action.type", "state": "available_when_unlocked_payload_required", "description": "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."},
                             {"id": "browser.action.key", "state": "available_when_unlocked", "description": "Send allowlisted key presses through the WebView2 DevTools Protocol executor after unlock, fresh preflight, keyboard-focus gate, QA checklist, and receipt logging."},
