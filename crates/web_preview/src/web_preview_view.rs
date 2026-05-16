@@ -3286,6 +3286,19 @@ impl WebPreviewView {
             .filter_map(Value::as_str)
             .filter(|check_id| checks.and_then(|checks| checks.get(*check_id)).is_none())
             .collect::<Vec<_>>();
+        let missing_required_evidence = required_check_ids
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|check_id| {
+                checks
+                    .and_then(|checks| checks.get(*check_id))
+                    .and_then(|check| check.pointer("/evidence"))
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|evidence| !evidence.is_empty())
+                    .is_none()
+            })
+            .collect::<Vec<_>>();
         let required_check_blocker_count = required_check_ids
             .iter()
             .filter_map(Value::as_str)
@@ -3302,6 +3315,7 @@ impl WebPreviewView {
             && result.pointer("/status").and_then(Value::as_str) == Some("pass")
             && required_check_count > 0
             && pass_required_check_count == required_check_count
+            && missing_required_evidence.is_empty()
             && result
                 .pointer("/overall_blocker")
                 .map(Value::is_null)
@@ -3321,6 +3335,7 @@ impl WebPreviewView {
             "pass_required_check_count": pass_required_check_count,
             "required_check_blocker_count": required_check_blocker_count,
             "missing_required_checks": missing_required_checks,
+            "missing_required_evidence": missing_required_evidence,
             "runtime_green_candidate": runtime_green_candidate,
             "overall_blocker": result.pointer("/overall_blocker").cloned(),
         })

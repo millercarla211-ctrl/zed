@@ -1,3 +1,14 @@
+[2026-05-17] - Agent Plugin Runtime Final Proof Evidence Enforcement
+
+FIXED:
+- WebPreview final validation result summaries now enforce the documented evidence rule: every required manual check must include non-empty evidence before an imported result can become a runtime-green candidate.
+
+CHANGED:
+- Final result summaries now include `missing_required_evidence` so Agent Panels can identify hollow pass entries separately from missing checks or blockers.
+
+NOTES:
+- This keeps the runtime-green claim gate honest without running `just run`, launching Chrome, dispatching browser or OS input, writing proof files, or touching real browser profiles.
+
 [2026-05-17] - Permissioned Agent Browser Executor Native Dispatch Receipt Matrix
 
 ADDED:
