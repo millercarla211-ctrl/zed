@@ -2,6 +2,7 @@ mod agent_browser_payload_tool;
 mod agent_chrome_payload_queue_inspect_tool;
 mod agent_chrome_payload_tool;
 mod agent_chrome_playwright_adapter_tool;
+mod agent_chrome_playwright_execution_inspect_tool;
 mod agent_chrome_playwright_invoke_tool;
 mod agent_chrome_runner_gate_tool;
 mod agent_plugin_bootstrap_tool;
@@ -69,6 +70,7 @@ pub use agent_browser_payload_tool::*;
 pub use agent_chrome_payload_queue_inspect_tool::*;
 pub use agent_chrome_payload_tool::*;
 pub use agent_chrome_playwright_adapter_tool::*;
+pub use agent_chrome_playwright_execution_inspect_tool::*;
 pub use agent_chrome_playwright_invoke_tool::*;
 pub use agent_chrome_runner_gate_tool::*;
 pub use agent_plugin_bootstrap_tool::*;
@@ -178,6 +180,7 @@ tools! {
     AgentChromeRunnerGateTool,
     AgentChromePlaywrightAdapterTool,
     AgentChromePlaywrightInvokeTool,
+    AgentChromePlaywrightExecutionInspectTool,
     AgentPluginCatalogTool,
     ApplyCodeActionTool,
     CopyPathTool,

@@ -1,3 +1,15 @@
+[2026-05-16] - Managed Chrome Execution Inspection
+
+ADDED:
+- Added the read-only `inspect_managed_chrome_playwright_executions` Agent tool to summarize recent managed Chrome Playwright run requests and execution receipts.
+- Advertised the execution inspection tool and schema through both the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- Managed Chrome plugin status can now report recent adapter outcomes, screenshot artifact paths, URLs, titles, errors, and request/receipt schema health without launching Chrome or running Node.
+
+NOTES:
+- The inspection path is read-only, managed-root scoped, and preserves the no-real-browser-profile invariant.
+
 [2026-05-16] - Managed Chrome Adapter Invocation
 
 ADDED:

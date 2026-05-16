@@ -6,6 +6,8 @@ use crate::{
     AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME, AGENT_CHROME_PAYLOAD_RESULT_SCHEMA,
     AGENT_CHROME_PAYLOAD_TOOL_NAME, AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA,
     AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME, AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+    AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_RESULT_SCHEMA,
+    AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
     AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA,
     AGENT_CHROME_PLAYWRIGHT_INVOCATION_RESULT_SCHEMA, AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
     AGENT_CHROME_PLAYWRIGHT_RUN_REQUEST_SCHEMA, AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME,
@@ -163,6 +165,7 @@ fn agent_plugin_catalog(
                 "request_chrome_payload_run": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
                 "prepare_chrome_playwright_adapter": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
                 "invoke_chrome_playwright_adapter": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
+                "inspect_chrome_playwright_executions": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
                 "prepare_runtime": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL
             },
             "available_to": [
@@ -235,6 +238,18 @@ fn agent_plugin_catalog(
                     "requires_permission_for_execution": true,
                     "safe_actions_only": ["open_url", "screenshot", "set_viewport", "wait_for_selector"],
                     "input_actions_blocked": ["click", "type_text", "press_key", "scroll"]
+                },
+                "playwright_execution_inspect_tool": {
+                    "name": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
+                    "payload": {
+                        "root_mode": "workspace",
+                        "max_entries": 8,
+                        "include_requests": false,
+                        "include_receipts": false
+                    },
+                    "read_only": true,
+                    "launches_browser": false,
+                    "runs_node": false
                 },
                 "zed_data_plugin_root": default_plugin_root.display().to_string(),
                 "workspace_plugin_root": workspace_plugin_root.as_ref().map(|path| path.display().to_string()),
@@ -473,10 +488,12 @@ fn chrome_plugin_manifest(
             "runner_gate_tool_name": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
             "playwright_adapter_tool_name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
             "playwright_invoke_tool_name": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
+            "playwright_execution_inspect_tool_name": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
             "playwright_run_request_schema": AGENT_CHROME_PLAYWRIGHT_RUN_REQUEST_SCHEMA,
             "playwright_invocation_result_schema": AGENT_CHROME_PLAYWRIGHT_INVOCATION_RESULT_SCHEMA,
             "playwright_adapter_manifest_schema": AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA,
             "playwright_execution_receipt_schema": AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA,
+            "playwright_execution_inspection_schema": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_RESULT_SCHEMA,
             "playwright_adapter_root_name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME,
             "playwright_runner_script_name": AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME,
             "runner_receipt_schema": AGENT_CHROME_RUNNER_RECEIPT_SCHEMA,
@@ -558,6 +575,7 @@ fn chrome_plugin_manifest(
                 "Queued payloads are written only to managed workspace or Zed-data plugin roots after authorization.",
                 "The Playwright adapter preparation tool writes only versioned adapter files under managed roots and does not run Node.",
                 "The Playwright invocation tool can run only open_url, screenshot, set_viewport, and wait_for_selector after authorization and a ready runner receipt.",
+                "The Playwright execution inspection tool is read-only and summarizes managed request and receipt files.",
                 "Future execution must use managed profiles, explicit permission, fresh preflight, and receipts.",
                 "The runner must never write into the user's real Chrome, Edge, or Firefox profile."
             ]
@@ -569,6 +587,7 @@ fn chrome_plugin_manifest(
             capability("chrome.action.runner_gate", "available_requires_authorization", "Use request_managed_chrome_payload_run to write a permissioned runner receipt that blocks until queue, bootstrap, managed-profile, and future adapter requirements are satisfied."),
             capability("chrome.runtime.playwright_adapter_prepare", "available_requires_authorization", "Use prepare_managed_chrome_playwright_adapter to write a versioned managed Playwright adapter artifact without installing packages, launching Chrome, or dispatching input."),
             capability("chrome.runtime.playwright_adapter_invoke", "available_requires_authorization", "Use invoke_managed_chrome_playwright_adapter to run the prepared adapter for open_url, screenshot, set_viewport, or wait_for_selector after a ready runner receipt."),
+            capability("chrome.runtime.playwright_execution_inspect", "available", "Use inspect_managed_chrome_playwright_executions to read recent managed run requests and execution receipts without launching Chrome."),
             capability("chrome.action.payload_queue_schema", "available", "Read the managed Chrome payload packet, queue item, queue result, and latest-file schemas for future runner execution."),
             capability("chrome.session.launch", "requires_bootstrap", "Launch or attach to a managed Chrome profile."),
             capability("chrome.page.open_url", "requires_bootstrap", "Open URLs in managed Chrome tabs."),
@@ -847,7 +866,7 @@ fn bootstrap_next_actions(status: &str) -> Vec<&'static str> {
         ],
         _ => vec![
             "Chrome plugin bootstrap assets are present.",
-            "Next slice can invoke the prepared Playwright adapter for open_url and screenshot behind the runner receipt.",
+            "Invoke the prepared Playwright adapter for safe actions, then inspect execution receipts before enabling input dispatch.",
         ],
     }
 }
