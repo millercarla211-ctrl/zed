@@ -8260,6 +8260,7 @@ impl WebPreviewView {
                     "compose_zed_pc_use_action_payload": "compose_zed_pc_use_action_payload",
                     "stage_zed_pc_use_action_payload": "stage_zed_pc_use_action_payload",
                     "queue_zed_pc_use_action_payload": "queue_zed_pc_use_action_payload",
+                    "inspect_zed_pc_use_payload_queue": "inspect_zed_pc_use_payload_queue",
                     "prepare_runtime": "prepare_agent_plugin_runtime"
                 },
                 "available_to": [
@@ -8617,8 +8618,10 @@ impl WebPreviewView {
                             "payload_tool_name": "compose_zed_pc_use_action_payload",
                             "payload_stage_tool_name": "stage_zed_pc_use_action_payload",
                             "payload_queue_tool_name": "queue_zed_pc_use_action_payload",
+                            "payload_queue_inspect_tool_name": "inspect_zed_pc_use_payload_queue",
                             "payload_schema": "zed.agent_plugins.pc_use.action_payload.v1",
                             "payload_queue_item_schema": "zed.agent_plugins.pc_use.action_payload_queue_item.v1",
+                            "payload_queue_inspection_schema": "zed.agent_plugins.pc_use.action_payload_queue_inspection.v1",
                             "os_wide_automation": "requires_separate_explicit_permission"
                         },
                         "capabilities": [
@@ -8626,6 +8629,7 @@ impl WebPreviewView {
                             {"id": "pc.zed_window.payload_compose", "state": "available", "description": "Use compose_zed_pc_use_action_payload to validate future Zed-window screenshot, focus, click, type, or inspect intents without dispatching input."},
                             {"id": "pc.zed_window.payload_stage_clipboard", "state": "available_requires_authorization", "description": "Use stage_zed_pc_use_action_payload to write a validated Zed-window PC-use payload packet to the clipboard without dispatching input."},
                             {"id": "pc.zed_window.payload_queue_managed", "state": "available_requires_authorization", "description": "Use queue_zed_pc_use_action_payload to write a validated Zed-window PC-use payload packet into managed workspace or Zed-data handoff roots without dispatching input."},
+                            {"id": "pc.zed_window.payload_queue_inspect", "state": "available", "description": "Use inspect_zed_pc_use_payload_queue to validate the latest managed PC-use payload handoff before any future importer or executor exists."},
                             {"id": "pc.zed_window.screenshot", "state": "planned", "description": "Capture Zed-window screenshots for agent context."},
                             {"id": "pc.zed_window.focus", "state": "planned", "description": "Focus Zed panes, panels, and tabs by safe editor-native handles."},
                             {"id": "pc.zed_window.click", "state": "planned_permission_gate", "description": "Click within Zed surfaces only after permission and target preflight."},
@@ -8638,6 +8642,7 @@ impl WebPreviewView {
                             "read_only_payload_compose_available": true,
                             "payload_stage_clipboard_available": true,
                             "payload_queue_managed_available": true,
+                            "payload_queue_inspection_available": true,
                             "zed_window_first": true,
                             "os_wide_actions_blocked_by_default": true,
                             "explicit_permission_required_for_input": true,

@@ -1,3 +1,15 @@
+[2026-05-16] - PC Use Queue Inspection
+
+ADDED:
+- Added the read-only `inspect_zed_pc_use_payload_queue` Agent tool for validating the latest managed PC-use handoff file.
+- Advertised the queue inspection tool and schema through the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- PC Use plugin manifests now expose a read-only queue inspection path before any importer, screenshot, focus, click, type, process launch, or OS-wide desktop automation executor is enabled.
+
+NOTES:
+- Queue inspection reads only managed workspace/Zed-data handoff files and never writes files, screenshots, focuses Zed, dispatches input, launches processes, or controls the OS desktop.
+
 [2026-05-16] - PC Use Payload Handoff
 
 ADDED:

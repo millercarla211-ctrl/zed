@@ -20,7 +20,7 @@ pub const AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME: &str = "queue_zed_pc_use_action_
 pub const AGENT_PC_USE_PAYLOAD_SCHEMA: &str = "zed.agent_plugins.pc_use.action_payload.v1";
 pub const AGENT_PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA: &str =
     "zed.agent_plugins.pc_use.action_payload_queue_item.v1";
-const AGENT_PC_USE_PAYLOAD_QUEUE_FILE_NAME: &str = "latest-zed-pc-use-payload.json";
+pub const AGENT_PC_USE_PAYLOAD_QUEUE_FILE_NAME: &str = "latest-zed-pc-use-payload.json";
 const MAX_PC_USE_TEXT_CHARS: usize = 4096;
 const ALLOWED_BUTTONS: &[&str] = &["left", "middle", "right"];
 const ALLOWED_SURFACES: &[&str] = &[
