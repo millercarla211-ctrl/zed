@@ -17,6 +17,7 @@ use crate::{
     AGENT_PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA, AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME,
     AGENT_PC_USE_PAYLOAD_SCHEMA, AGENT_PC_USE_PAYLOAD_STAGE_TOOL_NAME,
     AGENT_PC_USE_PAYLOAD_TOOL_NAME, AGENT_PC_USE_RUNNER_GATE_TOOL_NAME,
+    AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME, AGENT_PC_USE_RUNNER_RECEIPT_INSPECTION_SCHEMA,
     AGENT_PC_USE_RUNNER_RECEIPT_SCHEMA, AgentTool, ToolCallEventStream, ToolInput,
 };
 use agent_client_protocol::schema as acp;
@@ -177,6 +178,7 @@ fn agent_plugin_catalog(
                 "queue_zed_pc_use_action_payload": AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME,
                 "inspect_zed_pc_use_payload_queue": AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
                 "request_zed_pc_use_payload_run": AGENT_PC_USE_RUNNER_GATE_TOOL_NAME,
+                "inspect_zed_pc_use_runner_receipts": AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
                 "prepare_runtime": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL
             },
             "available_to": [
@@ -659,10 +661,12 @@ fn pc_use_plugin_manifest(
             "payload_queue_tool_name": AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME,
             "payload_queue_inspect_tool_name": AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
             "runner_gate_tool_name": AGENT_PC_USE_RUNNER_GATE_TOOL_NAME,
+            "runner_receipt_inspect_tool_name": AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
             "payload_schema": AGENT_PC_USE_PAYLOAD_SCHEMA,
             "payload_queue_item_schema": AGENT_PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA,
             "payload_queue_inspection_schema": AGENT_PC_USE_PAYLOAD_QUEUE_INSPECTION_SCHEMA,
             "runner_receipt_schema": AGENT_PC_USE_RUNNER_RECEIPT_SCHEMA,
+            "runner_receipt_inspection_schema": AGENT_PC_USE_RUNNER_RECEIPT_INSPECTION_SCHEMA,
             "plugin_root": workspace_plugin_root
                 .as_ref()
                 .map(|root| root.join("pc-use"))
@@ -678,6 +682,7 @@ fn pc_use_plugin_manifest(
             capability("pc.zed_window.payload_queue_managed", "available_requires_authorization", "Use queue_zed_pc_use_action_payload to write a validated Zed-window PC-use payload packet into managed workspace or Zed-data handoff roots without dispatching input."),
             capability("pc.zed_window.payload_queue_inspect", "available", "Use inspect_zed_pc_use_payload_queue to validate the latest managed PC-use payload handoff before any future importer or executor exists."),
             capability("pc.zed_window.runner_gate_receipt", "available_requires_authorization", "Use request_zed_pc_use_payload_run to write an auditable runner-gate receipt after validating the managed PC-use queue, without taking screenshots or dispatching input."),
+            capability("pc.zed_window.runner_receipt_inspect", "available", "Use inspect_zed_pc_use_runner_receipts to read recent PC-use runner-gate receipts without taking screenshots, focusing Zed, or dispatching input."),
             capability("pc.zed_window.screenshot", "planned", "Capture Zed-window screenshots for agent context."),
             capability("pc.zed_window.focus", "planned", "Focus Zed panes, panels, and tabs by safe editor-native handles."),
             capability("pc.zed_window.click", "planned_permission_gate", "Click within Zed surfaces only after permission and target preflight."),
@@ -692,6 +697,7 @@ fn pc_use_plugin_manifest(
             "payload_queue_managed_available": true,
             "payload_queue_inspection_available": true,
             "runner_gate_receipt_available": true,
+            "runner_receipt_inspection_available": true,
             "zed_window_first": true,
             "os_wide_actions_blocked_by_default": true,
             "explicit_permission_required_for_input": true,

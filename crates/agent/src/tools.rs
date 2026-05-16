@@ -9,6 +9,7 @@ mod agent_pc_use_inspect_tool;
 mod agent_pc_use_payload_queue_inspect_tool;
 mod agent_pc_use_payload_tool;
 mod agent_pc_use_runner_gate_tool;
+mod agent_pc_use_runner_receipt_inspect_tool;
 mod agent_plugin_bootstrap_tool;
 mod agent_plugin_catalog_tool;
 mod apply_code_action_tool;
@@ -81,6 +82,7 @@ pub use agent_pc_use_inspect_tool::*;
 pub use agent_pc_use_payload_queue_inspect_tool::*;
 pub use agent_pc_use_payload_tool::*;
 pub use agent_pc_use_runner_gate_tool::*;
+pub use agent_pc_use_runner_receipt_inspect_tool::*;
 pub use agent_plugin_bootstrap_tool::*;
 pub use agent_plugin_catalog_tool::*;
 pub use apply_code_action_tool::*;
@@ -195,6 +197,7 @@ tools! {
     AgentPcUsePayloadQueueTool,
     AgentPcUsePayloadQueueInspectTool,
     AgentPcUseRunnerGateTool,
+    AgentPcUseRunnerReceiptInspectTool,
     AgentPluginCatalogTool,
     ApplyCodeActionTool,
     CopyPathTool,

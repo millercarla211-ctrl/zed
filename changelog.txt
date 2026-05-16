@@ -1,3 +1,15 @@
+[2026-05-16] - PC Use Receipt Inspection
+
+ADDED:
+- Added the read-only `inspect_zed_pc_use_runner_receipts` Agent tool for summarizing recent PC-use runner-gate receipts from managed workspace or Zed-data roots.
+- Advertised the receipt inspection tool and schema through the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- PC Use plugin manifests now expose a read-only receipt status path so agents can report latest runner-gate outcomes without manually reading files.
+
+NOTES:
+- Receipt inspection never writes files, screenshots, focuses Zed, dispatches input, launches processes, or controls the OS desktop.
+
 [2026-05-16] - PC Use Runner Gate Receipt
 
 ADDED:
