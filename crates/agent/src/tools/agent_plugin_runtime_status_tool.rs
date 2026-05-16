@@ -112,6 +112,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result_import_receipt.v1";
 const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_proof_audit.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_final_proof_audit_summary.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME: &str =
     "latest-agent-browser-final-validation-result.json";
@@ -469,6 +471,8 @@ fn inspect_runtime_status(
         &runtime_green_report_gate_value,
         &runtime_green_final_report_packet_value,
     );
+    let runtime_green_final_proof_audit_summary =
+        runtime_green_final_proof_audit_summary(&runtime_green_final_proof_audit_value);
     let runtime_green_claim_gate = input
         .include_runtime_green_claim_gate
         .then(|| runtime_green_claim_gate_value.clone());
@@ -512,6 +516,7 @@ fn inspect_runtime_status(
         "runtime_green_report_badge": runtime_green_report_badge_value,
         "runtime_green_final_proof_guide": runtime_green_final_proof_guide_value,
         "runtime_green_final_proof_audit": runtime_green_final_proof_audit_value,
+        "runtime_green_final_proof_audit_summary": runtime_green_final_proof_audit_summary,
         "runtime_green_final_report_packet": runtime_green_final_report_packet_value,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
@@ -551,6 +556,7 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
             "final_validation_result": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
             "final_validation_result_import_receipt": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
             "final_proof_audit": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
+            "final_proof_audit_summary": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_green_final_proof_guide": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
             "runtime_green_final_report_packet": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
         },
@@ -2296,6 +2302,7 @@ fn runtime_green_proof_path(
                     "runtime_green_report_badge",
                     "runtime_green_final_proof_guide",
                     "runtime_green_final_proof_audit",
+                    "runtime_green_final_proof_audit_summary",
                     "runtime_green_final_report_packet"
                 ],
                 "writes_files": false,
@@ -2391,6 +2398,7 @@ fn runtime_green_proof_path(
             "runtime_green_blocker_summary",
             "runtime_green_readiness_scorecard",
             "runtime_green_final_proof_audit",
+            "runtime_green_final_proof_audit_summary",
             "runtime_green_final_report_packet"
         ],
         "safety": {
@@ -3158,6 +3166,73 @@ fn runtime_green_final_proof_audit(
         "runs_node": false,
         "launches_browser": false,
         "dispatches_input": false,
+    })
+}
+
+fn runtime_green_final_proof_audit_summary(audit: &Value) -> Value {
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
+        "source_schema": audit.get("schema").and_then(Value::as_str),
+        "status": audit.pointer("/audit/status").and_then(Value::as_str),
+        "runtime_green_candidate": audit
+            .pointer("/audit/runtime_green_candidate")
+            .and_then(Value::as_bool),
+        "overall_runtime_green_candidate": audit
+            .pointer("/audit/overall_runtime_green_candidate")
+            .and_then(Value::as_bool),
+        "may_report_runtime_green": audit
+            .pointer("/audit/may_report_runtime_green")
+            .and_then(Value::as_bool),
+        "final_result_present": audit
+            .pointer("/audit/final_result_present")
+            .and_then(Value::as_bool),
+        "final_result_runtime_green": audit
+            .pointer("/audit/final_result_runtime_green")
+            .and_then(Value::as_bool),
+        "next_action": audit.pointer("/audit/next_action").and_then(Value::as_str),
+        "missing_required_check_count": audit
+            .pointer("/audit/missing_required_checks")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        "missing_required_evidence_count": audit
+            .pointer("/audit/missing_required_evidence")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        "required_check_blocker_count": audit
+            .pointer("/audit/required_check_blocker_count")
+            .and_then(Value::as_u64),
+        "has_overall_blocker": audit
+            .pointer("/audit/has_overall_blocker")
+            .and_then(Value::as_bool),
+        "report_gate_status": audit
+            .pointer("/audit/report_gate/status")
+            .and_then(Value::as_str),
+        "report_gate_blocker": audit
+            .pointer("/audit/report_gate/blocker")
+            .and_then(Value::as_str),
+        "report_gate_can_report_runtime_green": audit
+            .pointer("/audit/report_gate/can_report_runtime_green")
+            .and_then(Value::as_bool),
+        "report_gate_next_action": audit
+            .pointer("/audit/report_gate/next_action")
+            .and_then(Value::as_str),
+        "final_report_packet_status": audit
+            .pointer("/latest/final_report_packet/status")
+            .and_then(Value::as_str),
+        "final_report_packet_next_action": audit
+            .pointer("/latest/final_report_packet/next_action")
+            .and_then(Value::as_str),
+        "webpreview_copy_action": audit
+            .get("webpreview_copy_action")
+            .and_then(Value::as_str),
+        "webpreview_send_action": audit
+            .get("webpreview_send_action")
+            .and_then(Value::as_str),
+        "read_only": audit.get("read_only").and_then(Value::as_bool),
+        "writes_files": audit.get("writes_files").and_then(Value::as_bool),
+        "runs_node": audit.get("runs_node").and_then(Value::as_bool),
+        "launches_browser": audit.get("launches_browser").and_then(Value::as_bool),
+        "dispatches_input": audit.get("dispatches_input").and_then(Value::as_bool),
     })
 }
 

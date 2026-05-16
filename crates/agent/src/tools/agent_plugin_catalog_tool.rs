@@ -94,6 +94,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_proof_guide.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_report_packet.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_final_proof_audit_summary.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
 
@@ -262,6 +264,7 @@ fn agent_plugin_catalog(
                 "runtime_green_final_proof_guide_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
                 "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
                 "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
+                "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
                 "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                 "runtime_green_ready_outcomes": {
                     "browser_final_validation_result": "runtime_green_candidate=true",
@@ -282,7 +285,7 @@ fn agent_plugin_catalog(
                     "include_runtime_green_proof_path": true,
                     "include_runtime_green_claim_gate": true
                 },
-                "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, runtime-green proof path, final proof audit, final report packet, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
+                "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, runtime-green proof path, final proof audit summary, final proof audit, final report packet, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
             },
             "webpreview_handoffs": {
                 "runtime_observability_digest": {
@@ -712,6 +715,7 @@ fn browser_plugin_manifest() -> Value {
             "final_validation_result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
             "final_validation_result_import_receipt_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
+            "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
             "final_validation_observability_schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
@@ -823,6 +827,8 @@ fn browser_plugin_manifest() -> Value {
         },
         "final_proof_audit_handoff": {
             "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
+            "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
+            "runtime_status_summary_field": "runtime_green_final_proof_audit_summary",
             "copy_action": "copy_agent_browser_final_proof_audit",
             "send_action": "send_agent_browser_final_proof_audit_to_agent",
             "read_only": true,
