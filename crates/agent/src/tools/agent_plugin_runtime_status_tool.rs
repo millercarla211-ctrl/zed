@@ -2109,6 +2109,25 @@ fn runtime_green_proof_path(
         .pointer("/latest_evidence/browser_final_validation_result/summary/runtime_green_candidate")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let current_best_next = operator_handoff
+        .get("current_best_next")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let current_best_next_lane = current_best_next
+        .get("lane_id")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown")
+        .to_string();
+    let current_best_next_label = current_best_next
+        .get("label")
+        .and_then(Value::as_str)
+        .unwrap_or(&current_best_next_lane)
+        .to_string();
+    let current_best_next_status = current_best_next
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown")
+        .to_string();
     let status = if runtime_green_candidate {
         "runtime_green_candidate"
     } else if runtime_status != "ready_for_read_only_discovery" {
@@ -2124,6 +2143,19 @@ fn runtime_green_proof_path(
     } else {
         "operator_action_required"
     };
+    let claim_gate_status = if runtime_green_candidate {
+        "ready"
+    } else if runtime_evidence_blocker_count > 0 || missing_required_file_count > 0 {
+        "runtime_evidence_required"
+    } else if stale_required_file_count > 0 {
+        "fresh_runtime_evidence_required"
+    } else if !browser_final_validation_candidate || manual_blocker_count > 0 {
+        "manual_final_result_required"
+    } else if lane_count > 0 && ready_lane_count < lane_count {
+        "pending_runtime_lane"
+    } else {
+        "manual_review_required"
+    };
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
@@ -2136,10 +2168,7 @@ fn runtime_green_proof_path(
             "operator_handoff_status": operator_handoff.get("status").and_then(Value::as_str),
             "scorecard_status": scorecard.get("status").and_then(Value::as_str),
             "blocker_summary_status": blocker_summary.get("status").and_then(Value::as_str),
-            "current_best_next": operator_handoff
-                .get("current_best_next")
-                .cloned()
-                .unwrap_or_else(|| serde_json::json!({})),
+            "current_best_next": current_best_next,
             "final_validation_result": blocker_summary
                 .pointer("/latest_evidence/browser_final_validation_result/summary")
                 .cloned()
@@ -2164,6 +2193,24 @@ fn runtime_green_proof_path(
                 "stale_required_file_count == 0",
                 "browser_final_validation_runtime_green == true"
             ]
+        },
+        "operator_summary": {
+            "status": claim_gate_status,
+            "ready_lane_fraction": format!("{ready_lane_count}/{lane_count}"),
+            "runtime_evidence_blocker_count": runtime_evidence_blocker_count,
+            "manual_blocker_count": manual_blocker_count,
+            "missing_required_file_count": missing_required_file_count,
+            "stale_required_file_count": stale_required_file_count,
+            "first_pending_lane_id": current_best_next_lane,
+            "first_pending_lane_label": current_best_next_label,
+            "first_pending_lane_status": current_best_next_status,
+            "browser_final_validation_runtime_green": browser_final_validation_candidate,
+            "can_claim_runtime_green": runtime_green_candidate,
+            "next_operator_step": if runtime_green_candidate {
+                "Run the final manual Windows runtime proof before reporting runtime-green."
+            } else {
+                "Resolve the first pending evidence lane, then re-read runtime_green_proof_path."
+            }
         },
         "proof_files": {
             "browser_final_validation_result": path_string(&roots.browser_final_validation_latest_result),

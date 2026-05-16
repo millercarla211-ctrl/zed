@@ -1,3 +1,12 @@
+[2026-05-16] - Agent Plugin Runtime Proof Path Operator Summary
+
+ADDED:
+- Runtime-green proof paths now include a compact operator summary with ready-lane fraction, first pending evidence lane, claim-gate status, blocker counts, and the next operator step.
+- WebPreview's Send Runtime-Green Proof Path handoff now leads with a human-readable status summary before the JSON packet so Agent Panel consumers do not need to parse the full payload first.
+
+NOTES:
+- This is read-only summary and handoff text only; it does not run Node, launch Chrome, dispatch browser or OS input, run `just run`, write proof files, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime WebPreview Proof Path Handoff
 
 ADDED:

@@ -4304,6 +4304,35 @@ impl WebPreviewView {
             .and_then(|summary| summary.get("runtime_green_candidate"))
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let current_best_next = handoff
+            .get("current_best_next")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
+        let current_best_next_lane = current_best_next
+            .get("lane_id")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_string();
+        let current_best_next_label = current_best_next
+            .get("label")
+            .and_then(Value::as_str)
+            .unwrap_or(&current_best_next_lane)
+            .to_string();
+        let current_best_next_status = current_best_next
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_string();
+        let claim_gate_ready = runtime_green_candidate && final_result_runtime_green;
+        let claim_gate_status = if claim_gate_ready {
+            "ready"
+        } else if !final_result_imported {
+            "missing_final_validation_result"
+        } else if pending_lane_count > 0 {
+            "pending_runtime_evidence"
+        } else {
+            "manual_review_required"
+        };
 
         serde_json::json!({
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
@@ -4334,15 +4363,26 @@ impl WebPreviewView {
                 "all_lanes_ready": pending_lane_count == 0 && lane_count > 0,
                 "final_browser_result_imported": final_result_imported,
                 "final_browser_result_runtime_green": final_result_runtime_green,
-                "can_claim_runtime_green_from_webpreview": runtime_green_candidate && final_result_runtime_green,
+                "can_claim_runtime_green_from_webpreview": claim_gate_ready,
                 "manual_runtime_command": "just run"
+            },
+            "operator_summary": {
+                "status": claim_gate_status,
+                "ready_lane_fraction": format!("{ready_lane_count}/{lane_count}"),
+                "pending_lane_count": pending_lane_count,
+                "first_pending_lane_id": current_best_next_lane,
+                "first_pending_lane_label": current_best_next_label,
+                "first_pending_lane_status": current_best_next_status,
+                "can_claim_runtime_green_from_webpreview": claim_gate_ready,
+                "next_operator_step": if claim_gate_ready {
+                    "Run the final manual Windows runtime proof before reporting runtime-green."
+                } else {
+                    "Resolve the first pending evidence lane, then re-read the proof path."
+                }
             },
             "current_digest": Self::agent_plugin_runtime_observability_digest_summary(digest),
             "current_operator_handoff": Self::agent_plugin_runtime_green_operator_handoff_summary(handoff),
-            "current_best_next": handoff
-                .get("current_best_next")
-                .cloned()
-                .unwrap_or_else(|| serde_json::json!({})),
+            "current_best_next": current_best_next,
             "proof_sources": {
                 "final_validation_observability": handoff
                     .pointer("/webpreview_evidence/final_validation_observability")
@@ -4437,12 +4477,53 @@ impl WebPreviewView {
             "lane_count": proof_path.pointer("/summary/lane_count").and_then(Value::as_u64),
             "pending_lane_count": proof_path.pointer("/summary/pending_lane_count").and_then(Value::as_u64),
             "current_best_next_lane": proof_path.pointer("/summary/current_best_next_lane").and_then(Value::as_str),
+            "first_pending_lane_label": proof_path.pointer("/operator_summary/first_pending_lane_label").and_then(Value::as_str),
+            "claim_gate_status": proof_path.pointer("/operator_summary/status").and_then(Value::as_str),
             "can_claim_runtime_green_from_webpreview": proof_path.pointer("/claim_gate/can_claim_runtime_green_from_webpreview").and_then(Value::as_bool),
         })
     }
 
     fn agent_plugin_runtime_green_proof_path_json(proof_path: &Value) -> String {
         serde_json::to_string_pretty(proof_path).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_plugin_runtime_green_proof_path_agent_summary(proof_path: &Value) -> String {
+        let status = proof_path
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let ready_lane_count = proof_path
+            .pointer("/summary/ready_lane_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let lane_count = proof_path
+            .pointer("/summary/lane_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let first_pending_lane = proof_path
+            .pointer("/operator_summary/first_pending_lane_label")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let first_pending_status = proof_path
+            .pointer("/operator_summary/first_pending_lane_status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let claim_gate_status = proof_path
+            .pointer("/operator_summary/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let can_claim_runtime_green = proof_path
+            .pointer("/claim_gate/can_claim_runtime_green_from_webpreview")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let next_step = proof_path
+            .pointer("/operator_summary/next_operator_step")
+            .and_then(Value::as_str)
+            .unwrap_or("Re-read the runtime-green proof path.");
+
+        format!(
+            "Runtime-green proof path\nStatus: {status}\nReady lanes: {ready_lane_count}/{lane_count}\nFirst pending evidence: {first_pending_lane} ({first_pending_status})\nClaim gate: {claim_gate_status} (can claim: {can_claim_runtime_green})\nNext: {next_step}"
+        )
     }
 
     fn agent_plugin_runtime_green_proof_path_agent_blocks(
@@ -4460,7 +4541,8 @@ impl WebPreviewView {
         }
 
         blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
-            "Runtime-green proof path:\n\n```json\n{}\n```",
+            "{}\n\n```json\n{}\n```",
+            Self::agent_plugin_runtime_green_proof_path_agent_summary(proof_path),
             Self::agent_plugin_runtime_green_proof_path_json(proof_path)
         ))));
         blocks
