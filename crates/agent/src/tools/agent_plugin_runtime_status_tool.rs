@@ -69,6 +69,8 @@ use std::{
 
 pub const AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME: &str = "inspect_agent_plugin_runtime_status";
 pub const AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA: &str = "zed.agent_plugins.runtime_status.v1";
+const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstrap_readiness.v1";
+const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstrap_manifest.v1";
 
 const MAX_HANDOFF_PREVIEW_BYTES: u64 = 1_048_576;
 const OBSERVABILITY_FRESHNESS_WINDOW_MS: u64 = 24 * 60 * 60 * 1000;
@@ -188,6 +190,7 @@ struct AgentPluginRuntimeRoots {
     playwright_root: PathBuf,
     dx_extension_root: PathBuf,
     managed_chrome_profile_root: PathBuf,
+    bootstrap_manifest: PathBuf,
     browser_queue_dir: PathBuf,
     browser_latest_payload: PathBuf,
     chrome_queue_dir: PathBuf,
@@ -233,6 +236,7 @@ impl AgentPluginRuntimeRoots {
             };
 
         let dx_extension_root = plugin_root.join("dx-chrome-extension");
+        let bootstrap_manifest = plugin_root.join("agent-plugin-bootstrap.json");
         let browser_queue_dir = plugin_root.join("browser-payloads");
         let browser_latest_payload = browser_queue_dir.join(AGENT_BROWSER_PAYLOAD_QUEUE_FILE_NAME);
         let chrome_queue_dir = plugin_root.join("chrome-payloads");
@@ -260,6 +264,7 @@ impl AgentPluginRuntimeRoots {
             playwright_root,
             dx_extension_root,
             managed_chrome_profile_root,
+            bootstrap_manifest,
             browser_queue_dir,
             browser_latest_payload,
             chrome_queue_dir,
@@ -298,6 +303,7 @@ impl AgentPluginRuntimeRoots {
             &self.playwright_root,
             &self.dx_extension_root,
             &self.managed_chrome_profile_root,
+            &self.bootstrap_manifest,
             &self.browser_queue_dir,
             &self.browser_latest_payload,
             &self.chrome_queue_dir,
@@ -335,6 +341,9 @@ fn inspect_runtime_status(
     };
 
     let host_checks = input.include_host_checks.then(host_checks);
+    let bootstrap_readiness = input
+        .include_host_checks
+        .then(|| bootstrap_readiness(roots, host_checks.as_ref()));
     let browser = browser_status(roots, input.include_latest_handoffs);
     let chrome = chrome_status(roots, input.include_latest_handoffs, host_checks.as_ref());
     let pc_use = pc_use_status(roots, input.include_latest_handoffs);
@@ -361,6 +370,7 @@ fn inspect_runtime_status(
             "pc_use": pc_use,
         },
         "host": host_checks,
+        "bootstrap_readiness": bootstrap_readiness,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
         "observability_profiles": input
@@ -479,6 +489,12 @@ fn chrome_status(
                 include_latest_handoff,
             ),
             "execution_dir": dir_probe(&roots.chrome_execution_dir),
+            "bootstrap_manifest": file_probe(
+                &roots.bootstrap_manifest,
+                Some(AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA),
+                None,
+                include_latest_handoff,
+            ),
             "playwright_root": dir_probe(&roots.playwright_root),
             "playwright_package": file_probe(&playwright_package, None, None, false),
             "adapter_root": dir_probe(&roots.chrome_adapter_root),
@@ -576,6 +592,190 @@ fn host_checks() -> Value {
     })
 }
 
+fn bootstrap_readiness(roots: &AgentPluginRuntimeRoots, host_checks: Option<&Value>) -> Value {
+    let playwright_package = roots
+        .playwright_root
+        .join("node_modules")
+        .join("playwright")
+        .join("package.json");
+    let dx_extension_manifest = roots.dx_extension_root.join("manifest.json");
+    let bootstrap_manifest_schema = json_file_schema(&roots.bootstrap_manifest);
+    let bootstrap_manifest_ready =
+        bootstrap_manifest_schema.as_deref() == Some(AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA);
+    let adapter_manifest_ready = json_file_schema(&roots.chrome_adapter_manifest).as_deref()
+        == Some(AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA);
+
+    let checks = vec![
+        runtime_bootstrap_check(
+            "workspace.root",
+            "Workspace root",
+            roots.active_project_root.is_some(),
+            roots.active_project_root.as_ref().map(path_string),
+            "host_blocker",
+            "A workspace root keeps managed plugin assets inside the active project.",
+        ),
+        runtime_bootstrap_check(
+            "host.node",
+            "Node.js runtime",
+            host_probe_available(host_checks, "node"),
+            host_probe_path(host_checks, "node"),
+            "host_blocker",
+            "Playwright and Chrome plugin bootstrapping need Node.js.",
+        ),
+        runtime_bootstrap_check(
+            "host.npm",
+            "npm package manager",
+            host_probe_available(host_checks, "npm"),
+            host_probe_path(host_checks, "npm"),
+            "host_blocker",
+            "Playwright package provisioning needs npm or a compatible npm executable.",
+        ),
+        runtime_bootstrap_check(
+            "host.chrome_or_edge",
+            "Chrome or Edge executable",
+            host_probe_available(host_checks, "chrome_or_edge"),
+            host_probe_path(host_checks, "chrome_or_edge"),
+            "host_blocker",
+            "Managed external Chrome execution needs Chrome, Edge, or Chromium.",
+        ),
+        runtime_bootstrap_check(
+            "root.managed_base",
+            "Managed runtime base root",
+            roots.managed_base_root.is_dir(),
+            Some(path_string(&roots.managed_base_root)),
+            "provision_required",
+            "Create this managed base root before writing plugin queues, assets, profiles, or receipts.",
+        ),
+        runtime_bootstrap_check(
+            "root.plugin",
+            "Managed plugin root",
+            roots.plugin_root.is_dir(),
+            Some(path_string(&roots.plugin_root)),
+            "provision_required",
+            "Create this managed plugin root before writing Browser, Chrome, or PC-use handoff files.",
+        ),
+        runtime_bootstrap_check(
+            "root.playwright",
+            "Managed Playwright root",
+            roots.playwright_root.is_dir(),
+            Some(path_string(&roots.playwright_root)),
+            "provision_required",
+            "Create this managed Playwright root before installing or preparing Playwright adapter files.",
+        ),
+        runtime_bootstrap_check(
+            "root.dx_chrome_extension",
+            "Managed DX Chrome extension root",
+            roots.dx_extension_root.is_dir(),
+            Some(path_string(&roots.dx_extension_root)),
+            "provision_required",
+            "Create this managed extension root before unpacking the DX Chrome extension.",
+        ),
+        runtime_bootstrap_check(
+            "profile.managed_chrome",
+            "Managed Chrome profile root",
+            roots.managed_chrome_profile_root.is_dir(),
+            Some(path_string(&roots.managed_chrome_profile_root)),
+            "provision_required",
+            "Create this profile root and never write into a user's real Chrome, Edge, or Firefox profile.",
+        ),
+        runtime_bootstrap_check(
+            "asset.bootstrap_manifest",
+            "Agent plugin bootstrap manifest",
+            bootstrap_manifest_ready,
+            Some(path_string(&roots.bootstrap_manifest)),
+            "provision_required",
+            "Write the bootstrap manifest so future agents can verify the managed-root policy before provisioning assets.",
+        ),
+        runtime_bootstrap_check(
+            "asset.playwright_package",
+            "Managed Playwright package",
+            playwright_package.is_file(),
+            Some(path_string(&playwright_package)),
+            "provision_required",
+            "Install Playwright into the managed tools root before launching external Chrome.",
+        ),
+        runtime_bootstrap_check(
+            "asset.playwright_adapter_manifest",
+            "Managed Playwright adapter manifest",
+            adapter_manifest_ready,
+            Some(path_string(&roots.chrome_adapter_manifest)),
+            "provision_required",
+            "Prepare the managed Playwright adapter artifact before launching external Chrome.",
+        ),
+        runtime_bootstrap_check(
+            "asset.playwright_adapter_runner",
+            "Managed Playwright adapter runner",
+            roots.chrome_runner_script.is_file(),
+            Some(path_string(&roots.chrome_runner_script)),
+            "provision_required",
+            "Prepare the managed Playwright runner script before launching external Chrome.",
+        ),
+        runtime_bootstrap_check(
+            "asset.dx_chrome_extension",
+            "DX Chrome extension manifest",
+            dx_extension_manifest.is_file(),
+            Some(path_string(&dx_extension_manifest)),
+            "provision_required",
+            "Download or unpack the DX Chrome extension before loading managed Chrome with the bridge.",
+        ),
+    ];
+
+    let host_blockers = runtime_readiness_issues(&checks, "host_blocker");
+    let provision_required = runtime_readiness_issues(&checks, "provision_required");
+    let status = if !host_blockers.is_empty() {
+        "blocked_missing_host_dependencies"
+    } else if !provision_required.is_empty() {
+        "ready_to_provision"
+    } else {
+        "ready_for_managed_chrome_executor"
+    };
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
+        "generated_at_ms": current_epoch_millis(),
+        "status": status,
+        "phase_summary": runtime_bootstrap_phase_summary(&checks),
+        "manifest": {
+            "path": path_string(&roots.bootstrap_manifest),
+            "expected_schema": AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA,
+            "actual_schema": bootstrap_manifest_schema,
+            "ready": bootstrap_manifest_ready,
+        },
+        "prepare_runtime_handoff": {
+            "tool_name": AgentPluginBootstrapTool::NAME,
+            "dry_run_payload": {
+                "root_mode": "workspace",
+                "create_managed_roots": false,
+                "write_bootstrap_manifest": false
+            },
+            "workspace_payload": {
+                "root_mode": "workspace",
+                "create_managed_roots": true,
+                "write_bootstrap_manifest": true
+            },
+            "zed_data_payload": {
+                "root_mode": "zed_data",
+                "create_managed_roots": true,
+                "write_bootstrap_manifest": true
+            },
+            "requires_permission_for_writes": true,
+            "downloads_packages": false,
+            "launches_browser": false,
+            "touches_real_browser_profiles": false,
+        },
+        "checks": checks,
+        "host_blockers": host_blockers,
+        "provision_required": provision_required,
+        "safety": {
+            "read_only": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "touches_real_browser_profiles": false,
+        },
+    })
+}
+
 fn roots_value(roots: &AgentPluginRuntimeRoots) -> Value {
     serde_json::json!({
         "workspace_roots": roots.workspace_roots.iter().map(path_string).collect::<Vec<_>>(),
@@ -584,11 +784,112 @@ fn roots_value(roots: &AgentPluginRuntimeRoots) -> Value {
         "playwright_root": path_string(&roots.playwright_root),
         "dx_chrome_extension_root": path_string(&roots.dx_extension_root),
         "managed_chrome_profile_root": path_string(&roots.managed_chrome_profile_root),
+        "bootstrap_manifest": path_string(&roots.bootstrap_manifest),
         "browser_queue_dir": path_string(&roots.browser_queue_dir),
         "chrome_queue_dir": path_string(&roots.chrome_queue_dir),
         "chrome_receipt_dir": path_string(&roots.chrome_receipt_dir),
         "chrome_execution_dir": path_string(&roots.chrome_execution_dir),
         "pc_use_root": path_string(&roots.pc_use_root),
+    })
+}
+
+fn host_probe_available(host_checks: Option<&Value>, key: &str) -> bool {
+    host_checks
+        .and_then(|checks| checks.get(key))
+        .and_then(|probe| probe.get("available"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn host_probe_path(host_checks: Option<&Value>, key: &str) -> Option<String> {
+    host_checks
+        .and_then(|checks| checks.get(key))
+        .and_then(|probe| probe.get("path"))
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+}
+
+fn runtime_bootstrap_check(
+    id: &str,
+    label: &str,
+    ready: bool,
+    path: Option<String>,
+    missing_kind: &str,
+    details: &str,
+) -> Value {
+    serde_json::json!({
+        "id": id,
+        "label": label,
+        "state": if ready { "ready" } else { missing_kind },
+        "ready": ready,
+        "path": path,
+        "details": details,
+    })
+}
+
+fn runtime_readiness_issues(checks: &[Value], state: &str) -> Vec<Value> {
+    checks
+        .iter()
+        .filter(|check| {
+            check
+                .get("state")
+                .and_then(Value::as_str)
+                .is_some_and(|check_state| check_state == state)
+        })
+        .cloned()
+        .collect()
+}
+
+fn runtime_bootstrap_phase_summary(checks: &[Value]) -> Value {
+    let host = runtime_bootstrap_phase("host_dependencies", checks, &["workspace.", "host."]);
+    let roots = runtime_bootstrap_phase("managed_roots", checks, &["root.", "profile."]);
+    let assets = runtime_bootstrap_phase("managed_assets", checks, &["asset."]);
+    let ready_phase_count = [&host, &roots, &assets]
+        .into_iter()
+        .filter(|phase| phase.get("ready").and_then(Value::as_bool).unwrap_or(false))
+        .count();
+
+    serde_json::json!({
+        "host_dependencies": host,
+        "managed_roots": roots,
+        "managed_assets": assets,
+        "ready_phase_count": ready_phase_count,
+        "total_phase_count": 3,
+    })
+}
+
+fn runtime_bootstrap_phase(name: &str, checks: &[Value], prefixes: &[&str]) -> Value {
+    let phase_checks = checks
+        .iter()
+        .filter(|check| {
+            check
+                .get("id")
+                .and_then(Value::as_str)
+                .is_some_and(|id| prefixes.iter().any(|prefix| id.starts_with(prefix)))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let total = phase_checks.len();
+    let ready = phase_checks
+        .iter()
+        .filter(|check| check.get("ready").and_then(Value::as_bool).unwrap_or(false))
+        .count();
+    let missing = phase_checks
+        .iter()
+        .filter_map(|check| {
+            let is_ready = check.get("ready").and_then(Value::as_bool).unwrap_or(false);
+            (!is_ready)
+                .then(|| check.get("id").and_then(Value::as_str).map(str::to_owned))
+                .flatten()
+        })
+        .collect::<Vec<_>>();
+
+    serde_json::json!({
+        "name": name,
+        "ready": ready == total && total > 0,
+        "ready_check_count": ready,
+        "total_check_count": total,
+        "missing": missing,
     })
 }
 
@@ -1370,6 +1671,15 @@ fn json_summary(
             .map(|object| object.keys().cloned().collect::<Vec<_>>())
             .unwrap_or_default(),
     })
+}
+
+fn json_file_schema(path: &Path) -> Option<String> {
+    let bytes = fs::read(path).ok()?;
+    serde_json::from_slice::<Value>(&bytes)
+        .ok()?
+        .get("schema")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
 }
 
 fn executable_probe(path: Option<PathBuf>) -> Value {

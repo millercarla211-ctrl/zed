@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Status Bootstrap Mirror
+
+ADDED:
+- Added bootstrap readiness phases to `inspect_agent_plugin_runtime_status`, matching the catalog's host dependency, managed-root, and managed-asset breakdown.
+- Added runtime-status checks for the bootstrap manifest schema, managed roots, Playwright package, adapter files, DX extension manifest, and managed Chrome profile root.
+- Exposed the same dry-run/workspace/Zed-data `prepare_agent_plugin_runtime` handoff payloads from runtime status.
+
+NOTES:
+- This is read-only runtime-status metadata only; it does not create roots, write manifests, install Playwright, download extensions, launch Chrome, run Node, dispatch input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Bootstrap Readiness Phases
 
 ADDED:
