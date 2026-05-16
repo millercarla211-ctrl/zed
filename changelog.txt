@@ -1,3 +1,12 @@
+[2026-05-16] - Agent Plugin Runtime WebPreview Proof State
+
+ADDED:
+- Added a WebPreview final-validation observability block covering final bundle, result template, imported result, missing proof pieces, runtime-green candidate status, and recovery actions.
+- Exposed the block through WebPreview session snapshots, the Agent Browser action manifest, and the WebPreview Browser plugin observability profile.
+
+NOTES:
+- This is read-only in-memory session-state metadata only; it does not generate proof packets by itself, run `just run`, launch Chrome, run Node, take screenshots, focus Zed, or dispatch input.
+
 [2026-05-16] - Agent Plugin Runtime Proof Recovery Actions
 
 ADDED:

@@ -1368,6 +1368,7 @@ impl WebPreviewView {
             "agent_browser_final_validation_bundle": self.latest_agent_browser_final_validation_bundle_summary(),
             "agent_browser_final_validation_result_template": self.latest_agent_browser_final_validation_result_template_summary(),
             "agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result_summary(),
+            "agent_browser_final_validation_observability": self.agent_browser_final_validation_observability(),
             "agent_browser_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
             "agent_browser_reload_executor_attempt": self.latest_agent_browser_reload_executor_attempt_summary(),
             "agent_browser_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
@@ -1790,6 +1791,130 @@ impl WebPreviewView {
     fn latest_agent_browser_final_validation_result_summary(&self) -> Option<Value> {
         let result = self.latest_agent_browser_final_validation_result.as_ref()?;
         Some(Self::agent_browser_final_validation_result_summary(result))
+    }
+
+    fn agent_browser_final_validation_observability(&self) -> Value {
+        let bundle_summary = self.latest_agent_browser_final_validation_bundle_summary();
+        let result_template_summary =
+            self.latest_agent_browser_final_validation_result_template_summary();
+        let result_summary = self.latest_agent_browser_final_validation_result_summary();
+        let result_runtime_green_candidate = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/runtime_green_candidate"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+
+        let mut missing = Vec::new();
+        if bundle_summary.is_none() {
+            missing.push("final_validation_bundle");
+        }
+        if result_template_summary.is_none() {
+            missing.push("final_validation_result_template");
+        }
+        if result_summary.is_none() {
+            missing.push("final_validation_result");
+        }
+
+        let status = if result_runtime_green_candidate {
+            "manual_runtime_result_imported_runtime_green_candidate"
+        } else if result_summary.is_some() {
+            "manual_runtime_result_imported_not_green"
+        } else if bundle_summary.is_some() && result_template_summary.is_some() {
+            "ready_for_manual_runtime_result_import"
+        } else {
+            "missing_final_proof_state"
+        };
+
+        serde_json::json!({
+            "status": status,
+            "generated_at_ms": Self::current_epoch_millis(),
+            "missing": missing,
+            "latest": {
+                "final_validation_bundle": bundle_summary,
+                "final_validation_result_template": result_template_summary,
+                "final_validation_result": result_summary,
+            },
+            "runtime_green_candidate": result_runtime_green_candidate,
+            "recovery_actions": self.agent_browser_final_validation_observability_actions(
+                status,
+                result_runtime_green_candidate,
+            ),
+            "required_final_state": [
+                "Copy or send the final validation bundle before the runtime pass.",
+                "Copy or send the final validation result template before the runtime pass.",
+                "Run one final Windows just run pass when validation is intended.",
+                "Fill the result template with pass/fail evidence.",
+                "Import the filled final validation result from the clipboard.",
+                "Only claim runtime-green when the imported result summary reports runtime_green_candidate=true."
+            ],
+            "read_only": true,
+        })
+    }
+
+    fn agent_browser_final_validation_observability_actions(
+        &self,
+        status: &str,
+        result_runtime_green_candidate: bool,
+    ) -> Value {
+        let mut actions = Vec::new();
+        if self.latest_agent_browser_final_validation_bundle.is_none() {
+            actions.push(serde_json::json!({
+                "target": "final_validation_bundle",
+                "action": "copy_agent_browser_final_validation_bundle",
+                "alternative_action": "send_agent_browser_final_validation_bundle_to_agent",
+                "reason": "missing",
+                "dispatches_input": false
+            }));
+        }
+        if self
+            .latest_agent_browser_final_validation_result_template
+            .is_none()
+        {
+            actions.push(serde_json::json!({
+                "target": "final_validation_result_template",
+                "action": "copy_agent_browser_final_validation_result_template",
+                "alternative_action": "send_agent_browser_final_validation_result_template_to_agent",
+                "reason": "missing",
+                "dispatches_input": false
+            }));
+        }
+        if self.latest_agent_browser_final_validation_result.is_none() {
+            actions.push(serde_json::json!({
+                "target": "final_validation_result",
+                "action": "import_agent_browser_final_validation_result_from_clipboard",
+                "reason": "missing_after_manual_runtime_pass",
+                "dispatches_input": false
+            }));
+        } else if !result_runtime_green_candidate {
+            actions.push(serde_json::json!({
+                "target": "final_validation_result",
+                "action": "import_agent_browser_final_validation_result_from_clipboard",
+                "reason": "imported_result_is_not_runtime_green",
+                "dispatches_input": false
+            }));
+        }
+
+        if actions.is_empty() {
+            actions.push(serde_json::json!({
+                "target": "runtime_green_claim",
+                "action": "send_agent_browser_final_validation_result_to_agent",
+                "reason": if status == "manual_runtime_result_imported_runtime_green_candidate" {
+                    "imported_result_is_runtime_green_candidate"
+                } else {
+                    "final_result_needs_review"
+                },
+                "dispatches_input": false
+            }));
+        }
+
+        serde_json::json!({
+            "status": if result_runtime_green_candidate {
+                "ready_to_report_runtime_green_candidate"
+            } else {
+                "final_validation_action_required"
+            },
+            "actions": actions
+        })
     }
 
     fn latest_agent_browser_noop_executor_attempt_summary(&self) -> Option<Value> {
@@ -9226,6 +9351,7 @@ impl WebPreviewView {
                     "purpose": "Import, copy, or send the filled manual Windows result after the final runtime proof."
                 }
             },
+            "final_validation_observability": self.agent_browser_final_validation_observability(),
             "notes": [
                 "Read-only actions are always available for context gathering.",
                 "Interactive actions must remain locked until the user explicitly allows them for this WebPreview session.",
@@ -9444,6 +9570,7 @@ impl WebPreviewView {
                                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
                                 "final_result_send": "send_agent_browser_final_validation_result_to_agent"
                             },
+                            "final_validation_observability": self.agent_browser_final_validation_observability(),
                             "watch_surfaces": [
                                 "editor caret and typing latency",
                                 "WebPreview focus after navigation or reload",
