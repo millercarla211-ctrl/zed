@@ -53,6 +53,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
 const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
     "zed.web_preview.agent_browser_function_surfaces.v1";
+const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstrap_readiness.v1";
+const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstrap_manifest.v1";
 
 /// Lists the built-in DX/Zed agent plugin catalog for browser, Chrome, and PC-use workflows.
 ///
@@ -1013,6 +1015,12 @@ fn agent_plugin_bootstrap_readiness(
 ) -> Value {
     let workspace_tools_root = workspace_tools_root.cloned();
     let workspace_plugin_root = workspace_plugin_root.cloned();
+    let managed_base_root = workspace_tools_root
+        .clone()
+        .unwrap_or_else(|| default_plugin_root.to_path_buf());
+    let plugin_root = workspace_plugin_root
+        .clone()
+        .unwrap_or_else(|| default_plugin_root.to_path_buf());
     let playwright_root = workspace_tools_root
         .as_ref()
         .map(|root| root.join("playwright"))
@@ -1025,6 +1033,7 @@ fn agent_plugin_bootstrap_readiness(
         .as_ref()
         .map(|root| root.join("dx-chrome-extension"))
         .unwrap_or_else(|| default_plugin_root.join("dx-chrome-extension"));
+    let bootstrap_manifest = plugin_root.join("agent-plugin-bootstrap.json");
     let managed_profile_root = workspace_tools_root
         .as_ref()
         .map(|root| root.join("browser-profiles").join("chrome"))
@@ -1039,6 +1048,9 @@ fn agent_plugin_bootstrap_readiness(
         .join("package.json");
     let playwright_adapter_manifest_ready = adapter_manifest_ready(&playwright_adapter_manifest);
     let dx_extension_manifest = dx_extension_root.join("manifest.json");
+    let bootstrap_manifest_schema = json_file_schema(&bootstrap_manifest);
+    let bootstrap_manifest_ready =
+        bootstrap_manifest_schema.as_deref() == Some(AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA);
 
     let checks = vec![
         bootstrap_check(
@@ -1074,6 +1086,54 @@ fn agent_plugin_bootstrap_readiness(
             "External Chrome control needs Chrome, Edge, or Chromium on this OS.",
         ),
         bootstrap_check(
+            "root.managed_base",
+            "Managed runtime base root",
+            managed_base_root.is_dir(),
+            Some(managed_base_root.clone()),
+            "provision_required",
+            "Create this managed base root before writing plugin queues, assets, profiles, or receipts.",
+        ),
+        bootstrap_check(
+            "root.plugin",
+            "Managed plugin root",
+            plugin_root.is_dir(),
+            Some(plugin_root.clone()),
+            "provision_required",
+            "Create this managed plugin root before writing Browser, Chrome, or PC-use handoff files.",
+        ),
+        bootstrap_check(
+            "root.playwright",
+            "Managed Playwright root",
+            playwright_root.is_dir(),
+            Some(playwright_root.clone()),
+            "provision_required",
+            "Create this managed Playwright root before installing or preparing Playwright adapter files.",
+        ),
+        bootstrap_check(
+            "root.dx_chrome_extension",
+            "Managed DX Chrome extension root",
+            dx_extension_root.is_dir(),
+            Some(dx_extension_root.clone()),
+            "provision_required",
+            "Create this managed extension root before unpacking the DX Chrome extension.",
+        ),
+        bootstrap_check(
+            "profile.managed_chrome",
+            "Managed Chrome profile root",
+            managed_profile_root.is_dir(),
+            Some(managed_profile_root.clone()),
+            "provision_required",
+            "Create this profile root and never write into a user's real Chrome, Edge, or Firefox profile.",
+        ),
+        bootstrap_check(
+            "asset.bootstrap_manifest",
+            "Agent plugin bootstrap manifest",
+            bootstrap_manifest_ready,
+            Some(bootstrap_manifest.clone()),
+            "provision_required",
+            "Write the bootstrap manifest so future agents can verify the managed-root policy before provisioning assets.",
+        ),
+        bootstrap_check(
             "asset.playwright_package",
             "Managed Playwright package",
             playwright_package.is_file(),
@@ -1105,14 +1165,6 @@ fn agent_plugin_bootstrap_readiness(
             "provision_required",
             "Download or unpack the DX Chrome extension before loading managed Chrome with the bridge.",
         ),
-        bootstrap_check(
-            "profile.managed_chrome",
-            "Managed Chrome profile root",
-            managed_profile_root.is_dir(),
-            Some(managed_profile_root.clone()),
-            "provision_required",
-            "Create this profile root and never write into a user's real Chrome, Edge, or Firefox profile.",
-        ),
     ];
 
     let host_blockers = readiness_issues(&checks, "host_blocker");
@@ -1126,13 +1178,38 @@ fn agent_plugin_bootstrap_readiness(
     };
 
     serde_json::json!({
-        "schema": "zed.agent_plugins.bootstrap_readiness.v1",
+        "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
         "generated_at_ms": current_epoch_millis(),
         "status": status,
         "prepare_tool_name": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL,
         "project_root": project_root.map(path_string),
+        "phase_summary": bootstrap_phase_summary(&checks),
+        "prepare_runtime_handoff": {
+            "tool_name": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL,
+            "dry_run_payload": {
+                "root_mode": "workspace",
+                "create_managed_roots": false,
+                "write_bootstrap_manifest": false
+            },
+            "workspace_payload": {
+                "root_mode": "workspace",
+                "create_managed_roots": true,
+                "write_bootstrap_manifest": true
+            },
+            "zed_data_payload": {
+                "root_mode": "zed_data",
+                "create_managed_roots": true,
+                "write_bootstrap_manifest": true
+            },
+            "requires_permission_for_writes": true,
+            "downloads_packages": false,
+            "launches_browser": false,
+            "touches_real_browser_profiles": false
+        },
         "roots": {
             "zed_data_plugin_root": path_string(default_plugin_root),
+            "managed_base_root": path_string(&managed_base_root),
+            "plugin_root": path_string(&plugin_root),
             "workspace_plugin_root": workspace_plugin_root.as_ref().map(path_string),
             "workspace_tools_root": workspace_tools_root.as_ref().map(path_string),
             "playwright_root": path_string(&playwright_root),
@@ -1141,11 +1218,18 @@ fn agent_plugin_bootstrap_readiness(
             "playwright_runner_script": path_string(&playwright_runner_script),
             "dx_chrome_extension_root": path_string(&dx_extension_root),
             "managed_chrome_profile_root": path_string(&managed_profile_root),
+            "bootstrap_manifest": path_string(&bootstrap_manifest),
         },
         "host": {
             "node": node.as_ref().map(path_string),
             "npm": npm.as_ref().map(path_string),
             "chrome_or_edge": browser.as_ref().map(path_string),
+        },
+        "manifest": {
+            "path": path_string(&bootstrap_manifest),
+            "expected_schema": AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA,
+            "actual_schema": bootstrap_manifest_schema,
+            "ready": bootstrap_manifest_ready,
         },
         "checks": checks,
         "host_blockers": host_blockers,
@@ -1191,6 +1275,59 @@ fn readiness_issues(checks: &[Value], state: &str) -> Vec<Value> {
         .collect()
 }
 
+fn bootstrap_phase_summary(checks: &[Value]) -> Value {
+    let host = bootstrap_phase("host_dependencies", checks, &["workspace.", "host."]);
+    let roots = bootstrap_phase("managed_roots", checks, &["root.", "profile."]);
+    let assets = bootstrap_phase("managed_assets", checks, &["asset."]);
+    let ready_phase_count = [&host, &roots, &assets]
+        .into_iter()
+        .filter(|phase| phase.get("ready").and_then(Value::as_bool).unwrap_or(false))
+        .count();
+
+    serde_json::json!({
+        "host_dependencies": host,
+        "managed_roots": roots,
+        "managed_assets": assets,
+        "ready_phase_count": ready_phase_count,
+        "total_phase_count": 3,
+    })
+}
+
+fn bootstrap_phase(name: &str, checks: &[Value], prefixes: &[&str]) -> Value {
+    let phase_checks = checks
+        .iter()
+        .filter(|check| {
+            check
+                .get("id")
+                .and_then(Value::as_str)
+                .is_some_and(|id| prefixes.iter().any(|prefix| id.starts_with(prefix)))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let total = phase_checks.len();
+    let ready = phase_checks
+        .iter()
+        .filter(|check| check.get("ready").and_then(Value::as_bool).unwrap_or(false))
+        .count();
+    let missing = phase_checks
+        .iter()
+        .filter_map(|check| {
+            let is_ready = check.get("ready").and_then(Value::as_bool).unwrap_or(false);
+            (!is_ready)
+                .then(|| check.get("id").and_then(Value::as_str).map(str::to_owned))
+                .flatten()
+        })
+        .collect::<Vec<_>>();
+
+    serde_json::json!({
+        "name": name,
+        "ready": ready == total && total > 0,
+        "ready_check_count": ready,
+        "total_check_count": total,
+        "missing": missing,
+    })
+}
+
 fn adapter_manifest_ready(path: &Path) -> bool {
     let bytes = match std::fs::read(path) {
         Ok(bytes) => bytes,
@@ -1205,6 +1342,15 @@ fn adapter_manifest_ready(path: &Path) -> bool {
                 .map(str::to_owned)
         })
         .is_some_and(|schema| schema == AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA)
+}
+
+fn json_file_schema(path: &Path) -> Option<String> {
+    let bytes = std::fs::read(path).ok()?;
+    serde_json::from_slice::<Value>(&bytes)
+        .ok()?
+        .get("schema")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
 }
 
 fn bootstrap_next_actions(status: &str) -> Vec<&'static str> {

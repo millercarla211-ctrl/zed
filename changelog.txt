@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Bootstrap Readiness Phases
+
+ADDED:
+- Added phase-level bootstrap readiness to `list_agent_plugins`, separating host dependencies, managed roots, and managed assets.
+- Added readiness checks for managed base/plugin/Playwright/DX-extension roots and the `agent-plugin-bootstrap.json` manifest schema.
+- Exposed the exact dry-run, workspace, and Zed-data `prepare_agent_plugin_runtime` handoff payloads inside bootstrap readiness.
+
+NOTES:
+- This is read-only catalog metadata only; it does not create roots, write manifests, install Playwright, download extensions, launch Chrome, run Node, dispatch input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Browser Function Handoff
 
 ADDED:
