@@ -102,6 +102,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_report_badge.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_proof_guide.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_final_proof_guide_summary.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_report_packet.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA: &str =
@@ -472,6 +474,8 @@ fn inspect_runtime_status(
         runtime_green_report_badge(&runtime_green_report_gate_value);
     let runtime_green_final_proof_guide_value =
         runtime_green_final_proof_guide(&runtime_green_report_gate_value, roots.root_mode_label());
+    let runtime_green_final_proof_guide_summary =
+        runtime_green_final_proof_guide_summary(&runtime_green_final_proof_guide_value);
     let runtime_green_final_report_packet_value = runtime_green_final_report_packet(
         &runtime_green_report_gate_value,
         &runtime_green_final_proof_guide_value,
@@ -536,6 +540,7 @@ fn inspect_runtime_status(
         "runtime_green_report_gate": runtime_green_report_gate_value,
         "runtime_green_report_badge": runtime_green_report_badge_value,
         "runtime_green_final_proof_guide": runtime_green_final_proof_guide_value,
+        "runtime_green_final_proof_guide_summary": runtime_green_final_proof_guide_summary,
         "runtime_green_final_proof_audit": runtime_green_final_proof_audit_value,
         "runtime_green_final_proof_audit_summary": runtime_green_final_proof_audit_summary,
         "runtime_green_final_report_packet": runtime_green_final_report_packet_value,
@@ -582,6 +587,7 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
             "final_proof_audit": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
             "final_proof_audit_summary": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_green_final_proof_guide": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
+            "runtime_green_final_proof_guide_summary": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
             "runtime_green_final_report_packet": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
             "runtime_green_final_report_packet_summary": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
             "runtime_green_report_readiness_card": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
@@ -2927,6 +2933,7 @@ fn runtime_green_proof_path(
                     "runtime_green_report_gate",
                     "runtime_green_report_badge",
                     "runtime_green_final_proof_guide",
+                    "runtime_green_final_proof_guide_summary",
                     "runtime_green_final_proof_audit",
                     "runtime_green_final_proof_audit_summary",
                     "runtime_green_final_report_packet",
@@ -2994,6 +3001,8 @@ fn runtime_green_proof_path(
             },
             "runtime_green_final_proof_guide": {
                 "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
+                "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
+                "runtime_status_summary_field": "runtime_green_final_proof_guide_summary",
                 "source": "runtime_green_report_gate",
                 "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
                 "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent"
@@ -3038,6 +3047,7 @@ fn runtime_green_proof_path(
             "runtime_green_operator_handoff",
             "runtime_green_blocker_summary",
             "runtime_green_readiness_scorecard",
+            "runtime_green_final_proof_guide_summary",
             "runtime_green_final_proof_audit",
             "runtime_green_final_proof_audit_summary",
             "runtime_green_final_report_packet",
@@ -3637,6 +3647,53 @@ fn runtime_green_final_proof_guide(report_gate: &Value, root_mode: &str) -> Valu
         "runs_node": false,
         "launches_browser": false,
         "dispatches_input": false,
+    })
+}
+
+fn runtime_green_final_proof_guide_summary(guide: &Value) -> Value {
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
+        "source_schema": guide.get("schema").and_then(Value::as_str),
+        "status": guide.get("status").and_then(Value::as_str),
+        "root_mode": guide.get("root_mode").and_then(Value::as_str),
+        "can_report_runtime_green": guide
+            .get("can_report_runtime_green")
+            .and_then(Value::as_bool),
+        "blocker": guide.get("blocker").and_then(Value::as_str),
+        "next_action": guide.get("next_action").and_then(Value::as_str),
+        "report_gate_status": guide
+            .get("report_gate_status")
+            .and_then(Value::as_str),
+        "manual_command": guide.get("manual_command").and_then(Value::as_str),
+        "ordered_step_count": guide
+            .get("ordered_steps")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        "first_step_id": guide
+            .pointer("/ordered_steps/0/id")
+            .and_then(Value::as_str),
+        "manual_step_id": "manual_just_run",
+        "required_before_status_claim": guide
+            .get("required_before_status_claim")
+            .and_then(Value::as_bool),
+        "copy_action": guide.get("copy_action").and_then(Value::as_str),
+        "send_action": guide.get("send_action").and_then(Value::as_str),
+        "template_action": guide.get("template_action").and_then(Value::as_str),
+        "import_action": guide.get("import_action").and_then(Value::as_str),
+        "import_receipt_action": guide
+            .get("import_receipt_action")
+            .and_then(Value::as_str),
+        "final_report_packet_action": guide
+            .get("final_report_packet_action")
+            .and_then(Value::as_str),
+        "final_bundle_action": guide
+            .get("final_bundle_action")
+            .and_then(Value::as_str),
+        "read_only": guide.get("read_only").and_then(Value::as_bool),
+        "writes_files": guide.get("writes_files").and_then(Value::as_bool),
+        "runs_node": guide.get("runs_node").and_then(Value::as_bool),
+        "launches_browser": guide.get("launches_browser").and_then(Value::as_bool),
+        "dispatches_input": guide.get("dispatches_input").and_then(Value::as_bool),
     })
 }
 
