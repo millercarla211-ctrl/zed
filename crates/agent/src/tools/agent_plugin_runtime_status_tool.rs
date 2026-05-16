@@ -106,6 +106,8 @@ const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_validation_result_import_receipt.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME: &str =
     "latest-agent-browser-final-validation-result.json";
@@ -531,6 +533,7 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
             "payload_queue_item": AGENT_BROWSER_PAYLOAD_QUEUE_ITEM_SCHEMA,
             "payload_queue_inspection": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECTION_SCHEMA,
             "final_validation_result": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+            "final_validation_result_import_receipt": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
             "runtime_green_final_proof_guide": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
         },
         "managed_paths": {
@@ -1447,6 +1450,7 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
                 "copy_agent_browser_final_validation_bundle",
                 "copy_agent_browser_final_validation_result_template",
                 "import_agent_browser_final_validation_result_from_clipboard",
+                "copy_agent_browser_final_validation_result_import_receipt",
                 "send_agent_browser_final_validation_result_to_agent",
                 AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME
             ]
@@ -2846,6 +2850,13 @@ fn runtime_green_final_proof_guide(report_gate: &Value, root_mode: &str) -> Valu
                 "dispatches_input": false
             },
             {
+                "id": "copy_import_receipt",
+                "action": "copy_agent_browser_final_validation_result_import_receipt",
+                "purpose": "Capture durable proof paths and the post-import report-gate state before rechecking runtime status.",
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
                 "id": "recheck_runtime_status",
                 "tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
                 "payload": runtime_green_status_inspect_payload(root_mode),
@@ -2866,6 +2877,7 @@ fn runtime_green_final_proof_guide(report_gate: &Value, root_mode: &str) -> Valu
         "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
         "template_action": "copy_agent_browser_final_validation_result_template",
         "import_action": "import_agent_browser_final_validation_result_from_clipboard",
+        "import_receipt_action": "copy_agent_browser_final_validation_result_import_receipt",
         "final_bundle_action": "copy_agent_browser_final_validation_bundle",
         "read_only": true,
         "writes_files": false,
@@ -2922,6 +2934,7 @@ fn runtime_green_next_required_proof(
                 "copy_agent_browser_final_validation_result_template",
                 "run just run manually when ready for final runtime proof",
                 "import_agent_browser_final_validation_result_from_clipboard",
+                "copy_agent_browser_final_validation_result_import_receipt",
                 "inspect_agent_plugin_runtime_status with include_runtime_green_claim_gate=true"
             ],
             "managed_proof_write": "only WebPreview final-result import writes managed final-proof JSON after explicit user action",
@@ -2993,6 +3006,7 @@ fn runtime_green_next_required_proof(
                     "run just run manually",
                     "copy_agent_browser_final_validation_result_template",
                     "import_agent_browser_final_validation_result_from_clipboard",
+                    "copy_agent_browser_final_validation_result_import_receipt",
                     "inspect_agent_plugin_runtime_status with include_runtime_green_claim_gate=true"
                 ])
             } else {
@@ -3080,6 +3094,14 @@ fn runtime_green_final_operator_checklist(
                 "status": if runtime_green_candidate { "pending_manual_result" } else { "blocked" },
                 "webpreview_action": "import_agent_browser_final_validation_result_from_clipboard",
                 "managed_proof_write": "writes managed final-proof JSON only after explicit WebPreview import",
+                "dispatches_input": false
+            },
+            {
+                "id": "copy_import_receipt",
+                "label": "Copy the final validation result import receipt.",
+                "status": "required_after_import",
+                "webpreview_action": "copy_agent_browser_final_validation_result_import_receipt",
+                "writes_files": false,
                 "dispatches_input": false
             },
             {
@@ -3410,6 +3432,7 @@ fn observability_profiles(runtime_status: &str, roots: &AgentPluginRuntimeRoots)
                     "final_bundle": "copy_agent_browser_final_validation_bundle",
                     "final_result_template": "copy_agent_browser_final_validation_result_template",
                     "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
+                    "final_result_import_receipt": "copy_agent_browser_final_validation_result_import_receipt",
                     "final_result_send": "send_agent_browser_final_validation_result_to_agent"
                 },
                 "watch_surfaces": [

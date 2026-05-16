@@ -52,6 +52,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_bundle.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_validation_result_import_receipt.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
@@ -641,6 +643,7 @@ fn browser_plugin_manifest() -> Value {
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
+                "final_result_import_receipt": "copy_agent_browser_final_validation_result_import_receipt",
                 "final_result_send": "send_agent_browser_final_validation_result_to_agent"
             },
             "watch_surfaces": [
@@ -688,6 +691,7 @@ fn browser_plugin_manifest() -> Value {
             "executor_validation_progress_schema": AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA,
             "final_validation_bundle_schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
             "final_validation_result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+            "final_validation_result_import_receipt_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
             "final_validation_observability_schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
             "managed_queue_import_action": "import_agent_browser_action_payload_from_managed_queue",
@@ -769,6 +773,16 @@ fn browser_plugin_manifest() -> Value {
             "managed_roots_only": true,
             "source": "WebPreview More menu",
             "purpose": "Import, persist, copy, or send the filled manual Windows result after the final runtime proof."
+        },
+        "final_validation_result_import_receipt_handoff": {
+            "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
+            "source_action": "import_agent_browser_final_validation_result_from_clipboard",
+            "copy_action": "copy_agent_browser_final_validation_result_import_receipt",
+            "send_action": "send_agent_browser_final_validation_result_import_receipt_to_agent",
+            "runtime_status_recheck": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+            "copy_send_read_only": true,
+            "source": "WebPreview More menu",
+            "purpose": "Copy or send the final result import receipt with durable proof paths and the post-import report-gate recheck."
         },
         "final_validation_observability_handoff": {
             "schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
@@ -867,6 +881,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.validation.final_bundle", "available", "Copy or send the final Windows validation bundle tying readiness, progress, runbook, manifest, plugin catalog, and proof order together."),
             capability("browser.validation.final_result_template", "available", "Copy or send the fillable manual Windows result template with allowed status values and runtime-green requirements."),
             capability("browser.validation.final_result", "available", "Import, copy, or send the filled final Windows validation result after manual runtime proof."),
+            capability("browser.validation.final_result_import_receipt", "available", "Copy or send the final result import receipt with durable proof paths and the next runtime-status recheck."),
             capability("browser.validation.final_proof_state", "available", "Copy or send compact final proof-state observability and recovery actions without generating larger proof packets."),
             capability("browser.action.click", "available_when_unlocked", "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."),
             capability("browser.action.type", "available_when_unlocked_payload_required", "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."),

@@ -80,6 +80,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_bundle.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_validation_result_import_receipt.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
@@ -349,6 +351,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "copy_agent_browser_final_validation_result_template",
     "send_agent_browser_final_validation_result_template_to_agent",
     "import_agent_browser_final_validation_result_from_clipboard",
+    "copy_agent_browser_final_validation_result_import_receipt",
+    "send_agent_browser_final_validation_result_import_receipt_to_agent",
     "copy_agent_browser_final_validation_result",
     "send_agent_browser_final_validation_result_to_agent",
     "copy_agent_browser_final_validation_observability",
@@ -731,6 +735,7 @@ pub struct WebPreviewView {
     latest_agent_browser_final_validation_bundle: Option<Value>,
     latest_agent_browser_final_validation_result_template: Option<Value>,
     latest_agent_browser_final_validation_result: Option<Value>,
+    latest_agent_browser_final_validation_result_import_receipt: Option<Value>,
     latest_agent_browser_noop_executor_attempt: Option<Value>,
     latest_agent_browser_reload_executor_attempt: Option<Value>,
     latest_agent_browser_clear_data_executor_attempt: Option<Value>,
@@ -948,6 +953,7 @@ impl WebPreviewView {
             latest_agent_browser_final_validation_bundle: None,
             latest_agent_browser_final_validation_result_template: None,
             latest_agent_browser_final_validation_result: None,
+            latest_agent_browser_final_validation_result_import_receipt: None,
             latest_agent_browser_noop_executor_attempt: None,
             latest_agent_browser_reload_executor_attempt: None,
             latest_agent_browser_clear_data_executor_attempt: None,
@@ -1440,6 +1446,7 @@ impl WebPreviewView {
             "agent_browser_final_validation_bundle": self.latest_agent_browser_final_validation_bundle_summary(),
             "agent_browser_final_validation_result_template": self.latest_agent_browser_final_validation_result_template_summary(),
             "agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result_summary(),
+            "agent_browser_final_validation_result_import_receipt": self.latest_agent_browser_final_validation_result_import_receipt_summary(),
             "agent_browser_final_validation_observability": self.agent_browser_final_validation_observability(),
             "agent_browser_function_surfaces": self.agent_browser_function_surfaces(),
             "agent_plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
@@ -1526,6 +1533,8 @@ impl WebPreviewView {
                 "copy_agent_browser_final_validation_result_template": true,
                 "send_agent_browser_final_validation_result_template_to_agent": true,
                 "import_agent_browser_final_validation_result_from_clipboard": true,
+                "copy_agent_browser_final_validation_result_import_receipt": self.latest_agent_browser_final_validation_result_import_receipt.is_some(),
+                "send_agent_browser_final_validation_result_import_receipt_to_agent": self.latest_agent_browser_final_validation_result_import_receipt.is_some(),
                 "copy_agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result.is_some(),
                 "send_agent_browser_final_validation_result_to_agent": self.latest_agent_browser_final_validation_result.is_some(),
                 "copy_agent_browser_final_validation_observability": true,
@@ -1975,6 +1984,23 @@ impl WebPreviewView {
         Some(Self::agent_browser_final_validation_result_summary(result))
     }
 
+    fn latest_agent_browser_final_validation_result_import_receipt_summary(&self) -> Option<Value> {
+        let receipt = self
+            .latest_agent_browser_final_validation_result_import_receipt
+            .as_ref()?;
+        Some(serde_json::json!({
+            "schema": receipt.pointer("/schema").and_then(Value::as_str),
+            "status": receipt.pointer("/status").and_then(Value::as_str),
+            "imported_at_ms": receipt.pointer("/imported_at_ms").and_then(Value::as_u64),
+            "runtime_green_candidate": receipt.pointer("/result_summary/runtime_green_candidate").and_then(Value::as_bool),
+            "result_status": receipt.pointer("/result_summary/status").and_then(Value::as_str),
+            "durable_write_count": receipt.pointer("/durable_write_count").and_then(Value::as_u64),
+            "report_gate_status": receipt.pointer("/post_import/runtime_green_report_gate/status").and_then(Value::as_str),
+            "report_gate_blocker": receipt.pointer("/post_import/runtime_green_report_gate/blocker").and_then(Value::as_str),
+            "next_action": receipt.pointer("/post_import/next_action").and_then(Value::as_str),
+        }))
+    }
+
     fn agent_browser_final_validation_result_latest_paths(
         &self,
     ) -> Vec<(&'static str, PathBuf, PathBuf)> {
@@ -2118,6 +2144,8 @@ impl WebPreviewView {
         let result_template_summary =
             self.latest_agent_browser_final_validation_result_template_summary();
         let result_summary = self.latest_agent_browser_final_validation_result_summary();
+        let result_import_receipt_summary =
+            self.latest_agent_browser_final_validation_result_import_receipt_summary();
         let durable_evidence = self.agent_browser_final_validation_result_durable_evidence();
         let durable_runtime_green_candidate = durable_evidence
             .pointer("/runtime_green_candidate")
@@ -2160,6 +2188,7 @@ impl WebPreviewView {
                 "final_validation_bundle": bundle_summary,
                 "final_validation_result_template": result_template_summary,
                 "final_validation_result": result_summary,
+                "final_validation_result_import_receipt": result_import_receipt_summary,
             },
             "durable_evidence": durable_evidence,
             "runtime_green_candidate": result_runtime_green_candidate,
@@ -2233,6 +2262,18 @@ impl WebPreviewView {
                 },
                 "dispatches_input": false
             }));
+            if self
+                .latest_agent_browser_final_validation_result_import_receipt
+                .is_some()
+            {
+                actions.push(serde_json::json!({
+                    "target": "final_validation_result_import_receipt",
+                    "action": "copy_agent_browser_final_validation_result_import_receipt",
+                    "alternative_action": "send_agent_browser_final_validation_result_import_receipt_to_agent",
+                    "reason": "post_import_receipt_available_for_recheck_handoff",
+                    "dispatches_input": false
+                }));
+            }
         }
 
         serde_json::json!({
@@ -2950,6 +2991,14 @@ impl WebPreviewView {
                     "send_action": "send_agent_browser_action_manifest_to_agent",
                     "handoffs": manifest.pointer("/handoffs").cloned()
                 },
+                "final_validation_result_import_receipt": {
+                    "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
+                    "source_action": "import_agent_browser_final_validation_result_from_clipboard",
+                    "copy_action": "copy_agent_browser_final_validation_result_import_receipt",
+                    "send_action": "send_agent_browser_final_validation_result_import_receipt_to_agent",
+                    "latest_summary": self.latest_agent_browser_final_validation_result_import_receipt_summary(),
+                    "read_only": true
+                },
                 "plugin_catalog": {
                     "schema": "zed.agent_plugins.catalog.v1",
                     "copy_action": "copy_agent_plugin_catalog",
@@ -3231,6 +3280,87 @@ impl WebPreviewView {
         )))]
     }
 
+    fn agent_browser_final_validation_result_import_receipt(
+        &self,
+        result_summary: &Value,
+        durable_writes: &[Value],
+        runtime_green_candidate: bool,
+    ) -> Value {
+        let report_gate = self.agent_plugin_runtime_green_report_gate_snapshot();
+        let final_proof_guide =
+            self.agent_plugin_runtime_green_final_proof_guide_from_report_gate(&report_gate);
+        let next_action = if runtime_green_candidate {
+            "copy_agent_plugin_runtime_green_report_gate"
+        } else {
+            "copy_agent_browser_final_validation_result_template"
+        };
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
+            "status": if runtime_green_candidate {
+                "imported_runtime_green_candidate"
+            } else {
+                "imported_not_runtime_green"
+            },
+            "imported_at_ms": Self::current_epoch_millis(),
+            "result_summary": result_summary,
+            "durable_write_count": durable_writes.len(),
+            "durable_writes": durable_writes,
+            "post_import": {
+                "runtime_green_report_gate": {
+                    "status": report_gate.pointer("/status").and_then(Value::as_str),
+                    "can_report_runtime_green": report_gate.pointer("/can_report_runtime_green").and_then(Value::as_bool),
+                    "blocker": report_gate.pointer("/blocker").and_then(Value::as_str),
+                    "next_action": report_gate.pointer("/next_action").and_then(Value::as_str),
+                    "copy_action": "copy_agent_plugin_runtime_green_report_gate",
+                    "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent"
+                },
+                "runtime_green_final_proof_guide": {
+                    "status": final_proof_guide.pointer("/status").and_then(Value::as_str),
+                    "next_action": final_proof_guide.pointer("/next_action").and_then(Value::as_str),
+                    "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
+                    "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent"
+                },
+                "recheck": {
+                    "tool": "inspect_agent_plugin_runtime_status",
+                    "payload": runtime_green_status_payload(self.runtime_green_root_mode()),
+                    "purpose": "Confirm the durable final result and refreshed report gate before any runtime-green report."
+                },
+                "next_action": next_action
+            },
+            "copy_action": "copy_agent_browser_final_validation_result_import_receipt",
+            "send_action": "send_agent_browser_final_validation_result_import_receipt_to_agent",
+            "read_only": true,
+            "import_wrote_managed_files": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+        })
+    }
+
+    fn agent_browser_final_validation_result_import_receipt_json(receipt: &Value) -> String {
+        serde_json::to_string_pretty(receipt).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_final_validation_result_import_receipt_agent_blocks(
+        receipt: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let summary = serde_json::json!({
+            "status": receipt.pointer("/status").and_then(Value::as_str),
+            "runtime_green_candidate": receipt.pointer("/result_summary/runtime_green_candidate").and_then(Value::as_bool),
+            "durable_write_count": receipt.pointer("/durable_write_count").and_then(Value::as_u64),
+            "report_gate_status": receipt.pointer("/post_import/runtime_green_report_gate/status").and_then(Value::as_str),
+            "report_gate_blocker": receipt.pointer("/post_import/runtime_green_report_gate/blocker").and_then(Value::as_str),
+            "next_action": receipt.pointer("/post_import/next_action").and_then(Value::as_str),
+        });
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview final validation result import receipt:\n\nSummary:\n```json\n{}\n```\n\nReceipt:\n```json\n{}\n```",
+            serde_json::to_string_pretty(&summary).unwrap_or_else(|_| "{}".to_string()),
+            Self::agent_browser_final_validation_result_import_receipt_json(receipt)
+        )))]
+    }
+
     fn agent_browser_final_validation_bundle_agent_blocks(
         &self,
         bundle: &Value,
@@ -3353,15 +3483,7 @@ impl WebPreviewView {
             .pointer("/runtime_green_candidate")
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        self.latest_agent_browser_final_validation_result = Some(result);
-        let Some(result) = self.latest_agent_browser_final_validation_result.as_ref() else {
-            self.show_toast(
-                "Final validation result import did not persist in memory",
-                cx,
-            );
-            return;
-        };
-        let durable_writes = match self.persist_agent_browser_final_validation_result(result) {
+        let durable_writes = match self.persist_agent_browser_final_validation_result(&result) {
             Ok(writes) => writes,
             Err(error) => {
                 self.report_action_error(
@@ -3373,6 +3495,13 @@ impl WebPreviewView {
                 return;
             }
         };
+        self.latest_agent_browser_final_validation_result = Some(result);
+        let import_receipt = self.agent_browser_final_validation_result_import_receipt(
+            &summary,
+            &durable_writes,
+            runtime_green_candidate,
+        );
+        self.latest_agent_browser_final_validation_result_import_receipt = Some(import_receipt);
         if runtime_green_candidate {
             self.show_toast(
                 format!(
@@ -3390,6 +3519,45 @@ impl WebPreviewView {
                 cx,
             );
         }
+        cx.notify();
+    }
+
+    fn copy_agent_browser_final_validation_result_import_receipt(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(receipt) = self
+            .latest_agent_browser_final_validation_result_import_receipt
+            .as_ref()
+        else {
+            self.show_toast("No final validation result import receipt yet", cx);
+            return;
+        };
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_final_validation_result_import_receipt_json(receipt),
+        ));
+        self.show_toast("Copied final validation result import receipt", cx);
+    }
+
+    fn send_agent_browser_final_validation_result_import_receipt_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(receipt) = self
+            .latest_agent_browser_final_validation_result_import_receipt
+            .as_ref()
+        else {
+            self.show_toast("No final validation result import receipt yet", cx);
+            return;
+        };
+        let blocks =
+            Self::agent_browser_final_validation_result_import_receipt_agent_blocks(receipt);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast(
+            "Sent final validation result import receipt to the agent panel",
+            cx,
+        );
         cx.notify();
     }
 
@@ -4707,6 +4875,14 @@ impl WebPreviewView {
                     "dispatches_input": false
                 },
                 {
+                    "id": "copy_import_receipt",
+                    "label": "Copy final result import receipt",
+                    "action": "copy_agent_browser_final_validation_result_import_receipt",
+                    "purpose": "Capture durable proof paths and the post-import report-gate state before rechecking runtime status.",
+                    "writes_files": false,
+                    "dispatches_input": false
+                },
+                {
                     "id": "recheck_runtime_status",
                     "label": "Recheck runtime status",
                     "tool": "inspect_agent_plugin_runtime_status",
@@ -4729,6 +4905,7 @@ impl WebPreviewView {
             "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
             "template_action": "copy_agent_browser_final_validation_result_template",
             "import_action": "import_agent_browser_final_validation_result_from_clipboard",
+            "import_receipt_action": "copy_agent_browser_final_validation_result_import_receipt",
             "final_bundle_action": "copy_agent_browser_final_validation_bundle",
             "read_only": true,
             "writes_files": false,
@@ -4777,6 +4954,7 @@ impl WebPreviewView {
                     "copy_agent_browser_final_validation_result_template",
                     "run just run manually when ready for final runtime proof",
                     "import_agent_browser_final_validation_result_from_clipboard",
+                    "copy_agent_browser_final_validation_result_import_receipt",
                     "copy_agent_plugin_runtime_green_claim_gate"
                 ],
                 "managed_proof_write": "only import_agent_browser_final_validation_result_from_clipboard writes managed final-proof JSON after explicit user action",
@@ -4839,6 +5017,7 @@ impl WebPreviewView {
                         "run just run manually",
                         "copy_agent_browser_final_validation_result_template",
                         "import_agent_browser_final_validation_result_from_clipboard",
+                        "copy_agent_browser_final_validation_result_import_receipt",
                         "copy_agent_plugin_runtime_green_claim_gate"
                     ])
                 } else {
@@ -4921,6 +5100,14 @@ impl WebPreviewView {
                     "dispatches_input": false
                 },
                 {
+                    "id": "copy_import_receipt",
+                    "label": "Copy the final validation result import receipt.",
+                    "status": "required_after_import",
+                    "action": "copy_agent_browser_final_validation_result_import_receipt",
+                    "writes_files": false,
+                    "dispatches_input": false
+                },
+                {
                     "id": "recheck_claim_gate",
                     "label": "Re-read the claim gate and proof path before reporting runtime-green.",
                     "status": "required_after_changes",
@@ -4984,7 +5171,9 @@ impl WebPreviewView {
                     "send_final_proof_state": "send_agent_browser_final_validation_observability_to_agent",
                     "copy_final_validation_bundle": "copy_agent_browser_final_validation_bundle",
                     "send_final_validation_bundle": "send_agent_browser_final_validation_bundle_to_agent",
-                    "import_final_result": "import_agent_browser_final_validation_result_from_clipboard"
+                    "import_final_result": "import_agent_browser_final_validation_result_from_clipboard",
+                    "copy_final_result_import_receipt": "copy_agent_browser_final_validation_result_import_receipt",
+                    "send_final_result_import_receipt": "send_agent_browser_final_validation_result_import_receipt_to_agent"
                 }
             }),
             serde_json::json!({
@@ -7831,6 +8020,7 @@ impl WebPreviewView {
                     "agent_browser_final_validation_bundle": self.latest_agent_browser_final_validation_bundle_summary(),
                     "agent_browser_final_validation_result_template": self.latest_agent_browser_final_validation_result_template_summary(),
                     "agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result_summary(),
+                    "agent_browser_final_validation_result_import_receipt": self.latest_agent_browser_final_validation_result_import_receipt_summary(),
                     "managed_chrome_execution": managed_chrome_execution,
                     "pc_use_status": pc_use_status,
                     "runtime_observability_digest": runtime_observability_digest_summary,
@@ -7878,6 +8068,10 @@ impl WebPreviewView {
                     "runtime_green_report_gate_blocker": runtime_green_report_gate.get("blocker").and_then(Value::as_str),
                     "runtime_green_report_badge": runtime_green_report_badge,
                     "runtime_green_final_proof_guide": runtime_green_final_proof_guide,
+                    "final_validation_result_import_receipt_visible": self.latest_agent_browser_final_validation_result_import_receipt.is_some(),
+                    "final_validation_result_import_receipt_copy_action": "copy_agent_browser_final_validation_result_import_receipt",
+                    "final_validation_result_import_receipt_send_action": "send_agent_browser_final_validation_result_import_receipt_to_agent",
+                    "final_validation_result_import_receipt": self.latest_agent_browser_final_validation_result_import_receipt_summary(),
                     "executor_wired": true,
                     "safe_to_send_to_agent_panel": true,
                 },
@@ -12268,6 +12462,15 @@ impl WebPreviewView {
                     "read_only": true,
                     "purpose": "Import, copy, or send the filled manual Windows result after the final runtime proof."
                 },
+                "final_validation_result_import_receipt": {
+                    "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
+                    "source_action": "import_agent_browser_final_validation_result_from_clipboard",
+                    "copy_action": "copy_agent_browser_final_validation_result_import_receipt",
+                    "send_action": "send_agent_browser_final_validation_result_import_receipt_to_agent",
+                    "latest_summary": self.latest_agent_browser_final_validation_result_import_receipt_summary(),
+                    "read_only": true,
+                    "purpose": "Share the post-import receipt with durable proof paths, refreshed report-gate status, and the runtime-status recheck payload."
+                },
                 "final_validation_observability": {
                     "schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
                     "copy_action": "copy_agent_browser_final_validation_observability",
@@ -12718,6 +12921,7 @@ impl WebPreviewView {
                                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
+                                "final_result_import_receipt": "copy_agent_browser_final_validation_result_import_receipt",
                                 "final_result_send": "send_agent_browser_final_validation_result_to_agent"
                             },
                             "final_validation_observability": self.agent_browser_final_validation_observability(),
@@ -12766,6 +12970,7 @@ impl WebPreviewView {
                             "executor_validation_progress_schema": AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA,
                             "final_validation_bundle_schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
                             "final_validation_result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+                            "final_validation_result_import_receipt_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
                             "final_validation_observability_schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
                             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
                             "managed_queue_import_action": "import_agent_browser_action_payload_from_managed_queue",
@@ -12847,6 +13052,16 @@ impl WebPreviewView {
                             "managed_roots_only": true,
                             "source": "WebPreview More menu",
                             "purpose": "Import, persist, copy, or send the filled manual Windows result after the final runtime proof."
+                        },
+                        "final_validation_result_import_receipt_handoff": {
+                            "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
+                            "source_action": "import_agent_browser_final_validation_result_from_clipboard",
+                            "copy_action": "copy_agent_browser_final_validation_result_import_receipt",
+                            "send_action": "send_agent_browser_final_validation_result_import_receipt_to_agent",
+                            "runtime_status_recheck": "inspect_agent_plugin_runtime_status",
+                            "copy_send_read_only": true,
+                            "source": "WebPreview More menu",
+                            "purpose": "Copy or send the final result import receipt with durable proof paths and the post-import report-gate recheck."
                         },
                         "final_validation_observability_handoff": {
                             "schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
@@ -12945,6 +13160,7 @@ impl WebPreviewView {
                             {"id": "browser.validation.final_bundle", "state": "available", "description": "Copy or send the final Windows validation bundle tying readiness, progress, runbook, manifest, plugin catalog, and proof order together."},
                             {"id": "browser.validation.final_result_template", "state": "available", "description": "Copy or send the fillable manual Windows result template with allowed status values and runtime-green requirements."},
                             {"id": "browser.validation.final_result", "state": "available", "description": "Import, copy, or send the filled final Windows validation result after manual runtime proof."},
+                            {"id": "browser.validation.final_result_import_receipt", "state": "available", "description": "Copy or send the final result import receipt with durable proof paths and the next runtime-status recheck."},
                             {"id": "browser.validation.final_proof_state", "state": "available", "description": "Copy or send compact final proof-state observability and recovery actions without generating larger proof packets."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},
                             {"id": "browser.action.type", "state": "available_when_unlocked_payload_required", "description": "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."},
@@ -15114,6 +15330,34 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Copy Final Result Import Receipt")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_final_validation_result_import_receipt(
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Final Result Import Receipt")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_final_validation_result_import_receipt_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy Final Result")
                                 .icon(IconName::Check)
                                 .handler({
@@ -17252,6 +17496,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_final_validation_bundle: None,
                 latest_agent_browser_final_validation_result_template: None,
                 latest_agent_browser_final_validation_result: None,
+                latest_agent_browser_final_validation_result_import_receipt: None,
                 latest_agent_browser_noop_executor_attempt: None,
                 latest_agent_browser_reload_executor_attempt: None,
                 latest_agent_browser_clear_data_executor_attempt: None,

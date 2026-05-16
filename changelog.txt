@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Final Result Import Receipt
+
+ADDED:
+- WebPreview now records a schema-versioned final validation result import receipt after the explicit clipboard import succeeds, including result summary, durable managed proof writes, refreshed report-gate state, final-proof guide state, and the runtime-status recheck payload.
+- WebPreview now exposes Copy/Send Final Result Import Receipt actions and advertises the receipt in session snapshots, status packets, final validation bundles, action manifests, observability state, and plugin catalogs.
+- Agent runtime-status and catalog metadata now advertise the final-result import receipt schema/action so agents can verify the post-import handoff before reporting runtime-green.
+
+NOTES:
+- The receipt is generated only after the existing explicit import action writes managed proof files; copy/send receipt actions are read-only and do not run Node, launch Chrome, dispatch browser or OS input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Final Proof Guide Actions
 
 ADDED:
