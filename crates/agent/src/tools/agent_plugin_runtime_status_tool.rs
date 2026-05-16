@@ -769,6 +769,7 @@ fn observability_proof_freshness(roots: &AgentPluginRuntimeRoots) -> Value {
     } else {
         "latest_runtime_evidence_present"
     };
+    let recovery_actions = observability_recovery_actions(&missing, &stale);
 
     serde_json::json!({
         "status": status,
@@ -776,6 +777,7 @@ fn observability_proof_freshness(roots: &AgentPluginRuntimeRoots) -> Value {
         "freshness_window_ms": OBSERVABILITY_FRESHNESS_WINDOW_MS,
         "missing_required_files": missing,
         "stale_required_files": stale,
+        "recovery_actions": recovery_actions,
         "required_files": {
             "browser_latest_payload": proof_file_probe(
                 &roots.browser_latest_payload,
@@ -823,6 +825,112 @@ fn observability_proof_freshness(roots: &AgentPluginRuntimeRoots) -> Value {
             "WebPreview imported final result state"
         ],
     })
+}
+
+fn observability_recovery_actions(missing: &[&str], stale: &[&str]) -> Value {
+    let mut actions = Vec::with_capacity(missing.len() + stale.len() + 1);
+    for label in missing {
+        actions.push(observability_recovery_action(*label, "missing"));
+    }
+    for label in stale {
+        actions.push(observability_recovery_action(*label, "stale"));
+    }
+
+    if actions.is_empty() {
+        actions.push(serde_json::json!({
+            "target": "manual_windows_runtime_result",
+            "reason": "latest_managed_evidence_present",
+            "steps": [
+                "Run one final just run pass when runtime validation is intended.",
+                "Exercise editor typing/caret, WebPreview input, managed Chrome safe actions, and PC-use receipt gates.",
+                "Fill and import the Browser final validation result template."
+            ],
+            "dispatches_input": false
+        }));
+    }
+
+    serde_json::json!({
+        "status": if missing.is_empty() && stale.is_empty() {
+            "ready_for_manual_runtime_result"
+        } else {
+            "managed_evidence_refresh_required"
+        },
+        "actions": actions
+    })
+}
+
+fn observability_recovery_action(label: &str, reason: &str) -> Value {
+    match label {
+        "browser.latest_payload" => serde_json::json!({
+            "target": label,
+            "reason": reason,
+            "steps": [
+                AGENT_BROWSER_PAYLOAD_TOOL_NAME,
+                AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME,
+                AGENT_BROWSER_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                "import_agent_browser_action_payload_from_managed_queue"
+            ],
+            "dispatches_input": false
+        }),
+        "chrome.latest_payload" => serde_json::json!({
+            "target": label,
+            "reason": reason,
+            "steps": [
+                AGENT_CHROME_PAYLOAD_TOOL_NAME,
+                AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
+                AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME
+            ],
+            "dispatches_input": false
+        }),
+        "chrome.latest_runner_receipt" => serde_json::json!({
+            "target": label,
+            "reason": reason,
+            "steps": [
+                AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                AGENT_CHROME_RUNNER_GATE_TOOL_NAME
+            ],
+            "dispatches_input": false
+        }),
+        "chrome.adapter_manifest" => serde_json::json!({
+            "target": label,
+            "reason": reason,
+            "steps": [
+                AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+                AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME
+            ],
+            "dispatches_input": false
+        }),
+        "pc_use.latest_payload" => serde_json::json!({
+            "target": label,
+            "reason": reason,
+            "steps": [
+                AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME,
+                AGENT_PC_USE_PAYLOAD_TOOL_NAME,
+                AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME,
+                AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME
+            ],
+            "dispatches_input": false
+        }),
+        "pc_use.latest_runner_receipt" => serde_json::json!({
+            "target": label,
+            "reason": reason,
+            "steps": [
+                AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                AGENT_PC_USE_RUNNER_GATE_TOOL_NAME,
+                AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME
+            ],
+            "dispatches_input": false
+        }),
+        _ => serde_json::json!({
+            "target": label,
+            "reason": reason,
+            "steps": [
+                AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                AgentPluginCatalogTool::NAME
+            ],
+            "dispatches_input": false
+        }),
+    }
 }
 
 fn track_required_proof_file(

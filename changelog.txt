@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Proof Recovery Actions
+
+ADDED:
+- Added non-dispatching recovery actions to the runtime-status proof freshness block.
+- Missing or stale Browser, managed Chrome, and PC-use evidence now maps to exact compose, queue, inspect, runner-gate, adapter, or WebPreview import steps.
+- When managed proof files are fresh, the recovery block points to the remaining manual Windows runtime result import.
+
+NOTES:
+- This is read-only guidance metadata only; it does not run `just run`, write files, launch Chrome, run Node, take screenshots, focus Zed, or dispatch input.
+
 [2026-05-16] - Agent Plugin Runtime Proof Freshness
 
 ADDED:
