@@ -1746,6 +1746,8 @@ impl WebPreviewView {
             "estimated_code_score": bundle.pointer("/estimated_code_score").and_then(Value::as_u64),
             "executor_readiness_status": bundle.pointer("/current_readiness/executor_readiness_status").and_then(Value::as_str),
             "validation_status": bundle.pointer("/current_readiness/validation_status").and_then(Value::as_str),
+            "result_schema": bundle.pointer("/manual_evidence_template/schema").and_then(Value::as_str),
+            "allowed_status_values": bundle.pointer("/manual_evidence_template/allowed_status_values").cloned(),
             "ready_item_count": bundle.pointer("/current_readiness/ready_item_count").and_then(Value::as_u64),
             "total_item_count": bundle.pointer("/current_readiness/total_item_count").and_then(Value::as_u64),
             "success_criteria_count": bundle.pointer("/success_criteria").and_then(Value::as_array).map(Vec::len),
@@ -2414,6 +2416,15 @@ impl WebPreviewView {
                 "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
                 "status": "not_run",
                 "runtime_command": "just run",
+                "allowed_status_values": ["not_run", "pass", "fail", "blocked", "skipped"],
+                "required_check_ids": [
+                    "editor_typing",
+                    "webpreview_input",
+                    "native_executor_receipts",
+                    "payload_bridge",
+                    "managed_chrome",
+                    "pc_use"
+                ],
                 "branch": "dev",
                 "commit": "fill with git rev-parse --short HEAD before runtime pass",
                 "started_at": null,
@@ -2451,7 +2462,14 @@ impl WebPreviewView {
                     }
                 },
                 "overall_blocker": null,
-                "claim_runtime_green_only_when": "all checks are pass and the validation-progress packet reports all evidence groups ready"
+                "runtime_green_requirements": {
+                    "top_level_status": "pass",
+                    "required_check_status": "pass",
+                    "validation_progress_status": "manual_windows_runtime_validation_ready",
+                    "evidence_rule": "Every required check id must have status pass and non-empty evidence.",
+                    "blocker_rule": "overall_blocker and every required check blocker must be null."
+                },
+                "claim_runtime_green_only_when": "all required checks are pass, blockers are null, and the validation-progress packet reports manual_windows_runtime_validation_ready"
             },
             "success_criteria": [
                 "No editor typing lag or caret disappearance after WebPreview actions.",
@@ -8960,6 +8978,13 @@ impl WebPreviewView {
                 "final_validation_bundle": {
                     "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
                     "result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+                    "result_status_values": ["not_run", "pass", "fail", "blocked", "skipped"],
+                    "runtime_green_requires": [
+                        "manual_evidence_template.status == pass",
+                        "every required manual_evidence_template.checks entry has status == pass",
+                        "manual_evidence_template.overall_blocker == null",
+                        "executor_validation_progress.status == manual_windows_runtime_validation_ready"
+                    ],
                     "copy_action": "copy_agent_browser_final_validation_bundle",
                     "send_action": "send_agent_browser_final_validation_bundle_to_agent",
                     "latest_summary": self.latest_agent_browser_final_validation_bundle_summary(),
@@ -9236,6 +9261,13 @@ impl WebPreviewView {
                         "final_validation_bundle_handoff": {
                             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
                             "result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+                            "result_status_values": ["not_run", "pass", "fail", "blocked", "skipped"],
+                            "runtime_green_requires": [
+                                "manual_evidence_template.status == pass",
+                                "every required manual_evidence_template.checks entry has status == pass",
+                                "manual_evidence_template.overall_blocker == null",
+                                "executor_validation_progress.status == manual_windows_runtime_validation_ready"
+                            ],
                             "copy_action": "copy_agent_browser_final_validation_bundle",
                             "send_action": "send_agent_browser_final_validation_bundle_to_agent",
                             "read_only": true,

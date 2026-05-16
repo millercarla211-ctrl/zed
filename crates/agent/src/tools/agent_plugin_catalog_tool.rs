@@ -424,6 +424,13 @@ fn browser_plugin_manifest() -> Value {
         "final_validation_bundle_handoff": {
             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
             "result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+            "result_status_values": ["not_run", "pass", "fail", "blocked", "skipped"],
+            "runtime_green_requires": [
+                "manual_evidence_template.status == pass",
+                "every required manual_evidence_template.checks entry has status == pass",
+                "manual_evidence_template.overall_blocker == null",
+                "executor_validation_progress.status == manual_windows_runtime_validation_ready"
+            ],
             "copy_action": "copy_agent_browser_final_validation_bundle",
             "send_action": "send_agent_browser_final_validation_bundle_to_agent",
             "read_only": true,

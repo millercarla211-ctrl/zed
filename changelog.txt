@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Browser Final Result Contract
+
+ADDED:
+- Added explicit allowed manual result status values and runtime-green requirements to the WebPreview final validation bundle.
+- Exposed the same final-result contract through the WebPreview action manifest and Agent/WebPreview plugin catalogs.
+- Included final-result schema/status metadata in the latest final validation bundle summary.
+
+NOTES:
+- This is proof metadata only; it does not run `just run`, dispatch browser input, launch Chrome, run Node, inspect the live page, or change editor/WebPreview focus paths.
+
 [2026-05-16] - Agent Browser Receipt Policy Completion
 
 FIXED:
