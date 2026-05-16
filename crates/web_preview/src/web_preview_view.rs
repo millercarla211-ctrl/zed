@@ -9431,6 +9431,26 @@ impl WebPreviewView {
                             "requires_external_process": false,
                             "native_backend": self.browser_native_backend_name()
                         },
+                        "observability_profile": {
+                            "status": "code_complete_pending_windows_runtime_validation",
+                            "code_score": 99,
+                            "runtime_green_blocker": "Run one final Windows just run pass, exercise editor typing/WebPreview/native executor flows, fill the final result template, and import the filled result.",
+                            "proof_handoffs": {
+                                "validation_progress": "copy_agent_browser_executor_validation_progress",
+                                "final_bundle": "copy_agent_browser_final_validation_bundle",
+                                "final_result_template": "copy_agent_browser_final_validation_result_template",
+                                "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
+                                "final_result_send": "send_agent_browser_final_validation_result_to_agent"
+                            },
+                            "watch_surfaces": [
+                                "editor caret and typing latency",
+                                "WebPreview focus after navigation or reload",
+                                "native click/type/key/scroll/history/cache receipts",
+                                "managed Chrome execution receipts",
+                                "PC-use queue and runner receipts"
+                            ],
+                            "next_feature_set": "Agent Plugin Runtime Observability"
+                        },
                         "entrypoints": [
                             "WebPreview More menu",
                             "Agent Panel content handoff",

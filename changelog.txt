@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Observability Start
+
+ADDED:
+- Added a Browser observability profile to the Agent `list_agent_plugins` catalog.
+- Added the same Browser observability profile to the WebPreview plugin handoff catalog.
+- The profile records code-complete/runtime-blocked status, final proof handoff actions, regression watch surfaces, and the next feature set name.
+
+NOTES:
+- This is read-only catalog metadata only; it does not run `just run`, dispatch browser input, launch Chrome, run Node, inspect the live page, or change editor/WebPreview focus paths.
+
 [2026-05-16] - Agent Browser Final Result Import
 
 ADDED:
