@@ -6007,7 +6007,8 @@ impl WebPreviewView {
                 "runtime_green_operator_handoff.lanes",
                 "runtime_green_operator_handoff.webpreview_evidence.final_validation_observability",
                 "runtime_green_operator_handoff.webpreview_evidence.managed_chrome_execution_status",
-                "runtime_green_operator_handoff.webpreview_evidence.pc_use_status"
+                "runtime_green_operator_handoff.webpreview_evidence.pc_use_status",
+                "runtime_observability_plugin_regression_watch"
             ],
             "safety": {
                 "matrix_is_read_only": true,
@@ -6049,6 +6050,7 @@ impl WebPreviewView {
             "proof": Self::agent_plugin_runtime_observability_plugin_proof_from_handoff(lane_id, handoff),
             "evidence_freshness": freshness,
             "next_action": next_action,
+            "regression_watch": Self::agent_plugin_runtime_observability_plugin_regression_watch(lane_id),
             "handoff": lane
                 .get("operator_actions")
                 .cloned()
@@ -6196,6 +6198,89 @@ impl WebPreviewView {
             "managed_chrome" => Some("copy_managed_chrome_execution_status"),
             "pc_use" => Some("copy_pc_use_status"),
             _ => None,
+        }
+    }
+
+    fn agent_plugin_runtime_observability_plugin_regression_watch(lane_id: &str) -> Value {
+        match lane_id {
+            "browser_webpreview" => serde_json::json!({
+                "status": "manual_runtime_watch_required",
+                "focus": "Protect editor typing, caret position, WebPreview focus, and Browser executor receipt discipline.",
+                "must_recheck": [
+                    "Editor typing remains responsive before and after WebPreview Browser actions.",
+                    "WebPreview focus returns to the expected surface after navigation, reload, tab switch, and URL edit.",
+                    "Native click, type, key, scroll, history, and cache receipts remain fresh before any final runtime-green claim.",
+                    "Final validation result import keeps durable evidence non-empty for every required manual check."
+                ],
+                "must_not_regress": [
+                    "No browser action should route keyboard input to the editor or stale WebPreview item unexpectedly.",
+                    "No read-only handoff should dispatch click, type, key, scroll, screenshot, or process-launch behavior.",
+                    "No runtime-green report should be possible without the imported final validation result."
+                ],
+                "proof_sources": [
+                    "agent_browser_executor_validation_progress",
+                    "agent_browser_native_dispatch_receipt_matrix",
+                    "agent_browser_final_validation_result_import_receipt",
+                    "runtime_green_claim_gate"
+                ],
+                "after_action_validation": "Refresh the runtime observability digest, then copy the final proof audit before reporting status.",
+                "read_only": true,
+            }),
+            "managed_chrome" => serde_json::json!({
+                "status": "managed_profile_watch_required",
+                "focus": "Keep managed Chrome/Playwright proof isolated to managed roots and safe read-only action receipts.",
+                "must_recheck": [
+                    "Managed roots stay under workspace or Zed-data plugin directories.",
+                    "Real Chrome, Edge, and Firefox profiles are not read or written.",
+                    "Adapter receipts still show only allowlisted safe actions: open_url, screenshot, inspect_element, dom_snapshot, runtime_events, set_viewport, or wait_for_selector.",
+                    "Click, type, key, and scroll remain blocked in the managed Chrome adapter."
+                ],
+                "must_not_regress": [
+                    "No Playwright execution should launch against a real user profile.",
+                    "No managed Chrome receipt should hide failed requests, timeout status, or action outcome.",
+                    "No catalog should advertise blocked input actions as executable."
+                ],
+                "proof_sources": [
+                    "agent-plugin-asset-provisioning.json",
+                    "managed_chrome_runner_receipt",
+                    "managed_chrome_execution_receipt",
+                    "managed_chrome_execution_status"
+                ],
+                "after_action_validation": "Inspect managed Chrome executions and re-read runtime status before advancing the runtime-green claim gate.",
+                "read_only": true,
+            }),
+            "pc_use" => serde_json::json!({
+                "status": "future_executor_watch_required",
+                "focus": "Keep PC-use proof auditable while OS-wide control, screenshots, focus changes, and input dispatch stay disabled.",
+                "must_recheck": [
+                    "Every future input-ready payload references a matching UI snapshot target id and snapshot receipt id.",
+                    "Runner receipts stay inspectable before any future executor exists.",
+                    "Context, target manifest, and UI snapshot tools remain read-only.",
+                    "PC-use status keeps explicit no-screenshot, no-focus, no-input, no-process, and no-OS-control flags."
+                ],
+                "must_not_regress": [
+                    "No PC-use path should take screenshots, focus Zed, click, type, launch processes, or control the OS.",
+                    "No guessed target id should pass as input-ready without a matching snapshot receipt.",
+                    "No future-executor receipt should be treated as real execution proof."
+                ],
+                "proof_sources": [
+                    "inspect_zed_window_context",
+                    "inspect_zed_pc_use_targets",
+                    "inspect_zed_pc_use_ui_snapshot",
+                    "inspect_zed_pc_use_runner_receipts"
+                ],
+                "after_action_validation": "Re-read PC-use proof summary and runtime claim gate before reporting PC-use readiness.",
+                "read_only": true,
+            }),
+            _ => serde_json::json!({
+                "status": "unknown_plugin_lane",
+                "focus": Value::Null,
+                "must_recheck": [],
+                "must_not_regress": [],
+                "proof_sources": [],
+                "after_action_validation": Value::Null,
+                "read_only": true,
+            }),
         }
     }
 

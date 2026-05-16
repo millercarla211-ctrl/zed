@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime Observability Regression Watch
+
+ADDED:
+- Agent runtime-status plugin matrix rows now include compact regression-watch summaries for Browser/WebPreview, managed Chrome, and PC-use.
+- WebPreview runtime observability matrix rows now mirror those regression-watch summaries from the current handoff.
+
+CHANGED:
+- Plugin matrix metadata now names regression-watch data as a read source so agents can discover watch guidance from the matrix instead of opening larger proof packets first.
+
+NOTES:
+- This is read-only observability. It adds must-recheck and must-not-regress guidance only; it does not launch browsers, run Node, dispatch input, take screenshots, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Observability Matrix Priority
 
 ADDED:
