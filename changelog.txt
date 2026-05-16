@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime WebPreview Catalog Proof Freshness
+
+ADDED:
+- WebPreview plugin catalog summaries now include a compact read-only `proof_freshness` contract with Browser, managed Chrome, and PC-use lane rows.
+- Each catalog plugin summary now exposes the proof source, runtime-status freshness field, recommended handoff, proof sources, and final recheck read sequence required before a runtime-green report.
+
+CHANGED:
+- Right-side panel consumers can now show proof freshness obligations and validation order from the compact catalog summary without probing files, expanding the full catalog, launching browsers, or dispatching input.
+
+NOTES:
+- This is read-only catalog guidance only. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, probe proof files, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime WebPreview Catalog Next Actions
 
 ADDED:
