@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime WebPreview Final Proof Guide Summary
+
+ADDED:
+- WebPreview final validation bundles and action manifests now expose compact Runtime-Green Final Proof Guide summaries instead of using the full guide payload as the summary.
+- WebPreview catalog metadata now advertises the final-proof guide summary schema and runtime-status summary field beside the existing full guide handoff.
+
+CHANGED:
+- Right-side panel consumers can now render final proof status, manual command, ordered-step count, key actions, and safety flags from WebPreview summaries without parsing or carrying the full guide.
+
+NOTES:
+- This is read-only metadata only. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Final Proof Guide Status Summary
 
 ADDED:
