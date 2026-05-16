@@ -393,6 +393,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
     "copy_agent_plugin_runtime_green_final_report_packet",
     "send_agent_plugin_runtime_green_final_report_packet_to_agent",
+    "copy_agent_plugin_runtime_green_report_readiness_card",
+    "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
     "copy_agent_plugin_runtime_observability_digest",
     "send_agent_plugin_runtime_observability_digest_to_agent",
     "copy_agent_browser_noop_executor_attempt",
@@ -1600,6 +1602,8 @@ impl WebPreviewView {
                 "send_agent_plugin_runtime_green_final_proof_guide_to_agent": true,
                 "copy_agent_plugin_runtime_green_final_report_packet": true,
                 "send_agent_plugin_runtime_green_final_report_packet_to_agent": true,
+                "copy_agent_plugin_runtime_green_report_readiness_card": true,
+                "send_agent_plugin_runtime_green_report_readiness_card_to_agent": true,
                 "agent_plugin_runtime_observability_digest": true,
                 "copy_agent_plugin_runtime_observability_digest": true,
                 "send_agent_plugin_runtime_observability_digest_to_agent": true,
@@ -3444,8 +3448,8 @@ impl WebPreviewView {
                 },
                 "runtime_green_report_readiness_card": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
-                    "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
-                    "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
+                    "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
+                    "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
                     "current_status": runtime_green_report_readiness_card.pointer("/status").and_then(Value::as_str),
                     "may_report_runtime_green": runtime_green_report_readiness_card.pointer("/may_report_runtime_green").and_then(Value::as_bool),
                     "current_summary": Self::agent_plugin_runtime_green_report_readiness_card_summary(&runtime_green_report_readiness_card),
@@ -5705,8 +5709,10 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "review_before_runtime_green_claim": true,
             },
-            "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
-            "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
+            "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
+            "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
+            "final_report_packet_copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
+            "final_report_packet_send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
             "report_gate_copy_action": "copy_agent_plugin_runtime_green_report_gate",
             "report_gate_send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
             "audit_copy_action": "copy_agent_browser_final_proof_audit",
@@ -7391,6 +7397,56 @@ impl WebPreviewView {
         })
     }
 
+    fn agent_plugin_runtime_green_report_readiness_card_agent_summary(card: &Value) -> String {
+        let status = card
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let may_report = card
+            .get("may_report_runtime_green")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let blocker = card
+            .get("blocker")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let next_action = card
+            .get("next_action")
+            .and_then(Value::as_str)
+            .unwrap_or("copy_agent_plugin_runtime_green_report_readiness_card");
+        let report_gate_status = card
+            .pointer("/report_gate/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let final_audit_status = card
+            .pointer("/final_proof_audit/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let regression_watch_status = card
+            .pointer("/regression_watch/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+
+        format!(
+            "Runtime-green report readiness card\nStatus: {status}\nMay report runtime-green: {may_report}\nReport gate: {report_gate_status}\nFinal proof audit: {final_audit_status}\nRegression watch: {regression_watch_status}\nBlocker: {blocker}\nNext action: {next_action}"
+        )
+    }
+
+    fn agent_plugin_runtime_green_report_readiness_card_json(card: &Value) -> String {
+        serde_json::to_string_pretty(card).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_plugin_runtime_green_report_readiness_card_agent_blocks(
+        &self,
+        card: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "{}\n\n```json\n{}\n```",
+            Self::agent_plugin_runtime_green_report_readiness_card_agent_summary(card),
+            Self::agent_plugin_runtime_green_report_readiness_card_json(card)
+        )))]
+    }
+
     fn agent_plugin_runtime_green_final_report_packet_agent_summary(packet: &Value) -> String {
         let status = packet
             .get("status")
@@ -7480,6 +7536,30 @@ impl WebPreviewView {
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast(
             "Sent runtime-green final report packet to the agent panel",
+            cx,
+        );
+        cx.notify();
+    }
+
+    fn copy_agent_plugin_runtime_green_report_readiness_card(&mut self, cx: &mut Context<Self>) {
+        let card = self.agent_plugin_runtime_green_report_readiness_card_snapshot();
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_plugin_runtime_green_report_readiness_card_json(&card),
+        ));
+        self.show_toast("Copied runtime-green report readiness card", cx);
+        cx.notify();
+    }
+
+    fn send_agent_plugin_runtime_green_report_readiness_card_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let card = self.agent_plugin_runtime_green_report_readiness_card_snapshot();
+        let blocks = self.agent_plugin_runtime_green_report_readiness_card_agent_blocks(&card);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast(
+            "Sent runtime-green report readiness card to the agent panel",
             cx,
         );
         cx.notify();
@@ -9578,6 +9658,8 @@ impl WebPreviewView {
                     "runtime_green_final_report_packet": Self::agent_plugin_runtime_green_final_report_packet_summary(&runtime_green_final_report_packet),
                     "runtime_green_report_readiness_card_visible": true,
                     "runtime_green_report_readiness_card_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
+                    "runtime_green_report_readiness_card_copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
+                    "runtime_green_report_readiness_card_send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
                     "runtime_green_report_readiness_card_status": runtime_green_report_readiness_card.get("status").and_then(Value::as_str),
                     "runtime_green_report_readiness_card_next_action": runtime_green_report_readiness_card.get("next_action").and_then(Value::as_str),
                     "runtime_green_report_readiness_card": Self::agent_plugin_runtime_green_report_readiness_card_summary(&runtime_green_report_readiness_card),
@@ -14373,8 +14455,8 @@ impl WebPreviewView {
                 },
                 "runtime_green_report_readiness_card": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
-                    "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
-                    "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
+                    "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
+                    "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
                     "latest_summary": Self::agent_plugin_runtime_green_report_readiness_card_summary(
                         &runtime_green_report_readiness_card
                     ),
@@ -14590,8 +14672,8 @@ impl WebPreviewView {
                     "runtime_green_report_readiness_card": {
                         "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
                         "source": "runtime_green_claim_readiness + runtime_green_report_gate + runtime_green_final_report_packet + runtime_green_final_proof_audit",
-                        "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
-                        "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
+                        "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
+                        "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
                         "read_only": true,
                         "purpose": "Share one compact status card for right-side panels with claim readiness, report gate, final packet, proof audit, and regression-watch state."
                     }
@@ -14765,7 +14847,7 @@ impl WebPreviewView {
                                 "runtime_green_report_badge": "copy_agent_plugin_runtime_green_report_gate",
                                 "runtime_green_final_proof_guide": "copy_agent_plugin_runtime_green_final_proof_guide",
                                 "runtime_green_final_report_packet": "copy_agent_plugin_runtime_green_final_report_packet",
-                                "runtime_green_report_readiness_card": "copy_agent_plugin_runtime_green_final_report_packet",
+                                "runtime_green_report_readiness_card": "copy_agent_plugin_runtime_green_report_readiness_card",
                                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -14994,8 +15076,8 @@ impl WebPreviewView {
                         },
                         "runtime_green_report_readiness_card_handoff": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
-                            "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
-                            "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
+                            "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
+                            "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
                             "read_only": true,
                             "source": "WebPreview status packet, final validation bundle, and Agent runtime status",
                             "purpose": "Expose one compact status card for right-side panels with claim readiness, report gate, final report packet, final proof audit, and regression-watch state."
@@ -18297,6 +18379,32 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_agent_plugin_runtime_green_final_report_packet_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Runtime-Green Report Readiness Card")
+                                .icon(IconName::Check)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_plugin_runtime_green_report_readiness_card(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Runtime-Green Report Readiness Card")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_plugin_runtime_green_report_readiness_card_to_agent(
                                                 window, cx,
                                             );
                                         });

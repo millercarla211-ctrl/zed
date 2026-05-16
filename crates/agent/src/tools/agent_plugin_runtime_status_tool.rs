@@ -2999,8 +2999,8 @@ fn runtime_green_proof_path(
             "runtime_green_report_readiness_card": {
                 "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
                 "source": "runtime_green_claim_readiness + runtime_green_report_gate + runtime_green_final_report_packet + runtime_green_final_proof_audit",
-                "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
-                "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent"
+                "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
+                "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent"
             },
             "runtime_observability_digest": {
                 "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
@@ -3876,8 +3876,10 @@ fn runtime_green_report_readiness_card(
                 .and_then(Value::as_str),
             "review_before_runtime_green_claim": true,
         },
-        "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
-        "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
+        "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
+        "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
+        "final_report_packet_copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
+        "final_report_packet_send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
         "report_gate_copy_action": "copy_agent_plugin_runtime_green_report_gate",
         "report_gate_send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
         "audit_copy_action": "copy_agent_browser_final_proof_audit",

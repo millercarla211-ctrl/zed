@@ -367,8 +367,8 @@ fn agent_plugin_catalog(
                 "runtime_green_report_readiness_card": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
                     "source": "runtime_green_claim_readiness + runtime_green_report_gate + runtime_green_final_report_packet + runtime_green_final_proof_audit",
-                    "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
-                    "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
+                    "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
+                    "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
                     "read_only": true,
                     "purpose": "Share one compact status card for right-side panels that combines claim readiness, report gate, final report packet, final proof audit, and regression-watch status."
                 }
@@ -677,7 +677,7 @@ fn browser_plugin_manifest() -> Value {
                 "runtime_green_report_badge": "copy_agent_plugin_runtime_green_report_gate",
                 "runtime_green_final_proof_guide": "copy_agent_plugin_runtime_green_final_proof_guide",
                 "runtime_green_final_report_packet": "copy_agent_plugin_runtime_green_final_report_packet",
-                "runtime_green_report_readiness_card": "copy_agent_plugin_runtime_green_final_report_packet",
+                "runtime_green_report_readiness_card": "copy_agent_plugin_runtime_green_report_readiness_card",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -905,8 +905,8 @@ fn browser_plugin_manifest() -> Value {
         },
         "runtime_green_report_readiness_card_handoff": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
-            "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
-            "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
+            "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
+            "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
             "read_only": true,
             "source": "WebPreview status packet, final validation bundle, and Agent runtime status",
             "purpose": "Expose one compact status card for right-side panels with claim readiness, report gate, final report packet, final proof audit, and regression-watch state."

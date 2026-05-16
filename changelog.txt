@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime Report Readiness Card Actions
+
+ADDED:
+- WebPreview now exposes first-class Copy/Send Runtime-Green Report Readiness Card actions and More-menu entries.
+- Agent/WebPreview catalogs and runtime-status metadata now point the report-readiness card handoff at its direct copy/send actions.
+
+CHANGED:
+- The report-readiness card now carries its own copy/send action names while still linking to the final report packet, report gate, and final proof audit as related handoffs.
+
+NOTES:
+- This remains read-only handoff metadata. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Report Readiness Card
 
 ADDED:
