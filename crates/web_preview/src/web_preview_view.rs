@@ -2057,6 +2057,13 @@ impl WebPreviewView {
             "overall_blocker": audit.pointer("/audit/overall_blocker").cloned(),
             "report_gate_status": audit.pointer("/audit/report_gate/status").and_then(Value::as_str),
             "report_gate_blocker": audit.pointer("/audit/report_gate/blocker").and_then(Value::as_str),
+            "regression_watch_status": audit.pointer("/audit/regression_watch/status").and_then(Value::as_str),
+            "regression_watch_lane_count": audit
+                .pointer("/audit/regression_watch/watched_plugin_count")
+                .and_then(Value::as_u64),
+            "first_regression_watch_status": audit
+                .pointer("/audit/regression_watch/first_watch_status")
+                .and_then(Value::as_str),
         })
     }
 
@@ -2465,6 +2472,16 @@ impl WebPreviewView {
                     "can_report_runtime_green": may_report_runtime_green,
                     "next_action": report_gate.get("next_action").and_then(Value::as_str),
                     "badge": report_gate.get("badge").cloned(),
+                },
+                "regression_watch": {
+                    "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_WATCH_ROLLUP_SCHEMA,
+                    "status": report_gate.pointer("/regression_watch/status").and_then(Value::as_str),
+                    "watched_plugin_count": report_gate
+                        .pointer("/regression_watch/watched_plugin_count")
+                        .and_then(Value::as_u64),
+                    "first_watch_status": report_gate
+                        .pointer("/regression_watch/first_watch/status")
+                        .and_then(Value::as_str),
                 }
             },
             "latest": {
@@ -2555,9 +2572,13 @@ impl WebPreviewView {
             .or_else(|| audit.get("report_gate_blocker"))
             .and_then(Value::as_str)
             .unwrap_or("none");
+        let regression_watch_status = audit
+            .pointer("/audit/regression_watch/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
 
         format!(
-            "Web preview final proof audit\nStatus: {status}\nRuntime-green candidate: {runtime_green_candidate}\nMay report runtime-green: {may_report_runtime_green}\nMissing required checks: {missing_required_check_count}\nMissing required evidence: {missing_required_evidence_count}\nRequired check blockers: {required_check_blocker_count}\nOverall blocker present: {has_overall_blocker}\nReport gate: {report_gate_status} (blocker: {report_gate_blocker})\nNext action: {next_action}"
+            "Web preview final proof audit\nStatus: {status}\nRuntime-green candidate: {runtime_green_candidate}\nMay report runtime-green: {may_report_runtime_green}\nMissing required checks: {missing_required_check_count}\nMissing required evidence: {missing_required_evidence_count}\nRequired check blockers: {required_check_blocker_count}\nOverall blocker present: {has_overall_blocker}\nReport gate: {report_gate_status} (blocker: {report_gate_blocker})\nRegression watch: {regression_watch_status}\nNext action: {next_action}"
         )
     }
 
@@ -4781,6 +4802,25 @@ impl WebPreviewView {
                 "primary_actions": ["send_pc_use_status_to_agent"],
             }),
         ];
+        let regression_watch_rows = lanes
+            .iter()
+            .map(|lane| {
+                let lane_id = lane
+                    .get("lane_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown");
+                serde_json::json!({
+                    "lane_id": lane_id,
+                    "plugin_id": Self::agent_plugin_runtime_observability_plugin_id(lane_id),
+                    "ready": lane.get("ready").and_then(Value::as_bool).unwrap_or(false),
+                    "regression_watch": Self::agent_plugin_runtime_observability_plugin_regression_watch(lane_id),
+                })
+            })
+            .collect::<Vec<_>>();
+        let regression_watch_rollup =
+            Self::agent_plugin_runtime_observability_plugin_regression_watch_rollup(
+                &regression_watch_rows,
+            );
         let lane_count = lanes.len();
         let ready_lane_count = lanes
             .iter()
@@ -4863,6 +4903,24 @@ impl WebPreviewView {
             "proof_path_send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
             "next_required_proof": next_required_proof,
             "final_operator_checklist": final_operator_checklist,
+            "regression_watch": {
+                "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_WATCH_ROLLUP_SCHEMA,
+                "status": regression_watch_rollup.get("status").and_then(Value::as_str),
+                "watched_plugin_count": regression_watch_rollup
+                    .get("watched_plugin_count")
+                    .and_then(Value::as_u64),
+                "total_must_recheck_count": regression_watch_rollup
+                    .get("total_must_recheck_count")
+                    .and_then(Value::as_u64),
+                "total_must_not_regress_count": regression_watch_rollup
+                    .get("total_must_not_regress_count")
+                    .and_then(Value::as_u64),
+                "first_watch": regression_watch_rollup.get("first_watch").cloned(),
+                "copy_action": "copy_agent_plugin_runtime_observability_digest",
+                "send_action": "send_agent_plugin_runtime_observability_digest_to_agent",
+                "source_field": "agent_plugin_runtime_green_claim_gate.regression_watch",
+                "review_before_runtime_green_claim": true,
+            },
             "lanes": lanes,
             "proof_focus": {
                 "final_validation_observability_status": browser_final_observability.get("status").and_then(Value::as_str),
@@ -4936,6 +4994,7 @@ impl WebPreviewView {
             "next_recommended_action": claim_gate
                 .pointer("/next_required_proof/recommended_action")
                 .and_then(Value::as_str),
+            "regression_watch": claim_gate.get("regression_watch").cloned(),
             "final_operator_checklist": Self::runtime_green_final_operator_checklist_summary(&claim_gate),
             "final_validation_observability": {
                 "schema": final_observability.get("schema").and_then(Value::as_str),
@@ -4962,7 +5021,8 @@ impl WebPreviewView {
                 "may_report_runtime_green": can_report_runtime_green,
                 "requires_runtime_green_candidate": true,
                 "requires_imported_final_result": true,
-                "requires_final_manual_command": "just run"
+                "requires_final_manual_command": "just run",
+                "requires_regression_watch_review_before_manual_claim": true
             },
             "read_only": true,
             "writes_files": false,
@@ -5046,6 +5106,7 @@ impl WebPreviewView {
             "claim_readiness_status": readiness.get("status").and_then(Value::as_str),
             "claim_gate_status": readiness.get("claim_gate_status").and_then(Value::as_str),
             "next_required_proof_id": readiness.get("next_required_proof_id").and_then(Value::as_str),
+            "regression_watch": readiness.get("regression_watch").cloned(),
             "final_result_present": final_result_present,
             "final_result_runtime_green": final_result_runtime_green,
             "final_manual_command": "just run",
@@ -5058,7 +5119,8 @@ impl WebPreviewView {
                 "may_report_runtime_green": can_report,
                 "requires_runtime_green_candidate": true,
                 "requires_imported_final_result": true,
-                "requires_final_manual_command": "just run"
+                "requires_final_manual_command": "just run",
+                "requires_regression_watch_review_before_manual_claim": true
             },
             "read_only": true,
             "writes_files": false,
@@ -5357,6 +5419,10 @@ impl WebPreviewView {
         } else {
             report_gate_blocker
         };
+        let regression_watch = report_gate
+            .get("regression_watch")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
 
         serde_json::json!({
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -5366,6 +5432,7 @@ impl WebPreviewView {
             "blocker": blocker,
             "next_action": next_action,
             "final_manual_command": "just run",
+            "regression_watch": regression_watch,
             "report_gate": {
                 "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
                 "status": report_gate_status,
@@ -5427,7 +5494,8 @@ impl WebPreviewView {
                 "source_of_truth": "runtime_green_report_gate",
                 "requires_final_manual_command": "just run",
                 "requires_imported_final_result": true,
-                "import_receipt_recommended_for_handoff": true
+                "import_receipt_recommended_for_handoff": true,
+                "requires_regression_watch_review_before_manual_claim": true
             },
             "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
             "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
@@ -7069,6 +7137,10 @@ impl WebPreviewView {
             "final_proof_guide_status": packet
                 .pointer("/final_proof_guide/status")
                 .and_then(Value::as_str),
+            "regression_watch_status": packet.pointer("/regression_watch/status").and_then(Value::as_str),
+            "regression_watch_lane_count": packet
+                .pointer("/regression_watch/watched_plugin_count")
+                .and_then(Value::as_u64),
         })
     }
 
@@ -7093,9 +7165,13 @@ impl WebPreviewView {
             .pointer("/final_result_import_receipt/present_in_session")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let regression_watch_status = packet
+            .pointer("/regression_watch/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
 
         format!(
-            "Runtime-green final report packet\nStatus: {status}\nMay report runtime-green: {may_report}\nImport receipt in session: {import_receipt_present}\nBlocker: {blocker}\nNext action: {next_action}"
+            "Runtime-green final report packet\nStatus: {status}\nMay report runtime-green: {may_report}\nImport receipt in session: {import_receipt_present}\nRegression watch: {regression_watch_status}\nBlocker: {blocker}\nNext action: {next_action}"
         )
     }
 

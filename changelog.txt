@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime Final Report Regression Watch Gate
+
+ADDED:
+- Agent runtime-green proof paths, claim readiness, report gates, final report packets, final proof audits, and final proof audit summaries now carry compact regression-watch status from the observability plugin matrix.
+- WebPreview claim gates now build a compact regression-watch rollup from Browser/WebPreview, managed Chrome, and PC-use lanes, then mirror it through claim readiness, report gates, final report packets, final report summaries, and final proof audits.
+
+CHANGED:
+- Runtime-green reporting policy now explicitly marks regression-watch review as required before a manual runtime-green claim, without changing the existing proof gate or dispatching input.
+
+NOTES:
+- This is read-only observability and reporting metadata. It does not launch browsers, run Node, dispatch input, take screenshots, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Observability Regression Watch Rollup
 
 ADDED:

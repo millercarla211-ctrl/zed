@@ -2755,6 +2755,10 @@ fn runtime_green_proof_path(
         .pointer("/totals/stale_required_file_count")
         .and_then(Value::as_u64)
         .unwrap_or(0);
+    let regression_watch_rollup = digest
+        .pointer("/plugin_matrix/regression_watch_rollup")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
     let ready_lane_count = scorecard
         .pointer("/totals/ready_lane_count")
         .and_then(Value::as_u64)
@@ -2827,6 +2831,7 @@ fn runtime_green_proof_path(
             "scorecard_status": scorecard.get("status").and_then(Value::as_str),
             "blocker_summary_status": blocker_summary.get("status").and_then(Value::as_str),
             "current_best_next": current_best_next,
+            "regression_watch_rollup": regression_watch_rollup.clone(),
             "final_validation_result": blocker_summary
                 .pointer("/latest_evidence/browser_final_validation_result/summary")
                 .cloned()
@@ -2859,6 +2864,13 @@ fn runtime_green_proof_path(
             "manual_blocker_count": manual_blocker_count,
             "missing_required_file_count": missing_required_file_count,
             "stale_required_file_count": stale_required_file_count,
+            "regression_watch_status": regression_watch_rollup.get("status").and_then(Value::as_str),
+            "regression_watch_lane_count": regression_watch_rollup
+                .get("watched_plugin_count")
+                .and_then(Value::as_u64),
+            "first_regression_watch_status": regression_watch_rollup
+                .pointer("/first_watch/status")
+                .and_then(Value::as_str),
             "first_pending_lane_id": current_best_next_lane,
             "first_pending_lane_label": current_best_next_label,
             "first_pending_lane_status": current_best_next_status,
@@ -2888,6 +2900,7 @@ fn runtime_green_proof_path(
                     "runtime_green_proof_path",
                     "runtime_observability_digest",
                     "runtime_observability_digest.plugin_matrix",
+                    "runtime_observability_digest.plugin_matrix.regression_watch_rollup",
                     "runtime_green_operator_handoff",
                     "runtime_green_report_gate",
                     "runtime_green_report_badge",
@@ -2902,7 +2915,7 @@ fn runtime_green_proof_path(
             {
                 "step": "read_digest",
                 "field": "runtime_observability_digest",
-                "purpose": "Summarize lane health, plugin matrix proof state, stale/missing proof evidence, and immediate recovery actions.",
+                "purpose": "Summarize lane health, plugin matrix proof state, regression-watch pressure, stale/missing proof evidence, and immediate recovery actions.",
                 "writes_files": false,
                 "dispatches_input": false
             },
@@ -3045,6 +3058,10 @@ fn runtime_green_claim_gate(proof_path: &Value) -> Value {
         runtime_green_candidate,
         root_mode,
     );
+    let regression_watch_rollup = proof_path
+        .pointer("/current/regression_watch_rollup")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
@@ -3077,6 +3094,24 @@ fn runtime_green_claim_gate(proof_path: &Value) -> Value {
         "next_operator_step": operator_summary.get("next_operator_step").and_then(Value::as_str),
         "next_required_proof": next_required_proof,
         "final_operator_checklist": final_operator_checklist,
+        "regression_watch": {
+            "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_WATCH_ROLLUP_SCHEMA,
+            "status": regression_watch_rollup.get("status").and_then(Value::as_str),
+            "watched_plugin_count": regression_watch_rollup
+                .get("watched_plugin_count")
+                .and_then(Value::as_u64),
+            "total_must_recheck_count": regression_watch_rollup
+                .get("total_must_recheck_count")
+                .and_then(Value::as_u64),
+            "total_must_not_regress_count": regression_watch_rollup
+                .get("total_must_not_regress_count")
+                .and_then(Value::as_u64),
+            "first_watch": regression_watch_rollup.get("first_watch").cloned(),
+            "copy_action": "copy_agent_plugin_runtime_observability_digest",
+            "send_action": "send_agent_plugin_runtime_observability_digest_to_agent",
+            "source_field": "runtime_observability_digest.plugin_matrix.regression_watch_rollup",
+            "review_before_runtime_green_claim": true,
+        },
         "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
         "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
         "proof_path_copy_action": "copy_agent_plugin_runtime_green_proof_path",
@@ -3114,6 +3149,13 @@ fn runtime_green_claim_gate_summary(claim_gate: &Value) -> Value {
             .and_then(Value::as_str),
         "next_recommended_action": claim_gate
             .pointer("/next_required_proof/recommended_action")
+            .and_then(Value::as_str),
+        "regression_watch_status": claim_gate.pointer("/regression_watch/status").and_then(Value::as_str),
+        "regression_watch_lane_count": claim_gate
+            .pointer("/regression_watch/watched_plugin_count")
+            .and_then(Value::as_u64),
+        "first_regression_watch_status": claim_gate
+            .pointer("/regression_watch/first_watch/status")
             .and_then(Value::as_str),
         "final_operator_checklist": {
             "status": checklist.get("status").and_then(Value::as_str),
@@ -3187,6 +3229,15 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
     let checklist = claim_gate
         .get("final_operator_checklist")
         .unwrap_or(&Value::Null);
+    let regression_watch_rollup = claim_gate
+        .get("regression_watch")
+        .cloned()
+        .or_else(|| {
+            proof_path
+                .pointer("/current/regression_watch_rollup")
+                .cloned()
+        })
+        .unwrap_or_else(|| serde_json::json!({}));
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
@@ -3217,6 +3268,24 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
         "next_recommended_tool": claim_gate
             .pointer("/next_required_proof/recommended_tool")
             .and_then(Value::as_str),
+        "regression_watch": {
+            "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_WATCH_ROLLUP_SCHEMA,
+            "status": regression_watch_rollup.get("status").and_then(Value::as_str),
+            "watched_plugin_count": regression_watch_rollup
+                .get("watched_plugin_count")
+                .and_then(Value::as_u64),
+            "total_must_recheck_count": regression_watch_rollup
+                .get("total_must_recheck_count")
+                .and_then(Value::as_u64),
+            "total_must_not_regress_count": regression_watch_rollup
+                .get("total_must_not_regress_count")
+                .and_then(Value::as_u64),
+            "first_watch": regression_watch_rollup.get("first_watch").cloned(),
+            "copy_action": "copy_agent_plugin_runtime_observability_digest",
+            "send_action": "send_agent_plugin_runtime_observability_digest_to_agent",
+            "source_field": "runtime_observability_digest.plugin_matrix.regression_watch_rollup",
+            "review_before_runtime_green_claim": true,
+        },
         "final_operator_checklist": {
             "status": checklist.get("status").and_then(Value::as_str),
             "can_run_final_manual_command": checklist
@@ -3244,7 +3313,8 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
             "may_report_runtime_green": can_report_runtime_green,
             "requires_runtime_green_candidate": true,
             "requires_imported_final_result": true,
-            "requires_final_manual_command": "just run"
+            "requires_final_manual_command": "just run",
+            "requires_regression_watch_review_before_manual_claim": true
         },
         "read_only": true,
         "writes_files": false,
@@ -3318,6 +3388,7 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
         "claim_readiness_status": readiness.get("status").and_then(Value::as_str),
         "claim_gate_status": readiness.get("claim_gate_status").and_then(Value::as_str),
         "next_required_proof_id": readiness.get("next_required_proof_id").and_then(Value::as_str),
+        "regression_watch": readiness.get("regression_watch").cloned(),
         "final_result_present": final_result_present,
         "final_result_runtime_green": final_result_runtime_green,
         "final_manual_command": "just run",
@@ -3330,7 +3401,8 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
             "may_report_runtime_green": can_report,
             "requires_runtime_green_candidate": true,
             "requires_imported_final_result": true,
-            "requires_final_manual_command": "just run"
+            "requires_final_manual_command": "just run",
+            "requires_regression_watch_review_before_manual_claim": true
         },
         "read_only": true,
         "writes_files": false,
@@ -3561,6 +3633,10 @@ fn runtime_green_final_report_packet(
     } else {
         next_report_action
     };
+    let regression_watch = report_gate
+        .get("regression_watch")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -3570,6 +3646,7 @@ fn runtime_green_final_report_packet(
         "blocker": if can_report { "none" } else { report_gate_blocker },
         "next_action": next_action,
         "final_manual_command": "just run",
+        "regression_watch": regression_watch,
         "report_gate": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
             "status": report_gate_status,
@@ -3626,7 +3703,8 @@ fn runtime_green_final_report_packet(
             "source_of_truth": "runtime_green_report_gate",
             "requires_final_manual_command": "just run",
             "requires_imported_final_result": true,
-            "import_receipt_recommended_for_handoff": true
+            "import_receipt_recommended_for_handoff": true,
+            "requires_regression_watch_review_before_manual_claim": true
         },
         "webpreview_copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
         "webpreview_send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
@@ -3723,6 +3801,16 @@ fn runtime_green_final_proof_audit(
                 "can_report_runtime_green": may_report_runtime_green,
                 "next_action": report_gate.get("next_action").and_then(Value::as_str),
                 "badge": report_gate.get("badge").cloned(),
+            },
+            "regression_watch": {
+                "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_WATCH_ROLLUP_SCHEMA,
+                "status": report_gate.pointer("/regression_watch/status").and_then(Value::as_str),
+                "watched_plugin_count": report_gate
+                    .pointer("/regression_watch/watched_plugin_count")
+                    .and_then(Value::as_u64),
+                "first_watch_status": report_gate
+                    .pointer("/regression_watch/first_watch/status")
+                    .and_then(Value::as_str),
             }
         },
         "latest": {
@@ -3741,6 +3829,9 @@ fn runtime_green_final_proof_audit(
                     .get("may_report_runtime_green")
                     .and_then(Value::as_bool),
                 "next_action": final_report_packet.get("next_action").and_then(Value::as_str),
+                "regression_watch_status": final_report_packet
+                    .pointer("/regression_watch/status")
+                    .and_then(Value::as_str),
             }
         },
         "required_before_runtime_green_claim": [
@@ -3808,6 +3899,15 @@ fn runtime_green_final_proof_audit_summary(audit: &Value) -> Value {
             .and_then(Value::as_bool),
         "report_gate_next_action": audit
             .pointer("/audit/report_gate/next_action")
+            .and_then(Value::as_str),
+        "regression_watch_status": audit
+            .pointer("/audit/regression_watch/status")
+            .and_then(Value::as_str),
+        "regression_watch_lane_count": audit
+            .pointer("/audit/regression_watch/watched_plugin_count")
+            .and_then(Value::as_u64),
+        "first_regression_watch_status": audit
+            .pointer("/audit/regression_watch/first_watch_status")
             .and_then(Value::as_str),
         "final_report_packet_status": audit
             .pointer("/latest/final_report_packet/status")
