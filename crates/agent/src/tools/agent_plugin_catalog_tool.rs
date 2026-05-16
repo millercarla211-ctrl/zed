@@ -18,7 +18,8 @@ use crate::{
     AGENT_PC_USE_PAYLOAD_SCHEMA, AGENT_PC_USE_PAYLOAD_STAGE_TOOL_NAME,
     AGENT_PC_USE_PAYLOAD_TOOL_NAME, AGENT_PC_USE_RUNNER_GATE_TOOL_NAME,
     AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME, AGENT_PC_USE_RUNNER_RECEIPT_INSPECTION_SCHEMA,
-    AGENT_PC_USE_RUNNER_RECEIPT_SCHEMA, AgentTool, ToolCallEventStream, ToolInput,
+    AGENT_PC_USE_RUNNER_RECEIPT_SCHEMA, AGENT_PC_USE_TARGET_MANIFEST_SCHEMA,
+    AGENT_PC_USE_TARGET_MANIFEST_TOOL_NAME, AgentTool, ToolCallEventStream, ToolInput,
 };
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
@@ -179,6 +180,7 @@ fn agent_plugin_catalog(
                 "inspect_zed_pc_use_payload_queue": AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
                 "request_zed_pc_use_payload_run": AGENT_PC_USE_RUNNER_GATE_TOOL_NAME,
                 "inspect_zed_pc_use_runner_receipts": AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
+                "inspect_zed_pc_use_targets": AGENT_PC_USE_TARGET_MANIFEST_TOOL_NAME,
                 "prepare_runtime": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL
             },
             "available_to": [
@@ -656,6 +658,8 @@ fn pc_use_plugin_manifest(
             "backend": "zed_window_runtime",
             "inspect_tool_name": AGENT_PC_USE_INSPECT_TOOL_NAME,
             "inspect_schema": "zed.agent_plugins.pc_use.zed_window_context.v1",
+            "target_manifest_tool_name": AGENT_PC_USE_TARGET_MANIFEST_TOOL_NAME,
+            "target_manifest_schema": AGENT_PC_USE_TARGET_MANIFEST_SCHEMA,
             "payload_tool_name": AGENT_PC_USE_PAYLOAD_TOOL_NAME,
             "payload_stage_tool_name": AGENT_PC_USE_PAYLOAD_STAGE_TOOL_NAME,
             "payload_queue_tool_name": AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME,
@@ -680,6 +684,7 @@ fn pc_use_plugin_manifest(
         },
         "capabilities": [
             capability("pc.zed_window.inspect_context", "available", "Use inspect_zed_window_context to read safe workspace and managed-root context before any future PC-use action."),
+            capability("pc.zed_window.target_manifest", "available", "Use inspect_zed_pc_use_targets to read the supported Zed surfaces, action prerequisites, and target-id contract before composing PC-use payloads."),
             capability("pc.zed_window.payload_compose", "available", "Use compose_zed_pc_use_action_payload to validate future Zed-window screenshot, focus, click, type, or inspect intents without dispatching input."),
             capability("pc.zed_window.payload_stage_clipboard", "available_requires_authorization", "Use stage_zed_pc_use_action_payload to write a validated Zed-window PC-use payload packet to the clipboard without dispatching input."),
             capability("pc.zed_window.payload_queue_managed", "available_requires_authorization", "Use queue_zed_pc_use_action_payload to write a validated Zed-window PC-use payload packet into managed workspace or Zed-data handoff roots without dispatching input."),
@@ -696,6 +701,7 @@ fn pc_use_plugin_manifest(
         ],
         "safety": {
             "read_only_context_available": true,
+            "read_only_target_manifest_available": true,
             "read_only_payload_compose_available": true,
             "payload_stage_clipboard_available": true,
             "payload_queue_managed_available": true,

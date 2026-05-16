@@ -1,3 +1,15 @@
+[2026-05-16] - PC Use Target Manifest
+
+ADDED:
+- Added the read-only `inspect_zed_pc_use_targets` Agent tool for discovering supported Zed PC-use surfaces, action prerequisites, target-id requirements, and receipt gates.
+- Advertised the target manifest tool and schema through the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- PC Use plugin manifests now expose the target contract before payload composition so agents can avoid guessing surfaces, action fields, coordinates, or OS-wide targets.
+
+NOTES:
+- The target manifest is read-only and does not screenshot, focus Zed, dispatch input, launch processes, or control the OS desktop.
+
 [2026-05-16] - WebPreview PC Use Status Handoff
 
 ADDED:
