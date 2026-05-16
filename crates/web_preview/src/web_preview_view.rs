@@ -305,6 +305,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_final_validation_result_to_agent",
     "copy_agent_browser_final_validation_observability",
     "send_agent_browser_final_validation_observability_to_agent",
+    "copy_agent_browser_function_surfaces",
+    "send_agent_browser_function_surfaces_to_agent",
     "copy_agent_browser_noop_executor_attempt",
     "send_agent_browser_noop_executor_attempt_to_agent",
     "copy_permissioned_click_preflight_attempt",
@@ -1459,6 +1461,8 @@ impl WebPreviewView {
                 "copy_agent_browser_final_validation_observability": true,
                 "send_agent_browser_final_validation_observability_to_agent": true,
                 "agent_browser_function_surfaces": true,
+                "copy_agent_browser_function_surfaces": true,
+                "send_agent_browser_function_surfaces_to_agent": true,
                 "copy_agent_browser_noop_executor_attempt": true,
                 "send_agent_browser_noop_executor_attempt_to_agent": true,
                 "run_permissioned_reload_executor": self.agent_action_permission.interactive_enabled(),
@@ -3321,6 +3325,37 @@ impl WebPreviewView {
                 ]
             }
         })
+    }
+
+    fn agent_browser_function_surfaces_json(&self) -> String {
+        serde_json::to_string_pretty(&self.agent_browser_function_surfaces())
+            .unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_function_surfaces_agent_blocks(&self) -> Vec<acp::ContentBlock> {
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview browser function surfaces:\n\n```json\n{}\n```",
+            self.agent_browser_function_surfaces_json()
+        )))]
+    }
+
+    fn copy_agent_browser_function_surfaces(&mut self, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            self.agent_browser_function_surfaces_json(),
+        ));
+        self.show_toast("Copied browser function surfaces", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_function_surfaces_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let blocks = self.agent_browser_function_surfaces_agent_blocks();
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent browser function surfaces to the agent panel", cx);
+        cx.notify();
     }
 
     fn current_epoch_millis() -> u64 {
@@ -9527,6 +9562,14 @@ impl WebPreviewView {
                     "latest_summary": self.agent_browser_final_validation_observability(),
                     "read_only": true,
                     "purpose": "Copy or send the compact final proof-state and recovery-action summary without requiring the larger session or action manifest."
+                },
+                "browser_function_surfaces": {
+                    "schema": AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA,
+                    "copy_action": "copy_agent_browser_function_surfaces",
+                    "send_action": "send_agent_browser_function_surfaces_to_agent",
+                    "latest_summary": self.agent_browser_function_surfaces(),
+                    "read_only": true,
+                    "purpose": "Copy or send the concrete screenshot, inspect, DevTools, and responsive viewport surface map without requiring the larger session or catalog."
                 }
             },
             "final_validation_observability": self.agent_browser_final_validation_observability(),
@@ -9761,6 +9804,14 @@ impl WebPreviewView {
                         },
                         "function_surfaces_schema": AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA,
                         "function_surfaces": self.agent_browser_function_surfaces(),
+                        "function_surfaces_handoff": {
+                            "schema": AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA,
+                            "copy_action": "copy_agent_browser_function_surfaces",
+                            "send_action": "send_agent_browser_function_surfaces_to_agent",
+                            "read_only": true,
+                            "source": "WebPreview More menu",
+                            "purpose": "Copy or send the concrete screenshot, inspect, DevTools, and responsive viewport surface map without requiring the larger session or catalog."
+                        },
                         "entrypoints": [
                             "WebPreview More menu",
                             "Agent Panel content handoff",
@@ -9875,6 +9926,7 @@ impl WebPreviewView {
                             {"id": "browser.element.inspect", "state": "available", "description": "Pick a page element and send selector, HTML, computed styles, rect, and screenshot context to the Agent Panel."},
                             {"id": "browser.devtools.open", "state": "available", "description": "Open the native browser DevTools for the active WebPreview backend."},
                             {"id": "browser.viewport.responsive", "state": "available", "description": "Switch the active WebPreview between full, phone, tablet, laptop, and rotated responsive viewports."},
+                            {"id": "browser.function_surfaces", "state": "available", "description": "Copy or send the concrete WebPreview screenshot, inspect, DevTools, and responsive viewport surface map."},
                             {"id": "browser.action.open_url", "state": "available_when_unlocked", "description": "Open the current URL/search editor text through the permissioned WebPreview executor shell."},
                             {"id": "browser.action.reload", "state": "available_when_unlocked", "description": "Reload through the permissioned WebPreview executor shell."},
                             {"id": "browser.action.go_back", "state": "available_when_unlocked", "description": "Navigate back through the native WebPreview history executor after unlock, native history trace, QA checklist, and receipt logging."},
@@ -12113,6 +12165,32 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_agent_browser_final_validation_observability_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Browser Function Surfaces")
+                                .icon(IconName::Screen)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_function_surfaces(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Browser Function Surfaces")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_function_surfaces_to_agent(
                                                 window, cx,
                                             );
                                         });

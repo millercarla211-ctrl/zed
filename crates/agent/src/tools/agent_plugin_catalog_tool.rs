@@ -489,6 +489,14 @@ fn browser_plugin_manifest() -> Value {
         },
         "function_surfaces_schema": AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA,
         "function_surfaces": browser_function_surfaces_manifest(),
+        "function_surfaces_handoff": {
+            "schema": AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA,
+            "copy_action": "copy_agent_browser_function_surfaces",
+            "send_action": "send_agent_browser_function_surfaces_to_agent",
+            "read_only": true,
+            "source": "WebPreview More menu",
+            "purpose": "Copy or send the concrete screenshot, inspect, DevTools, and responsive viewport surface map without requiring the larger session or catalog."
+        },
         "entrypoints": [
             "WebPreview More menu",
             "Agent Panel content handoff",
@@ -603,6 +611,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.element.inspect", "available", "Pick a page element and send selector, HTML, computed styles, rect, and screenshot context to the Agent Panel."),
             capability("browser.devtools.open", "available", "Open the native browser DevTools for the active WebPreview backend."),
             capability("browser.viewport.responsive", "available", "Switch the active WebPreview between full, phone, tablet, laptop, and rotated responsive viewports."),
+            capability("browser.function_surfaces", "available", "Copy or send the concrete WebPreview screenshot, inspect, DevTools, and responsive viewport surface map."),
             capability("browser.action.open_url", "available_when_unlocked", "Open the current URL/search editor text through the permissioned WebPreview executor shell."),
             capability("browser.action.reload", "available_when_unlocked", "Reload through the permissioned WebPreview executor shell."),
             capability("browser.action.go_back", "available_when_unlocked", "Navigate back through the native WebPreview history executor after unlock, native history trace, QA checklist, and receipt logging."),

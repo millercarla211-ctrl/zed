@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Browser Function Handoff
+
+ADDED:
+- Added direct WebPreview More-menu actions to copy or send the Browser function-surfaces packet to the Agent Panel.
+- Advertised the Browser function-surfaces handoff through the Agent Browser action manifest and both Agent/WebPreview Browser plugin catalogs.
+- Added a discoverable Browser capability for the function-surfaces packet so agents can find screenshot, inspect, DevTools, and responsive viewport wiring without copying the full session or catalog.
+
+NOTES:
+- This is read-only handoff metadata only; it does not take screenshots, launch DevTools, inspect elements, change viewport, dispatch page input, run `just run`, run Node, or touch external browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Browser Function Surfaces
 
 ADDED:
