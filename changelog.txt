@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime WebPreview Runtime-Green Handoff Surface
+
+ADDED:
+- WebPreview now has Copy/Send Runtime-Green Handoff actions for the Agent Panel.
+- The WebPreview action manifest, status packet, and plugin catalog advertise the runtime-green operator handoff schema and copy/send actions.
+- The handoff packages current Browser/WebPreview, managed Chrome, and PC-use readiness evidence with the Agent runtime-status payload needed for the full scorecard.
+
+NOTES:
+- This is read-only WebPreview handoff metadata only; it does not execute browser actions, run Node, launch Chrome, dispatch input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Runtime-Green Operator Handoff
 
 ADDED:

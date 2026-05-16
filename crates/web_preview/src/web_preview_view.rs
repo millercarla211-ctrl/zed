@@ -343,6 +343,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_function_surfaces_to_agent",
     "copy_agent_plugin_bootstrap_readiness",
     "send_agent_plugin_bootstrap_readiness_to_agent",
+    "copy_agent_plugin_runtime_green_handoff",
+    "send_agent_plugin_runtime_green_handoff_to_agent",
     "copy_agent_browser_noop_executor_attempt",
     "send_agent_browser_noop_executor_attempt_to_agent",
     "copy_permissioned_click_preflight_attempt",
@@ -1503,6 +1505,9 @@ impl WebPreviewView {
                 "agent_plugin_bootstrap_readiness": true,
                 "copy_agent_plugin_bootstrap_readiness": true,
                 "send_agent_plugin_bootstrap_readiness_to_agent": true,
+                "agent_plugin_runtime_green_operator_handoff": true,
+                "copy_agent_plugin_runtime_green_handoff": true,
+                "send_agent_plugin_runtime_green_handoff_to_agent": true,
                 "copy_agent_browser_noop_executor_attempt": true,
                 "send_agent_browser_noop_executor_attempt_to_agent": true,
                 "run_permissioned_reload_executor": self.agent_action_permission.interactive_enabled(),
@@ -2719,6 +2724,12 @@ impl WebPreviewView {
         let manifest = self.agent_browser_action_manifest(window);
         let bootstrap_readiness = self.agent_plugin_bootstrap_readiness();
         let manual_evidence_template = self.agent_browser_final_validation_result_template();
+        let runtime_green_operator_handoff =
+            self.agent_plugin_runtime_green_operator_handoff(window);
+        let runtime_green_operator_handoff_summary =
+            Self::agent_plugin_runtime_green_operator_handoff_summary(
+                &runtime_green_operator_handoff,
+            );
 
         serde_json::json!({
             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
@@ -2790,6 +2801,13 @@ impl WebPreviewView {
                     "send_action": "send_agent_plugin_bootstrap_readiness_to_agent",
                     "current_status": bootstrap_readiness.pointer("/status").and_then(Value::as_str),
                     "phase_summary": bootstrap_readiness.pointer("/phase_summary").cloned()
+                },
+                "runtime_green_operator_handoff": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_handoff",
+                    "send_action": "send_agent_plugin_runtime_green_handoff_to_agent",
+                    "current_status": runtime_green_operator_handoff.pointer("/status").and_then(Value::as_str),
+                    "latest_summary": runtime_green_operator_handoff_summary
                 },
                 "runtime_status_tool": {
                     "tool_name": "inspect_agent_plugin_runtime_status",
@@ -3894,6 +3912,236 @@ impl WebPreviewView {
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast("Sent plugin bootstrap readiness to the agent panel", cx);
         cx.notify();
+    }
+
+    fn agent_plugin_runtime_green_operator_handoff(&self, window: &Window) -> Value {
+        let root_mode = self.runtime_green_root_mode();
+        let browser_final_observability = self.agent_browser_final_validation_observability();
+        let browser_result_summary = self.latest_agent_browser_final_validation_result_summary();
+        let bootstrap_readiness = self.agent_plugin_bootstrap_readiness();
+        let managed_chrome_execution = self.managed_chrome_execution_status();
+        let pc_use_status = self.pc_use_status();
+
+        let browser_ready = browser_result_summary
+            .as_ref()
+            .and_then(|summary| summary.get("runtime_green_candidate"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let browser_result_present = browser_result_summary.is_some();
+        let bootstrap_ready = bootstrap_readiness.get("status").and_then(Value::as_str)
+            == Some("ready_for_managed_chrome_executor");
+        let managed_chrome_receipt_completed = managed_chrome_execution
+            .pointer("/latest_receipt/read/outcome")
+            .and_then(Value::as_str)
+            == Some("completed");
+        let managed_chrome_ready = bootstrap_ready && managed_chrome_receipt_completed;
+        let pc_use_ready =
+            pc_use_status.get("status").and_then(Value::as_str) == Some("has_ready_runner_receipt");
+
+        let lanes = vec![
+            serde_json::json!({
+                "lane_id": "browser_webpreview",
+                "label": "Browser/WebPreview",
+                "ready": browser_ready,
+                "status": if browser_ready {
+                    "ready"
+                } else if browser_result_present {
+                    "manual_result_not_runtime_green"
+                } else {
+                    "missing_final_validation_result"
+                },
+                "checks": {
+                    "final_validation_result_runtime_green": browser_ready,
+                    "final_validation_observability_status": browser_final_observability.get("status").and_then(Value::as_str),
+                    "latest_result_summary": browser_result_summary,
+                },
+                "operator_actions": {
+                    "copy_final_proof_state": "copy_agent_browser_final_validation_observability",
+                    "send_final_proof_state": "send_agent_browser_final_validation_observability_to_agent",
+                    "copy_final_validation_bundle": "copy_agent_browser_final_validation_bundle",
+                    "send_final_validation_bundle": "send_agent_browser_final_validation_bundle_to_agent",
+                    "import_final_result": "import_agent_browser_final_validation_result_from_clipboard"
+                }
+            }),
+            serde_json::json!({
+                "lane_id": "managed_chrome",
+                "label": "Managed Chrome/Playwright",
+                "ready": managed_chrome_ready,
+                "status": if managed_chrome_ready {
+                    "ready"
+                } else if !bootstrap_ready {
+                    "bootstrap_or_assets_not_ready"
+                } else {
+                    managed_chrome_execution.get("status").and_then(Value::as_str).unwrap_or("missing_completed_execution_receipt")
+                },
+                "checks": {
+                    "bootstrap_ready": bootstrap_ready,
+                    "execution_receipt_completed": managed_chrome_receipt_completed,
+                    "bootstrap_status": bootstrap_readiness.get("status").and_then(Value::as_str),
+                    "execution_status": managed_chrome_execution.get("status").and_then(Value::as_str),
+                    "latest_execution_outcome": managed_chrome_execution.pointer("/latest_receipt/read/outcome").and_then(Value::as_str),
+                },
+                "operator_actions": {
+                    "copy_bootstrap_readiness": "copy_agent_plugin_bootstrap_readiness",
+                    "send_bootstrap_readiness": "send_agent_plugin_bootstrap_readiness_to_agent",
+                    "copy_execution_status": "copy_managed_chrome_execution_status",
+                    "send_execution_status": "send_managed_chrome_execution_status_to_agent"
+                }
+            }),
+            serde_json::json!({
+                "lane_id": "pc_use",
+                "label": "Zed PC-use",
+                "ready": pc_use_ready,
+                "status": if pc_use_ready {
+                    "ready"
+                } else {
+                    pc_use_status.get("status").and_then(Value::as_str).unwrap_or("empty")
+                },
+                "checks": {
+                    "runner_receipt_ready": pc_use_ready,
+                    "latest_outcome": pc_use_status.get("latest_outcome").and_then(Value::as_str),
+                },
+                "operator_actions": {
+                    "copy_pc_use_status": "copy_pc_use_status",
+                    "send_pc_use_status": "send_pc_use_status_to_agent"
+                }
+            }),
+        ];
+        let ready_lane_count = lanes
+            .iter()
+            .filter(|lane| lane.get("ready").and_then(Value::as_bool).unwrap_or(false))
+            .count();
+        let runtime_green_candidate = browser_ready && managed_chrome_ready && pc_use_ready;
+        let current_best_next = lanes
+            .iter()
+            .find(|lane| {
+                lane.get("ready")
+                    .and_then(Value::as_bool)
+                    .map(|ready| !ready)
+                    .unwrap_or(true)
+            })
+            .cloned()
+            .unwrap_or_else(|| {
+                serde_json::json!({
+                    "lane_id": "final_runtime_validation",
+                    "label": "Final Windows runtime validation",
+                    "ready": false,
+                    "status": "manual_required",
+                    "operator_actions": {
+                        "inspect_runtime_status": "inspect_agent_plugin_runtime_status",
+                        "manual_command": "just run"
+                    }
+                })
+            });
+
+        serde_json::json!({
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+            "generated_at_ms": Self::current_epoch_millis(),
+            "source": "web_preview",
+            "status": if runtime_green_candidate {
+                "runtime_green_candidate"
+            } else {
+                "operator_action_required"
+            },
+            "runtime_green_candidate": runtime_green_candidate,
+            "root_mode": root_mode,
+            "session": self.browser_session_snapshot(window),
+            "summary": {
+                "lane_count": lanes.len(),
+                "ready_lane_count": ready_lane_count,
+                "current_best_next_lane": current_best_next.get("lane_id").and_then(Value::as_str),
+            },
+            "current_best_next": current_best_next,
+            "lanes": lanes,
+            "webpreview_evidence": {
+                "final_validation_observability": browser_final_observability,
+                "plugin_bootstrap_readiness": bootstrap_readiness,
+                "managed_chrome_execution_status": managed_chrome_execution,
+                "pc_use_status": pc_use_status,
+            },
+            "agent_runtime_status_tool": {
+                "tool_name": "inspect_agent_plugin_runtime_status",
+                "schema": "zed.agent_plugins.runtime_status.v1",
+                "scorecard_schema": AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA,
+                "operator_handoff_schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+                "payload": runtime_green_status_payload(root_mode)
+            },
+            "copy_action": "copy_agent_plugin_runtime_green_handoff",
+            "send_action": "send_agent_plugin_runtime_green_handoff_to_agent",
+            "safety": {
+                "read_only": true,
+                "writes_files": false,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false,
+                "touches_real_browser_profiles": false,
+                "permissioned_steps_require_user_visible_authorization": true
+            }
+        })
+    }
+
+    fn agent_plugin_runtime_green_operator_handoff_summary(handoff: &Value) -> Value {
+        serde_json::json!({
+            "schema": handoff.get("schema").and_then(Value::as_str),
+            "status": handoff.get("status").and_then(Value::as_str),
+            "runtime_green_candidate": handoff.get("runtime_green_candidate").and_then(Value::as_bool),
+            "root_mode": handoff.get("root_mode").and_then(Value::as_str),
+            "ready_lane_count": handoff.pointer("/summary/ready_lane_count").and_then(Value::as_u64),
+            "lane_count": handoff.pointer("/summary/lane_count").and_then(Value::as_u64),
+            "current_best_next_lane": handoff.pointer("/summary/current_best_next_lane").and_then(Value::as_str),
+        })
+    }
+
+    fn agent_plugin_runtime_green_operator_handoff_json(handoff: &Value) -> String {
+        serde_json::to_string_pretty(handoff).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_plugin_runtime_green_operator_handoff_agent_blocks(
+        &self,
+        handoff: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = handoff.pointer("/session/page/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Runtime-green operator handoff:\n\n```json\n{}\n```",
+            Self::agent_plugin_runtime_green_operator_handoff_json(handoff)
+        ))));
+        blocks
+    }
+
+    fn copy_agent_plugin_runtime_green_handoff(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let handoff = self.agent_plugin_runtime_green_operator_handoff(window);
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_plugin_runtime_green_operator_handoff_json(&handoff),
+        ));
+        self.show_toast("Copied runtime-green operator handoff", cx);
+        cx.notify();
+    }
+
+    fn send_agent_plugin_runtime_green_handoff_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let handoff = self.agent_plugin_runtime_green_operator_handoff(window);
+        let blocks = self.agent_plugin_runtime_green_operator_handoff_agent_blocks(&handoff);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent runtime-green handoff to the agent panel", cx);
+        cx.notify();
+    }
+
+    fn runtime_green_root_mode(&self) -> &'static str {
+        if self.workspace_context.root_path.is_some() {
+            "workspace"
+        } else {
+            "zed_data"
+        }
     }
 
     fn current_epoch_millis() -> u64 {
@@ -5647,6 +5895,12 @@ impl WebPreviewView {
         let success_receipt_ready = self.latest_successful_interaction_receipt.is_some();
         let managed_chrome_execution = self.managed_chrome_execution_status();
         let pc_use_status = self.pc_use_status();
+        let runtime_green_operator_handoff =
+            self.agent_plugin_runtime_green_operator_handoff(window);
+        let runtime_green_operator_handoff_summary =
+            Self::agent_plugin_runtime_green_operator_handoff_summary(
+                &runtime_green_operator_handoff,
+            );
         let context_ready =
             diagnostics_ready || runtime_ready || dom_ready || targets_ready || readiness_ready;
         let audit_ready = plan_ready
@@ -5745,6 +5999,7 @@ impl WebPreviewView {
                     "agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result_summary(),
                     "managed_chrome_execution": managed_chrome_execution,
                     "pc_use_status": pc_use_status,
+                    "runtime_green_operator_handoff": runtime_green_operator_handoff_summary,
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 },
                 "handoff": {
@@ -5753,6 +6008,9 @@ impl WebPreviewView {
                     "requires_receipt_after_every_input": true,
                     "managed_chrome_receipts_visible": true,
                     "pc_use_receipts_visible": true,
+                    "runtime_green_operator_handoff_visible": true,
+                    "runtime_green_operator_handoff_copy_action": "copy_agent_plugin_runtime_green_handoff",
+                    "runtime_green_operator_handoff_send_action": "send_agent_plugin_runtime_green_handoff_to_agent",
                     "executor_wired": true,
                     "safe_to_send_to_agent_panel": true,
                 },
@@ -10047,6 +10305,13 @@ impl WebPreviewView {
     }
 
     fn agent_browser_action_manifest(&self, window: &Window) -> Value {
+        let runtime_green_operator_handoff =
+            self.agent_plugin_runtime_green_operator_handoff(window);
+        let runtime_green_operator_handoff_summary =
+            Self::agent_plugin_runtime_green_operator_handoff_summary(
+                &runtime_green_operator_handoff,
+            );
+
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_actions.v1",
             "session": self.browser_session_snapshot(window),
@@ -10116,11 +10381,20 @@ impl WebPreviewView {
                     "latest_summary": self.agent_plugin_bootstrap_readiness(),
                     "read_only": true,
                     "purpose": "Copy or send the compact host, managed-root, and managed-asset bootstrap readiness packet without requiring the larger plugin catalog or runtime-status tool."
+                },
+                "runtime_green_operator_handoff": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_handoff",
+                    "send_action": "send_agent_plugin_runtime_green_handoff_to_agent",
+                    "latest_summary": runtime_green_operator_handoff_summary,
+                    "read_only": true,
+                    "purpose": "Copy or send one compact runtime-green operator packet with the current best next lane, WebPreview evidence, and the Agent runtime-status payload."
                 }
             },
             "final_validation_observability": self.agent_browser_final_validation_observability(),
             "browser_function_surfaces": self.agent_browser_function_surfaces(),
             "plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
+            "runtime_green_operator_handoff": runtime_green_operator_handoff,
             "notes": [
                 "Read-only actions are always available for context gathering.",
                 "Interactive actions must remain locked until the user explicitly allows them for this WebPreview session.",
@@ -10225,6 +10499,15 @@ impl WebPreviewView {
                         "include_observability_profiles": true
                     },
                     "purpose": "Summarize Browser, managed Chrome, PC-use readiness, observability profiles, and proof freshness without launching browsers, running Node, screenshots, or input dispatch."
+                },
+                "webpreview_handoffs": {
+                    "runtime_green_operator_handoff": {
+                        "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+                        "copy_action": "copy_agent_plugin_runtime_green_handoff",
+                        "send_action": "send_agent_plugin_runtime_green_handoff_to_agent",
+                        "read_only": true,
+                        "purpose": "Share one compact runtime-green operator packet from WebPreview with the current best next lane and the Agent runtime-status payload."
+                    }
                 },
                 "available_to": [
                     "agent_panel",
@@ -13543,6 +13826,34 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Copy Runtime-Green Handoff")
+                                .icon(IconName::Check)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_plugin_runtime_green_handoff(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Runtime-Green Handoff")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_plugin_runtime_green_handoff_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy Managed Chrome Execution Status")
                                 .icon(IconName::Info)
                                 .handler({
@@ -15638,6 +15949,18 @@ fn bootstrap_prepare_request(status: &str, workspace_available: bool) -> Value {
             "touches_real_browser_profiles": false,
             "workspace_preferred_when_available": true,
         },
+    })
+}
+
+fn runtime_green_status_payload(root_mode: &str) -> Value {
+    serde_json::json!({
+        "root_mode": root_mode,
+        "include_latest_handoffs": true,
+        "include_host_checks": true,
+        "include_next_actions": true,
+        "include_workflows": true,
+        "include_validation_matrix": true,
+        "include_observability_profiles": true
     })
 }
 
