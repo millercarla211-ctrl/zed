@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime WebPreview Full Catalog Summary Alignment
+
+ADDED:
+- Fresh WebPreview plugin catalog payloads now include a top-level `catalog_summary` using `zed.agent_plugins.catalog_summary.v1`.
+- The WebPreview catalog body now advertises the catalog summary schema beside the catalog status/tool metadata.
+
+CHANGED:
+- WebPreview latest-summary, clipboard, and Agent handoff paths now reuse the same compact catalog summary helper, keeping Browser, managed Chrome, and PC-use panel metadata aligned across freshly generated and stored catalogs.
+
+NOTES:
+- This is read-only catalog metadata only. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, probe proof files, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Agent Catalog Summary Alignment
 
 ADDED:

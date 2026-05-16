@@ -4196,7 +4196,12 @@ impl WebPreviewView {
     }
 
     fn latest_agent_plugin_catalog_summary(&self) -> Option<Value> {
-        let catalog = self.latest_agent_plugin_catalog.as_ref()?;
+        self.latest_agent_plugin_catalog
+            .as_ref()
+            .map(Self::agent_plugin_catalog_summary_from_catalog)
+    }
+
+    fn agent_plugin_catalog_summary_from_catalog(catalog: &Value) -> Value {
         let runtime_status = catalog.pointer("/catalog/runtime_status");
         let plugin_summaries = catalog
             .pointer("/catalog/plugins")
@@ -4238,7 +4243,7 @@ impl WebPreviewView {
             .as_ref()
             .map(|plugins| Self::agent_plugin_catalog_proof_freshness_summary(plugins));
 
-        Some(serde_json::json!({
+        serde_json::json!({
             "schema": AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA,
             "source_schema": catalog.get("schema").and_then(Value::as_str),
             "generated_at_ms": catalog.pointer("/catalog/generated_at_ms").and_then(Value::as_u64),
@@ -4276,7 +4281,7 @@ impl WebPreviewView {
             "plugins": plugin_summaries,
             "read_only": true,
             "dispatches_input": false,
-        }))
+        })
     }
 
     fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
@@ -15216,13 +15221,14 @@ impl WebPreviewView {
             .map(|root| root.join("agent-plugins"));
         let zed_plugin_root = data_dir().join("agent-plugins");
 
-        serde_json::json!({
+        let mut catalog = serde_json::json!({
             "schema": "zed.agent_plugins.catalog.v1",
             "session": self.browser_session_snapshot(window),
             "catalog": {
                 "generated_at_ms": Self::current_epoch_millis(),
                 "name": "DX Agent Plugin Runtime",
                 "status": "discovery_layer_available",
+                "summary_schema": AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA,
                 "tool_name": "list_agent_plugins",
                 "default_enabled_plugins": ["zed.browser", "zed.chrome", "zed.pc_use"],
                 "tools": {
@@ -16138,7 +16144,14 @@ impl WebPreviewView {
                 "Chrome and PC Use are default-enabled plugin manifests with bootstrap and permission gates defined before executor wiring.",
                 "The Agent can also call the read-only list_agent_plugins tool to discover this catalog from any Agent Panel."
             ]
-        })
+        });
+
+        let catalog_summary = Self::agent_plugin_catalog_summary_from_catalog(&catalog);
+        if let Some(catalog_object) = catalog.as_object_mut() {
+            catalog_object.insert("catalog_summary".into(), catalog_summary);
+        }
+
+        catalog
     }
 
     fn browser_native_backend_name(&self) -> &'static str {
