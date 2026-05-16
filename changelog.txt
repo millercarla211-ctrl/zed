@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime Observability Regression Watch Rollup
+
+ADDED:
+- Agent runtime-status plugin matrices now include a schema-versioned regression-watch rollup with watched plugin counts, total must-recheck and must-not-regress counts, proof-source counts, and the first compact watch item.
+- WebPreview runtime observability matrices now mirror the same rollup and expose the rollup status through compact digest summaries and catalog metadata.
+
+CHANGED:
+- Runtime observability digest totals now surface regression-watch pressure without requiring agents to open every plugin row.
+
+NOTES:
+- This is read-only observability. It does not launch browsers, run Node, dispatch input, take screenshots, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Observability Regression Watch
 
 ADDED:

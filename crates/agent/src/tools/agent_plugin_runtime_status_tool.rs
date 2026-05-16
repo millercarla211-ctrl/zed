@@ -108,6 +108,8 @@ const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_plugin_matrix.v1";
+const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_WATCH_ROLLUP_SCHEMA: &str =
+    "zed.agent_plugins.runtime_observability_regression_watch_rollup.v1";
 const AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA: &str = "zed.agent_plugins.pc_use.proof_summary.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
@@ -2087,6 +2089,18 @@ fn runtime_observability_digest(
             "manual_blocker_count": manual_blocker_count,
             "missing_required_file_count": missing_required_files,
             "stale_required_file_count": stale_required_files,
+            "regression_watch_lane_count": plugin_matrix
+                .pointer("/regression_watch_rollup/watched_plugin_count")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
+            "regression_watch_must_recheck_count": plugin_matrix
+                .pointer("/regression_watch_rollup/total_must_recheck_count")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
+            "regression_watch_must_not_regress_count": plugin_matrix
+                .pointer("/regression_watch_rollup/total_must_not_regress_count")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
         },
         "freshness": {
             "status": proof_freshness.get("status").and_then(Value::as_str),
@@ -2174,6 +2188,7 @@ fn runtime_observability_plugin_matrix(
         .filter(|row| row.get("ready").and_then(Value::as_bool).unwrap_or(false))
         .count();
     let pending_plugin_count = plugin_count.saturating_sub(ready_plugin_count);
+    let regression_watch_rollup = runtime_observability_plugin_regression_watch_rollup(&rows);
     let status = if plugin_count == 0 {
         "empty"
     } else if pending_plugin_count == 0 {
@@ -2189,6 +2204,7 @@ fn runtime_observability_plugin_matrix(
         "ready_plugin_count": ready_plugin_count,
         "pending_plugin_count": pending_plugin_count,
         "first_priority": first_priority,
+        "regression_watch_rollup": regression_watch_rollup,
         "rows": rows,
         "reads_from": [
             "runtime_green_readiness_scorecard.lanes",
@@ -2196,10 +2212,106 @@ fn runtime_observability_plugin_matrix(
             "observability_proof_freshness.required_files",
             "observability_proof_freshness.receipt_classifications",
             "observability_proof_freshness.recovery_actions",
-            "runtime_observability_plugin_regression_watch"
+            "runtime_observability_plugin_regression_watch",
+            "runtime_observability_plugin_regression_watch_rollup"
         ],
         "safety": {
             "matrix_is_read_only": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+            "touches_real_browser_profiles": false,
+        }
+    })
+}
+
+fn runtime_observability_plugin_regression_watch_rollup(rows: &[Value]) -> Value {
+    let watch_rows = rows
+        .iter()
+        .filter_map(|row| {
+            let watch = row.get("regression_watch")?;
+            let status = watch
+                .get("status")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown_plugin_lane");
+            if status == "unknown_plugin_lane" {
+                return None;
+            }
+
+            Some(serde_json::json!({
+                "lane_id": row.get("lane_id").and_then(Value::as_str).unwrap_or("unknown"),
+                "plugin_id": row.get("plugin_id").and_then(Value::as_str).unwrap_or("unknown"),
+                "ready": row.get("ready").and_then(Value::as_bool).unwrap_or(false),
+                "status": status,
+                "focus": watch.get("focus").cloned().unwrap_or(Value::Null),
+                "first_must_recheck": watch
+                    .get("must_recheck")
+                    .and_then(Value::as_array)
+                    .and_then(|items| items.first())
+                    .cloned()
+                    .unwrap_or(Value::Null),
+                "first_must_not_regress": watch
+                    .get("must_not_regress")
+                    .and_then(Value::as_array)
+                    .and_then(|items| items.first())
+                    .cloned()
+                    .unwrap_or(Value::Null),
+                "proof_source_count": watch
+                    .get("proof_sources")
+                    .and_then(Value::as_array)
+                    .map(|items| items.len())
+                    .unwrap_or(0),
+                "after_action_validation": watch
+                    .get("after_action_validation")
+                    .cloned()
+                    .unwrap_or(Value::Null),
+            }))
+        })
+        .collect::<Vec<_>>();
+    let total_must_recheck_count = rows
+        .iter()
+        .map(|row| {
+            row.pointer("/regression_watch/must_recheck")
+                .and_then(Value::as_array)
+                .map(|items| items.len())
+                .unwrap_or(0)
+        })
+        .sum::<usize>();
+    let total_must_not_regress_count = rows
+        .iter()
+        .map(|row| {
+            row.pointer("/regression_watch/must_not_regress")
+                .and_then(Value::as_array)
+                .map(|items| items.len())
+                .unwrap_or(0)
+        })
+        .sum::<usize>();
+    let total_proof_source_count = rows
+        .iter()
+        .map(|row| {
+            row.pointer("/regression_watch/proof_sources")
+                .and_then(Value::as_array)
+                .map(|items| items.len())
+                .unwrap_or(0)
+        })
+        .sum::<usize>();
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_WATCH_ROLLUP_SCHEMA,
+        "status": if watch_rows.is_empty() {
+            "no_regression_watch_lanes"
+        } else {
+            "regression_watch_required"
+        },
+        "watched_plugin_count": watch_rows.len(),
+        "total_must_recheck_count": total_must_recheck_count,
+        "total_must_not_regress_count": total_must_not_regress_count,
+        "total_proof_source_count": total_proof_source_count,
+        "first_watch": watch_rows.first().cloned(),
+        "watch_rows": watch_rows,
+        "safety": {
+            "rollup_is_read_only": true,
             "writes_files": false,
             "runs_node": false,
             "launches_browser": false,
@@ -2863,6 +2975,7 @@ fn runtime_green_proof_path(
             "runtime_observability_digest": {
                 "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                 "plugin_matrix_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA,
+                "regression_watch_rollup_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_WATCH_ROLLUP_SCHEMA,
                 "copy_action": "copy_agent_plugin_runtime_observability_digest",
                 "send_action": "send_agent_plugin_runtime_observability_digest_to_agent"
             },
