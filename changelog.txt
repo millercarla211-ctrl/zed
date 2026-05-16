@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Browser Final Result Template Handoff
+
+ADDED:
+- Added direct WebPreview More-menu actions to copy or send only the fillable final validation result template.
+- Reused the final bundle's manual evidence template through a shared helper so the bundle and direct handoff cannot drift.
+- Advertised the direct result-template handoff through the WebPreview action/plugin catalogs and Agent `list_agent_plugins` catalog.
+
+NOTES:
+- This is read-only proof metadata only; it does not run `just run`, dispatch browser input, launch Chrome, run Node, inspect the live page, or change editor/WebPreview focus paths.
+
 [2026-05-16] - Agent Browser Final Result Contract
 
 ADDED:

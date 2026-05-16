@@ -294,6 +294,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_executor_validation_progress_to_agent",
     "copy_agent_browser_final_validation_bundle",
     "send_agent_browser_final_validation_bundle_to_agent",
+    "copy_agent_browser_final_validation_result_template",
+    "send_agent_browser_final_validation_result_template_to_agent",
     "copy_agent_browser_noop_executor_attempt",
     "send_agent_browser_noop_executor_attempt_to_agent",
     "copy_permissioned_click_preflight_attempt",
@@ -1432,6 +1434,8 @@ impl WebPreviewView {
                 "send_agent_browser_executor_validation_progress_to_agent": true,
                 "copy_agent_browser_final_validation_bundle": true,
                 "send_agent_browser_final_validation_bundle_to_agent": true,
+                "copy_agent_browser_final_validation_result_template": true,
+                "send_agent_browser_final_validation_result_template_to_agent": true,
                 "copy_agent_browser_noop_executor_attempt": true,
                 "send_agent_browser_noop_executor_attempt_to_agent": true,
                 "run_permissioned_reload_executor": self.agent_action_permission.interactive_enabled(),
@@ -2324,6 +2328,7 @@ impl WebPreviewView {
         let progress = self.agent_browser_executor_validation_progress();
         let runbook = self.agent_browser_qa_runbook(window);
         let manifest = self.agent_browser_action_manifest(window);
+        let manual_evidence_template = self.agent_browser_final_validation_result_template();
 
         serde_json::json!({
             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
@@ -2412,65 +2417,7 @@ impl WebPreviewView {
                 "Inspect managed Chrome and PC-use queue/receipt/status handoffs without touching real browser profiles or OS-wide input.",
                 "Copy or send this final validation bundle with the resulting summaries."
             ],
-            "manual_evidence_template": {
-                "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
-                "status": "not_run",
-                "runtime_command": "just run",
-                "allowed_status_values": ["not_run", "pass", "fail", "blocked", "skipped"],
-                "required_check_ids": [
-                    "editor_typing",
-                    "webpreview_input",
-                    "native_executor_receipts",
-                    "payload_bridge",
-                    "managed_chrome",
-                    "pc_use"
-                ],
-                "branch": "dev",
-                "commit": "fill with git rev-parse --short HEAD before runtime pass",
-                "started_at": null,
-                "completed_at": null,
-                "checks": {
-                    "editor_typing": {
-                        "status": "not_run",
-                        "evidence": "Type quickly in a normal code file; text appears immediately and caret stays visible.",
-                        "blocker": null
-                    },
-                    "webpreview_input": {
-                        "status": "not_run",
-                        "evidence": "Hover, click, right-click, wheel, URL edit, page typing, reload, and focus switching all work.",
-                        "blocker": null
-                    },
-                    "native_executor_receipts": {
-                        "status": "not_run",
-                        "evidence": "Click, type, key, scroll, back, forward, and cache-only reset attempts emit blocked or successful receipts.",
-                        "blocker": null
-                    },
-                    "payload_bridge": {
-                        "status": "not_run",
-                        "evidence": "Managed Browser payload import emits a redacted schema/action receipt.",
-                        "blocker": null
-                    },
-                    "managed_chrome": {
-                        "status": "not_run",
-                        "evidence": "Managed Chrome queue, runner gate, adapter, and execution inspection stay under managed roots.",
-                        "blocker": null
-                    },
-                    "pc_use": {
-                        "status": "not_run",
-                        "evidence": "PC-use target, queue, runner, and receipt inspection stay read-only or managed-root scoped.",
-                        "blocker": null
-                    }
-                },
-                "overall_blocker": null,
-                "runtime_green_requirements": {
-                    "top_level_status": "pass",
-                    "required_check_status": "pass",
-                    "validation_progress_status": "manual_windows_runtime_validation_ready",
-                    "evidence_rule": "Every required check id must have status pass and non-empty evidence.",
-                    "blocker_rule": "overall_blocker and every required check blocker must be null."
-                },
-                "claim_runtime_green_only_when": "all required checks are pass, blockers are null, and the validation-progress packet reports manual_windows_runtime_validation_ready"
-            },
+            "manual_evidence_template": manual_evidence_template,
             "success_criteria": [
                 "No editor typing lag or caret disappearance after WebPreview actions.",
                 "No stale WebPreview focus after navigation, reload, tab switch, URL edit, or editor focus.",
@@ -2486,8 +2433,83 @@ impl WebPreviewView {
         })
     }
 
+    fn agent_browser_final_validation_result_template(&self) -> Value {
+        serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+            "status": "not_run",
+            "runtime_command": "just run",
+            "allowed_status_values": ["not_run", "pass", "fail", "blocked", "skipped"],
+            "required_check_ids": [
+                "editor_typing",
+                "webpreview_input",
+                "native_executor_receipts",
+                "payload_bridge",
+                "managed_chrome",
+                "pc_use"
+            ],
+            "branch": "dev",
+            "commit": "fill with git rev-parse --short HEAD before runtime pass",
+            "started_at": null,
+            "completed_at": null,
+            "checks": {
+                "editor_typing": {
+                    "status": "not_run",
+                    "evidence": "Type quickly in a normal code file; text appears immediately and caret stays visible.",
+                    "blocker": null
+                },
+                "webpreview_input": {
+                    "status": "not_run",
+                    "evidence": "Hover, click, right-click, wheel, URL edit, page typing, reload, and focus switching all work.",
+                    "blocker": null
+                },
+                "native_executor_receipts": {
+                    "status": "not_run",
+                    "evidence": "Click, type, key, scroll, back, forward, and cache-only reset attempts emit blocked or successful receipts.",
+                    "blocker": null
+                },
+                "payload_bridge": {
+                    "status": "not_run",
+                    "evidence": "Managed Browser payload import emits a redacted schema/action receipt.",
+                    "blocker": null
+                },
+                "managed_chrome": {
+                    "status": "not_run",
+                    "evidence": "Managed Chrome queue, runner gate, adapter, and execution inspection stay under managed roots.",
+                    "blocker": null
+                },
+                "pc_use": {
+                    "status": "not_run",
+                    "evidence": "PC-use target, queue, runner, and receipt inspection stay read-only or managed-root scoped.",
+                    "blocker": null
+                }
+            },
+            "overall_blocker": null,
+            "runtime_green_requirements": {
+                "top_level_status": "pass",
+                "required_check_status": "pass",
+                "validation_progress_status": "manual_windows_runtime_validation_ready",
+                "evidence_rule": "Every required check id must have status pass and non-empty evidence.",
+                "blocker_rule": "overall_blocker and every required check blocker must be null."
+            },
+            "claim_runtime_green_only_when": "all required checks are pass, blockers are null, and the validation-progress packet reports manual_windows_runtime_validation_ready"
+        })
+    }
+
     fn agent_browser_final_validation_bundle_json(bundle: &Value) -> String {
         serde_json::to_string_pretty(bundle).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_final_validation_result_template_json(template: &Value) -> String {
+        serde_json::to_string_pretty(template).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_final_validation_result_template_agent_blocks(
+        template: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview final validation result template:\n\n```json\n{}\n```",
+            Self::agent_browser_final_validation_result_template_json(template)
+        )))]
     }
 
     fn agent_browser_final_validation_bundle_agent_blocks(
@@ -2533,6 +2555,30 @@ impl WebPreviewView {
         self.latest_agent_browser_final_validation_bundle = Some(bundle);
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast("Sent final validation bundle to the agent panel", cx);
+        cx.notify();
+    }
+
+    fn copy_agent_browser_final_validation_result_template(&mut self, cx: &mut Context<Self>) {
+        let template = self.agent_browser_final_validation_result_template();
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_final_validation_result_template_json(&template),
+        ));
+        self.show_toast("Copied final validation result template", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_final_validation_result_template_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let template = self.agent_browser_final_validation_result_template();
+        let blocks = Self::agent_browser_final_validation_result_template_agent_blocks(&template);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast(
+            "Sent final validation result template to the agent panel",
+            cx,
+        );
         cx.notify();
     }
 
@@ -8990,6 +9036,13 @@ impl WebPreviewView {
                     "latest_summary": self.latest_agent_browser_final_validation_bundle_summary(),
                     "read_only": true,
                     "purpose": "Share one final proof packet that ties readiness, validation progress, QA runbook, action manifest, plugin catalog, and manual Windows proof order together."
+                },
+                "final_validation_result_template": {
+                    "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+                    "copy_action": "copy_agent_browser_final_validation_result_template",
+                    "send_action": "send_agent_browser_final_validation_result_template_to_agent",
+                    "read_only": true,
+                    "purpose": "Share only the fillable manual Windows result template with allowed status values and runtime-green requirements."
                 }
             },
             "notes": [
@@ -9274,6 +9327,14 @@ impl WebPreviewView {
                             "source": "WebPreview More menu",
                             "purpose": "Copy or send the canonical final Windows validation bundle before claiming runtime-green."
                         },
+                        "final_validation_result_template_handoff": {
+                            "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+                            "copy_action": "copy_agent_browser_final_validation_result_template",
+                            "send_action": "send_agent_browser_final_validation_result_template_to_agent",
+                            "read_only": true,
+                            "source": "WebPreview More menu",
+                            "purpose": "Copy or send only the fillable manual Windows result template before the final runtime proof."
+                        },
                         "capabilities": [
                             {"id": "browser.sessions.list", "state": "available", "description": "List open WebPreview sessions and workspace inventory."},
                             {"id": "browser.session.snapshot", "state": "available", "description": "Read the active WebPreview session metadata, bounds, profile, URL, and policy."},
@@ -9314,6 +9375,7 @@ impl WebPreviewView {
                             {"id": "browser.action.payload_import_receipt", "state": "available", "description": "Copy or send the latest WebPreview payload import receipt, with accepted schema, action metadata, redacted text length, permission state, and next-step safety notes."},
                             {"id": "browser.action.executor_validation_progress", "state": "available", "description": "Copy or send grouped Browser executor validation progress for final Windows proof without dispatching input."},
                             {"id": "browser.validation.final_bundle", "state": "available", "description": "Copy or send the final Windows validation bundle tying readiness, progress, runbook, manifest, plugin catalog, and proof order together."},
+                            {"id": "browser.validation.final_result_template", "state": "available", "description": "Copy or send the fillable manual Windows result template with allowed status values and runtime-green requirements."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},
                             {"id": "browser.action.type", "state": "available_when_unlocked_payload_required", "description": "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."},
                             {"id": "browser.action.key", "state": "available_when_unlocked", "description": "Send allowlisted key presses through the WebView2 DevTools Protocol executor after unlock, fresh preflight, keyboard-focus gate, QA checklist, and receipt logging."},
@@ -11379,6 +11441,34 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_agent_browser_final_validation_bundle_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Final Result Template")
+                                .icon(IconName::Check)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_final_validation_result_template(
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Final Result Template")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_final_validation_result_template_to_agent(
                                                 window, cx,
                                             );
                                         });
