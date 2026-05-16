@@ -1,3 +1,15 @@
+[2026-05-16] - WebPreview PC Use Status Handoff
+
+ADDED:
+- Added a read-only WebPreview PC-use status packet that summarizes the latest managed PC-use queue item and runner-gate receipt from workspace or Zed-data roots.
+- Added More-menu actions to copy the Zed PC-use status or send it to the Agent Panel.
+
+CHANGED:
+- WebPreview session snapshots, Agent Browser status packets, executor readiness, QA runbooks, and plugin catalogs now expose PC-use queue/receipt status beside managed Chrome execution status.
+
+NOTES:
+- The status handoff only reads managed files and does not write files, take screenshots, focus Zed, dispatch input, launch processes, or control the OS desktop.
+
 [2026-05-16] - PC Use Receipt Inspection
 
 ADDED:

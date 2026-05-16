@@ -68,6 +68,12 @@ const MANAGED_CHROME_RUN_REQUEST_SCHEMA: &str =
     "zed.agent_plugins.managed_chrome_playwright_run_request.v1";
 const MANAGED_CHROME_EXECUTION_RECEIPT_SCHEMA: &str =
     "zed.agent_plugins.managed_chrome_playwright_execution_receipt.v1";
+const PC_USE_PAYLOAD_QUEUE_FILE_NAME: &str = "latest-zed-pc-use-payload.json";
+const PC_USE_RUNNER_RECEIPT_FILE_NAME: &str = "latest-zed-pc-use-runner-receipt.json";
+const PC_USE_RUNNER_RECEIPT_PREFIX: &str = "zed-pc-use-runner-receipt-";
+const PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA: &str =
+    "zed.agent_plugins.pc_use.action_payload_queue_item.v1";
+const PC_USE_RUNNER_RECEIPT_SCHEMA: &str = "zed.agent_plugins.pc_use.runner_receipt.v1";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
@@ -304,6 +310,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_plugin_catalog_to_agent",
     "copy_managed_chrome_execution_status",
     "send_managed_chrome_execution_status_to_agent",
+    "copy_pc_use_status",
+    "send_pc_use_status_to_agent",
     "take_screenshot",
     "capture_selected_area_screenshot",
     "annotate_screenshot",
@@ -337,6 +345,31 @@ impl AgentBrowserExecutorGate {
     fn ready_for_executor(self) -> bool {
         self.interactive_unlocked && self.context_ready && self.audit_ready
     }
+}
+
+#[derive(Clone, Debug)]
+struct PcUseStatusRoot {
+    kind: &'static str,
+    pc_use_root: PathBuf,
+    payload_dir: PathBuf,
+    receipt_dir: PathBuf,
+}
+
+impl PcUseStatusRoot {
+    fn new(kind: &'static str, pc_use_root: PathBuf) -> Self {
+        Self {
+            payload_dir: pc_use_root.join("payloads"),
+            receipt_dir: pc_use_root.join("receipts"),
+            pc_use_root,
+            kind,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PcUseStatusFileKind {
+    PayloadQueue,
+    RunnerReceipt,
 }
 
 #[derive(Clone, Debug)]
@@ -1313,6 +1346,7 @@ impl WebPreviewView {
             "agent_browser_qa_runbook": self.latest_agent_browser_qa_runbook_summary(),
             "agent_plugin_catalog": self.latest_agent_plugin_catalog_summary(),
             "managed_chrome_execution": self.managed_chrome_execution_status(),
+            "pc_use_status": self.pc_use_status(),
             "annotated_screenshot": self.latest_annotated_screenshot_summary(),
             "native_preview": {
                 "backend": native_backend,
@@ -1410,6 +1444,8 @@ impl WebPreviewView {
                 "send_agent_plugin_catalog_to_agent": true,
                 "copy_managed_chrome_execution_status": true,
                 "send_managed_chrome_execution_status_to_agent": true,
+                "copy_pc_use_status": true,
+                "send_pc_use_status_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1623,6 +1659,8 @@ impl WebPreviewView {
             "interactive_unlocked": packet.pointer("/packet/readiness/interactive_unlocked").and_then(Value::as_bool),
             "managed_chrome_execution_status": packet.pointer("/packet/latest/managed_chrome_execution/status").and_then(Value::as_str),
             "managed_chrome_latest_outcome": packet.pointer("/packet/latest/managed_chrome_execution/latest_receipt/read/outcome").and_then(Value::as_str),
+            "pc_use_status": packet.pointer("/packet/latest/pc_use_status/status").and_then(Value::as_str),
+            "pc_use_latest_outcome": packet.pointer("/packet/latest/pc_use_status/latest_receipt/read/outcome").and_then(Value::as_str),
             "next_step": packet.pointer("/packet/next_step").and_then(Value::as_str),
         }))
     }
@@ -2036,6 +2074,110 @@ impl WebPreviewView {
             "Sent managed Chrome execution status to the agent panel",
             cx,
         );
+        cx.notify();
+    }
+
+    fn pc_use_status(&self) -> Value {
+        let roots = self.pc_use_status_roots();
+        let latest_receipt = latest_pc_use_status_file(
+            &roots,
+            PcUseStatusFileKind::RunnerReceipt,
+            PC_USE_RUNNER_RECEIPT_SCHEMA,
+        );
+        let latest_queue = latest_pc_use_status_file(
+            &roots,
+            PcUseStatusFileKind::PayloadQueue,
+            PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA,
+        );
+        let latest_outcome = latest_receipt
+            .as_ref()
+            .and_then(|receipt| receipt.pointer("/read/outcome"))
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let status =
+            if latest_receipt.is_some() && latest_outcome == "ready_future_executor_pending" {
+                "has_ready_runner_receipt"
+            } else if latest_receipt.is_some() {
+                "has_blocked_runner_receipt"
+            } else if latest_queue.is_some() {
+                "has_queue_without_receipt"
+            } else {
+                "empty"
+            };
+        let root_values = roots
+            .iter()
+            .map(|root| {
+                serde_json::json!({
+                    "kind": root.kind,
+                    "pc_use_root": root.pc_use_root.display().to_string(),
+                    "payload_dir": root.payload_dir.display().to_string(),
+                    "receipt_dir": root.receipt_dir.display().to_string(),
+                    "pc_use_root_exists": root.pc_use_root.is_dir(),
+                    "payload_dir_exists": root.payload_dir.is_dir(),
+                    "receipt_dir_exists": root.receipt_dir.is_dir(),
+                })
+            })
+            .collect::<Vec<_>>();
+
+        serde_json::json!({
+            "schema": "zed.web_preview.pc_use_status.v1",
+            "generated_at_ms": Self::current_epoch_millis(),
+            "status": status,
+            "latest_outcome": latest_outcome,
+            "roots": root_values,
+            "latest_receipt": latest_receipt,
+            "latest_queue": latest_queue,
+            "next_actions": pc_use_status_next_actions(status, latest_outcome),
+            "safety": {
+                "read_only": true,
+                "writes_files": false,
+                "takes_screenshot": false,
+                "focuses_zed": false,
+                "dispatches_mouse": false,
+                "dispatches_keyboard": false,
+                "launches_process": false,
+                "os_wide_desktop_control": false,
+                "managed_roots_only": true,
+            },
+        })
+    }
+
+    fn pc_use_status_roots(&self) -> Vec<PcUseStatusRoot> {
+        let mut roots = Vec::new();
+        if let Some(root_path) = self.workspace_context.root_path.as_ref() {
+            let pc_use_root = root_path.join("tools").join("agent-plugins").join("pc-use");
+            roots.push(PcUseStatusRoot::new("workspace", pc_use_root));
+        }
+        roots.push(PcUseStatusRoot::new(
+            "zed_data",
+            data_dir().join("agent-plugins").join("pc-use"),
+        ));
+        roots
+    }
+
+    fn pc_use_status_json(status: &Value) -> String {
+        serde_json::to_string_pretty(status).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn pc_use_status_agent_blocks(&self, status: &Value) -> Vec<acp::ContentBlock> {
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Zed PC-use status:\n\n```json\n{}\n```",
+            Self::pc_use_status_json(status)
+        )))]
+    }
+
+    fn copy_pc_use_status(&mut self, cx: &mut Context<Self>) {
+        let status = self.pc_use_status();
+        cx.write_to_clipboard(ClipboardItem::new_string(Self::pc_use_status_json(&status)));
+        self.show_toast("Copied Zed PC-use status", cx);
+        cx.notify();
+    }
+
+    fn send_pc_use_status_to_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let status = self.pc_use_status();
+        let blocks = self.pc_use_status_agent_blocks(&status);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent Zed PC-use status to the agent panel", cx);
         cx.notify();
     }
 
@@ -3800,6 +3942,7 @@ impl WebPreviewView {
         let blocked_receipt_ready = self.latest_blocked_interaction_receipt.is_some();
         let success_receipt_ready = self.latest_successful_interaction_receipt.is_some();
         let managed_chrome_execution = self.managed_chrome_execution_status();
+        let pc_use_status = self.pc_use_status();
         let context_ready =
             diagnostics_ready || runtime_ready || dom_ready || targets_ready || readiness_ready;
         let audit_ready = plan_ready
@@ -3893,6 +4036,7 @@ impl WebPreviewView {
                     "agent_browser_native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                     "agent_browser_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
                     "managed_chrome_execution": managed_chrome_execution,
+                    "pc_use_status": pc_use_status,
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 },
                 "handoff": {
@@ -3900,6 +4044,7 @@ impl WebPreviewView {
                     "requires_fresh_preflight_before_input": true,
                     "requires_receipt_after_every_input": true,
                     "managed_chrome_receipts_visible": true,
+                    "pc_use_receipts_visible": true,
                     "executor_wired": true,
                     "safe_to_send_to_agent_panel": true,
                 },
@@ -4082,6 +4227,7 @@ impl WebPreviewView {
             "Low-risk open_url, reload, set_viewport, clear_data, native click, native type, native scroll, native key, native history, and cache-only reset executors can run after their action-specific preflight, payload, focus, and QA gates pass."
         };
         let managed_chrome_execution = self.managed_chrome_execution_status();
+        let pc_use_status = self.pc_use_status();
         let native_input_bridge = serde_json::json!({
             "schema": "zed.web_preview.native_input_bridge_readiness.v1",
             "status": "partial_dispatch_wired_manual_qa_required",
@@ -4158,7 +4304,8 @@ impl WebPreviewView {
                 "route text and key dispatch only while WebPreview owns keyboard focus",
                 "capture before/after diagnostics and emit a receipt for every attempted dispatch"
             ],
-            "managed_chrome_execution": managed_chrome_execution.clone()
+            "managed_chrome_execution": managed_chrome_execution.clone(),
+            "pc_use_status": pc_use_status.clone()
         });
 
         serde_json::json!({
@@ -4176,6 +4323,7 @@ impl WebPreviewView {
                 "gate_ready_for_executor": gate_ready_for_executor,
                 "interactive_unlocked": interactive_unlocked,
                 "managed_chrome_execution": managed_chrome_execution.clone(),
+                "pc_use_status": pc_use_status.clone(),
                 "context_ready": context_ready,
                 "observability_ready": observability_ready,
                 "audit_ready": audit_ready,
@@ -4230,6 +4378,7 @@ impl WebPreviewView {
                 "native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                 "native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
                 "managed_chrome_execution": managed_chrome_execution,
+                "pc_use_status": pc_use_status,
             },
             "notes": [
                 "This readiness contract is read-only and does not dispatch browser input.",
@@ -8079,6 +8228,7 @@ impl WebPreviewView {
                     "latest_native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                     "latest_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
                     "managed_chrome_execution": self.managed_chrome_execution_status(),
+                    "pc_use_status": self.pc_use_status(),
                 },
                 "manual_gates": [
                     {
@@ -8623,6 +8773,9 @@ impl WebPreviewView {
                             "payload_queue_inspect_tool_name": "inspect_zed_pc_use_payload_queue",
                             "runner_gate_tool_name": "request_zed_pc_use_payload_run",
                             "runner_receipt_inspect_tool_name": "inspect_zed_pc_use_runner_receipts",
+                            "webpreview_pc_use_status_copy_action": "copy_pc_use_status",
+                            "webpreview_pc_use_status_agent_action": "send_pc_use_status_to_agent",
+                            "webpreview_pc_use_status_schema": "zed.web_preview.pc_use_status.v1",
                             "payload_schema": "zed.agent_plugins.pc_use.action_payload.v1",
                             "payload_queue_item_schema": "zed.agent_plugins.pc_use.action_payload_queue_item.v1",
                             "payload_queue_inspection_schema": "zed.agent_plugins.pc_use.action_payload_queue_inspection.v1",
@@ -8638,6 +8791,7 @@ impl WebPreviewView {
                             {"id": "pc.zed_window.payload_queue_inspect", "state": "available", "description": "Use inspect_zed_pc_use_payload_queue to validate the latest managed PC-use payload handoff before any future importer or executor exists."},
                             {"id": "pc.zed_window.runner_gate_receipt", "state": "available_requires_authorization", "description": "Use request_zed_pc_use_payload_run to write an auditable runner-gate receipt after validating the managed PC-use queue, without taking screenshots or dispatching input."},
                             {"id": "pc.zed_window.runner_receipt_inspect", "state": "available", "description": "Use inspect_zed_pc_use_runner_receipts to read recent PC-use runner-gate receipts without taking screenshots, focusing Zed, or dispatching input."},
+                            {"id": "pc.zed_window.status_handoff", "state": "available", "description": "Use WebPreview Copy/Send Zed PC-use Status to hand the latest managed queue or runner receipt summary to the Agent Panel."},
                             {"id": "pc.zed_window.screenshot", "state": "planned", "description": "Capture Zed-window screenshots for agent context."},
                             {"id": "pc.zed_window.focus", "state": "planned", "description": "Focus Zed panes, panels, and tabs by safe editor-native handles."},
                             {"id": "pc.zed_window.click", "state": "planned_permission_gate", "description": "Click within Zed surfaces only after permission and target preflight."},
@@ -8653,6 +8807,7 @@ impl WebPreviewView {
                             "payload_queue_inspection_available": true,
                             "runner_gate_receipt_available": true,
                             "runner_receipt_inspection_available": true,
+                            "webpreview_pc_use_status_available": true,
                             "zed_window_first": true,
                             "os_wide_actions_blocked_by_default": true,
                             "explicit_permission_required_for_input": true,
@@ -11174,6 +11329,30 @@ impl WebPreviewView {
                                     }
                                 }),
                         )
+                        .item(
+                            ContextMenuEntry::new("Copy Zed PC-use Status")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_pc_use_status(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Zed PC-use Status")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_pc_use_status_to_agent(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
                         .separator()
                         .item(
                             ContextMenuEntry::new("Allow Interactive Agent Actions")
@@ -12885,6 +13064,158 @@ fn managed_chrome_execution_next_actions(status: &str) -> Vec<&'static str> {
         ],
         _ => vec![
             "Queue a managed Chrome action, request the runner gate, prepare the adapter, then invoke a safe action.",
+        ],
+    }
+}
+
+fn latest_pc_use_status_file(
+    roots: &[PcUseStatusRoot],
+    kind: PcUseStatusFileKind,
+    expected_schema: &str,
+) -> Option<Value> {
+    let mut latest: Option<(u64, String, Value)> = None;
+    for root in roots {
+        let directory_path = match kind {
+            PcUseStatusFileKind::PayloadQueue => &root.payload_dir,
+            PcUseStatusFileKind::RunnerReceipt => &root.receipt_dir,
+        };
+        let Ok(entries) = fs::read_dir(directory_path) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.starts_with(directory_path)
+                || path.extension().and_then(|extension| extension.to_str()) != Some("json")
+            {
+                continue;
+            }
+            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            let matches_kind = match kind {
+                PcUseStatusFileKind::PayloadQueue => file_name == PC_USE_PAYLOAD_QUEUE_FILE_NAME,
+                PcUseStatusFileKind::RunnerReceipt => {
+                    file_name == PC_USE_RUNNER_RECEIPT_FILE_NAME
+                        || file_name.starts_with(PC_USE_RUNNER_RECEIPT_PREFIX)
+                }
+            };
+            if !matches_kind {
+                continue;
+            }
+
+            let metadata = entry.metadata().ok();
+            let modified_ms = metadata
+                .as_ref()
+                .and_then(|metadata| metadata.modified().ok())
+                .and_then(system_time_ms)
+                .unwrap_or_default();
+            let bytes = metadata.map(|metadata| metadata.len()).unwrap_or_default();
+            let summary = serde_json::json!({
+                "root_kind": root.kind,
+                "path": path.display().to_string(),
+                "file_name": file_name,
+                "modified_at_ms": modified_ms,
+                "bytes": bytes,
+                "kind": match kind {
+                    PcUseStatusFileKind::PayloadQueue => "payload_queue",
+                    PcUseStatusFileKind::RunnerReceipt => "runner_receipt",
+                },
+                "read": pc_use_status_file_read_summary(&path, expected_schema, kind),
+            });
+
+            let replace = match latest.as_ref() {
+                None => true,
+                Some((latest_modified_ms, latest_file_name, _)) => {
+                    modified_ms > *latest_modified_ms
+                        || (modified_ms == *latest_modified_ms
+                            && file_name > latest_file_name.as_str())
+                }
+            };
+            if replace {
+                latest = Some((modified_ms, file_name.to_string(), summary));
+            }
+        }
+    }
+
+    latest.map(|(_, _, summary)| summary)
+}
+
+fn pc_use_status_file_read_summary(
+    path: &Path,
+    expected_schema: &str,
+    kind: PcUseStatusFileKind,
+) -> Value {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            return serde_json::json!({
+                "ok": false,
+                "state": "read_error",
+                "details": error.to_string(),
+            });
+        }
+    };
+    let value = match serde_json::from_slice::<Value>(&bytes) {
+        Ok(value) => value,
+        Err(error) => {
+            return serde_json::json!({
+                "ok": false,
+                "state": "parse_error",
+                "bytes": bytes.len(),
+                "details": error.to_string(),
+            });
+        }
+    };
+    let schema = value
+        .get("schema")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let schema_ok = schema == expected_schema;
+
+    serde_json::json!({
+        "ok": true,
+        "state": if schema_ok { "ready" } else { "schema_mismatch" },
+        "bytes": bytes.len(),
+        "schema": schema,
+        "schema_ok": schema_ok,
+        "generated_at_ms": value.pointer("/result/generated_at_ms")
+            .or_else(|| value.get("queued_at_ms"))
+            .cloned(),
+        "outcome": value.pointer("/result/outcome").and_then(Value::as_str),
+        "action": value.pointer("/queue/action").and_then(Value::as_str)
+            .or_else(|| value.pointer("/payload_packet/payload/action").and_then(Value::as_str)),
+        "surface": value.pointer("/queue/surface").and_then(Value::as_str)
+            .or_else(|| value.pointer("/payload_packet/payload/surface").and_then(Value::as_str)),
+        "target_id_present": value.pointer("/queue/target_id_present").and_then(Value::as_bool)
+            .or_else(|| value.pointer("/payload_packet/payload/target_id").and_then(Value::as_str).map(|target_id| !target_id.trim().is_empty())),
+        "queue_blocker_count": value.pointer("/queue_blockers").and_then(Value::as_array).map(Vec::len),
+        "executor_pending_count": value.pointer("/executor_pending").and_then(Value::as_array).map(Vec::len),
+        "future_executor_pending": kind == PcUseStatusFileKind::RunnerReceipt
+            && value.pointer("/result/outcome").and_then(Value::as_str) == Some("ready_future_executor_pending"),
+        "source_tool": value.get("source_tool").and_then(Value::as_str),
+    })
+}
+
+fn pc_use_status_next_actions(status: &str, latest_outcome: &str) -> Vec<&'static str> {
+    match status {
+        "has_ready_runner_receipt" => vec![
+            "Send this status to the Agent Panel when the agent needs the latest PC-use gate outcome.",
+            "Keep screenshots, focus, click, and type disabled until a future Zed-window executor consumes this receipt and emits its own receipt.",
+        ],
+        "has_blocked_runner_receipt" if latest_outcome == "blocked_missing_queue" => vec![
+            "Queue a PC-use payload with queue_zed_pc_use_action_payload, then request the runner gate again.",
+            "Keep OS-wide desktop automation blocked by default.",
+        ],
+        "has_blocked_runner_receipt" => vec![
+            "Inspect the latest receipt blockers and regenerate the PC-use payload if schema or safety checks failed.",
+            "Do not run future PC-use execution against a blocked receipt.",
+        ],
+        "has_queue_without_receipt" => vec![
+            "Request the PC-use runner gate to write an auditable receipt for the latest managed queue item.",
+            "Do not add a future executor until the runner-gate receipt exists.",
+        ],
+        _ => vec![
+            "Compose and queue a Zed PC-use payload, then request the runner gate before any future executor work.",
         ],
     }
 }
