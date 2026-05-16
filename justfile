@@ -9,9 +9,10 @@ default:
 # RECOMMENDED: Run Zed with balanced local settings
 run:
     @echo "Running Zed with balanced G-drive build settings..."
-    @echo "Building only the zed binary (not all workspace targets)"
+    @echo "Building the zed binary plus the development CLI companion"
     @echo "Using Cargo config: 6 jobs, G:/Zed/target, rust-lld linker, no debug info"
     cargo build -p zed --bin zed
+    cargo build -p cli --bin cli
     @echo "Build complete! Launching Zed once..."
     ./target/debug/zed.exe
 
@@ -20,6 +21,7 @@ run-cranelift:
     @echo "Building with Cranelift backend (nightly required)..."
     @echo "Cranelift can reduce linker pressure on very large Rust builds"
     cargo +nightly build -p zed --bin zed -Z codegen-backend
+    cargo +nightly build -p cli --bin cli -Z codegen-backend
     @echo "Build complete! Running Zed..."
     ./target/debug/zed.exe
 
@@ -27,6 +29,7 @@ run-cranelift:
 continue:
     @echo "Continuing interrupted build..."
     cargo build -p zed --bin zed
+    cargo build -p cli --bin cli
     @echo "Build complete! Running Zed..."
     ./target/debug/zed.exe
 
@@ -34,6 +37,7 @@ continue:
 build:
     @echo "Building Zed with balanced G-drive settings..."
     cargo build -p zed --bin zed
+    cargo build -p cli --bin cli
 
 # Check code without building
 check:
@@ -96,9 +100,9 @@ help:
     @echo "=== ZED LOCAL BUILD GUIDE ==="
     @echo ""
     @echo "RECOMMENDED BUILD COMMANDS:"
-    @echo "  just run           - Build and run with balanced G-drive settings"
-    @echo "  just run-cranelift - Use Cranelift backend"
-    @echo "  just continue      - Resume interrupted build"
+    @echo "  just run           - Build zed + cli and run with balanced G-drive settings"
+    @echo "  just run-cranelift - Build zed + cli with Cranelift backend"
+    @echo "  just continue      - Resume interrupted zed + cli build"
     @echo "  just fmt           - Format the workspace with rustfmt"
     @echo "  just lint          - Lint web_preview with 6 workers"
     @echo "  just lint zed      - Lint the main app with 6 workers"

@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime Final Runtime Launcher Readiness
+
+FIXED:
+- Updated `just run`, `just continue`, `just run-cranelift`, and `just build` to build the development `cli.exe` companion beside `zed.exe` before launch or local runnable builds.
+- This addresses the observed final runtime launch blocker: `could not find zed-cli from any of: bin/zed.exe, ./cli.exe`.
+
+CHANGED:
+- Local build-guide text now describes building both `zed` and `cli` for runnable development builds on Windows.
+
+NOTES:
+- This changes only local Just recipes and documentation text. It does not change app-side CLI discovery, run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, probe proof files, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Catalog Summary Helper
 
 ADDED:
