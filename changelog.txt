@@ -1,3 +1,16 @@
+[2026-05-16] - Agent Browser Managed Payload Queue
+
+ADDED:
+- Added the permissioned `queue_agent_browser_action_payload` Agent tool for writing validated Browser payload packets into managed workspace or Zed-data handoff files.
+- Added a WebPreview action to import the latest managed Browser payload queue item into the active payload bridge.
+- Advertised the managed queue tool, import action, and payload queue capability through both Browser plugin catalogs.
+
+CHANGED:
+- WebPreview payload import receipts now distinguish clipboard imports from managed queue imports while keeping browser input dispatch disabled until the normal permission, preflight, focus, QA, and receipt gates pass.
+
+NOTES:
+- The managed queue is a direct Agent-to-WebPreview handoff path only; it does not execute browser input, run page scripts, touch external Chrome, or write outside the managed `tools/agent-plugins/browser-payloads` or Zed-data plugin queue roots.
+
 [2026-05-16] - Web Preview Payload Import Receipts
 
 ADDED:

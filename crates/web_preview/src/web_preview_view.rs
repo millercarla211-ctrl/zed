@@ -16,7 +16,7 @@ use project::{Project, ProjectEntryId, ProjectPath};
 use serde_json::Value;
 use std::{
     cell::{Cell, RefCell},
-    fs,
+    fs, io,
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
     rc::Rc,
@@ -60,6 +60,7 @@ use windows::Win32::{
 const DEFAULT_WEB_PREVIEW_URL: &str = "https://www.google.com/";
 const GOOGLE_SEARCH_URL: &str = "https://www.google.com/search";
 const BOOKMARKS_FILE_NAME: &str = "bookmarks.json";
+const AGENT_BROWSER_PAYLOAD_QUEUE_FILE_NAME: &str = "latest-agent-browser-payload.json";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
@@ -259,6 +260,7 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "copy_agent_browser_action_payload_bridge",
     "send_agent_browser_action_payload_bridge_to_agent",
     "import_agent_browser_action_payload_from_clipboard",
+    "import_agent_browser_action_payload_from_managed_queue",
     "copy_agent_browser_action_payload_import_receipt",
     "send_agent_browser_action_payload_import_receipt_to_agent",
     "copy_blocked_interaction_receipt",
@@ -1335,6 +1337,7 @@ impl WebPreviewView {
                 "copy_agent_browser_action_payload_bridge": true,
                 "send_agent_browser_action_payload_bridge_to_agent": true,
                 "import_agent_browser_action_payload_from_clipboard": true,
+                "import_agent_browser_action_payload_from_managed_queue": true,
                 "copy_agent_browser_action_payload_import_receipt": true,
                 "send_agent_browser_action_payload_import_receipt_to_agent": true,
                 "copy_blocked_interaction_receipt": true,
@@ -3039,6 +3042,7 @@ impl WebPreviewView {
         window: &Window,
         bridge: &Value,
         imported_payload: &Value,
+        source: &'static str,
         imported_as: &'static str,
     ) -> Value {
         let imported_payload =
@@ -3093,7 +3097,7 @@ impl WebPreviewView {
             "policy": self.agent_browser_policy_snapshot(),
             "receipt": {
                 "generated_at_ms": Self::current_epoch_millis(),
-                "source": "clipboard_import",
+                "source": source,
                 "status": status,
                 "imported_as": imported_as,
                 "accepted_schema": accepted_schema,
@@ -3154,6 +3158,63 @@ impl WebPreviewView {
             Self::agent_browser_action_payload_import_receipt_json(receipt)
         ))));
         blocks
+    }
+
+    fn agent_browser_payload_queue_latest_paths(&self) -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        if let Some(root_path) = self.workspace_context.root_path.as_ref() {
+            paths.push(
+                root_path
+                    .join("tools")
+                    .join("agent-plugins")
+                    .join("browser-payloads")
+                    .join(AGENT_BROWSER_PAYLOAD_QUEUE_FILE_NAME),
+            );
+        }
+        paths.push(
+            data_dir()
+                .join("agent-plugins")
+                .join("browser-payloads")
+                .join(AGENT_BROWSER_PAYLOAD_QUEUE_FILE_NAME),
+        );
+        paths
+    }
+
+    fn import_agent_browser_action_payload_value(
+        &mut self,
+        window: &Window,
+        imported_payload: Value,
+        source: &'static str,
+        imported_as: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let bridge = self.agent_browser_action_payload_bridge(
+            window,
+            Some(imported_payload.clone()),
+            source,
+        );
+        self.latest_agent_browser_action_payload_bridge = Some(bridge.clone());
+        let receipt = self.agent_browser_action_payload_import_receipt(
+            window,
+            &bridge,
+            &imported_payload,
+            source,
+            imported_as,
+        );
+        let type_ready = bridge
+            .pointer("/bridge/executor_payloads/type_text/payload_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        self.latest_agent_browser_action_payload_import_receipt = Some(receipt);
+        self.show_toast(
+            if type_ready {
+                "Imported browser action payload and recorded receipt"
+            } else {
+                "Imported browser payload receipt, but type text is not ready"
+            },
+            cx,
+        );
+        cx.notify();
     }
 
     fn agent_browser_action_payload_bridge_agent_blocks(
@@ -3226,32 +3287,69 @@ impl WebPreviewView {
                 "plain_text_type_payload",
             ),
         };
-        let bridge = self.agent_browser_action_payload_bridge(
+        self.import_agent_browser_action_payload_value(
             window,
-            Some(imported_payload.clone()),
+            imported_payload,
             "clipboard_import",
-        );
-        self.latest_agent_browser_action_payload_bridge = Some(bridge.clone());
-        let receipt = self.agent_browser_action_payload_import_receipt(
-            window,
-            &bridge,
-            &imported_payload,
             imported_as,
-        );
-        let type_ready = bridge
-            .pointer("/bridge/executor_payloads/type_text/payload_ready")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        self.latest_agent_browser_action_payload_import_receipt = Some(receipt);
-        self.show_toast(
-            if type_ready {
-                "Imported browser action payload and recorded receipt"
-            } else {
-                "Imported browser payload receipt, but type text is not ready"
-            },
             cx,
         );
-        cx.notify();
+    }
+
+    fn import_agent_browser_action_payload_from_managed_queue(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let mut missing_paths = Vec::new();
+        for path in self.agent_browser_payload_queue_latest_paths() {
+            match fs::read_to_string(&path) {
+                Ok(contents) => {
+                    let queue_item = match serde_json::from_str::<Value>(&contents) {
+                        Ok(value) => value,
+                        Err(error) => {
+                            self.report_action_error(
+                                "Browser payload queue item is invalid JSON",
+                                anyhow::anyhow!("{}: {error}", path.display()),
+                                cx,
+                            );
+                            return;
+                        }
+                    };
+                    let imported_payload = queue_item
+                        .get("payload_packet")
+                        .cloned()
+                        .unwrap_or(queue_item);
+                    self.import_agent_browser_action_payload_value(
+                        window,
+                        imported_payload,
+                        "managed_queue_import",
+                        "managed_queue_json",
+                        cx,
+                    );
+                    return;
+                }
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    missing_paths.push(path.display().to_string());
+                }
+                Err(error) => {
+                    self.report_action_error(
+                        "Browser payload queue is unavailable",
+                        anyhow::anyhow!("{}: {error}", path.display()),
+                        cx,
+                    );
+                    return;
+                }
+            }
+        }
+
+        self.show_toast(
+            format!(
+                "No managed browser payload queue item found ({})",
+                missing_paths.join(", ")
+            ),
+            cx,
+        );
     }
 
     fn copy_agent_browser_action_payload_import_receipt(&mut self, cx: &mut Context<Self>) {
@@ -8070,10 +8168,13 @@ impl WebPreviewView {
                         "action_payload_contract": {
                             "payload_tool_name": "compose_agent_browser_action_payload",
                             "payload_stage_tool_name": "stage_agent_browser_action_payload",
+                            "payload_queue_tool_name": "queue_agent_browser_action_payload",
                             "bridge_schema": "zed.web_preview.agent_browser_action_payload_bridge.v1",
                             "executor_payload_schema": "zed.web_preview.agent_browser_executor_payload.v1",
+                            "payload_queue_item_schema": "zed.agent_plugins.browser_action_payload_queue_item.v1",
                             "payload_import_receipt_schema": "zed.web_preview.agent_browser_action_payload_import_receipt.v1",
                             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
+                            "managed_queue_import_action": "import_agent_browser_action_payload_from_managed_queue",
                             "examples": [
                                 {
                                     "action": "type_text",
@@ -8138,8 +8239,10 @@ impl WebPreviewView {
                             {"id": "browser.dispatch.manual_qa_checklist", "state": "available", "description": "Generate the final manual QA checklist required before enabling native browser dispatch."},
                             {"id": "browser.action.payload_compose", "state": "available", "description": "Use compose_agent_browser_action_payload to generate validated WebPreview action payload packets before importing them into the payload bridge."},
                             {"id": "browser.action.payload_stage_clipboard", "state": "available_requires_authorization", "description": "Use stage_agent_browser_action_payload to write a validated WebPreview action payload packet to the clipboard for explicit WebPreview import."},
+                            {"id": "browser.action.payload_queue_managed", "state": "available_requires_authorization", "description": "Use queue_agent_browser_action_payload to write a validated payload packet into the managed workspace or Zed-data Browser payload queue for explicit WebPreview import."},
                             {"id": "browser.action.payload_bridge", "state": "available", "description": "Generate or send a schema-versioned payload bridge that maps Agent action payloads into WebPreview executors without dispatching by itself."},
                             {"id": "browser.action.payload_import_clipboard", "state": "available_explicit_user_action", "description": "Import a JSON action payload or plain text from the clipboard into the active WebPreview payload bridge for the next type executor attempt."},
+                            {"id": "browser.action.payload_import_queue", "state": "available_explicit_user_action", "description": "Import the latest managed Agent Browser payload queue item into the active WebPreview payload bridge without dispatching input."},
                             {"id": "browser.action.payload_import_receipt", "state": "available", "description": "Copy or send the latest WebPreview payload import receipt, with accepted schema, action metadata, redacted text length, permission state, and next-step safety notes."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},
                             {"id": "browser.action.type", "state": "available_when_unlocked_payload_required", "description": "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."},
@@ -9861,6 +9964,20 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.import_agent_browser_action_payload_from_clipboard(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Import Agent Payload from Managed Queue")
+                                .icon(IconName::QueueMessage)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.import_agent_browser_action_payload_from_managed_queue(
                                                 window, cx,
                                             );
                                         });

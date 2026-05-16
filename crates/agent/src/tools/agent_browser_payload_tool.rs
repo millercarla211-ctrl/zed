@@ -1,11 +1,15 @@
 use crate::{AgentTool, ToolCallEventStream, ToolInput, ToolPermissionContext};
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
-use gpui::{App, ClipboardItem, SharedString, Task};
+use gpui::{App, ClipboardItem, Entity, SharedString, Task};
+use paths::data_dir;
+use project::Project;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
+    fs,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -13,6 +17,8 @@ use std::{
 const MAX_TYPE_TEXT_CHARS: usize = 4096;
 pub const AGENT_BROWSER_PAYLOAD_TOOL_NAME: &str = "compose_agent_browser_action_payload";
 pub const AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME: &str = "stage_agent_browser_action_payload";
+pub const AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME: &str = "queue_agent_browser_action_payload";
+const AGENT_BROWSER_PAYLOAD_QUEUE_FILE_NAME: &str = "latest-agent-browser-payload.json";
 const ALLOWED_KEYS: &[&str] = &[
     "Escape",
     "Enter",
@@ -273,6 +279,271 @@ impl AgentTool for AgentBrowserPayloadStageTool {
     }
 }
 
+/// Queues a validated WebPreview Browser payload packet into a managed project or Zed-data file.
+///
+/// This is the direct handoff path between Agent tools and WebPreview. It writes only a managed
+/// queue item after explicit authorization; WebPreview must still import the queue item, require
+/// user permission, rerun preflight/focus gates, and emit executor receipts before any input runs.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct AgentBrowserPayloadQueueToolInput {
+    /// The browser payload to compose and queue.
+    pub payload: AgentBrowserPayloadToolInput,
+    /// Prefer workspace-local queue under `<workspace>/tools`; falls back to Zed data when no workspace exists.
+    pub root_mode: AgentBrowserPayloadQueueRootMode,
+}
+
+impl Default for AgentBrowserPayloadQueueToolInput {
+    fn default() -> Self {
+        Self {
+            payload: AgentBrowserPayloadToolInput {
+                include_handoff_instructions: false,
+                ..Default::default()
+            },
+            root_mode: AgentBrowserPayloadQueueRootMode::Workspace,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentBrowserPayloadQueueRootMode {
+    #[default]
+    Workspace,
+    ZedData,
+}
+
+pub struct AgentBrowserPayloadQueueTool {
+    project: Entity<Project>,
+}
+
+impl AgentBrowserPayloadQueueTool {
+    pub fn new(project: Entity<Project>) -> Self {
+        Self { project }
+    }
+}
+
+impl AgentTool for AgentBrowserPayloadQueueTool {
+    type Input = AgentBrowserPayloadQueueToolInput;
+    type Output = String;
+
+    const NAME: &'static str = AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME;
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Execute
+    }
+
+    fn initial_title(
+        &self,
+        input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        match input.map(|input| input.payload.action) {
+            Ok(AgentBrowserPayloadAction::Click) => "Queue browser click payload".into(),
+            Ok(AgentBrowserPayloadAction::TypeText) => "Queue browser type payload".into(),
+            Ok(AgentBrowserPayloadAction::PressKey) => "Queue browser key payload".into(),
+            Ok(AgentBrowserPayloadAction::Scroll) => "Queue browser scroll payload".into(),
+            Err(_) => "Queue browser action payload".into(),
+        }
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |cx| {
+            let input = input.recv().await.map_err(|error| error.to_string())?;
+            let project_root = cx.update(|cx| workspace_root_for_project(&self.project, cx));
+            let queue = AgentBrowserPayloadQueue::new(project_root, input.root_mode);
+
+            let result = compose_agent_browser_payload(&input.payload);
+            let valid = result
+                .pointer("/result/valid")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            if !valid {
+                let output = serde_json::to_string_pretty(&result)
+                    .map_err(|error| format!("Failed to serialize browser payload: {error}"))?;
+                event_stream.update_fields(
+                    acp::ToolCallUpdateFields::new().title("Browser payload needs fixes"),
+                );
+                return Err(output);
+            }
+
+            queue.validate()?;
+            let packet = result
+                .get("payload_packet")
+                .cloned()
+                .ok_or_else(|| "Missing payload_packet in composed browser payload".to_string())?;
+            let queue_item = queue.queue_item(&input, packet);
+            let queue_item_json = serde_json::to_vec_pretty(&queue_item)
+                .map_err(|error| format!("Failed to serialize queued browser payload: {error}"))?;
+
+            let context = ToolPermissionContext::new(
+                Self::NAME,
+                vec![
+                    action_name(input.payload.action).to_string(),
+                    path_string(&queue.queue_dir),
+                    path_string(&queue.latest_path),
+                    format!("{} queued bytes", queue_item_json.len()),
+                ],
+            );
+            let authorize = cx
+                .update(|cx| {
+                    event_stream.authorize(self.initial_title(Ok(input.clone()), cx), context, cx)
+                })
+                .map_err(|error| error.to_string())?;
+            authorize.await.map_err(|error| error.to_string())?;
+
+            fs::create_dir_all(&queue.queue_dir).map_err(|error| {
+                format!(
+                    "Failed to prepare browser payload queue {}: {error}",
+                    queue.queue_dir.display()
+                )
+            })?;
+            fs::write(&queue.latest_path, &queue_item_json).map_err(|error| {
+                format!(
+                    "Failed to write browser payload queue {}: {error}",
+                    queue.latest_path.display()
+                )
+            })?;
+            fs::write(&queue.archive_path, &queue_item_json).map_err(|error| {
+                format!(
+                    "Failed to archive browser payload queue item {}: {error}",
+                    queue.archive_path.display()
+                )
+            })?;
+
+            let output = serde_json::json!({
+                "schema": "zed.agent_plugins.browser_action_payload_queue_result.v1",
+                "result": {
+                    "generated_at_ms": current_epoch_millis(),
+                    "status": "queued_to_managed_handoff",
+                    "action": action_name(input.payload.action),
+                    "root_mode": queue.root_mode_label(),
+                    "queue_path": path_string(&queue.queue_dir),
+                    "latest_path": path_string(&queue.latest_path),
+                    "archive_path": path_string(&queue.archive_path),
+                    "next_step": "Use WebPreview's Import Agent Payload from Managed Queue action, then run the matching permissioned executor only after unlock, fresh preflight, focus, QA, and receipt gates pass."
+                },
+                "queued_item": queue_item,
+                "safety": {
+                    "tool_dispatches_browser_input": false,
+                    "tool_imports_into_webpreview": false,
+                    "managed_queue_written_after_authorization": true,
+                    "requires_webpreview_import": true,
+                    "requires_webpreview_permission_gate": true,
+                    "receipts_required_for_execution": true
+                }
+            });
+            let output = serde_json::to_string_pretty(&output)
+                .map_err(|error| format!("Failed to serialize queue result: {error}"))?;
+
+            event_stream.update_fields(
+                acp::ToolCallUpdateFields::new().title("Queued browser payload"),
+            );
+
+            Ok(output)
+        })
+    }
+}
+
+struct AgentBrowserPayloadQueue {
+    root_mode: AgentBrowserPayloadQueueRootMode,
+    project_root: Option<PathBuf>,
+    allowed_root: PathBuf,
+    queue_dir: PathBuf,
+    latest_path: PathBuf,
+    archive_path: PathBuf,
+}
+
+impl AgentBrowserPayloadQueue {
+    fn new(project_root: Option<PathBuf>, root_mode: AgentBrowserPayloadQueueRootMode) -> Self {
+        let use_workspace = matches!(root_mode, AgentBrowserPayloadQueueRootMode::Workspace)
+            && project_root.is_some();
+        let allowed_root = if use_workspace {
+            project_root
+                .as_ref()
+                .expect("workspace root checked above")
+                .join("tools")
+        } else {
+            data_dir().join("agent-plugins")
+        };
+        let queue_dir = if use_workspace {
+            allowed_root.join("agent-plugins").join("browser-payloads")
+        } else {
+            allowed_root.join("browser-payloads")
+        };
+        let latest_path = queue_dir.join(AGENT_BROWSER_PAYLOAD_QUEUE_FILE_NAME);
+        let archive_path = queue_dir.join(format!(
+            "agent-browser-payload-{}.json",
+            current_epoch_millis()
+        ));
+
+        Self {
+            root_mode,
+            project_root,
+            allowed_root,
+            queue_dir,
+            latest_path,
+            archive_path,
+        }
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        for path in [&self.queue_dir, &self.latest_path, &self.archive_path] {
+            if !path.starts_with(&self.allowed_root) {
+                return Err(format!(
+                    "Refusing to queue browser payload at unmanaged path {} outside {}",
+                    path.display(),
+                    self.allowed_root.display()
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn queue_item(&self, input: &AgentBrowserPayloadQueueToolInput, packet: Value) -> Value {
+        serde_json::json!({
+            "schema": "zed.agent_plugins.browser_action_payload_queue_item.v1",
+            "queued_at_ms": current_epoch_millis(),
+            "source_tool": AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME,
+            "payload_packet": packet,
+            "metadata": {
+                "action": action_name(input.payload.action),
+                "root_mode": self.root_mode_label(),
+                "project_root": self.project_root.as_ref().map(path_string),
+                "queue_path": path_string(&self.queue_dir),
+                "latest_path": path_string(&self.latest_path),
+                "archive_path": path_string(&self.archive_path),
+                "requires_webpreview_import": true,
+                "requires_interactive_unlock": true,
+                "requires_fresh_preflight": true,
+                "requires_receipt_after_execution": true,
+            },
+            "safety": {
+                "browser_input_dispatched": false,
+                "webpreview_imported": false,
+                "external_chrome_touched": false,
+                "real_browser_profiles_touched": false,
+            }
+        })
+    }
+
+    fn root_mode_label(&self) -> &'static str {
+        match self.root_mode {
+            AgentBrowserPayloadQueueRootMode::Workspace if self.project_root.is_some() => {
+                "workspace"
+            }
+            AgentBrowserPayloadQueueRootMode::Workspace => "zed_data_fallback",
+            AgentBrowserPayloadQueueRootMode::ZedData => "zed_data",
+        }
+    }
+}
+
 fn compose_agent_browser_payload(input: &AgentBrowserPayloadToolInput) -> Value {
     let mut blockers = Vec::new();
     let mut warnings = Vec::new();
@@ -492,6 +763,18 @@ fn warning(code: &str, message: &str) -> Value {
         "code": code,
         "message": message,
     })
+}
+
+fn workspace_root_for_project(project: &Entity<Project>, cx: &App) -> Option<PathBuf> {
+    project
+        .read(cx)
+        .visible_worktrees(cx)
+        .next()
+        .map(|worktree| worktree.read(cx).abs_path().as_ref().to_path_buf())
+}
+
+fn path_string(path: impl AsRef<Path>) -> String {
+    path.as_ref().display().to_string()
 }
 
 fn current_epoch_millis() -> u128 {

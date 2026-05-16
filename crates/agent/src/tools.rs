@@ -161,6 +161,7 @@ tools! {
     AgentPluginBootstrapTool,
     AgentBrowserPayloadTool,
     AgentBrowserPayloadStageTool,
+    AgentBrowserPayloadQueueTool,
     AgentPluginCatalogTool,
     ApplyCodeActionTool,
     CopyPathTool,

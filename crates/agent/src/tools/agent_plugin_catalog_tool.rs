@@ -1,6 +1,6 @@
 use crate::{
-    AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME, AGENT_BROWSER_PAYLOAD_TOOL_NAME, AgentTool,
-    ToolCallEventStream, ToolInput,
+    AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME, AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME,
+    AGENT_BROWSER_PAYLOAD_TOOL_NAME, AgentTool, ToolCallEventStream, ToolInput,
 };
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
@@ -146,6 +146,7 @@ fn agent_plugin_catalog(
                 "discovery": AgentPluginCatalogTool::NAME,
                 "compose_browser_action_payload": AGENT_BROWSER_PAYLOAD_TOOL_NAME,
                 "stage_browser_action_payload": AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME,
+                "queue_browser_action_payload": AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME,
                 "prepare_runtime": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL
             },
             "available_to": [
@@ -249,10 +250,13 @@ fn browser_plugin_manifest() -> Value {
         "action_payload_contract": {
             "payload_tool_name": AGENT_BROWSER_PAYLOAD_TOOL_NAME,
             "payload_stage_tool_name": AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME,
+            "payload_queue_tool_name": AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME,
             "bridge_schema": "zed.web_preview.agent_browser_action_payload_bridge.v1",
             "executor_payload_schema": "zed.web_preview.agent_browser_executor_payload.v1",
+            "payload_queue_item_schema": "zed.agent_plugins.browser_action_payload_queue_item.v1",
             "payload_import_receipt_schema": "zed.web_preview.agent_browser_action_payload_import_receipt.v1",
             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
+            "managed_queue_import_action": "import_agent_browser_action_payload_from_managed_queue",
             "examples": [
                 {
                     "action": "type_text",
@@ -317,8 +321,10 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.dispatch.manual_qa_checklist", "available", "Generate the final manual QA checklist required before enabling native browser dispatch."),
             capability("browser.action.payload_compose", "available", "Use compose_agent_browser_action_payload to generate validated WebPreview action payload packets before importing them into the payload bridge."),
             capability("browser.action.payload_stage_clipboard", "available_requires_authorization", "Use stage_agent_browser_action_payload to write a validated WebPreview action payload packet to the clipboard for explicit WebPreview import."),
+            capability("browser.action.payload_queue_managed", "available_requires_authorization", "Use queue_agent_browser_action_payload to write a validated payload packet into the managed workspace or Zed-data Browser payload queue for explicit WebPreview import."),
             capability("browser.action.payload_bridge", "available", "Generate or send a schema-versioned payload bridge that maps Agent action payloads into WebPreview executors without dispatching by itself."),
             capability("browser.action.payload_import_clipboard", "available_explicit_user_action", "Import a JSON action payload or plain text from the clipboard into the active WebPreview payload bridge for the next type executor attempt."),
+            capability("browser.action.payload_import_queue", "available_explicit_user_action", "Import the latest managed Agent Browser payload queue item into the active WebPreview payload bridge without dispatching input."),
             capability("browser.action.payload_import_receipt", "available", "Copy or send the latest WebPreview payload import receipt, with accepted schema, action metadata, redacted text length, permission state, and next-step safety notes."),
             capability("browser.action.click", "available_when_unlocked", "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."),
             capability("browser.action.type", "available_when_unlocked_payload_required", "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."),
