@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Browser Final Result Import
+
+ADDED:
+- Added a WebPreview More-menu action to import a filled final validation result from the clipboard.
+- Added Copy/Send Final Result actions for the imported result.
+- Exposed final-result summaries in session snapshots, Agent Browser status packets, action manifests, and Agent/WebPreview plugin catalogs.
+
+NOTES:
+- This is read-only proof-state plumbing only; it does not run `just run`, dispatch browser input, launch Chrome, run Node, inspect the live page, or change editor/WebPreview focus paths.
+
 [2026-05-16] - Agent Browser Final Result Template Summary
 
 ADDED:

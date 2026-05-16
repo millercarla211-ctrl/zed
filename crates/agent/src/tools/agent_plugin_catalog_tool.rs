@@ -445,6 +445,15 @@ fn browser_plugin_manifest() -> Value {
             "source": "WebPreview More menu",
             "purpose": "Copy or send only the fillable manual Windows result template before the final runtime proof."
         },
+        "final_validation_result_handoff": {
+            "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+            "import_action": "import_agent_browser_final_validation_result_from_clipboard",
+            "copy_action": "copy_agent_browser_final_validation_result",
+            "send_action": "send_agent_browser_final_validation_result_to_agent",
+            "read_only": true,
+            "source": "WebPreview More menu",
+            "purpose": "Import, copy, or send the filled manual Windows result after the final runtime proof."
+        },
         "capabilities": [
             capability("browser.sessions.list", "available", "List open WebPreview sessions and workspace inventory."),
             capability("browser.session.snapshot", "available", "Read the active WebPreview session metadata, bounds, profile, URL, and policy."),
@@ -486,6 +495,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.action.executor_validation_progress", "available", "Copy or send grouped Browser executor validation progress for final Windows proof without dispatching input."),
             capability("browser.validation.final_bundle", "available", "Copy or send the final Windows validation bundle tying readiness, progress, runbook, manifest, plugin catalog, and proof order together."),
             capability("browser.validation.final_result_template", "available", "Copy or send the fillable manual Windows result template with allowed status values and runtime-green requirements."),
+            capability("browser.validation.final_result", "available", "Import, copy, or send the filled final Windows validation result after manual runtime proof."),
             capability("browser.action.click", "available_when_unlocked", "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."),
             capability("browser.action.type", "available_when_unlocked_payload_required", "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."),
             capability("browser.action.key", "available_when_unlocked", "Send allowlisted key presses through the WebView2 DevTools Protocol executor after unlock, fresh preflight, keyboard-focus gate, QA checklist, and receipt logging."),

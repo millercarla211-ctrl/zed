@@ -296,6 +296,9 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_final_validation_bundle_to_agent",
     "copy_agent_browser_final_validation_result_template",
     "send_agent_browser_final_validation_result_template_to_agent",
+    "import_agent_browser_final_validation_result_from_clipboard",
+    "copy_agent_browser_final_validation_result",
+    "send_agent_browser_final_validation_result_to_agent",
     "copy_agent_browser_noop_executor_attempt",
     "send_agent_browser_noop_executor_attempt_to_agent",
     "copy_permissioned_click_preflight_attempt",
@@ -655,6 +658,7 @@ pub struct WebPreviewView {
     latest_agent_browser_executor_validation_progress: Option<Value>,
     latest_agent_browser_final_validation_bundle: Option<Value>,
     latest_agent_browser_final_validation_result_template: Option<Value>,
+    latest_agent_browser_final_validation_result: Option<Value>,
     latest_agent_browser_noop_executor_attempt: Option<Value>,
     latest_agent_browser_reload_executor_attempt: Option<Value>,
     latest_agent_browser_clear_data_executor_attempt: Option<Value>,
@@ -871,6 +875,7 @@ impl WebPreviewView {
             latest_agent_browser_executor_validation_progress: None,
             latest_agent_browser_final_validation_bundle: None,
             latest_agent_browser_final_validation_result_template: None,
+            latest_agent_browser_final_validation_result: None,
             latest_agent_browser_noop_executor_attempt: None,
             latest_agent_browser_reload_executor_attempt: None,
             latest_agent_browser_clear_data_executor_attempt: None,
@@ -1362,6 +1367,7 @@ impl WebPreviewView {
             "agent_browser_executor_validation_progress": self.latest_agent_browser_executor_validation_progress_summary(),
             "agent_browser_final_validation_bundle": self.latest_agent_browser_final_validation_bundle_summary(),
             "agent_browser_final_validation_result_template": self.latest_agent_browser_final_validation_result_template_summary(),
+            "agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result_summary(),
             "agent_browser_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
             "agent_browser_reload_executor_attempt": self.latest_agent_browser_reload_executor_attempt_summary(),
             "agent_browser_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
@@ -1439,6 +1445,9 @@ impl WebPreviewView {
                 "send_agent_browser_final_validation_bundle_to_agent": true,
                 "copy_agent_browser_final_validation_result_template": true,
                 "send_agent_browser_final_validation_result_template_to_agent": true,
+                "import_agent_browser_final_validation_result_from_clipboard": true,
+                "copy_agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result.is_some(),
+                "send_agent_browser_final_validation_result_to_agent": self.latest_agent_browser_final_validation_result.is_some(),
                 "copy_agent_browser_noop_executor_attempt": true,
                 "send_agent_browser_noop_executor_attempt_to_agent": true,
                 "run_permissioned_reload_executor": self.agent_action_permission.interactive_enabled(),
@@ -1776,6 +1785,11 @@ impl WebPreviewView {
             "required_check_ids": template.pointer("/required_check_ids").cloned(),
             "claim_runtime_green_only_when": template.pointer("/claim_runtime_green_only_when").and_then(Value::as_str),
         }))
+    }
+
+    fn latest_agent_browser_final_validation_result_summary(&self) -> Option<Value> {
+        let result = self.latest_agent_browser_final_validation_result.as_ref()?;
+        Some(Self::agent_browser_final_validation_result_summary(result))
     }
 
     fn latest_agent_browser_noop_executor_attempt_summary(&self) -> Option<Value> {
@@ -2531,6 +2545,72 @@ impl WebPreviewView {
         )))]
     }
 
+    fn agent_browser_final_validation_result_summary(result: &Value) -> Value {
+        let checks = result.pointer("/checks").and_then(Value::as_object);
+        let required_check_ids = result
+            .pointer("/required_check_ids")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let required_check_count = required_check_ids.len();
+        let pass_required_check_count = required_check_ids
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|check_id| {
+                checks
+                    .and_then(|checks| checks.get(*check_id))
+                    .and_then(|check| check.pointer("/status"))
+                    .and_then(Value::as_str)
+                    == Some("pass")
+            })
+            .count();
+        let missing_required_checks = required_check_ids
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|check_id| checks.and_then(|checks| checks.get(*check_id)).is_none())
+            .collect::<Vec<_>>();
+        let runtime_green_candidate = result.pointer("/schema").and_then(Value::as_str)
+            == Some(AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA)
+            && result.pointer("/status").and_then(Value::as_str) == Some("pass")
+            && required_check_count > 0
+            && pass_required_check_count == required_check_count
+            && result
+                .pointer("/overall_blocker")
+                .map(Value::is_null)
+                .unwrap_or(true)
+            && missing_required_checks.is_empty();
+
+        serde_json::json!({
+            "schema": result.pointer("/schema").and_then(Value::as_str),
+            "status": result.pointer("/status").and_then(Value::as_str),
+            "runtime_command": result.pointer("/runtime_command").and_then(Value::as_str),
+            "branch": result.pointer("/branch").and_then(Value::as_str),
+            "commit": result.pointer("/commit").and_then(Value::as_str),
+            "started_at": result.pointer("/started_at").cloned(),
+            "completed_at": result.pointer("/completed_at").cloned(),
+            "required_check_count": required_check_count,
+            "pass_required_check_count": pass_required_check_count,
+            "missing_required_checks": missing_required_checks,
+            "runtime_green_candidate": runtime_green_candidate,
+            "overall_blocker": result.pointer("/overall_blocker").cloned(),
+        })
+    }
+
+    fn agent_browser_final_validation_result_json(result: &Value) -> String {
+        serde_json::to_string_pretty(result).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_final_validation_result_agent_blocks(
+        result: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let summary = Self::agent_browser_final_validation_result_summary(result);
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview final validation result:\n\nSummary:\n```json\n{}\n```\n\nResult:\n```json\n{}\n```",
+            serde_json::to_string_pretty(&summary).unwrap_or_else(|_| "{}".to_string()),
+            Self::agent_browser_final_validation_result_json(result)
+        )))]
+    }
+
     fn agent_browser_final_validation_bundle_agent_blocks(
         &self,
         bundle: &Value,
@@ -2601,6 +2681,73 @@ impl WebPreviewView {
             cx,
         );
         cx.notify();
+    }
+
+    fn import_agent_browser_final_validation_result_from_clipboard(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(clipboard_text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+            self.show_toast(
+                "No clipboard text available for final validation result import",
+                cx,
+            );
+            return;
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&clipboard_text) else {
+            self.show_toast("Clipboard does not contain valid final validation JSON", cx);
+            return;
+        };
+        let result = value
+            .get("manual_evidence_template")
+            .cloned()
+            .unwrap_or(value);
+        if result.pointer("/schema").and_then(Value::as_str)
+            != Some(AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA)
+        {
+            self.show_toast("Clipboard final validation JSON has the wrong schema", cx);
+            return;
+        }
+        let summary = Self::agent_browser_final_validation_result_summary(&result);
+        let runtime_green_candidate = summary
+            .pointer("/runtime_green_candidate")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        self.latest_agent_browser_final_validation_result = Some(result);
+        if runtime_green_candidate {
+            self.show_toast("Imported passing final validation result", cx);
+        } else {
+            self.show_toast(
+                "Imported final validation result with incomplete evidence",
+                cx,
+            );
+        }
+        cx.notify();
+    }
+
+    fn copy_agent_browser_final_validation_result(&mut self, cx: &mut Context<Self>) {
+        let Some(result) = self.latest_agent_browser_final_validation_result.as_ref() else {
+            self.show_toast("No final validation result imported yet", cx);
+            return;
+        };
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_final_validation_result_json(result),
+        ));
+        self.show_toast("Copied final validation result", cx);
+    }
+
+    fn send_agent_browser_final_validation_result_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(result) = self.latest_agent_browser_final_validation_result.as_ref() else {
+            self.show_toast("No final validation result imported yet", cx);
+            return;
+        };
+        let blocks = Self::agent_browser_final_validation_result_agent_blocks(result);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent final validation result to the agent panel", cx);
     }
 
     fn agent_browser_validation_group(
@@ -4726,6 +4873,7 @@ impl WebPreviewView {
                     "agent_browser_executor_validation_progress": self.agent_browser_executor_validation_progress(),
                     "agent_browser_final_validation_bundle": self.latest_agent_browser_final_validation_bundle_summary(),
                     "agent_browser_final_validation_result_template": self.latest_agent_browser_final_validation_result_template_summary(),
+                    "agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result_summary(),
                     "managed_chrome_execution": managed_chrome_execution,
                     "pc_use_status": pc_use_status,
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
@@ -9066,6 +9214,15 @@ impl WebPreviewView {
                     "latest_summary": self.latest_agent_browser_final_validation_result_template_summary(),
                     "read_only": true,
                     "purpose": "Share only the fillable manual Windows result template with allowed status values and runtime-green requirements."
+                },
+                "final_validation_result": {
+                    "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+                    "import_action": "import_agent_browser_final_validation_result_from_clipboard",
+                    "copy_action": "copy_agent_browser_final_validation_result",
+                    "send_action": "send_agent_browser_final_validation_result_to_agent",
+                    "latest_summary": self.latest_agent_browser_final_validation_result_summary(),
+                    "read_only": true,
+                    "purpose": "Import, copy, or send the filled manual Windows result after the final runtime proof."
                 }
             },
             "notes": [
@@ -9358,6 +9515,15 @@ impl WebPreviewView {
                             "source": "WebPreview More menu",
                             "purpose": "Copy or send only the fillable manual Windows result template before the final runtime proof."
                         },
+                        "final_validation_result_handoff": {
+                            "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+                            "import_action": "import_agent_browser_final_validation_result_from_clipboard",
+                            "copy_action": "copy_agent_browser_final_validation_result",
+                            "send_action": "send_agent_browser_final_validation_result_to_agent",
+                            "read_only": true,
+                            "source": "WebPreview More menu",
+                            "purpose": "Import, copy, or send the filled manual Windows result after the final runtime proof."
+                        },
                         "capabilities": [
                             {"id": "browser.sessions.list", "state": "available", "description": "List open WebPreview sessions and workspace inventory."},
                             {"id": "browser.session.snapshot", "state": "available", "description": "Read the active WebPreview session metadata, bounds, profile, URL, and policy."},
@@ -9399,6 +9565,7 @@ impl WebPreviewView {
                             {"id": "browser.action.executor_validation_progress", "state": "available", "description": "Copy or send grouped Browser executor validation progress for final Windows proof without dispatching input."},
                             {"id": "browser.validation.final_bundle", "state": "available", "description": "Copy or send the final Windows validation bundle tying readiness, progress, runbook, manifest, plugin catalog, and proof order together."},
                             {"id": "browser.validation.final_result_template", "state": "available", "description": "Copy or send the fillable manual Windows result template with allowed status values and runtime-green requirements."},
+                            {"id": "browser.validation.final_result", "state": "available", "description": "Import, copy, or send the filled final Windows validation result after manual runtime proof."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},
                             {"id": "browser.action.type", "state": "available_when_unlocked_payload_required", "description": "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."},
                             {"id": "browser.action.key", "state": "available_when_unlocked", "description": "Send allowlisted key presses through the WebView2 DevTools Protocol executor after unlock, fresh preflight, keyboard-focus gate, QA checklist, and receipt logging."},
@@ -11499,6 +11666,46 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Import Final Result from Clipboard")
+                                .icon(IconName::QueueMessage)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.import_agent_browser_final_validation_result_from_clipboard(
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Final Result")
+                                .icon(IconName::Check)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_final_validation_result(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Final Result")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_final_validation_result_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy No-op Executor Attempt")
                                 .icon(IconName::Warning)
                                 .handler({
@@ -13338,6 +13545,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_executor_validation_progress: None,
                 latest_agent_browser_final_validation_bundle: None,
                 latest_agent_browser_final_validation_result_template: None,
+                latest_agent_browser_final_validation_result: None,
                 latest_agent_browser_noop_executor_attempt: None,
                 latest_agent_browser_reload_executor_attempt: None,
                 latest_agent_browser_clear_data_executor_attempt: None,
