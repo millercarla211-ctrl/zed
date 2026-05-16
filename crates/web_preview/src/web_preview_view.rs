@@ -654,6 +654,7 @@ pub struct WebPreviewView {
     latest_agent_browser_executor_readiness: Option<Value>,
     latest_agent_browser_executor_validation_progress: Option<Value>,
     latest_agent_browser_final_validation_bundle: Option<Value>,
+    latest_agent_browser_final_validation_result_template: Option<Value>,
     latest_agent_browser_noop_executor_attempt: Option<Value>,
     latest_agent_browser_reload_executor_attempt: Option<Value>,
     latest_agent_browser_clear_data_executor_attempt: Option<Value>,
@@ -869,6 +870,7 @@ impl WebPreviewView {
             latest_agent_browser_executor_readiness: None,
             latest_agent_browser_executor_validation_progress: None,
             latest_agent_browser_final_validation_bundle: None,
+            latest_agent_browser_final_validation_result_template: None,
             latest_agent_browser_noop_executor_attempt: None,
             latest_agent_browser_reload_executor_attempt: None,
             latest_agent_browser_clear_data_executor_attempt: None,
@@ -1359,6 +1361,7 @@ impl WebPreviewView {
             "agent_browser_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
             "agent_browser_executor_validation_progress": self.latest_agent_browser_executor_validation_progress_summary(),
             "agent_browser_final_validation_bundle": self.latest_agent_browser_final_validation_bundle_summary(),
+            "agent_browser_final_validation_result_template": self.latest_agent_browser_final_validation_result_template_summary(),
             "agent_browser_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
             "agent_browser_reload_executor_attempt": self.latest_agent_browser_reload_executor_attempt_summary(),
             "agent_browser_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
@@ -1756,6 +1759,22 @@ impl WebPreviewView {
             "total_item_count": bundle.pointer("/current_readiness/total_item_count").and_then(Value::as_u64),
             "success_criteria_count": bundle.pointer("/success_criteria").and_then(Value::as_array).map(Vec::len),
             "manual_proof_step_count": bundle.pointer("/manual_windows_proof_order").and_then(Value::as_array).map(Vec::len),
+        }))
+    }
+
+    fn latest_agent_browser_final_validation_result_template_summary(&self) -> Option<Value> {
+        let template = self
+            .latest_agent_browser_final_validation_result_template
+            .as_ref()?;
+        Some(serde_json::json!({
+            "schema": template.pointer("/schema").and_then(Value::as_str),
+            "status": template.pointer("/status").and_then(Value::as_str),
+            "runtime_command": template.pointer("/runtime_command").and_then(Value::as_str),
+            "branch": template.pointer("/branch").and_then(Value::as_str),
+            "commit": template.pointer("/commit").and_then(Value::as_str),
+            "allowed_status_values": template.pointer("/allowed_status_values").cloned(),
+            "required_check_ids": template.pointer("/required_check_ids").cloned(),
+            "claim_runtime_green_only_when": template.pointer("/claim_runtime_green_only_when").and_then(Value::as_str),
         }))
     }
 
@@ -2563,6 +2582,7 @@ impl WebPreviewView {
         cx.write_to_clipboard(ClipboardItem::new_string(
             Self::agent_browser_final_validation_result_template_json(&template),
         ));
+        self.latest_agent_browser_final_validation_result_template = Some(template);
         self.show_toast("Copied final validation result template", cx);
         cx.notify();
     }
@@ -2574,6 +2594,7 @@ impl WebPreviewView {
     ) {
         let template = self.agent_browser_final_validation_result_template();
         let blocks = Self::agent_browser_final_validation_result_template_agent_blocks(&template);
+        self.latest_agent_browser_final_validation_result_template = Some(template);
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast(
             "Sent final validation result template to the agent panel",
@@ -4704,6 +4725,7 @@ impl WebPreviewView {
                     "agent_browser_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
                     "agent_browser_executor_validation_progress": self.agent_browser_executor_validation_progress(),
                     "agent_browser_final_validation_bundle": self.latest_agent_browser_final_validation_bundle_summary(),
+                    "agent_browser_final_validation_result_template": self.latest_agent_browser_final_validation_result_template_summary(),
                     "managed_chrome_execution": managed_chrome_execution,
                     "pc_use_status": pc_use_status,
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
@@ -9041,6 +9063,7 @@ impl WebPreviewView {
                     "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
                     "copy_action": "copy_agent_browser_final_validation_result_template",
                     "send_action": "send_agent_browser_final_validation_result_template_to_agent",
+                    "latest_summary": self.latest_agent_browser_final_validation_result_template_summary(),
                     "read_only": true,
                     "purpose": "Share only the fillable manual Windows result template with allowed status values and runtime-green requirements."
                 }
@@ -13314,6 +13337,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_executor_readiness: None,
                 latest_agent_browser_executor_validation_progress: None,
                 latest_agent_browser_final_validation_bundle: None,
+                latest_agent_browser_final_validation_result_template: None,
                 latest_agent_browser_noop_executor_attempt: None,
                 latest_agent_browser_reload_executor_attempt: None,
                 latest_agent_browser_clear_data_executor_attempt: None,
