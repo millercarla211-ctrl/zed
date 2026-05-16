@@ -86,6 +86,8 @@ const AGENT_PLUGIN_MANAGED_ASSET_OPERATOR_RECIPE_SCHEMA: &str =
     "zed.agent_plugins.managed_asset_operator_recipe.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_BLOCKERS_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_blocker_summary.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_readiness_scorecard.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
@@ -386,6 +388,9 @@ fn inspect_runtime_status(
     let browser = browser_status(roots, input.include_latest_handoffs);
     let chrome = chrome_status(roots, input.include_latest_handoffs, host_checks.as_ref());
     let pc_use = pc_use_status(roots, input.include_latest_handoffs);
+    let runtime_green_blocker_summary = runtime_green_blocker_summary(status, roots);
+    let runtime_green_readiness_scorecard =
+        runtime_green_readiness_scorecard(status, &runtime_green_blocker_summary);
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA,
@@ -411,7 +416,8 @@ fn inspect_runtime_status(
         },
         "host": host_checks,
         "bootstrap_readiness": bootstrap_readiness,
-        "runtime_green_blocker_summary": runtime_green_blocker_summary(status, roots),
+        "runtime_green_blocker_summary": runtime_green_blocker_summary,
+        "runtime_green_readiness_scorecard": runtime_green_readiness_scorecard,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
         "observability_profiles": input
@@ -1566,6 +1572,30 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
                 Some("/payload_packet/schema"),
                 generated_at_ms,
             ),
+            "managed_chrome_latest_payload": proof_file_probe(
+                &roots.chrome_latest_payload,
+                Some(AGENT_CHROME_PAYLOAD_QUEUE_ITEM_SCHEMA),
+                Some("/payload_packet/schema"),
+                generated_at_ms,
+            ),
+            "managed_chrome_adapter_manifest": proof_file_probe(
+                &roots.chrome_adapter_manifest,
+                Some(AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA),
+                None,
+                generated_at_ms,
+            ),
+            "managed_chrome_runner_script": file_probe(
+                &roots.chrome_runner_script,
+                None,
+                None,
+                false,
+            ),
+            "pc_use_latest_payload": proof_file_probe(
+                &roots.pc_use_latest_payload,
+                Some(AGENT_PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA),
+                Some("/payload_packet/schema"),
+                generated_at_ms,
+            ),
             "pc_use_latest_runner_receipt": pc_use_runner_receipt,
         },
         "runtime_green_requires": [
@@ -1585,6 +1615,286 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
             "touches_real_browser_profiles": false
         }
     })
+}
+
+fn runtime_green_readiness_scorecard(runtime_status: &str, blocker_summary: &Value) -> Value {
+    let blockers = blocker_summary
+        .get("blockers")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let managed_root_blockers = blockers_for_area_exact(&blockers, "managed_roots");
+    let browser_blockers = blockers_for_area_exact(&blockers, "browser_webpreview");
+    let chrome_blockers = blockers_for_area_prefix(&blockers, "managed_chrome");
+    let pc_use_blockers = blockers_for_area_exact(&blockers, "pc_use");
+
+    let browser_final_result_ready = scorecard_bool_at(
+        blocker_summary,
+        "/latest_evidence/browser_final_validation_result/summary/runtime_green_candidate",
+    );
+    let browser_payload_ready = scorecard_bool_at(
+        blocker_summary,
+        "/latest_evidence/browser_latest_payload/exists",
+    );
+    let chrome_assets_ready = scorecard_bool_at(
+        blocker_summary,
+        "/latest_evidence/asset_readiness_summary/ready",
+    );
+    let chrome_payload_ready = scorecard_bool_at(
+        blocker_summary,
+        "/latest_evidence/managed_chrome_latest_payload/exists",
+    );
+    let chrome_adapter_manifest_ready = scorecard_bool_at(
+        blocker_summary,
+        "/latest_evidence/managed_chrome_adapter_manifest/exists",
+    );
+    let chrome_runner_script_ready = scorecard_bool_at(
+        blocker_summary,
+        "/latest_evidence/managed_chrome_runner_script/exists",
+    );
+    let chrome_runner_receipt_ready = scorecard_bool_at(
+        blocker_summary,
+        "/latest_evidence/managed_chrome_runner_receipt/classification/ready",
+    );
+    let chrome_execution_receipt_ready = scorecard_bool_at(
+        blocker_summary,
+        "/latest_evidence/managed_chrome_execution_receipt/classification/ready",
+    );
+    let pc_use_payload_ready = scorecard_bool_at(
+        blocker_summary,
+        "/latest_evidence/pc_use_latest_payload/exists",
+    );
+    let pc_use_runner_receipt_ready = scorecard_bool_at(
+        blocker_summary,
+        "/latest_evidence/pc_use_latest_runner_receipt/classification/ready",
+    );
+
+    let roots_ready = managed_root_blockers.is_empty();
+    let browser_ready = roots_ready
+        && browser_final_result_ready
+        && browser_payload_ready
+        && browser_blockers.is_empty();
+    let chrome_ready = roots_ready
+        && chrome_assets_ready
+        && chrome_payload_ready
+        && chrome_adapter_manifest_ready
+        && chrome_runner_script_ready
+        && chrome_runner_receipt_ready
+        && chrome_execution_receipt_ready
+        && chrome_blockers.is_empty();
+    let pc_use_ready = roots_ready
+        && pc_use_payload_ready
+        && pc_use_runner_receipt_ready
+        && pc_use_blockers.is_empty();
+
+    let lanes = vec![
+        runtime_green_scorecard_lane(
+            "browser_webpreview",
+            "Browser/WebPreview",
+            browser_ready,
+            serde_json::json!({
+                "latest_browser_payload_present": browser_payload_ready,
+                "final_validation_result_runtime_green": browser_final_result_ready,
+            }),
+            &browser_blockers,
+            "Managed Browser payload plus imported WebPreview final validation result.",
+        ),
+        runtime_green_scorecard_lane(
+            "managed_chrome",
+            "Managed Chrome/Playwright",
+            chrome_ready,
+            serde_json::json!({
+                "asset_readiness_ready": chrome_assets_ready,
+                "latest_chrome_payload_present": chrome_payload_ready,
+                "adapter_manifest_present": chrome_adapter_manifest_ready,
+                "runner_script_present": chrome_runner_script_ready,
+                "runner_receipt_ready": chrome_runner_receipt_ready,
+                "execution_receipt_completed": chrome_execution_receipt_ready,
+            }),
+            &chrome_blockers,
+            "Managed assets, adapter files, queued payload, runner gate, and completed adapter receipt.",
+        ),
+        runtime_green_scorecard_lane(
+            "pc_use",
+            "Zed PC-use",
+            pc_use_ready,
+            serde_json::json!({
+                "latest_pc_use_payload_present": pc_use_payload_ready,
+                "runner_receipt_ready": pc_use_runner_receipt_ready,
+            }),
+            &pc_use_blockers,
+            "Managed PC-use payload plus future-executor runner-gate receipt.",
+        ),
+    ];
+    let ready_lane_count = lanes
+        .iter()
+        .filter(|lane| lane.get("ready").and_then(Value::as_bool).unwrap_or(false))
+        .count();
+    let runtime_green_candidate = blocker_summary
+        .get("runtime_green_candidate")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let runtime_evidence_blocker_count = blocker_summary
+        .get("runtime_evidence_blocker_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let manual_blocker_count = blocker_summary
+        .get("manual_blocker_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let status = if !roots_ready {
+        "blocked_unmanaged_paths"
+    } else if runtime_green_candidate {
+        "runtime_green_candidate"
+    } else if ready_lane_count == lanes.len() {
+        "ready_for_final_runtime_claim"
+    } else if ready_lane_count > 0 {
+        "partially_ready"
+    } else {
+        "blocked_or_pending_evidence"
+    };
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA,
+        "status": status,
+        "runtime_status": runtime_status,
+        "runtime_green_candidate": runtime_green_candidate,
+        "summary_status": blocker_summary.get("status").and_then(Value::as_str),
+        "generated_from_schema": blocker_summary.get("schema").and_then(Value::as_str),
+        "totals": {
+            "lane_count": lanes.len(),
+            "ready_lane_count": ready_lane_count,
+            "blocker_count": blocker_summary.get("blocker_count").and_then(Value::as_u64).unwrap_or(0),
+            "runtime_evidence_blocker_count": runtime_evidence_blocker_count,
+            "manual_blocker_count": manual_blocker_count,
+            "managed_root_blocker_count": managed_root_blockers.len(),
+        },
+        "managed_root_blockers": runtime_green_lane_blockers(&managed_root_blockers),
+        "lanes": lanes,
+        "reads_from": [
+            "runtime_green_blocker_summary.blockers",
+            "runtime_green_blocker_summary.latest_evidence",
+            "runtime_green_blocker_summary.runtime_green_candidate"
+        ],
+        "safety": {
+            "scorecard_is_read_only": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+            "touches_real_browser_profiles": false
+        }
+    })
+}
+
+fn runtime_green_scorecard_lane(
+    id: &'static str,
+    label: &'static str,
+    ready: bool,
+    checks: Value,
+    blockers: &[Value],
+    ready_requirement: &'static str,
+) -> Value {
+    serde_json::json!({
+        "id": id,
+        "label": label,
+        "status": runtime_green_lane_status(ready, blockers),
+        "ready": ready,
+        "ready_requirement": ready_requirement,
+        "checks": checks,
+        "blocker_count": blockers.len(),
+        "blockers": runtime_green_lane_blockers(blockers),
+        "primary_next_actions": runtime_green_lane_next_actions(blockers),
+    })
+}
+
+fn runtime_green_lane_status(ready: bool, blockers: &[Value]) -> &'static str {
+    if ready {
+        return "ready";
+    }
+
+    if blockers.iter().any(|blocker| {
+        blocker
+            .get("severity")
+            .and_then(Value::as_str)
+            .is_some_and(|severity| severity == "critical")
+    }) {
+        "blocked"
+    } else if blockers.iter().any(|blocker| {
+        blocker
+            .get("severity")
+            .and_then(Value::as_str)
+            .is_some_and(|severity| severity == "runtime_evidence_missing")
+    }) {
+        "pending_runtime_evidence"
+    } else if blockers.iter().any(|blocker| {
+        blocker
+            .get("severity")
+            .and_then(Value::as_str)
+            .is_some_and(|severity| severity == "manual_required")
+    }) {
+        "manual_required"
+    } else {
+        "pending_runtime_evidence"
+    }
+}
+
+fn runtime_green_lane_blockers(blockers: &[Value]) -> Vec<Value> {
+    blockers
+        .iter()
+        .map(|blocker| {
+            serde_json::json!({
+                "area": blocker.get("area").and_then(Value::as_str),
+                "id": blocker.get("id").and_then(Value::as_str),
+                "severity": blocker.get("severity").and_then(Value::as_str),
+                "reason": blocker.get("reason").and_then(Value::as_str),
+                "next_actions": blocker
+                    .get("next_actions")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
+            })
+        })
+        .collect()
+}
+
+fn runtime_green_lane_next_actions(blockers: &[Value]) -> Value {
+    blockers
+        .iter()
+        .find_map(|blocker| blocker.get("next_actions").cloned())
+        .unwrap_or_else(|| serde_json::json!([]))
+}
+
+fn blockers_for_area_exact(blockers: &[Value], area: &str) -> Vec<Value> {
+    blockers
+        .iter()
+        .filter(|blocker| blocker.get("area").and_then(Value::as_str) == Some(area))
+        .cloned()
+        .collect()
+}
+
+fn blockers_for_area_prefix(blockers: &[Value], area_prefix: &str) -> Vec<Value> {
+    blockers
+        .iter()
+        .filter(|blocker| {
+            blocker
+                .get("area")
+                .and_then(Value::as_str)
+                .is_some_and(|area| {
+                    area == area_prefix
+                        || area
+                            .strip_prefix(area_prefix)
+                            .is_some_and(|suffix| suffix.starts_with('.'))
+                })
+        })
+        .cloned()
+        .collect()
+}
+
+fn scorecard_bool_at(value: &Value, pointer: &str) -> bool {
+    value
+        .pointer(pointer)
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 fn observability_profiles(runtime_status: &str, roots: &AgentPluginRuntimeRoots) -> Value {

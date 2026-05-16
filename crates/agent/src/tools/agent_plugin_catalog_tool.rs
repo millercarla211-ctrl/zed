@@ -70,6 +70,8 @@ const AGENT_PLUGIN_MANAGED_ASSET_OPERATOR_RECIPE_SCHEMA: &str =
     "zed.agent_plugins.managed_asset_operator_recipe.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_BLOCKERS_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_blocker_summary.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_readiness_scorecard.v1";
 
 /// Lists the built-in DX/Zed agent plugin catalog for browser, Chrome, and PC-use workflows.
 ///
@@ -226,6 +228,7 @@ fn agent_plugin_catalog(
                 "tool_name": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
                 "schema": AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA,
                 "runtime_green_blocker_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_BLOCKERS_SCHEMA,
+                "runtime_green_readiness_scorecard_schema": AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA,
                 "runtime_green_ready_outcomes": {
                     "browser_final_validation_result": "runtime_green_candidate=true",
                     "managed_chrome_runner_receipt": "ready_runner_adapter_pending",

@@ -1,3 +1,16 @@
+[2026-05-16] - Agent Plugin Runtime Runtime-Green Scorecard
+
+ADDED:
+- Runtime status now emits a schema-versioned runtime-green readiness scorecard beside the detailed blocker summary.
+- The scorecard derives Browser/WebPreview, managed Chrome/Playwright, and PC-use lane readiness from existing managed payloads, final validation proof, asset readiness, adapter files, and receipt outcome classifications.
+- Agent and WebPreview plugin catalogs now advertise the scorecard schema in runtime-status metadata.
+
+CHANGED:
+- The blocker summary latest evidence now includes managed Chrome payload, adapter manifest, runner script, and PC-use payload probes so the scorecard can explain missing evidence without extra file reads.
+
+NOTES:
+- This is read-only status metadata only; it does not write files, launch Chrome, run Node, dispatch browser input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Receipt Outcome Classification
 
 ADDED:
