@@ -2325,6 +2325,10 @@ fn runtime_green_claim_gate(proof_path: &Value) -> Value {
         .get("status")
         .and_then(Value::as_str)
         .unwrap_or("unknown");
+    let root_mode = proof_path
+        .get("root_mode")
+        .and_then(Value::as_str)
+        .unwrap_or("workspace");
     let ready_lane_count = claim_gate
         .get("ready_lane_count")
         .and_then(Value::as_u64)
@@ -2343,12 +2347,17 @@ fn runtime_green_claim_gate(proof_path: &Value) -> Value {
         .unwrap_or_else(|| serde_json::json!({}));
     let next_required_proof =
         runtime_green_next_required_proof(&current_best_next, runtime_green_candidate);
+    let final_operator_checklist = runtime_green_final_operator_checklist(
+        &next_required_proof,
+        runtime_green_candidate,
+        root_mode,
+    );
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
         "status": status,
         "runtime_status": proof_path.get("runtime_status").and_then(Value::as_str),
-        "root_mode": proof_path.get("root_mode").and_then(Value::as_str),
+        "root_mode": root_mode,
         "runtime_green_candidate": runtime_green_candidate,
         "ready_lane_count": ready_lane_count,
         "lane_count": lane_count,
@@ -2374,6 +2383,7 @@ fn runtime_green_claim_gate(proof_path: &Value) -> Value {
         "final_manual_command": "just run",
         "next_operator_step": operator_summary.get("next_operator_step").and_then(Value::as_str),
         "next_required_proof": next_required_proof,
+        "final_operator_checklist": final_operator_checklist,
         "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
         "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
         "proof_path_copy_action": "copy_agent_plugin_runtime_green_proof_path",
@@ -2515,6 +2525,102 @@ fn runtime_green_next_required_proof(
             "dispatches_input": false
         }),
     }
+}
+
+fn runtime_green_final_operator_checklist(
+    next_required_proof: &Value,
+    runtime_green_candidate: bool,
+    root_mode: &str,
+) -> Value {
+    let required_proof_id = next_required_proof
+        .get("required_proof_id")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let recommended_action = next_required_proof
+        .get("recommended_action")
+        .and_then(Value::as_str)
+        .unwrap_or("copy_agent_plugin_runtime_green_claim_gate");
+    let recommended_tool = next_required_proof
+        .get("recommended_tool")
+        .and_then(Value::as_str)
+        .unwrap_or(AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME);
+    let recommended_sequence = next_required_proof
+        .get("recommended_sequence")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
+    let status = if runtime_green_candidate {
+        "ready_for_final_windows_runtime_proof"
+    } else {
+        "blocked_by_required_proof"
+    };
+
+    serde_json::json!({
+        "status": status,
+        "can_run_final_manual_command": runtime_green_candidate,
+        "final_manual_command": "just run",
+        "first_required_proof_id": required_proof_id,
+        "first_recommended_action": recommended_action,
+        "first_recommended_tool": recommended_tool,
+        "recommended_sequence": recommended_sequence,
+        "ordered_checks": [
+            {
+                "id": "read_claim_gate",
+                "label": "Read the compact runtime-green claim gate.",
+                "status": "ready",
+                "tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                "payload": runtime_green_status_inspect_payload(root_mode),
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "resolve_first_required_proof",
+                "label": "Resolve the first missing runtime proof before the final manual pass.",
+                "status": if runtime_green_candidate { "ready" } else { "required" },
+                "required_proof_id": required_proof_id,
+                "recommended_action": recommended_action,
+                "recommended_tool": recommended_tool,
+                "writes_files": next_required_proof
+                    .get("writes_files")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                "dispatches_input": next_required_proof
+                    .get("dispatches_input")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+            },
+            {
+                "id": "run_final_windows_runtime_proof",
+                "label": "Run the final manual Windows runtime proof only after required proof is available.",
+                "status": if runtime_green_candidate { "required" } else { "blocked" },
+                "command": "just run",
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "import_final_result",
+                "label": "Import the filled final validation result after the manual proof.",
+                "status": if runtime_green_candidate { "pending_manual_result" } else { "blocked" },
+                "webpreview_action": "import_agent_browser_final_validation_result_from_clipboard",
+                "managed_proof_write": "writes managed final-proof JSON only after explicit WebPreview import",
+                "dispatches_input": false
+            },
+            {
+                "id": "recheck_claim_gate",
+                "label": "Re-read the claim gate and proof path before reporting runtime-green.",
+                "status": "required_after_changes",
+                "tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                "payload": runtime_green_status_inspect_payload(root_mode),
+                "writes_files": false,
+                "dispatches_input": false
+            }
+        ],
+        "reporting_policy": {
+            "may_report_runtime_green": false,
+            "reason": "The code path can only prepare or summarize evidence; a final manual Windows runtime proof and imported result are still required before a runtime-green report.",
+            "requires_imported_final_result": true
+        },
+        "read_only": true
+    })
 }
 
 fn runtime_green_operator_handoff(

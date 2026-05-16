@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Final Checklist
+
+ADDED:
+- Runtime-green claim gates now include a `final_operator_checklist` that marks whether the final Windows `just run` proof is blocked or ready.
+- The checklist lists ordered claim-gate, proof-resolution, final runtime, final-result import, and recheck steps with write/input-dispatch policy on each step.
+- Agent runtime-status checklists now preserve the active root mode when recommending the follow-up `inspect_agent_plugin_runtime_status` payload.
+
+NOTES:
+- This is read-only checklist metadata only; it does not run Node, launch Chrome, dispatch browser or OS input, run `just run`, write proof files, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Claim Gate Next Proof
 
 ADDED:
