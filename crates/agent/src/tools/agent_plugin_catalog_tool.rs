@@ -1215,7 +1215,7 @@ fn chrome_plugin_manifest(
             capability("chrome.page.type", "requires_permission", "Type into focused inputs through Playwright or extension bridge."),
             capability("chrome.page.press_key", "requires_permission", "Press keyboard shortcuts in managed Chrome."),
             capability("chrome.page.scroll", "requires_permission", "Scroll pages and containers in managed Chrome."),
-            capability("chrome.page.screenshot", "requires_bootstrap", "Capture full-page or viewport screenshots."),
+            capability("chrome.page.screenshot", "requires_bootstrap", "Capture viewport, full-page, or selector-scoped screenshots with receipt metadata."),
             capability("chrome.page.inspect_element", "requires_bootstrap", "Read selector-scoped tag, attribute, bounds, visibility, and computed-style summaries from managed Chrome receipts."),
             capability("chrome.page.dom_snapshot", "requires_bootstrap", "Read bounded document or selector-scoped DOM snapshots from managed Chrome receipts."),
             capability("chrome.runtime.console", "requires_bootstrap", "Read bounded console, page error, failed request, HTTP error, and performance-resource summaries from managed Chrome receipts."),

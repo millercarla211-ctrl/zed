@@ -1,3 +1,16 @@
+[2026-05-17] - Agent Plugin Runtime Managed Chrome Screenshot Metadata
+
+ADDED:
+- Managed Chrome screenshot execution now honors optional selectors by capturing selector-scoped element screenshots when a selector is present.
+- Managed Chrome execution receipts now include screenshot capture metadata with capture target, artifact path, selector, full-page flag, and dimensions.
+
+CHANGED:
+- Agent and WebPreview managed Chrome execution summaries now expose compact screenshot capture metadata beside the existing screenshot artifact path.
+- Agent/WebPreview catalogs and runtime-status recipes now describe managed Chrome screenshots as viewport, full-page, or selector-scoped captures.
+
+NOTES:
+- This does not enable click, type, key, or scroll in managed Chrome. It still requires managed roots, a ready runner receipt, explicit adapter invocation authorization, managed browser profiles, and final Windows runtime proof before runtime-green reporting.
+
 [2026-05-17] - Agent Plugin Runtime Managed Chrome Runtime Events
 
 ADDED:

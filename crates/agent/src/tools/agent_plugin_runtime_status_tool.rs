@@ -4753,7 +4753,7 @@ fn validation_matrix() -> Value {
             "goal": "Prove the managed external Chrome plugin path can prepare and run only safe Playwright actions from managed profiles.",
             "cases": [
                 "inspect runtime host probes for Node, npm, Chrome or Edge, Playwright package, DX extension manifest, and managed profile roots",
-                "compose and queue open_url, screenshot, inspect_element, dom_snapshot, runtime_events, set_viewport, and wait_for_selector payloads",
+                "compose and queue open_url, viewport/full-page/selector screenshot, inspect_element, dom_snapshot, runtime_events, set_viewport, and wait_for_selector payloads",
                 "inspect the managed Chrome queue before any runner request",
                 "write a runner-gate receipt without launching Chrome",
                 "prepare the managed Playwright adapter files",

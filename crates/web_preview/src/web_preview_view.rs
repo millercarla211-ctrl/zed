@@ -14270,7 +14270,7 @@ impl WebPreviewView {
                             {"id": "chrome.page.type", "state": "requires_permission", "description": "Type into focused inputs through Playwright or extension bridge."},
                             {"id": "chrome.page.press_key", "state": "requires_permission", "description": "Press keyboard shortcuts in managed Chrome."},
                             {"id": "chrome.page.scroll", "state": "requires_permission", "description": "Scroll pages and containers in managed Chrome."},
-                            {"id": "chrome.page.screenshot", "state": "requires_bootstrap", "description": "Capture full-page or viewport screenshots."},
+                            {"id": "chrome.page.screenshot", "state": "requires_bootstrap", "description": "Capture viewport, full-page, or selector-scoped screenshots with receipt metadata."},
                             {"id": "chrome.page.inspect_element", "state": "requires_bootstrap", "description": "Read selector-scoped tag, attribute, bounds, visibility, and computed-style summaries from managed Chrome receipts."},
                             {"id": "chrome.page.dom_snapshot", "state": "requires_bootstrap", "description": "Read bounded document or selector-scoped DOM snapshots from managed Chrome receipts."},
                             {"id": "chrome.runtime.console", "state": "requires_bootstrap", "description": "Read bounded console, page error, failed request, HTTP error, and performance-resource summaries from managed Chrome receipts."},
@@ -19126,6 +19126,7 @@ fn managed_chrome_execution_file_read_summary(path: &Path, expected_schema: &str
             .or_else(|| value.pointer("/queue_item/payload_packet/payload/url").and_then(Value::as_str)),
         "title": value.get("title").and_then(Value::as_str),
         "screenshot": value.pointer("/artifacts/screenshot").and_then(Value::as_str),
+        "screenshot_capture": managed_chrome_screenshot_summary(&value),
         "inspect_element": managed_chrome_inspect_element_summary(&value),
         "dom_snapshot": managed_chrome_dom_snapshot_summary(&value),
         "runtime_events": managed_chrome_runtime_events_summary(&value),
@@ -19133,6 +19134,17 @@ fn managed_chrome_execution_file_read_summary(path: &Path, expected_schema: &str
         "error": value.get("error").and_then(Value::as_str),
         "receipt_path": value.pointer("/execution/receipt_path").and_then(Value::as_str),
     })
+}
+
+fn managed_chrome_screenshot_summary(value: &Value) -> Option<Value> {
+    let screenshot = value.get("screenshot")?;
+    Some(serde_json::json!({
+        "path": screenshot.get("path").and_then(Value::as_str),
+        "capture_target": screenshot.get("capture_target").and_then(Value::as_str),
+        "selector": screenshot.get("selector").and_then(Value::as_str),
+        "full_page": screenshot.get("full_page").and_then(Value::as_bool),
+        "dimensions": screenshot.get("dimensions").cloned(),
+    }))
 }
 
 fn managed_chrome_inspect_element_summary(value: &Value) -> Option<Value> {

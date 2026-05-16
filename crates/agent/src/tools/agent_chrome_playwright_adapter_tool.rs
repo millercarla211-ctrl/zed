@@ -347,7 +347,7 @@ struct AdapterFile {
 fn adapter_package_json() -> Result<String, String> {
     serde_json::to_string_pretty(&serde_json::json!({
         "name": "@zed/managed-chrome-runner",
-        "version": "0.1.3",
+        "version": "0.1.4",
         "private": true,
         "type": "module",
         "description": "Managed Playwright adapter for DX/Zed Agent Chrome plugin receipts.",
@@ -367,7 +367,7 @@ fn adapter_manifest_json(plan: &ManagedChromePlaywrightAdapterPlan) -> Result<St
         "generated_at_ms": current_epoch_millis(),
         "adapter": {
             "name": "DX/Zed Managed Chrome Playwright Adapter",
-            "version": "0.1.3",
+            "version": "0.1.4",
             "root": path_string(&plan.adapter_root),
             "runner_script": path_string(&plan.runner_script_path),
             "execution_receipt_schema": AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA,
@@ -598,11 +598,53 @@ async function main() {
         : path.join(artifactsRoot, `managed-chrome-screenshot-${Date.now()}.png`);
       requireInside(managedRoot, outputPath, "screenshot output path");
       await fs.mkdir(path.dirname(outputPath), { recursive: true });
-      await page.screenshot({
-        path: outputPath,
-        fullPage: Boolean(payload.full_page)
-      });
+      let captureTarget = "viewport";
+      let dimensions = null;
+      if (payload.selector) {
+        const locator = page.locator(payload.selector).first();
+        await locator.waitFor({
+          state: "attached",
+          timeout: Number(payload.timeout_ms ?? 5000)
+        });
+        await locator.screenshot({
+          path: outputPath,
+          timeout: Number(payload.timeout_ms ?? 5000)
+        });
+        captureTarget = "selector";
+        dimensions = await locator.evaluate((node) => {
+          const rect = node.getBoundingClientRect();
+          return {
+            x: Math.round(rect.x),
+            y: Math.round(rect.y),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height)
+          };
+        });
+      } else {
+        await page.screenshot({
+          path: outputPath,
+          fullPage: Boolean(payload.full_page)
+        });
+        captureTarget = payload.full_page ? "full_page" : "viewport";
+        dimensions = await page.evaluate((fullPage) => ({
+          x: 0,
+          y: 0,
+          width: fullPage
+            ? Math.max(document.documentElement.scrollWidth, document.body?.scrollWidth ?? 0)
+            : window.innerWidth,
+          height: fullPage
+            ? Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight ?? 0)
+            : window.innerHeight
+        }), Boolean(payload.full_page));
+      }
       receipt.artifacts.screenshot = outputPath;
+      receipt.screenshot = {
+        selector: payload.selector ?? null,
+        full_page: Boolean(payload.full_page),
+        capture_target: captureTarget,
+        path: outputPath,
+        dimensions
+      };
     } else if (payload.action === "inspect_element") {
       if (!payload.selector) {
         throw new Error("inspect_element requires payload.selector");

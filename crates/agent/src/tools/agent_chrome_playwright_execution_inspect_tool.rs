@@ -388,6 +388,7 @@ fn read_json_summary(path: &Path) -> Value {
         "url": value.get("url").and_then(Value::as_str).or_else(|| value.pointer("/payload_packet/payload/url").and_then(Value::as_str)),
         "title": value.get("title").and_then(Value::as_str),
         "screenshot": value.pointer("/artifacts/screenshot").and_then(Value::as_str),
+        "screenshot_capture": screenshot_receipt_summary(&value),
         "inspect_element": inspect_element_receipt_summary(&value),
         "dom_snapshot": dom_snapshot_receipt_summary(&value),
         "runtime_events": runtime_events_receipt_summary(&value),
@@ -395,6 +396,17 @@ fn read_json_summary(path: &Path) -> Value {
         "error": value.get("error").and_then(Value::as_str),
         "value": value.clone(),
     })
+}
+
+fn screenshot_receipt_summary(value: &Value) -> Option<Value> {
+    let screenshot = value.get("screenshot")?;
+    Some(serde_json::json!({
+        "path": screenshot.get("path").and_then(Value::as_str),
+        "capture_target": screenshot.get("capture_target").and_then(Value::as_str),
+        "selector": screenshot.get("selector").and_then(Value::as_str),
+        "full_page": screenshot.get("full_page").and_then(Value::as_bool),
+        "dimensions": screenshot.get("dimensions").cloned(),
+    }))
 }
 
 fn inspect_element_receipt_summary(value: &Value) -> Option<Value> {
