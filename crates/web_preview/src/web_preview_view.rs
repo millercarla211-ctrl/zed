@@ -5960,6 +5960,8 @@ impl WebPreviewView {
             "plugin_matrix_status": digest.pointer("/plugin_matrix/status").and_then(Value::as_str),
             "ready_plugin_count": digest.pointer("/plugin_matrix/ready_plugin_count").and_then(Value::as_u64),
             "pending_plugin_count": digest.pointer("/plugin_matrix/pending_plugin_count").and_then(Value::as_u64),
+            "first_priority_action": digest.pointer("/plugin_matrix/first_priority/action").and_then(Value::as_str),
+            "first_priority_status": digest.pointer("/plugin_matrix/first_priority/status").and_then(Value::as_str),
             "current_best_next_lane": digest.pointer("/summary/current_best_next_lane").and_then(Value::as_str),
         })
     }
@@ -5975,6 +5977,11 @@ impl WebPreviewView {
             })
             .collect::<Vec<_>>();
         let plugin_count = rows.len();
+        let first_priority = rows
+            .iter()
+            .find(|row| !row.get("ready").and_then(Value::as_bool).unwrap_or(false))
+            .and_then(|row| row.get("next_action"))
+            .cloned();
         let ready_plugin_count = rows
             .iter()
             .filter(|row| row.get("ready").and_then(Value::as_bool).unwrap_or(false))
@@ -5994,6 +6001,7 @@ impl WebPreviewView {
             "plugin_count": plugin_count,
             "ready_plugin_count": ready_plugin_count,
             "pending_plugin_count": pending_plugin_count,
+            "first_priority": first_priority,
             "rows": rows,
             "reads_from": [
                 "runtime_green_operator_handoff.lanes",
@@ -6020,14 +6028,27 @@ impl WebPreviewView {
             .get("lane_id")
             .and_then(Value::as_str)
             .unwrap_or("unknown");
+        let ready = lane.get("ready").and_then(Value::as_bool).unwrap_or(false);
+        let freshness = Self::agent_plugin_runtime_observability_plugin_freshness_from_handoff(
+            lane_id, handoff,
+        );
+        let next_action = Self::agent_plugin_runtime_observability_plugin_next_action_from_handoff(
+            lane_id, ready, lane, &freshness,
+        );
 
         serde_json::json!({
             "lane_id": lane_id,
             "plugin_id": Self::agent_plugin_runtime_observability_plugin_id(lane_id),
             "status": lane.get("status").and_then(Value::as_str),
-            "ready": lane.get("ready").and_then(Value::as_bool).unwrap_or(false),
+            "ready": ready,
+            "currently_selected_by_handoff": handoff
+                .pointer("/current_best_next/lane_id")
+                .and_then(Value::as_str)
+                .is_some_and(|current_lane_id| current_lane_id == lane_id),
             "code_score": Self::agent_plugin_runtime_observability_plugin_code_score(lane_id),
             "proof": Self::agent_plugin_runtime_observability_plugin_proof_from_handoff(lane_id, handoff),
+            "evidence_freshness": freshness,
+            "next_action": next_action,
             "handoff": lane
                 .get("operator_actions")
                 .cloned()
@@ -6042,6 +6063,140 @@ impl WebPreviewView {
                 "touches_real_browser_profiles": false,
             }
         })
+    }
+
+    fn agent_plugin_runtime_observability_plugin_freshness_from_handoff(
+        lane_id: &str,
+        handoff: &Value,
+    ) -> Value {
+        match lane_id {
+            "browser_webpreview" => {
+                let runtime_green_candidate = handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/runtime_green_candidate")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let missing = handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/missing")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([]));
+
+                serde_json::json!({
+                    "status": if runtime_green_candidate {
+                        "session_evidence_current"
+                    } else {
+                        "manual_result_pending"
+                    },
+                    "source": "webpreview_evidence.final_validation_observability",
+                    "missing": missing,
+                    "does_not_probe_files": true,
+                    "read_only": true,
+                })
+            }
+            "managed_chrome" => {
+                let bootstrap_ready = handoff
+                    .pointer("/webpreview_evidence/plugin_bootstrap_readiness/status")
+                    .and_then(Value::as_str)
+                    == Some("ready_for_managed_chrome_executor");
+                let execution_completed = handoff
+                    .pointer("/webpreview_evidence/managed_chrome_execution_status/latest_receipt/read/outcome")
+                    .and_then(Value::as_str)
+                    == Some("completed");
+                let status = if bootstrap_ready && execution_completed {
+                    "session_evidence_current"
+                } else if !bootstrap_ready {
+                    "bootstrap_or_assets_pending"
+                } else {
+                    "execution_receipt_pending"
+                };
+
+                serde_json::json!({
+                    "status": status,
+                    "source": "webpreview_evidence.managed_chrome_execution_status",
+                    "bootstrap_ready": bootstrap_ready,
+                    "execution_receipt_completed": execution_completed,
+                    "does_not_probe_files": true,
+                    "read_only": true,
+                })
+            }
+            "pc_use" => {
+                let runner_receipt_ready = handoff
+                    .pointer(
+                        "/webpreview_evidence/pc_use_status/proof_summary/runner_receipt_ready",
+                    )
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let status = if runner_receipt_ready {
+                    "session_evidence_current"
+                } else {
+                    "runner_receipt_pending"
+                };
+
+                serde_json::json!({
+                    "status": status,
+                    "source": "webpreview_evidence.pc_use_status",
+                    "runner_receipt_ready": runner_receipt_ready,
+                    "does_not_probe_files": true,
+                    "read_only": true,
+                })
+            }
+            _ => serde_json::json!({
+                "status": "unknown_plugin_lane",
+                "source": Value::Null,
+                "does_not_probe_files": true,
+                "read_only": true,
+            }),
+        }
+    }
+
+    fn agent_plugin_runtime_observability_plugin_next_action_from_handoff(
+        lane_id: &str,
+        ready: bool,
+        lane: &Value,
+        freshness: &Value,
+    ) -> Value {
+        let freshness_status = freshness
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let action = if ready {
+            None
+        } else {
+            Self::agent_plugin_runtime_observability_plugin_default_next_action_from_handoff(
+                lane_id,
+                freshness_status,
+            )
+        };
+
+        serde_json::json!({
+            "status": if ready { "no_action_required" } else { freshness_status },
+            "action": action,
+            "source": "runtime_green_operator_handoff.webpreview_evidence",
+            "lane_id": lane_id,
+            "available_handoff_actions": lane
+                .get("operator_actions")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({})),
+            "dispatches_input": false,
+            "writes_files": false,
+        })
+    }
+
+    fn agent_plugin_runtime_observability_plugin_default_next_action_from_handoff(
+        lane_id: &str,
+        freshness_status: &str,
+    ) -> Option<&'static str> {
+        match lane_id {
+            "browser_webpreview" if freshness_status == "manual_result_pending" => {
+                Some("copy_agent_browser_final_validation_bundle")
+            }
+            "browser_webpreview" => Some("copy_agent_browser_final_validation_observability"),
+            "managed_chrome" if freshness_status == "bootstrap_or_assets_pending" => {
+                Some("copy_agent_plugin_bootstrap_readiness")
+            }
+            "managed_chrome" => Some("copy_managed_chrome_execution_status"),
+            "pc_use" => Some("copy_pc_use_status"),
+            _ => None,
+        }
     }
 
     fn agent_plugin_runtime_observability_plugin_proof_from_handoff(

@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime Observability Matrix Priority
+
+ADDED:
+- Agent runtime-status plugin matrix rows now include plugin-scoped evidence freshness, filtered missing/stale proof labels, filtered recovery actions, and a first next-action priority.
+- WebPreview runtime observability matrix rows now include session-scoped evidence freshness and next-action priority derived from the current runtime-green handoff.
+
+CHANGED:
+- WebPreview digest summaries now surface the first plugin-matrix priority action/status beside ready and pending plugin counts.
+
+NOTES:
+- This is read-only observability. WebPreview does not probe files, and neither path launches browsers, runs Node, dispatches input, takes screenshots, or touches real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Observability Matrix
 
 ADDED:

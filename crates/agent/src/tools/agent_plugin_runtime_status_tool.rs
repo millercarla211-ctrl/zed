@@ -2164,6 +2164,11 @@ fn runtime_observability_plugin_matrix(
         })
         .unwrap_or_default();
     let plugin_count = rows.len();
+    let first_priority = rows
+        .iter()
+        .find(|row| !row.get("ready").and_then(Value::as_bool).unwrap_or(false))
+        .and_then(|row| row.get("next_action"))
+        .cloned();
     let ready_plugin_count = rows
         .iter()
         .filter(|row| row.get("ready").and_then(Value::as_bool).unwrap_or(false))
@@ -2183,12 +2188,14 @@ fn runtime_observability_plugin_matrix(
         "plugin_count": plugin_count,
         "ready_plugin_count": ready_plugin_count,
         "pending_plugin_count": pending_plugin_count,
+        "first_priority": first_priority,
         "rows": rows,
         "reads_from": [
             "runtime_green_readiness_scorecard.lanes",
             "runtime_green_blocker_summary.latest_evidence",
             "observability_proof_freshness.required_files",
-            "observability_proof_freshness.receipt_classifications"
+            "observability_proof_freshness.receipt_classifications",
+            "observability_proof_freshness.recovery_actions"
         ],
         "safety": {
             "matrix_is_read_only": true,
@@ -2209,6 +2216,8 @@ fn runtime_observability_plugin_matrix_row(
     let lane_id = lane.get("id").and_then(Value::as_str).unwrap_or("unknown");
     let ready = lane.get("ready").and_then(Value::as_bool).unwrap_or(false);
     let proof = runtime_observability_plugin_proof(lane_id, proof_freshness, blocker_summary);
+    let freshness = runtime_observability_plugin_freshness(lane_id, proof_freshness);
+    let next_action = runtime_observability_plugin_next_action(lane_id, ready, lane, &freshness);
     let handoff = runtime_observability_plugin_handoff(lane_id);
 
     serde_json::json!({
@@ -2230,6 +2239,8 @@ fn runtime_observability_plugin_matrix_row(
             .cloned()
             .unwrap_or_else(|| serde_json::json!([])),
         "proof": proof,
+        "evidence_freshness": freshness,
+        "next_action": next_action,
         "handoff": handoff,
         "watch_surfaces": runtime_observability_plugin_watch_surfaces(lane_id),
         "safety": {
@@ -2302,6 +2313,151 @@ fn runtime_observability_plugin_proof(
             "status": "unknown_plugin_lane",
             "required_field": Value::Null,
         }),
+    }
+}
+
+fn runtime_observability_plugin_freshness(lane_id: &str, proof_freshness: &Value) -> Value {
+    let missing = runtime_observability_plugin_filtered_labels(
+        lane_id,
+        proof_freshness.get("missing_required_files"),
+    );
+    let stale = runtime_observability_plugin_filtered_labels(
+        lane_id,
+        proof_freshness.get("stale_required_files"),
+    );
+    let recovery_actions = runtime_observability_plugin_filtered_recovery_actions(
+        lane_id,
+        proof_freshness.pointer("/recovery_actions/actions"),
+    );
+    let first_refresh_target = missing.first().cloned().or_else(|| stale.first().cloned());
+    let status = if !missing.is_empty() {
+        "missing_runtime_evidence"
+    } else if !stale.is_empty() {
+        "stale_runtime_evidence"
+    } else {
+        "managed_evidence_current"
+    };
+
+    serde_json::json!({
+        "status": status,
+        "freshness_window_ms": proof_freshness.get("freshness_window_ms").and_then(Value::as_u64),
+        "missing_required_files": missing,
+        "stale_required_files": stale,
+        "first_refresh_target": first_refresh_target,
+        "recovery_actions": {
+            "status": if recovery_actions.is_empty() { "no_refresh_action_required" } else { "refresh_action_required" },
+            "actions": recovery_actions,
+        },
+        "read_only": true,
+    })
+}
+
+fn runtime_observability_plugin_filtered_labels(
+    lane_id: &str,
+    labels: Option<&Value>,
+) -> Vec<String> {
+    labels
+        .and_then(Value::as_array)
+        .map(|labels| {
+            labels
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|label| runtime_observability_plugin_label_matches(lane_id, label))
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+fn runtime_observability_plugin_filtered_recovery_actions(
+    lane_id: &str,
+    actions: Option<&Value>,
+) -> Vec<Value> {
+    actions
+        .and_then(Value::as_array)
+        .map(|actions| {
+            actions
+                .iter()
+                .filter(|action| {
+                    action
+                        .get("target")
+                        .and_then(Value::as_str)
+                        .is_some_and(|target| {
+                            runtime_observability_plugin_label_matches(lane_id, target)
+                        })
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+fn runtime_observability_plugin_label_matches(lane_id: &str, label: &str) -> bool {
+    match lane_id {
+        "browser_webpreview" => label.starts_with("browser."),
+        "managed_chrome" => label.starts_with("chrome."),
+        "pc_use" => label.starts_with("pc_use."),
+        _ => false,
+    }
+}
+
+fn runtime_observability_plugin_next_action(
+    lane_id: &str,
+    ready: bool,
+    lane: &Value,
+    freshness: &Value,
+) -> Value {
+    let freshness_status = freshness
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let recovery_action = freshness
+        .pointer("/recovery_actions/actions/0")
+        .cloned()
+        .unwrap_or(Value::Null);
+    let recovery_step = recovery_action
+        .pointer("/steps/0")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let lane_action = lane
+        .pointer("/primary_next_actions/0")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .or_else(|| runtime_observability_plugin_default_next_action(lane_id).map(str::to_string));
+    let uses_recovery_action = recovery_step.is_some();
+    let action = recovery_step.or(lane_action);
+    let writes_files = recovery_action
+        .get("writes_files")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let status = if ready {
+        "no_action_required"
+    } else if freshness_status == "missing_runtime_evidence" {
+        "refresh_missing_evidence"
+    } else if freshness_status == "stale_runtime_evidence" {
+        "refresh_stale_evidence"
+    } else {
+        "complete_required_proof"
+    };
+
+    serde_json::json!({
+        "status": status,
+        "action": action,
+        "source": if uses_recovery_action { "observability_proof_freshness.recovery_actions" } else { "runtime_green_readiness_scorecard.primary_next_actions" },
+        "target": freshness.get("first_refresh_target").and_then(Value::as_str),
+        "lane_id": lane_id,
+        "dispatches_input": false,
+        "writes_files": writes_files,
+        "recovery_action": recovery_action,
+    })
+}
+
+fn runtime_observability_plugin_default_next_action(lane_id: &str) -> Option<&'static str> {
+    match lane_id {
+        "browser_webpreview" => Some("copy_agent_browser_final_validation_bundle"),
+        "managed_chrome" => Some(AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME),
+        "pc_use" => Some(AGENT_PC_USE_RUNNER_GATE_TOOL_NAME),
+        _ => None,
     }
 }
 
