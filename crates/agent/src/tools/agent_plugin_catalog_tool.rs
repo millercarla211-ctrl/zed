@@ -4,7 +4,9 @@ use crate::{
     AGENT_CHROME_PAYLOAD_QUEUE_FILE_NAME, AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
     AGENT_CHROME_PAYLOAD_QUEUE_ITEM_SCHEMA, AGENT_CHROME_PAYLOAD_QUEUE_RESULT_SCHEMA,
     AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME, AGENT_CHROME_PAYLOAD_RESULT_SCHEMA,
-    AGENT_CHROME_PAYLOAD_TOOL_NAME, AgentTool, ToolCallEventStream, ToolInput,
+    AGENT_CHROME_PAYLOAD_TOOL_NAME, AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
+    AGENT_CHROME_RUNNER_RECEIPT_FILE_NAME, AGENT_CHROME_RUNNER_RECEIPT_SCHEMA, AgentTool,
+    ToolCallEventStream, ToolInput,
 };
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
@@ -154,6 +156,7 @@ fn agent_plugin_catalog(
                 "compose_chrome_action_payload": AGENT_CHROME_PAYLOAD_TOOL_NAME,
                 "queue_chrome_action_payload": AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
                 "inspect_chrome_action_payload_queue": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                "request_chrome_payload_run": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
                 "prepare_runtime": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL
             },
             "available_to": [
@@ -394,6 +397,9 @@ fn chrome_plugin_manifest(
             "payload_tool_name": AGENT_CHROME_PAYLOAD_TOOL_NAME,
             "payload_queue_tool_name": AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
             "payload_queue_inspect_tool_name": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+            "runner_gate_tool_name": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
+            "runner_receipt_schema": AGENT_CHROME_RUNNER_RECEIPT_SCHEMA,
+            "latest_runner_receipt_file": AGENT_CHROME_RUNNER_RECEIPT_FILE_NAME,
             "payload_result_schema": AGENT_CHROME_PAYLOAD_RESULT_SCHEMA,
             "executor_payload_schema": AGENT_CHROME_EXECUTOR_PAYLOAD_SCHEMA,
             "payload_queue_item_schema": AGENT_CHROME_PAYLOAD_QUEUE_ITEM_SCHEMA,
@@ -464,6 +470,7 @@ fn chrome_plugin_manifest(
             capability("chrome.action.payload_compose", "available", "Use compose_managed_chrome_action_payload to generate validated managed Chrome/Playwright action packets."),
             capability("chrome.action.payload_queue_managed", "available_requires_authorization", "Use queue_managed_chrome_action_payload to write a validated Chrome action packet into the managed workspace or Zed-data queue."),
             capability("chrome.action.payload_queue_inspect", "available", "Use inspect_managed_chrome_payload_queue to validate the latest queued Chrome payload and runner prerequisites before launch or dispatch exists."),
+            capability("chrome.action.runner_gate", "available_requires_authorization", "Use request_managed_chrome_payload_run to write a permissioned runner receipt that blocks until queue, bootstrap, managed-profile, and future adapter requirements are satisfied."),
             capability("chrome.action.payload_queue_schema", "available", "Read the managed Chrome payload packet, queue item, queue result, and latest-file schemas for future runner execution."),
             capability("chrome.session.launch", "requires_bootstrap", "Launch or attach to a managed Chrome profile."),
             capability("chrome.page.open_url", "requires_bootstrap", "Open URLs in managed Chrome tabs."),

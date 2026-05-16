@@ -1,3 +1,15 @@
+[2026-05-16] - Managed Chrome Runner Gate
+
+ADDED:
+- Added the permissioned `request_managed_chrome_payload_run` Agent tool for writing schema-versioned managed Chrome runner receipts.
+- Advertised the runner gate tool and receipt schema through both the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- Managed Chrome execution now has a permissioned receipt gate that consumes the latest queue item, checks host/provision/profile readiness, and blocks safely until the future Playwright adapter is enabled.
+
+NOTES:
+- The runner gate writes only managed receipt files; it does not launch Chrome, install Playwright, run page scripts, dispatch browser input, or touch real browser profiles.
+
 [2026-05-16] - Managed Chrome Queue Inspection
 
 ADDED:

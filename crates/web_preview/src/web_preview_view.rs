@@ -8110,6 +8110,7 @@ impl WebPreviewView {
                     "compose_chrome_action_payload": "compose_managed_chrome_action_payload",
                     "queue_chrome_action_payload": "queue_managed_chrome_action_payload",
                     "inspect_chrome_action_payload_queue": "inspect_managed_chrome_payload_queue",
+                    "request_chrome_payload_run": "request_managed_chrome_payload_run",
                     "prepare_runtime": "prepare_agent_plugin_runtime"
                 },
                 "available_to": [
@@ -8284,6 +8285,9 @@ impl WebPreviewView {
                             "payload_tool_name": "compose_managed_chrome_action_payload",
                             "payload_queue_tool_name": "queue_managed_chrome_action_payload",
                             "payload_queue_inspect_tool_name": "inspect_managed_chrome_payload_queue",
+                            "runner_gate_tool_name": "request_managed_chrome_payload_run",
+                            "runner_receipt_schema": "zed.agent_plugins.managed_chrome_runner_receipt.v1",
+                            "latest_runner_receipt_file": "latest-managed-chrome-runner-receipt.json",
                             "payload_result_schema": "zed.agent_plugins.managed_chrome_payload_result.v1",
                             "executor_payload_schema": "zed.agent_plugins.managed_chrome_executor_payload.v1",
                             "payload_queue_item_schema": "zed.agent_plugins.managed_chrome_payload_queue_item.v1",
@@ -8319,6 +8323,7 @@ impl WebPreviewView {
                             {"id": "chrome.action.payload_compose", "state": "available", "description": "Use compose_managed_chrome_action_payload to generate validated managed Chrome/Playwright action packets."},
                             {"id": "chrome.action.payload_queue_managed", "state": "available_requires_authorization", "description": "Use queue_managed_chrome_action_payload to write a validated Chrome action packet into the managed workspace or Zed-data queue."},
                             {"id": "chrome.action.payload_queue_inspect", "state": "available", "description": "Use inspect_managed_chrome_payload_queue to validate the latest queued Chrome payload and runner prerequisites before launch or dispatch exists."},
+                            {"id": "chrome.action.runner_gate", "state": "available_requires_authorization", "description": "Use request_managed_chrome_payload_run to write a permissioned runner receipt that blocks until queue, bootstrap, managed-profile, and future adapter requirements are satisfied."},
                             {"id": "chrome.action.payload_queue_schema", "state": "available", "description": "Read the managed Chrome payload packet, queue item, queue result, and latest-file schemas for future runner execution."},
                             {"id": "chrome.session.launch", "state": "requires_bootstrap", "description": "Launch or attach to a managed Chrome profile."},
                             {"id": "chrome.page.open_url", "state": "requires_bootstrap", "description": "Open URLs in managed Chrome tabs."},

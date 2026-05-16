@@ -1,6 +1,7 @@
 mod agent_browser_payload_tool;
 mod agent_chrome_payload_queue_inspect_tool;
 mod agent_chrome_payload_tool;
+mod agent_chrome_runner_gate_tool;
 mod agent_plugin_bootstrap_tool;
 mod agent_plugin_catalog_tool;
 mod apply_code_action_tool;
@@ -65,6 +66,7 @@ where
 pub use agent_browser_payload_tool::*;
 pub use agent_chrome_payload_queue_inspect_tool::*;
 pub use agent_chrome_payload_tool::*;
+pub use agent_chrome_runner_gate_tool::*;
 pub use agent_plugin_bootstrap_tool::*;
 pub use agent_plugin_catalog_tool::*;
 pub use apply_code_action_tool::*;
@@ -169,6 +171,7 @@ tools! {
     AgentChromePayloadTool,
     AgentChromePayloadQueueTool,
     AgentChromePayloadQueueInspectTool,
+    AgentChromeRunnerGateTool,
     AgentPluginCatalogTool,
     ApplyCodeActionTool,
     CopyPathTool,
