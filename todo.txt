@@ -1,5 +1,6 @@
 IN PROGRESS:
 - NEXT 100-POINT FEATURE SET: Agent Plugin Runtime. Goal: bring Codex-app-style plugin capability discovery into the Zed Agent, starting with Browser, Chrome/Playwright, and permissioned PC-use plugins available to every Agent Panel.
+- Agent Plugin Runtime report-badge slice: WebPreview and Agent runtime-status now expose a compact runtime-green report badge/status row derived from the report gate, and Agent Panel handoffs lead with it before larger JSON packets.
 - Agent Plugin Runtime report-gate slice: Agent/WebPreview surfaces now expose a canonical runtime-green report gate derived from claim readiness, with copy/send actions and catalog discovery so every surface agrees on ready vs blocked proof state.
 - Agent Plugin Runtime claim-readiness slice: WebPreview now exposes Copy/Send Runtime-Green Claim Readiness, uses durable final-result evidence when evaluating the Browser/WebPreview lane, and mirrors the compact readiness packet through Agent/WebPreview catalogs and runtime status.
 - Agent Plugin Runtime final checklist summary slice: WebPreview and Agent runtime-status summaries now surface compact final-checklist status, final command readiness, first required proof, and reporting policy so agents do not need to parse the full claim-gate JSON first.

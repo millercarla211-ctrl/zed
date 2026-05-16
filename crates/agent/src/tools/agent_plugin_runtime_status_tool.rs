@@ -98,6 +98,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_claim_readiness.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_report_gate.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_report_badge.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
@@ -445,6 +447,8 @@ fn inspect_runtime_status(
     );
     let runtime_green_report_gate_value =
         runtime_green_report_gate(&runtime_green_claim_readiness_value);
+    let runtime_green_report_badge_value =
+        runtime_green_report_badge(&runtime_green_report_gate_value);
     let runtime_green_claim_gate = input
         .include_runtime_green_claim_gate
         .then(|| runtime_green_claim_gate_value.clone());
@@ -485,6 +489,7 @@ fn inspect_runtime_status(
         "runtime_green_claim_gate_summary": runtime_green_claim_gate_summary,
         "runtime_green_claim_readiness": runtime_green_claim_readiness_value,
         "runtime_green_report_gate": runtime_green_report_gate_value,
+        "runtime_green_report_badge": runtime_green_report_badge_value,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
         "observability_profiles": input
@@ -2259,7 +2264,8 @@ fn runtime_green_proof_path(
                     "runtime_green_proof_path",
                     "runtime_observability_digest",
                     "runtime_green_operator_handoff",
-                    "runtime_green_report_gate"
+                    "runtime_green_report_gate",
+                    "runtime_green_report_badge"
                 ],
                 "writes_files": false,
                 "dispatches_input": false
@@ -2309,6 +2315,13 @@ fn runtime_green_proof_path(
             },
             "runtime_green_report_gate": {
                 "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
+                "badge_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
+                "copy_action": "copy_agent_plugin_runtime_green_report_gate",
+                "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent"
+            },
+            "runtime_green_report_badge": {
+                "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
+                "source": "runtime_green_report_gate.badge",
                 "copy_action": "copy_agent_plugin_runtime_green_report_gate",
                 "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent"
             },
@@ -2637,6 +2650,8 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
         .get("next_recommended_action")
         .and_then(Value::as_str)
         .unwrap_or("copy_agent_plugin_runtime_green_claim_readiness");
+    let badge =
+        runtime_green_report_badge_from_fields(status, label, can_report, blocker, next_action);
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
@@ -2646,6 +2661,7 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
         "can_report_runtime_green": can_report,
         "blocker": blocker,
         "next_action": next_action,
+        "badge": badge,
         "ready_lane_fraction": readiness.get("ready_lane_fraction").and_then(Value::as_str),
         "claim_readiness_status": readiness.get("status").and_then(Value::as_str),
         "claim_gate_status": readiness.get("claim_gate_status").and_then(Value::as_str),
@@ -2664,6 +2680,71 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
             "requires_imported_final_result": true,
             "requires_final_manual_command": "just run"
         },
+        "read_only": true,
+        "writes_files": false,
+        "runs_node": false,
+        "launches_browser": false,
+        "dispatches_input": false,
+    })
+}
+
+fn runtime_green_report_badge(report_gate: &Value) -> Value {
+    report_gate.get("badge").cloned().unwrap_or_else(|| {
+        let status = report_gate
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let label = report_gate
+            .get("label")
+            .and_then(Value::as_str)
+            .unwrap_or("Runtime-green report gate");
+        let can_report = report_gate
+            .get("can_report_runtime_green")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let blocker = report_gate
+            .get("blocker")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let next_action = report_gate
+            .get("next_action")
+            .and_then(Value::as_str)
+            .unwrap_or("copy_agent_plugin_runtime_green_report_gate");
+
+        runtime_green_report_badge_from_fields(status, label, can_report, blocker, next_action)
+    })
+}
+
+fn runtime_green_report_badge_from_fields(
+    status: &str,
+    label: &str,
+    can_report: bool,
+    blocker: &str,
+    next_action: &str,
+) -> Value {
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
+        "label": label,
+        "status": status,
+        "tone": if can_report { "success" } else { "blocked" },
+        "icon": if can_report { "check" } else { "shield-alert" },
+        "text": if can_report {
+            "Runtime-green can be reported"
+        } else {
+            "Runtime-green proof still blocked"
+        },
+        "can_report_runtime_green": can_report,
+        "blocker": blocker,
+        "next_action": next_action,
+        "required_before_status_claim": true,
+        "visible_in": [
+            "agent_panel",
+            "webpreview_status_packet",
+            "final_validation_bundle",
+            "agent_plugin_catalog"
+        ],
+        "copy_action": "copy_agent_plugin_runtime_green_report_gate",
+        "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
         "read_only": true,
         "writes_files": false,
         "runs_node": false,

@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Report Badge
+
+ADDED:
+- WebPreview now derives a compact runtime-green report badge from the report gate for status packets, final validation bundles, action manifests, session snapshots, and Agent Panel handoffs.
+- `inspect_agent_plugin_runtime_status` now emits `runtime_green_report_badge` alongside the report gate so agents can render one ready/blocked status row before reading larger proof packets.
+- Agent and WebPreview catalogs now advertise the report-badge schema and map it to the report-gate copy/send actions.
+
+NOTES:
+- This is read-only render metadata only; it does not run Node, launch Chrome, dispatch browser or OS input, run `just run`, write proof files, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Report Gate
 
 ADDED:

@@ -108,6 +108,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_claim_readiness.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_report_gate.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_report_badge.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_proof_path.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
@@ -1440,6 +1442,7 @@ impl WebPreviewView {
             "agent_plugin_runtime_green_claim_gate": self.agent_plugin_runtime_green_claim_gate_snapshot(),
             "agent_plugin_runtime_green_claim_readiness": self.agent_plugin_runtime_green_claim_readiness_snapshot(),
             "agent_plugin_runtime_green_report_gate": self.agent_plugin_runtime_green_report_gate_snapshot(),
+            "agent_plugin_runtime_green_report_badge": self.agent_plugin_runtime_green_report_badge_snapshot(),
             "agent_browser_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
             "agent_browser_reload_executor_attempt": self.latest_agent_browser_reload_executor_attempt_summary(),
             "agent_browser_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
@@ -1535,6 +1538,7 @@ impl WebPreviewView {
                 "agent_plugin_runtime_green_claim_gate": true,
                 "agent_plugin_runtime_green_claim_readiness": true,
                 "agent_plugin_runtime_green_report_gate": true,
+                "agent_plugin_runtime_green_report_badge": true,
                 "copy_agent_plugin_runtime_green_proof_path": true,
                 "send_agent_plugin_runtime_green_proof_path_to_agent": true,
                 "copy_agent_plugin_runtime_green_claim_gate": true,
@@ -1826,6 +1830,10 @@ impl WebPreviewView {
             "runtime_green_claim_readiness_can_report": packet.pointer("/packet/runtime_green_claim_readiness/can_report_runtime_green").and_then(Value::as_bool),
             "runtime_green_report_gate_status": packet.pointer("/packet/runtime_green_report_gate/status").and_then(Value::as_str),
             "runtime_green_report_gate_can_report": packet.pointer("/packet/runtime_green_report_gate/can_report_runtime_green").and_then(Value::as_bool),
+            "runtime_green_report_badge": packet
+                .pointer("/packet/runtime_green_report_badge")
+                .or_else(|| packet.pointer("/packet/runtime_green_report_gate/badge"))
+                .cloned(),
             "next_step": packet.pointer("/packet/next_step").and_then(Value::as_str),
         }))
     }
@@ -1896,6 +1904,10 @@ impl WebPreviewView {
             "runtime_green_claim_readiness_can_report": bundle.pointer("/handoff_artifacts/runtime_green_claim_readiness/can_report_runtime_green").and_then(Value::as_bool),
             "runtime_green_report_gate_status": bundle.pointer("/handoff_artifacts/runtime_green_report_gate/current_status").and_then(Value::as_str),
             "runtime_green_report_gate_can_report": bundle.pointer("/handoff_artifacts/runtime_green_report_gate/can_report_runtime_green").and_then(Value::as_bool),
+            "runtime_green_report_badge": bundle
+                .pointer("/handoff_artifacts/runtime_green_report_badge/current_badge")
+                .or_else(|| bundle.pointer("/handoff_artifacts/runtime_green_report_gate/current_snapshot/badge"))
+                .cloned(),
         }))
     }
 
@@ -2850,6 +2862,8 @@ impl WebPreviewView {
         let runtime_green_report_gate = Self::agent_plugin_runtime_green_report_gate_from_readiness(
             &runtime_green_claim_readiness,
         );
+        let runtime_green_report_badge =
+            Self::agent_plugin_runtime_green_report_badge_from_gate(&runtime_green_report_gate);
 
         serde_json::json!({
             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
@@ -2876,6 +2890,7 @@ impl WebPreviewView {
                 "runtime_green_claim_readiness_can_report": runtime_green_claim_readiness.pointer("/can_report_runtime_green").and_then(Value::as_bool),
                 "runtime_green_report_gate_status": runtime_green_report_gate.pointer("/status").and_then(Value::as_str),
                 "runtime_green_report_gate_can_report": runtime_green_report_gate.pointer("/can_report_runtime_green").and_then(Value::as_bool),
+                "runtime_green_report_badge": runtime_green_report_badge.clone(),
             },
             "handoff_artifacts": {
                 "status_packet": {
@@ -2978,6 +2993,14 @@ impl WebPreviewView {
                     "severity": runtime_green_report_gate.pointer("/severity").and_then(Value::as_str),
                     "blocker": runtime_green_report_gate.pointer("/blocker").and_then(Value::as_str),
                     "current_snapshot": runtime_green_report_gate.clone()
+                },
+                "runtime_green_report_badge": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_report_gate",
+                    "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
+                    "current_badge": runtime_green_report_badge.clone(),
+                    "source": "runtime_green_report_gate.badge",
+                    "read_only": true
                 },
                 "runtime_status_tool": {
                     "tool_name": "inspect_agent_plugin_runtime_status",
@@ -3191,6 +3214,18 @@ impl WebPreviewView {
         {
             blocks.push(url_block);
             blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+        if let Some(report_badge) = bundle
+            .pointer("/handoff_artifacts/runtime_green_report_badge/current_badge")
+            .or_else(|| {
+                bundle
+                    .pointer("/handoff_artifacts/runtime_green_report_gate/current_snapshot/badge")
+            })
+        {
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+                "{}\n\n",
+                Self::agent_plugin_runtime_green_report_badge_agent_summary(report_badge)
+            ))));
         }
 
         blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
@@ -4414,6 +4449,13 @@ impl WebPreviewView {
             .get("next_recommended_action")
             .and_then(Value::as_str)
             .unwrap_or("copy_agent_plugin_runtime_green_claim_readiness");
+        let badge = Self::agent_plugin_runtime_green_report_badge_from_fields(
+            status,
+            label,
+            can_report,
+            blocker,
+            next_action,
+        );
 
         serde_json::json!({
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
@@ -4423,6 +4465,7 @@ impl WebPreviewView {
             "can_report_runtime_green": can_report,
             "blocker": blocker,
             "next_action": next_action,
+            "badge": badge,
             "ready_lane_fraction": readiness.get("ready_lane_fraction").and_then(Value::as_str),
             "claim_readiness_status": readiness.get("status").and_then(Value::as_str),
             "claim_gate_status": readiness.get("claim_gate_status").and_then(Value::as_str),
@@ -4447,6 +4490,82 @@ impl WebPreviewView {
             "launches_browser": false,
             "dispatches_input": false,
         })
+    }
+
+    fn agent_plugin_runtime_green_report_badge_from_fields(
+        status: &str,
+        label: &str,
+        can_report: bool,
+        blocker: &str,
+        next_action: &str,
+    ) -> Value {
+        serde_json::json!({
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
+            "label": label,
+            "status": status,
+            "tone": if can_report { "success" } else { "blocked" },
+            "icon": if can_report { "check" } else { "shield-alert" },
+            "text": if can_report {
+                "Runtime-green can be reported"
+            } else {
+                "Runtime-green proof still blocked"
+            },
+            "can_report_runtime_green": can_report,
+            "blocker": blocker,
+            "next_action": next_action,
+            "required_before_status_claim": true,
+            "visible_in": [
+                "agent_panel",
+                "webpreview_status_packet",
+                "final_validation_bundle",
+                "agent_plugin_catalog"
+            ],
+            "copy_action": "copy_agent_plugin_runtime_green_report_gate",
+            "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
+            "read_only": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+        })
+    }
+
+    fn agent_plugin_runtime_green_report_badge_snapshot(&self) -> Value {
+        let report_gate = self.agent_plugin_runtime_green_report_gate_snapshot();
+        report_gate.get("badge").cloned().unwrap_or_else(|| {
+            Self::agent_plugin_runtime_green_report_badge_from_gate(&report_gate)
+        })
+    }
+
+    fn agent_plugin_runtime_green_report_badge_from_gate(report_gate: &Value) -> Value {
+        let status = report_gate
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let label = report_gate
+            .get("label")
+            .and_then(Value::as_str)
+            .unwrap_or("Runtime-green report gate");
+        let can_report = report_gate
+            .get("can_report_runtime_green")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let blocker = report_gate
+            .get("blocker")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let next_action = report_gate
+            .get("next_action")
+            .and_then(Value::as_str)
+            .unwrap_or("copy_agent_plugin_runtime_green_report_gate");
+
+        Self::agent_plugin_runtime_green_report_badge_from_fields(
+            status,
+            label,
+            can_report,
+            blocker,
+            next_action,
+        )
     }
 
     fn agent_plugin_runtime_green_next_required_proof(
@@ -5424,29 +5543,40 @@ impl WebPreviewView {
     }
 
     fn agent_plugin_runtime_green_report_gate_agent_summary(report_gate: &Value) -> String {
-        let status = report_gate
+        let badge = report_gate.get("badge").cloned().unwrap_or_else(|| {
+            Self::agent_plugin_runtime_green_report_badge_from_gate(report_gate)
+        });
+        Self::agent_plugin_runtime_green_report_badge_agent_summary(&badge)
+    }
+
+    fn agent_plugin_runtime_green_report_badge_agent_summary(badge: &Value) -> String {
+        let status = badge
             .get("status")
             .and_then(Value::as_str)
             .unwrap_or("unknown");
-        let label = report_gate
+        let label = badge
             .get("label")
             .and_then(Value::as_str)
             .unwrap_or("Runtime-green report gate");
-        let blocker = report_gate
+        let tone = badge
+            .get("tone")
+            .and_then(Value::as_str)
+            .unwrap_or("blocked");
+        let blocker = badge
             .get("blocker")
             .and_then(Value::as_str)
             .unwrap_or("unknown");
-        let can_report = report_gate
+        let can_report = badge
             .get("can_report_runtime_green")
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let next_action = report_gate
+        let next_action = badge
             .get("next_action")
             .and_then(Value::as_str)
             .unwrap_or("copy_agent_plugin_runtime_green_report_gate");
 
         format!(
-            "{label}\nStatus: {status}\nCan report runtime-green: {can_report}\nBlocker: {blocker}\nNext action: {next_action}"
+            "{label}\nTone: {tone}\nStatus: {status}\nCan report runtime-green: {can_report}\nBlocker: {blocker}\nNext action: {next_action}"
         )
     }
 
@@ -7357,6 +7487,8 @@ impl WebPreviewView {
         let runtime_green_report_gate = Self::agent_plugin_runtime_green_report_gate_from_readiness(
             &runtime_green_claim_readiness,
         );
+        let runtime_green_report_badge =
+            Self::agent_plugin_runtime_green_report_badge_from_gate(&runtime_green_report_gate);
         let context_ready =
             diagnostics_ready || runtime_ready || dom_ready || targets_ready || readiness_ready;
         let audit_ready = plan_ready
@@ -7397,6 +7529,7 @@ impl WebPreviewView {
                 "runtime_green_claim_gate": runtime_green_claim_gate.clone(),
                 "runtime_green_claim_readiness": runtime_green_claim_readiness.clone(),
                 "runtime_green_report_gate": runtime_green_report_gate.clone(),
+                "runtime_green_report_badge": runtime_green_report_badge.clone(),
                 "readiness": {
                     "context_ready": context_ready,
                     "audit_ready": audit_ready,
@@ -7464,6 +7597,7 @@ impl WebPreviewView {
                     "runtime_green_claim_gate": runtime_green_claim_gate.clone(),
                     "runtime_green_claim_readiness": runtime_green_claim_readiness.clone(),
                     "runtime_green_report_gate": runtime_green_report_gate.clone(),
+                    "runtime_green_report_badge": runtime_green_report_badge.clone(),
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 },
                 "handoff": {
@@ -7499,6 +7633,7 @@ impl WebPreviewView {
                     "runtime_green_report_gate_status": runtime_green_report_gate.get("status").and_then(Value::as_str),
                     "runtime_green_report_gate_label": runtime_green_report_gate.get("label").and_then(Value::as_str),
                     "runtime_green_report_gate_blocker": runtime_green_report_gate.get("blocker").and_then(Value::as_str),
+                    "runtime_green_report_badge": runtime_green_report_badge,
                     "executor_wired": true,
                     "safe_to_send_to_agent_panel": true,
                 },
@@ -7522,6 +7657,15 @@ impl WebPreviewView {
         {
             blocks.push(url_block);
             blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+        if let Some(report_badge) = packet
+            .pointer("/packet/runtime_green_report_badge")
+            .or_else(|| packet.pointer("/packet/runtime_green_report_gate/badge"))
+        {
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+                "{}\n\n",
+                Self::agent_plugin_runtime_green_report_badge_agent_summary(report_badge)
+            ))));
         }
 
         blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
@@ -11821,6 +11965,8 @@ impl WebPreviewView {
         let runtime_green_report_gate = Self::agent_plugin_runtime_green_report_gate_from_readiness(
             &runtime_green_claim_readiness,
         );
+        let runtime_green_report_badge =
+            Self::agent_plugin_runtime_green_report_badge_from_gate(&runtime_green_report_gate);
 
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_actions.v1",
@@ -11938,8 +12084,18 @@ impl WebPreviewView {
                     "copy_action": "copy_agent_plugin_runtime_green_report_gate",
                     "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
                     "latest_summary": runtime_green_report_gate.clone(),
+                    "badge": runtime_green_report_badge.clone(),
                     "read_only": true,
                     "purpose": "Copy or send the canonical ready/blocked badge agents must check before reporting runtime-green."
+                },
+                "runtime_green_report_badge": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
+                    "source": "runtime_green_report_gate.badge",
+                    "copy_action": "copy_agent_plugin_runtime_green_report_gate",
+                    "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
+                    "latest_summary": runtime_green_report_badge.clone(),
+                    "read_only": true,
+                    "purpose": "Render the compact runtime-green ready/blocked row before showing larger proof packets."
                 }
             },
             "final_validation_observability": self.agent_browser_final_validation_observability(),
@@ -11951,6 +12107,7 @@ impl WebPreviewView {
             "runtime_green_claim_gate": runtime_green_claim_gate,
             "runtime_green_claim_readiness": runtime_green_claim_readiness,
             "runtime_green_report_gate": runtime_green_report_gate,
+            "runtime_green_report_badge": runtime_green_report_badge,
             "notes": [
                 "Read-only actions are always available for context gathering.",
                 "Interactive actions must remain locked until the user explicitly allows them for this WebPreview session.",
@@ -12042,6 +12199,7 @@ impl WebPreviewView {
                     "runtime_green_claim_gate_schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
                     "runtime_green_claim_readiness_schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
                     "runtime_green_report_gate_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
+                    "runtime_green_report_badge_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
                     "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                     "runtime_green_ready_outcomes": {
                         "browser_final_validation_result": "runtime_green_candidate=true",
@@ -12102,10 +12260,19 @@ impl WebPreviewView {
                     },
                     "runtime_green_report_gate": {
                         "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
+                        "badge_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
                         "copy_action": "copy_agent_plugin_runtime_green_report_gate",
                         "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
                         "read_only": true,
                         "purpose": "Share the canonical ready/blocked badge agents must check before reporting runtime-green."
+                    },
+                    "runtime_green_report_badge": {
+                        "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
+                        "source": "runtime_green_report_gate.badge",
+                        "copy_action": "copy_agent_plugin_runtime_green_report_gate",
+                        "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
+                        "read_only": true,
+                        "purpose": "Render the compact runtime-green ready/blocked row before showing larger proof packets."
                     }
                 },
                 "available_to": [
@@ -12274,6 +12441,7 @@ impl WebPreviewView {
                                 "runtime_green_claim_gate": "copy_agent_plugin_runtime_green_claim_gate",
                                 "runtime_green_claim_readiness": "copy_agent_plugin_runtime_green_claim_readiness",
                                 "runtime_green_report_gate": "copy_agent_plugin_runtime_green_report_gate",
+                                "runtime_green_report_badge": "copy_agent_plugin_runtime_green_report_gate",
                                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -12433,11 +12601,20 @@ impl WebPreviewView {
                         },
                         "runtime_green_report_gate_handoff": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
+                            "badge_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
                             "copy_action": "copy_agent_plugin_runtime_green_report_gate",
                             "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
                             "read_only": true,
                             "source": "WebPreview More menu",
                             "purpose": "Copy or send the ready/blocked report gate that agents must check before reporting runtime-green."
+                        },
+                        "runtime_green_report_badge": {
+                            "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
+                            "source": "runtime_green_report_gate.badge",
+                            "copy_action": "copy_agent_plugin_runtime_green_report_gate",
+                            "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
+                            "read_only": true,
+                            "purpose": "Render the compact runtime-green ready/blocked row before showing larger proof packets."
                         },
                         "capabilities": [
                             {"id": "browser.sessions.list", "state": "available", "description": "List open WebPreview sessions and workspace inventory."},
@@ -12455,6 +12632,7 @@ impl WebPreviewView {
                             {"id": "browser.plugin_bootstrap_readiness", "state": "available", "description": "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."},
                             {"id": "browser.runtime_green_claim_readiness", "state": "available", "description": "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."},
                             {"id": "browser.runtime_green_report_gate", "state": "available", "description": "Copy or send the canonical runtime-green ready/blocked report gate."},
+                            {"id": "browser.runtime_green_report_badge", "state": "available", "description": "Render the runtime-green ready/blocked status row from the report gate."},
                             {"id": "browser.action.open_url", "state": "available_when_unlocked", "description": "Open the current URL/search editor text through the permissioned WebPreview executor shell."},
                             {"id": "browser.action.reload", "state": "available_when_unlocked", "description": "Reload through the permissioned WebPreview executor shell."},
                             {"id": "browser.action.go_back", "state": "available_when_unlocked", "description": "Navigate back through the native WebPreview history executor after unlock, native history trace, QA checklist, and receipt logging."},
