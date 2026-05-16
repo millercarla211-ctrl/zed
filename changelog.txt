@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime Final Report Packet Status Summary
+
+ADDED:
+- `inspect_agent_plugin_runtime_status` now emits `runtime_green_final_report_packet_summary`, a schema-versioned compact summary of the final report packet for right-side panel status surfaces.
+- Agent and WebPreview plugin catalogs now advertise the final-report packet summary schema and runtime-status summary field alongside the full packet handoff.
+
+CHANGED:
+- Runtime-status consumers can now read report-gate state, final-proof guide state, related copy actions, final manual command, regression-watch state, and read-only/input safety flags without parsing the full final report packet first.
+
+NOTES:
+- This is read-only metadata only. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Report Readiness Status Summary
 
 ADDED:

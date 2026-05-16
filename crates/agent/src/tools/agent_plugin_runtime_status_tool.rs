@@ -104,6 +104,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_proof_guide.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_report_packet.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_final_report_packet_summary.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_report_readiness_card.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA: &str =
@@ -480,6 +482,8 @@ fn inspect_runtime_status(
         &runtime_green_report_gate_value,
         &runtime_green_final_report_packet_value,
     );
+    let runtime_green_final_report_packet_summary =
+        runtime_green_final_report_packet_summary(&runtime_green_final_report_packet_value);
     let runtime_green_report_readiness_card_value = runtime_green_report_readiness_card(
         &runtime_green_claim_readiness_value,
         &runtime_green_report_gate_value,
@@ -535,6 +539,7 @@ fn inspect_runtime_status(
         "runtime_green_final_proof_audit": runtime_green_final_proof_audit_value,
         "runtime_green_final_proof_audit_summary": runtime_green_final_proof_audit_summary,
         "runtime_green_final_report_packet": runtime_green_final_report_packet_value,
+        "runtime_green_final_report_packet_summary": runtime_green_final_report_packet_summary,
         "runtime_green_report_readiness_card": runtime_green_report_readiness_card_value,
         "runtime_green_report_readiness_card_summary": runtime_green_report_readiness_card_summary,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
@@ -578,6 +583,7 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
             "final_proof_audit_summary": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_green_final_proof_guide": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
             "runtime_green_final_report_packet": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+            "runtime_green_final_report_packet_summary": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
             "runtime_green_report_readiness_card": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
             "runtime_green_report_readiness_card_summary": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
         },
@@ -2924,6 +2930,7 @@ fn runtime_green_proof_path(
                     "runtime_green_final_proof_audit",
                     "runtime_green_final_proof_audit_summary",
                     "runtime_green_final_report_packet",
+                    "runtime_green_final_report_packet_summary",
                     "runtime_green_report_readiness_card",
                     "runtime_green_report_readiness_card_summary"
                 ],
@@ -2999,6 +3006,8 @@ fn runtime_green_proof_path(
             },
             "runtime_green_final_report_packet": {
                 "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+                "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
+                "runtime_status_summary_field": "runtime_green_final_report_packet_summary",
                 "source": "runtime_green_report_gate + final_validation_result_import_receipt",
                 "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
                 "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent"
@@ -3032,6 +3041,7 @@ fn runtime_green_proof_path(
             "runtime_green_final_proof_audit",
             "runtime_green_final_proof_audit_summary",
             "runtime_green_final_report_packet",
+            "runtime_green_final_report_packet_summary",
             "runtime_green_report_readiness_card",
             "runtime_green_report_readiness_card_summary"
         ],
@@ -3741,6 +3751,67 @@ fn runtime_green_final_report_packet(
         "runs_node": false,
         "launches_browser": false,
         "dispatches_input": false,
+    })
+}
+
+fn runtime_green_final_report_packet_summary(packet: &Value) -> Value {
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
+        "source_schema": packet.get("schema").and_then(Value::as_str),
+        "status": packet.get("status").and_then(Value::as_str),
+        "root_mode": packet.get("root_mode").and_then(Value::as_str),
+        "may_report_runtime_green": packet
+            .get("may_report_runtime_green")
+            .and_then(Value::as_bool),
+        "blocker": packet.get("blocker").and_then(Value::as_str),
+        "next_action": packet.get("next_action").and_then(Value::as_str),
+        "final_manual_command": packet
+            .get("final_manual_command")
+            .and_then(Value::as_str),
+        "report_gate_status": packet
+            .pointer("/report_gate/status")
+            .and_then(Value::as_str),
+        "report_gate_can_report": packet
+            .pointer("/report_gate/can_report_runtime_green")
+            .and_then(Value::as_bool),
+        "report_gate_next_action": packet
+            .pointer("/report_gate/next_action")
+            .and_then(Value::as_str),
+        "final_proof_guide_status": packet
+            .pointer("/final_proof_guide/status")
+            .and_then(Value::as_str),
+        "final_proof_guide_next_action": packet
+            .pointer("/final_proof_guide/next_action")
+            .and_then(Value::as_str),
+        "regression_watch_status": packet
+            .pointer("/regression_watch/status")
+            .and_then(Value::as_str),
+        "regression_watch_lane_count": packet
+            .pointer("/regression_watch/watched_plugin_count")
+            .and_then(Value::as_u64),
+        "first_regression_watch_status": packet
+            .pointer("/regression_watch/first_watch/status")
+            .and_then(Value::as_str),
+        "webpreview_copy_action": packet
+            .get("webpreview_copy_action")
+            .and_then(Value::as_str),
+        "webpreview_send_action": packet
+            .get("webpreview_send_action")
+            .and_then(Value::as_str),
+        "report_gate_copy_action": packet
+            .pointer("/report_gate/copy_action")
+            .and_then(Value::as_str),
+        "final_proof_guide_copy_action": packet
+            .pointer("/final_proof_guide/copy_action")
+            .and_then(Value::as_str),
+        "import_receipt_copy_action": packet
+            .pointer("/webpreview_import_receipt/copy_action")
+            .and_then(Value::as_str),
+        "read_only": packet.get("read_only").and_then(Value::as_bool),
+        "writes_files": packet.get("writes_files").and_then(Value::as_bool),
+        "runs_node": packet.get("runs_node").and_then(Value::as_bool),
+        "launches_browser": packet.get("launches_browser").and_then(Value::as_bool),
+        "dispatches_input": packet.get("dispatches_input").and_then(Value::as_bool),
     })
 }
 
