@@ -3810,7 +3810,7 @@ fn observability_profiles(runtime_status: &str, roots: &AgentPluginRuntimeRoots)
                     "managed workspace or Zed-data roots only",
                     "asset provisioning receipts prove managed assets were prepared before Chrome execution",
                     "real Chrome, Edge, and Firefox profiles stay untouched",
-                    "adapter execution remains limited to open_url, screenshot, inspect_element, dom_snapshot, set_viewport, and wait_for_selector",
+                    "adapter execution remains limited to open_url, screenshot, inspect_element, dom_snapshot, runtime_events, set_viewport, and wait_for_selector",
                     "click, type, key, and scroll stay blocked in the managed adapter",
                     "runner and execution receipts stay inspectable"
                 ]
@@ -4633,7 +4633,7 @@ fn workflow_recipes() -> Value {
         },
         "chrome_managed_playwright_safe_actions": {
             "goal": "Run managed external Chrome only for currently allowlisted Playwright actions.",
-            "safe_for": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "set_viewport", "wait_for_selector"],
+            "safe_for": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "runtime_events", "set_viewport", "wait_for_selector"],
             "blocked_actions": ["click", "type_text", "press_key", "scroll"],
             "ordered_steps": [
                 {
@@ -4753,7 +4753,7 @@ fn validation_matrix() -> Value {
             "goal": "Prove the managed external Chrome plugin path can prepare and run only safe Playwright actions from managed profiles.",
             "cases": [
                 "inspect runtime host probes for Node, npm, Chrome or Edge, Playwright package, DX extension manifest, and managed profile roots",
-                "compose and queue open_url, screenshot, inspect_element, dom_snapshot, set_viewport, and wait_for_selector payloads",
+                "compose and queue open_url, screenshot, inspect_element, dom_snapshot, runtime_events, set_viewport, and wait_for_selector payloads",
                 "inspect the managed Chrome queue before any runner request",
                 "write a runner-gate receipt without launching Chrome",
                 "prepare the managed Playwright adapter files",

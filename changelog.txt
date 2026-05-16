@@ -1,3 +1,16 @@
+[2026-05-17] - Agent Plugin Runtime Managed Chrome Runtime Events
+
+ADDED:
+- Managed Chrome payload composition and queue validation now accept a read-only `runtime_events` action with bounded observation-time validation.
+- The generated managed Playwright adapter now supports `runtime_events`, collecting bounded console messages, page errors, failed requests, HTTP error responses, and performance-resource summaries into execution receipts.
+
+CHANGED:
+- Managed Chrome runner gates, adapter invocation readiness, execution inspection, runtime-status recipes, and Agent/WebPreview plugin catalogs now advertise `runtime_events` as an allowlisted non-input Playwright action.
+- Managed Chrome execution summaries now surface compact runtime-event receipt counts beside screenshot, element inspection, and DOM snapshot summaries.
+
+NOTES:
+- This does not enable click, type, key, or scroll in managed Chrome. It still requires managed roots, a ready runner receipt, explicit adapter invocation authorization, managed browser profiles, and final Windows runtime proof before runtime-green reporting.
+
 [2026-05-17] - Agent Plugin Runtime Managed Chrome DOM Snapshot
 
 ADDED:

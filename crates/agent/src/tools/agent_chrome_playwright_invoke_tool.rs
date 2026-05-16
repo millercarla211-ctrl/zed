@@ -343,7 +343,7 @@ impl ManagedChromePlaywrightInvocation {
                 is_safe_adapter_action(&action),
                 None,
                 "action_blocker",
-                "Only open_url, screenshot, inspect_element, dom_snapshot, set_viewport, and wait_for_selector are adapter-enabled.",
+                "Only open_url, screenshot, inspect_element, dom_snapshot, runtime_events, set_viewport, and wait_for_selector are adapter-enabled.",
             ),
             readiness_check(
                 "runner_gate.ready_receipt",
@@ -542,7 +542,7 @@ impl ManagedChromePlaywrightInvocation {
             },
             "safety": {
                 "permission_required_for_execution": true,
-                "safe_actions_only": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "set_viewport", "wait_for_selector"],
+                "safe_actions_only": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "runtime_events", "set_viewport", "wait_for_selector"],
                 "input_actions_blocked": ["click", "type_text", "press_key", "scroll"],
                 "managed_profile_only": true,
                 "real_browser_profiles_touched": false,
@@ -823,6 +823,7 @@ fn is_safe_adapter_action(action: &str) -> bool {
             | "screenshot"
             | "inspect_element"
             | "dom_snapshot"
+            | "runtime_events"
             | "set_viewport"
             | "wait_for_selector"
     )
@@ -839,6 +840,7 @@ fn is_supported_action(action: &str) -> bool {
             | "screenshot"
             | "inspect_element"
             | "dom_snapshot"
+            | "runtime_events"
             | "wait_for_selector"
             | "set_viewport"
     )

@@ -132,6 +132,7 @@ pub enum AgentChromePayloadAction {
     Screenshot,
     InspectElement,
     DomSnapshot,
+    RuntimeEvents,
     WaitForSelector,
     SetViewport,
 }
@@ -165,6 +166,9 @@ impl AgentTool for AgentChromePayloadTool {
             }
             Ok(AgentChromePayloadAction::DomSnapshot) => {
                 "Compose Chrome DOM snapshot payload".into()
+            }
+            Ok(AgentChromePayloadAction::RuntimeEvents) => {
+                "Compose Chrome runtime events payload".into()
             }
             Ok(AgentChromePayloadAction::WaitForSelector) => "Compose Chrome wait payload".into(),
             Ok(AgentChromePayloadAction::SetViewport) => "Compose Chrome viewport payload".into(),
@@ -269,6 +273,9 @@ impl AgentTool for AgentChromePayloadQueueTool {
                 "Queue Chrome inspect element payload".into()
             }
             Ok(AgentChromePayloadAction::DomSnapshot) => "Queue Chrome DOM snapshot payload".into(),
+            Ok(AgentChromePayloadAction::RuntimeEvents) => {
+                "Queue Chrome runtime events payload".into()
+            }
             Ok(AgentChromePayloadAction::WaitForSelector) => "Queue Chrome wait payload".into(),
             Ok(AgentChromePayloadAction::SetViewport) => "Queue Chrome viewport payload".into(),
             Err(_) => "Queue Chrome action payload".into(),
@@ -489,6 +496,7 @@ fn compose_managed_chrome_payload(input: &AgentChromePayloadToolInput) -> Value 
         AgentChromePayloadAction::DomSnapshot => {
             dom_snapshot_payload(input, &mut blockers, &mut warnings)
         }
+        AgentChromePayloadAction::RuntimeEvents => runtime_events_payload(input, &mut blockers),
         AgentChromePayloadAction::WaitForSelector => {
             wait_for_selector_payload(input, &mut blockers)
         }
@@ -762,6 +770,21 @@ fn dom_snapshot_payload(
     })
 }
 
+fn runtime_events_payload(input: &AgentChromePayloadToolInput, blockers: &mut Vec<Value>) -> Value {
+    if input.timeout_ms == 0 || input.timeout_ms > MAX_WAIT_TIMEOUT_MS {
+        blockers.push(blocker(
+            "unsupported_timeout",
+            "Runtime event observation timeouts must be between 1 and 30000 milliseconds.",
+            "Use a bounded timeout_ms value, usually 1000 to 5000.",
+        ));
+    }
+
+    serde_json::json!({
+        "action": "runtime_events",
+        "timeout_ms": input.timeout_ms,
+    })
+}
+
 fn wait_for_selector_payload(
     input: &AgentChromePayloadToolInput,
     blockers: &mut Vec<Value>,
@@ -856,6 +879,7 @@ fn action_name(action: AgentChromePayloadAction) -> &'static str {
         AgentChromePayloadAction::Screenshot => "screenshot",
         AgentChromePayloadAction::InspectElement => "inspect_element",
         AgentChromePayloadAction::DomSnapshot => "dom_snapshot",
+        AgentChromePayloadAction::RuntimeEvents => "runtime_events",
         AgentChromePayloadAction::WaitForSelector => "wait_for_selector",
         AgentChromePayloadAction::SetViewport => "set_viewport",
     }

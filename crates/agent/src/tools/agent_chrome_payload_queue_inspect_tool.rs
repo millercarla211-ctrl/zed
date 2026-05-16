@@ -535,6 +535,7 @@ fn is_supported_action(action: &str) -> bool {
             | "screenshot"
             | "inspect_element"
             | "dom_snapshot"
+            | "runtime_events"
             | "wait_for_selector"
             | "set_viewport"
     )

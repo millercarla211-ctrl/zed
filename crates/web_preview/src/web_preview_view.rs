@@ -13741,7 +13741,7 @@ impl WebPreviewView {
                             "include_payload_packet": false
                         },
                         "requires_permission_for_execution": true,
-                        "safe_actions_only": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "set_viewport", "wait_for_selector"],
+                        "safe_actions_only": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "runtime_events", "set_viewport", "wait_for_selector"],
                         "input_actions_blocked": ["click", "type_text", "press_key", "scroll"]
                     },
                     "playwright_execution_inspect_tool": {
@@ -14165,7 +14165,7 @@ impl WebPreviewView {
                                 "managed workspace or Zed-data roots only",
                                 "asset provisioning receipts prove managed assets were prepared before Chrome execution",
                                 "real Chrome, Edge, and Firefox profiles stay untouched",
-                                "adapter execution remains limited to open_url, screenshot, inspect_element, dom_snapshot, set_viewport, and wait_for_selector",
+                                "adapter execution remains limited to open_url, screenshot, inspect_element, dom_snapshot, runtime_events, set_viewport, and wait_for_selector",
                                 "click, type, key, and scroll stay blocked in the managed adapter",
                                 "runner and execution receipts stay inspectable from Agent and WebPreview catalogs"
                             ],
@@ -14237,6 +14237,7 @@ impl WebPreviewView {
                                 "screenshot",
                                 "inspect_element",
                                 "dom_snapshot",
+                                "runtime_events",
                                 "wait_for_selector",
                                 "set_viewport"
                             ],
@@ -14245,7 +14246,7 @@ impl WebPreviewView {
                                 "Queued payloads are written only to managed workspace or Zed-data plugin roots after authorization.",
                                 "The managed asset provisioner can write an asset receipt or copy a local unpacked DX Chrome extension into managed roots without downloads, Node, or Chrome launch.",
                                 "The Playwright adapter preparation tool writes only versioned adapter files under managed roots and does not run Node.",
-                                "The Playwright invocation tool can run only open_url, screenshot, inspect_element, dom_snapshot, set_viewport, and wait_for_selector after authorization and a ready runner receipt.",
+                                "The Playwright invocation tool can run only open_url, screenshot, inspect_element, dom_snapshot, runtime_events, set_viewport, and wait_for_selector after authorization and a ready runner receipt.",
                                 "The Playwright execution inspection tool is read-only and summarizes managed request and receipt files.",
                                 "WebPreview can copy or send the latest managed execution status to the Agent Panel without launching Chrome.",
                                 "Future execution must use managed profiles, explicit permission, fresh preflight, and receipts.",
@@ -14259,7 +14260,7 @@ impl WebPreviewView {
                             {"id": "chrome.action.runner_gate", "state": "available_requires_authorization", "description": "Use request_managed_chrome_payload_run to write a permissioned runner receipt that blocks until queue, bootstrap, managed-profile, and future adapter requirements are satisfied."},
                             {"id": "chrome.runtime.asset_provisioner", "state": "available_requires_authorization", "description": "Use prepare_agent_plugin_managed_assets to write an asset receipt or copy a local unpacked DX Chrome extension into managed roots without downloads, Node, or Chrome launch."},
                             {"id": "chrome.runtime.playwright_adapter_prepare", "state": "available_requires_authorization", "description": "Use prepare_managed_chrome_playwright_adapter to write a versioned managed Playwright adapter artifact without installing packages, launching Chrome, or dispatching input."},
-                            {"id": "chrome.runtime.playwright_adapter_invoke", "state": "available_requires_authorization", "description": "Use invoke_managed_chrome_playwright_adapter to run the prepared adapter for open_url, screenshot, inspect_element, dom_snapshot, set_viewport, or wait_for_selector after a ready runner receipt."},
+                            {"id": "chrome.runtime.playwright_adapter_invoke", "state": "available_requires_authorization", "description": "Use invoke_managed_chrome_playwright_adapter to run the prepared adapter for open_url, screenshot, inspect_element, dom_snapshot, runtime_events, set_viewport, or wait_for_selector after a ready runner receipt."},
                             {"id": "chrome.runtime.playwright_execution_inspect", "state": "available", "description": "Use inspect_managed_chrome_playwright_executions to read recent managed run requests and execution receipts without launching Chrome."},
                             {"id": "chrome.runtime.playwright_execution_status_handoff", "state": "available", "description": "Use WebPreview Copy/Send Managed Chrome Execution Status to hand the latest managed request or receipt summary to the Agent Panel."},
                             {"id": "chrome.action.payload_queue_schema", "state": "available", "description": "Read the managed Chrome payload packet, queue item, queue result, and latest-file schemas for future runner execution."},
@@ -14272,7 +14273,7 @@ impl WebPreviewView {
                             {"id": "chrome.page.screenshot", "state": "requires_bootstrap", "description": "Capture full-page or viewport screenshots."},
                             {"id": "chrome.page.inspect_element", "state": "requires_bootstrap", "description": "Read selector-scoped tag, attribute, bounds, visibility, and computed-style summaries from managed Chrome receipts."},
                             {"id": "chrome.page.dom_snapshot", "state": "requires_bootstrap", "description": "Read bounded document or selector-scoped DOM snapshots from managed Chrome receipts."},
-                            {"id": "chrome.runtime.console", "state": "requires_bootstrap", "description": "Read console, page errors, and network events."},
+                            {"id": "chrome.runtime.console", "state": "requires_bootstrap", "description": "Read bounded console, page error, failed request, HTTP error, and performance-resource summaries from managed Chrome receipts."},
                             {"id": "chrome.extension.bridge", "state": "requires_bootstrap", "description": "Use the DX Chrome extension bridge for pages where DevTools-only control is insufficient."}
                         ],
                         "safety": {
@@ -19127,6 +19128,7 @@ fn managed_chrome_execution_file_read_summary(path: &Path, expected_schema: &str
         "screenshot": value.pointer("/artifacts/screenshot").and_then(Value::as_str),
         "inspect_element": managed_chrome_inspect_element_summary(&value),
         "dom_snapshot": managed_chrome_dom_snapshot_summary(&value),
+        "runtime_events": managed_chrome_runtime_events_summary(&value),
         "page_scripts_executed": value.pointer("/safety/page_scripts_executed").and_then(Value::as_bool),
         "error": value.get("error").and_then(Value::as_str),
         "receipt_path": value.pointer("/execution/receipt_path").and_then(Value::as_str),
@@ -19159,11 +19161,27 @@ fn managed_chrome_dom_snapshot_summary(value: &Value) -> Option<Value> {
     }))
 }
 
+fn managed_chrome_runtime_events_summary(value: &Value) -> Option<Value> {
+    let events = value.get("runtime_events")?;
+    Some(serde_json::json!({
+        "observation_ms": events.get("observation_ms").and_then(Value::as_u64),
+        "url": events.pointer("/page/url").and_then(Value::as_str),
+        "ready_state": events.pointer("/page/ready_state").and_then(Value::as_str),
+        "console_message_count": events.get("console_messages").and_then(Value::as_array).map(|items| items.len()),
+        "page_error_count": events.get("page_errors").and_then(Value::as_array).map(|items| items.len()),
+        "request_failure_count": events.get("request_failures").and_then(Value::as_array).map(|items| items.len()),
+        "response_error_count": events.get("response_errors").and_then(Value::as_array).map(|items| items.len()),
+        "resource_summary": events.pointer("/page/resource_summary").cloned(),
+        "truncated": events.get("truncated").cloned(),
+        "dropped_counts": events.get("dropped_counts").cloned(),
+    }))
+}
+
 fn managed_chrome_execution_next_actions(status: &str) -> Vec<&'static str> {
     match status {
         "has_recent_execution_receipt" => vec![
             "Send this status to the Agent Panel when the agent needs the latest external Chrome outcome.",
-            "Inspect the receipt error, screenshot artifact, DOM snapshot, or element inspection summary before queueing another managed Chrome action.",
+            "Inspect the receipt error, screenshot artifact, runtime events, DOM snapshot, or element inspection summary before queueing another managed Chrome action.",
         ],
         "has_request_without_receipt" => vec![
             "Invoke the prepared Playwright adapter after runner-gate readiness passes.",

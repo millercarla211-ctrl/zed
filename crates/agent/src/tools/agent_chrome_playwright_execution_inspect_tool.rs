@@ -390,6 +390,7 @@ fn read_json_summary(path: &Path) -> Value {
         "screenshot": value.pointer("/artifacts/screenshot").and_then(Value::as_str),
         "inspect_element": inspect_element_receipt_summary(&value),
         "dom_snapshot": dom_snapshot_receipt_summary(&value),
+        "runtime_events": runtime_events_receipt_summary(&value),
         "page_scripts_executed": value.pointer("/safety/page_scripts_executed").and_then(Value::as_bool),
         "error": value.get("error").and_then(Value::as_str),
         "value": value.clone(),
@@ -422,11 +423,27 @@ fn dom_snapshot_receipt_summary(value: &Value) -> Option<Value> {
     }))
 }
 
+fn runtime_events_receipt_summary(value: &Value) -> Option<Value> {
+    let events = value.get("runtime_events")?;
+    Some(serde_json::json!({
+        "observation_ms": events.get("observation_ms").and_then(Value::as_u64),
+        "url": events.pointer("/page/url").and_then(Value::as_str),
+        "ready_state": events.pointer("/page/ready_state").and_then(Value::as_str),
+        "console_message_count": events.get("console_messages").and_then(Value::as_array).map(|items| items.len()),
+        "page_error_count": events.get("page_errors").and_then(Value::as_array).map(|items| items.len()),
+        "request_failure_count": events.get("request_failures").and_then(Value::as_array).map(|items| items.len()),
+        "response_error_count": events.get("response_errors").and_then(Value::as_array).map(|items| items.len()),
+        "resource_summary": events.pointer("/page/resource_summary").cloned(),
+        "truncated": events.get("truncated").cloned(),
+        "dropped_counts": events.get("dropped_counts").cloned(),
+    }))
+}
+
 fn next_actions(status: &str) -> Vec<&'static str> {
     match status {
         "has_recent_execution_receipts" => vec![
             "Send the latest receipt summary to the Agent Panel or browser status surface.",
-            "If an action failed, inspect the receipt error, screenshot artifact, DOM snapshot, or element inspection summary before queueing another payload.",
+            "If an action failed, inspect the receipt error, screenshot artifact, runtime events, DOM snapshot, or element inspection summary before queueing another payload.",
         ],
         "has_requests_without_receipts" => vec![
             "Run invoke_managed_chrome_playwright_adapter after checking runner-gate readiness.",

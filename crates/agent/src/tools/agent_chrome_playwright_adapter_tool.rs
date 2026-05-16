@@ -237,7 +237,7 @@ impl ManagedChromePlaywrightAdapterPlan {
                 "package_json": path_string(&self.package_json_path),
                 "manifest": path_string(&self.manifest_path),
                 "readme": path_string(&self.readme_path),
-                "supported_actions": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "set_viewport", "wait_for_selector"],
+                "supported_actions": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "runtime_events", "set_viewport", "wait_for_selector"],
                 "input_actions_blocked_by_default": ["click", "type_text", "press_key", "scroll"],
             },
             "roots": {
@@ -347,7 +347,7 @@ struct AdapterFile {
 fn adapter_package_json() -> Result<String, String> {
     serde_json::to_string_pretty(&serde_json::json!({
         "name": "@zed/managed-chrome-runner",
-        "version": "0.1.2",
+        "version": "0.1.3",
         "private": true,
         "type": "module",
         "description": "Managed Playwright adapter for DX/Zed Agent Chrome plugin receipts.",
@@ -367,7 +367,7 @@ fn adapter_manifest_json(plan: &ManagedChromePlaywrightAdapterPlan) -> Result<St
         "generated_at_ms": current_epoch_millis(),
         "adapter": {
             "name": "DX/Zed Managed Chrome Playwright Adapter",
-            "version": "0.1.2",
+            "version": "0.1.3",
             "root": path_string(&plan.adapter_root),
             "runner_script": path_string(&plan.runner_script_path),
             "execution_receipt_schema": AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA,
@@ -378,7 +378,7 @@ fn adapter_manifest_json(plan: &ManagedChromePlaywrightAdapterPlan) -> Result<St
             "dx_extension_root": path_string(&plan.dx_extension_root),
             "managed_chrome_profile_root": path_string(&plan.managed_profile_root)
         },
-        "supported_actions": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "set_viewport", "wait_for_selector"],
+        "supported_actions": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "runtime_events", "set_viewport", "wait_for_selector"],
         "input_actions_blocked_by_default": ["click", "type_text", "press_key", "scroll"],
         "safety": {
             "managed_profile_only": true,
@@ -424,6 +424,7 @@ Supported execution actions:
 - screenshot
 - inspect_element
 - dom_snapshot
+- runtime_events
 - set_viewport
 - wait_for_selector
 
@@ -439,7 +440,7 @@ import path from "node:path";
 
 const RECEIPT_SCHEMA = "zed.agent_plugins.managed_chrome_playwright_execution_receipt.v1";
 const INPUT_ACTIONS = new Set(["click", "type_text", "press_key", "scroll"]);
-const SUPPORTED_ACTIONS = new Set(["open_url", "screenshot", "inspect_element", "dom_snapshot", "set_viewport", "wait_for_selector"]);
+const SUPPORTED_ACTIONS = new Set(["open_url", "screenshot", "inspect_element", "dom_snapshot", "runtime_events", "set_viewport", "wait_for_selector"]);
 
 function parseArgs(argv) {
   const args = {};
@@ -784,6 +785,115 @@ async function main() {
         };
       }, payload.selector ?? null);
       receipt.dom_snapshot = snapshot;
+      receipt.safety.page_scripts_executed = true;
+    } else if (payload.action === "runtime_events") {
+      const observationMs = Math.max(1, Math.min(Number(payload.timeout_ms ?? 1000), 30000));
+      const consoleMessages = [];
+      const pageErrors = [];
+      const requestFailures = [];
+      const responseErrors = [];
+      const dropped = {
+        console_messages: 0,
+        page_errors: 0,
+        request_failures: 0,
+        response_errors: 0
+      };
+      const pushBounded = (target, item, droppedKey, max = 80) => {
+        if (target.length < max) {
+          target.push(item);
+        } else {
+          dropped[droppedKey] += 1;
+        }
+      };
+
+      page.on("console", (message) => {
+        pushBounded(consoleMessages, {
+          type: message.type(),
+          text: String(message.text() ?? "").slice(0, 1000),
+          location: message.location()
+        }, "console_messages");
+      });
+      page.on("pageerror", (error) => {
+        pushBounded(pageErrors, {
+          message: String(error?.message ?? error).slice(0, 1000),
+          stack: String(error?.stack ?? "").slice(0, 2000)
+        }, "page_errors");
+      });
+      page.on("requestfailed", (request) => {
+        pushBounded(requestFailures, {
+          url: request.url(),
+          method: request.method(),
+          resource_type: request.resourceType(),
+          failure: request.failure()?.errorText ?? null
+        }, "request_failures");
+      });
+      page.on("response", (response) => {
+        if (response.status() >= 400) {
+          pushBounded(responseErrors, {
+            url: response.url(),
+            status: response.status(),
+            status_text: response.statusText(),
+            resource_type: response.request().resourceType()
+          }, "response_errors");
+        }
+      });
+
+      await page.waitForTimeout(observationMs);
+      const pageSnapshot = await page.evaluate(() => {
+        const allResourceEntries = performance.getEntriesByType("resource");
+        const entries = allResourceEntries
+          .slice(-80)
+          .map((entry) => ({
+            name: String(entry.name ?? "").slice(0, 500),
+            initiator_type: entry.initiatorType ?? null,
+            transfer_size: entry.transferSize ?? null,
+            encoded_body_size: entry.encodedBodySize ?? null,
+            decoded_body_size: entry.decodedBodySize ?? null,
+            duration_ms: Math.round(entry.duration ?? 0),
+            start_time_ms: Math.round(entry.startTime ?? 0)
+          }));
+        const navigation = performance.getEntriesByType("navigation")[0];
+        return {
+          url: window.location.href,
+          title: document.title || null,
+          ready_state: document.readyState,
+          visibility_state: document.visibilityState,
+          online: navigator.onLine,
+          user_agent: navigator.userAgent,
+          navigation: navigation ? {
+            type: navigation.type,
+            dom_content_loaded_ms: Math.round(navigation.domContentLoadedEventEnd ?? 0),
+            load_event_ms: Math.round(navigation.loadEventEnd ?? 0),
+            duration_ms: Math.round(navigation.duration ?? 0),
+            transfer_size: navigation.transferSize ?? null,
+            encoded_body_size: navigation.encodedBodySize ?? null,
+            decoded_body_size: navigation.decodedBodySize ?? null
+          } : null,
+          resource_summary: {
+            count: allResourceEntries.length,
+            returned_count: entries.length,
+            failed_or_zero_transfer_count: allResourceEntries.filter((entry) => entry.transferSize === 0).length,
+            slow_count: allResourceEntries.filter((entry) => entry.duration >= 1000).length
+          },
+          recent_resources: entries
+        };
+      });
+      receipt.runtime_events = {
+        observation_ms: observationMs,
+        console_messages: consoleMessages,
+        page_errors: pageErrors,
+        request_failures: requestFailures,
+        response_errors: responseErrors,
+        page: pageSnapshot,
+        truncated: {
+          console_messages: dropped.console_messages > 0,
+          page_errors: dropped.page_errors > 0,
+          request_failures: dropped.request_failures > 0,
+          response_errors: dropped.response_errors > 0,
+          recent_resources: pageSnapshot.resource_summary.count > pageSnapshot.recent_resources.length
+        },
+        dropped_counts: dropped
+      };
       receipt.safety.page_scripts_executed = true;
     }
 
