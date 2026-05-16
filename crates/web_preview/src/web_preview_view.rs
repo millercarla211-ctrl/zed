@@ -2064,17 +2064,43 @@ impl WebPreviewView {
 
     fn agent_browser_final_proof_audit_summary(audit: &Value) -> Value {
         serde_json::json!({
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
+            "source_schema": audit.get("schema").and_then(Value::as_str),
             "generated_at_ms": audit.pointer("/audit/generated_at_ms").and_then(Value::as_u64),
             "status": audit.pointer("/audit/status").and_then(Value::as_str),
             "runtime_green_candidate": audit.pointer("/audit/runtime_green_candidate").and_then(Value::as_bool),
+            "overall_runtime_green_candidate": audit
+                .pointer("/audit/overall_runtime_green_candidate")
+                .and_then(Value::as_bool),
             "may_report_runtime_green": audit.pointer("/audit/may_report_runtime_green").and_then(Value::as_bool),
+            "final_result_present": audit
+                .pointer("/audit/final_result_present")
+                .and_then(Value::as_bool),
+            "final_result_runtime_green": audit
+                .pointer("/audit/final_result_runtime_green")
+                .and_then(Value::as_bool),
             "next_action": audit.pointer("/audit/next_action").and_then(Value::as_str),
             "missing_required_checks": audit.pointer("/audit/missing_required_checks").cloned(),
+            "missing_required_check_count": audit
+                .pointer("/audit/missing_required_checks")
+                .and_then(Value::as_array)
+                .map(Vec::len),
             "missing_required_evidence": audit.pointer("/audit/missing_required_evidence").cloned(),
+            "missing_required_evidence_count": audit
+                .pointer("/audit/missing_required_evidence")
+                .and_then(Value::as_array)
+                .map(Vec::len),
             "required_check_blocker_count": audit.pointer("/audit/required_check_blocker_count").and_then(Value::as_u64),
             "overall_blocker": audit.pointer("/audit/overall_blocker").cloned(),
+            "has_overall_blocker": audit.pointer("/audit/has_overall_blocker").and_then(Value::as_bool),
             "report_gate_status": audit.pointer("/audit/report_gate/status").and_then(Value::as_str),
             "report_gate_blocker": audit.pointer("/audit/report_gate/blocker").and_then(Value::as_str),
+            "report_gate_can_report_runtime_green": audit
+                .pointer("/audit/report_gate/can_report_runtime_green")
+                .and_then(Value::as_bool),
+            "report_gate_next_action": audit
+                .pointer("/audit/report_gate/next_action")
+                .and_then(Value::as_str),
             "regression_watch_status": audit.pointer("/audit/regression_watch/status").and_then(Value::as_str),
             "regression_watch_lane_count": audit
                 .pointer("/audit/regression_watch/watched_plugin_count")
@@ -2082,6 +2108,19 @@ impl WebPreviewView {
             "first_regression_watch_status": audit
                 .pointer("/audit/regression_watch/first_watch_status")
                 .and_then(Value::as_str),
+            "final_report_packet_status": audit
+                .pointer("/latest/final_report_packet/status")
+                .and_then(Value::as_str),
+            "final_report_packet_next_action": audit
+                .pointer("/latest/final_report_packet/next_action")
+                .and_then(Value::as_str),
+            "webpreview_copy_action": audit.get("webpreview_copy_action").and_then(Value::as_str),
+            "webpreview_send_action": audit.get("webpreview_send_action").and_then(Value::as_str),
+            "read_only": audit.get("read_only").and_then(Value::as_bool),
+            "writes_files": audit.get("writes_files").and_then(Value::as_bool),
+            "runs_node": audit.get("runs_node").and_then(Value::as_bool),
+            "launches_browser": audit.get("launches_browser").and_then(Value::as_bool),
+            "dispatches_input": audit.get("dispatches_input").and_then(Value::as_bool),
         })
     }
 
@@ -2405,10 +2444,26 @@ impl WebPreviewView {
         let result_summary = self.latest_agent_browser_final_validation_result_summary();
         let observability = self.agent_browser_final_validation_observability();
         let report_gate = self.agent_plugin_runtime_green_report_gate_snapshot();
+        let final_proof_guide =
+            self.agent_plugin_runtime_green_final_proof_guide_from_report_gate(&report_gate);
+        let final_report_packet = self.agent_plugin_runtime_green_final_report_packet_from_parts(
+            &report_gate,
+            &final_proof_guide,
+        );
         let import_receipt_summary =
             self.latest_agent_browser_final_validation_result_import_receipt_summary();
         let template_summary = self.latest_agent_browser_final_validation_result_template_summary();
         let bundle_summary = self.latest_agent_browser_final_validation_bundle_summary();
+        let final_result_present = result_summary.is_some()
+            || observability
+                .pointer("/durable_evidence/roots")
+                .and_then(Value::as_array)
+                .map(|roots| {
+                    roots
+                        .iter()
+                        .any(|root| root.get("exists").and_then(Value::as_bool).unwrap_or(false))
+                })
+                .unwrap_or(false);
         let runtime_green_candidate = result_summary
             .as_ref()
             .and_then(|summary| summary.pointer("/runtime_green_candidate"))
@@ -2418,6 +2473,10 @@ impl WebPreviewView {
                 .pointer("/durable_evidence/runtime_green_candidate")
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
+        let overall_runtime_green_candidate = report_gate
+            .get("runtime_green_candidate")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let may_report_runtime_green = report_gate
             .get("can_report_runtime_green")
             .and_then(Value::as_bool)
@@ -2473,6 +2532,9 @@ impl WebPreviewView {
                 "generated_at_ms": Self::current_epoch_millis(),
                 "status": status,
                 "runtime_green_candidate": runtime_green_candidate,
+                "overall_runtime_green_candidate": overall_runtime_green_candidate,
+                "final_result_present": final_result_present,
+                "final_result_runtime_green": runtime_green_candidate,
                 "may_report_runtime_green": may_report_runtime_green,
                 "next_action": next_action,
                 "missing_required_checks": missing_required_checks,
@@ -2508,6 +2570,17 @@ impl WebPreviewView {
                 "final_validation_result": result_summary,
                 "final_validation_result_import_receipt": import_receipt_summary,
                 "final_validation_observability": observability,
+                "final_report_packet": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+                    "status": final_report_packet.get("status").and_then(Value::as_str),
+                    "may_report_runtime_green": final_report_packet
+                        .get("may_report_runtime_green")
+                        .and_then(Value::as_bool),
+                    "next_action": final_report_packet.get("next_action").and_then(Value::as_str),
+                    "regression_watch_status": final_report_packet
+                        .pointer("/regression_watch/status")
+                        .and_then(Value::as_str),
+                },
             },
             "required_before_runtime_green_claim": [
                 "final_validation_result.status == pass",
@@ -2517,8 +2590,11 @@ impl WebPreviewView {
                 "every required check blocker is null",
                 "runtime_green_report_gate.can_report_runtime_green == true"
             ],
+            "source": "web_preview",
             "copy_action": "copy_agent_browser_final_proof_audit",
             "send_action": "send_agent_browser_final_proof_audit_to_agent",
+            "webpreview_copy_action": "copy_agent_browser_final_proof_audit",
+            "webpreview_send_action": "send_agent_browser_final_proof_audit_to_agent",
             "read_only": true,
             "writes_files": false,
             "runs_node": false,
@@ -3355,6 +3431,8 @@ impl WebPreviewView {
                 },
                 "final_proof_audit": {
                     "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
+                    "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
+                    "runtime_status_summary_field": "runtime_green_final_proof_audit_summary",
                     "copy_action": "copy_agent_browser_final_proof_audit",
                     "send_action": "send_agent_browser_final_proof_audit_to_agent",
                     "latest_summary": self.latest_agent_browser_final_proof_audit_summary(),
@@ -3436,6 +3514,7 @@ impl WebPreviewView {
                 "runtime_green_final_proof_guide": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
                     "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
+                    "runtime_status_summary_field": "runtime_green_final_proof_guide_summary",
                     "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
                     "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
                     "current_status": runtime_green_final_proof_guide.pointer("/status").and_then(Value::as_str),
@@ -5153,6 +5232,7 @@ impl WebPreviewView {
             "label": label,
             "severity": if can_report { "success" } else { "blocked" },
             "can_report_runtime_green": can_report,
+            "runtime_green_candidate": runtime_green_candidate,
             "blocker": blocker,
             "next_action": next_action,
             "badge": badge,
@@ -14588,6 +14668,8 @@ impl WebPreviewView {
                 },
                 "runtime_green_final_proof_guide": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
+                    "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
+                    "runtime_status_summary_field": "runtime_green_final_proof_guide_summary",
                     "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
                     "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
                     "latest_summary": Self::agent_plugin_runtime_green_final_proof_guide_summary(
@@ -14598,6 +14680,8 @@ impl WebPreviewView {
                 },
                 "runtime_green_final_report_packet": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+                    "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
+                    "runtime_status_summary_field": "runtime_green_final_report_packet_summary",
                     "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
                     "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
                     "latest_summary": Self::agent_plugin_runtime_green_final_report_packet_summary(
@@ -14608,6 +14692,8 @@ impl WebPreviewView {
                 },
                 "runtime_green_report_readiness_card": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
+                    "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
+                    "runtime_status_summary_field": "runtime_green_report_readiness_card_summary",
                     "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
                     "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
                     "latest_summary": Self::agent_plugin_runtime_green_report_readiness_card_summary(

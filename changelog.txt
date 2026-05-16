@@ -1,3 +1,16 @@
+[2026-05-17] - Agent Plugin Runtime WebPreview Audit Summary Schema
+
+ADDED:
+- WebPreview final-proof audit summaries now carry the advertised `runtime_green_final_proof_audit_summary` schema, `source_schema`, final-result readiness fields, final-report packet status/action fields, and read-only safety flags.
+- WebPreview final-proof audits now include final-result presence/runtime-green state, the overall runtime-green lane candidate, a compact final-report packet summary, and explicit WebPreview copy/send actions.
+- WebPreview final validation bundle/action-manifest handoffs now advertise summary schemas and runtime-status summary fields for final-proof audit, final-proof guide, final-report packet, and report-readiness summaries.
+
+CHANGED:
+- Right-side panel consumers can now treat WebPreview audit summaries like the Agent runtime-status audit summary instead of inferring schema and safety metadata from surrounding handoff records.
+
+NOTES:
+- This is read-only metadata only. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime WebPreview Report Summary Schemas
 
 ADDED:
