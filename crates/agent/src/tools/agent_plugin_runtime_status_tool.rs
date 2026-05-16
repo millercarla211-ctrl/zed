@@ -100,6 +100,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_report_gate.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_report_badge.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_final_proof_guide.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
@@ -449,6 +451,8 @@ fn inspect_runtime_status(
         runtime_green_report_gate(&runtime_green_claim_readiness_value);
     let runtime_green_report_badge_value =
         runtime_green_report_badge(&runtime_green_report_gate_value);
+    let runtime_green_final_proof_guide_value =
+        runtime_green_final_proof_guide(&runtime_green_report_gate_value, roots.root_mode_label());
     let runtime_green_claim_gate = input
         .include_runtime_green_claim_gate
         .then(|| runtime_green_claim_gate_value.clone());
@@ -490,6 +494,7 @@ fn inspect_runtime_status(
         "runtime_green_claim_readiness": runtime_green_claim_readiness_value,
         "runtime_green_report_gate": runtime_green_report_gate_value,
         "runtime_green_report_badge": runtime_green_report_badge_value,
+        "runtime_green_final_proof_guide": runtime_green_final_proof_guide_value,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
         "observability_profiles": input
@@ -526,6 +531,7 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
             "payload_queue_item": AGENT_BROWSER_PAYLOAD_QUEUE_ITEM_SCHEMA,
             "payload_queue_inspection": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECTION_SCHEMA,
             "final_validation_result": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+            "runtime_green_final_proof_guide": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
         },
         "managed_paths": {
             "queue_dir": dir_probe(&roots.browser_queue_dir),
@@ -2265,7 +2271,8 @@ fn runtime_green_proof_path(
                     "runtime_observability_digest",
                     "runtime_green_operator_handoff",
                     "runtime_green_report_gate",
-                    "runtime_green_report_badge"
+                    "runtime_green_report_badge",
+                    "runtime_green_final_proof_guide"
                 ],
                 "writes_files": false,
                 "dispatches_input": false
@@ -2324,6 +2331,12 @@ fn runtime_green_proof_path(
                 "source": "runtime_green_report_gate.badge",
                 "copy_action": "copy_agent_plugin_runtime_green_report_gate",
                 "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent"
+            },
+            "runtime_green_final_proof_guide": {
+                "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
+                "source": "runtime_green_report_gate",
+                "copy_action": "copy_agent_browser_final_validation_bundle",
+                "send_action": "send_agent_browser_final_validation_bundle_to_agent"
             },
             "runtime_observability_digest": {
                 "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
@@ -2745,6 +2758,115 @@ fn runtime_green_report_badge_from_fields(
         ],
         "copy_action": "copy_agent_plugin_runtime_green_report_gate",
         "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
+        "read_only": true,
+        "writes_files": false,
+        "runs_node": false,
+        "launches_browser": false,
+        "dispatches_input": false,
+    })
+}
+
+fn runtime_green_final_proof_guide(report_gate: &Value, root_mode: &str) -> Value {
+    let badge = runtime_green_report_badge(report_gate);
+    let can_report = report_gate
+        .get("can_report_runtime_green")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let blocker = report_gate
+        .get("blocker")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let status = if can_report {
+        "ready_to_report_runtime_green"
+    } else if blocker == "final_validation_result_missing"
+        || blocker == "final_validation_result_not_runtime_green"
+    {
+        "final_result_required"
+    } else {
+        "runtime_proof_required"
+    };
+    let next_action = if can_report {
+        "copy_agent_plugin_runtime_green_report_gate"
+    } else if blocker == "final_validation_result_missing"
+        || blocker == "final_validation_result_not_runtime_green"
+    {
+        "copy_agent_browser_final_validation_result_template"
+    } else {
+        report_gate
+            .get("next_action")
+            .and_then(Value::as_str)
+            .unwrap_or("copy_agent_plugin_runtime_green_report_gate")
+    };
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
+        "status": status,
+        "root_mode": root_mode,
+        "badge": badge,
+        "can_report_runtime_green": can_report,
+        "blocker": blocker,
+        "next_action": next_action,
+        "report_gate_status": report_gate.get("status").and_then(Value::as_str),
+        "manual_command": "just run",
+        "ordered_steps": [
+            {
+                "id": "read_report_badge",
+                "action": "copy_agent_plugin_runtime_green_report_gate",
+                "purpose": "Start from the compact ready/blocked status row before opening larger proof packets.",
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "copy_final_validation_bundle",
+                "action": "copy_agent_browser_final_validation_bundle",
+                "purpose": "Collect the final proof checklist, runbook, action manifest, and required result schema.",
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "copy_final_result_template",
+                "action": "copy_agent_browser_final_validation_result_template",
+                "purpose": "Prepare the fillable final Windows proof result before the manual runtime pass.",
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "manual_just_run",
+                "manual_command": "just run",
+                "purpose": "The operator runs this only when ready; this guide never invokes it.",
+                "writes_files": "manual_runtime_only",
+                "dispatches_input": "manual_validation_only"
+            },
+            {
+                "id": "import_final_result",
+                "action": "import_agent_browser_final_validation_result_from_clipboard",
+                "purpose": "Persist the filled final result into the managed proof file after explicit user action.",
+                "writes_files": true,
+                "managed_proof_write": true,
+                "dispatches_input": false
+            },
+            {
+                "id": "recheck_runtime_status",
+                "tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                "payload": runtime_green_status_inspect_payload(root_mode),
+                "purpose": "Confirm the durable final result and refreshed report gate before any runtime-green report.",
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "copy_report_gate_again",
+                "action": "copy_agent_plugin_runtime_green_report_gate",
+                "purpose": "Use the refreshed ready/blocked gate as the only source for the final status claim.",
+                "writes_files": false,
+                "dispatches_input": false
+            }
+        ],
+        "required_before_status_claim": true,
+        "copy_action": "copy_agent_plugin_runtime_green_report_gate",
+        "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
+        "template_action": "copy_agent_browser_final_validation_result_template",
+        "import_action": "import_agent_browser_final_validation_result_from_clipboard",
+        "final_bundle_action": "copy_agent_browser_final_validation_bundle",
         "read_only": true,
         "writes_files": false,
         "runs_node": false,

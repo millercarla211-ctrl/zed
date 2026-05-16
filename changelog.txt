@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Final Proof Guide
+
+ADDED:
+- WebPreview now exposes a compact runtime-green final proof guide through session snapshots, status packets, final validation bundles, action manifests, and catalogs.
+- `inspect_agent_plugin_runtime_status` now emits `runtime_green_final_proof_guide` so agents can follow the badge -> final bundle -> result template -> manual `just run` -> result import -> recheck path without parsing large packets first.
+- Agent and WebPreview catalogs now advertise the final-proof guide schema and capability.
+
+NOTES:
+- This is read-only guide metadata only; it does not run Node, launch Chrome, dispatch browser or OS input, run `just run`, write proof files, or touch real browser profiles. The only write named in the guide remains the existing explicit final-result import action.
+
 [2026-05-16] - Agent Plugin Runtime Report Badge
 
 ADDED:

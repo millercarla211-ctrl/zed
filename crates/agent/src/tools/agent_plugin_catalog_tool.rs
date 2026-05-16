@@ -84,6 +84,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_report_gate.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_report_badge.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_final_proof_guide.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
 
@@ -249,6 +251,7 @@ fn agent_plugin_catalog(
                 "runtime_green_claim_readiness_schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
                 "runtime_green_report_gate_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
                 "runtime_green_report_badge_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
+                "runtime_green_final_proof_guide_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
                 "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                 "runtime_green_ready_outcomes": {
                     "browser_final_validation_result": "runtime_green_candidate=true",
@@ -322,6 +325,14 @@ fn agent_plugin_catalog(
                     "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
                     "read_only": true,
                     "purpose": "Render the compact runtime-green ready/blocked row before showing larger proof packets."
+                },
+                "runtime_green_final_proof_guide": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
+                    "source": "runtime_green_report_gate",
+                    "copy_action": "copy_agent_browser_final_validation_bundle",
+                    "send_action": "send_agent_browser_final_validation_bundle_to_agent",
+                    "read_only": true,
+                    "purpose": "Guide agents from report badge to final result template, manual just run proof, import, and status recheck."
                 }
             },
             "available_to": [
@@ -626,6 +637,7 @@ fn browser_plugin_manifest() -> Value {
                 "runtime_green_claim_readiness": "copy_agent_plugin_runtime_green_claim_readiness",
                 "runtime_green_report_gate": "copy_agent_plugin_runtime_green_report_gate",
                 "runtime_green_report_badge": "copy_agent_plugin_runtime_green_report_gate",
+                "runtime_green_final_proof_guide": "copy_agent_browser_final_validation_bundle",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -799,6 +811,14 @@ fn browser_plugin_manifest() -> Value {
             "read_only": true,
             "purpose": "Render the compact runtime-green ready/blocked row before showing larger proof packets."
         },
+        "runtime_green_final_proof_guide": {
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
+            "copy_action": "copy_agent_browser_final_validation_bundle",
+            "send_action": "send_agent_browser_final_validation_bundle_to_agent",
+            "read_only": true,
+            "source": "WebPreview final validation bundle and status packet",
+            "purpose": "Guide agents from report badge to final result template, manual just run proof, import, and status recheck."
+        },
         "capabilities": [
             capability("browser.sessions.list", "available", "List open WebPreview sessions and workspace inventory."),
             capability("browser.session.snapshot", "available", "Read the active WebPreview session metadata, bounds, profile, URL, and policy."),
@@ -816,6 +836,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.runtime_green_claim_readiness", "available", "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."),
             capability("browser.runtime_green_report_gate", "available", "Copy or send the canonical runtime-green ready/blocked report gate."),
             capability("browser.runtime_green_report_badge", "available", "Render the runtime-green ready/blocked status row from the report gate."),
+            capability("browser.runtime_green_final_proof_guide", "available", "Follow the compact final proof guide from report badge through template, manual just run proof, import, and recheck."),
             capability("browser.action.open_url", "available_when_unlocked", "Open the current URL/search editor text through the permissioned WebPreview executor shell."),
             capability("browser.action.reload", "available_when_unlocked", "Reload through the permissioned WebPreview executor shell."),
             capability("browser.action.go_back", "available_when_unlocked", "Navigate back through the native WebPreview history executor after unlock, native history trace, QA checklist, and receipt logging."),
