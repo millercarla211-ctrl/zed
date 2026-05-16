@@ -1,3 +1,15 @@
+[2026-05-16] - PC Use Target-Aware Payloads
+
+CHANGED:
+- Updated `compose_zed_pc_use_action_payload` to classify `zed:` target ids from the current target snapshot, enforce matching surfaces, and include target-reference metadata in payload packets.
+- PC-use plugin manifests now describe payload composition as validating against the target manifest and target-snapshot contract.
+
+FIXED:
+- Current read-only snapshot target ids like `zed:workspace:active` and `zed:project_panel:worktree:*` can no longer be treated as valid focus, click, or type handles before a future UI snapshot exists.
+
+NOTES:
+- This remains read-only payload composition and does not dispatch input, take screenshots, focus Zed, launch processes, or control the OS desktop.
+
 [2026-05-16] - PC Use Target Snapshot
 
 ADDED:

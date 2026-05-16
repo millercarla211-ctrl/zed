@@ -33,6 +33,14 @@ const ALLOWED_SURFACES: &[&str] = &[
     "terminal",
 ];
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PcUseTargetIdKind {
+    CurrentWorkspaceSnapshot,
+    CurrentProjectPanelWorktreeSnapshot,
+    FutureZedUiSnapshot,
+    Unknown,
+}
+
 /// Composes a schema-versioned payload for future Zed-window PC-use actions.
 ///
 /// This tool is read-only. It does not take screenshots, focus panes, click, type, execute shell
@@ -558,6 +566,48 @@ fn compose_pc_use_payload(input: &AgentPcUsePayloadToolInput) -> Value {
         .as_deref()
         .map(str::trim)
         .filter(|label| !label.is_empty());
+    let target_id_kind = target_id.map(classify_pc_use_target_id);
+
+    if let Some((target_id, target_id_kind)) = target_id.zip(target_id_kind) {
+        if let Some(required_surface) = target_id_kind.required_surface() {
+            if surface != required_surface {
+                blockers.push(blocker(
+                    "target_surface_mismatch",
+                    "The target id belongs to a different Zed surface than the requested payload surface.",
+                    "Use the surface from inspect_zed_pc_use_target_snapshot or choose a matching target id.",
+                ));
+            }
+        }
+
+        if target_id_kind == PcUseTargetIdKind::Unknown {
+            warnings.push(warning(
+                "unknown_target_namespace",
+                "Target ids should come from inspect_zed_pc_use_target_snapshot or a future Zed UI snapshot.",
+            ));
+        }
+
+        if matches!(
+            input.action,
+            AgentPcUsePayloadAction::Focus
+                | AgentPcUsePayloadAction::Click
+                | AgentPcUsePayloadAction::TypeText
+        ) && !target_id_kind.is_input_ready()
+        {
+            blockers.push(blocker(
+                "target_not_input_ready",
+                "Only future Zed UI snapshot ids are safe for focus, click, or type intent composition.",
+                "Wait for a future Zed UI snapshot target id before composing focus, click, or type_text payloads.",
+            ));
+        }
+
+        if target_id.len() > 512 {
+            blockers.push(blocker(
+                "target_id_too_long",
+                "Target ids are bounded to keep PC-use handoff packets small and auditable.",
+                "Use a target id returned by inspect_zed_pc_use_target_snapshot or a future Zed UI snapshot.",
+            ));
+        }
+    }
 
     if matches!(
         input.action,
@@ -620,18 +670,21 @@ fn compose_pc_use_payload(input: &AgentPcUsePayloadToolInput) -> Value {
             "action": action,
             "surface": surface,
             "target_id": target_id,
+            "target_reference": target_id.map(target_reference),
         }),
         AgentPcUsePayloadAction::Focus | AgentPcUsePayloadAction::InspectUi => serde_json::json!({
             "action": action,
             "surface": surface,
             "target_id": target_id,
             "target_label": target_label,
+            "target_reference": target_id.map(target_reference),
         }),
         AgentPcUsePayloadAction::Click => serde_json::json!({
             "action": action,
             "surface": surface,
             "target_id": target_id,
             "target_label": target_label,
+            "target_reference": target_id.map(target_reference),
             "button": button,
             "click_count": click_count,
         }),
@@ -640,6 +693,7 @@ fn compose_pc_use_payload(input: &AgentPcUsePayloadToolInput) -> Value {
             "surface": surface,
             "target_id": target_id,
             "target_label": target_label,
+            "target_reference": target_id.map(target_reference),
             "text": if valid { Some(text) } else { None },
             "text_len": text_len,
         }),
@@ -677,14 +731,73 @@ fn compose_pc_use_payload(input: &AgentPcUsePayloadToolInput) -> Value {
         },
         "handoff": input.include_handoff_instructions.then(|| serde_json::json!({
             "inspect_tool_name": "inspect_zed_window_context",
+            "target_manifest_tool_name": "inspect_zed_pc_use_targets",
+            "target_snapshot_tool_name": "inspect_zed_pc_use_target_snapshot",
             "future_executor_status": "not_enabled",
             "next_steps": [
                 "Use inspect_zed_window_context to collect safe workspace context.",
+                "Use inspect_zed_pc_use_targets to read supported surfaces and action requirements.",
+                "Use inspect_zed_pc_use_target_snapshot for current read-only workspace or project-panel target ids.",
                 "Wait for a future Zed UI inspection receipt before focus, click, or type execution.",
                 "Require explicit user-visible permission before any future screenshot, focus, click, or type action.",
                 "Keep OS-wide desktop automation blocked unless the user grants a separate permission."
             ]
         })),
+    })
+}
+
+fn classify_pc_use_target_id(target_id: &str) -> PcUseTargetIdKind {
+    if target_id == "zed:workspace:active" {
+        PcUseTargetIdKind::CurrentWorkspaceSnapshot
+    } else if target_id.starts_with("zed:project_panel:worktree:") {
+        PcUseTargetIdKind::CurrentProjectPanelWorktreeSnapshot
+    } else if target_id.starts_with("zed:") {
+        PcUseTargetIdKind::FutureZedUiSnapshot
+    } else {
+        PcUseTargetIdKind::Unknown
+    }
+}
+
+impl PcUseTargetIdKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::CurrentWorkspaceSnapshot => "current_workspace_snapshot",
+            Self::CurrentProjectPanelWorktreeSnapshot => "current_project_panel_worktree_snapshot",
+            Self::FutureZedUiSnapshot => "future_zed_ui_snapshot",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    fn required_surface(self) -> Option<&'static str> {
+        match self {
+            Self::CurrentWorkspaceSnapshot => Some("workspace"),
+            Self::CurrentProjectPanelWorktreeSnapshot => Some("project_panel"),
+            Self::FutureZedUiSnapshot | Self::Unknown => None,
+        }
+    }
+
+    fn is_current_snapshot(self) -> bool {
+        matches!(
+            self,
+            Self::CurrentWorkspaceSnapshot | Self::CurrentProjectPanelWorktreeSnapshot
+        )
+    }
+
+    fn is_input_ready(self) -> bool {
+        matches!(self, Self::FutureZedUiSnapshot)
+    }
+}
+
+fn target_reference(target_id: &str) -> Value {
+    let kind = classify_pc_use_target_id(target_id);
+    serde_json::json!({
+        "source": kind.label(),
+        "current_snapshot_target": kind.is_current_snapshot(),
+        "input_ready": kind.is_input_ready(),
+        "required_surface": kind.required_surface(),
+        "safe_for_read_only_actions": true,
+        "safe_for_input_actions": kind.is_input_ready(),
+        "requires_fresh_target_receipt_for_execution": true,
     })
 }
 
