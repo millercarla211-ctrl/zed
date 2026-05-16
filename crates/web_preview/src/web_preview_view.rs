@@ -4231,6 +4231,9 @@ impl WebPreviewView {
                     "current_summary_count": current_summary_count,
                 })
             });
+        let next_actions = plugin_summaries
+            .as_ref()
+            .map(|plugins| Self::agent_plugin_catalog_next_actions_summary(plugins));
 
         Some(serde_json::json!({
             "schema": AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA,
@@ -4265,6 +4268,7 @@ impl WebPreviewView {
                 "read_only": runtime_status.and_then(|status| status.get("read_only")).and_then(Value::as_bool),
             },
             "webpreview_handoffs": webpreview_handoffs,
+            "next_actions": next_actions,
             "plugins": plugin_summaries,
             "read_only": true,
             "dispatches_input": false,
@@ -4273,6 +4277,27 @@ impl WebPreviewView {
 
     fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
         let observability = plugin.get("observability_profile");
+        let code_score = observability
+            .and_then(|profile| profile.get("code_score"))
+            .and_then(Value::as_u64);
+        let runtime_green_blocker = observability
+            .and_then(|profile| profile.get("runtime_green_blocker"))
+            .and_then(Value::as_str);
+        let explicit_next_action = observability
+            .and_then(|profile| profile.get("next_action"))
+            .and_then(Value::as_str);
+        let next_action_source = if explicit_next_action.is_some() {
+            Some("observability_profile.next_action")
+        } else if runtime_green_blocker.is_some() {
+            Some("observability_profile.runtime_green_blocker")
+        } else {
+            None
+        };
+        let next_action = explicit_next_action.or(runtime_green_blocker);
+        let needs_runtime_validation = runtime_green_blocker.is_some()
+            || code_score.map(|score| score < 100).unwrap_or_else(|| {
+                plugin.get("status").and_then(Value::as_str) != Some("available")
+            });
         let proof_handoff_count = observability
             .and_then(|profile| profile.get("proof_handoffs"))
             .and_then(Value::as_object)
@@ -4299,14 +4324,18 @@ impl WebPreviewView {
                 "status": observability
                     .and_then(|profile| profile.get("status"))
                     .and_then(Value::as_str),
-                "code_score": observability
-                    .and_then(|profile| profile.get("code_score"))
-                    .and_then(Value::as_u64),
-                "runtime_green_blocker": observability
-                    .and_then(|profile| profile.get("runtime_green_blocker"))
-                    .and_then(Value::as_str),
+                "code_score": code_score,
+                "needs_runtime_validation": needs_runtime_validation,
+                "runtime_green_blocker": runtime_green_blocker,
                 "proof_handoff_count": proof_handoff_count,
                 "watch_surface_count": watch_surface_count,
+                "next_action": {
+                    "summary": next_action,
+                    "source": next_action_source,
+                    "recommended_handoff": Self::agent_plugin_catalog_recommended_handoff(plugin),
+                    "read_only": true,
+                    "dispatches_input": false,
+                },
                 "next_feature_set": observability
                     .and_then(|profile| profile.get("next_feature_set"))
                     .and_then(Value::as_str),
@@ -4340,6 +4369,87 @@ impl WebPreviewView {
                 "read_only_summary": true,
                 "dispatches_input": false,
             },
+        })
+    }
+
+    fn agent_plugin_catalog_next_actions_summary(plugins: &[Value]) -> Value {
+        let rows = plugins
+            .iter()
+            .filter_map(|plugin| {
+                let next_action = plugin.pointer("/observability/next_action/summary")?;
+
+                Some(serde_json::json!({
+                    "plugin_id": plugin.get("id").and_then(Value::as_str),
+                    "plugin_name": plugin.get("name").and_then(Value::as_str),
+                    "status": plugin.pointer("/observability/status").and_then(Value::as_str),
+                    "code_score": plugin.pointer("/observability/code_score").and_then(Value::as_u64),
+                    "needs_runtime_validation": plugin
+                        .pointer("/observability/needs_runtime_validation")
+                        .and_then(Value::as_bool),
+                    "summary": next_action,
+                    "source": plugin.pointer("/observability/next_action/source").and_then(Value::as_str),
+                    "recommended_handoff": plugin.pointer("/observability/next_action/recommended_handoff").cloned(),
+                }))
+            })
+            .collect::<Vec<_>>();
+        let blocked_or_pending_count = rows
+            .iter()
+            .filter(|row| {
+                row.get("needs_runtime_validation")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(true)
+            })
+            .count();
+        let first = rows.first().cloned();
+
+        serde_json::json!({
+            "blocked_or_pending_count": blocked_or_pending_count,
+            "total_count": rows.len(),
+            "first": first,
+            "rows": rows,
+            "read_only": true,
+            "dispatches_input": false,
+        })
+    }
+
+    fn agent_plugin_catalog_recommended_handoff(plugin: &Value) -> Option<Value> {
+        let plugin_id = plugin.get("id").and_then(Value::as_str)?;
+        let proof_handoffs = plugin.pointer("/observability_profile/proof_handoffs")?;
+        let preferred_keys: &[&str] = match plugin_id {
+            "zed.browser" => &[
+                "runtime_green_report_readiness_card",
+                "runtime_green_final_report_packet",
+                "runtime_green_final_proof_guide",
+                "final_bundle",
+                "validation_progress",
+            ],
+            "zed.chrome" => &[
+                "execution_inspect_tool",
+                "adapter_invoke_tool",
+                "runner_gate_tool",
+                "queue_inspection_tool",
+                "webpreview_status_copy",
+            ],
+            "zed.pc_use" => &[
+                "webpreview_status_copy",
+                "runner_receipts_tool",
+                "payload_queue_inspect_tool",
+                "target_snapshot_tool",
+                "context_tool",
+            ],
+            _ => &[],
+        };
+
+        preferred_keys.iter().find_map(|key| {
+            proof_handoffs
+                .get(*key)
+                .and_then(Value::as_str)
+                .map(|value| {
+                    serde_json::json!({
+                        "id": *key,
+                        "value": value,
+                    })
+                })
         })
     }
 

@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime WebPreview Catalog Next Actions
+
+ADDED:
+- WebPreview plugin catalog summaries now include a compact read-only `next_actions` rollup with blocked-or-pending counts, the first recommended row, and per-plugin next-action rows.
+- Per-plugin catalog summaries now expose runtime-validation state, next-action source, and a recommended handoff/tool for Browser, managed Chrome, and PC-use.
+
+CHANGED:
+- Right-side panel consumers can now render the next safe plugin step from the compact catalog summary instead of expanding the full plugin catalog or inferring priority from raw observability fields.
+
+NOTES:
+- This is read-only catalog guidance only. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime WebPreview Catalog Summary
 
 ADDED:
