@@ -1,3 +1,15 @@
+[2026-05-16] - PC Use Payload Composer
+
+ADDED:
+- Added the read-only `compose_zed_pc_use_action_payload` Agent tool for validating future Zed-window screenshot, focus, click, type, and inspect intents.
+- Registered the payload composer for Agent Panel use and advertised it through both Agent and WebPreview plugin catalogs.
+
+CHANGED:
+- PC Use plugin manifests now include a no-dispatch payload schema and capability before any screenshot, focus, click, type, or OS-wide desktop automation executor is enabled.
+
+NOTES:
+- The composer only returns schema-versioned JSON and safety blockers; it does not screenshot, focus, click, type, launch processes, or control the OS desktop.
+
 [2026-05-16] - PC Use Read-Only Context Tool
 
 ADDED:

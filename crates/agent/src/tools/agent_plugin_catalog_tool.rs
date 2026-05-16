@@ -12,8 +12,9 @@ use crate::{
     AGENT_CHROME_PLAYWRIGHT_INVOCATION_RESULT_SCHEMA, AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
     AGENT_CHROME_PLAYWRIGHT_RUN_REQUEST_SCHEMA, AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME,
     AGENT_CHROME_RUNNER_GATE_TOOL_NAME, AGENT_CHROME_RUNNER_RECEIPT_FILE_NAME,
-    AGENT_CHROME_RUNNER_RECEIPT_SCHEMA, AGENT_PC_USE_INSPECT_TOOL_NAME, AgentTool,
-    ToolCallEventStream, ToolInput,
+    AGENT_CHROME_RUNNER_RECEIPT_SCHEMA, AGENT_PC_USE_INSPECT_TOOL_NAME,
+    AGENT_PC_USE_PAYLOAD_SCHEMA, AGENT_PC_USE_PAYLOAD_TOOL_NAME, AgentTool, ToolCallEventStream,
+    ToolInput,
 };
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
@@ -168,6 +169,7 @@ fn agent_plugin_catalog(
                 "invoke_chrome_playwright_adapter": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
                 "inspect_chrome_playwright_executions": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
                 "inspect_zed_window_context": AGENT_PC_USE_INSPECT_TOOL_NAME,
+                "compose_zed_pc_use_action_payload": AGENT_PC_USE_PAYLOAD_TOOL_NAME,
                 "prepare_runtime": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL
             },
             "available_to": [
@@ -645,6 +647,8 @@ fn pc_use_plugin_manifest(
             "backend": "zed_window_runtime",
             "inspect_tool_name": AGENT_PC_USE_INSPECT_TOOL_NAME,
             "inspect_schema": "zed.agent_plugins.pc_use.zed_window_context.v1",
+            "payload_tool_name": AGENT_PC_USE_PAYLOAD_TOOL_NAME,
+            "payload_schema": AGENT_PC_USE_PAYLOAD_SCHEMA,
             "plugin_root": workspace_plugin_root
                 .as_ref()
                 .map(|root| root.join("pc-use"))
@@ -655,6 +659,7 @@ fn pc_use_plugin_manifest(
         },
         "capabilities": [
             capability("pc.zed_window.inspect_context", "available", "Use inspect_zed_window_context to read safe workspace and managed-root context before any future PC-use action."),
+            capability("pc.zed_window.payload_compose", "available", "Use compose_zed_pc_use_action_payload to validate future Zed-window screenshot, focus, click, type, or inspect intents without dispatching input."),
             capability("pc.zed_window.screenshot", "planned", "Capture Zed-window screenshots for agent context."),
             capability("pc.zed_window.focus", "planned", "Focus Zed panes, panels, and tabs by safe editor-native handles."),
             capability("pc.zed_window.click", "planned_permission_gate", "Click within Zed surfaces only after permission and target preflight."),
@@ -664,6 +669,7 @@ fn pc_use_plugin_manifest(
         ],
         "safety": {
             "read_only_context_available": true,
+            "read_only_payload_compose_available": true,
             "zed_window_first": true,
             "os_wide_actions_blocked_by_default": true,
             "explicit_permission_required_for_input": true,

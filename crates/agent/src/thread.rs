@@ -1639,6 +1639,7 @@ impl Thread {
             self.project.clone(),
         ));
         self.add_tool(AgentPcUseInspectTool::new(self.project.clone()));
+        self.add_tool(AgentPcUsePayloadTool);
         self.add_tool(AgentPluginBootstrapTool::new(self.project.clone()));
 
         self.add_tool(DiagnosticsTool::new(self.project.clone()));
