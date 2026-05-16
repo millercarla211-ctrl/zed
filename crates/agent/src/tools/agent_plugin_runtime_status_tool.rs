@@ -106,6 +106,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_report_packet.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_report_readiness_card.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_report_readiness_card_summary.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA: &str =
@@ -486,6 +488,8 @@ fn inspect_runtime_status(
     );
     let runtime_green_final_proof_audit_summary =
         runtime_green_final_proof_audit_summary(&runtime_green_final_proof_audit_value);
+    let runtime_green_report_readiness_card_summary =
+        runtime_green_report_readiness_card_summary(&runtime_green_report_readiness_card_value);
     let runtime_green_claim_gate = input
         .include_runtime_green_claim_gate
         .then(|| runtime_green_claim_gate_value.clone());
@@ -532,6 +536,7 @@ fn inspect_runtime_status(
         "runtime_green_final_proof_audit_summary": runtime_green_final_proof_audit_summary,
         "runtime_green_final_report_packet": runtime_green_final_report_packet_value,
         "runtime_green_report_readiness_card": runtime_green_report_readiness_card_value,
+        "runtime_green_report_readiness_card_summary": runtime_green_report_readiness_card_summary,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
         "observability_profiles": input
@@ -574,6 +579,7 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
             "runtime_green_final_proof_guide": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
             "runtime_green_final_report_packet": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
             "runtime_green_report_readiness_card": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
+            "runtime_green_report_readiness_card_summary": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
         },
         "managed_paths": {
             "queue_dir": dir_probe(&roots.browser_queue_dir),
@@ -2918,7 +2924,8 @@ fn runtime_green_proof_path(
                     "runtime_green_final_proof_audit",
                     "runtime_green_final_proof_audit_summary",
                     "runtime_green_final_report_packet",
-                    "runtime_green_report_readiness_card"
+                    "runtime_green_report_readiness_card",
+                    "runtime_green_report_readiness_card_summary"
                 ],
                 "writes_files": false,
                 "dispatches_input": false
@@ -2998,6 +3005,8 @@ fn runtime_green_proof_path(
             },
             "runtime_green_report_readiness_card": {
                 "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
+                "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
+                "runtime_status_summary_field": "runtime_green_report_readiness_card_summary",
                 "source": "runtime_green_claim_readiness + runtime_green_report_gate + runtime_green_final_report_packet + runtime_green_final_proof_audit",
                 "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
                 "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent"
@@ -3023,7 +3032,8 @@ fn runtime_green_proof_path(
             "runtime_green_final_proof_audit",
             "runtime_green_final_proof_audit_summary",
             "runtime_green_final_report_packet",
-            "runtime_green_report_readiness_card"
+            "runtime_green_report_readiness_card",
+            "runtime_green_report_readiness_card_summary"
         ],
         "safety": {
             "proof_path_is_read_only": true,
@@ -3889,6 +3899,87 @@ fn runtime_green_report_readiness_card(
         "runs_node": false,
         "launches_browser": false,
         "dispatches_input": false,
+    })
+}
+
+fn runtime_green_report_readiness_card_summary(card: &Value) -> Value {
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
+        "source_schema": card.get("schema").and_then(Value::as_str),
+        "status": card.get("status").and_then(Value::as_str),
+        "may_report_runtime_green": card
+            .get("may_report_runtime_green")
+            .and_then(Value::as_bool),
+        "blocker": card.get("blocker").and_then(Value::as_str),
+        "next_action": card.get("next_action").and_then(Value::as_str),
+        "final_manual_command": card
+            .get("final_manual_command")
+            .and_then(Value::as_str),
+        "claim_readiness_status": card
+            .pointer("/claim_readiness/status")
+            .and_then(Value::as_str),
+        "ready_lane_fraction": card
+            .pointer("/claim_readiness/ready_lane_fraction")
+            .and_then(Value::as_str),
+        "first_pending_lane_label": card
+            .pointer("/claim_readiness/first_pending_lane_label")
+            .and_then(Value::as_str),
+        "first_pending_lane_status": card
+            .pointer("/claim_readiness/first_pending_lane_status")
+            .and_then(Value::as_str),
+        "next_required_proof_id": card
+            .pointer("/claim_readiness/next_required_proof_id")
+            .and_then(Value::as_str),
+        "report_gate_status": card
+            .pointer("/report_gate/status")
+            .and_then(Value::as_str),
+        "report_gate_can_report": card
+            .pointer("/report_gate/can_report_runtime_green")
+            .and_then(Value::as_bool),
+        "final_report_packet_status": card
+            .pointer("/final_report_packet/status")
+            .and_then(Value::as_str),
+        "final_report_packet_may_report": card
+            .pointer("/final_report_packet/may_report_runtime_green")
+            .and_then(Value::as_bool),
+        "final_proof_audit_status": card
+            .pointer("/final_proof_audit/status")
+            .and_then(Value::as_str),
+        "final_result_present": card
+            .pointer("/final_proof_audit/final_result_present")
+            .and_then(Value::as_bool),
+        "final_result_runtime_green": card
+            .pointer("/final_proof_audit/final_result_runtime_green")
+            .and_then(Value::as_bool),
+        "missing_required_check_count": card
+            .pointer("/final_proof_audit/missing_required_check_count")
+            .and_then(Value::as_u64),
+        "missing_required_evidence_count": card
+            .pointer("/final_proof_audit/missing_required_evidence_count")
+            .and_then(Value::as_u64),
+        "regression_watch_status": card
+            .pointer("/regression_watch/status")
+            .and_then(Value::as_str),
+        "regression_watch_lane_count": card
+            .pointer("/regression_watch/watched_plugin_count")
+            .and_then(Value::as_u64),
+        "first_regression_watch_status": card
+            .pointer("/regression_watch/first_watch_status")
+            .and_then(Value::as_str),
+        "copy_action": card.get("copy_action").and_then(Value::as_str),
+        "send_action": card.get("send_action").and_then(Value::as_str),
+        "final_report_packet_copy_action": card
+            .get("final_report_packet_copy_action")
+            .and_then(Value::as_str),
+        "report_gate_copy_action": card
+            .get("report_gate_copy_action")
+            .and_then(Value::as_str),
+        "audit_copy_action": card.get("audit_copy_action").and_then(Value::as_str),
+        "read_only": card.get("read_only").and_then(Value::as_bool),
+        "writes_files": card.get("writes_files").and_then(Value::as_bool),
+        "runs_node": card.get("runs_node").and_then(Value::as_bool),
+        "launches_browser": card.get("launches_browser").and_then(Value::as_bool),
+        "dispatches_input": card.get("dispatches_input").and_then(Value::as_bool),
     })
 }
 
