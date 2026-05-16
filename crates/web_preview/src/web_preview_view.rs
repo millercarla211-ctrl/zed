@@ -82,6 +82,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
+const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
+    "zed.web_preview.agent_browser_function_surfaces.v1";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
@@ -1373,6 +1375,7 @@ impl WebPreviewView {
             "agent_browser_final_validation_result_template": self.latest_agent_browser_final_validation_result_template_summary(),
             "agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result_summary(),
             "agent_browser_final_validation_observability": self.agent_browser_final_validation_observability(),
+            "agent_browser_function_surfaces": self.agent_browser_function_surfaces(),
             "agent_browser_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
             "agent_browser_reload_executor_attempt": self.latest_agent_browser_reload_executor_attempt_summary(),
             "agent_browser_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
@@ -1455,6 +1458,7 @@ impl WebPreviewView {
                 "send_agent_browser_final_validation_result_to_agent": self.latest_agent_browser_final_validation_result.is_some(),
                 "copy_agent_browser_final_validation_observability": true,
                 "send_agent_browser_final_validation_observability_to_agent": true,
+                "agent_browser_function_surfaces": true,
                 "copy_agent_browser_noop_executor_attempt": true,
                 "send_agent_browser_noop_executor_attempt_to_agent": true,
                 "run_permissioned_reload_executor": self.agent_action_permission.interactive_enabled(),
@@ -3189,6 +3193,134 @@ impl WebPreviewView {
             "annotation_count": screenshot.pointer("/annotation/counts/annotations").and_then(Value::as_u64),
             "viewport": screenshot.pointer("/annotation/viewport").cloned(),
         }))
+    }
+
+    fn agent_browser_function_surfaces(&self) -> Value {
+        let screenshot_state = if cfg!(target_os = "windows") {
+            "available"
+        } else {
+            "platform_unavailable"
+        };
+        let devtools_state = if cfg!(any(target_os = "windows", target_os = "macos")) {
+            "available"
+        } else {
+            "platform_unavailable"
+        };
+        let page_script_state = if self.load_state_name() == "ready" {
+            "available"
+        } else {
+            "available_after_page_ready"
+        };
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA,
+            "generated_at_ms": Self::current_epoch_millis(),
+            "session_id": self.session_id.as_ref(),
+            "backend": self.browser_native_backend_name(),
+            "page": {
+                "url": self.active_url.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "load_state": self.load_state_name(),
+            },
+            "current_viewport": self.viewport_mode.snapshot(),
+            "latest_evidence": {
+                "page_diagnostics": self.latest_page_diagnostics_summary(),
+                "dom_snapshot": self.latest_dom_snapshot_summary(),
+                "action_targets": self.latest_action_targets_summary(),
+                "annotated_screenshot": self.latest_annotated_screenshot_summary(),
+                "viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
+            },
+            "surfaces": [
+                {
+                    "id": "browser.screenshot.capture",
+                    "state": screenshot_state,
+                    "menu_action": "take_screenshot",
+                    "menu_label": "Take Screenshot",
+                    "output": ["clipboard_image", "agent_panel_image_attachment", "profile_screenshots_png"],
+                    "uses_page_script": false,
+                    "dispatches_input": false,
+                    "requires_interactive_unlock": false,
+                },
+                {
+                    "id": "browser.screenshot.area",
+                    "state": screenshot_state,
+                    "menu_action": "capture_selected_area_screenshot",
+                    "menu_label": "Capture Area",
+                    "overlay_completion_kind": "capture-area",
+                    "output": ["cropped_clipboard_image", "agent_panel_image_attachment", "profile_screenshots_png"],
+                    "uses_page_script": true,
+                    "dispatches_input": false,
+                    "requires_interactive_unlock": false,
+                },
+                {
+                    "id": "browser.screenshot.annotate",
+                    "state": screenshot_state,
+                    "menu_action": "annotate_screenshot",
+                    "menu_label": "Annotate Screenshot",
+                    "overlay_completion_kind": "annotated-screenshot",
+                    "output": ["clipboard_image", "agent_panel_image_attachment", "annotation_metadata_json"],
+                    "latest_summary": self.latest_annotated_screenshot_summary(),
+                    "uses_page_script": true,
+                    "dispatches_input": false,
+                    "requires_interactive_unlock": false,
+                },
+                {
+                    "id": "browser.element.inspect",
+                    "state": page_script_state,
+                    "menu_action": "inspect_element",
+                    "menu_label": "Inspect Element",
+                    "overlay_completion_kind": "inspect-element",
+                    "output": ["agent_panel_selector", "agent_panel_html", "computed_style_summary", "optional_cropped_screenshot"],
+                    "uses_page_script": true,
+                    "dispatches_input": false,
+                    "requires_interactive_unlock": false,
+                },
+                {
+                    "id": "browser.devtools.open",
+                    "state": devtools_state,
+                    "menu_action": "open_devtools",
+                    "menu_label": "Open DevTools",
+                    "output": ["native_devtools_window"],
+                    "uses_page_script": false,
+                    "dispatches_input": false,
+                    "requires_interactive_unlock": false,
+                },
+                {
+                    "id": "browser.viewport.responsive",
+                    "state": "available",
+                    "menu_actions": ["viewport_full", "viewport_iphone_15", "viewport_ipad_air", "viewport_laptop", "viewport_rotate"],
+                    "executor_action": "run_permissioned_viewport_executor",
+                    "presets": [
+                        PreviewViewportMode::FULL.snapshot(),
+                        PreviewViewportMode::IPHONE_15.snapshot(),
+                        PreviewViewportMode::IPAD_AIR.snapshot(),
+                        PreviewViewportMode::LAPTOP.snapshot(),
+                    ],
+                    "current": self.viewport_mode.snapshot(),
+                    "uses_page_script": false,
+                    "dispatches_input": false,
+                    "requires_interactive_unlock_for_executor": true,
+                }
+            ],
+            "workflow": [
+                "Use screenshot or selected-area capture for visual context.",
+                "Use annotated screenshots when the user needs specific regions called out.",
+                "Use Inspect Element after page ready for selector, HTML, style, rect, and screenshot context.",
+                "Use responsive viewport menu entries for visual testing and the permissioned viewport executor only when explicit interactive unlock is active.",
+                "Use DevTools for manual debugging on native WebPreview backends."
+            ],
+            "safety": {
+                "read_only_or_agent_handoff": true,
+                "dispatches_page_input": false,
+                "mutates_external_browser_profiles": false,
+                "interactive_browser_actions_unlocked": self.agent_action_permission.interactive_enabled(),
+                "notes": [
+                    "Screenshot capture reads the visible native WebPreview rectangle and stores images under the WebPreview profile screenshots directory.",
+                    "Area capture, annotation, and inspect use injected overlay scripts but do not click or type into page controls.",
+                    "Responsive viewport menu changes WebPreview layout bounds; the permissioned viewport executor still requires the normal unlock and receipt gate."
+                ]
+            }
+        })
     }
 
     fn current_epoch_millis() -> u64 {
@@ -9398,6 +9530,7 @@ impl WebPreviewView {
                 }
             },
             "final_validation_observability": self.agent_browser_final_validation_observability(),
+            "browser_function_surfaces": self.agent_browser_function_surfaces(),
             "notes": [
                 "Read-only actions are always available for context gathering.",
                 "Interactive actions must remain locked until the user explicitly allows them for this WebPreview session.",
@@ -9626,6 +9759,8 @@ impl WebPreviewView {
                             ],
                             "next_feature_set": "Agent Plugin Runtime Observability"
                         },
+                        "function_surfaces_schema": AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA,
+                        "function_surfaces": self.agent_browser_function_surfaces(),
                         "entrypoints": [
                             "WebPreview More menu",
                             "Agent Panel content handoff",

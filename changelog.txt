@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Browser Function Surfaces
+
+ADDED:
+- Added a structured Browser function-surfaces packet for screenshot, selected-area capture, annotated screenshot, inspect element, DevTools, and responsive viewport workflows.
+- Exposed the packet through WebPreview session snapshots, the Agent Browser action manifest, and both Agent/WebPreview Browser plugin catalogs.
+- Documented each surface's menu action, output shape, platform state, page-script usage, input-dispatch behavior, and unlock requirements.
+
+NOTES:
+- This is discovery and handoff metadata only; it does not take screenshots, launch DevTools, inspect elements, change viewport, dispatch page input, run `just run`, run Node, or touch external browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Final Proof State Handoff
 
 ADDED:

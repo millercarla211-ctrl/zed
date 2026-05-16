@@ -51,6 +51,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
+const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
+    "zed.web_preview.agent_browser_function_surfaces.v1";
 
 /// Lists the built-in DX/Zed agent plugin catalog for browser, Chrome, and PC-use workflows.
 ///
@@ -345,6 +347,107 @@ fn agent_plugin_catalog(
     })
 }
 
+fn browser_function_surfaces_manifest() -> Value {
+    let screenshot_state = if cfg!(target_os = "windows") {
+        "available"
+    } else {
+        "platform_unavailable"
+    };
+    let devtools_state = if cfg!(any(target_os = "windows", target_os = "macos")) {
+        "available"
+    } else {
+        "platform_unavailable"
+    };
+
+    serde_json::json!({
+        "schema": AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA,
+        "source": "WebPreview More menu and active WebPreview session snapshot",
+        "backend": "web_preview",
+        "surfaces": [
+            {
+                "id": "browser.screenshot.capture",
+                "state": screenshot_state,
+                "menu_action": "take_screenshot",
+                "menu_label": "Take Screenshot",
+                "output": ["clipboard_image", "agent_panel_image_attachment", "profile_screenshots_png"],
+                "uses_page_script": false,
+                "dispatches_input": false,
+                "requires_interactive_unlock": false,
+            },
+            {
+                "id": "browser.screenshot.area",
+                "state": screenshot_state,
+                "menu_action": "capture_selected_area_screenshot",
+                "menu_label": "Capture Area",
+                "overlay_completion_kind": "capture-area",
+                "output": ["cropped_clipboard_image", "agent_panel_image_attachment", "profile_screenshots_png"],
+                "uses_page_script": true,
+                "dispatches_input": false,
+                "requires_interactive_unlock": false,
+            },
+            {
+                "id": "browser.screenshot.annotate",
+                "state": screenshot_state,
+                "menu_action": "annotate_screenshot",
+                "menu_label": "Annotate Screenshot",
+                "overlay_completion_kind": "annotated-screenshot",
+                "output": ["clipboard_image", "agent_panel_image_attachment", "annotation_metadata_json"],
+                "uses_page_script": true,
+                "dispatches_input": false,
+                "requires_interactive_unlock": false,
+            },
+            {
+                "id": "browser.element.inspect",
+                "state": "available_after_page_ready",
+                "menu_action": "inspect_element",
+                "menu_label": "Inspect Element",
+                "overlay_completion_kind": "inspect-element",
+                "output": ["agent_panel_selector", "agent_panel_html", "computed_style_summary", "optional_cropped_screenshot"],
+                "uses_page_script": true,
+                "dispatches_input": false,
+                "requires_interactive_unlock": false,
+            },
+            {
+                "id": "browser.devtools.open",
+                "state": devtools_state,
+                "menu_action": "open_devtools",
+                "menu_label": "Open DevTools",
+                "output": ["native_devtools_window"],
+                "uses_page_script": false,
+                "dispatches_input": false,
+                "requires_interactive_unlock": false,
+            },
+            {
+                "id": "browser.viewport.responsive",
+                "state": "available",
+                "menu_actions": ["viewport_full", "viewport_iphone_15", "viewport_ipad_air", "viewport_laptop", "viewport_rotate"],
+                "executor_action": "run_permissioned_viewport_executor",
+                "presets": [
+                    {"mode": "full", "label": "Full", "width": null, "height": null},
+                    {"mode": "fixed", "label": "iPhone 15", "width": 393, "height": 852},
+                    {"mode": "fixed", "label": "iPad Air", "width": 820, "height": 1180},
+                    {"mode": "fixed", "label": "Laptop", "width": 1280, "height": 900}
+                ],
+                "uses_page_script": false,
+                "dispatches_input": false,
+                "requires_interactive_unlock_for_executor": true,
+            }
+        ],
+        "workflow": [
+            "Use screenshot or selected-area capture for visual context.",
+            "Use annotated screenshots when the user needs specific regions called out.",
+            "Use Inspect Element after page ready for selector, HTML, style, rect, and screenshot context.",
+            "Use responsive viewport menu entries for visual testing and the permissioned viewport executor only when explicit interactive unlock is active.",
+            "Use DevTools for manual debugging on native WebPreview backends."
+        ],
+        "safety": {
+            "read_only_or_agent_handoff": true,
+            "dispatches_page_input": false,
+            "mutates_external_browser_profiles": false
+        }
+    })
+}
+
 fn browser_plugin_manifest() -> Value {
     serde_json::json!({
         "id": "zed.browser",
@@ -384,6 +487,8 @@ fn browser_plugin_manifest() -> Value {
             ],
             "next_feature_set": "Agent Plugin Runtime Observability"
         },
+        "function_surfaces_schema": AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA,
+        "function_surfaces": browser_function_surfaces_manifest(),
         "entrypoints": [
             "WebPreview More menu",
             "Agent Panel content handoff",
