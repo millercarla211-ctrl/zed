@@ -1,5 +1,6 @@
 IN PROGRESS:
 - NEXT 100-POINT FEATURE SET: Agent Plugin Runtime. Goal: bring Codex-app-style plugin capability discovery into the Zed Agent, starting with Browser, Chrome/Playwright, and permissioned PC-use plugins available to every Agent Panel.
+- Agent Plugin Runtime managed-asset operator recipe slice: runtime status, Agent catalog, and WebPreview catalog now publish a schema-versioned managed asset operator recipe that orders root preparation, receipt writing, DX extension copy, adapter preparation, status inspection, and final Windows validation.
 - Agent Plugin Runtime asset-readiness runtime-status slice: `inspect_agent_plugin_runtime_status` now extracts the latest receipt's asset readiness summary so agents can see managed asset blockers, warnings, ready counts, and next actions without manually opening the receipt file.
 - Agent Plugin Runtime asset-readiness summary slice: `prepare_agent_plugin_managed_assets` now emits a compact readiness summary with required asset booleans, blockers, warnings, and next actions; Agent and WebPreview discovery expose the summary schema.
 - Agent Plugin Runtime asset-receipt catalog alignment slice: Agent and WebPreview bootstrap readiness now require a valid managed asset provisioning receipt, and the Chrome action contracts expose the receipt file/schema alongside the managed asset provisioner.

@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Managed Asset Operator Recipe
+
+ADDED:
+- Added a schema-versioned managed asset operator recipe to runtime status, Agent catalog, and WebPreview catalog asset provisioning plans.
+- The recipe orders safe setup through bootstrap readiness inspection, managed-root preparation, asset receipt writing, optional DX Chrome extension copy, Playwright adapter preparation, runtime-status inspection, and the final Windows validation pass.
+- Runtime status workflow recipes and managed Chrome schemas now expose the operator recipe so agents can follow one canonical path before external Chrome execution.
+
+NOTES:
+- This is metadata only; it does not write files by itself, copy extensions, download packages, run Node, launch Chrome, dispatch browser input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Asset Readiness Runtime Status
 
 ADDED:

@@ -80,6 +80,8 @@ const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstra
 const AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA: &str =
     "zed.agent_plugins.bootstrap_prepare_request.v1";
 const AGENT_PLUGIN_BOOTSTRAP_ASSET_PLAN_SCHEMA: &str = "zed.agent_plugins.bootstrap_asset_plan.v1";
+const AGENT_PLUGIN_MANAGED_ASSET_OPERATOR_RECIPE_SCHEMA: &str =
+    "zed.agent_plugins.managed_asset_operator_recipe.v1";
 
 const MAX_HANDOFF_PREVIEW_BYTES: u64 = 1_048_576;
 const OBSERVABILITY_FRESHNESS_WINDOW_MS: u64 = 24 * 60 * 60 * 1000;
@@ -487,6 +489,7 @@ fn chrome_status(
             "runner_receipt": AGENT_CHROME_RUNNER_RECEIPT_SCHEMA,
             "asset_provisioning_result": AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
             "asset_provisioning_receipt": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
+            "managed_asset_operator_recipe": AGENT_PLUGIN_MANAGED_ASSET_OPERATOR_RECIPE_SCHEMA,
             "playwright_adapter_manifest": AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA,
             "playwright_run_request": AGENT_CHROME_PLAYWRIGHT_RUN_REQUEST_SCHEMA,
             "playwright_execution_inspection": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_RESULT_SCHEMA,
@@ -830,6 +833,7 @@ fn runtime_bootstrap_asset_provisioning_plan(
         "readiness_status": status,
         "safe_to_start_after_plan": status == "ready_for_managed_chrome_executor",
         "root_mode": root_mode,
+        "operator_recipe": managed_asset_operator_recipe(root_mode),
         "steps": [
             {
                 "id": "bootstrap.manifest",
@@ -903,6 +907,7 @@ fn runtime_bootstrap_asset_provisioning_plan(
             "asset_provisioning_receipt_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
             "required_ready_checks": [
                 "asset.bootstrap_manifest",
+                "asset.provisioning_receipt",
                 "asset.playwright_package",
                 "asset.playwright_adapter_manifest",
                 "asset.playwright_adapter_runner",
@@ -917,6 +922,120 @@ fn runtime_bootstrap_asset_provisioning_plan(
             "dispatches_input": false,
             "touches_real_browser_profiles": false,
             "requires_receipts_before_executor_actions": true
+        }
+    })
+}
+
+fn managed_asset_operator_recipe(root_mode: &str) -> Value {
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_MANAGED_ASSET_OPERATOR_RECIPE_SCHEMA,
+        "root_mode": root_mode,
+        "goal": "Prepare managed Browser and Chrome plugin assets in the safe order before any external Chrome execution.",
+        "ordered_steps": [
+            {
+                "step": "inspect_bootstrap_readiness",
+                "tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                "recommended_payload": {
+                    "root_mode": root_mode,
+                    "include_bootstrap_readiness": true,
+                    "include_observability_profiles": true,
+                    "include_next_actions": true
+                },
+                "writes_files": false,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "step": "prepare_managed_roots",
+                "tool": AgentPluginBootstrapTool::NAME,
+                "recommended_payload": {
+                    "root_mode": root_mode,
+                    "create_managed_roots": true,
+                    "write_bootstrap_manifest": true
+                },
+                "requires_authorization": true,
+                "writes_files": true,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "step": "write_asset_receipt",
+                "tool": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
+                "recommended_payload": {
+                    "root_mode": root_mode,
+                    "write_asset_receipt": true,
+                    "copy_dx_chrome_extension": false,
+                    "dx_chrome_extension_source_root": Value::Null,
+                    "overwrite_existing_files": false,
+                    "include_file_preview": true
+                },
+                "requires_authorization": true,
+                "writes_files": true,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "step": "copy_dx_chrome_extension_if_missing",
+                "tool": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
+                "recommended_payload": {
+                    "root_mode": root_mode,
+                    "write_asset_receipt": true,
+                    "copy_dx_chrome_extension": true,
+                    "dx_chrome_extension_source_root": "<local unpacked extension root>",
+                    "overwrite_existing_files": false,
+                    "include_file_preview": true
+                },
+                "requires_authorization": true,
+                "writes_files": true,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "step": "prepare_playwright_adapter",
+                "tool": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+                "recommended_payload": {
+                    "root_mode": root_mode,
+                    "write_adapter_files": true,
+                    "include_script_preview": false
+                },
+                "requires_authorization": true,
+                "writes_files": true,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "step": "inspect_runtime_status_again",
+                "tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                "recommended_payload": {
+                    "root_mode": root_mode,
+                    "include_bootstrap_readiness": true,
+                    "include_observability_profiles": true,
+                    "include_latest_handoff": true,
+                    "include_next_actions": true
+                },
+                "writes_files": false,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "step": "final_windows_validation",
+                "manual_command": "just run",
+                "when": "only after managed asset status, adapter readiness, Browser/WebPreview receipts, managed Chrome receipts, and PC-use receipts are ready for a final runtime pass",
+                "writes_files": false,
+                "dispatches_input": "manual_validation_only"
+            }
+        ],
+        "safety": {
+            "recipe_is_metadata_only": true,
+            "never_write_to_real_browser_profiles": true,
+            "external_browser_launch_requires_later_permissioned_adapter_step": true,
+            "input_dispatch_requires_webpreview_or_future_executor_receipts": true
         }
     })
 }
@@ -1577,6 +1696,7 @@ fn latest_json_file_probe(directory: &Path, generated_at_ms: u64) -> Value {
 
 fn workflow_recipes() -> Value {
     serde_json::json!({
+        "managed_asset_operator_recipe": managed_asset_operator_recipe("workspace_or_zed_data"),
         "browser_webpreview_payload": {
             "goal": "Move a validated Agent Browser action into the in-app WebPreview without dispatching input from Agent tools.",
             "safe_for": ["click", "type_text", "press_key", "scroll"],

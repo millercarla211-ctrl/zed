@@ -89,6 +89,8 @@ const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstra
 const AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA: &str =
     "zed.agent_plugins.bootstrap_prepare_request.v1";
 const AGENT_PLUGIN_BOOTSTRAP_ASSET_PLAN_SCHEMA: &str = "zed.agent_plugins.bootstrap_asset_plan.v1";
+const AGENT_PLUGIN_MANAGED_ASSET_OPERATOR_RECIPE_SCHEMA: &str =
+    "zed.agent_plugins.managed_asset_operator_recipe.v1";
 const AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA: &str =
     "zed.agent_plugins.asset_provisioning_result.v1";
 const AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA: &str =
@@ -10054,6 +10056,7 @@ impl WebPreviewView {
                         "result_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
                         "receipt_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
                         "asset_readiness_summary_schema": AGENT_PLUGIN_ASSET_READINESS_SUMMARY_SCHEMA,
+                        "operator_recipe_schema": AGENT_PLUGIN_MANAGED_ASSET_OPERATOR_RECIPE_SCHEMA,
                         "dry_run_payload": {
                             "root_mode": "workspace",
                             "write_asset_receipt": false,
@@ -15447,6 +15450,7 @@ fn bootstrap_asset_provisioning_plan(
         "readiness_status": status,
         "safe_to_start_after_plan": status == "ready_for_managed_chrome_executor",
         "root_mode": root_mode,
+        "operator_recipe": managed_asset_operator_recipe(root_mode),
         "steps": [
             {
                 "id": "bootstrap.manifest",
@@ -15518,6 +15522,7 @@ fn bootstrap_asset_provisioning_plan(
             "asset_provisioner_tool": PREPARE_AGENT_PLUGIN_MANAGED_ASSETS_TOOL,
             "required_ready_checks": [
                 "asset.bootstrap_manifest",
+                "asset.provisioning_receipt",
                 "asset.playwright_package",
                 "asset.playwright_adapter_manifest",
                 "asset.playwright_adapter_runner",
@@ -15532,6 +15537,114 @@ fn bootstrap_asset_provisioning_plan(
             "dispatches_input": false,
             "touches_real_browser_profiles": false,
             "requires_receipts_before_executor_actions": true
+        }
+    })
+}
+
+fn managed_asset_operator_recipe(root_mode: &str) -> Value {
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_MANAGED_ASSET_OPERATOR_RECIPE_SCHEMA,
+        "root_mode": root_mode,
+        "goal": "Prepare managed Browser and Chrome plugin assets in the safe order before any external Chrome execution.",
+        "ordered_steps": [
+            {
+                "step": "inspect_bootstrap_readiness",
+                "surface": "WebPreview Copy or Send Plugin Bootstrap Readiness",
+                "writes_files": false,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "step": "prepare_managed_roots",
+                "tool": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL,
+                "recommended_payload": {
+                    "root_mode": root_mode,
+                    "create_managed_roots": true,
+                    "write_bootstrap_manifest": true
+                },
+                "requires_authorization": true,
+                "writes_files": true,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "step": "write_asset_receipt",
+                "tool": PREPARE_AGENT_PLUGIN_MANAGED_ASSETS_TOOL,
+                "recommended_payload": {
+                    "root_mode": root_mode,
+                    "write_asset_receipt": true,
+                    "copy_dx_chrome_extension": false,
+                    "dx_chrome_extension_source_root": Value::Null,
+                    "overwrite_existing_files": false,
+                    "include_file_preview": true
+                },
+                "requires_authorization": true,
+                "writes_files": true,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "step": "copy_dx_chrome_extension_if_missing",
+                "tool": PREPARE_AGENT_PLUGIN_MANAGED_ASSETS_TOOL,
+                "recommended_payload": {
+                    "root_mode": root_mode,
+                    "write_asset_receipt": true,
+                    "copy_dx_chrome_extension": true,
+                    "dx_chrome_extension_source_root": "<local unpacked extension root>",
+                    "overwrite_existing_files": false,
+                    "include_file_preview": true
+                },
+                "requires_authorization": true,
+                "writes_files": true,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "step": "prepare_playwright_adapter",
+                "tool": PREPARE_MANAGED_CHROME_PLAYWRIGHT_ADAPTER_TOOL,
+                "recommended_payload": {
+                    "root_mode": root_mode,
+                    "write_adapter_files": true,
+                    "include_script_preview": false
+                },
+                "requires_authorization": true,
+                "writes_files": true,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "step": "inspect_runtime_status_again",
+                "tool": "inspect_agent_plugin_runtime_status",
+                "recommended_payload": {
+                    "root_mode": root_mode,
+                    "include_bootstrap_readiness": true,
+                    "include_observability_profiles": true,
+                    "include_latest_handoff": true,
+                    "include_next_actions": true
+                },
+                "writes_files": false,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "step": "final_windows_validation",
+                "manual_command": "just run",
+                "when": "only after managed asset status, adapter readiness, Browser/WebPreview receipts, managed Chrome receipts, and PC-use receipts are ready for a final runtime pass",
+                "writes_files": false,
+                "dispatches_input": "manual_validation_only"
+            }
+        ],
+        "safety": {
+            "recipe_is_metadata_only": true,
+            "never_write_to_real_browser_profiles": true,
+            "external_browser_launch_requires_later_permissioned_adapter_step": true,
+            "input_dispatch_requires_webpreview_or_future_executor_receipts": true
         }
     })
 }
