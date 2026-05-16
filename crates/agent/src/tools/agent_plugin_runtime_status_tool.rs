@@ -4758,7 +4758,7 @@ fn validation_matrix() -> Value {
                 "write a runner-gate receipt without launching Chrome",
                 "prepare the managed Playwright adapter files",
                 "invoke the adapter only for allowlisted safe actions after a runner-gate receipt exists",
-                "inspect execution request and receipt summaries after invocation, including screenshot, viewport, selector-wait, DOM, runtime-event, and element-inspection evidence"
+                "inspect execution request and receipt summaries after invocation, including navigation, screenshot, viewport, selector-wait, DOM, runtime-event, and element-inspection evidence"
             ],
             "blocked_until_future_gate": [
                 "click",

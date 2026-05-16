@@ -347,7 +347,7 @@ struct AdapterFile {
 fn adapter_package_json() -> Result<String, String> {
     serde_json::to_string_pretty(&serde_json::json!({
         "name": "@zed/managed-chrome-runner",
-        "version": "0.1.5",
+        "version": "0.1.6",
         "private": true,
         "type": "module",
         "description": "Managed Playwright adapter for DX/Zed Agent Chrome plugin receipts.",
@@ -367,7 +367,7 @@ fn adapter_manifest_json(plan: &ManagedChromePlaywrightAdapterPlan) -> Result<St
         "generated_at_ms": current_epoch_millis(),
         "adapter": {
             "name": "DX/Zed Managed Chrome Playwright Adapter",
-            "version": "0.1.5",
+            "version": "0.1.6",
             "root": path_string(&plan.adapter_root),
             "runner_script": path_string(&plan.runner_script_path),
             "execution_receipt_schema": AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA,
@@ -575,10 +575,28 @@ async function main() {
       if (!payload.url) {
         throw new Error("open_url requires payload.url");
       }
-      await page.goto(payload.url, {
+      const timeoutMs = Number(payload.timeout_ms ?? 30000);
+      const response = await page.goto(payload.url, {
         waitUntil: "domcontentloaded",
-        timeout: Number(payload.timeout_ms ?? 30000)
+        timeout: timeoutMs
       });
+      const request = response?.request?.() ?? null;
+      receipt.navigation = {
+        requested_url: payload.url,
+        final_url: page.url(),
+        wait_until: "domcontentloaded",
+        timeout_ms: timeoutMs,
+        response: response
+          ? {
+            url: response.url(),
+            status: response.status(),
+            status_text: response.statusText(),
+            ok: response.ok(),
+            from_service_worker: response.fromServiceWorker(),
+            redirected: Boolean(request?.redirectedFrom?.())
+          }
+          : null
+      };
     } else if (payload.action === "set_viewport") {
       const requestedViewport = {
         width: Number(payload.width ?? payload.viewport_width ?? 1440),
@@ -974,6 +992,10 @@ async function main() {
 
     receipt.url = page.url();
     receipt.title = await page.title().catch(() => null);
+    if (receipt.navigation) {
+      receipt.navigation.final_url = receipt.url;
+      receipt.navigation.title = receipt.title;
+    }
     receipt.details.push("Managed Chrome adapter completed the requested non-input action.");
   } catch (error) {
     receipt.outcome = "failed";

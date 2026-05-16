@@ -1,3 +1,16 @@
+[2026-05-17] - Agent Plugin Runtime Managed Chrome Navigation Receipts
+
+ADDED:
+- Managed Chrome `open_url` receipts now include requested URL, final URL, page title, wait policy, timeout, HTTP response status, service-worker flag, and redirect metadata.
+- Agent and WebPreview managed Chrome execution summaries now expose compact `navigation` receipt evidence for the latest managed `open_url` run.
+
+CHANGED:
+- Agent/WebPreview managed Chrome catalogs now describe `chrome.page.open_url` as a receipt-backed navigation action instead of only a tab-opening capability.
+- Managed Chrome final runtime-status recipes now list navigation receipt evidence beside screenshot, viewport, selector-wait, DOM, runtime-event, and element-inspection evidence.
+
+NOTES:
+- This does not enable click, type, key, scroll, or OS-wide control in managed Chrome. It still requires managed roots, a ready runner receipt, explicit adapter invocation authorization, managed browser profiles, and final Windows runtime proof before runtime-green reporting.
+
 [2026-05-17] - Agent Plugin Runtime Managed Chrome Viewport And Wait Receipts
 
 ADDED:

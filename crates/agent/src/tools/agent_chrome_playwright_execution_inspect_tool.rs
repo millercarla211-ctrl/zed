@@ -387,6 +387,7 @@ fn read_json_summary(path: &Path) -> Value {
         "action": value.get("action").and_then(Value::as_str).or_else(|| value.pointer("/payload_packet/payload/action").and_then(Value::as_str)),
         "url": value.get("url").and_then(Value::as_str).or_else(|| value.pointer("/payload_packet/payload/url").and_then(Value::as_str)),
         "title": value.get("title").and_then(Value::as_str),
+        "navigation": navigation_receipt_summary(&value),
         "screenshot": value.pointer("/artifacts/screenshot").and_then(Value::as_str),
         "screenshot_capture": screenshot_receipt_summary(&value),
         "viewport_change": viewport_receipt_summary(&value),
@@ -408,6 +409,18 @@ fn screenshot_receipt_summary(value: &Value) -> Option<Value> {
         "selector": screenshot.get("selector").and_then(Value::as_str),
         "full_page": screenshot.get("full_page").and_then(Value::as_bool),
         "dimensions": screenshot.get("dimensions").cloned(),
+    }))
+}
+
+fn navigation_receipt_summary(value: &Value) -> Option<Value> {
+    let navigation = value.get("navigation")?;
+    Some(serde_json::json!({
+        "requested_url": navigation.get("requested_url").and_then(Value::as_str),
+        "final_url": navigation.get("final_url").and_then(Value::as_str),
+        "title": navigation.get("title").and_then(Value::as_str),
+        "wait_until": navigation.get("wait_until").and_then(Value::as_str),
+        "timeout_ms": navigation.get("timeout_ms").and_then(Value::as_u64),
+        "response": navigation.get("response").cloned(),
     }))
 }
 

@@ -1210,7 +1210,7 @@ fn chrome_plugin_manifest(
             capability("chrome.runtime.playwright_execution_status_handoff", "available", "Use WebPreview Copy/Send Managed Chrome Execution Status to hand the latest managed request or receipt summary to the Agent Panel."),
             capability("chrome.action.payload_queue_schema", "available", "Read the managed Chrome payload packet, queue item, queue result, and latest-file schemas for future runner execution."),
             capability("chrome.session.launch", "requires_bootstrap", "Launch or attach to a managed Chrome profile."),
-            capability("chrome.page.open_url", "requires_bootstrap", "Open URLs in managed Chrome tabs."),
+            capability("chrome.page.open_url", "requires_bootstrap", "Open URLs in managed Chrome tabs and read navigation response metadata from receipts."),
             capability("chrome.page.click", "requires_permission", "Click elements through Playwright locators or extension targets."),
             capability("chrome.page.type", "requires_permission", "Type into focused inputs through Playwright or extension bridge."),
             capability("chrome.page.press_key", "requires_permission", "Press keyboard shortcuts in managed Chrome."),

@@ -14265,7 +14265,7 @@ impl WebPreviewView {
                             {"id": "chrome.runtime.playwright_execution_status_handoff", "state": "available", "description": "Use WebPreview Copy/Send Managed Chrome Execution Status to hand the latest managed request or receipt summary to the Agent Panel."},
                             {"id": "chrome.action.payload_queue_schema", "state": "available", "description": "Read the managed Chrome payload packet, queue item, queue result, and latest-file schemas for future runner execution."},
                             {"id": "chrome.session.launch", "state": "requires_bootstrap", "description": "Launch or attach to a managed Chrome profile."},
-                            {"id": "chrome.page.open_url", "state": "requires_bootstrap", "description": "Open URLs in managed Chrome tabs."},
+                            {"id": "chrome.page.open_url", "state": "requires_bootstrap", "description": "Open URLs in managed Chrome tabs and read navigation response metadata from receipts."},
                             {"id": "chrome.page.click", "state": "requires_permission", "description": "Click elements through Playwright locators or extension targets."},
                             {"id": "chrome.page.type", "state": "requires_permission", "description": "Type into focused inputs through Playwright or extension bridge."},
                             {"id": "chrome.page.press_key", "state": "requires_permission", "description": "Press keyboard shortcuts in managed Chrome."},
@@ -19127,6 +19127,7 @@ fn managed_chrome_execution_file_read_summary(path: &Path, expected_schema: &str
             .or_else(|| value.pointer("/payload_packet/payload/url").and_then(Value::as_str))
             .or_else(|| value.pointer("/queue_item/payload_packet/payload/url").and_then(Value::as_str)),
         "title": value.get("title").and_then(Value::as_str),
+        "navigation": managed_chrome_navigation_summary(&value),
         "screenshot": value.pointer("/artifacts/screenshot").and_then(Value::as_str),
         "screenshot_capture": managed_chrome_screenshot_summary(&value),
         "viewport_change": managed_chrome_viewport_summary(&value),
@@ -19148,6 +19149,18 @@ fn managed_chrome_screenshot_summary(value: &Value) -> Option<Value> {
         "selector": screenshot.get("selector").and_then(Value::as_str),
         "full_page": screenshot.get("full_page").and_then(Value::as_bool),
         "dimensions": screenshot.get("dimensions").cloned(),
+    }))
+}
+
+fn managed_chrome_navigation_summary(value: &Value) -> Option<Value> {
+    let navigation = value.get("navigation")?;
+    Some(serde_json::json!({
+        "requested_url": navigation.get("requested_url").and_then(Value::as_str),
+        "final_url": navigation.get("final_url").and_then(Value::as_str),
+        "title": navigation.get("title").and_then(Value::as_str),
+        "wait_until": navigation.get("wait_until").and_then(Value::as_str),
+        "timeout_ms": navigation.get("timeout_ms").and_then(Value::as_u64),
+        "response": navigation.get("response").cloned(),
     }))
 }
 
