@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Asset Readiness Summary
+
+ADDED:
+- Added a schema-versioned asset readiness summary to `prepare_agent_plugin_managed_assets` results and receipts.
+- The summary reports managed root, Playwright package, DX Chrome extension manifest, managed profile, and asset receipt readiness with blockers, warnings, and next actions.
+- Agent catalog and WebPreview bootstrap discovery now advertise the asset readiness summary schema alongside the asset provisioner result and receipt schemas.
+
+NOTES:
+- This is provisioner/status metadata only; it does not download packages, run Node, launch Chrome, dispatch browser input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Asset Receipt Catalog Alignment
 
 CHANGED:

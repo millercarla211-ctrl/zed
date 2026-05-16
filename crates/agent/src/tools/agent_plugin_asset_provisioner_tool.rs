@@ -22,6 +22,8 @@ pub const AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA: &str =
     "zed.agent_plugins.asset_provisioning_receipt.v1";
 pub const AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_FILE_NAME: &str =
     "agent-plugin-asset-provisioning.json";
+pub const AGENT_PLUGIN_ASSET_READINESS_SUMMARY_SCHEMA: &str =
+    "zed.agent_plugins.asset_readiness_summary.v1";
 
 const MAX_EXTENSION_FILES: usize = 512;
 const MAX_EXTENSION_FILE_BYTES: u64 = 5 * 1024 * 1024;
@@ -211,16 +213,16 @@ impl ManagedAssetProvisioningPlan {
 
     fn apply(&self, input: &AgentPluginAssetProvisionerToolInput) -> Result<Value, String> {
         let copy_report = self.dx_extension_copy_report(input)?;
-        let receipt = self.receipt_value(input, &copy_report);
         let mut wrote_receipt = false;
 
-        if input.write_asset_receipt {
+        let receipt = if input.write_asset_receipt {
             fs::create_dir_all(&self.plugin_root).map_err(|error| {
                 format!(
                     "Failed to prepare agent plugin root {}: {error}",
                     self.plugin_root.display()
                 )
             })?;
+            let receipt = self.receipt_value(input, &copy_report, true);
             let receipt_json = serde_json::to_vec_pretty(&receipt)
                 .map_err(|error| format!("Failed to serialize asset receipt: {error}"))?;
             fs::write(&self.receipt_path, receipt_json).map_err(|error| {
@@ -230,7 +232,12 @@ impl ManagedAssetProvisioningPlan {
                 )
             })?;
             wrote_receipt = true;
-        }
+            receipt
+        } else {
+            self.receipt_value(input, &copy_report, false)
+        };
+        let asset_readiness_summary =
+            self.asset_readiness_summary(input, &copy_report, wrote_receipt);
 
         Ok(serde_json::json!({
             "schema": AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
@@ -242,7 +249,8 @@ impl ManagedAssetProvisioningPlan {
                 "wrote_asset_receipt": wrote_receipt,
                 "receipt_path": path_string(&self.receipt_path),
             },
-            "assets": self.assets_value(),
+            "asset_readiness_summary": asset_readiness_summary,
+            "assets": self.assets_value(wrote_receipt),
             "dx_chrome_extension_copy": copy_report,
             "receipt": receipt,
             "next_actions": [
@@ -426,7 +434,11 @@ impl ManagedAssetProvisioningPlan {
         &self,
         input: &AgentPluginAssetProvisionerToolInput,
         copy_report: &Value,
+        receipt_written_by_this_run: bool,
     ) -> Value {
+        let asset_readiness_summary =
+            self.asset_readiness_summary(input, copy_report, receipt_written_by_this_run);
+
         serde_json::json!({
             "schema": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
             "generated_at_ms": current_epoch_millis(),
@@ -437,7 +449,8 @@ impl ManagedAssetProvisioningPlan {
                 "overwrite_existing_files": input.overwrite_existing_files,
                 "has_dx_chrome_extension_source_root": input.dx_chrome_extension_source_root.is_some(),
             },
-            "assets": self.assets_value(),
+            "asset_readiness_summary": asset_readiness_summary,
+            "assets": self.assets_value(receipt_written_by_this_run),
             "dx_chrome_extension_copy": copy_report,
             "safety": {
                 "downloads_packages": false,
@@ -450,7 +463,102 @@ impl ManagedAssetProvisioningPlan {
         })
     }
 
-    fn assets_value(&self) -> Value {
+    fn asset_readiness_summary(
+        &self,
+        input: &AgentPluginAssetProvisionerToolInput,
+        copy_report: &Value,
+        receipt_written_by_this_run: bool,
+    ) -> Value {
+        let managed_base_root_ready = self.allowed_root.is_dir();
+        let plugin_root_ready = self.plugin_root.is_dir();
+        let playwright_root_ready = self.playwright_root.is_dir();
+        let playwright_package_ready = self.playwright_package_json.is_file();
+        let dx_extension_manifest_ready = self.dx_extension_manifest.is_file();
+        let managed_profile_root_ready = self.managed_profile_root.is_dir();
+        let asset_receipt_ready = receipt_written_by_this_run || self.receipt_path.is_file();
+        let skipped_file_count = copy_report
+            .get("skipped_file_count")
+            .and_then(Value::as_u64)
+            .unwrap_or_default();
+        let copy_truncated = copy_report
+            .get("truncated")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+
+        let mut blockers = Vec::new();
+        if !managed_base_root_ready {
+            blockers.push("missing_managed_base_root");
+        }
+        if !plugin_root_ready {
+            blockers.push("missing_managed_plugin_root");
+        }
+        if !playwright_root_ready {
+            blockers.push("missing_managed_playwright_root");
+        }
+        if !playwright_package_ready {
+            blockers.push("missing_playwright_package");
+        }
+        if !dx_extension_manifest_ready {
+            blockers.push("missing_dx_chrome_extension_manifest");
+        }
+        if !managed_profile_root_ready {
+            blockers.push("missing_managed_chrome_profile_root");
+        }
+        if !asset_receipt_ready {
+            blockers.push("missing_asset_provisioning_receipt");
+        }
+
+        let mut warnings = Vec::new();
+        if skipped_file_count > 0 {
+            warnings.push("dx_extension_copy_skipped_files");
+        }
+        if copy_truncated {
+            warnings.push("dx_extension_copy_preview_truncated");
+        }
+        if input.copy_dx_chrome_extension && !dx_extension_manifest_ready {
+            warnings.push("dx_extension_copy_did_not_produce_manifest");
+        }
+
+        let ready_flags = [
+            managed_base_root_ready,
+            plugin_root_ready,
+            playwright_root_ready,
+            playwright_package_ready,
+            dx_extension_manifest_ready,
+            managed_profile_root_ready,
+            asset_receipt_ready,
+        ];
+        let ready_count = ready_flags.iter().filter(|ready| **ready).count();
+        let next_actions = asset_readiness_next_actions(&blockers, &warnings);
+        let status = if blockers.is_empty() {
+            "ready_for_managed_chrome_validation"
+        } else {
+            "blocked_missing_managed_assets"
+        };
+
+        serde_json::json!({
+            "schema": AGENT_PLUGIN_ASSET_READINESS_SUMMARY_SCHEMA,
+            "status": status,
+            "ready": blockers.is_empty(),
+            "ready_count": ready_count,
+            "required_count": ready_flags.len(),
+            "required": {
+                "managed_base_root": managed_base_root_ready,
+                "managed_plugin_root": plugin_root_ready,
+                "managed_playwright_root": playwright_root_ready,
+                "playwright_package": playwright_package_ready,
+                "dx_chrome_extension_manifest": dx_extension_manifest_ready,
+                "managed_chrome_profile_root": managed_profile_root_ready,
+                "asset_provisioning_receipt": asset_receipt_ready,
+            },
+            "blockers": blockers,
+            "warnings": warnings,
+            "next_actions": next_actions,
+            "copy_status": copy_report.get("status").and_then(Value::as_str).unwrap_or("unknown"),
+        })
+    }
+
+    fn assets_value(&self, receipt_written_by_this_run: bool) -> Value {
         serde_json::json!({
             "playwright": {
                 "managed_root": path_string(&self.playwright_root),
@@ -470,7 +578,7 @@ impl ManagedAssetProvisioningPlan {
             },
             "receipt": {
                 "path": path_string(&self.receipt_path),
-                "ready": self.receipt_path.is_file(),
+                "ready": receipt_written_by_this_run || self.receipt_path.is_file(),
                 "schema": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
             }
         })
@@ -485,6 +593,50 @@ impl ManagedAssetProvisioningPlan {
             AgentChromePayloadQueueRootMode::ZedData => "zed_data",
         }
     }
+}
+
+fn asset_readiness_next_actions(
+    blockers: &[&'static str],
+    warnings: &[&'static str],
+) -> Vec<&'static str> {
+    let mut actions = Vec::new();
+    if blockers.iter().any(|blocker| {
+        matches!(
+            *blocker,
+            "missing_managed_base_root"
+                | "missing_managed_plugin_root"
+                | "missing_managed_playwright_root"
+                | "missing_managed_chrome_profile_root"
+        )
+    }) {
+        actions.push(
+            "Run prepare_agent_plugin_runtime with create_managed_roots=true before preparing assets.",
+        );
+    }
+    if blockers.contains(&"missing_asset_provisioning_receipt") {
+        actions.push("Run prepare_agent_plugin_managed_assets with write_asset_receipt=true.");
+    }
+    if blockers.contains(&"missing_dx_chrome_extension_manifest") {
+        actions.push(
+            "Provide dx_chrome_extension_source_root and set copy_dx_chrome_extension=true to copy a local unpacked DX Chrome extension.",
+        );
+    }
+    if blockers.contains(&"missing_playwright_package") {
+        actions.push(
+            "Install Playwright into the managed Playwright root through an explicit installer or manual operator step before invoking managed Chrome.",
+        );
+    }
+    if warnings.contains(&"dx_extension_copy_skipped_files") {
+        actions.push(
+            "Inspect skipped DX extension files before rerunning with overwrite_existing_files=true.",
+        );
+    }
+    if actions.is_empty() {
+        actions.push(
+            "Run inspect_agent_plugin_runtime_status with include_observability_profiles=true and complete the final Windows validation pass.",
+        );
+    }
+    actions
 }
 
 fn dx_extension_source(input: &AgentPluginAssetProvisionerToolInput) -> Result<PathBuf, String> {

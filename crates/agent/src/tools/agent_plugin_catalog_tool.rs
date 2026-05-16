@@ -27,8 +27,8 @@ use crate::{
     AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME, AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
     AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_FILE_NAME,
     AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA, AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
-    AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA, AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME, AgentTool,
-    ToolCallEventStream, ToolInput,
+    AGENT_PLUGIN_ASSET_READINESS_SUMMARY_SCHEMA, AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA,
+    AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME, AgentTool, ToolCallEventStream, ToolInput,
 };
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
@@ -283,6 +283,7 @@ fn agent_plugin_catalog(
                     "name": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
                     "result_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
                     "receipt_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
+                    "asset_readiness_summary_schema": AGENT_PLUGIN_ASSET_READINESS_SUMMARY_SCHEMA,
                     "dry_run_payload": {
                         "root_mode": "workspace",
                         "write_asset_receipt": false,

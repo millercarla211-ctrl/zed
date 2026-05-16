@@ -93,6 +93,8 @@ const AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA: &str =
     "zed.agent_plugins.asset_provisioning_result.v1";
 const AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA: &str =
     "zed.agent_plugins.asset_provisioning_receipt.v1";
+const AGENT_PLUGIN_ASSET_READINESS_SUMMARY_SCHEMA: &str =
+    "zed.agent_plugins.asset_readiness_summary.v1";
 const AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_FILE_NAME: &str =
     "agent-plugin-asset-provisioning.json";
 const AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA: &str =
@@ -10049,6 +10051,9 @@ impl WebPreviewView {
                     },
                     "managed_asset_provisioner_tool": {
                         "name": PREPARE_AGENT_PLUGIN_MANAGED_ASSETS_TOOL,
+                        "result_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
+                        "receipt_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
+                        "asset_readiness_summary_schema": AGENT_PLUGIN_ASSET_READINESS_SUMMARY_SCHEMA,
                         "dry_run_payload": {
                             "root_mode": "workspace",
                             "write_asset_receipt": false,
