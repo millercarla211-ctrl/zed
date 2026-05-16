@@ -1,3 +1,16 @@
+[2026-05-16] - PC Use UI Snapshot Collector
+
+ADDED:
+- Added the read-only `inspect_zed_pc_use_ui_snapshot` Agent tool for exposing the safest current Zed UI snapshot available from project state.
+- Advertised the UI snapshot tool and schema through the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- PC-use target manifests, target snapshots, UI snapshot contract output, and payload handoff guidance now include the UI snapshot collector in the required flow.
+- The UI snapshot collector reports workspace/project-panel targets as read-only and separately reports editor, WebPreview, Agent Panel, right panel, title/status bar, and terminal as live-UI gaps until a true window UI source exists.
+
+NOTES:
+- This collector is intentionally partial and read-only: it does not inspect pixels, take screenshots, focus Zed, dispatch mouse or keyboard input, launch processes, or control the desktop.
+
 [2026-05-16] - PC Use UI Snapshot Contract
 
 ADDED:

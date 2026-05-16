@@ -189,6 +189,7 @@ fn inspect_pc_use_targets(
             "inspect_zed_pc_use_targets",
             "inspect_zed_pc_use_target_snapshot",
             "inspect_zed_pc_use_ui_snapshot_contract",
+            "inspect_zed_pc_use_ui_snapshot",
             "compose_zed_pc_use_action_payload",
             "queue_zed_pc_use_action_payload or stage_zed_pc_use_action_payload",
             "inspect_zed_pc_use_payload_queue",

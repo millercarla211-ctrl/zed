@@ -161,6 +161,7 @@ fn ui_snapshot_contract(input: AgentPcUseUiSnapshotContractToolInput) -> Value {
             "inspect_zed_pc_use_targets",
             "inspect_zed_pc_use_target_snapshot",
             "inspect_zed_pc_use_ui_snapshot_contract",
+            "inspect_zed_pc_use_ui_snapshot",
             "future live Zed UI snapshot receipt",
             "compose_zed_pc_use_action_payload",
             "queue_zed_pc_use_action_payload or stage_zed_pc_use_action_payload",

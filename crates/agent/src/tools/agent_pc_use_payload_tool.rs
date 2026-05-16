@@ -738,12 +738,14 @@ fn compose_pc_use_payload(input: &AgentPcUsePayloadToolInput) -> Value {
             "target_manifest_tool_name": "inspect_zed_pc_use_targets",
             "target_snapshot_tool_name": "inspect_zed_pc_use_target_snapshot",
             "ui_snapshot_contract_tool_name": "inspect_zed_pc_use_ui_snapshot_contract",
+            "ui_snapshot_tool_name": "inspect_zed_pc_use_ui_snapshot",
             "future_executor_status": "not_enabled",
             "next_steps": [
                 "Use inspect_zed_window_context to collect safe workspace context.",
                 "Use inspect_zed_pc_use_targets to read supported surfaces and action requirements.",
                 "Use inspect_zed_pc_use_target_snapshot for current read-only workspace or project-panel target ids.",
                 "Use inspect_zed_pc_use_ui_snapshot_contract before accepting future focus, click, or type target ids.",
+                "Use inspect_zed_pc_use_ui_snapshot to see the current partial Zed UI snapshot and live-UI gaps.",
                 "Wait for a future Zed UI inspection receipt before focus, click, or type execution.",
                 "Require explicit user-visible permission before any future screenshot, focus, click, or type action.",
                 "Keep OS-wide desktop automation blocked unless the user grants a separate permission."
