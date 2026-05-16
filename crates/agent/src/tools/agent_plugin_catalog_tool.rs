@@ -4,9 +4,11 @@ use crate::{
     AGENT_CHROME_PAYLOAD_QUEUE_FILE_NAME, AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
     AGENT_CHROME_PAYLOAD_QUEUE_ITEM_SCHEMA, AGENT_CHROME_PAYLOAD_QUEUE_RESULT_SCHEMA,
     AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME, AGENT_CHROME_PAYLOAD_RESULT_SCHEMA,
-    AGENT_CHROME_PAYLOAD_TOOL_NAME, AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
-    AGENT_CHROME_RUNNER_RECEIPT_FILE_NAME, AGENT_CHROME_RUNNER_RECEIPT_SCHEMA, AgentTool,
-    ToolCallEventStream, ToolInput,
+    AGENT_CHROME_PAYLOAD_TOOL_NAME, AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA,
+    AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME, AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+    AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA, AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME,
+    AGENT_CHROME_RUNNER_GATE_TOOL_NAME, AGENT_CHROME_RUNNER_RECEIPT_FILE_NAME,
+    AGENT_CHROME_RUNNER_RECEIPT_SCHEMA, AgentTool, ToolCallEventStream, ToolInput,
 };
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
@@ -157,6 +159,7 @@ fn agent_plugin_catalog(
                 "queue_chrome_action_payload": AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
                 "inspect_chrome_action_payload_queue": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
                 "request_chrome_payload_run": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
+                "prepare_chrome_playwright_adapter": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
                 "prepare_runtime": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL
             },
             "available_to": [
@@ -187,6 +190,28 @@ fn agent_plugin_catalog(
                     },
                     "requires_permission_for_writes": true,
                     "downloads_or_launches_browser": false
+                },
+                "playwright_adapter_prepare_tool": {
+                    "name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+                    "dry_run_payload": {
+                        "root_mode": "workspace",
+                        "write_adapter_files": false,
+                        "include_script_preview": false
+                    },
+                    "workspace_payload": {
+                        "root_mode": "workspace",
+                        "write_adapter_files": true,
+                        "include_script_preview": false
+                    },
+                    "zed_data_payload": {
+                        "root_mode": "zed_data",
+                        "write_adapter_files": true,
+                        "include_script_preview": false
+                    },
+                    "requires_permission_for_writes": true,
+                    "installs_packages": false,
+                    "launches_browser": false,
+                    "runs_node": false
                 },
                 "zed_data_plugin_root": default_plugin_root.display().to_string(),
                 "workspace_plugin_root": workspace_plugin_root.as_ref().map(|path| path.display().to_string()),
@@ -375,6 +400,31 @@ fn chrome_plugin_manifest(
                 .unwrap_or_else(|| default_plugin_root.join("playwright"))
                 .display()
                 .to_string(),
+            "playwright_adapter_root": workspace_tools_root
+                .as_ref()
+                .map(|root| root.join("playwright").join(AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME))
+                .unwrap_or_else(|| {
+                    default_plugin_root
+                        .join("playwright")
+                        .join(AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME)
+                })
+                .display()
+                .to_string(),
+            "playwright_runner_script": workspace_tools_root
+                .as_ref()
+                .map(|root| {
+                    root.join("playwright")
+                        .join(AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME)
+                        .join(AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME)
+                })
+                .unwrap_or_else(|| {
+                    default_plugin_root
+                        .join("playwright")
+                        .join(AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME)
+                        .join(AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME)
+                })
+                .display()
+                .to_string(),
             "dx_extension_root": workspace_plugin_root
                 .as_ref()
                 .map(|root| root.join("dx-chrome-extension"))
@@ -398,6 +448,11 @@ fn chrome_plugin_manifest(
             "payload_queue_tool_name": AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
             "payload_queue_inspect_tool_name": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
             "runner_gate_tool_name": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
+            "playwright_adapter_tool_name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+            "playwright_adapter_manifest_schema": AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA,
+            "playwright_execution_receipt_schema": AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA,
+            "playwright_adapter_root_name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME,
+            "playwright_runner_script_name": AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME,
             "runner_receipt_schema": AGENT_CHROME_RUNNER_RECEIPT_SCHEMA,
             "latest_runner_receipt_file": AGENT_CHROME_RUNNER_RECEIPT_FILE_NAME,
             "payload_result_schema": AGENT_CHROME_PAYLOAD_RESULT_SCHEMA,
@@ -411,6 +466,19 @@ fn chrome_plugin_manifest(
                     .map(|root| root.join("chrome-payloads").display().to_string()),
                 "zed_data": default_plugin_root
                     .join("chrome-payloads")
+                    .display()
+                    .to_string()
+            },
+            "managed_adapter_roots": {
+                "workspace": workspace_tools_root.as_ref().map(|root| {
+                    root.join("playwright")
+                        .join(AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME)
+                        .display()
+                        .to_string()
+                }),
+                "zed_data": default_plugin_root
+                    .join("playwright")
+                    .join(AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME)
                     .display()
                     .to_string()
             },
@@ -462,6 +530,7 @@ fn chrome_plugin_manifest(
             "rules": [
                 "Payload tools never launch Chrome, install Playwright, dispatch input, or run page scripts.",
                 "Queued payloads are written only to managed workspace or Zed-data plugin roots after authorization.",
+                "The Playwright adapter preparation tool writes only versioned adapter files under managed roots and does not run Node.",
                 "Future execution must use managed profiles, explicit permission, fresh preflight, and receipts.",
                 "The runner must never write into the user's real Chrome, Edge, or Firefox profile."
             ]
@@ -471,6 +540,7 @@ fn chrome_plugin_manifest(
             capability("chrome.action.payload_queue_managed", "available_requires_authorization", "Use queue_managed_chrome_action_payload to write a validated Chrome action packet into the managed workspace or Zed-data queue."),
             capability("chrome.action.payload_queue_inspect", "available", "Use inspect_managed_chrome_payload_queue to validate the latest queued Chrome payload and runner prerequisites before launch or dispatch exists."),
             capability("chrome.action.runner_gate", "available_requires_authorization", "Use request_managed_chrome_payload_run to write a permissioned runner receipt that blocks until queue, bootstrap, managed-profile, and future adapter requirements are satisfied."),
+            capability("chrome.runtime.playwright_adapter_prepare", "available_requires_authorization", "Use prepare_managed_chrome_playwright_adapter to write a versioned managed Playwright adapter artifact without installing packages, launching Chrome, or dispatching input."),
             capability("chrome.action.payload_queue_schema", "available", "Read the managed Chrome payload packet, queue item, queue result, and latest-file schemas for future runner execution."),
             capability("chrome.session.launch", "requires_bootstrap", "Launch or attach to a managed Chrome profile."),
             capability("chrome.page.open_url", "requires_bootstrap", "Open URLs in managed Chrome tabs."),

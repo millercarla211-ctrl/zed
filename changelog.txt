@@ -1,3 +1,15 @@
+[2026-05-16] - Managed Chrome Playwright Adapter
+
+ADDED:
+- Added the permissioned `prepare_managed_chrome_playwright_adapter` Agent tool for writing a versioned managed Playwright adapter package, runner script, README, and manifest.
+- Advertised the adapter preparation tool, manifest schema, execution receipt schema, adapter root, and runner script through both the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- Managed Chrome execution now has a concrete adapter artifact step after the runner gate, ready for future open_url, screenshot, viewport, and selector-wait invocation wiring.
+
+NOTES:
+- The adapter preparation step writes only under managed workspace/Zed-data roots after authorization; it does not install packages, run Node, launch Chrome, dispatch browser input, execute page scripts, or touch real browser profiles.
+
 [2026-05-16] - Managed Chrome Runner Gate
 
 ADDED:
