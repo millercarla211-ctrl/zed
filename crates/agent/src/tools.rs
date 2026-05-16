@@ -1,3 +1,4 @@
+mod agent_browser_payload_queue_inspect_tool;
 mod agent_browser_payload_tool;
 mod agent_chrome_payload_queue_inspect_tool;
 mod agent_chrome_payload_tool;
@@ -76,6 +77,7 @@ where
     }
 }
 
+pub use agent_browser_payload_queue_inspect_tool::*;
 pub use agent_browser_payload_tool::*;
 pub use agent_chrome_payload_queue_inspect_tool::*;
 pub use agent_chrome_payload_tool::*;
@@ -194,6 +196,7 @@ tools! {
     AgentBrowserPayloadTool,
     AgentBrowserPayloadStageTool,
     AgentBrowserPayloadQueueTool,
+    AgentBrowserPayloadQueueInspectTool,
     AgentChromePayloadTool,
     AgentChromePayloadQueueTool,
     AgentChromePayloadQueueInspectTool,

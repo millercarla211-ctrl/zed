@@ -1,3 +1,15 @@
+[2026-05-16] - Browser Payload Queue Inspection
+
+ADDED:
+- Added the read-only `inspect_agent_browser_payload_queue` Agent tool for validating the latest managed WebPreview Browser payload handoff before import.
+- Advertised the Browser queue inspector through the Agent plugin catalog, runtime status tool, and WebPreview plugin handoff catalog.
+
+CHANGED:
+- Browser payload queue items now share an exported schema constant with catalog, runtime-status, and inspection surfaces.
+
+NOTES:
+- The inspector is handoff-only: it does not import into WebPreview, write files, take screenshots, launch browsers, dispatch mouse/keyboard/wheel input, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Status Tool
 
 ADDED:

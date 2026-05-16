@@ -19,6 +19,8 @@ pub const AGENT_BROWSER_PAYLOAD_TOOL_NAME: &str = "compose_agent_browser_action_
 pub const AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME: &str = "stage_agent_browser_action_payload";
 pub const AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME: &str = "queue_agent_browser_action_payload";
 pub const AGENT_BROWSER_PAYLOAD_QUEUE_FILE_NAME: &str = "latest-agent-browser-payload.json";
+pub const AGENT_BROWSER_PAYLOAD_QUEUE_ITEM_SCHEMA: &str =
+    "zed.agent_plugins.browser_action_payload_queue_item.v1";
 const ALLOWED_KEYS: &[&str] = &[
     "Escape",
     "Enter",
@@ -508,7 +510,7 @@ impl AgentBrowserPayloadQueue {
 
     fn queue_item(&self, input: &AgentBrowserPayloadQueueToolInput, packet: Value) -> Value {
         serde_json::json!({
-            "schema": "zed.agent_plugins.browser_action_payload_queue_item.v1",
+            "schema": AGENT_BROWSER_PAYLOAD_QUEUE_ITEM_SCHEMA,
             "queued_at_ms": current_epoch_millis(),
             "source_tool": AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME,
             "payload_packet": packet,

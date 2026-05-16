@@ -1,7 +1,12 @@
 use super::{
+    agent_browser_payload_queue_inspect_tool::{
+        AGENT_BROWSER_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+        AGENT_BROWSER_PAYLOAD_QUEUE_INSPECTION_SCHEMA,
+    },
     agent_browser_payload_tool::{
-        AGENT_BROWSER_PAYLOAD_QUEUE_FILE_NAME, AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME,
-        AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME, AGENT_BROWSER_PAYLOAD_TOOL_NAME,
+        AGENT_BROWSER_PAYLOAD_QUEUE_FILE_NAME, AGENT_BROWSER_PAYLOAD_QUEUE_ITEM_SCHEMA,
+        AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME, AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME,
+        AGENT_BROWSER_PAYLOAD_TOOL_NAME,
     },
     agent_chrome_payload_tool::{
         AGENT_CHROME_PAYLOAD_QUEUE_FILE_NAME, AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
@@ -371,12 +376,17 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
             "compose_payload": AGENT_BROWSER_PAYLOAD_TOOL_NAME,
             "stage_payload": AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME,
             "queue_payload": AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME,
+            "inspect_payload_queue": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+        },
+        "schemas": {
+            "payload_queue_item": AGENT_BROWSER_PAYLOAD_QUEUE_ITEM_SCHEMA,
+            "payload_queue_inspection": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECTION_SCHEMA,
         },
         "managed_paths": {
             "queue_dir": dir_probe(&roots.browser_queue_dir),
             "latest_payload": file_probe(
                 &roots.browser_latest_payload,
-                Some("zed.agent_plugins.browser_action_payload_queue_item.v1"),
+                Some(AGENT_BROWSER_PAYLOAD_QUEUE_ITEM_SCHEMA),
                 Some("/payload_packet/schema"),
                 include_latest_handoff,
             ),

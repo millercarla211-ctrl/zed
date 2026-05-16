@@ -8400,6 +8400,7 @@ impl WebPreviewView {
                     "compose_browser_action_payload": "compose_agent_browser_action_payload",
                     "stage_browser_action_payload": "stage_agent_browser_action_payload",
                     "queue_browser_action_payload": "queue_agent_browser_action_payload",
+                    "inspect_browser_action_payload_queue": "inspect_agent_browser_payload_queue",
                     "compose_chrome_action_payload": "compose_managed_chrome_action_payload",
                     "queue_chrome_action_payload": "queue_managed_chrome_action_payload",
                     "inspect_chrome_action_payload_queue": "inspect_managed_chrome_payload_queue",
@@ -8547,9 +8548,11 @@ impl WebPreviewView {
                             "payload_tool_name": "compose_agent_browser_action_payload",
                             "payload_stage_tool_name": "stage_agent_browser_action_payload",
                             "payload_queue_tool_name": "queue_agent_browser_action_payload",
+                            "payload_queue_inspect_tool_name": "inspect_agent_browser_payload_queue",
                             "bridge_schema": "zed.web_preview.agent_browser_action_payload_bridge.v1",
                             "executor_payload_schema": "zed.web_preview.agent_browser_executor_payload.v1",
                             "payload_queue_item_schema": "zed.agent_plugins.browser_action_payload_queue_item.v1",
+                            "payload_queue_inspection_schema": "zed.agent_plugins.browser_action_payload_queue_inspection.v1",
                             "payload_import_receipt_schema": "zed.web_preview.agent_browser_action_payload_import_receipt.v1",
                             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
                             "managed_queue_import_action": "import_agent_browser_action_payload_from_managed_queue",
@@ -8580,6 +8583,7 @@ impl WebPreviewView {
                             ],
                             "rules": [
                                 "Payload bridges are handoff artifacts and never dispatch by themselves.",
+                                "Managed queue items should be checked with inspect_agent_browser_payload_queue before WebPreview import when an Agent did not just queue the payload.",
                                 "Interactive executors still require unlock, fresh preflight, action-specific gates, and receipts.",
                                 "type_text requires non-empty payload.text and rejects selector mismatches when a selector is supplied."
                             ]
