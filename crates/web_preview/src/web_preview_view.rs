@@ -102,6 +102,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_readiness_scorecard.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_operator_handoff.v1";
+const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
+    "zed.agent_plugins.runtime_observability_digest.v1";
 const AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA: &str =
     "zed.agent_plugins.asset_provisioning_result.v1";
 const AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA: &str =
@@ -2819,7 +2821,8 @@ impl WebPreviewView {
                         "include_next_actions": true,
                         "include_workflows": true,
                         "include_validation_matrix": true,
-                        "include_observability_profiles": true
+                        "include_observability_profiles": true,
+                        "include_observability_digest": true
                     }
                 }
             },
@@ -10482,6 +10485,7 @@ impl WebPreviewView {
                     "runtime_green_blocker_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_BLOCKERS_SCHEMA,
                     "runtime_green_readiness_scorecard_schema": AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA,
                     "runtime_green_operator_handoff_schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+                    "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                     "runtime_green_ready_outcomes": {
                         "browser_final_validation_result": "runtime_green_candidate=true",
                         "managed_chrome_runner_receipt": "ready_runner_adapter_pending",
@@ -10496,9 +10500,10 @@ impl WebPreviewView {
                         "include_next_actions": true,
                         "include_workflows": true,
                         "include_validation_matrix": true,
-                        "include_observability_profiles": true
+                        "include_observability_profiles": true,
+                        "include_observability_digest": true
                     },
-                    "purpose": "Summarize Browser, managed Chrome, PC-use readiness, observability profiles, and proof freshness without launching browsers, running Node, screenshots, or input dispatch."
+                    "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
                 },
                 "webpreview_handoffs": {
                     "runtime_green_operator_handoff": {
@@ -15960,7 +15965,8 @@ fn runtime_green_status_payload(root_mode: &str) -> Value {
         "include_next_actions": true,
         "include_workflows": true,
         "include_validation_matrix": true,
-        "include_observability_profiles": true
+        "include_observability_profiles": true,
+        "include_observability_digest": true
     })
 }
 
@@ -16159,6 +16165,7 @@ fn managed_asset_operator_recipe(root_mode: &str) -> Value {
                     "root_mode": root_mode,
                     "include_bootstrap_readiness": true,
                     "include_observability_profiles": true,
+                    "include_observability_digest": true,
                     "include_latest_handoff": true,
                     "include_next_actions": true
                 },

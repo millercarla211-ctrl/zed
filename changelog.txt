@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Observability Digest
+
+ADDED:
+- Runtime status now emits a schema-versioned compact observability digest for Browser/WebPreview, managed Chrome, and PC-use plugin health.
+- The digest summarizes lane readiness, blocker counts, missing or stale managed proof counts, recovery actions, and the next runtime-green operator packet.
+- Agent and WebPreview plugin catalogs now advertise the digest schema and include flag in their recommended runtime-status payloads.
+
+NOTES:
+- This is read-only status metadata only; it does not write files, run Node, launch Chrome, dispatch browser or OS input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime WebPreview Runtime-Green Handoff Surface
 
 ADDED:

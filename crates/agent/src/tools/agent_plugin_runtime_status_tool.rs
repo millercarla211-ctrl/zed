@@ -90,6 +90,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_readiness_scorecard.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_operator_handoff.v1";
+const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
+    "zed.agent_plugins.runtime_observability_digest.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
@@ -126,6 +128,8 @@ pub struct AgentPluginRuntimeStatusToolInput {
     pub include_validation_matrix: bool,
     /// Include compact plugin observability profiles and runtime-green blockers.
     pub include_observability_profiles: bool,
+    /// Include the compact runtime observability digest for quick Agent Panel status checks.
+    pub include_observability_digest: bool,
 }
 
 impl Default for AgentPluginRuntimeStatusToolInput {
@@ -138,6 +142,7 @@ impl Default for AgentPluginRuntimeStatusToolInput {
             include_workflows: true,
             include_validation_matrix: true,
             include_observability_profiles: true,
+            include_observability_digest: true,
         }
     }
 }
@@ -393,6 +398,14 @@ fn inspect_runtime_status(
     let runtime_green_blocker_summary = runtime_green_blocker_summary(status, roots);
     let runtime_green_readiness_scorecard =
         runtime_green_readiness_scorecard(status, &runtime_green_blocker_summary);
+    let runtime_observability_digest = input.include_observability_digest.then(|| {
+        runtime_observability_digest(
+            status,
+            roots,
+            &runtime_green_blocker_summary,
+            &runtime_green_readiness_scorecard,
+        )
+    });
     let runtime_green_operator_handoff = runtime_green_operator_handoff(
         runtime_request_root_mode(roots),
         status,
@@ -427,6 +440,7 @@ fn inspect_runtime_status(
         "runtime_green_blocker_summary": runtime_green_blocker_summary,
         "runtime_green_readiness_scorecard": runtime_green_readiness_scorecard,
         "runtime_green_operator_handoff": runtime_green_operator_handoff,
+        "runtime_observability_digest": runtime_observability_digest,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
         "observability_profiles": input
@@ -986,6 +1000,7 @@ fn managed_asset_operator_recipe(root_mode: &str) -> Value {
                     "root_mode": root_mode,
                     "include_bootstrap_readiness": true,
                     "include_observability_profiles": true,
+                    "include_observability_digest": true,
                     "include_next_actions": true
                 },
                 "writes_files": false,
@@ -1062,6 +1077,7 @@ fn managed_asset_operator_recipe(root_mode: &str) -> Value {
                     "root_mode": root_mode,
                     "include_bootstrap_readiness": true,
                     "include_observability_profiles": true,
+                    "include_observability_digest": true,
                     "include_latest_handoff": true,
                     "include_next_actions": true
                 },
@@ -1906,6 +1922,133 @@ fn scorecard_bool_at(value: &Value, pointer: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn runtime_observability_digest(
+    runtime_status: &str,
+    roots: &AgentPluginRuntimeRoots,
+    blocker_summary: &Value,
+    scorecard: &Value,
+) -> Value {
+    let proof_freshness = observability_proof_freshness(roots);
+    let missing_required_files = proof_freshness
+        .get("missing_required_files")
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len);
+    let stale_required_files = proof_freshness
+        .get("stale_required_files")
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len);
+    let blocker_count = blocker_summary
+        .get("blocker_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let runtime_evidence_blocker_count = blocker_summary
+        .get("runtime_evidence_blocker_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let manual_blocker_count = blocker_summary
+        .get("manual_blocker_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let runtime_green_candidate = blocker_summary
+        .get("runtime_green_candidate")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let ready_lane_count = scorecard
+        .pointer("/totals/ready_lane_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let lane_count = scorecard
+        .pointer("/totals/lane_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let status = if runtime_green_candidate {
+        "runtime_green_candidate"
+    } else if runtime_status != "ready_for_read_only_discovery" {
+        "runtime_status_blocked"
+    } else if runtime_evidence_blocker_count > 0 || missing_required_files > 0 {
+        "runtime_evidence_refresh_required"
+    } else if stale_required_files > 0 {
+        "stale_runtime_evidence"
+    } else if manual_blocker_count > 0 {
+        "manual_validation_required"
+    } else if lane_count > 0 && ready_lane_count == lane_count {
+        "ready_for_final_runtime_validation"
+    } else {
+        "operator_action_required"
+    };
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+        "status": status,
+        "runtime_status": runtime_status,
+        "runtime_green_candidate": runtime_green_candidate,
+        "scorecard_status": scorecard.get("status").and_then(Value::as_str),
+        "blocker_summary_status": blocker_summary.get("status").and_then(Value::as_str),
+        "totals": {
+            "lane_count": lane_count,
+            "ready_lane_count": ready_lane_count,
+            "blocker_count": blocker_count,
+            "runtime_evidence_blocker_count": runtime_evidence_blocker_count,
+            "manual_blocker_count": manual_blocker_count,
+            "missing_required_file_count": missing_required_files,
+            "stale_required_file_count": stale_required_files,
+        },
+        "freshness": {
+            "status": proof_freshness.get("status").and_then(Value::as_str),
+            "freshness_window_ms": proof_freshness.get("freshness_window_ms").and_then(Value::as_u64),
+            "missing_required_files": proof_freshness
+                .get("missing_required_files")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!([])),
+            "stale_required_files": proof_freshness
+                .get("stale_required_files")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!([])),
+            "recovery_actions": proof_freshness
+                .get("recovery_actions")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({})),
+        },
+        "lane_statuses": scorecard
+            .get("lanes")
+            .and_then(Value::as_array)
+            .map(|lanes| lanes.iter().map(runtime_observability_digest_lane).collect::<Vec<_>>())
+            .unwrap_or_default(),
+        "next_operator_packet": {
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+            "field": "runtime_green_operator_handoff",
+            "tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+            "payload": runtime_green_status_inspect_payload(runtime_request_root_mode(roots))
+        },
+        "reads_from": [
+            "runtime_green_blocker_summary",
+            "runtime_green_readiness_scorecard",
+            "observability_proof_freshness"
+        ],
+        "safety": {
+            "digest_is_read_only": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+            "touches_real_browser_profiles": false
+        }
+    })
+}
+
+fn runtime_observability_digest_lane(lane: &Value) -> Value {
+    serde_json::json!({
+        "id": lane.get("id").and_then(Value::as_str),
+        "status": lane.get("status").and_then(Value::as_str),
+        "ready": lane.get("ready").and_then(Value::as_bool).unwrap_or(false),
+        "blocker_count": lane.get("blocker_count").and_then(Value::as_u64).unwrap_or(0),
+        "primary_next_actions": lane
+            .get("primary_next_actions")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([])),
+    })
+}
+
 fn runtime_green_operator_handoff(
     root_mode: &str,
     runtime_status: &str,
@@ -2158,7 +2301,8 @@ fn runtime_green_status_inspect_payload(root_mode: &str) -> Value {
         "include_next_actions": true,
         "include_workflows": true,
         "include_validation_matrix": true,
-        "include_observability_profiles": true
+        "include_observability_profiles": true,
+        "include_observability_digest": true
     })
 }
 
