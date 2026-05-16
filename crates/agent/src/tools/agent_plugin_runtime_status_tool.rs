@@ -71,6 +71,8 @@ pub const AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME: &str = "inspect_agent_plugin_ru
 pub const AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA: &str = "zed.agent_plugins.runtime_status.v1";
 const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstrap_readiness.v1";
 const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstrap_manifest.v1";
+const AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA: &str =
+    "zed.agent_plugins.bootstrap_prepare_request.v1";
 
 const MAX_HANDOFF_PREVIEW_BYTES: u64 = 1_048_576;
 const OBSERVABILITY_FRESHNESS_WINDOW_MS: u64 = 24 * 60 * 60 * 1000;
@@ -763,6 +765,10 @@ fn bootstrap_readiness(roots: &AgentPluginRuntimeRoots, host_checks: Option<&Val
             "launches_browser": false,
             "touches_real_browser_profiles": false,
         },
+        "prepare_runtime_request": runtime_bootstrap_prepare_request(
+            status,
+            roots.active_project_root.is_some()
+        ),
         "checks": checks,
         "host_blockers": host_blockers,
         "provision_required": provision_required,
@@ -890,6 +896,55 @@ fn runtime_bootstrap_phase(name: &str, checks: &[Value], prefixes: &[&str]) -> V
         "ready_check_count": ready,
         "total_check_count": total,
         "missing": missing,
+    })
+}
+
+fn runtime_bootstrap_prepare_request(status: &str, workspace_available: bool) -> Value {
+    let root_mode = if workspace_available {
+        "workspace"
+    } else {
+        "zed_data"
+    };
+    let should_prepare = status == "ready_to_provision";
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA,
+        "tool_name": AgentPluginBootstrapTool::NAME,
+        "readiness_status": status,
+        "should_call_prepare": should_prepare,
+        "authorization_required": should_prepare,
+        "recommended_payload": {
+            "root_mode": root_mode,
+            "create_managed_roots": should_prepare,
+            "write_bootstrap_manifest": should_prepare
+        },
+        "dry_run_payload": {
+            "root_mode": root_mode,
+            "create_managed_roots": false,
+            "write_bootstrap_manifest": false
+        },
+        "blocked_by": match status {
+            "blocked_missing_host_dependencies" => vec!["host_dependencies"],
+            "ready_for_managed_chrome_executor" => vec!["already_prepared"],
+            _ => Vec::new(),
+        },
+        "after_prepare_verification": {
+            "tool_name": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+            "payload": {
+                "root_mode": root_mode,
+                "include_host_checks": true,
+                "include_bootstrap_readiness": true,
+                "include_latest_handoffs": true,
+                "include_next_actions": true
+            }
+        },
+        "safety": {
+            "writes_only_when_authorized": true,
+            "downloads_packages": false,
+            "launches_browser": false,
+            "touches_real_browser_profiles": false,
+            "workspace_preferred_when_available": true,
+        },
     })
 }
 

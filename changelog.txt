@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Bootstrap Prepare Request
+
+ADDED:
+- Added a schema-versioned bootstrap prepare-request block to Agent catalog bootstrap readiness, Agent runtime status bootstrap readiness, and WebPreview bootstrap readiness packets.
+- Added the same prepare-request shape to `prepare_agent_plugin_runtime` output so dry-run/apply payloads and follow-up verification remain explicit after the tool runs.
+- The prepare request now chooses workspace roots when available, falls back to Zed data roots without exposing `zed_data_fallback` as input, and records when authorization is required.
+
+NOTES:
+- This is metadata and existing permissioned-root preparation only; it does not download packages, launch Chrome, run Node, dispatch input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime WebPreview Bootstrap Handoff
 
 ADDED:

@@ -14,6 +14,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+const AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA: &str =
+    "zed.agent_plugins.bootstrap_prepare_request.v1";
+
 /// Prepares managed roots for the DX/Zed Agent Plugin Runtime without touching real browser profiles.
 ///
 /// By default this is a dry run. Set `create_managed_roots` to create the managed directories and
@@ -221,6 +224,7 @@ impl BootstrapPlan {
                 "wrote_manifest": wrote_manifest,
                 "manifest_path": path_string(&self.manifest_path),
             },
+            "prepare_request": self.prepare_request_value(&input),
             "roots": self.roots_value(),
             "planned_directories": directories.iter().map(path_string).collect::<Vec<_>>(),
             "next_actions": [
@@ -236,6 +240,44 @@ impl BootstrapPlan {
                 "write_scope": "managed Zed data roots or workspace tools roots only",
             },
         }))
+    }
+
+    fn prepare_request_value(&self, input: &AgentPluginBootstrapToolInput) -> Value {
+        let request_root_mode = self.request_root_mode();
+
+        serde_json::json!({
+            "schema": AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA,
+            "tool_name": AgentPluginBootstrapTool::NAME,
+            "received_payload": {
+                "root_mode": request_root_mode,
+                "create_managed_roots": input.create_managed_roots,
+                "write_bootstrap_manifest": input.write_bootstrap_manifest
+            },
+            "dry_run_payload": {
+                "root_mode": request_root_mode,
+                "create_managed_roots": false,
+                "write_bootstrap_manifest": false
+            },
+            "apply_payload": {
+                "root_mode": request_root_mode,
+                "create_managed_roots": true,
+                "write_bootstrap_manifest": true
+            },
+            "authorization_required_for_apply": true,
+            "downloads_packages": false,
+            "launches_browser": false,
+            "touches_real_browser_profiles": false,
+            "after_prepare_verification": {
+                "tool_name": "inspect_agent_plugin_runtime_status",
+                "payload": {
+                    "root_mode": request_root_mode,
+                    "include_host_checks": true,
+                    "include_bootstrap_readiness": true,
+                    "include_latest_handoffs": true,
+                    "include_next_actions": true
+                }
+            },
+        })
     }
 
     fn permission_values(&self, write_manifest: bool) -> Vec<String> {
@@ -329,6 +371,13 @@ impl BootstrapPlan {
             AgentPluginBootstrapRootMode::Workspace if self.project_root.is_some() => "workspace",
             AgentPluginBootstrapRootMode::Workspace => "zed_data_fallback",
             AgentPluginBootstrapRootMode::ZedData => "zed_data",
+        }
+    }
+
+    fn request_root_mode(&self) -> &'static str {
+        match self.root_mode {
+            AgentPluginBootstrapRootMode::Workspace if self.project_root.is_some() => "workspace",
+            _ => "zed_data",
         }
     }
 }

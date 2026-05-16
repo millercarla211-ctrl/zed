@@ -55,6 +55,8 @@ const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
     "zed.web_preview.agent_browser_function_surfaces.v1";
 const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstrap_readiness.v1";
 const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstrap_manifest.v1";
+const AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA: &str =
+    "zed.agent_plugins.bootstrap_prepare_request.v1";
 
 /// Lists the built-in DX/Zed agent plugin catalog for browser, Chrome, and PC-use workflows.
 ///
@@ -1223,6 +1225,7 @@ fn agent_plugin_bootstrap_readiness(
             "launches_browser": false,
             "touches_real_browser_profiles": false
         },
+        "prepare_runtime_request": bootstrap_prepare_request(status, project_root.is_some()),
         "roots": {
             "zed_data_plugin_root": path_string(default_plugin_root),
             "managed_base_root": path_string(&managed_base_root),
@@ -1388,6 +1391,53 @@ fn bootstrap_next_actions(status: &str) -> Vec<&'static str> {
             "Invoke the prepared Playwright adapter for safe actions, then inspect execution receipts before enabling input dispatch.",
         ],
     }
+}
+
+fn bootstrap_prepare_request(status: &str, workspace_available: bool) -> Value {
+    let root_mode = if workspace_available {
+        "workspace"
+    } else {
+        "zed_data"
+    };
+    let should_prepare = status == "ready_to_provision";
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA,
+        "tool_name": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL,
+        "readiness_status": status,
+        "should_call_prepare": should_prepare,
+        "authorization_required": should_prepare,
+        "recommended_payload": {
+            "root_mode": root_mode,
+            "create_managed_roots": should_prepare,
+            "write_bootstrap_manifest": should_prepare
+        },
+        "dry_run_payload": {
+            "root_mode": root_mode,
+            "create_managed_roots": false,
+            "write_bootstrap_manifest": false
+        },
+        "blocked_by": match status {
+            "blocked_missing_host_dependencies" => vec!["host_dependencies"],
+            "ready_for_managed_chrome_executor" => vec!["already_prepared"],
+            _ => Vec::new(),
+        },
+        "after_prepare_verification": {
+            "tool_name": AgentPluginCatalogTool::NAME,
+            "payload": {
+                "include_bootstrap_readiness": true,
+                "include_bootstrap_plan": true,
+                "include_planned_plugins": true
+            }
+        },
+        "safety": {
+            "writes_only_when_authorized": true,
+            "downloads_packages": false,
+            "launches_browser": false,
+            "touches_real_browser_profiles": false,
+            "workspace_preferred_when_available": true,
+        },
+    })
 }
 
 fn find_browser_executable() -> Option<PathBuf> {
