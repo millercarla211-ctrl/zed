@@ -7,13 +7,14 @@ use crate::{
     AgentPcUsePayloadQueueTool, AgentPcUsePayloadStageTool, AgentPcUsePayloadTool,
     AgentPcUseRunnerGateTool, AgentPcUseRunnerReceiptInspectTool, AgentPcUseTargetManifestTool,
     AgentPcUseTargetSnapshotTool, AgentPcUseUiSnapshotContractTool, AgentPcUseUiSnapshotTool,
-    AgentPluginBootstrapTool, AgentPluginCatalogTool, AgentPluginRuntimeStatusTool,
-    ApplyCodeActionTool, CodeActionStore, ContextServerRegistry, CopyPathTool, CreateDirectoryTool,
-    DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool, EditFileTool, FetchTool,
-    FindPathTool, FindReferencesTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool,
-    ListDirectoryTool, MovePathTool, OpenTool, ProjectSnapshot, ReadFileTool, RenameTool,
-    SpawnAgentTool, SystemPromptTemplate, Templates, TerminalTool, ToolPermissionDecision,
-    UpdatePlanTool, WebSearchTool, WriteFileTool, decide_permission_from_settings,
+    AgentPluginAssetProvisionerTool, AgentPluginBootstrapTool, AgentPluginCatalogTool,
+    AgentPluginRuntimeStatusTool, ApplyCodeActionTool, CodeActionStore, ContextServerRegistry,
+    CopyPathTool, CreateDirectoryTool, DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool,
+    EditFileTool, FetchTool, FindPathTool, FindReferencesTool, GetCodeActionsTool,
+    GoToDefinitionTool, GrepTool, ListDirectoryTool, MovePathTool, OpenTool, ProjectSnapshot,
+    ReadFileTool, RenameTool, SpawnAgentTool, SystemPromptTemplate, Templates, TerminalTool,
+    ToolPermissionDecision, UpdatePlanTool, WebSearchTool, WriteFileTool,
+    decide_permission_from_settings,
 };
 use acp_thread::{MentionUri, UserMessageId};
 use action_log::ActionLog;
@@ -1659,6 +1660,7 @@ impl Thread {
         self.add_tool(AgentPcUseTargetSnapshotTool::new(self.project.clone()));
         self.add_tool(AgentPcUseUiSnapshotContractTool);
         self.add_tool(AgentPcUseUiSnapshotTool::new(self.project.clone()));
+        self.add_tool(AgentPluginAssetProvisionerTool::new(self.project.clone()));
         self.add_tool(AgentPluginBootstrapTool::new(self.project.clone()));
 
         self.add_tool(DiagnosticsTool::new(self.project.clone()));

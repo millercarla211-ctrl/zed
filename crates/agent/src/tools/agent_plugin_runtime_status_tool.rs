@@ -48,6 +48,12 @@ use super::{
     agent_pc_use_target_snapshot_tool::AGENT_PC_USE_TARGET_SNAPSHOT_TOOL_NAME,
     agent_pc_use_ui_snapshot_contract_tool::AGENT_PC_USE_UI_SNAPSHOT_CONTRACT_TOOL_NAME,
     agent_pc_use_ui_snapshot_tool::AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME,
+    agent_plugin_asset_provisioner_tool::{
+        AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
+        AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_FILE_NAME,
+        AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
+        AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
+    },
     agent_plugin_bootstrap_tool::AgentPluginBootstrapTool,
     agent_plugin_catalog_tool::AgentPluginCatalogTool,
 };
@@ -194,6 +200,7 @@ struct AgentPluginRuntimeRoots {
     dx_extension_root: PathBuf,
     managed_chrome_profile_root: PathBuf,
     bootstrap_manifest: PathBuf,
+    asset_provisioning_receipt: PathBuf,
     browser_queue_dir: PathBuf,
     browser_latest_payload: PathBuf,
     chrome_queue_dir: PathBuf,
@@ -240,6 +247,8 @@ impl AgentPluginRuntimeRoots {
 
         let dx_extension_root = plugin_root.join("dx-chrome-extension");
         let bootstrap_manifest = plugin_root.join("agent-plugin-bootstrap.json");
+        let asset_provisioning_receipt =
+            plugin_root.join(AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_FILE_NAME);
         let browser_queue_dir = plugin_root.join("browser-payloads");
         let browser_latest_payload = browser_queue_dir.join(AGENT_BROWSER_PAYLOAD_QUEUE_FILE_NAME);
         let chrome_queue_dir = plugin_root.join("chrome-payloads");
@@ -268,6 +277,7 @@ impl AgentPluginRuntimeRoots {
             dx_extension_root,
             managed_chrome_profile_root,
             bootstrap_manifest,
+            asset_provisioning_receipt,
             browser_queue_dir,
             browser_latest_payload,
             chrome_queue_dir,
@@ -307,6 +317,7 @@ impl AgentPluginRuntimeRoots {
             &self.dx_extension_root,
             &self.managed_chrome_profile_root,
             &self.bootstrap_manifest,
+            &self.asset_provisioning_receipt,
             &self.browser_queue_dir,
             &self.browser_latest_payload,
             &self.chrome_queue_dir,
@@ -365,6 +376,7 @@ fn inspect_runtime_status(
             "catalog": AgentPluginCatalogTool::NAME,
             "runtime_status": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
             "prepare_runtime": AgentPluginBootstrapTool::NAME,
+            "prepare_managed_assets": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
         },
         "roots": roots_value(roots),
         "plugins": {
@@ -465,6 +477,7 @@ fn chrome_status(
             "queue_payload": AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
             "inspect_payload_queue": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
             "request_payload_run": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
+            "prepare_managed_assets": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
             "prepare_playwright_adapter": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
             "invoke_playwright_adapter": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
             "inspect_playwright_executions": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
@@ -472,6 +485,8 @@ fn chrome_status(
         "schemas": {
             "payload_queue_item": AGENT_CHROME_PAYLOAD_QUEUE_ITEM_SCHEMA,
             "runner_receipt": AGENT_CHROME_RUNNER_RECEIPT_SCHEMA,
+            "asset_provisioning_result": AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
+            "asset_provisioning_receipt": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
             "playwright_adapter_manifest": AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA,
             "playwright_run_request": AGENT_CHROME_PLAYWRIGHT_RUN_REQUEST_SCHEMA,
             "playwright_execution_inspection": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_RESULT_SCHEMA,
@@ -500,6 +515,12 @@ fn chrome_status(
             ),
             "playwright_root": dir_probe(&roots.playwright_root),
             "playwright_package": file_probe(&playwright_package, None, None, false),
+            "asset_provisioning_receipt": file_probe(
+                &roots.asset_provisioning_receipt,
+                Some(AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA),
+                None,
+                include_latest_handoff,
+            ),
             "adapter_root": dir_probe(&roots.chrome_adapter_root),
             "adapter_manifest": file_probe(
                 &roots.chrome_adapter_manifest,
@@ -515,6 +536,7 @@ fn chrome_status(
         "requirements_before_execution": [
             "managed Chrome or Edge executable is available",
             "Playwright package is installed under the managed tools root",
+            "asset provisioning receipt confirms managed asset status",
             "DX Chrome extension is unpacked under the managed plugin root",
             "permissioned invoke tool is called with execute_adapter=true",
             "adapter receipt is inspected after every execution"
@@ -719,7 +741,7 @@ fn bootstrap_readiness(roots: &AgentPluginRuntimeRoots, host_checks: Option<&Val
             dx_extension_manifest.is_file(),
             Some(path_string(&dx_extension_manifest)),
             "provision_required",
-            "Download or unpack the DX Chrome extension before loading managed Chrome with the bridge.",
+            "Use the managed asset provisioner to copy a local unpacked DX Chrome extension before loading managed Chrome with the bridge.",
         ),
     ];
 
@@ -875,6 +897,9 @@ fn runtime_bootstrap_asset_provisioning_plan(
         "after_asset_provisioning_verification": {
             "catalog_tool": AgentPluginCatalogTool::NAME,
             "runtime_status_tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+            "asset_provisioner_tool": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
+            "asset_provisioning_result_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
+            "asset_provisioning_receipt_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
             "required_ready_checks": [
                 "asset.bootstrap_manifest",
                 "asset.playwright_package",
@@ -904,6 +929,7 @@ fn roots_value(roots: &AgentPluginRuntimeRoots) -> Value {
         "dx_chrome_extension_root": path_string(&roots.dx_extension_root),
         "managed_chrome_profile_root": path_string(&roots.managed_chrome_profile_root),
         "bootstrap_manifest": path_string(&roots.bootstrap_manifest),
+        "asset_provisioning_receipt": path_string(&roots.asset_provisioning_receipt),
         "browser_queue_dir": path_string(&roots.browser_queue_dir),
         "chrome_queue_dir": path_string(&roots.chrome_queue_dir),
         "chrome_receipt_dir": path_string(&roots.chrome_receipt_dir),
@@ -1093,6 +1119,13 @@ fn next_actions(status: &str, roots: &AgentPluginRuntimeRoots) -> Vec<&'static s
     if !roots.chrome_adapter_manifest.is_file() || !roots.chrome_runner_script.is_file() {
         actions.push(
             "Prepare the managed Chrome Playwright adapter before external Chrome execution.",
+        );
+    }
+    if !roots.dx_extension_root.join("manifest.json").is_file()
+        || !roots.asset_provisioning_receipt.is_file()
+    {
+        actions.push(
+            "Run prepare_agent_plugin_managed_assets to write an asset receipt or copy a local unpacked DX Chrome extension into the managed plugin root.",
         );
     }
     if !roots.pc_use_latest_payload.is_file() {

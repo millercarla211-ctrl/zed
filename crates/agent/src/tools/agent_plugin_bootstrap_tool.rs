@@ -17,6 +17,7 @@ use std::{
 const AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA: &str =
     "zed.agent_plugins.bootstrap_prepare_request.v1";
 const AGENT_PLUGIN_BOOTSTRAP_ASSET_PLAN_SCHEMA: &str = "zed.agent_plugins.bootstrap_asset_plan.v1";
+const AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME: &str = "prepare_agent_plugin_managed_assets";
 const AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME: &str = "prepare_managed_chrome_playwright_adapter";
 const AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME: &str = "zed-managed-chrome-runner";
 const AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME: &str = "managed_chrome_runner.mjs";
@@ -234,7 +235,7 @@ impl BootstrapPlan {
             "planned_directories": directories.iter().map(path_string).collect::<Vec<_>>(),
             "next_actions": [
                 "Install Playwright into the managed Playwright root.",
-                "Download or unpack the DX Chrome extension into the managed extension root.",
+                "Run prepare_agent_plugin_managed_assets to write an asset receipt or copy a local unpacked DX Chrome extension into the managed extension root.",
                 "Keep Chrome automation on managed profiles only; never write to user browser profiles.",
                 "After assets exist, run list_agent_plugins to verify bootstrap readiness."
             ],
@@ -341,6 +342,7 @@ impl BootstrapPlan {
             "after_asset_provisioning_verification": {
                 "catalog_tool": "list_agent_plugins",
                 "runtime_status_tool": "inspect_agent_plugin_runtime_status",
+                "asset_provisioner_tool": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
                 "required_ready_checks": [
                     "asset.bootstrap_manifest",
                     "asset.playwright_package",

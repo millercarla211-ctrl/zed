@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Managed Asset Provisioner
+
+ADDED:
+- Added permissioned `prepare_agent_plugin_managed_assets` for dry-running managed asset readiness, writing an asset provisioning receipt, and copying a local unpacked DX Chrome extension into the managed extension root.
+- Registered the new tool with Agent threads, the built-in tool list, Agent catalog, runtime status, and WebPreview plugin catalog handoffs.
+- The provisioner validates managed output paths, requires an unpacked extension `manifest.json` before copy, skips symlinks and heavy/generated source directories, and bounds local extension copies.
+
+NOTES:
+- This does not download packages, install Playwright, run Node, launch Chrome, dispatch browser input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Bootstrap Asset Plan
 
 ADDED:

@@ -15,6 +15,7 @@ mod agent_pc_use_target_manifest_tool;
 mod agent_pc_use_target_snapshot_tool;
 mod agent_pc_use_ui_snapshot_contract_tool;
 mod agent_pc_use_ui_snapshot_tool;
+mod agent_plugin_asset_provisioner_tool;
 mod agent_plugin_bootstrap_tool;
 mod agent_plugin_catalog_tool;
 mod agent_plugin_runtime_status_tool;
@@ -94,6 +95,7 @@ pub use agent_pc_use_target_manifest_tool::*;
 pub use agent_pc_use_target_snapshot_tool::*;
 pub use agent_pc_use_ui_snapshot_contract_tool::*;
 pub use agent_pc_use_ui_snapshot_tool::*;
+pub use agent_plugin_asset_provisioner_tool::*;
 pub use agent_plugin_bootstrap_tool::*;
 pub use agent_plugin_catalog_tool::*;
 pub use agent_plugin_runtime_status_tool::*;
@@ -192,6 +194,7 @@ macro_rules! tools {
 }
 
 tools! {
+    AgentPluginAssetProvisionerTool,
     AgentPluginBootstrapTool,
     AgentBrowserPayloadTool,
     AgentBrowserPayloadStageTool,

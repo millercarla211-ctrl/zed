@@ -94,6 +94,7 @@ const AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA: &str =
 const AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME: &str = "zed-managed-chrome-runner";
 const AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME: &str = "managed_chrome_runner.mjs";
 const PREPARE_AGENT_PLUGIN_RUNTIME_TOOL: &str = "prepare_agent_plugin_runtime";
+const PREPARE_AGENT_PLUGIN_MANAGED_ASSETS_TOOL: &str = "prepare_agent_plugin_managed_assets";
 const PREPARE_MANAGED_CHROME_PLAYWRIGHT_ADAPTER_TOOL: &str =
     "prepare_managed_chrome_playwright_adapter";
 
@@ -3544,7 +3545,7 @@ impl WebPreviewView {
                 dx_extension_manifest.is_file(),
                 Some(dx_extension_manifest.clone()),
                 "provision_required",
-                "Download or unpack the DX Chrome extension before loading managed Chrome with the bridge.",
+                "Use the managed asset provisioner to copy a local unpacked DX Chrome extension before loading managed Chrome with the bridge.",
             ),
         ];
 
@@ -9978,6 +9979,7 @@ impl WebPreviewView {
                     "inspect_zed_pc_use_payload_queue": "inspect_zed_pc_use_payload_queue",
                     "request_zed_pc_use_payload_run": "request_zed_pc_use_payload_run",
                     "inspect_zed_pc_use_runner_receipts": "inspect_zed_pc_use_runner_receipts",
+                    "prepare_managed_assets": PREPARE_AGENT_PLUGIN_MANAGED_ASSETS_TOOL,
                     "prepare_runtime": "prepare_agent_plugin_runtime"
                 },
                 "runtime_status": {
@@ -10025,6 +10027,38 @@ impl WebPreviewView {
                         "installs_packages": false,
                         "launches_browser": false,
                         "runs_node": false
+                    },
+                    "managed_asset_provisioner_tool": {
+                        "name": PREPARE_AGENT_PLUGIN_MANAGED_ASSETS_TOOL,
+                        "dry_run_payload": {
+                            "root_mode": "workspace",
+                            "write_asset_receipt": false,
+                            "copy_dx_chrome_extension": false,
+                            "dx_chrome_extension_source_root": null,
+                            "overwrite_existing_files": false,
+                            "include_file_preview": true
+                        },
+                        "receipt_payload": {
+                            "root_mode": "workspace",
+                            "write_asset_receipt": true,
+                            "copy_dx_chrome_extension": false,
+                            "dx_chrome_extension_source_root": null,
+                            "overwrite_existing_files": false,
+                            "include_file_preview": true
+                        },
+                        "local_extension_copy_payload": {
+                            "root_mode": "workspace",
+                            "write_asset_receipt": true,
+                            "copy_dx_chrome_extension": true,
+                            "dx_chrome_extension_source_root": "<local unpacked extension root>",
+                            "overwrite_existing_files": false,
+                            "include_file_preview": true
+                        },
+                        "requires_permission_for_writes": true,
+                        "downloads_packages": false,
+                        "runs_node": false,
+                        "launches_browser": false,
+                        "touches_real_browser_profiles": false
                     },
                     "playwright_adapter_invoke_tool": {
                         "name": "invoke_managed_chrome_playwright_adapter",
@@ -10352,6 +10386,7 @@ impl WebPreviewView {
                             "proof_handoffs": {
                                 "queue_inspection_tool": "inspect_managed_chrome_payload_queue",
                                 "runner_gate_tool": "request_managed_chrome_payload_run",
+                                "asset_provisioner_tool": PREPARE_AGENT_PLUGIN_MANAGED_ASSETS_TOOL,
                                 "adapter_prepare_tool": "prepare_managed_chrome_playwright_adapter",
                                 "adapter_invoke_tool": "invoke_managed_chrome_playwright_adapter",
                                 "execution_inspect_tool": "inspect_managed_chrome_playwright_executions",
@@ -10372,6 +10407,7 @@ impl WebPreviewView {
                             "payload_queue_tool_name": "queue_managed_chrome_action_payload",
                             "payload_queue_inspect_tool_name": "inspect_managed_chrome_payload_queue",
                             "runner_gate_tool_name": "request_managed_chrome_payload_run",
+                            "asset_provisioner_tool_name": PREPARE_AGENT_PLUGIN_MANAGED_ASSETS_TOOL,
                             "playwright_adapter_tool_name": "prepare_managed_chrome_playwright_adapter",
                             "playwright_invoke_tool_name": "invoke_managed_chrome_playwright_adapter",
                             "playwright_execution_inspect_tool_name": "inspect_managed_chrome_playwright_executions",
@@ -10433,6 +10469,7 @@ impl WebPreviewView {
                             "rules": [
                                 "Payload tools never launch Chrome, install Playwright, dispatch input, or run page scripts.",
                                 "Queued payloads are written only to managed workspace or Zed-data plugin roots after authorization.",
+                                "The managed asset provisioner can write an asset receipt or copy a local unpacked DX Chrome extension into managed roots without downloads, Node, or Chrome launch.",
                                 "The Playwright adapter preparation tool writes only versioned adapter files under managed roots and does not run Node.",
                                 "The Playwright invocation tool can run only open_url, screenshot, set_viewport, and wait_for_selector after authorization and a ready runner receipt.",
                                 "The Playwright execution inspection tool is read-only and summarizes managed request and receipt files.",
@@ -10446,6 +10483,7 @@ impl WebPreviewView {
                             {"id": "chrome.action.payload_queue_managed", "state": "available_requires_authorization", "description": "Use queue_managed_chrome_action_payload to write a validated Chrome action packet into the managed workspace or Zed-data queue."},
                             {"id": "chrome.action.payload_queue_inspect", "state": "available", "description": "Use inspect_managed_chrome_payload_queue to validate the latest queued Chrome payload and runner prerequisites before launch or dispatch exists."},
                             {"id": "chrome.action.runner_gate", "state": "available_requires_authorization", "description": "Use request_managed_chrome_payload_run to write a permissioned runner receipt that blocks until queue, bootstrap, managed-profile, and future adapter requirements are satisfied."},
+                            {"id": "chrome.runtime.asset_provisioner", "state": "available_requires_authorization", "description": "Use prepare_agent_plugin_managed_assets to write an asset receipt or copy a local unpacked DX Chrome extension into managed roots without downloads, Node, or Chrome launch."},
                             {"id": "chrome.runtime.playwright_adapter_prepare", "state": "available_requires_authorization", "description": "Use prepare_managed_chrome_playwright_adapter to write a versioned managed Playwright adapter artifact without installing packages, launching Chrome, or dispatching input."},
                             {"id": "chrome.runtime.playwright_adapter_invoke", "state": "available_requires_authorization", "description": "Use invoke_managed_chrome_playwright_adapter to run the prepared adapter for open_url, screenshot, set_viewport, or wait_for_selector after a ready runner receipt."},
                             {"id": "chrome.runtime.playwright_execution_inspect", "state": "available", "description": "Use inspect_managed_chrome_playwright_executions to read recent managed run requests and execution receipts without launching Chrome."},
@@ -15301,7 +15339,7 @@ fn bootstrap_next_actions(status: &str) -> Vec<&'static str> {
             "Run prepare_agent_plugin_runtime with create_managed_roots=true and write_bootstrap_manifest=true to create the managed roots.",
             "Install Playwright into the managed tools root.",
             "Run prepare_managed_chrome_playwright_adapter with write_adapter_files=true.",
-            "Download or unpack the DX Chrome extension into the managed agent plugin root.",
+            "Run prepare_agent_plugin_managed_assets to write an asset receipt or copy a local unpacked DX Chrome extension into the managed agent plugin root.",
             "Keep managed Chrome profile data in the prepared profile root; never touch real user browser profiles.",
         ],
         _ => vec![
@@ -15449,6 +15487,7 @@ fn bootstrap_asset_provisioning_plan(
         "after_asset_provisioning_verification": {
             "catalog_tool": "list_agent_plugins",
             "runtime_status_tool": "inspect_agent_plugin_runtime_status",
+            "asset_provisioner_tool": PREPARE_AGENT_PLUGIN_MANAGED_ASSETS_TOOL,
             "required_ready_checks": [
                 "asset.bootstrap_manifest",
                 "asset.playwright_package",

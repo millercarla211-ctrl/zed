@@ -24,8 +24,10 @@ use crate::{
     AGENT_PC_USE_TARGET_MANIFEST_TOOL_NAME, AGENT_PC_USE_TARGET_SNAPSHOT_SCHEMA,
     AGENT_PC_USE_TARGET_SNAPSHOT_TOOL_NAME, AGENT_PC_USE_UI_SNAPSHOT_CONTRACT_SCHEMA,
     AGENT_PC_USE_UI_SNAPSHOT_CONTRACT_TOOL_NAME, AGENT_PC_USE_UI_SNAPSHOT_SCHEMA,
-    AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME, AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA,
-    AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME, AgentTool, ToolCallEventStream, ToolInput,
+    AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME, AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
+    AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA, AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
+    AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA, AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME, AgentTool,
+    ToolCallEventStream, ToolInput,
 };
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
@@ -207,6 +209,7 @@ fn agent_plugin_catalog(
                 "inspect_zed_pc_use_target_snapshot": AGENT_PC_USE_TARGET_SNAPSHOT_TOOL_NAME,
                 "inspect_zed_pc_use_ui_snapshot_contract": AGENT_PC_USE_UI_SNAPSHOT_CONTRACT_TOOL_NAME,
                 "inspect_zed_pc_use_ui_snapshot": AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME,
+                "prepare_managed_assets": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
                 "prepare_runtime": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL
             },
             "runtime_status": {
@@ -274,6 +277,40 @@ fn agent_plugin_catalog(
                     "installs_packages": false,
                     "launches_browser": false,
                     "runs_node": false
+                },
+                "managed_asset_provisioner_tool": {
+                    "name": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
+                    "result_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
+                    "receipt_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
+                    "dry_run_payload": {
+                        "root_mode": "workspace",
+                        "write_asset_receipt": false,
+                        "copy_dx_chrome_extension": false,
+                        "dx_chrome_extension_source_root": null,
+                        "overwrite_existing_files": false,
+                        "include_file_preview": true
+                    },
+                    "receipt_payload": {
+                        "root_mode": "workspace",
+                        "write_asset_receipt": true,
+                        "copy_dx_chrome_extension": false,
+                        "dx_chrome_extension_source_root": null,
+                        "overwrite_existing_files": false,
+                        "include_file_preview": true
+                    },
+                    "local_extension_copy_payload": {
+                        "root_mode": "workspace",
+                        "write_asset_receipt": true,
+                        "copy_dx_chrome_extension": true,
+                        "dx_chrome_extension_source_root": "<local unpacked extension root>",
+                        "overwrite_existing_files": false,
+                        "include_file_preview": true
+                    },
+                    "requires_permission_for_writes": true,
+                    "downloads_packages": false,
+                    "runs_node": false,
+                    "launches_browser": false,
+                    "touches_real_browser_profiles": false
                 },
                 "playwright_adapter_invoke_tool": {
                     "name": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
@@ -754,6 +791,7 @@ fn chrome_plugin_manifest(
             "proof_handoffs": {
                 "queue_inspection_tool": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
                 "runner_gate_tool": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
+                "asset_provisioner_tool": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
                 "adapter_prepare_tool": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
                 "adapter_invoke_tool": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
                 "execution_inspect_tool": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
@@ -774,6 +812,9 @@ fn chrome_plugin_manifest(
             "payload_queue_tool_name": AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
             "payload_queue_inspect_tool_name": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
             "runner_gate_tool_name": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
+            "asset_provisioner_tool_name": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
+            "asset_provisioning_result_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
+            "asset_provisioning_receipt_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
             "playwright_adapter_tool_name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
             "playwright_invoke_tool_name": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
             "playwright_execution_inspect_tool_name": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
@@ -876,6 +917,7 @@ fn chrome_plugin_manifest(
             "rules": [
                 "Payload tools never launch Chrome, install Playwright, dispatch input, or run page scripts.",
                 "Queued payloads are written only to managed workspace or Zed-data plugin roots after authorization.",
+                "The managed asset provisioner can write an asset receipt or copy a local unpacked DX Chrome extension into managed roots without downloads, Node, or Chrome launch.",
                 "The Playwright adapter preparation tool writes only versioned adapter files under managed roots and does not run Node.",
                 "The Playwright invocation tool can run only open_url, screenshot, set_viewport, and wait_for_selector after authorization and a ready runner receipt.",
                 "The Playwright execution inspection tool is read-only and summarizes managed request and receipt files.",
@@ -889,6 +931,7 @@ fn chrome_plugin_manifest(
             capability("chrome.action.payload_queue_managed", "available_requires_authorization", "Use queue_managed_chrome_action_payload to write a validated Chrome action packet into the managed workspace or Zed-data queue."),
             capability("chrome.action.payload_queue_inspect", "available", "Use inspect_managed_chrome_payload_queue to validate the latest queued Chrome payload and runner prerequisites before launch or dispatch exists."),
             capability("chrome.action.runner_gate", "available_requires_authorization", "Use request_managed_chrome_payload_run to write a permissioned runner receipt that blocks until queue, bootstrap, managed-profile, and future adapter requirements are satisfied."),
+            capability("chrome.runtime.asset_provisioner", "available_requires_authorization", "Use prepare_agent_plugin_managed_assets to write an asset receipt or copy a local unpacked DX Chrome extension into managed roots without downloads, Node, or Chrome launch."),
             capability("chrome.runtime.playwright_adapter_prepare", "available_requires_authorization", "Use prepare_managed_chrome_playwright_adapter to write a versioned managed Playwright adapter artifact without installing packages, launching Chrome, or dispatching input."),
             capability("chrome.runtime.playwright_adapter_invoke", "available_requires_authorization", "Use invoke_managed_chrome_playwright_adapter to run the prepared adapter for open_url, screenshot, set_viewport, or wait_for_selector after a ready runner receipt."),
             capability("chrome.runtime.playwright_execution_inspect", "available", "Use inspect_managed_chrome_playwright_executions to read recent managed run requests and execution receipts without launching Chrome."),
@@ -1183,7 +1226,7 @@ fn agent_plugin_bootstrap_readiness(
             dx_extension_manifest.is_file(),
             Some(dx_extension_manifest.clone()),
             "provision_required",
-            "Download or unpack the DX Chrome extension before loading managed Chrome with the bridge.",
+            "Use the managed asset provisioner to copy a local unpacked DX Chrome extension before loading managed Chrome with the bridge.",
         ),
     ];
 
@@ -1368,6 +1411,7 @@ fn bootstrap_asset_provisioning_plan(
         "after_asset_provisioning_verification": {
             "catalog_tool": AgentPluginCatalogTool::NAME,
             "runtime_status_tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+            "asset_provisioner_tool": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
             "required_ready_checks": [
                 "asset.bootstrap_manifest",
                 "asset.playwright_package",
@@ -1506,7 +1550,7 @@ fn bootstrap_next_actions(status: &str) -> Vec<&'static str> {
             "Run prepare_agent_plugin_runtime with create_managed_roots=true and write_bootstrap_manifest=true to create the managed roots.",
             "Install Playwright into the managed tools root.",
             "Run prepare_managed_chrome_playwright_adapter with write_adapter_files=true.",
-            "Download or unpack the DX Chrome extension into the managed agent plugin root.",
+            "Run prepare_agent_plugin_managed_assets to write an asset receipt or copy a local unpacked DX Chrome extension into the managed agent plugin root.",
             "Keep managed Chrome profile data in the prepared profile root; never touch real user browser profiles.",
         ],
         _ => vec![
