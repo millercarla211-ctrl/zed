@@ -1,3 +1,14 @@
+[2026-05-17] - Agent Plugin Runtime Catalog Summary Helper
+
+ADDED:
+- WebPreview now has a direct `current_agent_plugin_catalog_summary` helper for live Browser, managed Chrome, and PC-use catalog summary consumers.
+
+CHANGED:
+- WebPreview status packets and action manifests now use the direct helper for current catalog summaries, avoiding a status-packet dependency on composing the full action manifest just to read plugin catalog state.
+
+NOTES:
+- This is a read-only summary-path refactor only. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, probe proof files, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Status Packet Catalog Summary
 
 ADDED:

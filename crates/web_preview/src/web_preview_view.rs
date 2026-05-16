@@ -4205,6 +4205,14 @@ impl WebPreviewView {
             .map(Self::agent_plugin_catalog_summary_from_catalog)
     }
 
+    fn current_agent_plugin_catalog_summary(&self, window: &Window) -> Value {
+        let catalog = self.agent_plugin_catalog(window);
+        catalog
+            .get("catalog_summary")
+            .cloned()
+            .unwrap_or_else(|| Self::agent_plugin_catalog_summary_from_catalog(&catalog))
+    }
+
     fn agent_plugin_catalog_summary_from_catalog(catalog: &Value) -> Value {
         let runtime_status = catalog.pointer("/catalog/runtime_status");
         let plugin_summaries = catalog
@@ -10169,10 +10177,8 @@ impl WebPreviewView {
                 &runtime_green_final_report_packet,
                 &final_proof_audit,
             );
-        let action_manifest = self.agent_browser_action_manifest(window);
-        let agent_plugin_catalog_current_summary = action_manifest
-            .pointer("/handoffs/plugin_catalog/current_summary")
-            .cloned();
+        let agent_plugin_catalog_current_summary =
+            self.current_agent_plugin_catalog_summary(window);
         let context_ready =
             diagnostics_ready || runtime_ready || dom_ready || targets_ready || readiness_ready;
         let audit_ready = plan_ready
@@ -14978,13 +14984,8 @@ impl WebPreviewView {
                 &runtime_green_final_report_packet,
                 &final_proof_audit,
             );
-        let agent_plugin_catalog = self.agent_plugin_catalog(window);
-        let agent_plugin_catalog_current_summary = agent_plugin_catalog
-            .get("catalog_summary")
-            .cloned()
-            .unwrap_or_else(|| {
-                Self::agent_plugin_catalog_summary_from_catalog(&agent_plugin_catalog)
-            });
+        let agent_plugin_catalog_current_summary =
+            self.current_agent_plugin_catalog_summary(window);
 
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_actions.v1",
