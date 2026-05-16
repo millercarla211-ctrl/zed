@@ -2,12 +2,19 @@
 # Cargo output is pinned to G:/Zed/target in .cargo/config.toml.
 set shell := ["powershell.exe", "-NoLogo", "-Command"]
 
+build_target_dir := "G:/Zed/target"
+min_build_free_gb := "25"
+
 # Default recipe - shows available commands
 default:
     @just --list
 
+# Guard runnable builds before Cargo starts filling the incremental cache.
+ensure-build-headroom:
+    @$targetDir = "{{build_target_dir}}"; $driveName = (Split-Path -Qualifier $targetDir).TrimEnd(":"); $drive = Get-PSDrive -Name $driveName; $freeGb = [math]::Round($drive.Free / 1GB, 2); $minBytes = [int64]{{min_build_free_gb}} * 1GB; if ($drive.Free -lt $minBytes) { throw "Zed build target drive $($drive.Name): has only $freeGb GB free; need at least {{min_build_free_gb}} GB before running Cargo. Free target/cache space or move CARGO_TARGET_DIR, then rerun this recipe." } else { Write-Host "Build target headroom OK: $freeGb GB free on $($drive.Name):" }
+
 # RECOMMENDED: Run Zed with balanced local settings
-run:
+run: ensure-build-headroom
     @echo "Running Zed with balanced G-drive build settings..."
     @echo "Building the zed binary plus the development CLI companion"
     @echo "Using Cargo config: 6 jobs, G:/Zed/target, rust-lld linker, no debug info"
@@ -17,7 +24,7 @@ run:
     ./target/debug/zed.exe
 
 # Try with Cranelift backend (requires nightly Rust)
-run-cranelift:
+run-cranelift: ensure-build-headroom
     @echo "Building with Cranelift backend (nightly required)..."
     @echo "Cranelift can reduce linker pressure on very large Rust builds"
     cargo +nightly build -p zed --bin zed -Z codegen-backend
@@ -26,7 +33,7 @@ run-cranelift:
     ./target/debug/zed.exe
 
 # Continue interrupted build
-continue:
+continue: ensure-build-headroom
     @echo "Continuing interrupted build..."
     cargo build -p zed --bin zed
     cargo build -p cli --bin cli
@@ -34,7 +41,7 @@ continue:
     ./target/debug/zed.exe
 
 # Build only (no run)
-build:
+build: ensure-build-headroom
     @echo "Building Zed with balanced G-drive settings..."
     cargo build -p zed --bin zed
     cargo build -p cli --bin cli
@@ -83,6 +90,7 @@ show-memory-guide:
     @echo "  RAM: 24 GB installed"
     @echo "  Build output: G:/Zed/target"
     @echo "  Cargo workers: 6"
+    @echo "  Runnable build preflight: at least 25 GB free on G:"
     @echo ""
     @echo "If builds still hit memory pressure, configure Windows virtual memory:"
     @echo "1. Open System Properties > Advanced > Performance Settings"
@@ -93,13 +101,14 @@ show-memory-guide:
     @echo "   Maximum size: 49152 MB (48 GB)"
     @echo "5. Click Set, OK, and RESTART your computer"
     @echo ""
-    @echo "G: currently has enough SSD headroom for this checkout."
+    @echo "Run 'just ensure-build-headroom' before a final runtime proof if disk space is tight."
 
 # Help - show all important information
 help:
     @echo "=== ZED LOCAL BUILD GUIDE ==="
     @echo ""
     @echo "RECOMMENDED BUILD COMMANDS:"
+    @echo "  just ensure-build-headroom - Check G: free space before any runnable Cargo build"
     @echo "  just run           - Build zed + cli and run with balanced G-drive settings"
     @echo "  just run-cranelift - Build zed + cli with Cranelift backend"
     @echo "  just continue      - Resume interrupted zed + cli build"

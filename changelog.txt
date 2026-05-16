@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime Build Headroom Guard
+
+ADDED:
+- Added a Just `ensure-build-headroom` preflight that checks the configured `G:/Zed/target` drive has at least 25 GB free before runnable Cargo builds start.
+
+CHANGED:
+- `just run`, `just continue`, `just run-cranelift`, and `just build` now depend on the headroom guard.
+- The local build guide now exposes the headroom check and no longer claims G: has enough space unconditionally.
+
+NOTES:
+- A fresh `just run` proof progressed past the previous `syn` failure, then failed before launch because G: had effectively no free space while writing Cargo incremental files. No cleanup was performed, and no browser, Chrome, Playwright, Node, screenshot, page input, or OS-control action was reached.
+
 [2026-05-17] - Agent Plugin Runtime Final Runtime Proof Recheck
 
 FIXED:
