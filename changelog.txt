@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Bootstrap Asset Plan
+
+ADDED:
+- Added a schema-versioned bootstrap asset provisioning plan to Agent catalog bootstrap readiness, Agent runtime status bootstrap readiness, and WebPreview bootstrap readiness packets.
+- Added the same asset plan to `prepare_agent_plugin_runtime` output so agents can see the exact post-root steps after a dry-run or apply result.
+- The plan lists Playwright package readiness, managed Playwright adapter dry-run/write payloads, DX Chrome extension manifest expectations, required verification checks, and safety constraints.
+
+NOTES:
+- This is metadata and readiness guidance only; it does not download packages, launch Chrome, run Node, dispatch input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Bootstrap Prepare Request
 
 ADDED:

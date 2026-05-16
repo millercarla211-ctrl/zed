@@ -73,6 +73,7 @@ const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstr
 const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstrap_manifest.v1";
 const AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA: &str =
     "zed.agent_plugins.bootstrap_prepare_request.v1";
+const AGENT_PLUGIN_BOOTSTRAP_ASSET_PLAN_SCHEMA: &str = "zed.agent_plugins.bootstrap_asset_plan.v1";
 
 const MAX_HANDOFF_PREVIEW_BYTES: u64 = 1_048_576;
 const OBSERVABILITY_FRESHNESS_WINDOW_MS: u64 = 24 * 60 * 60 * 1000;
@@ -769,6 +770,14 @@ fn bootstrap_readiness(roots: &AgentPluginRuntimeRoots, host_checks: Option<&Val
             status,
             roots.active_project_root.is_some()
         ),
+        "asset_provisioning_plan": runtime_bootstrap_asset_provisioning_plan(
+            status,
+            roots,
+            &playwright_package,
+            bootstrap_manifest_ready,
+            adapter_manifest_ready,
+            &dx_extension_manifest,
+        ),
         "checks": checks,
         "host_blockers": host_blockers,
         "provision_required": provision_required,
@@ -779,6 +788,110 @@ fn bootstrap_readiness(roots: &AgentPluginRuntimeRoots, host_checks: Option<&Val
             "launches_browser": false,
             "touches_real_browser_profiles": false,
         },
+    })
+}
+
+fn runtime_bootstrap_asset_provisioning_plan(
+    status: &str,
+    roots: &AgentPluginRuntimeRoots,
+    playwright_package: &Path,
+    bootstrap_manifest_ready: bool,
+    adapter_manifest_ready: bool,
+    dx_extension_manifest: &Path,
+) -> Value {
+    let root_mode = runtime_request_root_mode(roots);
+    let adapter_ready = adapter_manifest_ready && roots.chrome_runner_script.is_file();
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_BOOTSTRAP_ASSET_PLAN_SCHEMA,
+        "readiness_status": status,
+        "safe_to_start_after_plan": status == "ready_for_managed_chrome_executor",
+        "root_mode": root_mode,
+        "steps": [
+            {
+                "id": "bootstrap.manifest",
+                "label": "Agent plugin bootstrap manifest",
+                "state": if bootstrap_manifest_ready { "ready" } else { "pending_prepare_runtime" },
+                "path": path_string(&roots.bootstrap_manifest),
+                "tool_name": AgentPluginBootstrapTool::NAME,
+                "apply_payload": {
+                    "root_mode": root_mode,
+                    "create_managed_roots": true,
+                    "write_bootstrap_manifest": true
+                },
+                "requires_authorization": true,
+                "runs_node": false,
+                "downloads_packages": false,
+                "launches_browser": false
+            },
+            {
+                "id": "playwright.package",
+                "label": "Managed Playwright package",
+                "state": if playwright_package.is_file() { "ready" } else { "pending_manual_or_future_provisioner" },
+                "managed_root": path_string(&roots.playwright_root),
+                "expected_package_json": path_string(playwright_package),
+                "requires_authorization": true,
+                "runs_node": true,
+                "downloads_packages": true,
+                "launches_browser": false,
+                "touches_real_browser_profiles": false
+            },
+            {
+                "id": "playwright.adapter",
+                "label": "Managed Chrome Playwright adapter",
+                "state": if adapter_ready { "ready" } else { "pending_prepare_managed_adapter" },
+                "tool_name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+                "managed_root": path_string(&roots.chrome_adapter_root),
+                "expected_manifest": path_string(&roots.chrome_adapter_manifest),
+                "expected_runner": path_string(&roots.chrome_runner_script),
+                "dry_run_payload": {
+                    "root_mode": root_mode,
+                    "write_adapter_files": false,
+                    "include_script_preview": false
+                },
+                "write_payload": {
+                    "root_mode": root_mode,
+                    "write_adapter_files": true,
+                    "include_script_preview": false
+                },
+                "requires_authorization": true,
+                "runs_node": false,
+                "downloads_packages": false,
+                "launches_browser": false
+            },
+            {
+                "id": "dx.chrome_extension",
+                "label": "Managed DX Chrome extension",
+                "state": if dx_extension_manifest.is_file() { "ready" } else { "pending_manual_or_future_provisioner" },
+                "managed_root": path_string(&roots.dx_extension_root),
+                "expected_manifest": path_string(dx_extension_manifest),
+                "requires_authorization": true,
+                "runs_node": false,
+                "downloads_packages": true,
+                "launches_browser": false,
+                "touches_real_browser_profiles": false
+            }
+        ],
+        "after_asset_provisioning_verification": {
+            "catalog_tool": AgentPluginCatalogTool::NAME,
+            "runtime_status_tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+            "required_ready_checks": [
+                "asset.bootstrap_manifest",
+                "asset.playwright_package",
+                "asset.playwright_adapter_manifest",
+                "asset.playwright_adapter_runner",
+                "asset.dx_chrome_extension"
+            ]
+        },
+        "safety": {
+            "plan_is_metadata_only": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+            "touches_real_browser_profiles": false,
+            "requires_receipts_before_executor_actions": true
+        }
     })
 }
 
@@ -797,6 +910,16 @@ fn roots_value(roots: &AgentPluginRuntimeRoots) -> Value {
         "chrome_execution_dir": path_string(&roots.chrome_execution_dir),
         "pc_use_root": path_string(&roots.pc_use_root),
     })
+}
+
+fn runtime_request_root_mode(roots: &AgentPluginRuntimeRoots) -> &'static str {
+    if roots.active_project_root.is_some()
+        && matches!(roots.root_mode, AgentPluginRuntimeStatusRootMode::Workspace)
+    {
+        "workspace"
+    } else {
+        "zed_data"
+    }
 }
 
 fn host_probe_available(host_checks: Option<&Value>, key: &str) -> bool {

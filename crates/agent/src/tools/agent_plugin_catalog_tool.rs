@@ -57,6 +57,7 @@ const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstr
 const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstrap_manifest.v1";
 const AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA: &str =
     "zed.agent_plugins.bootstrap_prepare_request.v1";
+const AGENT_PLUGIN_BOOTSTRAP_ASSET_PLAN_SCHEMA: &str = "zed.agent_plugins.bootstrap_asset_plan.v1";
 
 /// Lists the built-in DX/Zed agent plugin catalog for browser, Chrome, and PC-use workflows.
 ///
@@ -1226,6 +1227,20 @@ fn agent_plugin_bootstrap_readiness(
             "touches_real_browser_profiles": false
         },
         "prepare_runtime_request": bootstrap_prepare_request(status, project_root.is_some()),
+        "asset_provisioning_plan": bootstrap_asset_provisioning_plan(
+            status,
+            if project_root.is_some() { "workspace" } else { "zed_data" },
+            &bootstrap_manifest,
+            bootstrap_manifest_ready,
+            &playwright_root,
+            &playwright_package,
+            &playwright_adapter_root,
+            &playwright_adapter_manifest,
+            &playwright_runner_script,
+            playwright_adapter_manifest_ready,
+            &dx_extension_root,
+            &dx_extension_manifest,
+        ),
         "roots": {
             "zed_data_plugin_root": path_string(default_plugin_root),
             "managed_base_root": path_string(&managed_base_root),
@@ -1261,6 +1276,114 @@ fn agent_plugin_bootstrap_readiness(
             "external_browser_input_requires_user_permission": true,
             "receipts_required_for_executor_actions": true,
         },
+    })
+}
+
+fn bootstrap_asset_provisioning_plan(
+    status: &str,
+    root_mode: &str,
+    bootstrap_manifest: &Path,
+    bootstrap_manifest_ready: bool,
+    playwright_root: &Path,
+    playwright_package: &Path,
+    playwright_adapter_root: &Path,
+    playwright_adapter_manifest: &Path,
+    playwright_runner_script: &Path,
+    playwright_adapter_manifest_ready: bool,
+    dx_extension_root: &Path,
+    dx_extension_manifest: &Path,
+) -> Value {
+    let adapter_ready = playwright_adapter_manifest_ready && playwright_runner_script.is_file();
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_BOOTSTRAP_ASSET_PLAN_SCHEMA,
+        "readiness_status": status,
+        "safe_to_start_after_plan": status == "ready_for_managed_chrome_executor",
+        "root_mode": root_mode,
+        "steps": [
+            {
+                "id": "bootstrap.manifest",
+                "label": "Agent plugin bootstrap manifest",
+                "state": if bootstrap_manifest_ready { "ready" } else { "pending_prepare_runtime" },
+                "path": path_string(bootstrap_manifest),
+                "tool_name": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL,
+                "apply_payload": {
+                    "root_mode": root_mode,
+                    "create_managed_roots": true,
+                    "write_bootstrap_manifest": true
+                },
+                "requires_authorization": true,
+                "runs_node": false,
+                "downloads_packages": false,
+                "launches_browser": false
+            },
+            {
+                "id": "playwright.package",
+                "label": "Managed Playwright package",
+                "state": if playwright_package.is_file() { "ready" } else { "pending_manual_or_future_provisioner" },
+                "managed_root": path_string(playwright_root),
+                "expected_package_json": path_string(playwright_package),
+                "requires_authorization": true,
+                "runs_node": true,
+                "downloads_packages": true,
+                "launches_browser": false,
+                "touches_real_browser_profiles": false
+            },
+            {
+                "id": "playwright.adapter",
+                "label": "Managed Chrome Playwright adapter",
+                "state": if adapter_ready { "ready" } else { "pending_prepare_managed_adapter" },
+                "tool_name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+                "managed_root": path_string(playwright_adapter_root),
+                "expected_manifest": path_string(playwright_adapter_manifest),
+                "expected_runner": path_string(playwright_runner_script),
+                "dry_run_payload": {
+                    "root_mode": root_mode,
+                    "write_adapter_files": false,
+                    "include_script_preview": false
+                },
+                "write_payload": {
+                    "root_mode": root_mode,
+                    "write_adapter_files": true,
+                    "include_script_preview": false
+                },
+                "requires_authorization": true,
+                "runs_node": false,
+                "downloads_packages": false,
+                "launches_browser": false
+            },
+            {
+                "id": "dx.chrome_extension",
+                "label": "Managed DX Chrome extension",
+                "state": if dx_extension_manifest.is_file() { "ready" } else { "pending_manual_or_future_provisioner" },
+                "managed_root": path_string(dx_extension_root),
+                "expected_manifest": path_string(dx_extension_manifest),
+                "requires_authorization": true,
+                "runs_node": false,
+                "downloads_packages": true,
+                "launches_browser": false,
+                "touches_real_browser_profiles": false
+            }
+        ],
+        "after_asset_provisioning_verification": {
+            "catalog_tool": AgentPluginCatalogTool::NAME,
+            "runtime_status_tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+            "required_ready_checks": [
+                "asset.bootstrap_manifest",
+                "asset.playwright_package",
+                "asset.playwright_adapter_manifest",
+                "asset.playwright_adapter_runner",
+                "asset.dx_chrome_extension"
+            ]
+        },
+        "safety": {
+            "plan_is_metadata_only": true,
+            "writes_files": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+            "touches_real_browser_profiles": false,
+            "requires_receipts_before_executor_actions": true
+        }
     })
 }
 

@@ -16,6 +16,10 @@ use std::{
 
 const AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA: &str =
     "zed.agent_plugins.bootstrap_prepare_request.v1";
+const AGENT_PLUGIN_BOOTSTRAP_ASSET_PLAN_SCHEMA: &str = "zed.agent_plugins.bootstrap_asset_plan.v1";
+const AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME: &str = "prepare_managed_chrome_playwright_adapter";
+const AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME: &str = "zed-managed-chrome-runner";
+const AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME: &str = "managed_chrome_runner.mjs";
 
 /// Prepares managed roots for the DX/Zed Agent Plugin Runtime without touching real browser profiles.
 ///
@@ -225,6 +229,7 @@ impl BootstrapPlan {
                 "manifest_path": path_string(&self.manifest_path),
             },
             "prepare_request": self.prepare_request_value(&input),
+            "asset_provisioning_plan": self.asset_provisioning_plan(),
             "roots": self.roots_value(),
             "planned_directories": directories.iter().map(path_string).collect::<Vec<_>>(),
             "next_actions": [
@@ -240,6 +245,118 @@ impl BootstrapPlan {
                 "write_scope": "managed Zed data roots or workspace tools roots only",
             },
         }))
+    }
+
+    fn asset_provisioning_plan(&self) -> Value {
+        let root_mode = self.request_root_mode();
+        let playwright_package = self
+            .playwright_root
+            .join("node_modules")
+            .join("playwright")
+            .join("package.json");
+        let playwright_adapter_root = self
+            .playwright_root
+            .join(AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME);
+        let playwright_adapter_manifest = playwright_adapter_root.join("adapter-manifest.json");
+        let playwright_runner_script =
+            playwright_adapter_root.join(AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME);
+        let dx_extension_manifest = self.dx_extension_root.join("manifest.json");
+        let adapter_ready =
+            playwright_adapter_manifest.is_file() && playwright_runner_script.is_file();
+        let ready = self.manifest_path.is_file()
+            && playwright_package.is_file()
+            && adapter_ready
+            && dx_extension_manifest.is_file();
+
+        serde_json::json!({
+            "schema": AGENT_PLUGIN_BOOTSTRAP_ASSET_PLAN_SCHEMA,
+            "readiness_status": if ready { "ready_for_managed_chrome_executor" } else { "ready_to_provision" },
+            "safe_to_start_after_plan": ready,
+            "root_mode": root_mode,
+            "steps": [
+                {
+                    "id": "bootstrap.manifest",
+                    "label": "Agent plugin bootstrap manifest",
+                    "state": if self.manifest_path.is_file() { "ready" } else { "pending_prepare_runtime" },
+                    "path": path_string(&self.manifest_path),
+                    "tool_name": AgentPluginBootstrapTool::NAME,
+                    "apply_payload": {
+                        "root_mode": root_mode,
+                        "create_managed_roots": true,
+                        "write_bootstrap_manifest": true
+                    },
+                    "requires_authorization": true,
+                    "runs_node": false,
+                    "downloads_packages": false,
+                    "launches_browser": false
+                },
+                {
+                    "id": "playwright.package",
+                    "label": "Managed Playwright package",
+                    "state": if playwright_package.is_file() { "ready" } else { "pending_manual_or_future_provisioner" },
+                    "managed_root": path_string(&self.playwright_root),
+                    "expected_package_json": path_string(&playwright_package),
+                    "requires_authorization": true,
+                    "runs_node": true,
+                    "downloads_packages": true,
+                    "launches_browser": false,
+                    "touches_real_browser_profiles": false
+                },
+                {
+                    "id": "playwright.adapter",
+                    "label": "Managed Chrome Playwright adapter",
+                    "state": if adapter_ready { "ready" } else { "pending_prepare_managed_adapter" },
+                    "tool_name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+                    "managed_root": path_string(&playwright_adapter_root),
+                    "expected_manifest": path_string(&playwright_adapter_manifest),
+                    "expected_runner": path_string(&playwright_runner_script),
+                    "dry_run_payload": {
+                        "root_mode": root_mode,
+                        "write_adapter_files": false,
+                        "include_script_preview": false
+                    },
+                    "write_payload": {
+                        "root_mode": root_mode,
+                        "write_adapter_files": true,
+                        "include_script_preview": false
+                    },
+                    "requires_authorization": true,
+                    "runs_node": false,
+                    "downloads_packages": false,
+                    "launches_browser": false
+                },
+                {
+                    "id": "dx.chrome_extension",
+                    "label": "Managed DX Chrome extension",
+                    "state": if dx_extension_manifest.is_file() { "ready" } else { "pending_manual_or_future_provisioner" },
+                    "managed_root": path_string(&self.dx_extension_root),
+                    "expected_manifest": path_string(&dx_extension_manifest),
+                    "requires_authorization": true,
+                    "runs_node": false,
+                    "downloads_packages": true,
+                    "launches_browser": false,
+                    "touches_real_browser_profiles": false
+                }
+            ],
+            "after_asset_provisioning_verification": {
+                "catalog_tool": "list_agent_plugins",
+                "runtime_status_tool": "inspect_agent_plugin_runtime_status",
+                "required_ready_checks": [
+                    "asset.bootstrap_manifest",
+                    "asset.playwright_package",
+                    "asset.playwright_adapter_manifest",
+                    "asset.playwright_adapter_runner",
+                    "asset.dx_chrome_extension"
+                ]
+            },
+            "safety": {
+                "plan_is_metadata_only": true,
+                "launches_browser": false,
+                "dispatches_input": false,
+                "touches_real_browser_profiles": false,
+                "requires_receipts_before_executor_actions": true
+            }
+        })
     }
 
     fn prepare_request_value(&self, input: &AgentPluginBootstrapToolInput) -> Value {
