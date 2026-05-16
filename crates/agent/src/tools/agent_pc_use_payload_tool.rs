@@ -1,4 +1,7 @@
-use crate::{AgentTool, ToolCallEventStream, ToolInput, ToolPermissionContext};
+use crate::{
+    AgentTool, PC_USE_FUTURE_UI_TARGET_PREFIXES, ToolCallEventStream, ToolInput,
+    ToolPermissionContext,
+};
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
 use gpui::{App, ClipboardItem, Entity, SharedString, Task};
@@ -38,6 +41,7 @@ enum PcUseTargetIdKind {
     CurrentWorkspaceSnapshot,
     CurrentProjectPanelWorktreeSnapshot,
     FutureZedUiSnapshot,
+    UnknownZedNamespace,
     Unknown,
 }
 
@@ -733,11 +737,13 @@ fn compose_pc_use_payload(input: &AgentPcUsePayloadToolInput) -> Value {
             "inspect_tool_name": "inspect_zed_window_context",
             "target_manifest_tool_name": "inspect_zed_pc_use_targets",
             "target_snapshot_tool_name": "inspect_zed_pc_use_target_snapshot",
+            "ui_snapshot_contract_tool_name": "inspect_zed_pc_use_ui_snapshot_contract",
             "future_executor_status": "not_enabled",
             "next_steps": [
                 "Use inspect_zed_window_context to collect safe workspace context.",
                 "Use inspect_zed_pc_use_targets to read supported surfaces and action requirements.",
                 "Use inspect_zed_pc_use_target_snapshot for current read-only workspace or project-panel target ids.",
+                "Use inspect_zed_pc_use_ui_snapshot_contract before accepting future focus, click, or type target ids.",
                 "Wait for a future Zed UI inspection receipt before focus, click, or type execution.",
                 "Require explicit user-visible permission before any future screenshot, focus, click, or type action.",
                 "Keep OS-wide desktop automation blocked unless the user grants a separate permission."
@@ -751,8 +757,13 @@ fn classify_pc_use_target_id(target_id: &str) -> PcUseTargetIdKind {
         PcUseTargetIdKind::CurrentWorkspaceSnapshot
     } else if target_id.starts_with("zed:project_panel:worktree:") {
         PcUseTargetIdKind::CurrentProjectPanelWorktreeSnapshot
-    } else if target_id.starts_with("zed:") {
+    } else if PC_USE_FUTURE_UI_TARGET_PREFIXES
+        .iter()
+        .any(|(prefix, _, _)| target_id.starts_with(prefix))
+    {
         PcUseTargetIdKind::FutureZedUiSnapshot
+    } else if target_id.starts_with("zed:") {
+        PcUseTargetIdKind::UnknownZedNamespace
     } else {
         PcUseTargetIdKind::Unknown
     }
@@ -764,6 +775,7 @@ impl PcUseTargetIdKind {
             Self::CurrentWorkspaceSnapshot => "current_workspace_snapshot",
             Self::CurrentProjectPanelWorktreeSnapshot => "current_project_panel_worktree_snapshot",
             Self::FutureZedUiSnapshot => "future_zed_ui_snapshot",
+            Self::UnknownZedNamespace => "unknown_zed_namespace",
             Self::Unknown => "unknown",
         }
     }
@@ -772,7 +784,7 @@ impl PcUseTargetIdKind {
         match self {
             Self::CurrentWorkspaceSnapshot => Some("workspace"),
             Self::CurrentProjectPanelWorktreeSnapshot => Some("project_panel"),
-            Self::FutureZedUiSnapshot | Self::Unknown => None,
+            Self::FutureZedUiSnapshot | Self::UnknownZedNamespace | Self::Unknown => None,
         }
     }
 

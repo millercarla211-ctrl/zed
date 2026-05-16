@@ -1,3 +1,16 @@
+[2026-05-16] - PC Use UI Snapshot Contract
+
+ADDED:
+- Added the read-only `inspect_zed_pc_use_ui_snapshot_contract` Agent tool for publishing future Zed UI snapshot target namespaces, snapshot fields, and input-readiness rules.
+- Advertised the UI snapshot contract tool and schema through the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- `compose_zed_pc_use_action_payload` now treats only documented future UI snapshot prefixes as input-ready and marks unknown `zed:` namespaces as not input-ready.
+- PC-use payload handoff guidance now includes the UI snapshot contract step before focus, click, or type target ids are accepted.
+
+NOTES:
+- The UI snapshot contract is static and read-only; it does not inspect live UI, screenshot, focus Zed, dispatch input, launch processes, or control the OS desktop.
+
 [2026-05-16] - PC Use Target-Aware Payloads
 
 CHANGED:
