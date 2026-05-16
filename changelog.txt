@@ -1,3 +1,12 @@
+[2026-05-16] - Agent Plugin Runtime Final Checklist Summaries
+
+ADDED:
+- WebPreview status-packet, executor-readiness, validation-progress, final-bundle, action-manifest, and claim-gate Agent Panel summaries now expose compact final-checklist status and final-command readiness.
+- `inspect_agent_plugin_runtime_status` now returns a `runtime_green_claim_gate_summary` with the next required proof, recommended action, final checklist status, and reporting policy.
+
+NOTES:
+- This is summary metadata only; it does not run Node, launch Chrome, dispatch browser or OS input, run `just run`, write proof files, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Final Checklist
 
 ADDED:

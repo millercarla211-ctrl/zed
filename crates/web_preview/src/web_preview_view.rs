@@ -1803,6 +1803,9 @@ impl WebPreviewView {
             "runtime_green_ready_lane_fraction": packet.pointer("/packet/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
             "runtime_green_first_pending_lane": packet.pointer("/packet/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
             "runtime_green_can_claim_from_webpreview": packet.pointer("/packet/runtime_green_claim_gate/can_claim_runtime_green_from_webpreview").and_then(Value::as_bool),
+            "runtime_green_final_operator_checklist": packet
+                .pointer("/packet/runtime_green_claim_gate")
+                .map(Self::runtime_green_final_operator_checklist_summary),
             "next_step": packet.pointer("/packet/next_step").and_then(Value::as_str),
         }))
     }
@@ -1820,6 +1823,9 @@ impl WebPreviewView {
             "runtime_green_claim_gate_status": readiness.pointer("/readiness/runtime_green_claim_gate/status").and_then(Value::as_str),
             "runtime_green_ready_lane_fraction": readiness.pointer("/readiness/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
             "runtime_green_first_pending_lane": readiness.pointer("/readiness/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
+            "runtime_green_final_operator_checklist": readiness
+                .pointer("/readiness/runtime_green_claim_gate")
+                .map(Self::runtime_green_final_operator_checklist_summary),
             "next_step": readiness.pointer("/readiness/next_step").and_then(Value::as_str),
         }))
     }
@@ -1840,6 +1846,9 @@ impl WebPreviewView {
             "runtime_green_claim_gate_status": progress.pointer("/runtime_green_claim_gate/status").and_then(Value::as_str),
             "runtime_green_ready_lane_fraction": progress.pointer("/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
             "runtime_green_first_pending_lane": progress.pointer("/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
+            "runtime_green_final_operator_checklist": progress
+                .pointer("/runtime_green_claim_gate")
+                .map(Self::runtime_green_final_operator_checklist_summary),
             "next_step": progress.pointer("/next_step").and_then(Value::as_str),
         }))
     }
@@ -1860,7 +1869,41 @@ impl WebPreviewView {
             "total_item_count": bundle.pointer("/current_readiness/total_item_count").and_then(Value::as_u64),
             "success_criteria_count": bundle.pointer("/success_criteria").and_then(Value::as_array).map(Vec::len),
             "manual_proof_step_count": bundle.pointer("/manual_windows_proof_order").and_then(Value::as_array).map(Vec::len),
+            "runtime_green_final_operator_checklist": bundle
+                .pointer("/handoff_artifacts/runtime_green_claim_gate/current_snapshot")
+                .map(Self::runtime_green_final_operator_checklist_summary),
         }))
+    }
+
+    fn runtime_green_final_operator_checklist_summary(claim_gate: &Value) -> Value {
+        let checklist = claim_gate
+            .get("final_operator_checklist")
+            .unwrap_or(&Value::Null);
+
+        serde_json::json!({
+            "status": checklist.get("status").and_then(Value::as_str),
+            "can_run_final_manual_command": checklist
+                .get("can_run_final_manual_command")
+                .and_then(Value::as_bool),
+            "final_manual_command": checklist.get("final_manual_command").and_then(Value::as_str),
+            "first_required_proof_id": checklist
+                .get("first_required_proof_id")
+                .and_then(Value::as_str),
+            "first_recommended_action": checklist
+                .get("first_recommended_action")
+                .and_then(Value::as_str),
+            "ordered_check_count": checklist
+                .get("ordered_checks")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            "may_report_runtime_green": checklist
+                .pointer("/reporting_policy/may_report_runtime_green")
+                .and_then(Value::as_bool),
+            "requires_imported_final_result": checklist
+                .pointer("/reporting_policy/requires_imported_final_result")
+                .and_then(Value::as_bool),
+            "read_only": checklist.get("read_only").and_then(Value::as_bool),
+        })
     }
 
     fn latest_agent_browser_final_validation_result_template_summary(&self) -> Option<Value> {
@@ -2799,6 +2842,7 @@ impl WebPreviewView {
                 "runtime_green_claim_gate_status": runtime_green_claim_gate.pointer("/status").and_then(Value::as_str),
                 "runtime_green_ready_lane_fraction": runtime_green_claim_gate.pointer("/ready_lane_fraction").and_then(Value::as_str),
                 "runtime_green_first_pending_lane": runtime_green_claim_gate.pointer("/first_pending_lane_label").and_then(Value::as_str),
+                "runtime_green_final_operator_checklist": Self::runtime_green_final_operator_checklist_summary(&runtime_green_claim_gate),
             },
             "handoff_artifacts": {
                 "status_packet": {
@@ -2881,6 +2925,7 @@ impl WebPreviewView {
                     "current_status": runtime_green_claim_gate.pointer("/status").and_then(Value::as_str),
                     "ready_lane_fraction": runtime_green_claim_gate.pointer("/ready_lane_fraction").and_then(Value::as_str),
                     "first_pending_lane": runtime_green_claim_gate.pointer("/first_pending_lane_label").and_then(Value::as_str),
+                    "final_operator_checklist": Self::runtime_green_final_operator_checklist_summary(&runtime_green_claim_gate),
                     "current_snapshot": runtime_green_claim_gate.clone()
                 },
                 "runtime_status_tool": {
@@ -5018,9 +5063,21 @@ impl WebPreviewView {
             .pointer("/next_required_proof/recommended_action")
             .and_then(Value::as_str)
             .unwrap_or("copy_agent_plugin_runtime_green_claim_gate");
+        let final_checklist_status = claim_gate
+            .pointer("/final_operator_checklist/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let final_can_run = claim_gate
+            .pointer("/final_operator_checklist/can_run_final_manual_command")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let final_required_proof = claim_gate
+            .pointer("/final_operator_checklist/first_required_proof_id")
+            .and_then(Value::as_str)
+            .unwrap_or(required_proof);
 
         format!(
-            "Runtime-green claim gate\nStatus: {status}\nReady lanes: {ready_lane_fraction}\nFirst pending evidence: {first_pending_lane} ({first_pending_status})\nRequired proof: {required_proof}\nRecommended action: {recommended_action}\nCan claim from WebPreview: {can_claim_runtime_green}\nNext: {next_step}"
+            "Runtime-green claim gate\nStatus: {status}\nReady lanes: {ready_lane_fraction}\nFirst pending evidence: {first_pending_lane} ({first_pending_status})\nRequired proof: {required_proof}\nRecommended action: {recommended_action}\nFinal checklist: {final_checklist_status} (can run final command: {final_can_run}, first proof: {final_required_proof})\nCan claim from WebPreview: {can_claim_runtime_green}\nNext: {next_step}"
         )
     }
 
@@ -7052,6 +7109,7 @@ impl WebPreviewView {
                     "runtime_green_claim_gate_status": runtime_green_claim_gate.get("status").and_then(Value::as_str),
                     "runtime_green_claim_gate_first_pending_lane": runtime_green_claim_gate.get("first_pending_lane_label").and_then(Value::as_str),
                     "runtime_green_claim_gate_ready_lane_fraction": runtime_green_claim_gate.get("ready_lane_fraction").and_then(Value::as_str),
+                    "runtime_green_final_operator_checklist": Self::runtime_green_final_operator_checklist_summary(&runtime_green_claim_gate),
                     "executor_wired": true,
                     "safe_to_send_to_agent_panel": true,
                 },
@@ -11469,6 +11527,7 @@ impl WebPreviewView {
                     "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
                     "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
                     "latest_summary": runtime_green_claim_gate.clone(),
+                    "final_operator_checklist": Self::runtime_green_final_operator_checklist_summary(&runtime_green_claim_gate),
                     "read_only": true,
                     "purpose": "Copy or send only the compact claim gate with ready-lane fraction, first pending evidence, and next operator step."
                 }

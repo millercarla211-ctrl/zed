@@ -437,6 +437,9 @@ fn inspect_runtime_status(
     let runtime_green_claim_gate = input
         .include_runtime_green_claim_gate
         .then(|| runtime_green_claim_gate(&runtime_green_proof_path_value));
+    let runtime_green_claim_gate_summary = runtime_green_claim_gate
+        .as_ref()
+        .map(runtime_green_claim_gate_summary);
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA,
@@ -468,6 +471,7 @@ fn inspect_runtime_status(
         "runtime_observability_digest": runtime_observability_digest,
         "runtime_green_proof_path": runtime_green_proof_path,
         "runtime_green_claim_gate": runtime_green_claim_gate,
+        "runtime_green_claim_gate_summary": runtime_green_claim_gate_summary,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
         "observability_profiles": input
@@ -2394,6 +2398,66 @@ fn runtime_green_claim_gate(proof_path: &Value) -> Value {
         "runs_node": false,
         "launches_browser": false,
         "dispatches_input": false,
+    })
+}
+
+fn runtime_green_claim_gate_summary(claim_gate: &Value) -> Value {
+    let checklist = claim_gate
+        .get("final_operator_checklist")
+        .unwrap_or(&Value::Null);
+
+    serde_json::json!({
+        "status": claim_gate.get("status").and_then(Value::as_str),
+        "ready_lane_fraction": claim_gate
+            .get("ready_lane_fraction")
+            .and_then(Value::as_str),
+        "first_pending_lane_label": claim_gate
+            .get("first_pending_lane_label")
+            .and_then(Value::as_str),
+        "first_pending_lane_status": claim_gate
+            .get("first_pending_lane_status")
+            .and_then(Value::as_str),
+        "can_claim_runtime_green": claim_gate
+            .get("can_claim_runtime_green")
+            .and_then(Value::as_bool),
+        "next_required_proof_id": claim_gate
+            .pointer("/next_required_proof/required_proof_id")
+            .and_then(Value::as_str),
+        "next_recommended_action": claim_gate
+            .pointer("/next_required_proof/recommended_action")
+            .and_then(Value::as_str),
+        "final_operator_checklist": {
+            "status": checklist.get("status").and_then(Value::as_str),
+            "can_run_final_manual_command": checklist
+                .get("can_run_final_manual_command")
+                .and_then(Value::as_bool),
+            "final_manual_command": checklist
+                .get("final_manual_command")
+                .and_then(Value::as_str),
+            "first_required_proof_id": checklist
+                .get("first_required_proof_id")
+                .and_then(Value::as_str),
+            "first_recommended_tool": checklist
+                .get("first_recommended_tool")
+                .and_then(Value::as_str),
+            "first_recommended_action": checklist
+                .get("first_recommended_action")
+                .and_then(Value::as_str),
+            "ordered_check_count": checklist
+                .get("ordered_checks")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            "may_report_runtime_green": checklist
+                .pointer("/reporting_policy/may_report_runtime_green")
+                .and_then(Value::as_bool),
+            "requires_imported_final_result": checklist
+                .pointer("/reporting_policy/requires_imported_final_result")
+                .and_then(Value::as_bool),
+            "read_only": checklist.get("read_only").and_then(Value::as_bool),
+        },
+        "copy_action": claim_gate.get("copy_action").and_then(Value::as_str),
+        "send_action": claim_gate.get("send_action").and_then(Value::as_str),
+        "read_only": claim_gate.get("read_only").and_then(Value::as_bool),
     })
 }
 
