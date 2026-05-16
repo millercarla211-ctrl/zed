@@ -1218,6 +1218,8 @@ fn chrome_plugin_manifest(
             capability("chrome.page.screenshot", "requires_bootstrap", "Capture viewport, full-page, or selector-scoped screenshots with receipt metadata."),
             capability("chrome.page.inspect_element", "requires_bootstrap", "Read selector-scoped tag, attribute, bounds, visibility, and computed-style summaries from managed Chrome receipts."),
             capability("chrome.page.dom_snapshot", "requires_bootstrap", "Read bounded document or selector-scoped DOM snapshots from managed Chrome receipts."),
+            capability("chrome.page.set_viewport", "requires_bootstrap", "Apply responsive viewport dimensions and read requested/applied viewport metadata from managed Chrome receipts."),
+            capability("chrome.page.wait_for_selector", "requires_bootstrap", "Wait for selector visibility and read matched bounds from managed Chrome receipts."),
             capability("chrome.runtime.console", "requires_bootstrap", "Read bounded console, page error, failed request, HTTP error, and performance-resource summaries from managed Chrome receipts."),
             capability("chrome.extension.bridge", "requires_bootstrap", "Use the DX Chrome extension bridge for pages where DevTools-only control is insufficient.")
         ],

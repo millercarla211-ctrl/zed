@@ -347,7 +347,7 @@ struct AdapterFile {
 fn adapter_package_json() -> Result<String, String> {
     serde_json::to_string_pretty(&serde_json::json!({
         "name": "@zed/managed-chrome-runner",
-        "version": "0.1.4",
+        "version": "0.1.5",
         "private": true,
         "type": "module",
         "description": "Managed Playwright adapter for DX/Zed Agent Chrome plugin receipts.",
@@ -367,7 +367,7 @@ fn adapter_manifest_json(plan: &ManagedChromePlaywrightAdapterPlan) -> Result<St
         "generated_at_ms": current_epoch_millis(),
         "adapter": {
             "name": "DX/Zed Managed Chrome Playwright Adapter",
-            "version": "0.1.4",
+            "version": "0.1.5",
             "root": path_string(&plan.adapter_root),
             "runner_script": path_string(&plan.runner_script_path),
             "execution_receipt_schema": AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA,
@@ -557,6 +557,7 @@ async function main() {
     headless: false,
     executablePath,
     args: launchArgs,
+    deviceScaleFactor: Number(payload.device_scale_factor ?? 1),
     viewport: {
       width: Number(payload.width ?? payload.viewport_width ?? 1440),
       height: Number(payload.height ?? payload.viewport_height ?? 900)
@@ -579,18 +580,49 @@ async function main() {
         timeout: Number(payload.timeout_ms ?? 30000)
       });
     } else if (payload.action === "set_viewport") {
-      await page.setViewportSize({
+      const requestedViewport = {
         width: Number(payload.width ?? payload.viewport_width ?? 1440),
-        height: Number(payload.height ?? payload.viewport_height ?? 900)
+        height: Number(payload.height ?? payload.viewport_height ?? 900),
+        device_scale_factor: Number(payload.device_scale_factor ?? 1)
+      };
+      await page.setViewportSize({
+        width: requestedViewport.width,
+        height: requestedViewport.height
       });
+      receipt.viewport = {
+        requested: requestedViewport,
+        applied: await page.evaluate(() => ({
+          width: window.innerWidth,
+          height: window.innerHeight,
+          device_scale_factor: window.devicePixelRatio
+        }))
+      };
+      receipt.safety.page_scripts_executed = true;
     } else if (payload.action === "wait_for_selector") {
       if (!payload.selector) {
         throw new Error("wait_for_selector requires payload.selector");
       }
-      await page.locator(payload.selector).first().waitFor({
+      const timeoutMs = Number(payload.timeout_ms ?? 5000);
+      const locator = page.locator(payload.selector).first();
+      await locator.waitFor({
         state: "visible",
-        timeout: Number(payload.timeout_ms ?? 5000)
+        timeout: timeoutMs
       });
+      const bounds = await locator.boundingBox();
+      receipt.selector_wait = {
+        selector: payload.selector,
+        state: "visible",
+        timeout_ms: timeoutMs,
+        matched: true,
+        bounds: bounds
+          ? {
+            x: Math.round(bounds.x),
+            y: Math.round(bounds.y),
+            width: Math.round(bounds.width),
+            height: Math.round(bounds.height)
+          }
+          : null
+      };
     } else if (payload.action === "screenshot") {
       const artifactsRoot = roots.artifacts_root ?? path.join(adapterRoot, "artifacts");
       const outputPath = payload.output_path
@@ -645,6 +677,7 @@ async function main() {
         path: outputPath,
         dimensions
       };
+      receipt.safety.page_scripts_executed = true;
     } else if (payload.action === "inspect_element") {
       if (!payload.selector) {
         throw new Error("inspect_element requires payload.selector");

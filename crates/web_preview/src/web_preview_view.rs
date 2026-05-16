@@ -14273,6 +14273,8 @@ impl WebPreviewView {
                             {"id": "chrome.page.screenshot", "state": "requires_bootstrap", "description": "Capture viewport, full-page, or selector-scoped screenshots with receipt metadata."},
                             {"id": "chrome.page.inspect_element", "state": "requires_bootstrap", "description": "Read selector-scoped tag, attribute, bounds, visibility, and computed-style summaries from managed Chrome receipts."},
                             {"id": "chrome.page.dom_snapshot", "state": "requires_bootstrap", "description": "Read bounded document or selector-scoped DOM snapshots from managed Chrome receipts."},
+                            {"id": "chrome.page.set_viewport", "state": "requires_bootstrap", "description": "Apply responsive viewport dimensions and read requested/applied viewport metadata from managed Chrome receipts."},
+                            {"id": "chrome.page.wait_for_selector", "state": "requires_bootstrap", "description": "Wait for selector visibility and read matched bounds from managed Chrome receipts."},
                             {"id": "chrome.runtime.console", "state": "requires_bootstrap", "description": "Read bounded console, page error, failed request, HTTP error, and performance-resource summaries from managed Chrome receipts."},
                             {"id": "chrome.extension.bridge", "state": "requires_bootstrap", "description": "Use the DX Chrome extension bridge for pages where DevTools-only control is insufficient."}
                         ],
@@ -19127,6 +19129,8 @@ fn managed_chrome_execution_file_read_summary(path: &Path, expected_schema: &str
         "title": value.get("title").and_then(Value::as_str),
         "screenshot": value.pointer("/artifacts/screenshot").and_then(Value::as_str),
         "screenshot_capture": managed_chrome_screenshot_summary(&value),
+        "viewport_change": managed_chrome_viewport_summary(&value),
+        "selector_wait": managed_chrome_selector_wait_summary(&value),
         "inspect_element": managed_chrome_inspect_element_summary(&value),
         "dom_snapshot": managed_chrome_dom_snapshot_summary(&value),
         "runtime_events": managed_chrome_runtime_events_summary(&value),
@@ -19144,6 +19148,25 @@ fn managed_chrome_screenshot_summary(value: &Value) -> Option<Value> {
         "selector": screenshot.get("selector").and_then(Value::as_str),
         "full_page": screenshot.get("full_page").and_then(Value::as_bool),
         "dimensions": screenshot.get("dimensions").cloned(),
+    }))
+}
+
+fn managed_chrome_viewport_summary(value: &Value) -> Option<Value> {
+    let viewport = value.get("viewport")?;
+    Some(serde_json::json!({
+        "requested": viewport.get("requested").cloned(),
+        "applied": viewport.get("applied").cloned(),
+    }))
+}
+
+fn managed_chrome_selector_wait_summary(value: &Value) -> Option<Value> {
+    let wait = value.get("selector_wait")?;
+    Some(serde_json::json!({
+        "selector": wait.get("selector").and_then(Value::as_str),
+        "state": wait.get("state").and_then(Value::as_str),
+        "timeout_ms": wait.get("timeout_ms").and_then(Value::as_u64),
+        "matched": wait.get("matched").and_then(Value::as_bool),
+        "bounds": wait.get("bounds").cloned(),
     }))
 }
 

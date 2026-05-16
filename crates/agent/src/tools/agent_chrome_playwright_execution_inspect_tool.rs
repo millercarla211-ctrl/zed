@@ -389,6 +389,8 @@ fn read_json_summary(path: &Path) -> Value {
         "title": value.get("title").and_then(Value::as_str),
         "screenshot": value.pointer("/artifacts/screenshot").and_then(Value::as_str),
         "screenshot_capture": screenshot_receipt_summary(&value),
+        "viewport_change": viewport_receipt_summary(&value),
+        "selector_wait": selector_wait_receipt_summary(&value),
         "inspect_element": inspect_element_receipt_summary(&value),
         "dom_snapshot": dom_snapshot_receipt_summary(&value),
         "runtime_events": runtime_events_receipt_summary(&value),
@@ -406,6 +408,25 @@ fn screenshot_receipt_summary(value: &Value) -> Option<Value> {
         "selector": screenshot.get("selector").and_then(Value::as_str),
         "full_page": screenshot.get("full_page").and_then(Value::as_bool),
         "dimensions": screenshot.get("dimensions").cloned(),
+    }))
+}
+
+fn viewport_receipt_summary(value: &Value) -> Option<Value> {
+    let viewport = value.get("viewport")?;
+    Some(serde_json::json!({
+        "requested": viewport.get("requested").cloned(),
+        "applied": viewport.get("applied").cloned(),
+    }))
+}
+
+fn selector_wait_receipt_summary(value: &Value) -> Option<Value> {
+    let wait = value.get("selector_wait")?;
+    Some(serde_json::json!({
+        "selector": wait.get("selector").and_then(Value::as_str),
+        "state": wait.get("state").and_then(Value::as_str),
+        "timeout_ms": wait.get("timeout_ms").and_then(Value::as_u64),
+        "matched": wait.get("matched").and_then(Value::as_bool),
+        "bounds": wait.get("bounds").cloned(),
     }))
 }
 
