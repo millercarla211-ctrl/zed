@@ -86,6 +86,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result_import_receipt.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
+const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_proof_audit.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME: &str =
     "latest-agent-browser-final-validation-result.json";
@@ -361,6 +363,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_final_validation_result_to_agent",
     "copy_agent_browser_final_validation_observability",
     "send_agent_browser_final_validation_observability_to_agent",
+    "copy_agent_browser_final_proof_audit",
+    "send_agent_browser_final_proof_audit_to_agent",
     "copy_agent_browser_function_surfaces",
     "send_agent_browser_function_surfaces_to_agent",
     "copy_agent_plugin_bootstrap_readiness",
@@ -744,6 +748,7 @@ pub struct WebPreviewView {
     latest_agent_browser_final_validation_result_template: Option<Value>,
     latest_agent_browser_final_validation_result: Option<Value>,
     latest_agent_browser_final_validation_result_import_receipt: Option<Value>,
+    latest_agent_browser_final_proof_audit: Option<Value>,
     latest_agent_browser_noop_executor_attempt: Option<Value>,
     latest_agent_browser_reload_executor_attempt: Option<Value>,
     latest_agent_browser_clear_data_executor_attempt: Option<Value>,
@@ -963,6 +968,7 @@ impl WebPreviewView {
             latest_agent_browser_final_validation_result_template: None,
             latest_agent_browser_final_validation_result: None,
             latest_agent_browser_final_validation_result_import_receipt: None,
+            latest_agent_browser_final_proof_audit: None,
             latest_agent_browser_noop_executor_attempt: None,
             latest_agent_browser_reload_executor_attempt: None,
             latest_agent_browser_clear_data_executor_attempt: None,
@@ -1458,6 +1464,7 @@ impl WebPreviewView {
             "agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result_summary(),
             "agent_browser_final_validation_result_import_receipt": self.latest_agent_browser_final_validation_result_import_receipt_summary(),
             "agent_browser_final_validation_observability": self.agent_browser_final_validation_observability(),
+            "agent_browser_final_proof_audit": self.latest_agent_browser_final_proof_audit_summary(),
             "agent_browser_function_surfaces": self.agent_browser_function_surfaces(),
             "agent_plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
             "agent_plugin_runtime_green_claim_gate": self.agent_plugin_runtime_green_claim_gate_snapshot(),
@@ -1551,6 +1558,8 @@ impl WebPreviewView {
                 "send_agent_browser_final_validation_result_to_agent": self.latest_agent_browser_final_validation_result.is_some(),
                 "copy_agent_browser_final_validation_observability": true,
                 "send_agent_browser_final_validation_observability_to_agent": true,
+                "copy_agent_browser_final_proof_audit": true,
+                "send_agent_browser_final_proof_audit_to_agent": true,
                 "agent_browser_function_surfaces": true,
                 "copy_agent_browser_function_surfaces": true,
                 "send_agent_browser_function_surfaces_to_agent": true,
@@ -2022,6 +2031,27 @@ impl WebPreviewView {
         }))
     }
 
+    fn latest_agent_browser_final_proof_audit_summary(&self) -> Option<Value> {
+        let audit = self.latest_agent_browser_final_proof_audit.as_ref()?;
+        Some(Self::agent_browser_final_proof_audit_summary(audit))
+    }
+
+    fn agent_browser_final_proof_audit_summary(audit: &Value) -> Value {
+        serde_json::json!({
+            "generated_at_ms": audit.pointer("/audit/generated_at_ms").and_then(Value::as_u64),
+            "status": audit.pointer("/audit/status").and_then(Value::as_str),
+            "runtime_green_candidate": audit.pointer("/audit/runtime_green_candidate").and_then(Value::as_bool),
+            "may_report_runtime_green": audit.pointer("/audit/may_report_runtime_green").and_then(Value::as_bool),
+            "next_action": audit.pointer("/audit/next_action").and_then(Value::as_str),
+            "missing_required_checks": audit.pointer("/audit/missing_required_checks").cloned(),
+            "missing_required_evidence": audit.pointer("/audit/missing_required_evidence").cloned(),
+            "required_check_blocker_count": audit.pointer("/audit/required_check_blocker_count").and_then(Value::as_u64),
+            "overall_blocker": audit.pointer("/audit/overall_blocker").cloned(),
+            "report_gate_status": audit.pointer("/audit/report_gate/status").and_then(Value::as_str),
+            "report_gate_blocker": audit.pointer("/audit/report_gate/blocker").and_then(Value::as_str),
+        })
+    }
+
     fn agent_browser_final_validation_result_latest_paths(
         &self,
     ) -> Vec<(&'static str, PathBuf, PathBuf)> {
@@ -2335,6 +2365,156 @@ impl WebPreviewView {
         let blocks = self.agent_browser_final_validation_observability_agent_blocks();
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast("Sent final validation observability to the agent panel", cx);
+        cx.notify();
+    }
+
+    fn agent_browser_final_proof_audit(&self) -> Value {
+        let result_summary = self.latest_agent_browser_final_validation_result_summary();
+        let observability = self.agent_browser_final_validation_observability();
+        let report_gate = self.agent_plugin_runtime_green_report_gate_snapshot();
+        let import_receipt_summary =
+            self.latest_agent_browser_final_validation_result_import_receipt_summary();
+        let template_summary = self.latest_agent_browser_final_validation_result_template_summary();
+        let bundle_summary = self.latest_agent_browser_final_validation_bundle_summary();
+        let runtime_green_candidate = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/runtime_green_candidate"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+            || observability
+                .pointer("/durable_evidence/runtime_green_candidate")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+        let may_report_runtime_green = report_gate
+            .get("can_report_runtime_green")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let missing_required_checks = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/missing_required_checks"))
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let missing_required_evidence = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/missing_required_evidence"))
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let required_check_blocker_count = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/required_check_blocker_count"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let has_overall_blocker = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/overall_blocker"))
+            .map(|blocker| !blocker.is_null())
+            .unwrap_or(false);
+        let status = if may_report_runtime_green {
+            "ready_to_report_runtime_green"
+        } else if runtime_green_candidate {
+            "runtime_green_result_waiting_for_report_gate"
+        } else if result_summary.is_some() {
+            "final_result_needs_evidence_or_blocker_fix"
+        } else if template_summary.is_some() && bundle_summary.is_some() {
+            "awaiting_final_runtime_result_import"
+        } else {
+            "final_proof_packet_required"
+        };
+        let next_action = if may_report_runtime_green {
+            "copy_agent_plugin_runtime_green_final_report_packet"
+        } else if bundle_summary.is_none() {
+            "copy_agent_browser_final_validation_bundle"
+        } else if template_summary.is_none() {
+            "copy_agent_browser_final_validation_result_template"
+        } else if result_summary.is_none() {
+            "import_agent_browser_final_validation_result_from_clipboard"
+        } else if runtime_green_candidate {
+            "copy_agent_plugin_runtime_green_report_gate"
+        } else {
+            "copy_agent_browser_final_validation_result"
+        };
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
+            "audit": {
+                "generated_at_ms": Self::current_epoch_millis(),
+                "status": status,
+                "runtime_green_candidate": runtime_green_candidate,
+                "may_report_runtime_green": may_report_runtime_green,
+                "next_action": next_action,
+                "missing_required_checks": missing_required_checks,
+                "missing_required_evidence": missing_required_evidence,
+                "required_check_blocker_count": required_check_blocker_count,
+                "overall_blocker": result_summary
+                    .as_ref()
+                    .and_then(|summary| summary.pointer("/overall_blocker"))
+                    .cloned(),
+                "has_overall_blocker": has_overall_blocker,
+                "report_gate": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
+                    "status": report_gate.get("status").and_then(Value::as_str),
+                    "blocker": report_gate.get("blocker").and_then(Value::as_str),
+                    "can_report_runtime_green": may_report_runtime_green,
+                    "next_action": report_gate.get("next_action").and_then(Value::as_str),
+                    "badge": report_gate.get("badge").cloned(),
+                }
+            },
+            "latest": {
+                "final_validation_bundle": bundle_summary,
+                "final_validation_result_template": template_summary,
+                "final_validation_result": result_summary,
+                "final_validation_result_import_receipt": import_receipt_summary,
+                "final_validation_observability": observability,
+            },
+            "required_before_runtime_green_claim": [
+                "final_validation_result.status == pass",
+                "all required checks have status pass",
+                "all required checks include non-empty evidence",
+                "overall_blocker is null",
+                "every required check blocker is null",
+                "runtime_green_report_gate.can_report_runtime_green == true"
+            ],
+            "copy_action": "copy_agent_browser_final_proof_audit",
+            "send_action": "send_agent_browser_final_proof_audit_to_agent",
+            "read_only": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+        })
+    }
+
+    fn agent_browser_final_proof_audit_json(audit: &Value) -> String {
+        serde_json::to_string_pretty(audit).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_final_proof_audit_agent_blocks(audit: &Value) -> Vec<acp::ContentBlock> {
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview final proof audit:\n\n```json\n{}\n```",
+            Self::agent_browser_final_proof_audit_json(audit)
+        )))]
+    }
+
+    fn copy_agent_browser_final_proof_audit(&mut self, cx: &mut Context<Self>) {
+        let audit = self.agent_browser_final_proof_audit();
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_final_proof_audit_json(&audit),
+        ));
+        self.latest_agent_browser_final_proof_audit = Some(audit);
+        self.show_toast("Copied final proof audit", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_final_proof_audit_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let audit = self.agent_browser_final_proof_audit();
+        let blocks = Self::agent_browser_final_proof_audit_agent_blocks(&audit);
+        self.latest_agent_browser_final_proof_audit = Some(audit);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent final proof audit to the agent panel", cx);
         cx.notify();
     }
 
@@ -2963,6 +3143,7 @@ impl WebPreviewView {
                 &runtime_green_report_gate,
                 &runtime_green_final_proof_guide,
             );
+        let final_proof_audit = self.agent_browser_final_proof_audit();
 
         serde_json::json!({
             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
@@ -3048,6 +3229,14 @@ impl WebPreviewView {
                     "copy_action": "copy_agent_browser_final_validation_result_import_receipt",
                     "send_action": "send_agent_browser_final_validation_result_import_receipt_to_agent",
                     "latest_summary": self.latest_agent_browser_final_validation_result_import_receipt_summary(),
+                    "read_only": true
+                },
+                "final_proof_audit": {
+                    "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
+                    "copy_action": "copy_agent_browser_final_proof_audit",
+                    "send_action": "send_agent_browser_final_proof_audit_to_agent",
+                    "latest_summary": self.latest_agent_browser_final_proof_audit_summary(),
+                    "current_summary": Self::agent_browser_final_proof_audit_summary(&final_proof_audit),
                     "read_only": true
                 },
                 "plugin_catalog": {
@@ -8363,6 +8552,7 @@ impl WebPreviewView {
                     "agent_browser_final_validation_result_template": self.latest_agent_browser_final_validation_result_template_summary(),
                     "agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result_summary(),
                     "agent_browser_final_validation_result_import_receipt": self.latest_agent_browser_final_validation_result_import_receipt_summary(),
+                    "agent_browser_final_proof_audit": self.latest_agent_browser_final_proof_audit_summary(),
                     "managed_chrome_execution": managed_chrome_execution,
                     "pc_use_status": pc_use_status,
                     "runtime_observability_digest": runtime_observability_digest_summary,
@@ -13015,6 +13205,7 @@ impl WebPreviewView {
                 &runtime_green_report_gate,
                 &runtime_green_final_proof_guide,
             );
+        let final_proof_audit = self.agent_browser_final_proof_audit();
 
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_actions.v1",
@@ -13086,6 +13277,15 @@ impl WebPreviewView {
                     "latest_summary": self.agent_browser_final_validation_observability(),
                     "read_only": true,
                     "purpose": "Copy or send the compact final proof-state and recovery-action summary without requiring the larger session or action manifest."
+                },
+                "final_proof_audit": {
+                    "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
+                    "copy_action": "copy_agent_browser_final_proof_audit",
+                    "send_action": "send_agent_browser_final_proof_audit_to_agent",
+                    "latest_summary": self.latest_agent_browser_final_proof_audit_summary(),
+                    "current_summary": Self::agent_browser_final_proof_audit_summary(&final_proof_audit),
+                    "read_only": true,
+                    "purpose": "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."
                 },
                 "browser_function_surfaces": {
                     "schema": AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA,
@@ -13182,6 +13382,7 @@ impl WebPreviewView {
                 }
             },
             "final_validation_observability": self.agent_browser_final_validation_observability(),
+            "final_proof_audit": final_proof_audit,
             "browser_function_surfaces": self.agent_browser_function_surfaces(),
             "plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
             "runtime_observability_digest": runtime_observability_digest,
@@ -13287,6 +13488,7 @@ impl WebPreviewView {
                     "runtime_green_report_badge_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
                     "runtime_green_final_proof_guide_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
                     "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+                    "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                     "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                     "runtime_green_ready_outcomes": {
                         "browser_final_validation_result": "runtime_green_candidate=true",
@@ -13551,6 +13753,7 @@ impl WebPreviewView {
                                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
                                 "final_result_import_receipt": "copy_agent_browser_final_validation_result_import_receipt",
+                                "final_proof_audit": "copy_agent_browser_final_proof_audit",
                                 "final_result_send": "send_agent_browser_final_validation_result_to_agent"
                             },
                             "final_validation_observability": self.agent_browser_final_validation_observability(),
@@ -13601,6 +13804,7 @@ impl WebPreviewView {
                             "final_validation_bundle_schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
                             "final_validation_result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
                             "final_validation_result_import_receipt_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
+                            "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                             "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
                             "final_validation_observability_schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
                             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
@@ -13710,6 +13914,14 @@ impl WebPreviewView {
                             "source": "WebPreview More menu",
                             "purpose": "Copy or send the compact final proof-state and recovery-action summary without requiring the larger session or action manifest."
                         },
+                        "final_proof_audit_handoff": {
+                            "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
+                            "copy_action": "copy_agent_browser_final_proof_audit",
+                            "send_action": "send_agent_browser_final_proof_audit_to_agent",
+                            "read_only": true,
+                            "source": "WebPreview More menu",
+                            "purpose": "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."
+                        },
                         "runtime_green_claim_gate_handoff": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
                             "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
@@ -13811,6 +14023,7 @@ impl WebPreviewView {
                             {"id": "browser.validation.final_result", "state": "available", "description": "Import, copy, or send the filled final Windows validation result after manual runtime proof."},
                             {"id": "browser.validation.final_result_import_receipt", "state": "available", "description": "Copy or send the final result import receipt with durable proof paths and the next runtime-status recheck."},
                             {"id": "browser.validation.final_proof_state", "state": "available", "description": "Copy or send compact final proof-state observability and recovery actions without generating larger proof packets."},
+                            {"id": "browser.validation.final_proof_audit", "state": "available", "description": "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},
                             {"id": "browser.action.type", "state": "available_when_unlocked_payload_required", "description": "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."},
                             {"id": "browser.action.key", "state": "available_when_unlocked", "description": "Send allowlisted key presses through the WebView2 DevTools Protocol executor after unlock, fresh preflight, keyboard-focus gate, QA checklist, and receipt logging."},
@@ -16061,6 +16274,32 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Copy Final Proof Audit")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_final_proof_audit(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Final Proof Audit")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_final_proof_audit_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy Browser Function Surfaces")
                                 .icon(IconName::Screen)
                                 .handler({
@@ -18200,6 +18439,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_final_validation_result_template: None,
                 latest_agent_browser_final_validation_result: None,
                 latest_agent_browser_final_validation_result_import_receipt: None,
+                latest_agent_browser_final_proof_audit: None,
                 latest_agent_browser_noop_executor_attempt: None,
                 latest_agent_browser_reload_executor_attempt: None,
                 latest_agent_browser_clear_data_executor_attempt: None,

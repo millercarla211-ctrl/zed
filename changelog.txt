@@ -1,3 +1,13 @@
+[2026-05-17] - Agent Plugin Runtime Final Proof Audit
+
+ADDED:
+- WebPreview now exposes a schema-versioned final proof audit packet that summarizes missing required checks, missing evidence, required-check blockers, overall blockers, import receipt state, final observability, and the runtime-green report gate.
+- WebPreview now has Copy/Send Final Proof Audit actions in the More menu, session snapshots, status packets, final validation bundles, action manifests, and Browser plugin catalog metadata.
+- Agent catalog metadata now advertises the final-proof audit schema, copy/send action names, and browser.validation.final_proof_audit capability so Agent Panels can inspect the final claim blocker without parsing larger packets.
+
+NOTES:
+- The final proof audit is read-only. It does not run `just run`, launch Chrome, dispatch browser or OS input, write proof files, or touch real browser profiles; it only reports whether the final proof is evidence-complete enough to trust the report gate.
+
 [2026-05-17] - Agent Plugin Runtime Final Proof Evidence Enforcement
 
 FIXED:
