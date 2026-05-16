@@ -80,8 +80,13 @@ const AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA: &str =
     "zed.web_preview.agent_browser_executor_validation_progress.v1";
 const AGENT_BROWSER_NATIVE_DISPATCH_RECEIPT_MATRIX_SCHEMA: &str =
     "zed.web_preview.native_dispatch_receipt_matrix.v1";
+const AGENT_BROWSER_STATUS_PACKET_SCHEMA: &str = "zed.web_preview.agent_browser_status_packet.v1";
+const AGENT_BROWSER_STATUS_PACKET_SUMMARY_SCHEMA: &str =
+    "zed.web_preview.agent_browser_status_packet_summary.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_bundle.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SUMMARY_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_validation_bundle_summary.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
@@ -1873,6 +1878,8 @@ impl WebPreviewView {
     fn latest_agent_browser_status_packet_summary(&self) -> Option<Value> {
         let packet = self.latest_agent_browser_status_packet.as_ref()?;
         Some(serde_json::json!({
+            "schema": AGENT_BROWSER_STATUS_PACKET_SUMMARY_SCHEMA,
+            "source_schema": packet.get("schema").and_then(Value::as_str),
             "captured_at_ms": packet.pointer("/packet/captured_at_ms").and_then(Value::as_u64),
             "url": packet.pointer("/packet/url").and_then(Value::as_str),
             "title": packet.pointer("/packet/title").and_then(Value::as_str),
@@ -1905,6 +1912,20 @@ impl WebPreviewView {
             "runtime_green_final_report_may_report": packet.pointer("/packet/runtime_green_final_report_packet/may_report_runtime_green").and_then(Value::as_bool),
             "runtime_green_report_readiness_card_status": packet.pointer("/packet/runtime_green_report_readiness_card/status").and_then(Value::as_str),
             "runtime_green_report_readiness_card_next_action": packet.pointer("/packet/runtime_green_report_readiness_card/next_action").and_then(Value::as_str),
+            "runtime_green_final_proof_guide_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
+            "runtime_green_final_report_packet_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
+            "runtime_green_report_readiness_card_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
+            "runtime_green_final_proof_guide_summary": packet
+                .pointer("/packet/latest/runtime_green_final_proof_guide")
+                .cloned(),
+            "runtime_green_final_report_packet_summary": packet
+                .pointer("/packet/latest/runtime_green_final_report_packet")
+                .cloned(),
+            "runtime_green_report_readiness_card_summary": packet
+                .pointer("/packet/latest/runtime_green_report_readiness_card")
+                .cloned(),
+            "read_only": true,
+            "dispatches_input": false,
             "next_step": packet.pointer("/packet/next_step").and_then(Value::as_str),
         }))
     }
@@ -1955,6 +1976,8 @@ impl WebPreviewView {
     fn latest_agent_browser_final_validation_bundle_summary(&self) -> Option<Value> {
         let bundle = self.latest_agent_browser_final_validation_bundle.as_ref()?;
         Some(serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SUMMARY_SCHEMA,
+            "source_schema": bundle.get("schema").and_then(Value::as_str),
             "captured_at_ms": bundle.pointer("/captured_at_ms").and_then(Value::as_u64),
             "url": bundle.pointer("/session/url").and_then(Value::as_str),
             "title": bundle.pointer("/session/title").and_then(Value::as_str),
@@ -1980,11 +2003,42 @@ impl WebPreviewView {
                 .or_else(|| bundle.pointer("/handoff_artifacts/runtime_green_report_gate/current_snapshot/badge"))
                 .cloned(),
             "runtime_green_final_proof_guide_status": bundle.pointer("/handoff_artifacts/runtime_green_final_proof_guide/current_status").and_then(Value::as_str),
-            "runtime_green_final_proof_next_action": bundle.pointer("/handoff_artifacts/runtime_green_final_proof_guide/next_action").and_then(Value::as_str),
+            "runtime_green_final_proof_next_action": bundle
+                .pointer("/handoff_artifacts/runtime_green_final_proof_guide/current_summary/next_action")
+                .or_else(|| bundle.pointer("/handoff_artifacts/runtime_green_final_proof_guide/current_guide/next_action"))
+                .and_then(Value::as_str),
             "runtime_green_final_report_packet_status": bundle.pointer("/handoff_artifacts/runtime_green_final_report_packet/current_status").and_then(Value::as_str),
-            "runtime_green_final_report_may_report": bundle.pointer("/handoff_artifacts/runtime_green_final_report_packet/may_report_runtime_green").and_then(Value::as_bool),
+            "runtime_green_final_report_may_report": bundle
+                .pointer("/handoff_artifacts/runtime_green_final_report_packet/current_summary/may_report_runtime_green")
+                .or_else(|| bundle.pointer("/handoff_artifacts/runtime_green_final_report_packet/current_packet/may_report_runtime_green"))
+                .and_then(Value::as_bool),
+            "runtime_green_final_report_next_action": bundle
+                .pointer("/handoff_artifacts/runtime_green_final_report_packet/current_summary/next_action")
+                .or_else(|| bundle.pointer("/handoff_artifacts/runtime_green_final_report_packet/current_packet/next_action"))
+                .and_then(Value::as_str),
             "runtime_green_report_readiness_card_status": bundle.pointer("/handoff_artifacts/runtime_green_report_readiness_card/current_status").and_then(Value::as_str),
-            "runtime_green_report_readiness_card_next_action": bundle.pointer("/handoff_artifacts/runtime_green_report_readiness_card/current_card/next_action").and_then(Value::as_str),
+            "runtime_green_report_readiness_card_next_action": bundle
+                .pointer("/handoff_artifacts/runtime_green_report_readiness_card/current_summary/next_action")
+                .or_else(|| bundle.pointer("/handoff_artifacts/runtime_green_report_readiness_card/current_card/next_action"))
+                .and_then(Value::as_str),
+            "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
+            "runtime_green_final_proof_guide_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
+            "runtime_green_final_report_packet_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
+            "runtime_green_report_readiness_card_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
+            "final_proof_audit_summary": bundle
+                .pointer("/handoff_artifacts/final_proof_audit/current_summary")
+                .cloned(),
+            "runtime_green_final_proof_guide_summary": bundle
+                .pointer("/handoff_artifacts/runtime_green_final_proof_guide/current_summary")
+                .cloned(),
+            "runtime_green_final_report_packet_summary": bundle
+                .pointer("/handoff_artifacts/runtime_green_final_report_packet/current_summary")
+                .cloned(),
+            "runtime_green_report_readiness_card_summary": bundle
+                .pointer("/handoff_artifacts/runtime_green_report_readiness_card/current_summary")
+                .cloned(),
+            "read_only": true,
+            "dispatches_input": false,
         }))
     }
 
@@ -3376,7 +3430,8 @@ impl WebPreviewView {
             },
             "handoff_artifacts": {
                 "status_packet": {
-                    "schema": "zed.web_preview.agent_browser_status_packet.v1",
+                    "schema": AGENT_BROWSER_STATUS_PACKET_SCHEMA,
+                    "summary_schema": AGENT_BROWSER_STATUS_PACKET_SUMMARY_SCHEMA,
                     "copy_action": "copy_agent_browser_status_packet",
                     "send_action": "send_agent_browser_status_packet_to_agent",
                     "latest_summary": self.latest_agent_browser_status_packet_summary()
@@ -9744,7 +9799,7 @@ impl WebPreviewView {
         };
 
         serde_json::json!({
-            "schema": "zed.web_preview.agent_browser_status_packet.v1",
+            "schema": AGENT_BROWSER_STATUS_PACKET_SCHEMA,
             "session": self.browser_session_snapshot(window),
             "policy": self.agent_browser_policy_snapshot(),
             "packet": {
@@ -9832,7 +9887,9 @@ impl WebPreviewView {
                     "runtime_green_claim_readiness": runtime_green_claim_readiness.clone(),
                     "runtime_green_report_gate": runtime_green_report_gate.clone(),
                     "runtime_green_report_badge": runtime_green_report_badge.clone(),
-                    "runtime_green_final_proof_guide": runtime_green_final_proof_guide.clone(),
+                    "runtime_green_final_proof_guide": Self::agent_plugin_runtime_green_final_proof_guide_summary(
+                        &runtime_green_final_proof_guide
+                    ),
                     "runtime_green_final_report_packet": Self::agent_plugin_runtime_green_final_report_packet_summary(
                         &runtime_green_final_report_packet
                     ),
@@ -14530,8 +14587,18 @@ impl WebPreviewView {
                     "read_only": true,
                     "purpose": "Share compact click, type, key, scroll, history, and cache-reset receipt readiness with the first missing action before the final Windows proof."
                 },
+                "status_packet": {
+                    "schema": AGENT_BROWSER_STATUS_PACKET_SCHEMA,
+                    "summary_schema": AGENT_BROWSER_STATUS_PACKET_SUMMARY_SCHEMA,
+                    "copy_action": "copy_agent_browser_status_packet",
+                    "send_action": "send_agent_browser_status_packet_to_agent",
+                    "latest_summary": self.latest_agent_browser_status_packet_summary(),
+                    "read_only": true,
+                    "purpose": "Share the compact current WebPreview status packet with runtime-green proof summaries, managed Chrome, and PC-use status."
+                },
                 "final_validation_bundle": {
                     "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
+                    "summary_schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SUMMARY_SCHEMA,
                     "result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
                     "result_status_values": ["not_run", "pass", "fail", "blocked", "skipped"],
                     "runtime_green_requires": [

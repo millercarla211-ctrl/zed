@@ -1,3 +1,17 @@
+[2026-05-17] - Agent Plugin Runtime WebPreview Status Bundle Summaries
+
+ADDED:
+- WebPreview status-packet and final-validation-bundle summaries now carry dedicated summary schemas plus `source_schema`.
+- WebPreview status summaries now include compact final-proof guide, final-report packet, and report-readiness card summaries with their advertised summary schemas.
+- WebPreview action manifests now advertise the status-packet handoff with a summary schema beside the final-validation-bundle handoff.
+
+CHANGED:
+- Final-validation-bundle summaries now read final-proof, final-report, and report-readiness next-action/report fields from compact `current_summary` payloads before falling back to full payloads, avoiding null panel fields when the compact summary already has the data.
+- Status packets now place the compact final-proof guide summary in `latest` instead of duplicating the full guide payload.
+
+NOTES:
+- This is read-only summary/handoff metadata only. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime WebPreview Audit Summary Schema
 
 ADDED:
