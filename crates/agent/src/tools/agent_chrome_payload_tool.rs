@@ -131,6 +131,7 @@ pub enum AgentChromePayloadAction {
     Scroll,
     Screenshot,
     InspectElement,
+    DomSnapshot,
     WaitForSelector,
     SetViewport,
 }
@@ -161,6 +162,9 @@ impl AgentTool for AgentChromePayloadTool {
             Ok(AgentChromePayloadAction::Screenshot) => "Compose Chrome screenshot payload".into(),
             Ok(AgentChromePayloadAction::InspectElement) => {
                 "Compose Chrome inspect element payload".into()
+            }
+            Ok(AgentChromePayloadAction::DomSnapshot) => {
+                "Compose Chrome DOM snapshot payload".into()
             }
             Ok(AgentChromePayloadAction::WaitForSelector) => "Compose Chrome wait payload".into(),
             Ok(AgentChromePayloadAction::SetViewport) => "Compose Chrome viewport payload".into(),
@@ -264,6 +268,7 @@ impl AgentTool for AgentChromePayloadQueueTool {
             Ok(AgentChromePayloadAction::InspectElement) => {
                 "Queue Chrome inspect element payload".into()
             }
+            Ok(AgentChromePayloadAction::DomSnapshot) => "Queue Chrome DOM snapshot payload".into(),
             Ok(AgentChromePayloadAction::WaitForSelector) => "Queue Chrome wait payload".into(),
             Ok(AgentChromePayloadAction::SetViewport) => "Queue Chrome viewport payload".into(),
             Err(_) => "Queue Chrome action payload".into(),
@@ -481,6 +486,9 @@ fn compose_managed_chrome_payload(input: &AgentChromePayloadToolInput) -> Value 
         AgentChromePayloadAction::Scroll => scroll_payload(input, &mut blockers, &mut warnings),
         AgentChromePayloadAction::Screenshot => screenshot_payload(input, &mut warnings),
         AgentChromePayloadAction::InspectElement => inspect_element_payload(input, &mut blockers),
+        AgentChromePayloadAction::DomSnapshot => {
+            dom_snapshot_payload(input, &mut blockers, &mut warnings)
+        }
         AgentChromePayloadAction::WaitForSelector => {
             wait_for_selector_payload(input, &mut blockers)
         }
@@ -724,6 +732,36 @@ fn inspect_element_payload(
     })
 }
 
+fn dom_snapshot_payload(
+    input: &AgentChromePayloadToolInput,
+    blockers: &mut Vec<Value>,
+    warnings: &mut Vec<Value>,
+) -> Value {
+    if input.selector.as_deref().is_some_and(str::is_empty) {
+        warnings.push(warning(
+            "empty_selector_ignored",
+            "An empty DOM snapshot selector will be ignored and the runner should inspect the document root.",
+        ));
+    }
+    if input.timeout_ms == 0 || input.timeout_ms > MAX_WAIT_TIMEOUT_MS {
+        blockers.push(blocker(
+            "unsupported_timeout",
+            "DOM snapshot timeouts must be between 1 and 30000 milliseconds.",
+            "Use a bounded timeout_ms value, usually 5000 to 10000.",
+        ));
+    }
+
+    serde_json::json!({
+        "action": "dom_snapshot",
+        "selector": input
+            .selector
+            .as_ref()
+            .filter(|selector| !selector.is_empty())
+            .cloned(),
+        "timeout_ms": input.timeout_ms,
+    })
+}
+
 fn wait_for_selector_payload(
     input: &AgentChromePayloadToolInput,
     blockers: &mut Vec<Value>,
@@ -817,6 +855,7 @@ fn action_name(action: AgentChromePayloadAction) -> &'static str {
         AgentChromePayloadAction::Scroll => "scroll",
         AgentChromePayloadAction::Screenshot => "screenshot",
         AgentChromePayloadAction::InspectElement => "inspect_element",
+        AgentChromePayloadAction::DomSnapshot => "dom_snapshot",
         AgentChromePayloadAction::WaitForSelector => "wait_for_selector",
         AgentChromePayloadAction::SetViewport => "set_viewport",
     }

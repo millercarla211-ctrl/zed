@@ -618,6 +618,7 @@ fn is_supported_action(action: &str) -> bool {
             | "scroll"
             | "screenshot"
             | "inspect_element"
+            | "dom_snapshot"
             | "wait_for_selector"
             | "set_viewport"
     )

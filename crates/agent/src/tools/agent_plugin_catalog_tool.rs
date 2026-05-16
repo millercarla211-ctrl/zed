@@ -460,7 +460,7 @@ fn agent_plugin_catalog(
                         "include_payload_packet": false
                     },
                     "requires_permission_for_execution": true,
-                    "safe_actions_only": ["open_url", "screenshot", "inspect_element", "set_viewport", "wait_for_selector"],
+                    "safe_actions_only": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "set_viewport", "wait_for_selector"],
                     "input_actions_blocked": ["click", "type_text", "press_key", "scroll"]
                 },
                 "playwright_execution_inspect_tool": {
@@ -1037,7 +1037,7 @@ fn chrome_plugin_manifest(
                 "managed workspace or Zed-data roots only",
                 "asset provisioning receipts prove managed assets were prepared before Chrome execution",
                 "real Chrome, Edge, and Firefox profiles stay untouched",
-                "adapter execution remains limited to open_url, screenshot, inspect_element, set_viewport, and wait_for_selector",
+                "adapter execution remains limited to open_url, screenshot, inspect_element, dom_snapshot, set_viewport, and wait_for_selector",
                 "click, type, key, and scroll stay blocked in the managed adapter",
                 "runner and execution receipts stay inspectable from Agent and WebPreview catalogs"
             ],
@@ -1114,6 +1114,7 @@ fn chrome_plugin_manifest(
                 "scroll",
                 "screenshot",
                 "inspect_element",
+                "dom_snapshot",
                 "wait_for_selector",
                 "set_viewport"
             ],
@@ -1151,6 +1152,17 @@ fn chrome_plugin_manifest(
                     }
                 },
                 {
+                    "action": "dom_snapshot",
+                    "payload": {
+                        "schema": AGENT_CHROME_EXECUTOR_PAYLOAD_SCHEMA,
+                        "payload": {
+                            "action": "dom_snapshot",
+                            "selector": "main",
+                            "timeout_ms": 5000
+                        }
+                    }
+                },
+                {
                     "action": "set_viewport",
                     "payload": {
                         "schema": AGENT_CHROME_EXECUTOR_PAYLOAD_SCHEMA,
@@ -1168,7 +1180,7 @@ fn chrome_plugin_manifest(
                 "Queued payloads are written only to managed workspace or Zed-data plugin roots after authorization.",
                 "The managed asset provisioner can write an asset receipt or copy a local unpacked DX Chrome extension into managed roots without downloads, Node, or Chrome launch.",
                 "The Playwright adapter preparation tool writes only versioned adapter files under managed roots and does not run Node.",
-                "The Playwright invocation tool can run only open_url, screenshot, inspect_element, set_viewport, and wait_for_selector after authorization and a ready runner receipt.",
+                "The Playwright invocation tool can run only open_url, screenshot, inspect_element, dom_snapshot, set_viewport, and wait_for_selector after authorization and a ready runner receipt.",
                 "The Playwright execution inspection tool is read-only and summarizes managed request and receipt files.",
                 "WebPreview can copy or send the latest managed execution status to the Agent Panel without launching Chrome.",
                 "Future execution must use managed profiles, explicit permission, fresh preflight, and receipts.",
@@ -1182,7 +1194,7 @@ fn chrome_plugin_manifest(
             capability("chrome.action.runner_gate", "available_requires_authorization", "Use request_managed_chrome_payload_run to write a permissioned runner receipt that blocks until queue, bootstrap, managed-profile, and future adapter requirements are satisfied."),
             capability("chrome.runtime.asset_provisioner", "available_requires_authorization", "Use prepare_agent_plugin_managed_assets to write an asset receipt or copy a local unpacked DX Chrome extension into managed roots without downloads, Node, or Chrome launch."),
             capability("chrome.runtime.playwright_adapter_prepare", "available_requires_authorization", "Use prepare_managed_chrome_playwright_adapter to write a versioned managed Playwright adapter artifact without installing packages, launching Chrome, or dispatching input."),
-            capability("chrome.runtime.playwright_adapter_invoke", "available_requires_authorization", "Use invoke_managed_chrome_playwright_adapter to run the prepared adapter for open_url, screenshot, inspect_element, set_viewport, or wait_for_selector after a ready runner receipt."),
+            capability("chrome.runtime.playwright_adapter_invoke", "available_requires_authorization", "Use invoke_managed_chrome_playwright_adapter to run the prepared adapter for open_url, screenshot, inspect_element, dom_snapshot, set_viewport, or wait_for_selector after a ready runner receipt."),
             capability("chrome.runtime.playwright_execution_inspect", "available", "Use inspect_managed_chrome_playwright_executions to read recent managed run requests and execution receipts without launching Chrome."),
             capability("chrome.runtime.playwright_execution_status_handoff", "available", "Use WebPreview Copy/Send Managed Chrome Execution Status to hand the latest managed request or receipt summary to the Agent Panel."),
             capability("chrome.action.payload_queue_schema", "available", "Read the managed Chrome payload packet, queue item, queue result, and latest-file schemas for future runner execution."),
@@ -1194,7 +1206,7 @@ fn chrome_plugin_manifest(
             capability("chrome.page.scroll", "requires_permission", "Scroll pages and containers in managed Chrome."),
             capability("chrome.page.screenshot", "requires_bootstrap", "Capture full-page or viewport screenshots."),
             capability("chrome.page.inspect_element", "requires_bootstrap", "Read selector-scoped tag, attribute, bounds, visibility, and computed-style summaries from managed Chrome receipts."),
-            capability("chrome.page.dom_snapshot", "requires_bootstrap", "Read DOM/accessibility snapshots."),
+            capability("chrome.page.dom_snapshot", "requires_bootstrap", "Read bounded document or selector-scoped DOM snapshots from managed Chrome receipts."),
             capability("chrome.runtime.console", "requires_bootstrap", "Read console, page errors, and network events."),
             capability("chrome.extension.bridge", "requires_bootstrap", "Use the DX Chrome extension bridge for pages where DevTools-only control is insufficient.")
         ],

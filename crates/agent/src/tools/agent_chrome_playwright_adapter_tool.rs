@@ -237,7 +237,7 @@ impl ManagedChromePlaywrightAdapterPlan {
                 "package_json": path_string(&self.package_json_path),
                 "manifest": path_string(&self.manifest_path),
                 "readme": path_string(&self.readme_path),
-                "supported_actions": ["open_url", "screenshot", "inspect_element", "set_viewport", "wait_for_selector"],
+                "supported_actions": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "set_viewport", "wait_for_selector"],
                 "input_actions_blocked_by_default": ["click", "type_text", "press_key", "scroll"],
             },
             "roots": {
@@ -347,7 +347,7 @@ struct AdapterFile {
 fn adapter_package_json() -> Result<String, String> {
     serde_json::to_string_pretty(&serde_json::json!({
         "name": "@zed/managed-chrome-runner",
-        "version": "0.1.1",
+        "version": "0.1.2",
         "private": true,
         "type": "module",
         "description": "Managed Playwright adapter for DX/Zed Agent Chrome plugin receipts.",
@@ -367,7 +367,7 @@ fn adapter_manifest_json(plan: &ManagedChromePlaywrightAdapterPlan) -> Result<St
         "generated_at_ms": current_epoch_millis(),
         "adapter": {
             "name": "DX/Zed Managed Chrome Playwright Adapter",
-            "version": "0.1.1",
+            "version": "0.1.2",
             "root": path_string(&plan.adapter_root),
             "runner_script": path_string(&plan.runner_script_path),
             "execution_receipt_schema": AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA,
@@ -378,7 +378,7 @@ fn adapter_manifest_json(plan: &ManagedChromePlaywrightAdapterPlan) -> Result<St
             "dx_extension_root": path_string(&plan.dx_extension_root),
             "managed_chrome_profile_root": path_string(&plan.managed_profile_root)
         },
-        "supported_actions": ["open_url", "screenshot", "inspect_element", "set_viewport", "wait_for_selector"],
+        "supported_actions": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "set_viewport", "wait_for_selector"],
         "input_actions_blocked_by_default": ["click", "type_text", "press_key", "scroll"],
         "safety": {
             "managed_profile_only": true,
@@ -423,6 +423,7 @@ Supported execution actions:
 - open_url
 - screenshot
 - inspect_element
+- dom_snapshot
 - set_viewport
 - wait_for_selector
 
@@ -438,7 +439,7 @@ import path from "node:path";
 
 const RECEIPT_SCHEMA = "zed.agent_plugins.managed_chrome_playwright_execution_receipt.v1";
 const INPUT_ACTIONS = new Set(["click", "type_text", "press_key", "scroll"]);
-const SUPPORTED_ACTIONS = new Set(["open_url", "screenshot", "inspect_element", "set_viewport", "wait_for_selector"]);
+const SUPPORTED_ACTIONS = new Set(["open_url", "screenshot", "inspect_element", "dom_snapshot", "set_viewport", "wait_for_selector"]);
 
 function parseArgs(argv) {
   const args = {};
@@ -649,6 +650,140 @@ async function main() {
         selector: payload.selector,
         element
       };
+      receipt.safety.page_scripts_executed = true;
+    } else if (payload.action === "dom_snapshot") {
+      if (payload.selector) {
+        await page.locator(payload.selector).first().waitFor({
+          state: "attached",
+          timeout: Number(payload.timeout_ms ?? 5000)
+        });
+      }
+      const snapshot = await page.evaluate((selector) => {
+        function compactText(value, max = 300) {
+          return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+        }
+
+        function attr(node, name, max = 300) {
+          const value = node.getAttribute?.(name);
+          return value === null || value === undefined ? null : compactText(value, max);
+        }
+
+        function bounds(node) {
+          const rect = node.getBoundingClientRect?.();
+          if (!rect) {
+            return null;
+          }
+          return {
+            x: Math.round(rect.x),
+            y: Math.round(rect.y),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height)
+          };
+        }
+
+        function visible(node) {
+          const rect = node.getBoundingClientRect?.();
+          if (!rect) {
+            return false;
+          }
+          const style = window.getComputedStyle(node);
+          return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+        }
+
+        function nodeSummary(node) {
+          return {
+            tag_name: node.tagName?.toLowerCase?.() ?? null,
+            id: attr(node, "id", 120),
+            class: attr(node, "class", 200),
+            role: attr(node, "role", 120),
+            aria_label: attr(node, "aria-label", 200),
+            title: attr(node, "title", 200),
+            text_preview: compactText(node.innerText || node.textContent || "", 300),
+            bounds: bounds(node),
+            visible: visible(node)
+          };
+        }
+
+        function limited(query, max, map) {
+          return Array.from(root.querySelectorAll(query)).slice(0, max).map(map);
+        }
+
+        const root = selector ? document.querySelector(selector) : document.documentElement;
+        if (!root) {
+          throw new Error(`dom_snapshot selector not found: ${selector}`);
+        }
+
+        const rootElementCount = root.matches?.("*") ? 1 : 0;
+        const elementCount = rootElementCount + root.querySelectorAll("*").length;
+        return {
+          selector,
+          scoped: Boolean(selector),
+          url: window.location.href,
+          title: document.title || null,
+          ready_state: document.readyState,
+          viewport: {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            device_scale_factor: window.devicePixelRatio
+          },
+          scroll: {
+            x: Math.round(window.scrollX),
+            y: Math.round(window.scrollY),
+            width: Math.max(document.documentElement.scrollWidth, document.body?.scrollWidth ?? 0),
+            height: Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight ?? 0)
+          },
+          document_element: nodeSummary(root),
+          counts: {
+            elements: elementCount,
+            anchors: root.querySelectorAll("a[href]").length,
+            buttons: root.querySelectorAll("button,[role='button'],input[type='button'],input[type='submit'],input[type='reset']").length,
+            inputs: root.querySelectorAll("input,textarea,select").length,
+            forms: root.querySelectorAll("form").length,
+            images: root.querySelectorAll("img,picture,svg").length,
+            videos: root.querySelectorAll("video").length,
+            audio: root.querySelectorAll("audio").length,
+            headings: root.querySelectorAll("h1,h2,h3,h4,h5,h6,[role='heading']").length,
+            landmarks: root.querySelectorAll("main,nav,aside,header,footer,section[aria-label],[role='main'],[role='navigation'],[role='complementary'],[role='banner'],[role='contentinfo']").length
+          },
+          headings: limited("h1,h2,h3,h4,h5,h6,[role='heading']", 24, (node) => ({
+            ...nodeSummary(node),
+            level: Number(node.getAttribute("aria-level")) || Number(node.tagName?.match(/^H([1-6])$/)?.[1]) || null
+          })),
+          links: limited("a[href]", 24, (node) => ({
+            ...nodeSummary(node),
+            href: attr(node, "href", 500)
+          })),
+          forms: limited("form", 12, (node) => ({
+            ...nodeSummary(node),
+            name: attr(node, "name", 120),
+            method: attr(node, "method", 80),
+            action: attr(node, "action", 500)
+          })),
+          buttons: limited("button,[role='button'],input[type='button'],input[type='submit'],input[type='reset']", 24, (node) => ({
+            ...nodeSummary(node),
+            type: attr(node, "type", 80),
+            name: attr(node, "name", 120),
+            disabled: Boolean(node.disabled)
+          })),
+          inputs: limited("input,textarea,select", 24, (node) => ({
+            tag_name: node.tagName?.toLowerCase?.() ?? null,
+            type: attr(node, "type", 80),
+            name: attr(node, "name", 120),
+            placeholder: attr(node, "placeholder", 200),
+            aria_label: attr(node, "aria-label", 200),
+            required: Boolean(node.required),
+            disabled: Boolean(node.disabled),
+            checked: typeof node.checked === "boolean" ? node.checked : null
+          })),
+          landmarks: limited("main,nav,aside,header,footer,section[aria-label],[role='main'],[role='navigation'],[role='complementary'],[role='banner'],[role='contentinfo']", 16, nodeSummary),
+          meta: Array.from(document.head?.querySelectorAll("meta[name],meta[property]") ?? []).slice(0, 24).map((node) => ({
+            name: attr(node, "name", 120),
+            property: attr(node, "property", 120),
+            content_preview: attr(node, "content", 300)
+          }))
+        };
+      }, payload.selector ?? null);
+      receipt.dom_snapshot = snapshot;
       receipt.safety.page_scripts_executed = true;
     }
 

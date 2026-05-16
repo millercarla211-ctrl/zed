@@ -1,3 +1,16 @@
+[2026-05-17] - Agent Plugin Runtime Managed Chrome DOM Snapshot
+
+ADDED:
+- Managed Chrome payload composition and queue validation now accept a read-only `dom_snapshot` action with optional selector scoping and bounded timeout validation.
+- The generated managed Playwright adapter now supports `dom_snapshot`, writing bounded document or selector-scoped structure, counts, headings, links, forms, controls, landmarks, metadata, viewport, and scroll summaries into the execution receipt.
+
+CHANGED:
+- Managed Chrome runner gates, adapter invocation readiness, execution inspection, runtime-status recipes, and Agent/WebPreview plugin catalogs now advertise `dom_snapshot` as an allowlisted non-input Playwright action.
+- Managed Chrome execution summaries now surface compact DOM snapshot receipt data beside screenshot artifacts and element inspection summaries.
+
+NOTES:
+- This does not enable click, type, key, or scroll in managed Chrome. It still requires managed roots, a ready runner receipt, explicit adapter invocation authorization, managed browser profiles, and final Windows runtime proof before runtime-green reporting.
+
 [2026-05-17] - Agent Plugin Runtime Managed Chrome Inspect Element
 
 ADDED:

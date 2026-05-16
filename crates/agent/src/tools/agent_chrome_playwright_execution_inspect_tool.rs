@@ -389,6 +389,7 @@ fn read_json_summary(path: &Path) -> Value {
         "title": value.get("title").and_then(Value::as_str),
         "screenshot": value.pointer("/artifacts/screenshot").and_then(Value::as_str),
         "inspect_element": inspect_element_receipt_summary(&value),
+        "dom_snapshot": dom_snapshot_receipt_summary(&value),
         "page_scripts_executed": value.pointer("/safety/page_scripts_executed").and_then(Value::as_bool),
         "error": value.get("error").and_then(Value::as_str),
         "value": value.clone(),
@@ -406,11 +407,26 @@ fn inspect_element_receipt_summary(value: &Value) -> Option<Value> {
     }))
 }
 
+fn dom_snapshot_receipt_summary(value: &Value) -> Option<Value> {
+    let snapshot = value.get("dom_snapshot")?;
+    Some(serde_json::json!({
+        "selector": snapshot.get("selector").and_then(Value::as_str),
+        "scoped": snapshot.get("scoped").and_then(Value::as_bool),
+        "ready_state": snapshot.get("ready_state").and_then(Value::as_str),
+        "url": snapshot.get("url").and_then(Value::as_str),
+        "title": snapshot.get("title").and_then(Value::as_str),
+        "counts": snapshot.get("counts").cloned(),
+        "heading_count": snapshot.get("headings").and_then(Value::as_array).map(|items| items.len()),
+        "link_count": snapshot.get("links").and_then(Value::as_array).map(|items| items.len()),
+        "form_count": snapshot.get("forms").and_then(Value::as_array).map(|items| items.len()),
+    }))
+}
+
 fn next_actions(status: &str) -> Vec<&'static str> {
     match status {
         "has_recent_execution_receipts" => vec![
             "Send the latest receipt summary to the Agent Panel or browser status surface.",
-            "If an action failed, inspect the receipt error, screenshot artifact, or element inspection summary before queueing another payload.",
+            "If an action failed, inspect the receipt error, screenshot artifact, DOM snapshot, or element inspection summary before queueing another payload.",
         ],
         "has_requests_without_receipts" => vec![
             "Run invoke_managed_chrome_playwright_adapter after checking runner-gate readiness.",
