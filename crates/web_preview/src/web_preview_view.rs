@@ -102,6 +102,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_readiness_scorecard.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_operator_handoff.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_proof_path.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
 const AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA: &str =
@@ -2840,7 +2842,8 @@ impl WebPreviewView {
                         "include_workflows": true,
                         "include_validation_matrix": true,
                         "include_observability_profiles": true,
-                        "include_observability_digest": true
+                        "include_observability_digest": true,
+                        "include_runtime_green_proof_path": true
                     }
                 }
             },
@@ -4085,6 +4088,7 @@ impl WebPreviewView {
                 "schema": "zed.agent_plugins.runtime_status.v1",
                 "scorecard_schema": AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA,
                 "operator_handoff_schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+                "proof_path_schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
                 "payload": runtime_green_status_payload(root_mode)
             },
             "copy_action": "copy_agent_plugin_runtime_green_handoff",
@@ -4204,6 +4208,7 @@ impl WebPreviewView {
                 "tool_name": "inspect_agent_plugin_runtime_status",
                 "schema": "zed.agent_plugins.runtime_status.v1",
                 "observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+                "proof_path_schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
                 "payload": runtime_green_status_payload(
                     handoff
                         .get("root_mode")
@@ -10705,6 +10710,7 @@ impl WebPreviewView {
                     "runtime_green_blocker_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_BLOCKERS_SCHEMA,
                     "runtime_green_readiness_scorecard_schema": AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA,
                     "runtime_green_operator_handoff_schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+                    "runtime_green_proof_path_schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
                     "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                     "runtime_green_ready_outcomes": {
                         "browser_final_validation_result": "runtime_green_candidate=true",
@@ -10721,9 +10727,10 @@ impl WebPreviewView {
                         "include_workflows": true,
                         "include_validation_matrix": true,
                         "include_observability_profiles": true,
-                        "include_observability_digest": true
+                        "include_observability_digest": true,
+                        "include_runtime_green_proof_path": true
                     },
-                    "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
+                    "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, runtime-green proof path, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
                 },
                 "webpreview_handoffs": {
                     "runtime_observability_digest": {
@@ -16221,7 +16228,8 @@ fn runtime_green_status_payload(root_mode: &str) -> Value {
         "include_workflows": true,
         "include_validation_matrix": true,
         "include_observability_profiles": true,
-        "include_observability_digest": true
+        "include_observability_digest": true,
+        "include_runtime_green_proof_path": true
     })
 }
 
@@ -16421,6 +16429,7 @@ fn managed_asset_operator_recipe(root_mode: &str) -> Value {
                     "include_bootstrap_readiness": true,
                     "include_observability_profiles": true,
                     "include_observability_digest": true,
+                    "include_runtime_green_proof_path": true,
                     "include_latest_handoff": true,
                     "include_next_actions": true
                 },

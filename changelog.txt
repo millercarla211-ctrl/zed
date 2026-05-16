@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Runtime-Green Proof Path
+
+ADDED:
+- Runtime status now emits a schema-versioned runtime-green proof path tying the observability digest, operator handoff, blocker summary, readiness scorecard, and final proof result together.
+- The proof path exposes a compact claim gate, managed proof file locations, Agent read sequence, and WebPreview packet actions for runtime-green verification.
+- Agent and WebPreview catalogs now advertise the proof-path schema and default runtime-status include flag.
+
+NOTES:
+- This is read-only status metadata only; it does not write files, run Node, launch Chrome, dispatch browser or OS input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime WebPreview Observability Digest Handoff
 
 ADDED:

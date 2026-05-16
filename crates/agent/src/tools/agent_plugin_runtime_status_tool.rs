@@ -90,6 +90,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_readiness_scorecard.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_operator_handoff.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_proof_path.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
@@ -130,6 +132,8 @@ pub struct AgentPluginRuntimeStatusToolInput {
     pub include_observability_profiles: bool,
     /// Include the compact runtime observability digest for quick Agent Panel status checks.
     pub include_observability_digest: bool,
+    /// Include the canonical runtime-green proof path tying digest, handoff, and final proof fields together.
+    pub include_runtime_green_proof_path: bool,
 }
 
 impl Default for AgentPluginRuntimeStatusToolInput {
@@ -143,6 +147,7 @@ impl Default for AgentPluginRuntimeStatusToolInput {
             include_validation_matrix: true,
             include_observability_profiles: true,
             include_observability_digest: true,
+            include_runtime_green_proof_path: true,
         }
     }
 }
@@ -398,20 +403,31 @@ fn inspect_runtime_status(
     let runtime_green_blocker_summary = runtime_green_blocker_summary(status, roots);
     let runtime_green_readiness_scorecard =
         runtime_green_readiness_scorecard(status, &runtime_green_blocker_summary);
-    let runtime_observability_digest = input.include_observability_digest.then(|| {
-        runtime_observability_digest(
-            status,
-            roots,
-            &runtime_green_blocker_summary,
-            &runtime_green_readiness_scorecard,
-        )
-    });
+    let runtime_observability_digest_value = runtime_observability_digest(
+        status,
+        roots,
+        &runtime_green_blocker_summary,
+        &runtime_green_readiness_scorecard,
+    );
+    let runtime_observability_digest = input
+        .include_observability_digest
+        .then(|| runtime_observability_digest_value.clone());
     let runtime_green_operator_handoff = runtime_green_operator_handoff(
         runtime_request_root_mode(roots),
         status,
         &runtime_green_blocker_summary,
         &runtime_green_readiness_scorecard,
     );
+    let runtime_green_proof_path = input.include_runtime_green_proof_path.then(|| {
+        runtime_green_proof_path(
+            status,
+            roots,
+            &runtime_green_blocker_summary,
+            &runtime_green_readiness_scorecard,
+            &runtime_observability_digest_value,
+            &runtime_green_operator_handoff,
+        )
+    });
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA,
@@ -441,6 +457,7 @@ fn inspect_runtime_status(
         "runtime_green_readiness_scorecard": runtime_green_readiness_scorecard,
         "runtime_green_operator_handoff": runtime_green_operator_handoff,
         "runtime_observability_digest": runtime_observability_digest,
+        "runtime_green_proof_path": runtime_green_proof_path,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
         "observability_profiles": input
@@ -1001,6 +1018,7 @@ fn managed_asset_operator_recipe(root_mode: &str) -> Value {
                     "include_bootstrap_readiness": true,
                     "include_observability_profiles": true,
                     "include_observability_digest": true,
+                    "include_runtime_green_proof_path": true,
                     "include_next_actions": true
                 },
                 "writes_files": false,
@@ -1078,6 +1096,7 @@ fn managed_asset_operator_recipe(root_mode: &str) -> Value {
                     "include_bootstrap_readiness": true,
                     "include_observability_profiles": true,
                     "include_observability_digest": true,
+                    "include_runtime_green_proof_path": true,
                     "include_latest_handoff": true,
                     "include_next_actions": true
                 },
@@ -2049,6 +2068,181 @@ fn runtime_observability_digest_lane(lane: &Value) -> Value {
     })
 }
 
+fn runtime_green_proof_path(
+    runtime_status: &str,
+    roots: &AgentPluginRuntimeRoots,
+    blocker_summary: &Value,
+    scorecard: &Value,
+    digest: &Value,
+    operator_handoff: &Value,
+) -> Value {
+    let root_mode = runtime_request_root_mode(roots);
+    let runtime_green_candidate = blocker_summary
+        .get("runtime_green_candidate")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let runtime_evidence_blocker_count = blocker_summary
+        .get("runtime_evidence_blocker_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let manual_blocker_count = blocker_summary
+        .get("manual_blocker_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let missing_required_file_count = digest
+        .pointer("/totals/missing_required_file_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let stale_required_file_count = digest
+        .pointer("/totals/stale_required_file_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let ready_lane_count = scorecard
+        .pointer("/totals/ready_lane_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let lane_count = scorecard
+        .pointer("/totals/lane_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let browser_final_validation_candidate = blocker_summary
+        .pointer("/latest_evidence/browser_final_validation_result/summary/runtime_green_candidate")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let status = if runtime_green_candidate {
+        "runtime_green_candidate"
+    } else if runtime_status != "ready_for_read_only_discovery" {
+        "runtime_status_blocked"
+    } else if runtime_evidence_blocker_count > 0 || missing_required_file_count > 0 {
+        "runtime_evidence_required"
+    } else if stale_required_file_count > 0 {
+        "fresh_runtime_evidence_required"
+    } else if !browser_final_validation_candidate || manual_blocker_count > 0 {
+        "manual_final_result_required"
+    } else if lane_count > 0 && ready_lane_count == lane_count {
+        "ready_for_final_runtime_validation"
+    } else {
+        "operator_action_required"
+    };
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
+        "status": status,
+        "runtime_status": runtime_status,
+        "root_mode": root_mode,
+        "runtime_green_candidate": runtime_green_candidate,
+        "current": {
+            "digest_status": digest.get("status").and_then(Value::as_str),
+            "operator_handoff_status": operator_handoff.get("status").and_then(Value::as_str),
+            "scorecard_status": scorecard.get("status").and_then(Value::as_str),
+            "blocker_summary_status": blocker_summary.get("status").and_then(Value::as_str),
+            "current_best_next": operator_handoff
+                .get("current_best_next")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({})),
+            "final_validation_result": blocker_summary
+                .pointer("/latest_evidence/browser_final_validation_result/summary")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({})),
+        },
+        "claim_gate": {
+            "ready": runtime_green_candidate,
+            "ready_lane_count": ready_lane_count,
+            "lane_count": lane_count,
+            "runtime_evidence_blocker_count": runtime_evidence_blocker_count,
+            "manual_blocker_count": manual_blocker_count,
+            "missing_required_file_count": missing_required_file_count,
+            "stale_required_file_count": stale_required_file_count,
+            "browser_final_validation_runtime_green": browser_final_validation_candidate,
+            "requires_final_windows_just_run": true,
+            "claim_only_when": [
+                "runtime_green_candidate == true",
+                "ready_lane_count == lane_count",
+                "runtime_evidence_blocker_count == 0",
+                "manual_blocker_count == 0",
+                "missing_required_file_count == 0",
+                "stale_required_file_count == 0",
+                "browser_final_validation_runtime_green == true"
+            ]
+        },
+        "proof_files": {
+            "browser_final_validation_result": path_string(&roots.browser_final_validation_latest_result),
+            "browser_latest_payload": path_string(&roots.browser_latest_payload),
+            "managed_chrome_latest_payload": path_string(&roots.chrome_latest_payload),
+            "managed_chrome_runner_receipt": path_string(&roots.chrome_latest_runner_receipt),
+            "managed_chrome_execution_dir": path_string(&roots.chrome_execution_dir),
+            "pc_use_latest_payload": path_string(&roots.pc_use_latest_payload),
+            "pc_use_runner_receipt": path_string(&roots.pc_use_latest_receipt),
+        },
+        "agent_read_sequence": [
+            {
+                "step": "inspect_runtime_status",
+                "tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                "payload": runtime_green_status_inspect_payload(root_mode),
+                "reads_fields": [
+                    "runtime_green_proof_path",
+                    "runtime_observability_digest",
+                    "runtime_green_operator_handoff"
+                ],
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
+                "step": "read_digest",
+                "field": "runtime_observability_digest",
+                "purpose": "Summarize lane health, stale/missing proof evidence, and immediate recovery actions.",
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
+                "step": "follow_operator_handoff",
+                "field": "runtime_green_operator_handoff.current_best_next",
+                "purpose": "Choose the next Browser/WebPreview, managed Chrome, PC-use, or final validation action.",
+                "writes_files": "only when a permissioned tool explicitly writes managed receipts",
+                "dispatches_input": false
+            },
+            {
+                "step": "import_final_result_when_available",
+                "webpreview_actions": [
+                    "copy_agent_browser_final_validation_result_template",
+                    "import_agent_browser_final_validation_result_from_clipboard",
+                    "copy_agent_browser_final_validation_result",
+                    "send_agent_browser_final_validation_result_to_agent"
+                ],
+                "purpose": "Record the manual Windows runtime proof before any runtime-green claim.",
+                "managed_proof_write": "only after explicit WebPreview import action",
+                "dispatches_input": false
+            }
+        ],
+        "webpreview_packets": {
+            "runtime_observability_digest": {
+                "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+                "copy_action": "copy_agent_plugin_runtime_observability_digest",
+                "send_action": "send_agent_plugin_runtime_observability_digest_to_agent"
+            },
+            "runtime_green_operator_handoff": {
+                "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+                "copy_action": "copy_agent_plugin_runtime_green_handoff",
+                "send_action": "send_agent_plugin_runtime_green_handoff_to_agent"
+            }
+        },
+        "reads_from": [
+            "runtime_observability_digest",
+            "runtime_green_operator_handoff",
+            "runtime_green_blocker_summary",
+            "runtime_green_readiness_scorecard"
+        ],
+        "safety": {
+            "proof_path_is_read_only": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+            "touches_real_browser_profiles": false
+        }
+    })
+}
+
 fn runtime_green_operator_handoff(
     root_mode: &str,
     runtime_status: &str,
@@ -2302,7 +2496,8 @@ fn runtime_green_status_inspect_payload(root_mode: &str) -> Value {
         "include_workflows": true,
         "include_validation_matrix": true,
         "include_observability_profiles": true,
-        "include_observability_digest": true
+        "include_observability_digest": true,
+        "include_runtime_green_proof_path": true
     })
 }
 
