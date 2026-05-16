@@ -1,3 +1,15 @@
+[2026-05-16] - Managed Chrome Catalog Handoff Metadata
+
+ADDED:
+- Added managed Chrome execution status copy/send action names, status schema, and execution receipt roots to both Agent and WebPreview plugin catalogs.
+- Added the `chrome.runtime.playwright_execution_status_handoff` capability so agents can discover the latest managed request/receipt handoff path without guessing WebPreview UI actions.
+
+CHANGED:
+- Managed Chrome catalog rules now explain that WebPreview can hand execution status to the Agent Panel without launching Chrome, running Node, dispatching input, or touching real browser profiles.
+
+NOTES:
+- This is catalog metadata only; it does not execute Chrome or modify managed execution files.
+
 [2026-05-16] - Managed Chrome WebPreview Receipt Surface
 
 ADDED:

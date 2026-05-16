@@ -489,6 +489,9 @@ fn chrome_plugin_manifest(
             "playwright_adapter_tool_name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
             "playwright_invoke_tool_name": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
             "playwright_execution_inspect_tool_name": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
+            "webpreview_execution_status_copy_action": "copy_managed_chrome_execution_status",
+            "webpreview_execution_status_agent_action": "send_managed_chrome_execution_status_to_agent",
+            "webpreview_execution_status_schema": "zed.web_preview.managed_chrome_execution_status.v1",
             "playwright_run_request_schema": AGENT_CHROME_PLAYWRIGHT_RUN_REQUEST_SCHEMA,
             "playwright_invocation_result_schema": AGENT_CHROME_PLAYWRIGHT_INVOCATION_RESULT_SCHEMA,
             "playwright_adapter_manifest_schema": AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA,
@@ -522,6 +525,18 @@ fn chrome_plugin_manifest(
                 "zed_data": default_plugin_root
                     .join("playwright")
                     .join(AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME)
+                    .display()
+                    .to_string()
+            },
+            "managed_execution_roots": {
+                "workspace": workspace_tools_root.as_ref().map(|root| {
+                    root.join("agent-plugins")
+                        .join("chrome-executions")
+                        .display()
+                        .to_string()
+                }),
+                "zed_data": default_plugin_root
+                    .join("chrome-executions")
                     .display()
                     .to_string()
             },
@@ -576,6 +591,7 @@ fn chrome_plugin_manifest(
                 "The Playwright adapter preparation tool writes only versioned adapter files under managed roots and does not run Node.",
                 "The Playwright invocation tool can run only open_url, screenshot, set_viewport, and wait_for_selector after authorization and a ready runner receipt.",
                 "The Playwright execution inspection tool is read-only and summarizes managed request and receipt files.",
+                "WebPreview can copy or send the latest managed execution status to the Agent Panel without launching Chrome.",
                 "Future execution must use managed profiles, explicit permission, fresh preflight, and receipts.",
                 "The runner must never write into the user's real Chrome, Edge, or Firefox profile."
             ]
@@ -588,6 +604,7 @@ fn chrome_plugin_manifest(
             capability("chrome.runtime.playwright_adapter_prepare", "available_requires_authorization", "Use prepare_managed_chrome_playwright_adapter to write a versioned managed Playwright adapter artifact without installing packages, launching Chrome, or dispatching input."),
             capability("chrome.runtime.playwright_adapter_invoke", "available_requires_authorization", "Use invoke_managed_chrome_playwright_adapter to run the prepared adapter for open_url, screenshot, set_viewport, or wait_for_selector after a ready runner receipt."),
             capability("chrome.runtime.playwright_execution_inspect", "available", "Use inspect_managed_chrome_playwright_executions to read recent managed run requests and execution receipts without launching Chrome."),
+            capability("chrome.runtime.playwright_execution_status_handoff", "available", "Use WebPreview Copy/Send Managed Chrome Execution Status to hand the latest managed request or receipt summary to the Agent Panel."),
             capability("chrome.action.payload_queue_schema", "available", "Read the managed Chrome payload packet, queue item, queue result, and latest-file schemas for future runner execution."),
             capability("chrome.session.launch", "requires_bootstrap", "Launch or attach to a managed Chrome profile."),
             capability("chrome.page.open_url", "requires_bootstrap", "Open URLs in managed Chrome tabs."),
