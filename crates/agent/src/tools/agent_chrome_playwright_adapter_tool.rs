@@ -237,7 +237,7 @@ impl ManagedChromePlaywrightAdapterPlan {
                 "package_json": path_string(&self.package_json_path),
                 "manifest": path_string(&self.manifest_path),
                 "readme": path_string(&self.readme_path),
-                "supported_actions": ["open_url", "screenshot", "set_viewport", "wait_for_selector"],
+                "supported_actions": ["open_url", "screenshot", "inspect_element", "set_viewport", "wait_for_selector"],
                 "input_actions_blocked_by_default": ["click", "type_text", "press_key", "scroll"],
             },
             "roots": {
@@ -347,7 +347,7 @@ struct AdapterFile {
 fn adapter_package_json() -> Result<String, String> {
     serde_json::to_string_pretty(&serde_json::json!({
         "name": "@zed/managed-chrome-runner",
-        "version": "0.1.0",
+        "version": "0.1.1",
         "private": true,
         "type": "module",
         "description": "Managed Playwright adapter for DX/Zed Agent Chrome plugin receipts.",
@@ -367,7 +367,7 @@ fn adapter_manifest_json(plan: &ManagedChromePlaywrightAdapterPlan) -> Result<St
         "generated_at_ms": current_epoch_millis(),
         "adapter": {
             "name": "DX/Zed Managed Chrome Playwright Adapter",
-            "version": "0.1.0",
+            "version": "0.1.1",
             "root": path_string(&plan.adapter_root),
             "runner_script": path_string(&plan.runner_script_path),
             "execution_receipt_schema": AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA,
@@ -378,7 +378,7 @@ fn adapter_manifest_json(plan: &ManagedChromePlaywrightAdapterPlan) -> Result<St
             "dx_extension_root": path_string(&plan.dx_extension_root),
             "managed_chrome_profile_root": path_string(&plan.managed_profile_root)
         },
-        "supported_actions": ["open_url", "screenshot", "set_viewport", "wait_for_selector"],
+        "supported_actions": ["open_url", "screenshot", "inspect_element", "set_viewport", "wait_for_selector"],
         "input_actions_blocked_by_default": ["click", "type_text", "press_key", "scroll"],
         "safety": {
             "managed_profile_only": true,
@@ -422,6 +422,7 @@ Supported execution actions:
 
 - open_url
 - screenshot
+- inspect_element
 - set_viewport
 - wait_for_selector
 
@@ -437,7 +438,7 @@ import path from "node:path";
 
 const RECEIPT_SCHEMA = "zed.agent_plugins.managed_chrome_playwright_execution_receipt.v1";
 const INPUT_ACTIONS = new Set(["click", "type_text", "press_key", "scroll"]);
-const SUPPORTED_ACTIONS = new Set(["open_url", "screenshot", "set_viewport", "wait_for_selector"]);
+const SUPPORTED_ACTIONS = new Set(["open_url", "screenshot", "inspect_element", "set_viewport", "wait_for_selector"]);
 
 function parseArgs(argv) {
   const args = {};
@@ -600,6 +601,55 @@ async function main() {
         fullPage: Boolean(payload.full_page)
       });
       receipt.artifacts.screenshot = outputPath;
+    } else if (payload.action === "inspect_element") {
+      if (!payload.selector) {
+        throw new Error("inspect_element requires payload.selector");
+      }
+      const locator = page.locator(payload.selector).first();
+      await locator.waitFor({
+        state: "attached",
+        timeout: Number(payload.timeout_ms ?? 5000)
+      });
+      const element = await locator.evaluate((node) => {
+        const rect = node.getBoundingClientRect();
+        const style = window.getComputedStyle(node);
+        const attributes = {};
+        for (const name of ["id", "class", "role", "aria-label", "name", "type", "href", "src", "alt", "title", "placeholder"]) {
+          const value = node.getAttribute(name);
+          if (value !== null) {
+            attributes[name] = value.slice(0, 500);
+          }
+        }
+        const rawText = (node.innerText || node.textContent || "").replace(/\s+/g, " ").trim();
+        return {
+          tag_name: node.tagName.toLowerCase(),
+          attributes,
+          text_preview: rawText.slice(0, 1000),
+          text_truncated: rawText.length > 1000,
+          bounding_client_rect: {
+            x: Math.round(rect.x),
+            y: Math.round(rect.y),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height)
+          },
+          visible: rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none",
+          computed_style: {
+            display: style.display,
+            visibility: style.visibility,
+            position: style.position,
+            color: style.color,
+            background_color: style.backgroundColor,
+            font_size: style.fontSize,
+            font_family: style.fontFamily,
+            z_index: style.zIndex
+          }
+        };
+      });
+      receipt.inspection = {
+        selector: payload.selector,
+        element
+      };
+      receipt.safety.page_scripts_executed = true;
     }
 
     receipt.url = page.url();

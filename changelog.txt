@@ -1,3 +1,16 @@
+[2026-05-17] - Agent Plugin Runtime Managed Chrome Inspect Element
+
+ADDED:
+- Managed Chrome payload composition and queue validation now accept a read-only `inspect_element` action with selector and bounded timeout validation.
+- The generated managed Playwright adapter now supports `inspect_element`, writing selector-scoped tag, attribute, text-preview, bounds, visibility, and computed-style data into the execution receipt.
+
+CHANGED:
+- Managed Chrome runner gates, adapter invocation readiness, execution inspection, runtime-status recipes, and Agent/WebPreview plugin catalogs now advertise `inspect_element` as an allowlisted non-input Playwright action.
+- Managed Chrome execution summaries now surface compact inspect-element receipt data beside screenshot artifacts and error summaries.
+
+NOTES:
+- This does not enable click, type, key, or scroll in managed Chrome. It still requires managed roots, a ready runner receipt, explicit adapter invocation authorization, and managed browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Status Audit Summary
 
 ADDED:

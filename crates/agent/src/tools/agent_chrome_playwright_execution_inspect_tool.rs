@@ -388,16 +388,29 @@ fn read_json_summary(path: &Path) -> Value {
         "url": value.get("url").and_then(Value::as_str).or_else(|| value.pointer("/payload_packet/payload/url").and_then(Value::as_str)),
         "title": value.get("title").and_then(Value::as_str),
         "screenshot": value.pointer("/artifacts/screenshot").and_then(Value::as_str),
+        "inspect_element": inspect_element_receipt_summary(&value),
+        "page_scripts_executed": value.pointer("/safety/page_scripts_executed").and_then(Value::as_bool),
         "error": value.get("error").and_then(Value::as_str),
         "value": value.clone(),
     })
+}
+
+fn inspect_element_receipt_summary(value: &Value) -> Option<Value> {
+    let inspection = value.get("inspection")?;
+    Some(serde_json::json!({
+        "selector": inspection.get("selector").and_then(Value::as_str),
+        "tag_name": inspection.pointer("/element/tag_name").and_then(Value::as_str),
+        "visible": inspection.pointer("/element/visible").and_then(Value::as_bool),
+        "text_truncated": inspection.pointer("/element/text_truncated").and_then(Value::as_bool),
+        "bounds": inspection.pointer("/element/bounding_client_rect").cloned(),
+    }))
 }
 
 fn next_actions(status: &str) -> Vec<&'static str> {
     match status {
         "has_recent_execution_receipts" => vec![
             "Send the latest receipt summary to the Agent Panel or browser status surface.",
-            "If an action failed, inspect the receipt error before queueing another payload.",
+            "If an action failed, inspect the receipt error, screenshot artifact, or element inspection summary before queueing another payload.",
         ],
         "has_requests_without_receipts" => vec![
             "Run invoke_managed_chrome_playwright_adapter after checking runner-gate readiness.",

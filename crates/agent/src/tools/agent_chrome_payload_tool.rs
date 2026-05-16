@@ -130,6 +130,7 @@ pub enum AgentChromePayloadAction {
     PressKey,
     Scroll,
     Screenshot,
+    InspectElement,
     WaitForSelector,
     SetViewport,
 }
@@ -158,6 +159,9 @@ impl AgentTool for AgentChromePayloadTool {
             Ok(AgentChromePayloadAction::PressKey) => "Compose Chrome key payload".into(),
             Ok(AgentChromePayloadAction::Scroll) => "Compose Chrome scroll payload".into(),
             Ok(AgentChromePayloadAction::Screenshot) => "Compose Chrome screenshot payload".into(),
+            Ok(AgentChromePayloadAction::InspectElement) => {
+                "Compose Chrome inspect element payload".into()
+            }
             Ok(AgentChromePayloadAction::WaitForSelector) => "Compose Chrome wait payload".into(),
             Ok(AgentChromePayloadAction::SetViewport) => "Compose Chrome viewport payload".into(),
             Err(_) => "Compose Chrome action payload".into(),
@@ -257,6 +261,9 @@ impl AgentTool for AgentChromePayloadQueueTool {
             Ok(AgentChromePayloadAction::PressKey) => "Queue Chrome key payload".into(),
             Ok(AgentChromePayloadAction::Scroll) => "Queue Chrome scroll payload".into(),
             Ok(AgentChromePayloadAction::Screenshot) => "Queue Chrome screenshot payload".into(),
+            Ok(AgentChromePayloadAction::InspectElement) => {
+                "Queue Chrome inspect element payload".into()
+            }
             Ok(AgentChromePayloadAction::WaitForSelector) => "Queue Chrome wait payload".into(),
             Ok(AgentChromePayloadAction::SetViewport) => "Queue Chrome viewport payload".into(),
             Err(_) => "Queue Chrome action payload".into(),
@@ -473,6 +480,7 @@ fn compose_managed_chrome_payload(input: &AgentChromePayloadToolInput) -> Value 
         AgentChromePayloadAction::PressKey => press_key_payload(input, &mut blockers),
         AgentChromePayloadAction::Scroll => scroll_payload(input, &mut blockers, &mut warnings),
         AgentChromePayloadAction::Screenshot => screenshot_payload(input, &mut warnings),
+        AgentChromePayloadAction::InspectElement => inspect_element_payload(input, &mut blockers),
         AgentChromePayloadAction::WaitForSelector => {
             wait_for_selector_payload(input, &mut blockers)
         }
@@ -512,7 +520,7 @@ fn compose_managed_chrome_payload(input: &AgentChromePayloadToolInput) -> Value 
                 "prepare_agent_plugin_runtime has verified or created managed roots",
                 "Chrome/Playwright runner uses only managed browser profiles",
                 "user has explicitly authorized the queued action",
-                "fresh selector, URL, viewport, or screenshot preflight exists when applicable",
+                "fresh selector, URL, viewport, screenshot, or inspection preflight exists when applicable",
                 "runner emits a schema-versioned receipt after success, block, or failure"
             ]
         })),
@@ -691,6 +699,31 @@ fn screenshot_payload(input: &AgentChromePayloadToolInput, warnings: &mut Vec<Va
     })
 }
 
+fn inspect_element_payload(
+    input: &AgentChromePayloadToolInput,
+    blockers: &mut Vec<Value>,
+) -> Value {
+    require_selector(
+        input,
+        blockers,
+        "inspect_selector_missing",
+        "Inspect element payloads require a selector for managed Chrome.",
+    );
+    if input.timeout_ms == 0 || input.timeout_ms > MAX_WAIT_TIMEOUT_MS {
+        blockers.push(blocker(
+            "unsupported_timeout",
+            "Inspect element timeouts must be between 1 and 30000 milliseconds.",
+            "Use a bounded timeout_ms value, usually 5000 to 10000.",
+        ));
+    }
+
+    serde_json::json!({
+        "action": "inspect_element",
+        "selector": input.selector.clone(),
+        "timeout_ms": input.timeout_ms,
+    })
+}
+
 fn wait_for_selector_payload(
     input: &AgentChromePayloadToolInput,
     blockers: &mut Vec<Value>,
@@ -783,6 +816,7 @@ fn action_name(action: AgentChromePayloadAction) -> &'static str {
         AgentChromePayloadAction::PressKey => "press_key",
         AgentChromePayloadAction::Scroll => "scroll",
         AgentChromePayloadAction::Screenshot => "screenshot",
+        AgentChromePayloadAction::InspectElement => "inspect_element",
         AgentChromePayloadAction::WaitForSelector => "wait_for_selector",
         AgentChromePayloadAction::SetViewport => "set_viewport",
     }
