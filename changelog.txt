@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime WebPreview Catalog Summary
+
+ADDED:
+- WebPreview plugin catalog summaries now carry `zed.agent_plugins.catalog_summary.v1` and advertise that summary schema from the action manifest.
+- Compact catalog summaries now include runtime-status schema metadata, WebPreview handoff counts, per-plugin status/default/scope/runtime metadata, observability status, proof-handoff counts, proof-summary fields, capability/watch-surface counts, and read-only/input-dispatch safety flags.
+
+CHANGED:
+- Right-side panel consumers can now render Browser, managed Chrome, and PC-use catalog health from the compact latest-summary path without parsing the full plugin catalog first.
+
+NOTES:
+- This is read-only catalog metadata only. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime WebPreview Status Bundle Summaries
 
 ADDED:

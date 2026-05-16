@@ -102,6 +102,7 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX: &str =
     "agent-browser-final-validation-result-";
 const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
     "zed.web_preview.agent_browser_function_surfaces.v1";
+const AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA: &str = "zed.agent_plugins.catalog_summary.v1";
 const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstrap_readiness.v1";
 const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstrap_manifest.v1";
 const AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA: &str =
@@ -3496,9 +3497,11 @@ impl WebPreviewView {
                 },
                 "plugin_catalog": {
                     "schema": "zed.agent_plugins.catalog.v1",
+                    "summary_schema": AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA,
                     "copy_action": "copy_agent_plugin_catalog",
                     "send_action": "send_agent_plugin_catalog_to_agent",
-                    "latest_summary": self.latest_agent_plugin_catalog_summary()
+                    "latest_summary": self.latest_agent_plugin_catalog_summary(),
+                    "read_only": true
                 },
                 "plugin_bootstrap_readiness": {
                     "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
@@ -4194,13 +4197,150 @@ impl WebPreviewView {
 
     fn latest_agent_plugin_catalog_summary(&self) -> Option<Value> {
         let catalog = self.latest_agent_plugin_catalog.as_ref()?;
+        let runtime_status = catalog.pointer("/catalog/runtime_status");
+        let plugin_summaries = catalog
+            .pointer("/catalog/plugins")
+            .and_then(Value::as_array)
+            .map(|plugins| {
+                plugins
+                    .iter()
+                    .map(Self::agent_plugin_catalog_plugin_summary)
+                    .collect::<Vec<_>>()
+            });
+        let webpreview_handoffs = catalog
+            .pointer("/catalog/webpreview_handoffs")
+            .and_then(Value::as_object)
+            .map(|handoffs| {
+                let handoff_ids = handoffs.keys().cloned().collect::<Vec<_>>();
+                let summary_schema_count = handoffs
+                    .values()
+                    .filter(|handoff| handoff.get("summary_schema").is_some())
+                    .count();
+                let current_summary_count = handoffs
+                    .values()
+                    .filter(|handoff| {
+                        handoff.get("latest_summary").is_some()
+                            || handoff.get("current_summary").is_some()
+                    })
+                    .count();
+
+                serde_json::json!({
+                    "count": handoffs.len(),
+                    "ids": handoff_ids,
+                    "summary_schema_count": summary_schema_count,
+                    "current_summary_count": current_summary_count,
+                })
+            });
+
         Some(serde_json::json!({
+            "schema": AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA,
+            "source_schema": catalog.get("schema").and_then(Value::as_str),
             "generated_at_ms": catalog.pointer("/catalog/generated_at_ms").and_then(Value::as_u64),
             "status": catalog.pointer("/catalog/status").and_then(Value::as_str),
+            "tool_name": catalog.pointer("/catalog/tool_name").and_then(Value::as_str),
             "plugin_count": catalog.pointer("/catalog/plugins").and_then(Value::as_array).map(Vec::len),
             "default_enabled_plugins": catalog.pointer("/catalog/default_enabled_plugins").cloned(),
             "available_to": catalog.pointer("/catalog/available_to").cloned(),
+            "runtime_status": {
+                "tool_name": runtime_status.and_then(|status| status.get("tool_name")).and_then(Value::as_str),
+                "schema": runtime_status.and_then(|status| status.get("schema")).and_then(Value::as_str),
+                "runtime_observability_digest_schema": runtime_status
+                    .and_then(|status| status.get("runtime_observability_digest_schema"))
+                    .and_then(Value::as_str),
+                "runtime_observability_matrix_schema": runtime_status
+                    .and_then(|status| status.get("runtime_observability_matrix_schema"))
+                    .and_then(Value::as_str),
+                "runtime_green_final_proof_guide_summary_schema": runtime_status
+                    .and_then(|status| status.get("runtime_green_final_proof_guide_summary_schema"))
+                    .and_then(Value::as_str),
+                "runtime_green_final_report_packet_summary_schema": runtime_status
+                    .and_then(|status| status.get("runtime_green_final_report_packet_summary_schema"))
+                    .and_then(Value::as_str),
+                "runtime_green_report_readiness_card_summary_schema": runtime_status
+                    .and_then(|status| status.get("runtime_green_report_readiness_card_summary_schema"))
+                    .and_then(Value::as_str),
+                "final_proof_audit_summary_schema": runtime_status
+                    .and_then(|status| status.get("final_proof_audit_summary_schema"))
+                    .and_then(Value::as_str),
+                "read_only": runtime_status.and_then(|status| status.get("read_only")).and_then(Value::as_bool),
+            },
+            "webpreview_handoffs": webpreview_handoffs,
+            "plugins": plugin_summaries,
+            "read_only": true,
+            "dispatches_input": false,
         }))
+    }
+
+    fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
+        let observability = plugin.get("observability_profile");
+        let proof_handoff_count = observability
+            .and_then(|profile| profile.get("proof_handoffs"))
+            .and_then(Value::as_object)
+            .map(|handoffs| handoffs.len());
+        let watch_surface_count = observability
+            .and_then(|profile| profile.get("watch_surfaces"))
+            .and_then(Value::as_array)
+            .map(Vec::len);
+
+        serde_json::json!({
+            "id": plugin.get("id").and_then(Value::as_str),
+            "name": plugin.get("name").and_then(Value::as_str),
+            "status": plugin.get("status").and_then(Value::as_str),
+            "default_enabled": plugin.get("default_enabled").and_then(Value::as_bool),
+            "scope": plugin.get("scope").and_then(Value::as_str),
+            "runtime": {
+                "backend": plugin.pointer("/runtime/backend").and_then(Value::as_str),
+                "requires_external_process": plugin
+                    .pointer("/runtime/requires_external_process")
+                    .and_then(Value::as_bool),
+                "native_backend": plugin.pointer("/runtime/native_backend").and_then(Value::as_str),
+            },
+            "observability": {
+                "status": observability
+                    .and_then(|profile| profile.get("status"))
+                    .and_then(Value::as_str),
+                "code_score": observability
+                    .and_then(|profile| profile.get("code_score"))
+                    .and_then(Value::as_u64),
+                "runtime_green_blocker": observability
+                    .and_then(|profile| profile.get("runtime_green_blocker"))
+                    .and_then(Value::as_str),
+                "proof_handoff_count": proof_handoff_count,
+                "watch_surface_count": watch_surface_count,
+                "next_feature_set": observability
+                    .and_then(|profile| profile.get("next_feature_set"))
+                    .and_then(Value::as_str),
+            },
+            "handoffs": {
+                "function_surfaces_schema": plugin
+                    .get("function_surfaces_schema")
+                    .and_then(Value::as_str),
+                "function_surfaces_copy_action": plugin
+                    .pointer("/function_surfaces_handoff/copy_action")
+                    .and_then(Value::as_str),
+                "function_surfaces_send_action": plugin
+                    .pointer("/function_surfaces_handoff/send_action")
+                    .and_then(Value::as_str),
+                "bootstrap_schema": plugin
+                    .get("bootstrap_readiness_schema")
+                    .and_then(Value::as_str),
+                "proof_summary_schema": plugin
+                    .get("proof_summary_schema")
+                    .or_else(|| plugin.pointer("/runtime/pc_use_proof_summary_schema"))
+                    .and_then(Value::as_str),
+                "runtime_status_proof_summary_field": observability
+                    .and_then(|profile| profile.pointer("/proof_handoffs/runtime_status_proof_summary_field"))
+                    .and_then(Value::as_str),
+                "capability_count": plugin
+                    .get("capabilities")
+                    .and_then(Value::as_array)
+                    .map(Vec::len),
+            },
+            "safety": {
+                "read_only_summary": true,
+                "dispatches_input": false,
+            },
+        })
     }
 
     fn managed_chrome_execution_status(&self) -> Value {
