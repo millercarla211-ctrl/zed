@@ -614,6 +614,10 @@ fn agent_plugin_bootstrap_readiness(
         .as_ref()
         .map(|root| root.join("playwright"))
         .unwrap_or_else(|| default_plugin_root.join("playwright"));
+    let playwright_adapter_root = playwright_root.join(AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME);
+    let playwright_adapter_manifest = playwright_adapter_root.join("adapter-manifest.json");
+    let playwright_runner_script =
+        playwright_adapter_root.join(AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME);
     let dx_extension_root = workspace_plugin_root
         .as_ref()
         .map(|root| root.join("dx-chrome-extension"))
@@ -630,6 +634,7 @@ fn agent_plugin_bootstrap_readiness(
         .join("node_modules")
         .join("playwright")
         .join("package.json");
+    let playwright_adapter_manifest_ready = adapter_manifest_ready(&playwright_adapter_manifest);
     let dx_extension_manifest = dx_extension_root.join("manifest.json");
 
     let checks = vec![
@@ -674,6 +679,22 @@ fn agent_plugin_bootstrap_readiness(
             "Install Playwright into the managed tools root before launching external Chrome.",
         ),
         bootstrap_check(
+            "asset.playwright_adapter_manifest",
+            "Managed Playwright adapter manifest",
+            playwright_adapter_manifest_ready,
+            Some(playwright_adapter_manifest.clone()),
+            "provision_required",
+            "Prepare the managed Playwright adapter artifact before launching external Chrome.",
+        ),
+        bootstrap_check(
+            "asset.playwright_adapter_runner",
+            "Managed Playwright adapter runner",
+            playwright_runner_script.is_file(),
+            Some(playwright_runner_script.clone()),
+            "provision_required",
+            "Prepare the managed Playwright runner script before launching external Chrome.",
+        ),
+        bootstrap_check(
             "asset.dx_chrome_extension",
             "DX Chrome extension manifest",
             dx_extension_manifest.is_file(),
@@ -712,6 +733,9 @@ fn agent_plugin_bootstrap_readiness(
             "workspace_plugin_root": workspace_plugin_root.as_ref().map(path_string),
             "workspace_tools_root": workspace_tools_root.as_ref().map(path_string),
             "playwright_root": path_string(&playwright_root),
+            "playwright_adapter_root": path_string(&playwright_adapter_root),
+            "playwright_adapter_manifest": path_string(&playwright_adapter_manifest),
+            "playwright_runner_script": path_string(&playwright_runner_script),
             "dx_chrome_extension_root": path_string(&dx_extension_root),
             "managed_chrome_profile_root": path_string(&managed_profile_root),
         },
@@ -764,6 +788,22 @@ fn readiness_issues(checks: &[Value], state: &str) -> Vec<Value> {
         .collect()
 }
 
+fn adapter_manifest_ready(path: &Path) -> bool {
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(_) => return false,
+    };
+    serde_json::from_slice::<Value>(&bytes)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("schema")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        })
+        .is_some_and(|schema| schema == AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA)
+}
+
 fn bootstrap_next_actions(status: &str) -> Vec<&'static str> {
     match status {
         "blocked_missing_host_dependencies" => vec![
@@ -773,12 +813,13 @@ fn bootstrap_next_actions(status: &str) -> Vec<&'static str> {
         "ready_to_provision" => vec![
             "Run prepare_agent_plugin_runtime with create_managed_roots=true and write_bootstrap_manifest=true to create the managed roots.",
             "Install Playwright into the managed tools root.",
+            "Run prepare_managed_chrome_playwright_adapter with write_adapter_files=true.",
             "Download or unpack the DX Chrome extension into the managed agent plugin root.",
             "Keep managed Chrome profile data in the prepared profile root; never touch real user browser profiles.",
         ],
         _ => vec![
             "Chrome plugin bootstrap assets are present.",
-            "Next slice can add permission-gated launch and screenshot executors.",
+            "Next slice can invoke the prepared Playwright adapter for open_url and screenshot behind the runner receipt.",
         ],
     }
 }

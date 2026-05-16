@@ -1,3 +1,14 @@
+[2026-05-16] - Managed Chrome Adapter Readiness
+
+ADDED:
+- Added managed Playwright adapter manifest and runner-script checks to Chrome queue inspection, runner-gate receipts, and Agent plugin bootstrap readiness.
+
+CHANGED:
+- Managed Chrome readiness now requires `prepare_managed_chrome_playwright_adapter` output before reporting the external Chrome runner path as ready.
+
+NOTES:
+- This remains inspection and receipt-only; it does not run Node, install Playwright, launch Chrome, dispatch browser input, execute page scripts, or touch real browser profiles.
+
 [2026-05-16] - Managed Chrome Playwright Adapter
 
 ADDED:

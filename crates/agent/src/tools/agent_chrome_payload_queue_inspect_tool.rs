@@ -2,6 +2,10 @@ use super::agent_chrome_payload_tool::{
     AGENT_CHROME_EXECUTOR_PAYLOAD_SCHEMA, AGENT_CHROME_PAYLOAD_QUEUE_FILE_NAME,
     AGENT_CHROME_PAYLOAD_QUEUE_ITEM_SCHEMA, AgentChromePayloadQueueRootMode,
 };
+use super::agent_chrome_playwright_adapter_tool::{
+    AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA, AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME,
+    AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME,
+};
 use crate::{AgentTool, ToolCallEventStream, ToolInput};
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
@@ -112,6 +116,9 @@ struct ManagedChromePayloadQueueInspector {
     queue_dir: PathBuf,
     latest_path: PathBuf,
     playwright_root: PathBuf,
+    playwright_adapter_root: PathBuf,
+    playwright_adapter_manifest: PathBuf,
+    playwright_runner_script: PathBuf,
     dx_extension_root: PathBuf,
     managed_profile_root: PathBuf,
 }
@@ -140,6 +147,11 @@ impl ManagedChromePayloadQueueInspector {
         };
         let queue_dir = plugin_root.join("chrome-payloads");
         let latest_path = queue_dir.join(AGENT_CHROME_PAYLOAD_QUEUE_FILE_NAME);
+        let playwright_adapter_root =
+            playwright_root.join(AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME);
+        let playwright_adapter_manifest = playwright_adapter_root.join("adapter-manifest.json");
+        let playwright_runner_script =
+            playwright_adapter_root.join(AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME);
         let dx_extension_root = plugin_root.join("dx-chrome-extension");
 
         Self {
@@ -150,6 +162,9 @@ impl ManagedChromePayloadQueueInspector {
             queue_dir,
             latest_path,
             playwright_root,
+            playwright_adapter_root,
+            playwright_adapter_manifest,
+            playwright_runner_script,
             dx_extension_root,
             managed_profile_root,
         }
@@ -180,6 +195,7 @@ impl ManagedChromePayloadQueueInspector {
             .join("package.json");
         let dx_extension_manifest = self.dx_extension_root.join("manifest.json");
         let runner_receipt_dir = self.plugin_root.join("chrome-receipts");
+        let adapter_manifest_ready = self.adapter_manifest_ready();
 
         let checks = vec![
             readiness_check(
@@ -225,6 +241,22 @@ impl ManagedChromePayloadQueueInspector {
                 Some(playwright_package.clone()),
                 "provision_required",
                 "Install Playwright into the managed tools root before runner execution.",
+            ),
+            readiness_check(
+                "asset.playwright_adapter_manifest",
+                "Managed Playwright adapter manifest",
+                adapter_manifest_ready,
+                Some(self.playwright_adapter_manifest.clone()),
+                "provision_required",
+                "Prepare the managed Playwright adapter artifact before runner execution.",
+            ),
+            readiness_check(
+                "asset.playwright_adapter_runner",
+                "Managed Playwright adapter runner",
+                self.playwright_runner_script.is_file(),
+                Some(self.playwright_runner_script.clone()),
+                "provision_required",
+                "Prepare the managed Playwright runner script before runner execution.",
             ),
             readiness_check(
                 "asset.dx_chrome_extension",
@@ -277,6 +309,9 @@ impl ManagedChromePayloadQueueInspector {
                 "queue_dir": path_string(&self.queue_dir),
                 "latest_queue_path": path_string(&self.latest_path),
                 "playwright_root": path_string(&self.playwright_root),
+                "playwright_adapter_root": path_string(&self.playwright_adapter_root),
+                "playwright_adapter_manifest": path_string(&self.playwright_adapter_manifest),
+                "playwright_runner_script": path_string(&self.playwright_runner_script),
                 "dx_chrome_extension_root": path_string(&self.dx_extension_root),
                 "managed_chrome_profile_root": path_string(&self.managed_profile_root),
                 "runner_receipt_dir": path_string(&runner_receipt_dir),
@@ -399,6 +434,22 @@ impl ManagedChromePayloadQueueInspector {
             AgentChromePayloadQueueRootMode::ZedData => "zed_data",
         }
     }
+
+    fn adapter_manifest_ready(&self) -> bool {
+        let bytes = match fs::read(&self.playwright_adapter_manifest) {
+            Ok(bytes) => bytes,
+            Err(_) => return false,
+        };
+        serde_json::from_slice::<Value>(&bytes)
+            .ok()
+            .and_then(|value| {
+                value
+                    .get("schema")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            })
+            .is_some_and(|schema| schema == AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA)
+    }
 }
 
 struct QueueSummary {
@@ -462,12 +513,13 @@ fn next_actions(status: &str) -> Vec<&'static str> {
         "ready_to_provision" => vec![
             "Run prepare_agent_plugin_runtime with create_managed_roots=true and write_bootstrap_manifest=true.",
             "Install Playwright into the managed tools root.",
+            "Run prepare_managed_chrome_playwright_adapter with write_adapter_files=true.",
             "Download or unpack the DX Chrome extension into the managed agent plugin root.",
             "Keep Chrome profile data in the prepared managed profile root.",
         ],
         _ => vec![
             "The latest queue item and managed runner prerequisites are ready.",
-            "Next slice can add a permission-gated managed Chrome runner that emits receipts.",
+            "Request the managed Chrome runner gate, then invoke the prepared Playwright adapter.",
         ],
     }
 }
