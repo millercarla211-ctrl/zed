@@ -284,6 +284,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_status_packet_to_agent",
     "copy_agent_browser_executor_readiness",
     "send_agent_browser_executor_readiness_to_agent",
+    "copy_agent_browser_executor_validation_progress",
+    "send_agent_browser_executor_validation_progress_to_agent",
     "copy_agent_browser_noop_executor_attempt",
     "send_agent_browser_noop_executor_attempt_to_agent",
     "copy_native_click_trace_attempt",
@@ -620,6 +622,7 @@ pub struct WebPreviewView {
     latest_successful_interaction_receipt: Option<Value>,
     latest_agent_browser_status_packet: Option<Value>,
     latest_agent_browser_executor_readiness: Option<Value>,
+    latest_agent_browser_executor_validation_progress: Option<Value>,
     latest_agent_browser_noop_executor_attempt: Option<Value>,
     latest_agent_browser_reload_executor_attempt: Option<Value>,
     latest_agent_browser_clear_data_executor_attempt: Option<Value>,
@@ -833,6 +836,7 @@ impl WebPreviewView {
             latest_successful_interaction_receipt: None,
             latest_agent_browser_status_packet: None,
             latest_agent_browser_executor_readiness: None,
+            latest_agent_browser_executor_validation_progress: None,
             latest_agent_browser_noop_executor_attempt: None,
             latest_agent_browser_reload_executor_attempt: None,
             latest_agent_browser_clear_data_executor_attempt: None,
@@ -1321,6 +1325,7 @@ impl WebPreviewView {
             "successful_interaction_receipt": self.latest_successful_interaction_receipt_summary(),
             "agent_browser_status_packet": self.latest_agent_browser_status_packet_summary(),
             "agent_browser_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
+            "agent_browser_executor_validation_progress": self.latest_agent_browser_executor_validation_progress_summary(),
             "agent_browser_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
             "agent_browser_reload_executor_attempt": self.latest_agent_browser_reload_executor_attempt_summary(),
             "agent_browser_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
@@ -1392,6 +1397,8 @@ impl WebPreviewView {
                 "send_agent_browser_status_packet_to_agent": true,
                 "copy_agent_browser_executor_readiness": true,
                 "send_agent_browser_executor_readiness_to_agent": true,
+                "copy_agent_browser_executor_validation_progress": true,
+                "send_agent_browser_executor_validation_progress_to_agent": true,
                 "copy_agent_browser_noop_executor_attempt": true,
                 "send_agent_browser_noop_executor_attempt_to_agent": true,
                 "run_permissioned_reload_executor": self.agent_action_permission.interactive_enabled(),
@@ -1676,6 +1683,23 @@ impl WebPreviewView {
             "can_dispatch_now": readiness.pointer("/readiness/can_dispatch_now").and_then(Value::as_bool),
             "blocker_count": readiness.pointer("/readiness/blockers").and_then(Value::as_array).map(Vec::len),
             "next_step": readiness.pointer("/readiness/next_step").and_then(Value::as_str),
+        }))
+    }
+
+    fn latest_agent_browser_executor_validation_progress_summary(&self) -> Option<Value> {
+        let progress = self
+            .latest_agent_browser_executor_validation_progress
+            .as_ref()?;
+        Some(serde_json::json!({
+            "captured_at_ms": progress.pointer("/captured_at_ms").and_then(Value::as_u64),
+            "url": progress.pointer("/session/url").and_then(Value::as_str),
+            "title": progress.pointer("/session/title").and_then(Value::as_str),
+            "status": progress.pointer("/status").and_then(Value::as_str),
+            "ready_item_count": progress.pointer("/ready_item_count").and_then(Value::as_u64),
+            "total_item_count": progress.pointer("/total_item_count").and_then(Value::as_u64),
+            "ready_group_count": progress.pointer("/ready_group_count").and_then(Value::as_u64),
+            "total_group_count": progress.pointer("/total_group_count").and_then(Value::as_u64),
+            "next_step": progress.pointer("/next_step").and_then(Value::as_str),
         }))
     }
 
@@ -2168,6 +2192,11 @@ impl WebPreviewView {
 
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_executor_validation_progress.v1",
+            "session": {
+                "session_id": self.session_id.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "url": self.active_url.as_ref(),
+            },
             "captured_at_ms": Self::current_epoch_millis(),
             "status": status,
             "estimated_code_score": 99,
@@ -2190,6 +2219,52 @@ impl WebPreviewView {
                 "Collect the missing evidence groups from the WebPreview More menu before the final Windows just run pass."
             },
         })
+    }
+
+    fn agent_browser_executor_validation_progress_json(progress: &Value) -> String {
+        serde_json::to_string_pretty(progress).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_executor_validation_progress_agent_blocks(
+        &self,
+        progress: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = progress.pointer("/session/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview executor validation progress:\n\n```json\n{}\n```",
+            Self::agent_browser_executor_validation_progress_json(progress)
+        ))));
+        blocks
+    }
+
+    fn copy_agent_browser_executor_validation_progress(&mut self, cx: &mut Context<Self>) {
+        let progress = self.agent_browser_executor_validation_progress();
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_executor_validation_progress_json(&progress),
+        ));
+        self.latest_agent_browser_executor_validation_progress = Some(progress);
+        self.show_toast("Copied executor validation progress", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_executor_validation_progress_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let progress = self.agent_browser_executor_validation_progress();
+        let blocks = self.agent_browser_executor_validation_progress_agent_blocks(&progress);
+        self.latest_agent_browser_executor_validation_progress = Some(progress);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent executor validation progress to the agent panel", cx);
+        cx.notify();
     }
 
     fn agent_browser_validation_group(
@@ -10923,6 +10998,34 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_agent_browser_executor_readiness_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Executor Validation Progress")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_executor_validation_progress(
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Executor Validation Progress")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_executor_validation_progress_to_agent(
                                                 window, cx,
                                             );
                                         });

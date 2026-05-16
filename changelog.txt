@@ -1,3 +1,12 @@
+[2026-05-16] - Agent Browser Executor Validation Progress Handoff
+
+ADDED:
+- Added direct WebPreview More-menu actions to copy or send executor validation progress to the Agent Panel.
+- Stored the latest executor validation progress summary in WebPreview session snapshots so agents can inspect the focused proof packet without requiring the larger status, readiness, or runbook payloads.
+
+NOTES:
+- This remains read-only handoff metadata; it does not dispatch browser input, run page JavaScript, launch Chrome, take screenshots, or change editor/WebPreview focus paths.
+
 [2026-05-16] - Agent Browser Executor Validation Progress
 
 ADDED:
