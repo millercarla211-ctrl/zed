@@ -1,3 +1,12 @@
+[2026-05-17] - Agent Plugin Runtime Final Proof Audit Summary
+
+CHANGED:
+- WebPreview final-proof audit Agent Panel handoffs now lead with a compact human-readable summary for status, report permission, missing checks, missing evidence, blockers, report-gate state, and next action before the JSON packet.
+- Final validation bundle handoffs now include the same final-proof audit headline between the final-proof guide and final-report packet so agents can see the claim blocker without parsing nested bundle JSON.
+
+NOTES:
+- This is Agent Panel presentation metadata only. It does not run `just run`, launch Chrome, dispatch browser or OS input, write proof files, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Final Proof Audit
 
 ADDED:

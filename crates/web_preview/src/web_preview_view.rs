@@ -2488,9 +2488,75 @@ impl WebPreviewView {
         serde_json::to_string_pretty(audit).unwrap_or_else(|_| "{}".to_string())
     }
 
+    fn agent_browser_final_proof_audit_agent_summary(audit: &Value) -> String {
+        let status = audit
+            .pointer("/audit/status")
+            .or_else(|| audit.get("status"))
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let runtime_green_candidate = audit
+            .pointer("/audit/runtime_green_candidate")
+            .or_else(|| audit.get("runtime_green_candidate"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let may_report_runtime_green = audit
+            .pointer("/audit/may_report_runtime_green")
+            .or_else(|| audit.get("may_report_runtime_green"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let next_action = audit
+            .pointer("/audit/next_action")
+            .or_else(|| audit.get("next_action"))
+            .and_then(Value::as_str)
+            .unwrap_or("copy_agent_browser_final_proof_audit");
+        let missing_required_check_count = audit
+            .pointer("/audit/missing_required_checks")
+            .or_else(|| audit.get("missing_required_checks"))
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or(0);
+        let missing_required_evidence_count = audit
+            .pointer("/audit/missing_required_evidence")
+            .or_else(|| audit.get("missing_required_evidence"))
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or(0);
+        let required_check_blocker_count = audit
+            .pointer("/audit/required_check_blocker_count")
+            .or_else(|| audit.get("required_check_blocker_count"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let has_overall_blocker = audit
+            .pointer("/audit/has_overall_blocker")
+            .or_else(|| audit.get("has_overall_blocker"))
+            .and_then(Value::as_bool)
+            .unwrap_or_else(|| {
+                audit
+                    .pointer("/audit/overall_blocker")
+                    .or_else(|| audit.get("overall_blocker"))
+                    .map(|blocker| !blocker.is_null())
+                    .unwrap_or(false)
+            });
+        let report_gate_status = audit
+            .pointer("/audit/report_gate/status")
+            .or_else(|| audit.get("report_gate_status"))
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let report_gate_blocker = audit
+            .pointer("/audit/report_gate/blocker")
+            .or_else(|| audit.get("report_gate_blocker"))
+            .and_then(Value::as_str)
+            .unwrap_or("none");
+
+        format!(
+            "Web preview final proof audit\nStatus: {status}\nRuntime-green candidate: {runtime_green_candidate}\nMay report runtime-green: {may_report_runtime_green}\nMissing required checks: {missing_required_check_count}\nMissing required evidence: {missing_required_evidence_count}\nRequired check blockers: {required_check_blocker_count}\nOverall blocker present: {has_overall_blocker}\nReport gate: {report_gate_status} (blocker: {report_gate_blocker})\nNext action: {next_action}"
+        )
+    }
+
     fn agent_browser_final_proof_audit_agent_blocks(audit: &Value) -> Vec<acp::ContentBlock> {
         vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
-            "Web preview final proof audit:\n\n```json\n{}\n```",
+            "{}\n\n```json\n{}\n```",
+            Self::agent_browser_final_proof_audit_agent_summary(audit),
             Self::agent_browser_final_proof_audit_json(audit)
         )))]
     }
@@ -3662,6 +3728,14 @@ impl WebPreviewView {
             blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
                 "{}\n\n",
                 Self::agent_plugin_runtime_green_final_proof_guide_agent_summary(final_proof_guide)
+            ))));
+        }
+        if let Some(final_proof_audit) =
+            bundle.pointer("/handoff_artifacts/final_proof_audit/current_summary")
+        {
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+                "{}\n\n",
+                Self::agent_browser_final_proof_audit_agent_summary(final_proof_audit)
             ))));
         }
         if let Some(final_report_packet) =
