@@ -76,6 +76,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_operator_handoff.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_proof_path.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_claim_gate.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
 
@@ -237,6 +239,7 @@ fn agent_plugin_catalog(
                 "runtime_green_readiness_scorecard_schema": AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA,
                 "runtime_green_operator_handoff_schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
                 "runtime_green_proof_path_schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
+                "runtime_green_claim_gate_schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
                 "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                 "runtime_green_ready_outcomes": {
                     "browser_final_validation_result": "runtime_green_candidate=true",
@@ -254,9 +257,10 @@ fn agent_plugin_catalog(
                     "include_validation_matrix": true,
                     "include_observability_profiles": true,
                     "include_observability_digest": true,
-                    "include_runtime_green_proof_path": true
+                    "include_runtime_green_proof_path": true,
+                    "include_runtime_green_claim_gate": true
                 },
-                "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, runtime-green proof path, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
+                "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, runtime-green proof path, first-class claim gate, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
             },
             "webpreview_handoffs": {
                 "runtime_observability_digest": {
@@ -279,6 +283,13 @@ fn agent_plugin_catalog(
                     "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
                     "read_only": true,
                     "purpose": "Share the canonical WebPreview runtime-green proof path with claim gate, proof sources, current best next lane, and Agent runtime-status read sequence."
+                },
+                "runtime_green_claim_gate": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
+                    "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
+                    "read_only": true,
+                    "purpose": "Share the compact WebPreview claim gate with ready-lane fraction, first pending evidence, and next operator step."
                 }
             },
             "available_to": [
@@ -579,6 +590,7 @@ fn browser_plugin_manifest() -> Value {
             "runtime_green_blocker": "Run one final Windows just run pass, exercise editor typing/WebPreview/native executor flows, fill the final result template, and import the filled result.",
             "proof_handoffs": {
                 "validation_progress": "copy_agent_browser_executor_validation_progress",
+                "runtime_green_claim_gate": "copy_agent_plugin_runtime_green_claim_gate",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -718,6 +730,14 @@ fn browser_plugin_manifest() -> Value {
             "read_only": true,
             "source": "WebPreview More menu",
             "purpose": "Copy or send the compact final proof-state and recovery-action summary without requiring the larger session or action manifest."
+        },
+        "runtime_green_claim_gate_handoff": {
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
+            "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
+            "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
+            "read_only": true,
+            "source": "WebPreview More menu",
+            "purpose": "Copy or send the compact runtime-green claim gate without requiring the larger proof path."
         },
         "capabilities": [
             capability("browser.sessions.list", "available", "List open WebPreview sessions and workspace inventory."),
@@ -1684,6 +1704,7 @@ fn managed_asset_operator_recipe(root_mode: &str) -> Value {
                     "include_observability_profiles": true,
                     "include_observability_digest": true,
                     "include_runtime_green_proof_path": true,
+                    "include_runtime_green_claim_gate": true,
                     "include_latest_handoff": true,
                     "include_next_actions": true
                 },

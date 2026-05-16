@@ -92,6 +92,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_operator_handoff.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_proof_path.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_claim_gate.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
@@ -134,6 +136,8 @@ pub struct AgentPluginRuntimeStatusToolInput {
     pub include_observability_digest: bool,
     /// Include the canonical runtime-green proof path tying digest, handoff, and final proof fields together.
     pub include_runtime_green_proof_path: bool,
+    /// Include the compact runtime-green claim gate for quick Agent Panel status checks.
+    pub include_runtime_green_claim_gate: bool,
 }
 
 impl Default for AgentPluginRuntimeStatusToolInput {
@@ -148,6 +152,7 @@ impl Default for AgentPluginRuntimeStatusToolInput {
             include_observability_profiles: true,
             include_observability_digest: true,
             include_runtime_green_proof_path: true,
+            include_runtime_green_claim_gate: true,
         }
     }
 }
@@ -418,16 +423,20 @@ fn inspect_runtime_status(
         &runtime_green_blocker_summary,
         &runtime_green_readiness_scorecard,
     );
-    let runtime_green_proof_path = input.include_runtime_green_proof_path.then(|| {
-        runtime_green_proof_path(
-            status,
-            roots,
-            &runtime_green_blocker_summary,
-            &runtime_green_readiness_scorecard,
-            &runtime_observability_digest_value,
-            &runtime_green_operator_handoff,
-        )
-    });
+    let runtime_green_proof_path_value = runtime_green_proof_path(
+        status,
+        roots,
+        &runtime_green_blocker_summary,
+        &runtime_green_readiness_scorecard,
+        &runtime_observability_digest_value,
+        &runtime_green_operator_handoff,
+    );
+    let runtime_green_proof_path = input
+        .include_runtime_green_proof_path
+        .then(|| runtime_green_proof_path_value.clone());
+    let runtime_green_claim_gate = input
+        .include_runtime_green_claim_gate
+        .then(|| runtime_green_claim_gate(&runtime_green_proof_path_value));
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA,
@@ -458,6 +467,7 @@ fn inspect_runtime_status(
         "runtime_green_operator_handoff": runtime_green_operator_handoff,
         "runtime_observability_digest": runtime_observability_digest,
         "runtime_green_proof_path": runtime_green_proof_path,
+        "runtime_green_claim_gate": runtime_green_claim_gate,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
         "observability_profiles": input
@@ -1019,6 +1029,7 @@ fn managed_asset_operator_recipe(root_mode: &str) -> Value {
                     "include_observability_profiles": true,
                     "include_observability_digest": true,
                     "include_runtime_green_proof_path": true,
+                    "include_runtime_green_claim_gate": true,
                     "include_next_actions": true
                 },
                 "writes_files": false,
@@ -1097,6 +1108,7 @@ fn managed_asset_operator_recipe(root_mode: &str) -> Value {
                     "include_observability_profiles": true,
                     "include_observability_digest": true,
                     "include_runtime_green_proof_path": true,
+                    "include_runtime_green_claim_gate": true,
                     "include_latest_handoff": true,
                     "include_next_actions": true
                 },
@@ -2267,6 +2279,11 @@ fn runtime_green_proof_path(
                 "copy_action": "copy_agent_plugin_runtime_green_proof_path",
                 "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent"
             },
+            "runtime_green_claim_gate": {
+                "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
+                "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
+                "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent"
+            },
             "runtime_observability_digest": {
                 "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                 "copy_action": "copy_agent_plugin_runtime_observability_digest",
@@ -2292,6 +2309,74 @@ fn runtime_green_proof_path(
             "dispatches_input": false,
             "touches_real_browser_profiles": false
         }
+    })
+}
+
+fn runtime_green_claim_gate(proof_path: &Value) -> Value {
+    let claim_gate = proof_path
+        .get("claim_gate")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let operator_summary = proof_path
+        .get("operator_summary")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let status = operator_summary
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let ready_lane_count = claim_gate
+        .get("ready_lane_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let lane_count = claim_gate
+        .get("lane_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let runtime_green_candidate = proof_path
+        .get("runtime_green_candidate")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
+        "status": status,
+        "runtime_status": proof_path.get("runtime_status").and_then(Value::as_str),
+        "root_mode": proof_path.get("root_mode").and_then(Value::as_str),
+        "runtime_green_candidate": runtime_green_candidate,
+        "ready_lane_count": ready_lane_count,
+        "lane_count": lane_count,
+        "ready_lane_fraction": operator_summary
+            .get("ready_lane_fraction")
+            .and_then(Value::as_str)
+            .map(|fraction| fraction.to_string())
+            .unwrap_or_else(|| format!("{ready_lane_count}/{lane_count}")),
+        "runtime_evidence_blocker_count": operator_summary.get("runtime_evidence_blocker_count").and_then(Value::as_u64),
+        "manual_blocker_count": operator_summary.get("manual_blocker_count").and_then(Value::as_u64),
+        "missing_required_file_count": operator_summary.get("missing_required_file_count").and_then(Value::as_u64),
+        "stale_required_file_count": operator_summary.get("stale_required_file_count").and_then(Value::as_u64),
+        "first_pending_lane_id": operator_summary.get("first_pending_lane_id").and_then(Value::as_str),
+        "first_pending_lane_label": operator_summary.get("first_pending_lane_label").and_then(Value::as_str),
+        "first_pending_lane_status": operator_summary.get("first_pending_lane_status").and_then(Value::as_str),
+        "browser_final_validation_runtime_green": operator_summary.get("browser_final_validation_runtime_green").and_then(Value::as_bool),
+        "can_claim_runtime_green": operator_summary.get("can_claim_runtime_green").and_then(Value::as_bool),
+        "claim_only_when": claim_gate
+            .get("claim_only_when")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([])),
+        "requires_final_windows_just_run": claim_gate.get("requires_final_windows_just_run").and_then(Value::as_bool).unwrap_or(true),
+        "final_manual_command": "just run",
+        "next_operator_step": operator_summary.get("next_operator_step").and_then(Value::as_str),
+        "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
+        "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
+        "proof_path_copy_action": "copy_agent_plugin_runtime_green_proof_path",
+        "proof_path_send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
+        "source_field": "runtime_green_proof_path.claim_gate",
+        "read_only": true,
+        "writes_files": false,
+        "runs_node": false,
+        "launches_browser": false,
+        "dispatches_input": false,
     })
 }
 
@@ -2549,7 +2634,8 @@ fn runtime_green_status_inspect_payload(root_mode: &str) -> Value {
         "include_validation_matrix": true,
         "include_observability_profiles": true,
         "include_observability_digest": true,
-        "include_runtime_green_proof_path": true
+        "include_runtime_green_proof_path": true,
+        "include_runtime_green_claim_gate": true
     })
 }
 

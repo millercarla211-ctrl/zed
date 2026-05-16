@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Claim Gate Handoff
+
+ADDED:
+- WebPreview now has direct Copy/Send Runtime-Green Claim Gate actions for Agent Panel handoff.
+- Agent Browser action manifests and WebPreview plugin catalogs now advertise the claim-gate schema, copy action, send action, and compact purpose separately from the larger proof path.
+- `inspect_agent_plugin_runtime_status` now supports a first-class `runtime_green_claim_gate` field and `include_runtime_green_claim_gate` payload flag derived from the canonical proof path.
+
+NOTES:
+- This is read-only handoff metadata only; it does not run Node, launch Chrome, dispatch browser or OS input, run `just run`, write proof files, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Claim Gate Status Surfaces
 
 ADDED:

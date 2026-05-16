@@ -353,6 +353,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_plugin_runtime_green_handoff_to_agent",
     "copy_agent_plugin_runtime_green_proof_path",
     "send_agent_plugin_runtime_green_proof_path_to_agent",
+    "copy_agent_plugin_runtime_green_claim_gate",
+    "send_agent_plugin_runtime_green_claim_gate_to_agent",
     "copy_agent_plugin_runtime_observability_digest",
     "send_agent_plugin_runtime_observability_digest_to_agent",
     "copy_agent_browser_noop_executor_attempt",
@@ -1523,6 +1525,8 @@ impl WebPreviewView {
                 "agent_plugin_runtime_green_claim_gate": true,
                 "copy_agent_plugin_runtime_green_proof_path": true,
                 "send_agent_plugin_runtime_green_proof_path_to_agent": true,
+                "copy_agent_plugin_runtime_green_claim_gate": true,
+                "send_agent_plugin_runtime_green_claim_gate_to_agent": true,
                 "agent_plugin_runtime_observability_digest": true,
                 "copy_agent_plugin_runtime_observability_digest": true,
                 "send_agent_plugin_runtime_observability_digest_to_agent": true,
@@ -2872,8 +2876,8 @@ impl WebPreviewView {
                 },
                 "runtime_green_claim_gate": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
-                    "copy_action": "copy_agent_plugin_runtime_green_proof_path",
-                    "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
+                    "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
+                    "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
                     "current_status": runtime_green_claim_gate.pointer("/status").and_then(Value::as_str),
                     "ready_lane_fraction": runtime_green_claim_gate.pointer("/ready_lane_fraction").and_then(Value::as_str),
                     "first_pending_lane": runtime_green_claim_gate.pointer("/first_pending_lane_label").and_then(Value::as_str),
@@ -2891,7 +2895,8 @@ impl WebPreviewView {
                         "include_validation_matrix": true,
                         "include_observability_profiles": true,
                         "include_observability_digest": true,
-                        "include_runtime_green_proof_path": true
+                        "include_runtime_green_proof_path": true,
+                        "include_runtime_green_claim_gate": true
                     }
                 }
             },
@@ -4129,8 +4134,10 @@ impl WebPreviewView {
             "first_pending_lane_status": first_pending_lane_status,
             "can_claim_runtime_green_from_webpreview": runtime_green_candidate,
             "final_manual_command": "just run",
-            "copy_action": "copy_agent_plugin_runtime_green_proof_path",
-            "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
+            "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
+            "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
+            "proof_path_copy_action": "copy_agent_plugin_runtime_green_proof_path",
+            "proof_path_send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
             "lanes": lanes,
             "proof_focus": {
                 "final_validation_observability_status": browser_final_observability.get("status").and_then(Value::as_str),
@@ -4761,6 +4768,73 @@ impl WebPreviewView {
         let blocks = self.agent_plugin_runtime_green_proof_path_agent_blocks(&proof_path);
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast("Sent runtime-green proof path to the agent panel", cx);
+        cx.notify();
+    }
+
+    fn agent_plugin_runtime_green_claim_gate_json(claim_gate: &Value) -> String {
+        serde_json::to_string_pretty(claim_gate).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_plugin_runtime_green_claim_gate_agent_summary(claim_gate: &Value) -> String {
+        let status = claim_gate
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let ready_lane_fraction = claim_gate
+            .get("ready_lane_fraction")
+            .and_then(Value::as_str)
+            .unwrap_or("0/0");
+        let first_pending_lane = claim_gate
+            .get("first_pending_lane_label")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let first_pending_status = claim_gate
+            .get("first_pending_lane_status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let can_claim_runtime_green = claim_gate
+            .get("can_claim_runtime_green_from_webpreview")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let next_step = claim_gate
+            .get("next_operator_step")
+            .and_then(Value::as_str)
+            .unwrap_or("Re-read the runtime-green claim gate.");
+
+        format!(
+            "Runtime-green claim gate\nStatus: {status}\nReady lanes: {ready_lane_fraction}\nFirst pending evidence: {first_pending_lane} ({first_pending_status})\nCan claim from WebPreview: {can_claim_runtime_green}\nNext: {next_step}"
+        )
+    }
+
+    fn agent_plugin_runtime_green_claim_gate_agent_blocks(
+        &self,
+        claim_gate: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "{}\n\n```json\n{}\n```",
+            Self::agent_plugin_runtime_green_claim_gate_agent_summary(claim_gate),
+            Self::agent_plugin_runtime_green_claim_gate_json(claim_gate)
+        )))]
+    }
+
+    fn copy_agent_plugin_runtime_green_claim_gate(&mut self, cx: &mut Context<Self>) {
+        let claim_gate = self.agent_plugin_runtime_green_claim_gate_snapshot();
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_plugin_runtime_green_claim_gate_json(&claim_gate),
+        ));
+        self.show_toast("Copied runtime-green claim gate", cx);
+        cx.notify();
+    }
+
+    fn send_agent_plugin_runtime_green_claim_gate_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let claim_gate = self.agent_plugin_runtime_green_claim_gate_snapshot();
+        let blocks = self.agent_plugin_runtime_green_claim_gate_agent_blocks(&claim_gate);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent runtime-green claim gate to the agent panel", cx);
         cx.notify();
     }
 
@@ -6755,6 +6829,8 @@ impl WebPreviewView {
                     "runtime_green_proof_path_copy_action": "copy_agent_plugin_runtime_green_proof_path",
                     "runtime_green_proof_path_send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
                     "runtime_green_claim_gate_visible": true,
+                    "runtime_green_claim_gate_copy_action": "copy_agent_plugin_runtime_green_claim_gate",
+                    "runtime_green_claim_gate_send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
                     "runtime_green_claim_gate_status": runtime_green_claim_gate.get("status").and_then(Value::as_str),
                     "runtime_green_claim_gate_first_pending_lane": runtime_green_claim_gate.get("first_pending_lane_label").and_then(Value::as_str),
                     "runtime_green_claim_gate_ready_lane_fraction": runtime_green_claim_gate.get("ready_lane_fraction").and_then(Value::as_str),
@@ -11074,6 +11150,7 @@ impl WebPreviewView {
         );
         let runtime_green_proof_path_summary =
             Self::agent_plugin_runtime_green_proof_path_summary(&runtime_green_proof_path);
+        let runtime_green_claim_gate = self.agent_plugin_runtime_green_claim_gate_snapshot();
 
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_actions.v1",
@@ -11168,6 +11245,14 @@ impl WebPreviewView {
                     "latest_summary": runtime_green_proof_path_summary,
                     "read_only": true,
                     "purpose": "Copy or send the canonical runtime-green proof path that ties digest, handoff, final result, claim gate, and Agent runtime-status read sequence together."
+                },
+                "runtime_green_claim_gate": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
+                    "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
+                    "latest_summary": runtime_green_claim_gate.clone(),
+                    "read_only": true,
+                    "purpose": "Copy or send only the compact claim gate with ready-lane fraction, first pending evidence, and next operator step."
                 }
             },
             "final_validation_observability": self.agent_browser_final_validation_observability(),
@@ -11176,6 +11261,7 @@ impl WebPreviewView {
             "runtime_observability_digest": runtime_observability_digest,
             "runtime_green_operator_handoff": runtime_green_operator_handoff,
             "runtime_green_proof_path": runtime_green_proof_path,
+            "runtime_green_claim_gate": runtime_green_claim_gate,
             "notes": [
                 "Read-only actions are always available for context gathering.",
                 "Interactive actions must remain locked until the user explicitly allows them for this WebPreview session.",
@@ -11264,6 +11350,7 @@ impl WebPreviewView {
                     "runtime_green_readiness_scorecard_schema": AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA,
                     "runtime_green_operator_handoff_schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
                     "runtime_green_proof_path_schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
+                    "runtime_green_claim_gate_schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
                     "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                     "runtime_green_ready_outcomes": {
                         "browser_final_validation_result": "runtime_green_candidate=true",
@@ -11281,9 +11368,10 @@ impl WebPreviewView {
                         "include_validation_matrix": true,
                         "include_observability_profiles": true,
                         "include_observability_digest": true,
-                        "include_runtime_green_proof_path": true
+                        "include_runtime_green_proof_path": true,
+                        "include_runtime_green_claim_gate": true
                     },
-                    "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, runtime-green proof path, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
+                    "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, runtime-green proof path, first-class claim gate, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
                 },
                 "webpreview_handoffs": {
                     "runtime_observability_digest": {
@@ -11306,6 +11394,13 @@ impl WebPreviewView {
                         "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
                         "read_only": true,
                         "purpose": "Share the canonical WebPreview runtime-green proof path with claim gate, proof sources, current best next lane, and Agent runtime-status read sequence."
+                    },
+                    "runtime_green_claim_gate": {
+                        "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
+                        "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
+                        "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
+                        "read_only": true,
+                        "purpose": "Share the compact WebPreview claim gate with ready-lane fraction, first pending evidence, and next operator step."
                     }
                 },
                 "available_to": [
@@ -11471,6 +11566,7 @@ impl WebPreviewView {
                             "runtime_green_blocker": "Run one final Windows just run pass, exercise editor typing/WebPreview/native executor flows, fill the final result template, and import the filled result.",
                             "proof_handoffs": {
                                 "validation_progress": "copy_agent_browser_executor_validation_progress",
+                                "runtime_green_claim_gate": "copy_agent_plugin_runtime_green_claim_gate",
                                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -11611,6 +11707,14 @@ impl WebPreviewView {
                             "read_only": true,
                             "source": "WebPreview More menu",
                             "purpose": "Copy or send the compact final proof-state and recovery-action summary without requiring the larger session or action manifest."
+                        },
+                        "runtime_green_claim_gate_handoff": {
+                            "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
+                            "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
+                            "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
+                            "read_only": true,
+                            "source": "WebPreview More menu",
+                            "purpose": "Copy or send the compact runtime-green claim gate without requiring the larger proof path."
                         },
                         "capabilities": [
                             {"id": "browser.sessions.list", "state": "available", "description": "List open WebPreview sessions and workspace inventory."},
@@ -14681,6 +14785,32 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Copy Runtime-Green Claim Gate")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_plugin_runtime_green_claim_gate(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Runtime-Green Claim Gate")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_plugin_runtime_green_claim_gate_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy Runtime Observability Digest")
                                 .icon(IconName::Info)
                                 .handler({
@@ -16817,7 +16947,8 @@ fn runtime_green_status_payload(root_mode: &str) -> Value {
         "include_validation_matrix": true,
         "include_observability_profiles": true,
         "include_observability_digest": true,
-        "include_runtime_green_proof_path": true
+        "include_runtime_green_proof_path": true,
+        "include_runtime_green_claim_gate": true
     })
 }
 
@@ -17018,6 +17149,7 @@ fn managed_asset_operator_recipe(root_mode: &str) -> Value {
                     "include_observability_profiles": true,
                     "include_observability_digest": true,
                     "include_runtime_green_proof_path": true,
+                    "include_runtime_green_claim_gate": true,
                     "include_latest_handoff": true,
                     "include_next_actions": true
                 },
