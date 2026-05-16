@@ -98,6 +98,7 @@ const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_proof_audit_summary.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
+const AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA: &str = "zed.agent_plugins.pc_use.proof_summary.v1";
 
 /// Lists the built-in DX/Zed agent plugin catalog for browser, Chrome, and PC-use workflows.
 ///
@@ -266,6 +267,7 @@ fn agent_plugin_catalog(
                 "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                 "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
                 "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+                "pc_use_proof_summary_schema": AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA,
                 "runtime_green_ready_outcomes": {
                     "browser_final_validation_result": "runtime_green_candidate=true",
                     "managed_chrome_runner_receipt": "ready_runner_adapter_pending",
@@ -1266,6 +1268,8 @@ fn pc_use_plugin_manifest(
             "webpreview_pc_use_status_copy_action": "copy_pc_use_status",
             "webpreview_pc_use_status_agent_action": "send_pc_use_status_to_agent",
             "webpreview_pc_use_status_schema": "zed.web_preview.pc_use_status.v1",
+            "pc_use_proof_summary_schema": AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA,
+            "webpreview_pc_use_proof_summary_schema": "zed.web_preview.pc_use_proof_summary.v1",
             "payload_schema": AGENT_PC_USE_PAYLOAD_SCHEMA,
             "payload_queue_item_schema": AGENT_PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA,
             "payload_queue_inspection_schema": AGENT_PC_USE_PAYLOAD_QUEUE_INSPECTION_SCHEMA,
@@ -1292,6 +1296,8 @@ fn pc_use_plugin_manifest(
                 "ui_snapshot_tool": AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME,
                 "payload_queue_inspect_tool": AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
                 "runner_receipts_tool": AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
+                "runtime_status_proof_summary_field": "plugins.pc_use.proof_summary",
+                "runtime_green_evidence_proof_summary_field": "runtime_green_blocker_summary.latest_evidence.pc_use_proof_summary",
                 "webpreview_status_copy": "copy_pc_use_status",
                 "webpreview_status_send": "send_pc_use_status_to_agent"
             },
@@ -1316,7 +1322,7 @@ fn pc_use_plugin_manifest(
             capability("pc.zed_window.payload_queue_inspect", "available", "Use inspect_zed_pc_use_payload_queue to validate the latest managed PC-use payload handoff before any future importer or executor exists."),
             capability("pc.zed_window.runner_gate_receipt", "available_requires_authorization", "Use request_zed_pc_use_payload_run to write an auditable runner-gate receipt after validating the managed PC-use queue, without taking screenshots or dispatching input."),
             capability("pc.zed_window.runner_receipt_inspect", "available", "Use inspect_zed_pc_use_runner_receipts to read recent PC-use runner-gate receipts without taking screenshots, focusing Zed, or dispatching input."),
-            capability("pc.zed_window.status_handoff", "available", "Use WebPreview Copy/Send Zed PC-use Status to hand the latest managed queue or runner receipt summary to the Agent Panel."),
+            capability("pc.zed_window.status_handoff", "available", "Use WebPreview Copy/Send Zed PC-use Status to hand the latest managed queue, runner receipt, and proof summary to the Agent Panel."),
             capability("pc.zed_window.screenshot", "planned", "Capture Zed-window screenshots for agent context."),
             capability("pc.zed_window.focus", "planned", "Focus Zed panes, panels, and tabs by safe editor-native handles."),
             capability("pc.zed_window.click", "planned_permission_gate", "Click within Zed surfaces only after permission and target preflight."),

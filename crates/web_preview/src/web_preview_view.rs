@@ -73,7 +73,9 @@ const PC_USE_RUNNER_RECEIPT_FILE_NAME: &str = "latest-zed-pc-use-runner-receipt.
 const PC_USE_RUNNER_RECEIPT_PREFIX: &str = "zed-pc-use-runner-receipt-";
 const PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA: &str =
     "zed.agent_plugins.pc_use.action_payload_queue_item.v1";
+const PC_USE_PAYLOAD_SCHEMA: &str = "zed.agent_plugins.pc_use.action_payload.v1";
 const PC_USE_RUNNER_RECEIPT_SCHEMA: &str = "zed.agent_plugins.pc_use.runner_receipt.v1";
+const PC_USE_PROOF_SUMMARY_SCHEMA: &str = "zed.web_preview.pc_use_proof_summary.v1";
 const AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA: &str =
     "zed.web_preview.agent_browser_executor_validation_progress.v1";
 const AGENT_BROWSER_NATIVE_DISPATCH_RECEIPT_MATRIX_SCHEMA: &str =
@@ -4147,6 +4149,12 @@ impl WebPreviewView {
                 })
             })
             .collect::<Vec<_>>();
+        let proof_summary = pc_use_status_proof_summary(
+            status,
+            latest_outcome,
+            latest_queue.as_ref(),
+            latest_receipt.as_ref(),
+        );
 
         serde_json::json!({
             "schema": "zed.web_preview.pc_use_status.v1",
@@ -4156,6 +4164,7 @@ impl WebPreviewView {
             "roots": root_values,
             "latest_receipt": latest_receipt,
             "latest_queue": latest_queue,
+            "proof_summary": proof_summary,
             "next_actions": pc_use_status_next_actions(status, latest_outcome),
             "safety": {
                 "read_only": true,
@@ -13567,6 +13576,7 @@ impl WebPreviewView {
                     "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                     "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
                     "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+                    "pc_use_proof_summary_schema": "zed.agent_plugins.pc_use.proof_summary.v1",
                     "runtime_green_ready_outcomes": {
                         "browser_final_validation_result": "runtime_green_candidate=true",
                         "managed_chrome_runner_receipt": "ready_runner_adapter_pending",
@@ -14313,6 +14323,8 @@ impl WebPreviewView {
                             "webpreview_pc_use_status_copy_action": "copy_pc_use_status",
                             "webpreview_pc_use_status_agent_action": "send_pc_use_status_to_agent",
                             "webpreview_pc_use_status_schema": "zed.web_preview.pc_use_status.v1",
+                            "pc_use_proof_summary_schema": "zed.agent_plugins.pc_use.proof_summary.v1",
+                            "webpreview_pc_use_proof_summary_schema": PC_USE_PROOF_SUMMARY_SCHEMA,
                             "payload_schema": "zed.agent_plugins.pc_use.action_payload.v1",
                             "payload_queue_item_schema": "zed.agent_plugins.pc_use.action_payload_queue_item.v1",
                             "payload_queue_inspection_schema": "zed.agent_plugins.pc_use.action_payload_queue_inspection.v1",
@@ -14333,6 +14345,8 @@ impl WebPreviewView {
                                 "ui_snapshot_tool": "inspect_zed_pc_use_ui_snapshot",
                                 "payload_queue_inspect_tool": "inspect_zed_pc_use_payload_queue",
                                 "runner_receipts_tool": "inspect_zed_pc_use_runner_receipts",
+                                "runtime_status_proof_summary_field": "plugins.pc_use.proof_summary",
+                                "runtime_green_evidence_proof_summary_field": "runtime_green_blocker_summary.latest_evidence.pc_use_proof_summary",
                                 "webpreview_status_copy": "copy_pc_use_status",
                                 "webpreview_status_send": "send_pc_use_status_to_agent"
                             },
@@ -14357,7 +14371,7 @@ impl WebPreviewView {
                             {"id": "pc.zed_window.payload_queue_inspect", "state": "available", "description": "Use inspect_zed_pc_use_payload_queue to validate the latest managed PC-use payload handoff before any future importer or executor exists."},
                             {"id": "pc.zed_window.runner_gate_receipt", "state": "available_requires_authorization", "description": "Use request_zed_pc_use_payload_run to write an auditable runner-gate receipt after validating the managed PC-use queue, without taking screenshots or dispatching input."},
                             {"id": "pc.zed_window.runner_receipt_inspect", "state": "available", "description": "Use inspect_zed_pc_use_runner_receipts to read recent PC-use runner-gate receipts without taking screenshots, focusing Zed, or dispatching input."},
-                            {"id": "pc.zed_window.status_handoff", "state": "available", "description": "Use WebPreview Copy/Send Zed PC-use Status to hand the latest managed queue or runner receipt summary to the Agent Panel."},
+                            {"id": "pc.zed_window.status_handoff", "state": "available", "description": "Use WebPreview Copy/Send Zed PC-use Status to hand the latest managed queue, runner receipt, and proof summary to the Agent Panel."},
                             {"id": "pc.zed_window.screenshot", "state": "planned", "description": "Capture Zed-window screenshots for agent context."},
                             {"id": "pc.zed_window.focus", "state": "planned", "description": "Focus Zed panes, panels, and tabs by safe editor-native handles."},
                             {"id": "pc.zed_window.click", "state": "planned_permission_gate", "description": "Click within Zed surfaces only after permission and target preflight."},
@@ -19344,6 +19358,14 @@ fn pc_use_status_file_read_summary(
         .and_then(Value::as_str)
         .unwrap_or("unknown");
     let schema_ok = schema == expected_schema;
+    let payload_schema = value
+        .pointer("/payload_packet/schema")
+        .and_then(Value::as_str);
+    let payload_schema_ok = payload_schema == Some(PC_USE_PAYLOAD_SCHEMA);
+    let dispatches_input = value
+        .pointer("/payload_packet/safety/dispatches_input")
+        .and_then(Value::as_bool)
+        .unwrap_or(kind == PcUseStatusFileKind::RunnerReceipt);
 
     serde_json::json!({
         "ok": true,
@@ -19351,6 +19373,8 @@ fn pc_use_status_file_read_summary(
         "bytes": bytes.len(),
         "schema": schema,
         "schema_ok": schema_ok,
+        "payload_schema": payload_schema,
+        "payload_schema_ok": payload_schema_ok,
         "generated_at_ms": value.pointer("/result/generated_at_ms")
             .or_else(|| value.get("queued_at_ms"))
             .cloned(),
@@ -19361,11 +19385,109 @@ fn pc_use_status_file_read_summary(
             .or_else(|| value.pointer("/payload_packet/payload/surface").and_then(Value::as_str)),
         "target_id_present": value.pointer("/queue/target_id_present").and_then(Value::as_bool)
             .or_else(|| value.pointer("/payload_packet/payload/target_id").and_then(Value::as_str).map(|target_id| !target_id.trim().is_empty())),
+        "target_snapshot_id": value.pointer("/queue/target_snapshot_id").and_then(Value::as_str)
+            .or_else(|| value.pointer("/payload_packet/payload/target_snapshot_id").and_then(Value::as_str)),
+        "target_snapshot_id_present": value.pointer("/queue/target_snapshot_id_present").and_then(Value::as_bool)
+            .or_else(|| value.pointer("/payload_packet/payload/target_snapshot_id").and_then(Value::as_str).map(|snapshot_id| !snapshot_id.trim().is_empty())),
+        "target_reference": value.pointer("/queue/target_reference").cloned()
+            .or_else(|| value.pointer("/payload_packet/payload/target_reference").cloned()),
         "queue_blocker_count": value.pointer("/queue_blockers").and_then(Value::as_array).map(Vec::len),
         "executor_pending_count": value.pointer("/executor_pending").and_then(Value::as_array).map(Vec::len),
         "future_executor_pending": kind == PcUseStatusFileKind::RunnerReceipt
             && value.pointer("/result/outcome").and_then(Value::as_str) == Some("ready_future_executor_pending"),
+        "future_executor_enabled": value.pointer("/result/future_executor_enabled").and_then(Value::as_bool),
+        "safe_for_handoff": kind == PcUseStatusFileKind::PayloadQueue && schema_ok && payload_schema_ok && !dispatches_input,
+        "dispatches_input": dispatches_input,
+        "takes_screenshot": value.pointer("/payload_packet/safety/takes_screenshot").and_then(Value::as_bool)
+            .or_else(|| value.pointer("/safety/takes_screenshot").and_then(Value::as_bool)),
+        "focuses_zed": value.pointer("/safety/focuses_zed").and_then(Value::as_bool)
+            .or_else(|| value.pointer("/payload_packet/safety/focuses_window").and_then(Value::as_bool)),
+        "dispatches_mouse": value.pointer("/safety/dispatches_mouse").and_then(Value::as_bool),
+        "dispatches_keyboard": value.pointer("/safety/dispatches_keyboard").and_then(Value::as_bool),
+        "launches_process": value.pointer("/safety/launches_process").and_then(Value::as_bool)
+            .or_else(|| value.pointer("/payload_packet/safety/launches_process").and_then(Value::as_bool)),
+        "os_wide_control": value.pointer("/payload_packet/safety/os_wide_control").and_then(Value::as_bool),
+        "os_wide_desktop_control": value.pointer("/safety/os_wide_desktop_control").and_then(Value::as_bool),
         "source_tool": value.get("source_tool").and_then(Value::as_str),
+    })
+}
+
+fn pc_use_status_proof_summary(
+    status: &str,
+    latest_outcome: &str,
+    latest_queue: Option<&Value>,
+    latest_receipt: Option<&Value>,
+) -> Value {
+    let queue_read = latest_queue.and_then(|queue| queue.get("read"));
+    let receipt_read = latest_receipt.and_then(|receipt| receipt.get("read"));
+    let queue_ready = queue_read
+        .and_then(|read| read.get("safe_for_handoff"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let receipt_ready = receipt_read
+        .and_then(|read| read.get("future_executor_pending"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let proof_status = if receipt_ready {
+        "ready_future_executor_receipt_present"
+    } else if latest_receipt.is_some() {
+        "runner_receipt_not_ready"
+    } else if queue_ready {
+        "payload_ready_runner_receipt_missing"
+    } else if latest_queue.is_some() {
+        "payload_not_ready"
+    } else {
+        "payload_missing"
+    };
+
+    serde_json::json!({
+        "schema": PC_USE_PROOF_SUMMARY_SCHEMA,
+        "status": proof_status,
+        "webpreview_status": status,
+        "latest_outcome": latest_outcome,
+        "ready": receipt_ready,
+        "payload_ready": queue_ready,
+        "runner_receipt_ready": receipt_ready,
+        "payload": {
+            "root_kind": latest_queue.and_then(|queue| queue.get("root_kind")).and_then(Value::as_str),
+            "path": latest_queue.and_then(|queue| queue.get("path")).and_then(Value::as_str),
+            "modified_at_ms": latest_queue.and_then(|queue| queue.get("modified_at_ms")).and_then(Value::as_u64),
+            "schema": queue_read.and_then(|read| read.get("schema")).and_then(Value::as_str),
+            "payload_schema": queue_read.and_then(|read| read.get("payload_schema")).and_then(Value::as_str),
+            "action": queue_read.and_then(|read| read.get("action")).and_then(Value::as_str),
+            "surface": queue_read.and_then(|read| read.get("surface")).and_then(Value::as_str),
+            "target_id_present": queue_read.and_then(|read| read.get("target_id_present")).and_then(Value::as_bool),
+            "target_snapshot_id": queue_read.and_then(|read| read.get("target_snapshot_id")).and_then(Value::as_str),
+            "target_snapshot_id_present": queue_read.and_then(|read| read.get("target_snapshot_id_present")).and_then(Value::as_bool),
+            "target_reference": queue_read.and_then(|read| read.get("target_reference")).cloned(),
+            "safe_for_handoff": queue_ready,
+        },
+        "runner_receipt": {
+            "root_kind": latest_receipt.and_then(|receipt| receipt.get("root_kind")).and_then(Value::as_str),
+            "path": latest_receipt.and_then(|receipt| receipt.get("path")).and_then(Value::as_str),
+            "modified_at_ms": latest_receipt.and_then(|receipt| receipt.get("modified_at_ms")).and_then(Value::as_u64),
+            "schema": receipt_read.and_then(|read| read.get("schema")).and_then(Value::as_str),
+            "outcome": receipt_read.and_then(|read| read.get("outcome")).and_then(Value::as_str),
+            "action": receipt_read.and_then(|read| read.get("action")).and_then(Value::as_str),
+            "surface": receipt_read.and_then(|read| read.get("surface")).and_then(Value::as_str),
+            "target_id_present": receipt_read.and_then(|read| read.get("target_id_present")).and_then(Value::as_bool),
+            "target_snapshot_id": receipt_read.and_then(|read| read.get("target_snapshot_id")).and_then(Value::as_str),
+            "target_snapshot_id_present": receipt_read.and_then(|read| read.get("target_snapshot_id_present")).and_then(Value::as_bool),
+            "target_reference": receipt_read.and_then(|read| read.get("target_reference")).cloned(),
+            "queue_blocker_count": receipt_read.and_then(|read| read.get("queue_blocker_count")).and_then(Value::as_u64),
+            "executor_pending_count": receipt_read.and_then(|read| read.get("executor_pending_count")).and_then(Value::as_u64),
+            "future_executor_enabled": receipt_read.and_then(|read| read.get("future_executor_enabled")).and_then(Value::as_bool),
+        },
+        "next_actions": pc_use_status_next_actions(status, latest_outcome),
+        "safety": {
+            "summary_is_read_only": true,
+            "writes_files": false,
+            "takes_screenshot": false,
+            "focuses_zed": false,
+            "dispatches_input": false,
+            "launches_processes": false,
+            "os_wide_desktop_control": false,
+        },
     })
 }
 

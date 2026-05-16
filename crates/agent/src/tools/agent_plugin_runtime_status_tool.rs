@@ -35,8 +35,8 @@ use super::{
     },
     agent_pc_use_payload_tool::{
         AGENT_PC_USE_PAYLOAD_QUEUE_FILE_NAME, AGENT_PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA,
-        AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME, AGENT_PC_USE_PAYLOAD_STAGE_TOOL_NAME,
-        AGENT_PC_USE_PAYLOAD_TOOL_NAME,
+        AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME, AGENT_PC_USE_PAYLOAD_SCHEMA,
+        AGENT_PC_USE_PAYLOAD_STAGE_TOOL_NAME, AGENT_PC_USE_PAYLOAD_TOOL_NAME,
     },
     agent_pc_use_runner_gate_tool::{
         AGENT_PC_USE_RUNNER_GATE_TOOL_NAME, AGENT_PC_USE_RUNNER_RECEIPT_FILE_NAME,
@@ -106,6 +106,7 @@ const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_report_packet.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
+const AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA: &str = "zed.agent_plugins.pc_use.proof_summary.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
@@ -692,6 +693,7 @@ fn chrome_status(
 }
 
 fn pc_use_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool) -> Value {
+    let proof_summary = pc_use_proof_summary(roots, current_epoch_millis());
     serde_json::json!({
         "id": "zed.pc_use",
         "status": "read_only_snapshot_available_future_input_gated",
@@ -733,6 +735,7 @@ fn pc_use_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool) 
                 include_latest_handoff,
             ),
         },
+        "proof_summary": proof_summary,
         "requirements_before_future_input": [
             "fresh inspect_zed_pc_use_ui_snapshot result",
             "input-ready target id from the live snapshot",
@@ -1709,6 +1712,7 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
                 generated_at_ms,
             ),
             "pc_use_latest_runner_receipt": pc_use_runner_receipt,
+            "pc_use_proof_summary": pc_use_proof_summary(roots, generated_at_ms),
         },
         "runtime_green_requires": [
             "no critical or runtime_evidence_missing blockers",
@@ -3316,7 +3320,8 @@ fn runtime_green_next_required_proof(
             "label": lane_label,
             "status": lane_status,
             "required_proof_id": "pc_use_ready_runner_receipt",
-            "required_proof_field": "runtime_green_blocker_summary.latest_evidence.pc_use_runner_receipt.read.outcome == ready_future_executor_pending",
+            "required_proof_field": "runtime_green_blocker_summary.latest_evidence.pc_use_latest_runner_receipt.classification.outcome == ready_future_executor_pending",
+            "summary_field": "runtime_green_blocker_summary.latest_evidence.pc_use_proof_summary",
             "recommended_action": recommended_action,
             "recommended_tool": recommended_tool.unwrap_or(AGENT_PC_USE_RUNNER_GATE_TOOL_NAME),
             "primary_next_actions": primary_next_actions,
@@ -4151,6 +4156,282 @@ fn track_required_proof_file(
         .unwrap_or(false)
     {
         stale.push(label);
+    }
+}
+
+fn pc_use_proof_summary(roots: &AgentPluginRuntimeRoots, generated_at_ms: u64) -> Value {
+    let payload = pc_use_payload_proof_summary(&roots.pc_use_latest_payload, generated_at_ms);
+    let runner_receipt =
+        pc_use_runner_receipt_proof_summary(&roots.pc_use_latest_receipt, generated_at_ms);
+    let payload_ready = payload
+        .get("ready")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let payload_exists = payload
+        .pointer("/file/exists")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let runner_receipt_ready = runner_receipt
+        .get("ready")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let runner_receipt_exists = runner_receipt
+        .pointer("/file/exists")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let status = if runner_receipt_ready {
+        "ready_future_executor_receipt_present"
+    } else if runner_receipt_exists {
+        "runner_receipt_not_ready"
+    } else if payload_ready {
+        "payload_ready_runner_receipt_missing"
+    } else if payload_exists {
+        "payload_not_ready"
+    } else {
+        "payload_missing"
+    };
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA,
+        "status": status,
+        "generated_at_ms": generated_at_ms,
+        "ready": runner_receipt_ready,
+        "payload_ready": payload_ready,
+        "runner_receipt_ready": runner_receipt_ready,
+        "payload": payload,
+        "runner_receipt": runner_receipt,
+        "next_actions": pc_use_proof_next_actions(status),
+        "reads_from": [
+            "plugins.pc_use.managed_paths.latest_payload",
+            "plugins.pc_use.managed_paths.latest_runner_receipt",
+            "runtime_green_blocker_summary.latest_evidence.pc_use_latest_payload",
+            "runtime_green_blocker_summary.latest_evidence.pc_use_latest_runner_receipt"
+        ],
+        "safety": {
+            "summary_is_read_only": true,
+            "writes_files": false,
+            "takes_screenshot": false,
+            "focuses_zed": false,
+            "dispatches_input": false,
+            "launches_processes": false,
+            "os_wide_desktop_control": false,
+        },
+    })
+}
+
+fn pc_use_payload_proof_summary(path: &Path, generated_at_ms: u64) -> Value {
+    let probe = proof_file_probe(
+        path,
+        Some(AGENT_PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA),
+        Some("/payload_packet/schema"),
+        generated_at_ms,
+    );
+    let file = proof_file_metadata_summary(&probe, path);
+    let value = match read_compact_json_file(path) {
+        Ok(value) => value,
+        Err(error) => {
+            return serde_json::json!({
+                "state": error.get("state").and_then(Value::as_str).unwrap_or("read_error"),
+                "ready": false,
+                "file": file,
+                "read_error": error,
+            });
+        }
+    };
+
+    let queue_schema = value.get("schema").and_then(Value::as_str);
+    let payload_schema = value
+        .pointer("/payload_packet/schema")
+        .and_then(Value::as_str);
+    let queue_schema_matches = queue_schema == Some(AGENT_PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA);
+    let payload_schema_matches = payload_schema == Some(AGENT_PC_USE_PAYLOAD_SCHEMA);
+    let dispatches_input = value
+        .pointer("/payload_packet/safety/dispatches_input")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    let ready = queue_schema_matches && payload_schema_matches && !dispatches_input;
+    let state = if ready {
+        "ready"
+    } else if !queue_schema_matches {
+        "queue_schema_mismatch"
+    } else if !payload_schema_matches {
+        "payload_schema_mismatch"
+    } else {
+        "unsafe_dispatching_payload"
+    };
+
+    serde_json::json!({
+        "state": state,
+        "ready": ready,
+        "file": file,
+        "schema": queue_schema,
+        "payload_schema": payload_schema,
+        "queue_schema_matches": queue_schema_matches,
+        "payload_schema_matches": payload_schema_matches,
+        "action": value.pointer("/payload_packet/payload/action").and_then(Value::as_str),
+        "surface": value.pointer("/payload_packet/payload/surface").and_then(Value::as_str),
+        "target_id_present": value.pointer("/payload_packet/payload/target_id")
+            .and_then(Value::as_str)
+            .is_some_and(|target_id| !target_id.trim().is_empty()),
+        "target_snapshot_id": value.pointer("/payload_packet/payload/target_snapshot_id").and_then(Value::as_str),
+        "target_snapshot_id_present": value.pointer("/payload_packet/payload/target_snapshot_id")
+            .and_then(Value::as_str)
+            .is_some_and(|snapshot_id| !snapshot_id.trim().is_empty()),
+        "target_reference": value.pointer("/payload_packet/payload/target_reference").cloned(),
+        "safe_for_handoff": !dispatches_input,
+        "dispatches_input": dispatches_input,
+        "takes_screenshot": value.pointer("/payload_packet/safety/takes_screenshot").and_then(Value::as_bool),
+        "focuses_window": value.pointer("/payload_packet/safety/focuses_window").and_then(Value::as_bool),
+        "launches_process": value.pointer("/payload_packet/safety/launches_process").and_then(Value::as_bool),
+        "os_wide_control": value.pointer("/payload_packet/safety/os_wide_control").and_then(Value::as_bool),
+        "source_tool": value.get("source_tool").and_then(Value::as_str)
+            .or_else(|| value.pointer("/payload_packet/source_tool").and_then(Value::as_str)),
+        "queued_at_ms": value.get("queued_at_ms").cloned(),
+    })
+}
+
+fn pc_use_runner_receipt_proof_summary(path: &Path, generated_at_ms: u64) -> Value {
+    let probe = outcome_receipt_probe(
+        path,
+        Some(AGENT_PC_USE_RUNNER_RECEIPT_SCHEMA),
+        "/result/outcome",
+        &[PC_USE_RUNNER_READY_OUTCOME],
+        generated_at_ms,
+    );
+    let file = proof_file_metadata_summary(&probe, path);
+    let classification = probe
+        .get("classification")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let value = match read_compact_json_file(path) {
+        Ok(value) => value,
+        Err(error) => {
+            return serde_json::json!({
+                "state": error.get("state").and_then(Value::as_str).unwrap_or("read_error"),
+                "ready": false,
+                "file": file,
+                "classification": classification,
+                "read_error": error,
+            });
+        }
+    };
+    let ready = classification
+        .get("ready")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+
+    serde_json::json!({
+        "state": if ready { "ready" } else { "not_ready" },
+        "ready": ready,
+        "file": file,
+        "classification": classification,
+        "schema": value.get("schema").and_then(Value::as_str),
+        "outcome": value.pointer("/result/outcome").and_then(Value::as_str),
+        "root_mode": value.pointer("/result/root_mode").and_then(Value::as_str),
+        "action": value.pointer("/queue/action").and_then(Value::as_str),
+        "surface": value.pointer("/queue/surface").and_then(Value::as_str),
+        "target_id_present": value.pointer("/queue/target_id_present").and_then(Value::as_bool),
+        "target_snapshot_id": value.pointer("/queue/target_snapshot_id").and_then(Value::as_str),
+        "target_snapshot_id_present": value.pointer("/queue/target_snapshot_id_present").and_then(Value::as_bool),
+        "target_reference": value.pointer("/queue/target_reference").cloned(),
+        "queue_blocker_count": value.pointer("/queue_blockers").and_then(Value::as_array).map(Vec::len),
+        "executor_pending_count": value.pointer("/executor_pending").and_then(Value::as_array).map(Vec::len),
+        "queue_blockers": value.get("queue_blockers").cloned().unwrap_or_else(|| serde_json::json!([])),
+        "executor_pending": value.get("executor_pending").cloned().unwrap_or_else(|| serde_json::json!([])),
+        "future_executor_enabled": value.pointer("/result/future_executor_enabled").and_then(Value::as_bool),
+        "screenshot_taken": value.pointer("/result/screenshot_taken").and_then(Value::as_bool),
+        "zed_focus_changed": value.pointer("/result/zed_focus_changed").and_then(Value::as_bool),
+        "mouse_dispatched": value.pointer("/result/mouse_dispatched").and_then(Value::as_bool),
+        "keyboard_dispatched": value.pointer("/result/keyboard_dispatched").and_then(Value::as_bool),
+        "process_launched": value.pointer("/result/process_launched").and_then(Value::as_bool),
+    })
+}
+
+fn proof_file_metadata_summary(probe: &Value, path: &Path) -> Value {
+    serde_json::json!({
+        "path": path_string(path),
+        "exists": probe.get("exists").and_then(Value::as_bool).unwrap_or(false),
+        "is_file": probe.get("is_file").and_then(Value::as_bool).unwrap_or(false),
+        "byte_len": probe.get("byte_len").cloned(),
+        "modified_at_ms": probe.get("modified_at_ms").cloned(),
+        "age_seconds": probe.get("age_seconds").cloned(),
+        "fresh_within_window": probe.get("fresh_within_window").cloned(),
+    })
+}
+
+fn read_compact_json_file(path: &Path) -> Result<Value, Value> {
+    let metadata = fs::metadata(path).map_err(|error| {
+        serde_json::json!({
+            "state": if error.kind() == std::io::ErrorKind::NotFound {
+                "missing"
+            } else {
+                "metadata_error"
+            },
+            "path": path_string(path),
+            "error": error.to_string(),
+        })
+    })?;
+    if !metadata.is_file() {
+        return Err(serde_json::json!({
+            "state": "not_file",
+            "path": path_string(path),
+        }));
+    }
+    if metadata.len() > MAX_HANDOFF_PREVIEW_BYTES {
+        return Err(serde_json::json!({
+            "state": "skipped_too_large",
+            "path": path_string(path),
+            "byte_len": metadata.len(),
+            "max_preview_bytes": MAX_HANDOFF_PREVIEW_BYTES,
+        }));
+    }
+    let bytes = fs::read(path).map_err(|error| {
+        serde_json::json!({
+            "state": "read_error",
+            "path": path_string(path),
+            "error": error.to_string(),
+        })
+    })?;
+    serde_json::from_slice::<Value>(&bytes).map_err(|error| {
+        serde_json::json!({
+            "state": "parse_error",
+            "path": path_string(path),
+            "byte_len": bytes.len(),
+            "error": error.to_string(),
+        })
+    })
+}
+
+fn pc_use_proof_next_actions(status: &str) -> Vec<&'static str> {
+    match status {
+        "ready_future_executor_receipt_present" => vec![
+            AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
+            "send_pc_use_status_to_agent",
+            "Keep PC-use screenshots, focus, click, type, and OS-wide control disabled until a future Zed-window executor consumes the receipt and emits an after-action receipt.",
+        ],
+        "runner_receipt_not_ready" => vec![
+            AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
+            AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+            AGENT_PC_USE_PAYLOAD_TOOL_NAME,
+            AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME,
+        ],
+        "payload_ready_runner_receipt_missing" => vec![
+            AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+            AGENT_PC_USE_RUNNER_GATE_TOOL_NAME,
+            AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
+        ],
+        "payload_not_ready" => vec![
+            AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME,
+            AGENT_PC_USE_PAYLOAD_TOOL_NAME,
+            AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME,
+            AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+        ],
+        _ => vec![
+            AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME,
+            AGENT_PC_USE_PAYLOAD_TOOL_NAME,
+            AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME,
+            AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+        ],
     }
 }
 

@@ -1,3 +1,17 @@
+[2026-05-17] - Agent Plugin Runtime PC-use Proof Summary
+
+ADDED:
+- Agent runtime status now emits `zed.agent_plugins.pc_use.proof_summary.v1` under `plugins.pc_use.proof_summary` and `runtime_green_blocker_summary.latest_evidence.pc_use_proof_summary`.
+- WebPreview PC-use status now emits `zed.web_preview.pc_use_proof_summary.v1` with payload readiness, runner-receipt readiness, action, surface, target snapshot metadata, blocker counts, and next actions.
+- PC-use queue inspection and runner-gate receipt summaries now preserve target snapshot id/reference metadata for future executor proof handoffs.
+
+CHANGED:
+- Agent and WebPreview plugin catalogs now advertise the PC-use proof summary schema and exact runtime-status fields.
+- Runtime-green next-proof metadata now points at the actual PC-use runner receipt classification outcome field.
+
+NOTES:
+- This is read-only observability. It does not enable screenshots, Zed focus changes, mouse/keyboard dispatch, process launch, or OS-wide desktop control.
+
 [2026-05-17] - Agent Plugin Runtime Managed Chrome Navigation Receipts
 
 ADDED:

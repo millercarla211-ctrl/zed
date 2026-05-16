@@ -253,6 +253,11 @@ impl AgentPcUsePayloadQueueInspector {
             .pointer("/payload_packet/payload/target_id")
             .and_then(Value::as_str)
             .is_some_and(|target_id| !target_id.trim().is_empty());
+        let target_snapshot_id = parsed
+            .pointer("/payload_packet/payload/target_snapshot_id")
+            .and_then(Value::as_str);
+        let target_snapshot_id_present =
+            target_snapshot_id.is_some_and(|snapshot_id| !snapshot_id.trim().is_empty());
         let safety_dispatches_input = parsed
             .pointer("/payload_packet/safety/dispatches_input")
             .and_then(Value::as_bool)
@@ -279,6 +284,9 @@ impl AgentPcUsePayloadQueueInspector {
                 "action": action,
                 "surface": surface,
                 "target_id_present": target_id_present,
+                "target_snapshot_id": target_snapshot_id,
+                "target_snapshot_id_present": target_snapshot_id_present,
+                "target_reference": parsed.pointer("/payload_packet/payload/target_reference").cloned(),
                 "safe_for_handoff": safe_for_handoff,
                 "payload_packet": include_payload_packet.then(|| {
                     parsed.get("payload_packet").cloned().unwrap_or(Value::Null)

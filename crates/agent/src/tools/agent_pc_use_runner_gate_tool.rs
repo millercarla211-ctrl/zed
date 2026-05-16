@@ -373,6 +373,11 @@ impl AgentPcUseRunnerGate {
             .pointer("/payload_packet/safety/dispatches_input")
             .and_then(Value::as_bool)
             .unwrap_or(true);
+        let target_snapshot_id = value
+            .pointer("/payload_packet/payload/target_snapshot_id")
+            .and_then(Value::as_str);
+        let target_snapshot_id_present =
+            target_snapshot_id.is_some_and(|snapshot_id| !snapshot_id.trim().is_empty());
         let state = if queue_schema_ok && payload_schema_ok && action_ok && !dispatches_input {
             QueueState::Ready
         } else {
@@ -393,6 +398,9 @@ impl AgentPcUseRunnerGate {
                 .pointer("/payload_packet/payload/target_id")
                 .and_then(Value::as_str)
                 .is_some_and(|target_id| !target_id.trim().is_empty()),
+            "target_snapshot_id": target_snapshot_id,
+            "target_snapshot_id_present": target_snapshot_id_present,
+            "target_reference": value.pointer("/payload_packet/payload/target_reference").cloned(),
             "queued_at_ms": value.get("queued_at_ms").cloned(),
             "source_tool": value.get("source_tool").cloned(),
         });
