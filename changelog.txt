@@ -1,3 +1,11 @@
+[2026-05-16] - WebPreview Validation Progress Split Health
+
+FIXED:
+- Initialized the executor validation-progress cache in WebPreview split-pane clones so the new handoff state stays compile-ready in both fresh and split preview instances.
+
+NOTES:
+- This is a state-initializer health fix only; it does not change WebPreview keyboard, mouse, focus, native dispatch, or editor hot paths.
+
 [2026-05-16] - Agent Browser Executor Validation Progress Discovery
 
 ADDED:

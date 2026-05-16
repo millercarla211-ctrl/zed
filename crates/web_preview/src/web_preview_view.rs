@@ -12891,6 +12891,7 @@ impl Item for WebPreviewView {
                 latest_successful_interaction_receipt: None,
                 latest_agent_browser_status_packet: None,
                 latest_agent_browser_executor_readiness: None,
+                latest_agent_browser_executor_validation_progress: None,
                 latest_agent_browser_noop_executor_attempt: None,
                 latest_agent_browser_reload_executor_attempt: None,
                 latest_agent_browser_clear_data_executor_attempt: None,
