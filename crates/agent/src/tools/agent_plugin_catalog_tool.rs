@@ -78,6 +78,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_proof_path.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_claim_gate.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_claim_readiness.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
 
@@ -240,6 +242,7 @@ fn agent_plugin_catalog(
                 "runtime_green_operator_handoff_schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
                 "runtime_green_proof_path_schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
                 "runtime_green_claim_gate_schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
+                "runtime_green_claim_readiness_schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
                 "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                 "runtime_green_ready_outcomes": {
                     "browser_final_validation_result": "runtime_green_candidate=true",
@@ -290,6 +293,13 @@ fn agent_plugin_catalog(
                     "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
                     "read_only": true,
                     "purpose": "Share the compact WebPreview claim gate with ready-lane fraction, first pending evidence, and next operator step."
+                },
+                "runtime_green_claim_readiness": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
+                    "send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent",
+                    "read_only": true,
+                    "purpose": "Share the single compact readiness packet that combines claim gate, final result state, final checklist, and reporting policy."
                 }
             },
             "available_to": [
@@ -591,6 +601,7 @@ fn browser_plugin_manifest() -> Value {
             "proof_handoffs": {
                 "validation_progress": "copy_agent_browser_executor_validation_progress",
                 "runtime_green_claim_gate": "copy_agent_plugin_runtime_green_claim_gate",
+                "runtime_green_claim_readiness": "copy_agent_plugin_runtime_green_claim_readiness",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -739,6 +750,14 @@ fn browser_plugin_manifest() -> Value {
             "source": "WebPreview More menu",
             "purpose": "Copy or send the compact runtime-green claim gate without requiring the larger proof path."
         },
+        "runtime_green_claim_readiness_handoff": {
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
+            "copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
+            "send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent",
+            "read_only": true,
+            "source": "WebPreview More menu",
+            "purpose": "Copy or send the compact runtime-green claim readiness packet without requiring the larger proof path."
+        },
         "capabilities": [
             capability("browser.sessions.list", "available", "List open WebPreview sessions and workspace inventory."),
             capability("browser.session.snapshot", "available", "Read the active WebPreview session metadata, bounds, profile, URL, and policy."),
@@ -753,6 +772,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.viewport.responsive", "available", "Switch the active WebPreview between full, phone, tablet, laptop, and rotated responsive viewports."),
             capability("browser.function_surfaces", "available", "Copy or send the concrete WebPreview screenshot, inspect, DevTools, and responsive viewport surface map."),
             capability("browser.plugin_bootstrap_readiness", "available", "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."),
+            capability("browser.runtime_green_claim_readiness", "available", "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."),
             capability("browser.action.open_url", "available_when_unlocked", "Open the current URL/search editor text through the permissioned WebPreview executor shell."),
             capability("browser.action.reload", "available_when_unlocked", "Reload through the permissioned WebPreview executor shell."),
             capability("browser.action.go_back", "available_when_unlocked", "Navigate back through the native WebPreview history executor after unlock, native history trace, QA checklist, and receipt logging."),

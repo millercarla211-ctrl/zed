@@ -104,6 +104,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_operator_handoff.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_claim_gate.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_claim_readiness.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_proof_path.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
@@ -355,6 +357,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_plugin_runtime_green_proof_path_to_agent",
     "copy_agent_plugin_runtime_green_claim_gate",
     "send_agent_plugin_runtime_green_claim_gate_to_agent",
+    "copy_agent_plugin_runtime_green_claim_readiness",
+    "send_agent_plugin_runtime_green_claim_readiness_to_agent",
     "copy_agent_plugin_runtime_observability_digest",
     "send_agent_plugin_runtime_observability_digest_to_agent",
     "copy_agent_browser_noop_executor_attempt",
@@ -1430,6 +1434,7 @@ impl WebPreviewView {
             "agent_browser_function_surfaces": self.agent_browser_function_surfaces(),
             "agent_plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
             "agent_plugin_runtime_green_claim_gate": self.agent_plugin_runtime_green_claim_gate_snapshot(),
+            "agent_plugin_runtime_green_claim_readiness": self.agent_plugin_runtime_green_claim_readiness_snapshot(),
             "agent_browser_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
             "agent_browser_reload_executor_attempt": self.latest_agent_browser_reload_executor_attempt_summary(),
             "agent_browser_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
@@ -1523,10 +1528,13 @@ impl WebPreviewView {
                 "send_agent_plugin_runtime_green_handoff_to_agent": true,
                 "agent_plugin_runtime_green_proof_path": true,
                 "agent_plugin_runtime_green_claim_gate": true,
+                "agent_plugin_runtime_green_claim_readiness": true,
                 "copy_agent_plugin_runtime_green_proof_path": true,
                 "send_agent_plugin_runtime_green_proof_path_to_agent": true,
                 "copy_agent_plugin_runtime_green_claim_gate": true,
                 "send_agent_plugin_runtime_green_claim_gate_to_agent": true,
+                "copy_agent_plugin_runtime_green_claim_readiness": true,
+                "send_agent_plugin_runtime_green_claim_readiness_to_agent": true,
                 "agent_plugin_runtime_observability_digest": true,
                 "copy_agent_plugin_runtime_observability_digest": true,
                 "send_agent_plugin_runtime_observability_digest_to_agent": true,
@@ -1806,6 +1814,8 @@ impl WebPreviewView {
             "runtime_green_final_operator_checklist": packet
                 .pointer("/packet/runtime_green_claim_gate")
                 .map(Self::runtime_green_final_operator_checklist_summary),
+            "runtime_green_claim_readiness_status": packet.pointer("/packet/runtime_green_claim_readiness/status").and_then(Value::as_str),
+            "runtime_green_claim_readiness_can_report": packet.pointer("/packet/runtime_green_claim_readiness/can_report_runtime_green").and_then(Value::as_bool),
             "next_step": packet.pointer("/packet/next_step").and_then(Value::as_str),
         }))
     }
@@ -1872,6 +1882,8 @@ impl WebPreviewView {
             "runtime_green_final_operator_checklist": bundle
                 .pointer("/handoff_artifacts/runtime_green_claim_gate/current_snapshot")
                 .map(Self::runtime_green_final_operator_checklist_summary),
+            "runtime_green_claim_readiness_status": bundle.pointer("/handoff_artifacts/runtime_green_claim_readiness/current_status").and_then(Value::as_str),
+            "runtime_green_claim_readiness_can_report": bundle.pointer("/handoff_artifacts/runtime_green_claim_readiness/can_report_runtime_green").and_then(Value::as_bool),
         }))
     }
 
@@ -2821,6 +2833,8 @@ impl WebPreviewView {
         let runtime_green_proof_path_summary =
             Self::agent_plugin_runtime_green_proof_path_summary(&runtime_green_proof_path);
         let runtime_green_claim_gate = self.agent_plugin_runtime_green_claim_gate_snapshot();
+        let runtime_green_claim_readiness =
+            self.agent_plugin_runtime_green_claim_readiness_snapshot();
 
         serde_json::json!({
             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
@@ -2843,6 +2857,8 @@ impl WebPreviewView {
                 "runtime_green_ready_lane_fraction": runtime_green_claim_gate.pointer("/ready_lane_fraction").and_then(Value::as_str),
                 "runtime_green_first_pending_lane": runtime_green_claim_gate.pointer("/first_pending_lane_label").and_then(Value::as_str),
                 "runtime_green_final_operator_checklist": Self::runtime_green_final_operator_checklist_summary(&runtime_green_claim_gate),
+                "runtime_green_claim_readiness_status": runtime_green_claim_readiness.pointer("/status").and_then(Value::as_str),
+                "runtime_green_claim_readiness_can_report": runtime_green_claim_readiness.pointer("/can_report_runtime_green").and_then(Value::as_bool),
             },
             "handoff_artifacts": {
                 "status_packet": {
@@ -2927,6 +2943,14 @@ impl WebPreviewView {
                     "first_pending_lane": runtime_green_claim_gate.pointer("/first_pending_lane_label").and_then(Value::as_str),
                     "final_operator_checklist": Self::runtime_green_final_operator_checklist_summary(&runtime_green_claim_gate),
                     "current_snapshot": runtime_green_claim_gate.clone()
+                },
+                "runtime_green_claim_readiness": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
+                    "send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent",
+                    "current_status": runtime_green_claim_readiness.pointer("/status").and_then(Value::as_str),
+                    "can_report_runtime_green": runtime_green_claim_readiness.pointer("/can_report_runtime_green").and_then(Value::as_bool),
+                    "current_snapshot": runtime_green_claim_readiness.clone()
                 },
                 "runtime_status_tool": {
                     "tool_name": "inspect_agent_plugin_runtime_status",
@@ -4044,12 +4068,20 @@ impl WebPreviewView {
         let managed_chrome_execution = self.managed_chrome_execution_status();
         let pc_use_status = self.pc_use_status();
 
-        let browser_ready = browser_result_summary
-            .as_ref()
-            .and_then(|summary| summary.get("runtime_green_candidate"))
+        let browser_ready = browser_final_observability
+            .get("runtime_green_candidate")
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let browser_result_present = browser_result_summary.is_some();
+        let browser_result_present = browser_result_summary.is_some()
+            || browser_final_observability
+                .pointer("/durable_evidence/roots")
+                .and_then(Value::as_array)
+                .map(|roots| {
+                    roots
+                        .iter()
+                        .any(|root| root.get("exists").and_then(Value::as_bool).unwrap_or(false))
+                })
+                .unwrap_or(false);
         let bootstrap_ready = bootstrap_readiness.get("status").and_then(Value::as_str)
             == Some("ready_for_managed_chrome_executor");
         let managed_chrome_receipt_completed = managed_chrome_execution
@@ -4207,6 +4239,98 @@ impl WebPreviewView {
                 "Resolve the first pending evidence lane, then re-read the runtime-green claim gate."
             },
             "read_only": true,
+        })
+    }
+
+    fn agent_plugin_runtime_green_claim_readiness_snapshot(&self) -> Value {
+        let claim_gate = self.agent_plugin_runtime_green_claim_gate_snapshot();
+        let final_observability = self.agent_browser_final_validation_observability();
+        let final_result_summary = final_observability.pointer("/latest/final_validation_result");
+        let final_result_present = final_result_summary
+            .map(|summary| !summary.is_null())
+            .unwrap_or(false)
+            || final_observability
+                .pointer("/durable_evidence/roots")
+                .and_then(Value::as_array)
+                .map(|roots| {
+                    roots
+                        .iter()
+                        .any(|root| root.get("exists").and_then(Value::as_bool).unwrap_or(false))
+                })
+                .unwrap_or(false);
+        let final_result_runtime_green = final_observability
+            .get("runtime_green_candidate")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let runtime_green_candidate = claim_gate
+            .get("runtime_green_candidate")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let can_report_runtime_green = runtime_green_candidate && final_result_runtime_green;
+        let status = if can_report_runtime_green {
+            "ready_to_report_runtime_green"
+        } else if !runtime_green_candidate {
+            "runtime_evidence_required"
+        } else if !final_result_present {
+            "final_validation_result_missing"
+        } else if !final_result_runtime_green {
+            "final_validation_result_not_runtime_green"
+        } else {
+            "manual_review_required"
+        };
+
+        serde_json::json!({
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
+            "status": status,
+            "can_report_runtime_green": can_report_runtime_green,
+            "runtime_green_candidate": runtime_green_candidate,
+            "final_result_present": final_result_present,
+            "final_result_runtime_green": final_result_runtime_green,
+            "final_manual_command": "just run",
+            "claim_gate_status": claim_gate.get("status").and_then(Value::as_str),
+            "ready_lane_fraction": claim_gate.get("ready_lane_fraction").and_then(Value::as_str),
+            "first_pending_lane_id": claim_gate.get("first_pending_lane_id").and_then(Value::as_str),
+            "first_pending_lane_label": claim_gate.get("first_pending_lane_label").and_then(Value::as_str),
+            "first_pending_lane_status": claim_gate.get("first_pending_lane_status").and_then(Value::as_str),
+            "next_required_proof_id": claim_gate
+                .pointer("/next_required_proof/required_proof_id")
+                .and_then(Value::as_str),
+            "next_recommended_action": claim_gate
+                .pointer("/next_required_proof/recommended_action")
+                .and_then(Value::as_str),
+            "final_operator_checklist": Self::runtime_green_final_operator_checklist_summary(&claim_gate),
+            "final_validation_observability": {
+                "schema": final_observability.get("schema").and_then(Value::as_str),
+                "status": final_observability.get("status").and_then(Value::as_str),
+                "missing": final_observability.get("missing").cloned().unwrap_or_else(|| serde_json::json!([])),
+                "durable_status": final_observability.pointer("/durable_evidence/status").and_then(Value::as_str),
+                "durable_runtime_green_candidate": final_observability
+                    .pointer("/durable_evidence/runtime_green_candidate")
+                    .and_then(Value::as_bool),
+            },
+            "copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
+            "send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent",
+            "claim_gate_copy_action": "copy_agent_plugin_runtime_green_claim_gate",
+            "claim_gate_send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
+            "proof_path_copy_action": "copy_agent_plugin_runtime_green_proof_path",
+            "proof_path_send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
+            "read_sequence": [
+                "copy_agent_plugin_runtime_green_claim_readiness",
+                "copy_agent_plugin_runtime_green_claim_gate",
+                "copy_agent_plugin_runtime_green_proof_path",
+                "copy_agent_browser_final_validation_result"
+            ],
+            "reporting_policy": {
+                "may_report_runtime_green": can_report_runtime_green,
+                "requires_runtime_green_candidate": true,
+                "requires_imported_final_result": true,
+                "requires_final_manual_command": "just run"
+            },
+            "read_only": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
         })
     }
 
@@ -5110,6 +5234,73 @@ impl WebPreviewView {
         let blocks = self.agent_plugin_runtime_green_claim_gate_agent_blocks(&claim_gate);
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast("Sent runtime-green claim gate to the agent panel", cx);
+        cx.notify();
+    }
+
+    fn agent_plugin_runtime_green_claim_readiness_json(readiness: &Value) -> String {
+        serde_json::to_string_pretty(readiness).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_plugin_runtime_green_claim_readiness_agent_summary(readiness: &Value) -> String {
+        let status = readiness
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let ready_lane_fraction = readiness
+            .get("ready_lane_fraction")
+            .and_then(Value::as_str)
+            .unwrap_or("0/0");
+        let can_report = readiness
+            .get("can_report_runtime_green")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let final_result_runtime_green = readiness
+            .get("final_result_runtime_green")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let next_required_proof = readiness
+            .get("next_required_proof_id")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let next_recommended_action = readiness
+            .get("next_recommended_action")
+            .and_then(Value::as_str)
+            .unwrap_or("copy_agent_plugin_runtime_green_claim_readiness");
+
+        format!(
+            "Runtime-green claim readiness\nStatus: {status}\nReady lanes: {ready_lane_fraction}\nFinal result runtime-green: {final_result_runtime_green}\nCan report runtime-green: {can_report}\nNext proof: {next_required_proof}\nNext action: {next_recommended_action}"
+        )
+    }
+
+    fn agent_plugin_runtime_green_claim_readiness_agent_blocks(
+        &self,
+        readiness: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "{}\n\n```json\n{}\n```",
+            Self::agent_plugin_runtime_green_claim_readiness_agent_summary(readiness),
+            Self::agent_plugin_runtime_green_claim_readiness_json(readiness)
+        )))]
+    }
+
+    fn copy_agent_plugin_runtime_green_claim_readiness(&mut self, cx: &mut Context<Self>) {
+        let readiness = self.agent_plugin_runtime_green_claim_readiness_snapshot();
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_plugin_runtime_green_claim_readiness_json(&readiness),
+        ));
+        self.show_toast("Copied runtime-green claim readiness", cx);
+        cx.notify();
+    }
+
+    fn send_agent_plugin_runtime_green_claim_readiness_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let readiness = self.agent_plugin_runtime_green_claim_readiness_snapshot();
+        let blocks = self.agent_plugin_runtime_green_claim_readiness_agent_blocks(&readiness);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent runtime-green claim readiness to the agent panel", cx);
         cx.notify();
     }
 
@@ -6983,6 +7174,8 @@ impl WebPreviewView {
         let runtime_green_proof_path_summary =
             Self::agent_plugin_runtime_green_proof_path_summary(&runtime_green_proof_path);
         let runtime_green_claim_gate = self.agent_plugin_runtime_green_claim_gate_snapshot();
+        let runtime_green_claim_readiness =
+            self.agent_plugin_runtime_green_claim_readiness_snapshot();
         let context_ready =
             diagnostics_ready || runtime_ready || dom_ready || targets_ready || readiness_ready;
         let audit_ready = plan_ready
@@ -7021,6 +7214,7 @@ impl WebPreviewView {
                 "status": status,
                 "next_step": next_step,
                 "runtime_green_claim_gate": runtime_green_claim_gate.clone(),
+                "runtime_green_claim_readiness": runtime_green_claim_readiness.clone(),
                 "readiness": {
                     "context_ready": context_ready,
                     "audit_ready": audit_ready,
@@ -7086,6 +7280,7 @@ impl WebPreviewView {
                     "runtime_green_operator_handoff": runtime_green_operator_handoff_summary,
                     "runtime_green_proof_path": runtime_green_proof_path_summary,
                     "runtime_green_claim_gate": runtime_green_claim_gate.clone(),
+                    "runtime_green_claim_readiness": runtime_green_claim_readiness.clone(),
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 },
                 "handoff": {
@@ -7110,6 +7305,11 @@ impl WebPreviewView {
                     "runtime_green_claim_gate_first_pending_lane": runtime_green_claim_gate.get("first_pending_lane_label").and_then(Value::as_str),
                     "runtime_green_claim_gate_ready_lane_fraction": runtime_green_claim_gate.get("ready_lane_fraction").and_then(Value::as_str),
                     "runtime_green_final_operator_checklist": Self::runtime_green_final_operator_checklist_summary(&runtime_green_claim_gate),
+                    "runtime_green_claim_readiness_visible": true,
+                    "runtime_green_claim_readiness_copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
+                    "runtime_green_claim_readiness_send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent",
+                    "runtime_green_claim_readiness_status": runtime_green_claim_readiness.get("status").and_then(Value::as_str),
+                    "runtime_green_claim_readiness_can_report": runtime_green_claim_readiness.get("can_report_runtime_green").and_then(Value::as_bool),
                     "executor_wired": true,
                     "safe_to_send_to_agent_panel": true,
                 },
@@ -11427,6 +11627,8 @@ impl WebPreviewView {
         let runtime_green_proof_path_summary =
             Self::agent_plugin_runtime_green_proof_path_summary(&runtime_green_proof_path);
         let runtime_green_claim_gate = self.agent_plugin_runtime_green_claim_gate_snapshot();
+        let runtime_green_claim_readiness =
+            self.agent_plugin_runtime_green_claim_readiness_snapshot();
 
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_actions.v1",
@@ -11530,6 +11732,14 @@ impl WebPreviewView {
                     "final_operator_checklist": Self::runtime_green_final_operator_checklist_summary(&runtime_green_claim_gate),
                     "read_only": true,
                     "purpose": "Copy or send only the compact claim gate with ready-lane fraction, first pending evidence, and next operator step."
+                },
+                "runtime_green_claim_readiness": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
+                    "send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent",
+                    "latest_summary": runtime_green_claim_readiness.clone(),
+                    "read_only": true,
+                    "purpose": "Copy or send the single compact readiness packet that combines claim gate, final result state, final checklist, and reporting policy."
                 }
             },
             "final_validation_observability": self.agent_browser_final_validation_observability(),
@@ -11539,6 +11749,7 @@ impl WebPreviewView {
             "runtime_green_operator_handoff": runtime_green_operator_handoff,
             "runtime_green_proof_path": runtime_green_proof_path,
             "runtime_green_claim_gate": runtime_green_claim_gate,
+            "runtime_green_claim_readiness": runtime_green_claim_readiness,
             "notes": [
                 "Read-only actions are always available for context gathering.",
                 "Interactive actions must remain locked until the user explicitly allows them for this WebPreview session.",
@@ -11628,6 +11839,7 @@ impl WebPreviewView {
                     "runtime_green_operator_handoff_schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
                     "runtime_green_proof_path_schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
                     "runtime_green_claim_gate_schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
+                    "runtime_green_claim_readiness_schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
                     "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                     "runtime_green_ready_outcomes": {
                         "browser_final_validation_result": "runtime_green_candidate=true",
@@ -11678,6 +11890,13 @@ impl WebPreviewView {
                         "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
                         "read_only": true,
                         "purpose": "Share the compact WebPreview claim gate with ready-lane fraction, first pending evidence, and next operator step."
+                    },
+                    "runtime_green_claim_readiness": {
+                        "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
+                        "copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
+                        "send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent",
+                        "read_only": true,
+                        "purpose": "Share the single compact readiness packet that combines claim gate, final result state, final checklist, and reporting policy."
                     }
                 },
                 "available_to": [
@@ -11844,6 +12063,7 @@ impl WebPreviewView {
                             "proof_handoffs": {
                                 "validation_progress": "copy_agent_browser_executor_validation_progress",
                                 "runtime_green_claim_gate": "copy_agent_plugin_runtime_green_claim_gate",
+                                "runtime_green_claim_readiness": "copy_agent_plugin_runtime_green_claim_readiness",
                                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -11993,6 +12213,14 @@ impl WebPreviewView {
                             "source": "WebPreview More menu",
                             "purpose": "Copy or send the compact runtime-green claim gate without requiring the larger proof path."
                         },
+                        "runtime_green_claim_readiness_handoff": {
+                            "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
+                            "copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
+                            "send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent",
+                            "read_only": true,
+                            "source": "WebPreview More menu",
+                            "purpose": "Copy or send the compact runtime-green claim readiness packet without requiring the larger proof path."
+                        },
                         "capabilities": [
                             {"id": "browser.sessions.list", "state": "available", "description": "List open WebPreview sessions and workspace inventory."},
                             {"id": "browser.session.snapshot", "state": "available", "description": "Read the active WebPreview session metadata, bounds, profile, URL, and policy."},
@@ -12007,6 +12235,7 @@ impl WebPreviewView {
                             {"id": "browser.viewport.responsive", "state": "available", "description": "Switch the active WebPreview between full, phone, tablet, laptop, and rotated responsive viewports."},
                             {"id": "browser.function_surfaces", "state": "available", "description": "Copy or send the concrete WebPreview screenshot, inspect, DevTools, and responsive viewport surface map."},
                             {"id": "browser.plugin_bootstrap_readiness", "state": "available", "description": "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."},
+                            {"id": "browser.runtime_green_claim_readiness", "state": "available", "description": "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."},
                             {"id": "browser.action.open_url", "state": "available_when_unlocked", "description": "Open the current URL/search editor text through the permissioned WebPreview executor shell."},
                             {"id": "browser.action.reload", "state": "available_when_unlocked", "description": "Reload through the permissioned WebPreview executor shell."},
                             {"id": "browser.action.go_back", "state": "available_when_unlocked", "description": "Navigate back through the native WebPreview history executor after unlock, native history trace, QA checklist, and receipt logging."},
@@ -15081,6 +15310,34 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_agent_plugin_runtime_green_claim_gate_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Runtime-Green Claim Readiness")
+                                .icon(IconName::Check)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_plugin_runtime_green_claim_readiness(
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Runtime-Green Claim Readiness")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_plugin_runtime_green_claim_readiness_to_agent(
                                                 window, cx,
                                             );
                                         });

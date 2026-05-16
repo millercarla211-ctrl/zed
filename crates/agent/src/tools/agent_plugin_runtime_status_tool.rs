@@ -94,6 +94,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_proof_path.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_claim_gate.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_claim_readiness.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
@@ -434,9 +436,14 @@ fn inspect_runtime_status(
     let runtime_green_proof_path = input
         .include_runtime_green_proof_path
         .then(|| runtime_green_proof_path_value.clone());
+    let runtime_green_claim_gate_value = runtime_green_claim_gate(&runtime_green_proof_path_value);
+    let runtime_green_claim_readiness_value = runtime_green_claim_readiness(
+        &runtime_green_proof_path_value,
+        &runtime_green_claim_gate_value,
+    );
     let runtime_green_claim_gate = input
         .include_runtime_green_claim_gate
-        .then(|| runtime_green_claim_gate(&runtime_green_proof_path_value));
+        .then(|| runtime_green_claim_gate_value.clone());
     let runtime_green_claim_gate_summary = runtime_green_claim_gate
         .as_ref()
         .map(runtime_green_claim_gate_summary);
@@ -472,6 +479,7 @@ fn inspect_runtime_status(
         "runtime_green_proof_path": runtime_green_proof_path,
         "runtime_green_claim_gate": runtime_green_claim_gate,
         "runtime_green_claim_gate_summary": runtime_green_claim_gate_summary,
+        "runtime_green_claim_readiness": runtime_green_claim_readiness_value,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
         "observability_profiles": input
@@ -2288,6 +2296,11 @@ fn runtime_green_proof_path(
                 "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
                 "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent"
             },
+            "runtime_green_claim_readiness": {
+                "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
+                "copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
+                "send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent"
+            },
             "runtime_observability_digest": {
                 "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                 "copy_action": "copy_agent_plugin_runtime_observability_digest",
@@ -2458,6 +2471,110 @@ fn runtime_green_claim_gate_summary(claim_gate: &Value) -> Value {
         "copy_action": claim_gate.get("copy_action").and_then(Value::as_str),
         "send_action": claim_gate.get("send_action").and_then(Value::as_str),
         "read_only": claim_gate.get("read_only").and_then(Value::as_bool),
+    })
+}
+
+fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Value {
+    let runtime_green_candidate = proof_path
+        .get("runtime_green_candidate")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let final_result_summary = proof_path
+        .pointer("/current/final_validation_result")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let final_result_present = final_result_summary
+        .get("state")
+        .and_then(Value::as_str)
+        .map(|state| state != "missing_result")
+        .unwrap_or_else(|| {
+            final_result_summary
+                .as_object()
+                .map_or(false, |object| !object.is_empty())
+        });
+    let final_result_runtime_green = final_result_summary
+        .get("runtime_green_candidate")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let can_report_runtime_green = runtime_green_candidate && final_result_runtime_green;
+    let status = if can_report_runtime_green {
+        "ready_to_report_runtime_green"
+    } else if !runtime_green_candidate {
+        "runtime_evidence_required"
+    } else if !final_result_present {
+        "final_validation_result_missing"
+    } else if !final_result_runtime_green {
+        "final_validation_result_not_runtime_green"
+    } else {
+        "manual_review_required"
+    };
+    let checklist = claim_gate
+        .get("final_operator_checklist")
+        .unwrap_or(&Value::Null);
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
+        "status": status,
+        "root_mode": proof_path.get("root_mode").and_then(Value::as_str),
+        "can_report_runtime_green": can_report_runtime_green,
+        "runtime_green_candidate": runtime_green_candidate,
+        "final_result_present": final_result_present,
+        "final_result_runtime_green": final_result_runtime_green,
+        "final_manual_command": "just run",
+        "claim_gate_status": claim_gate.get("status").and_then(Value::as_str),
+        "ready_lane_fraction": claim_gate.get("ready_lane_fraction").and_then(Value::as_str),
+        "first_pending_lane_id": claim_gate
+            .get("first_pending_lane_id")
+            .and_then(Value::as_str),
+        "first_pending_lane_label": claim_gate
+            .get("first_pending_lane_label")
+            .and_then(Value::as_str),
+        "first_pending_lane_status": claim_gate
+            .get("first_pending_lane_status")
+            .and_then(Value::as_str),
+        "next_required_proof_id": claim_gate
+            .pointer("/next_required_proof/required_proof_id")
+            .and_then(Value::as_str),
+        "next_recommended_action": claim_gate
+            .pointer("/next_required_proof/recommended_action")
+            .and_then(Value::as_str),
+        "next_recommended_tool": claim_gate
+            .pointer("/next_required_proof/recommended_tool")
+            .and_then(Value::as_str),
+        "final_operator_checklist": {
+            "status": checklist.get("status").and_then(Value::as_str),
+            "can_run_final_manual_command": checklist
+                .get("can_run_final_manual_command")
+                .and_then(Value::as_bool),
+            "first_required_proof_id": checklist
+                .get("first_required_proof_id")
+                .and_then(Value::as_str),
+            "first_recommended_tool": checklist
+                .get("first_recommended_tool")
+                .and_then(Value::as_str),
+            "ordered_check_count": checklist
+                .get("ordered_checks")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+        },
+        "final_validation_result_summary": final_result_summary,
+        "copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
+        "send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent",
+        "claim_gate_copy_action": "copy_agent_plugin_runtime_green_claim_gate",
+        "claim_gate_send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
+        "proof_path_copy_action": "copy_agent_plugin_runtime_green_proof_path",
+        "proof_path_send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
+        "reporting_policy": {
+            "may_report_runtime_green": can_report_runtime_green,
+            "requires_runtime_green_candidate": true,
+            "requires_imported_final_result": true,
+            "requires_final_manual_command": "just run"
+        },
+        "read_only": true,
+        "writes_files": false,
+        "runs_node": false,
+        "launches_browser": false,
+        "dispatches_input": false,
     })
 }
 

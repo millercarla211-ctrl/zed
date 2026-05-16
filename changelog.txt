@@ -1,3 +1,16 @@
+[2026-05-16] - Agent Plugin Runtime Claim Readiness
+
+ADDED:
+- WebPreview now exposes Copy/Send Runtime-Green Claim Readiness actions with a compact packet combining claim gate, final result state, final checklist, and reporting policy.
+- `inspect_agent_plugin_runtime_status` now emits `runtime_green_claim_readiness` alongside the claim gate so agents can read one ready/blocked packet before reporting runtime-green.
+- Agent and WebPreview plugin catalogs now advertise the claim-readiness schema and WebPreview copy/send actions.
+
+CHANGED:
+- WebPreview claim gates now consider durable managed final-validation result evidence, not only the in-memory final result, when evaluating the Browser/WebPreview lane.
+
+NOTES:
+- This remains read-only handoff metadata; it does not run Node, launch Chrome, dispatch browser or OS input, run `just run`, write proof files, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Final Checklist Summaries
 
 ADDED:
