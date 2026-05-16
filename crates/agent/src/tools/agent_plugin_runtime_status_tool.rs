@@ -2215,6 +2215,11 @@ fn runtime_green_proof_path(
             }
         ],
         "webpreview_packets": {
+            "runtime_green_proof_path": {
+                "schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
+                "copy_action": "copy_agent_plugin_runtime_green_proof_path",
+                "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent"
+            },
             "runtime_observability_digest": {
                 "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                 "copy_action": "copy_agent_plugin_runtime_observability_digest",

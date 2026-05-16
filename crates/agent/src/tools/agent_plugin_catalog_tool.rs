@@ -272,6 +272,13 @@ fn agent_plugin_catalog(
                     "send_action": "send_agent_plugin_runtime_green_handoff_to_agent",
                     "read_only": true,
                     "purpose": "Share one compact WebPreview runtime-green operator packet with current lane evidence and the Agent runtime-status payload."
+                },
+                "runtime_green_proof_path": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_proof_path",
+                    "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
+                    "read_only": true,
+                    "purpose": "Share the canonical WebPreview runtime-green proof path with claim gate, proof sources, current best next lane, and Agent runtime-status read sequence."
                 }
             },
             "available_to": [

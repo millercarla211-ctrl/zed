@@ -349,6 +349,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_plugin_bootstrap_readiness_to_agent",
     "copy_agent_plugin_runtime_green_handoff",
     "send_agent_plugin_runtime_green_handoff_to_agent",
+    "copy_agent_plugin_runtime_green_proof_path",
+    "send_agent_plugin_runtime_green_proof_path_to_agent",
     "copy_agent_plugin_runtime_observability_digest",
     "send_agent_plugin_runtime_observability_digest_to_agent",
     "copy_agent_browser_noop_executor_attempt",
@@ -1514,6 +1516,9 @@ impl WebPreviewView {
                 "agent_plugin_runtime_green_operator_handoff": true,
                 "copy_agent_plugin_runtime_green_handoff": true,
                 "send_agent_plugin_runtime_green_handoff_to_agent": true,
+                "agent_plugin_runtime_green_proof_path": true,
+                "copy_agent_plugin_runtime_green_proof_path": true,
+                "send_agent_plugin_runtime_green_proof_path_to_agent": true,
                 "agent_plugin_runtime_observability_digest": true,
                 "copy_agent_plugin_runtime_observability_digest": true,
                 "send_agent_plugin_runtime_observability_digest_to_agent": true,
@@ -2745,6 +2750,12 @@ impl WebPreviewView {
             );
         let runtime_observability_digest_summary =
             Self::agent_plugin_runtime_observability_digest_summary(&runtime_observability_digest);
+        let runtime_green_proof_path = self.agent_plugin_runtime_green_proof_path_from_packets(
+            &runtime_green_operator_handoff,
+            &runtime_observability_digest,
+        );
+        let runtime_green_proof_path_summary =
+            Self::agent_plugin_runtime_green_proof_path_summary(&runtime_green_proof_path);
 
         serde_json::json!({
             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
@@ -2831,6 +2842,13 @@ impl WebPreviewView {
                     "current_status": runtime_green_operator_handoff.pointer("/status").and_then(Value::as_str),
                     "latest_summary": runtime_green_operator_handoff_summary
                 },
+                "runtime_green_proof_path": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_proof_path",
+                    "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
+                    "current_status": runtime_green_proof_path.pointer("/status").and_then(Value::as_str),
+                    "latest_summary": runtime_green_proof_path_summary
+                },
                 "runtime_status_tool": {
                     "tool_name": "inspect_agent_plugin_runtime_status",
                     "schema": "zed.agent_plugins.runtime_status.v1",
@@ -2855,6 +2873,7 @@ impl WebPreviewView {
                 "Run native traces and native executor attempts for click, type, key, scroll, back, forward, and cache-only reset.",
                 "Import one managed Browser payload and confirm the payload-import receipt redacts text while preserving schema/action metadata.",
                 "Inspect managed Chrome and PC-use queue/receipt/status handoffs without touching real browser profiles or OS-wide input.",
+                "Copy or send the runtime-green proof path and confirm its claim gate still points at the first pending evidence lane.",
                 "Copy or send this final validation bundle with the resulting summaries."
             ],
             "manual_evidence_template": manual_evidence_template,
@@ -4245,6 +4264,231 @@ impl WebPreviewView {
             "pending_lane_count": digest.pointer("/summary/pending_lane_count").and_then(Value::as_u64),
             "current_best_next_lane": digest.pointer("/summary/current_best_next_lane").and_then(Value::as_str),
         })
+    }
+
+    fn agent_plugin_runtime_green_proof_path(&self, window: &Window) -> Value {
+        let handoff = self.agent_plugin_runtime_green_operator_handoff(window);
+        let digest = self.agent_plugin_runtime_observability_digest_from_handoff(&handoff);
+        self.agent_plugin_runtime_green_proof_path_from_packets(&handoff, &digest)
+    }
+
+    fn agent_plugin_runtime_green_proof_path_from_packets(
+        &self,
+        handoff: &Value,
+        digest: &Value,
+    ) -> Value {
+        let root_mode = handoff
+            .get("root_mode")
+            .and_then(Value::as_str)
+            .unwrap_or("workspace");
+        let runtime_green_candidate = handoff
+            .get("runtime_green_candidate")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let lane_count = handoff
+            .pointer("/summary/lane_count")
+            .and_then(Value::as_u64)
+            .unwrap_or_default();
+        let ready_lane_count = handoff
+            .pointer("/summary/ready_lane_count")
+            .and_then(Value::as_u64)
+            .unwrap_or_default();
+        let pending_lane_count = digest
+            .pointer("/summary/pending_lane_count")
+            .and_then(Value::as_u64)
+            .unwrap_or_else(|| lane_count.saturating_sub(ready_lane_count));
+        let final_result_summary = self.latest_agent_browser_final_validation_result_summary();
+        let final_result_imported = final_result_summary.is_some();
+        let final_result_runtime_green = final_result_summary
+            .as_ref()
+            .and_then(|summary| summary.get("runtime_green_candidate"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+
+        serde_json::json!({
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
+            "generated_at_ms": Self::current_epoch_millis(),
+            "source": "web_preview",
+            "status": if runtime_green_candidate {
+                "runtime_green_candidate"
+            } else {
+                "operator_action_required"
+            },
+            "runtime_green_candidate": runtime_green_candidate,
+            "root_mode": root_mode,
+            "session": handoff
+                .get("session")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({})),
+            "summary": {
+                "lane_count": lane_count,
+                "ready_lane_count": ready_lane_count,
+                "pending_lane_count": pending_lane_count,
+                "current_best_next_lane": handoff.pointer("/summary/current_best_next_lane").and_then(Value::as_str),
+                "final_result_imported": final_result_imported,
+                "final_result_runtime_green": final_result_runtime_green,
+            },
+            "claim_gate": {
+                "ready_lane_count": ready_lane_count,
+                "lane_count": lane_count,
+                "all_lanes_ready": pending_lane_count == 0 && lane_count > 0,
+                "final_browser_result_imported": final_result_imported,
+                "final_browser_result_runtime_green": final_result_runtime_green,
+                "can_claim_runtime_green_from_webpreview": runtime_green_candidate && final_result_runtime_green,
+                "manual_runtime_command": "just run"
+            },
+            "current_digest": Self::agent_plugin_runtime_observability_digest_summary(digest),
+            "current_operator_handoff": Self::agent_plugin_runtime_green_operator_handoff_summary(handoff),
+            "current_best_next": handoff
+                .get("current_best_next")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({})),
+            "proof_sources": {
+                "final_validation_observability": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!({})),
+                "final_validation_result_summary": final_result_summary,
+                "plugin_bootstrap_readiness": handoff
+                    .pointer("/webpreview_evidence/plugin_bootstrap_readiness")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!({})),
+                "managed_chrome_execution_status": handoff
+                    .pointer("/webpreview_evidence/managed_chrome_execution_status")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!({})),
+                "pc_use_status": handoff
+                    .pointer("/webpreview_evidence/pc_use_status")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!({})),
+            },
+            "agent_runtime_status_tool": {
+                "tool_name": "inspect_agent_plugin_runtime_status",
+                "schema": "zed.agent_plugins.runtime_status.v1",
+                "proof_path_schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
+                "payload": runtime_green_status_payload(root_mode)
+            },
+            "agent_read_sequence": [
+                {
+                    "step": "read_webpreview_proof_path",
+                    "copy_action": "copy_agent_plugin_runtime_green_proof_path",
+                    "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
+                    "purpose": "Start from the compact proof path before expanding into larger packets."
+                },
+                {
+                    "step": "inspect_agent_runtime_status",
+                    "tool_name": "inspect_agent_plugin_runtime_status",
+                    "payload": runtime_green_status_payload(root_mode),
+                    "purpose": "Read the canonical Agent-side proof path and managed proof-file locations."
+                },
+                {
+                    "step": "follow_current_best_next",
+                    "field": "current_best_next",
+                    "purpose": "Resolve the first pending runtime-green lane before claiming readiness."
+                },
+                {
+                    "step": "import_final_result_when_available",
+                    "action": "import_agent_browser_final_validation_result_from_clipboard",
+                    "purpose": "Persist the final manual Windows result before any runtime-green claim."
+                }
+            ],
+            "webpreview_packets": {
+                "runtime_green_proof_path": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_proof_path",
+                    "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent"
+                },
+                "runtime_observability_digest": {
+                    "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_observability_digest",
+                    "send_action": "send_agent_plugin_runtime_observability_digest_to_agent"
+                },
+                "runtime_green_operator_handoff": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_handoff",
+                    "send_action": "send_agent_plugin_runtime_green_handoff_to_agent"
+                }
+            },
+            "reads_from": [
+                "runtime_observability_digest",
+                "runtime_green_operator_handoff",
+                "final_validation_observability",
+                "managed_chrome_execution_status",
+                "pc_use_status"
+            ],
+            "safety": {
+                "read_only": true,
+                "writes_files": false,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false,
+                "touches_real_browser_profiles": false
+            }
+        })
+    }
+
+    fn agent_plugin_runtime_green_proof_path_summary(proof_path: &Value) -> Value {
+        serde_json::json!({
+            "schema": proof_path.get("schema").and_then(Value::as_str),
+            "status": proof_path.get("status").and_then(Value::as_str),
+            "runtime_green_candidate": proof_path.get("runtime_green_candidate").and_then(Value::as_bool),
+            "root_mode": proof_path.get("root_mode").and_then(Value::as_str),
+            "ready_lane_count": proof_path.pointer("/summary/ready_lane_count").and_then(Value::as_u64),
+            "lane_count": proof_path.pointer("/summary/lane_count").and_then(Value::as_u64),
+            "pending_lane_count": proof_path.pointer("/summary/pending_lane_count").and_then(Value::as_u64),
+            "current_best_next_lane": proof_path.pointer("/summary/current_best_next_lane").and_then(Value::as_str),
+            "can_claim_runtime_green_from_webpreview": proof_path.pointer("/claim_gate/can_claim_runtime_green_from_webpreview").and_then(Value::as_bool),
+        })
+    }
+
+    fn agent_plugin_runtime_green_proof_path_json(proof_path: &Value) -> String {
+        serde_json::to_string_pretty(proof_path).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_plugin_runtime_green_proof_path_agent_blocks(
+        &self,
+        proof_path: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = proof_path
+            .pointer("/session/page/url")
+            .and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Runtime-green proof path:\n\n```json\n{}\n```",
+            Self::agent_plugin_runtime_green_proof_path_json(proof_path)
+        ))));
+        blocks
+    }
+
+    fn copy_agent_plugin_runtime_green_proof_path(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let proof_path = self.agent_plugin_runtime_green_proof_path(window);
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_plugin_runtime_green_proof_path_json(&proof_path),
+        ));
+        self.show_toast("Copied runtime-green proof path", cx);
+        cx.notify();
+    }
+
+    fn send_agent_plugin_runtime_green_proof_path_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let proof_path = self.agent_plugin_runtime_green_proof_path(window);
+        let blocks = self.agent_plugin_runtime_green_proof_path_agent_blocks(&proof_path);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent runtime-green proof path to the agent panel", cx);
+        cx.notify();
     }
 
     fn agent_plugin_runtime_observability_digest_json(digest: &Value) -> String {
@@ -6110,6 +6354,12 @@ impl WebPreviewView {
             );
         let runtime_observability_digest_summary =
             Self::agent_plugin_runtime_observability_digest_summary(&runtime_observability_digest);
+        let runtime_green_proof_path = self.agent_plugin_runtime_green_proof_path_from_packets(
+            &runtime_green_operator_handoff,
+            &runtime_observability_digest,
+        );
+        let runtime_green_proof_path_summary =
+            Self::agent_plugin_runtime_green_proof_path_summary(&runtime_green_proof_path);
         let context_ready =
             diagnostics_ready || runtime_ready || dom_ready || targets_ready || readiness_ready;
         let audit_ready = plan_ready
@@ -6210,6 +6460,7 @@ impl WebPreviewView {
                     "pc_use_status": pc_use_status,
                     "runtime_observability_digest": runtime_observability_digest_summary,
                     "runtime_green_operator_handoff": runtime_green_operator_handoff_summary,
+                    "runtime_green_proof_path": runtime_green_proof_path_summary,
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 },
                 "handoff": {
@@ -6224,6 +6475,9 @@ impl WebPreviewView {
                     "runtime_green_operator_handoff_visible": true,
                     "runtime_green_operator_handoff_copy_action": "copy_agent_plugin_runtime_green_handoff",
                     "runtime_green_operator_handoff_send_action": "send_agent_plugin_runtime_green_handoff_to_agent",
+                    "runtime_green_proof_path_visible": true,
+                    "runtime_green_proof_path_copy_action": "copy_agent_plugin_runtime_green_proof_path",
+                    "runtime_green_proof_path_send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
                     "executor_wired": true,
                     "safe_to_send_to_agent_panel": true,
                 },
@@ -10530,6 +10784,12 @@ impl WebPreviewView {
             );
         let runtime_observability_digest_summary =
             Self::agent_plugin_runtime_observability_digest_summary(&runtime_observability_digest);
+        let runtime_green_proof_path = self.agent_plugin_runtime_green_proof_path_from_packets(
+            &runtime_green_operator_handoff,
+            &runtime_observability_digest,
+        );
+        let runtime_green_proof_path_summary =
+            Self::agent_plugin_runtime_green_proof_path_summary(&runtime_green_proof_path);
 
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_actions.v1",
@@ -10616,6 +10876,14 @@ impl WebPreviewView {
                     "latest_summary": runtime_green_operator_handoff_summary,
                     "read_only": true,
                     "purpose": "Copy or send one compact runtime-green operator packet with the current best next lane, WebPreview evidence, and the Agent runtime-status payload."
+                },
+                "runtime_green_proof_path": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_proof_path",
+                    "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
+                    "latest_summary": runtime_green_proof_path_summary,
+                    "read_only": true,
+                    "purpose": "Copy or send the canonical runtime-green proof path that ties digest, handoff, final result, claim gate, and Agent runtime-status read sequence together."
                 }
             },
             "final_validation_observability": self.agent_browser_final_validation_observability(),
@@ -10623,6 +10891,7 @@ impl WebPreviewView {
             "plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
             "runtime_observability_digest": runtime_observability_digest,
             "runtime_green_operator_handoff": runtime_green_operator_handoff,
+            "runtime_green_proof_path": runtime_green_proof_path,
             "notes": [
                 "Read-only actions are always available for context gathering.",
                 "Interactive actions must remain locked until the user explicitly allows them for this WebPreview session.",
@@ -10746,6 +11015,13 @@ impl WebPreviewView {
                         "send_action": "send_agent_plugin_runtime_green_handoff_to_agent",
                         "read_only": true,
                         "purpose": "Share one compact runtime-green operator packet from WebPreview with the current best next lane and the Agent runtime-status payload."
+                    },
+                    "runtime_green_proof_path": {
+                        "schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
+                        "copy_action": "copy_agent_plugin_runtime_green_proof_path",
+                        "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
+                        "read_only": true,
+                        "purpose": "Share the canonical WebPreview runtime-green proof path with claim gate, proof sources, current best next lane, and Agent runtime-status read sequence."
                     }
                 },
                 "available_to": [
@@ -14086,6 +14362,34 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_agent_plugin_runtime_green_handoff_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Runtime-Green Proof Path")
+                                .icon(IconName::Check)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_plugin_runtime_green_proof_path(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Runtime-Green Proof Path")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_plugin_runtime_green_proof_path_to_agent(
                                                 window, cx,
                                             );
                                         });

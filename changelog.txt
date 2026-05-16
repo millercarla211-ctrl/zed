@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime WebPreview Proof Path Handoff
+
+ADDED:
+- WebPreview now has Copy/Send Runtime-Green Proof Path actions for Agent Panel handoff.
+- Status packets, final validation bundles, action manifests, and plugin catalogs now advertise the proof-path schema, summary, copy action, and send action.
+- The WebPreview proof path ties the digest, runtime-green handoff, final result summary, claim gate, proof sources, and Agent runtime-status read sequence into one compact read-only packet.
+
+NOTES:
+- This is read-only WebPreview handoff metadata only; it does not run Node, launch Chrome, dispatch browser or OS input, run `just run`, write proof files, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Runtime-Green Proof Path
 
 ADDED:
