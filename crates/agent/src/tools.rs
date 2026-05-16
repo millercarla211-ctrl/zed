@@ -187,6 +187,8 @@ tools! {
     AgentChromePlaywrightExecutionInspectTool,
     AgentPcUseInspectTool,
     AgentPcUsePayloadTool,
+    AgentPcUsePayloadStageTool,
+    AgentPcUsePayloadQueueTool,
     AgentPluginCatalogTool,
     ApplyCodeActionTool,
     CopyPathTool,

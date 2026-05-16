@@ -1,17 +1,26 @@
-use crate::{AgentTool, ToolCallEventStream, ToolInput};
+use crate::{AgentTool, ToolCallEventStream, ToolInput, ToolPermissionContext};
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
-use gpui::{App, SharedString, Task};
+use gpui::{App, ClipboardItem, Entity, SharedString, Task};
+use paths::data_dir;
+use project::Project;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
+    fs,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 pub const AGENT_PC_USE_PAYLOAD_TOOL_NAME: &str = "compose_zed_pc_use_action_payload";
+pub const AGENT_PC_USE_PAYLOAD_STAGE_TOOL_NAME: &str = "stage_zed_pc_use_action_payload";
+pub const AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME: &str = "queue_zed_pc_use_action_payload";
 pub const AGENT_PC_USE_PAYLOAD_SCHEMA: &str = "zed.agent_plugins.pc_use.action_payload.v1";
+pub const AGENT_PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA: &str =
+    "zed.agent_plugins.pc_use.action_payload_queue_item.v1";
+const AGENT_PC_USE_PAYLOAD_QUEUE_FILE_NAME: &str = "latest-zed-pc-use-payload.json";
 const MAX_PC_USE_TEXT_CHARS: usize = 4096;
 const ALLOWED_BUTTONS: &[&str] = &["left", "middle", "right"];
 const ALLOWED_SURFACES: &[&str] = &[
@@ -127,6 +136,401 @@ impl AgentTool for AgentPcUsePayloadTool {
 
             if valid { Ok(output) } else { Err(output) }
         })
+    }
+}
+
+/// Stages a validated Zed-window PC-use payload packet onto the clipboard.
+///
+/// This tool writes only the schema-versioned payload packet after explicit authorization. It does
+/// not take screenshots, focus Zed, click, type, launch processes, or control the OS desktop.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct AgentPcUsePayloadStageToolInput {
+    /// The PC-use payload to compose and stage.
+    pub payload: AgentPcUsePayloadToolInput,
+}
+
+impl Default for AgentPcUsePayloadStageToolInput {
+    fn default() -> Self {
+        Self {
+            payload: AgentPcUsePayloadToolInput {
+                include_handoff_instructions: false,
+                ..Default::default()
+            },
+        }
+    }
+}
+
+pub struct AgentPcUsePayloadStageTool;
+
+impl AgentTool for AgentPcUsePayloadStageTool {
+    type Input = AgentPcUsePayloadStageToolInput;
+    type Output = String;
+
+    const NAME: &'static str = AGENT_PC_USE_PAYLOAD_STAGE_TOOL_NAME;
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Execute
+    }
+
+    fn initial_title(
+        &self,
+        input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        match input.map(|input| input.payload.action) {
+            Ok(AgentPcUsePayloadAction::Screenshot) => "Stage Zed screenshot payload".into(),
+            Ok(AgentPcUsePayloadAction::Focus) => "Stage Zed focus payload".into(),
+            Ok(AgentPcUsePayloadAction::Click) => "Stage Zed click payload".into(),
+            Ok(AgentPcUsePayloadAction::TypeText) => "Stage Zed type payload".into(),
+            Ok(AgentPcUsePayloadAction::InspectUi) => "Stage Zed UI inspect payload".into(),
+            Err(_) => "Stage Zed PC-use payload".into(),
+        }
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |cx| {
+            let input = input.recv().await.map_err(|error| error.to_string())?;
+            let result = compose_pc_use_payload(&input.payload);
+            let valid = result
+                .pointer("/result/valid")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            if !valid {
+                let output = serde_json::to_string_pretty(&result)
+                    .map_err(|error| format!("Failed to serialize PC-use payload: {error}"))?;
+                event_stream.update_fields(
+                    acp::ToolCallUpdateFields::new().title("Zed PC-use payload needs fixes"),
+                );
+                return Err(output);
+            }
+
+            let packet = result
+                .get("payload_packet")
+                .cloned()
+                .ok_or_else(|| "Missing payload_packet in composed PC-use payload".to_string())?;
+            let packet_json = serde_json::to_string_pretty(&packet)
+                .map_err(|error| format!("Failed to serialize PC-use payload packet: {error}"))?;
+
+            let context = ToolPermissionContext::new(
+                Self::NAME,
+                vec![
+                    pc_use_action_name(input.payload.action).to_string(),
+                    format!("{} clipboard characters", packet_json.chars().count()),
+                ],
+            );
+            let authorize = cx
+                .update(|cx| {
+                    event_stream.authorize(self.initial_title(Ok(input.clone()), cx), context, cx)
+                })
+                .map_err(|error| error.to_string())?;
+            authorize.await.map_err(|error| error.to_string())?;
+
+            cx.update(|cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(packet_json.clone()));
+            })
+            .map_err(|error| error.to_string())?;
+
+            let output = serde_json::json!({
+                "schema": "zed.agent_plugins.pc_use.action_payload_stage_result.v1",
+                "result": {
+                    "generated_at_ms": current_epoch_millis(),
+                    "status": "staged_to_clipboard",
+                    "action": pc_use_action_name(input.payload.action),
+                    "clipboard_characters": packet_json.chars().count(),
+                    "next_step": "Keep this packet as an explicit handoff only. Future PC-use execution still requires Zed UI inspection, user-visible permission, a focused Zed target, and an execution receipt."
+                },
+                "payload_packet": packet,
+                "safety": {
+                    "tool_dispatches_input": false,
+                    "tool_takes_screenshot": false,
+                    "tool_focuses_zed": false,
+                    "clipboard_written_after_authorization": true,
+                    "requires_future_pc_use_permission_gate": true,
+                    "os_wide_desktop_control": false
+                }
+            });
+            let output = serde_json::to_string_pretty(&output)
+                .map_err(|error| format!("Failed to serialize PC-use staging result: {error}"))?;
+
+            event_stream
+                .update_fields(acp::ToolCallUpdateFields::new().title("Staged Zed PC-use payload"));
+
+            Ok(output)
+        })
+    }
+}
+
+/// Queues a validated Zed-window PC-use payload into a managed workspace or Zed-data file.
+///
+/// This creates a handoff artifact only. It does not import, execute, screenshot, focus, click,
+/// type, launch processes, or control the OS desktop.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct AgentPcUsePayloadQueueToolInput {
+    /// The PC-use payload to compose and queue.
+    pub payload: AgentPcUsePayloadToolInput,
+    /// Prefer workspace-local queue under `<workspace>/tools`; falls back to Zed data when no workspace exists.
+    pub root_mode: AgentPcUsePayloadQueueRootMode,
+}
+
+impl Default for AgentPcUsePayloadQueueToolInput {
+    fn default() -> Self {
+        Self {
+            payload: AgentPcUsePayloadToolInput {
+                include_handoff_instructions: false,
+                ..Default::default()
+            },
+            root_mode: AgentPcUsePayloadQueueRootMode::Workspace,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentPcUsePayloadQueueRootMode {
+    #[default]
+    Workspace,
+    ZedData,
+}
+
+pub struct AgentPcUsePayloadQueueTool {
+    project: Entity<Project>,
+}
+
+impl AgentPcUsePayloadQueueTool {
+    pub fn new(project: Entity<Project>) -> Self {
+        Self { project }
+    }
+}
+
+impl AgentTool for AgentPcUsePayloadQueueTool {
+    type Input = AgentPcUsePayloadQueueToolInput;
+    type Output = String;
+
+    const NAME: &'static str = AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME;
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Execute
+    }
+
+    fn initial_title(
+        &self,
+        input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        match input.map(|input| input.payload.action) {
+            Ok(AgentPcUsePayloadAction::Screenshot) => "Queue Zed screenshot payload".into(),
+            Ok(AgentPcUsePayloadAction::Focus) => "Queue Zed focus payload".into(),
+            Ok(AgentPcUsePayloadAction::Click) => "Queue Zed click payload".into(),
+            Ok(AgentPcUsePayloadAction::TypeText) => "Queue Zed type payload".into(),
+            Ok(AgentPcUsePayloadAction::InspectUi) => "Queue Zed UI inspect payload".into(),
+            Err(_) => "Queue Zed PC-use payload".into(),
+        }
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |cx| {
+            let input = input.recv().await.map_err(|error| error.to_string())?;
+            let project_root = cx.update(|cx| workspace_root_for_project(&self.project, cx));
+            let queue = AgentPcUsePayloadQueue::new(project_root, input.root_mode);
+
+            let result = compose_pc_use_payload(&input.payload);
+            let valid = result
+                .pointer("/result/valid")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            if !valid {
+                let output = serde_json::to_string_pretty(&result)
+                    .map_err(|error| format!("Failed to serialize PC-use payload: {error}"))?;
+                event_stream.update_fields(
+                    acp::ToolCallUpdateFields::new().title("Zed PC-use payload needs fixes"),
+                );
+                return Err(output);
+            }
+
+            queue.validate()?;
+            let packet = result
+                .get("payload_packet")
+                .cloned()
+                .ok_or_else(|| "Missing payload_packet in composed PC-use payload".to_string())?;
+            let queue_item = queue.queue_item(&input, packet);
+            let queue_item_json = serde_json::to_vec_pretty(&queue_item)
+                .map_err(|error| format!("Failed to serialize queued PC-use payload: {error}"))?;
+
+            let context = ToolPermissionContext::new(
+                Self::NAME,
+                vec![
+                    pc_use_action_name(input.payload.action).to_string(),
+                    path_string(&queue.queue_dir),
+                    path_string(&queue.latest_path),
+                    format!("{} queued bytes", queue_item_json.len()),
+                ],
+            );
+            let authorize = cx
+                .update(|cx| {
+                    event_stream.authorize(self.initial_title(Ok(input.clone()), cx), context, cx)
+                })
+                .map_err(|error| error.to_string())?;
+            authorize.await.map_err(|error| error.to_string())?;
+
+            fs::create_dir_all(&queue.queue_dir).map_err(|error| {
+                format!(
+                    "Failed to prepare PC-use payload queue {}: {error}",
+                    queue.queue_dir.display()
+                )
+            })?;
+            fs::write(&queue.latest_path, &queue_item_json).map_err(|error| {
+                format!(
+                    "Failed to write PC-use payload queue {}: {error}",
+                    queue.latest_path.display()
+                )
+            })?;
+            fs::write(&queue.archive_path, &queue_item_json).map_err(|error| {
+                format!(
+                    "Failed to archive PC-use payload queue item {}: {error}",
+                    queue.archive_path.display()
+                )
+            })?;
+
+            let output = serde_json::json!({
+                "schema": "zed.agent_plugins.pc_use.action_payload_queue_result.v1",
+                "result": {
+                    "generated_at_ms": current_epoch_millis(),
+                    "status": "queued_to_managed_handoff",
+                    "action": pc_use_action_name(input.payload.action),
+                    "root_mode": queue.root_mode_label(),
+                    "queue_path": path_string(&queue.queue_dir),
+                    "latest_path": path_string(&queue.latest_path),
+                    "archive_path": path_string(&queue.archive_path),
+                    "next_step": "Use this managed handoff only after Zed UI inspection and explicit permission are available. Future PC-use executors must reread the packet, validate a fresh target receipt, and emit an execution receipt."
+                },
+                "queued_item": queue_item,
+                "safety": {
+                    "tool_dispatches_input": false,
+                    "tool_takes_screenshot": false,
+                    "tool_focuses_zed": false,
+                    "managed_queue_written_after_authorization": true,
+                    "requires_future_pc_use_import": true,
+                    "requires_future_pc_use_permission_gate": true,
+                    "os_wide_desktop_control": false
+                }
+            });
+            let output = serde_json::to_string_pretty(&output)
+                .map_err(|error| format!("Failed to serialize PC-use queue result: {error}"))?;
+
+            event_stream
+                .update_fields(acp::ToolCallUpdateFields::new().title("Queued Zed PC-use payload"));
+
+            Ok(output)
+        })
+    }
+}
+
+struct AgentPcUsePayloadQueue {
+    root_mode: AgentPcUsePayloadQueueRootMode,
+    project_root: Option<PathBuf>,
+    allowed_root: PathBuf,
+    queue_dir: PathBuf,
+    latest_path: PathBuf,
+    archive_path: PathBuf,
+}
+
+impl AgentPcUsePayloadQueue {
+    fn new(project_root: Option<PathBuf>, root_mode: AgentPcUsePayloadQueueRootMode) -> Self {
+        let use_workspace = matches!(root_mode, AgentPcUsePayloadQueueRootMode::Workspace)
+            && project_root.is_some();
+        let allowed_root = if use_workspace {
+            project_root
+                .as_ref()
+                .expect("workspace root checked above")
+                .join("tools")
+        } else {
+            data_dir().join("agent-plugins")
+        };
+        let queue_dir = if use_workspace {
+            allowed_root
+                .join("agent-plugins")
+                .join("pc-use")
+                .join("payloads")
+        } else {
+            allowed_root.join("pc-use").join("payloads")
+        };
+        let latest_path = queue_dir.join(AGENT_PC_USE_PAYLOAD_QUEUE_FILE_NAME);
+        let archive_path = queue_dir.join(format!(
+            "zed-pc-use-payload-{}.json",
+            current_epoch_millis()
+        ));
+
+        Self {
+            root_mode,
+            project_root,
+            allowed_root,
+            queue_dir,
+            latest_path,
+            archive_path,
+        }
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        for path in [&self.queue_dir, &self.latest_path, &self.archive_path] {
+            if !path.starts_with(&self.allowed_root) {
+                return Err(format!(
+                    "Refusing to queue PC-use payload at unmanaged path {} outside {}",
+                    path.display(),
+                    self.allowed_root.display()
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn queue_item(&self, input: &AgentPcUsePayloadQueueToolInput, packet: Value) -> Value {
+        serde_json::json!({
+            "schema": AGENT_PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA,
+            "queued_at_ms": current_epoch_millis(),
+            "source_tool": AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME,
+            "payload_packet": packet,
+            "metadata": {
+                "action": pc_use_action_name(input.payload.action),
+                "surface": normalize_surface(&input.payload.surface),
+                "root_mode": self.root_mode_label(),
+                "project_root": self.project_root.as_ref().map(path_string),
+                "queue_path": path_string(&self.queue_dir),
+                "latest_path": path_string(&self.latest_path),
+                "archive_path": path_string(&self.archive_path),
+                "requires_zed_ui_inspection": true,
+                "requires_explicit_permission": true,
+                "requires_fresh_target_receipt": true,
+                "requires_receipt_after_execution": true,
+            },
+            "safety": {
+                "input_dispatched": false,
+                "screenshot_taken": false,
+                "zed_focus_changed": false,
+                "process_launched": false,
+                "os_wide_desktop_control": false,
+            }
+        })
+    }
+
+    fn root_mode_label(&self) -> &'static str {
+        match self.root_mode {
+            AgentPcUsePayloadQueueRootMode::Workspace if self.project_root.is_some() => "workspace",
+            AgentPcUsePayloadQueueRootMode::Workspace => "zed_data_fallback",
+            AgentPcUsePayloadQueueRootMode::ZedData => "zed_data",
+        }
     }
 }
 
@@ -315,6 +719,18 @@ fn warning(code: &str, message: &str) -> Value {
         "code": code,
         "message": message,
     })
+}
+
+fn workspace_root_for_project(project: &Entity<Project>, cx: &App) -> Option<PathBuf> {
+    project
+        .read(cx)
+        .visible_worktrees(cx)
+        .next()
+        .map(|worktree| worktree.read(cx).abs_path().as_ref().to_path_buf())
+}
+
+fn path_string(path: impl AsRef<Path>) -> String {
+    path.as_ref().display().to_string()
 }
 
 fn current_epoch_millis() -> u64 {

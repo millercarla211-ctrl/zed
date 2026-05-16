@@ -1,3 +1,15 @@
+[2026-05-16] - PC Use Payload Handoff
+
+ADDED:
+- Added permissioned `stage_zed_pc_use_action_payload` and `queue_zed_pc_use_action_payload` Agent tools for clipboard and managed-root PC-use payload handoffs.
+- Advertised the PC-use stage and queue tools through the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- PC Use plugin manifests now expose clipboard and managed-queue handoff schemas before any screenshot, focus, click, type, process launch, or OS-wide desktop automation executor is enabled.
+
+NOTES:
+- The handoff tools write only authorized clipboard or managed JSON artifacts; they do not dispatch input, take screenshots, focus Zed, launch processes, or control the OS desktop.
+
 [2026-05-16] - PC Use Payload Composer
 
 ADDED:

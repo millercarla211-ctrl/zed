@@ -2,13 +2,14 @@ use crate::{
     AgentBrowserPayloadQueueTool, AgentBrowserPayloadStageTool, AgentBrowserPayloadTool,
     AgentChromePayloadQueueInspectTool, AgentChromePayloadQueueTool, AgentChromePayloadTool,
     AgentChromePlaywrightAdapterTool, AgentChromePlaywrightExecutionInspectTool,
-    AgentChromePlaywrightInvokeTool, AgentChromeRunnerGateTool, AgentPluginBootstrapTool,
-    AgentPluginCatalogTool, ApplyCodeActionTool, CodeActionStore, ContextServerRegistry,
-    CopyPathTool, CreateDirectoryTool, DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool,
-    EditFileTool, FetchTool, FindPathTool, FindReferencesTool, GetCodeActionsTool,
-    GoToDefinitionTool, GrepTool, ListDirectoryTool, MovePathTool, OpenTool, ProjectSnapshot,
-    ReadFileTool, RenameTool, SpawnAgentTool, SystemPromptTemplate, Templates, TerminalTool,
-    ToolPermissionDecision, UpdatePlanTool, WebSearchTool, WriteFileTool,
+    AgentChromePlaywrightInvokeTool, AgentChromeRunnerGateTool, AgentPcUseInspectTool,
+    AgentPcUsePayloadQueueTool, AgentPcUsePayloadStageTool, AgentPcUsePayloadTool,
+    AgentPluginBootstrapTool, AgentPluginCatalogTool, ApplyCodeActionTool, CodeActionStore,
+    ContextServerRegistry, CopyPathTool, CreateDirectoryTool, DbLanguageModel, DbThread,
+    DeletePathTool, DiagnosticsTool, EditFileTool, FetchTool, FindPathTool, FindReferencesTool,
+    GetCodeActionsTool, GoToDefinitionTool, GrepTool, ListDirectoryTool, MovePathTool, OpenTool,
+    ProjectSnapshot, ReadFileTool, RenameTool, SpawnAgentTool, SystemPromptTemplate, Templates,
+    TerminalTool, ToolPermissionDecision, UpdatePlanTool, WebSearchTool, WriteFileTool,
     decide_permission_from_settings,
 };
 use acp_thread::{MentionUri, UserMessageId};
@@ -1640,6 +1641,8 @@ impl Thread {
         ));
         self.add_tool(AgentPcUseInspectTool::new(self.project.clone()));
         self.add_tool(AgentPcUsePayloadTool);
+        self.add_tool(AgentPcUsePayloadStageTool);
+        self.add_tool(AgentPcUsePayloadQueueTool::new(self.project.clone()));
         self.add_tool(AgentPluginBootstrapTool::new(self.project.clone()));
 
         self.add_tool(DiagnosticsTool::new(self.project.clone()));
