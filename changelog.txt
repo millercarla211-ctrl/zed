@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Final Proof State Handoff
+
+ADDED:
+- Added direct WebPreview More-menu actions to copy or send the final validation proof-state observability packet.
+- Advertised the final proof-state schema and actions through the Agent Browser action manifest and both Agent/WebPreview Browser plugin catalogs.
+- Listed the new final proof-state copy/send actions in the read-only Agent Browser action policy.
+
+NOTES:
+- This is read-only handoff metadata only; it does not generate final bundles/results, run `just run`, launch Chrome, run Node, take screenshots, focus Zed, or dispatch input.
+
 [2026-05-16] - Agent Plugin Runtime WebPreview Proof State
 
 ADDED:

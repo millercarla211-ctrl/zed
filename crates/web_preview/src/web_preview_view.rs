@@ -80,6 +80,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_bundle.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_validation_observability.v1";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
@@ -299,6 +301,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "import_agent_browser_final_validation_result_from_clipboard",
     "copy_agent_browser_final_validation_result",
     "send_agent_browser_final_validation_result_to_agent",
+    "copy_agent_browser_final_validation_observability",
+    "send_agent_browser_final_validation_observability_to_agent",
     "copy_agent_browser_noop_executor_attempt",
     "send_agent_browser_noop_executor_attempt_to_agent",
     "copy_permissioned_click_preflight_attempt",
@@ -1449,6 +1453,8 @@ impl WebPreviewView {
                 "import_agent_browser_final_validation_result_from_clipboard": true,
                 "copy_agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result.is_some(),
                 "send_agent_browser_final_validation_result_to_agent": self.latest_agent_browser_final_validation_result.is_some(),
+                "copy_agent_browser_final_validation_observability": true,
+                "send_agent_browser_final_validation_observability_to_agent": true,
                 "copy_agent_browser_noop_executor_attempt": true,
                 "send_agent_browser_noop_executor_attempt_to_agent": true,
                 "run_permissioned_reload_executor": self.agent_action_permission.interactive_enabled(),
@@ -1826,6 +1832,7 @@ impl WebPreviewView {
         };
 
         serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
             "status": status,
             "generated_at_ms": Self::current_epoch_millis(),
             "missing": missing,
@@ -1915,6 +1922,37 @@ impl WebPreviewView {
             },
             "actions": actions
         })
+    }
+
+    fn agent_browser_final_validation_observability_json(&self) -> String {
+        serde_json::to_string_pretty(&self.agent_browser_final_validation_observability())
+            .unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_final_validation_observability_agent_blocks(&self) -> Vec<acp::ContentBlock> {
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview final validation observability:\n\n```json\n{}\n```",
+            self.agent_browser_final_validation_observability_json()
+        )))]
+    }
+
+    fn copy_agent_browser_final_validation_observability(&mut self, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            self.agent_browser_final_validation_observability_json(),
+        ));
+        self.show_toast("Copied final validation observability", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_final_validation_observability_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let blocks = self.agent_browser_final_validation_observability_agent_blocks();
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent final validation observability to the agent panel", cx);
+        cx.notify();
     }
 
     fn latest_agent_browser_noop_executor_attempt_summary(&self) -> Option<Value> {
@@ -9349,6 +9387,14 @@ impl WebPreviewView {
                     "latest_summary": self.latest_agent_browser_final_validation_result_summary(),
                     "read_only": true,
                     "purpose": "Import, copy, or send the filled manual Windows result after the final runtime proof."
+                },
+                "final_validation_observability": {
+                    "schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
+                    "copy_action": "copy_agent_browser_final_validation_observability",
+                    "send_action": "send_agent_browser_final_validation_observability_to_agent",
+                    "latest_summary": self.agent_browser_final_validation_observability(),
+                    "read_only": true,
+                    "purpose": "Copy or send the compact final proof-state and recovery-action summary without requiring the larger session or action manifest."
                 }
             },
             "final_validation_observability": self.agent_browser_final_validation_observability(),
@@ -9598,6 +9644,7 @@ impl WebPreviewView {
                             "executor_validation_progress_schema": AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA,
                             "final_validation_bundle_schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
                             "final_validation_result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+                            "final_validation_observability_schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
                             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
                             "managed_queue_import_action": "import_agent_browser_action_payload_from_managed_queue",
                             "examples": [
@@ -9673,6 +9720,14 @@ impl WebPreviewView {
                             "source": "WebPreview More menu",
                             "purpose": "Import, copy, or send the filled manual Windows result after the final runtime proof."
                         },
+                        "final_validation_observability_handoff": {
+                            "schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
+                            "copy_action": "copy_agent_browser_final_validation_observability",
+                            "send_action": "send_agent_browser_final_validation_observability_to_agent",
+                            "read_only": true,
+                            "source": "WebPreview More menu",
+                            "purpose": "Copy or send the compact final proof-state and recovery-action summary without requiring the larger session or action manifest."
+                        },
                         "capabilities": [
                             {"id": "browser.sessions.list", "state": "available", "description": "List open WebPreview sessions and workspace inventory."},
                             {"id": "browser.session.snapshot", "state": "available", "description": "Read the active WebPreview session metadata, bounds, profile, URL, and policy."},
@@ -9715,6 +9770,7 @@ impl WebPreviewView {
                             {"id": "browser.validation.final_bundle", "state": "available", "description": "Copy or send the final Windows validation bundle tying readiness, progress, runbook, manifest, plugin catalog, and proof order together."},
                             {"id": "browser.validation.final_result_template", "state": "available", "description": "Copy or send the fillable manual Windows result template with allowed status values and runtime-green requirements."},
                             {"id": "browser.validation.final_result", "state": "available", "description": "Import, copy, or send the filled final Windows validation result after manual runtime proof."},
+                            {"id": "browser.validation.final_proof_state", "state": "available", "description": "Copy or send compact final proof-state observability and recovery actions without generating larger proof packets."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},
                             {"id": "browser.action.type", "state": "available_when_unlocked_payload_required", "description": "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."},
                             {"id": "browser.action.key", "state": "available_when_unlocked", "description": "Send allowlisted key presses through the WebView2 DevTools Protocol executor after unlock, fresh preflight, keyboard-focus gate, QA checklist, and receipt logging."},
@@ -11894,6 +11950,34 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_agent_browser_final_validation_result_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Final Proof State")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_final_validation_observability(
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Final Proof State")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_final_validation_observability_to_agent(
                                                 window, cx,
                                             );
                                         });
