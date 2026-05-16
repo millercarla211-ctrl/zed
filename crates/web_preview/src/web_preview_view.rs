@@ -7371,6 +7371,18 @@ impl WebPreviewView {
                 .and_then(Value::as_bool),
             "blocker": card.get("blocker").and_then(Value::as_str),
             "next_action": card.get("next_action").and_then(Value::as_str),
+            "copy_action": card.get("copy_action").and_then(Value::as_str),
+            "send_action": card.get("send_action").and_then(Value::as_str),
+            "final_report_packet_copy_action": card
+                .get("final_report_packet_copy_action")
+                .and_then(Value::as_str),
+            "report_gate_copy_action": card
+                .get("report_gate_copy_action")
+                .and_then(Value::as_str),
+            "audit_copy_action": card.get("audit_copy_action").and_then(Value::as_str),
+            "final_manual_command": card
+                .get("final_manual_command")
+                .and_then(Value::as_str),
             "claim_readiness_status": card
                 .pointer("/claim_readiness/status")
                 .and_then(Value::as_str),
@@ -7394,6 +7406,8 @@ impl WebPreviewView {
             "regression_watch_lane_count": card
                 .pointer("/regression_watch/watched_plugin_count")
                 .and_then(Value::as_u64),
+            "read_only": card.get("read_only").and_then(Value::as_bool),
+            "dispatches_input": card.get("dispatches_input").and_then(Value::as_bool),
         })
     }
 

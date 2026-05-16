@@ -1,3 +1,14 @@
+[2026-05-17] - Agent Plugin Runtime Report Readiness Summary Actions
+
+ADDED:
+- WebPreview report-readiness card summaries now include direct copy/send actions, related report-packet/report-gate/audit copy actions, the final manual command, and read-only/input safety flags.
+
+CHANGED:
+- Right-side panel consumers can render Runtime-Green Report Readiness Card controls from the compact summary instead of opening the full card payload first.
+
+NOTES:
+- This is compact read-only handoff metadata only. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Report Readiness Card Actions
 
 ADDED:
