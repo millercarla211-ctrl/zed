@@ -179,6 +179,7 @@ fn inspect_pc_use_targets(
         "target_contract": {
             "target_id_source": "future zed UI snapshot or explicit user-selected target",
             "target_id_required_for": ["focus", "click", "type_text"],
+            "target_snapshot_id_required_for_future_input_targets": true,
             "target_label_optional": true,
             "coordinates_not_accepted_from_agents": true,
             "os_wide_targets_supported": false,
@@ -263,12 +264,14 @@ fn example_payload(action: &str) -> Value {
         "focus" => serde_json::json!({
             "action": "focus",
             "surface": "editor",
-            "target_id": "from-future-ui-snapshot"
+            "target_id": "from-future-ui-snapshot",
+            "target_snapshot_id": "zed-ui-snapshot-from-live-ui-receipt"
         }),
         "click" => serde_json::json!({
             "action": "click",
             "surface": "right_panel",
             "target_id": "from-future-ui-snapshot",
+            "target_snapshot_id": "zed-ui-snapshot-from-live-ui-receipt",
             "button": "left",
             "click_count": 1
         }),
@@ -276,6 +279,7 @@ fn example_payload(action: &str) -> Value {
             "action": "type_text",
             "surface": "editor",
             "target_id": "from-future-ui-snapshot",
+            "target_snapshot_id": "zed-ui-snapshot-from-live-ui-receipt",
             "text": "explicit user-approved text"
         }),
         _ => Value::Null,

@@ -8793,6 +8793,7 @@ impl WebPreviewView {
                             "payload_queue_inspection_schema": "zed.agent_plugins.pc_use.action_payload_queue_inspection.v1",
                             "runner_receipt_schema": "zed.agent_plugins.pc_use.runner_receipt.v1",
                             "runner_receipt_inspection_schema": "zed.agent_plugins.pc_use.runner_receipt_inspection.v1",
+                            "future_input_payload_requires_target_snapshot_id": true,
                             "os_wide_automation": "requires_separate_explicit_permission"
                         },
                         "capabilities": [

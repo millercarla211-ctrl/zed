@@ -61,6 +61,8 @@ pub struct AgentPcUsePayloadToolInput {
     pub target_id: Option<String>,
     /// Optional human-readable target label from a future UI inspection receipt.
     pub target_label: Option<String>,
+    /// Optional snapshot receipt id that produced the target id.
+    pub target_snapshot_id: Option<String>,
     /// Text for `type_text`.
     pub text: Option<String>,
     /// Mouse button for `click`.
@@ -78,6 +80,7 @@ impl Default for AgentPcUsePayloadToolInput {
             surface: "workspace".to_string(),
             target_id: None,
             target_label: None,
+            target_snapshot_id: None,
             text: None,
             button: "left".to_string(),
             click_count: 1,
@@ -570,6 +573,11 @@ fn compose_pc_use_payload(input: &AgentPcUsePayloadToolInput) -> Value {
         .as_deref()
         .map(str::trim)
         .filter(|label| !label.is_empty());
+    let target_snapshot_id = input
+        .target_snapshot_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|snapshot_id| !snapshot_id.is_empty());
     let target_id_kind = target_id.map(classify_pc_use_target_id);
 
     if let Some((target_id, target_id_kind)) = target_id.zip(target_id_kind) {
@@ -609,6 +617,46 @@ fn compose_pc_use_payload(input: &AgentPcUsePayloadToolInput) -> Value {
                 "target_id_too_long",
                 "Target ids are bounded to keep PC-use handoff packets small and auditable.",
                 "Use a target id returned by inspect_zed_pc_use_target_snapshot or a future Zed UI snapshot.",
+            ));
+        }
+
+        if matches!(
+            input.action,
+            AgentPcUsePayloadAction::Focus
+                | AgentPcUsePayloadAction::Click
+                | AgentPcUsePayloadAction::TypeText
+        ) && target_id_kind.is_input_ready()
+            && target_snapshot_id.is_none()
+        {
+            blockers.push(blocker(
+                "missing_target_snapshot_id",
+                "Future focus, click, and type payloads require the Zed UI snapshot receipt id that produced the target.",
+                "Run a live Zed UI snapshot first and pass its snapshot_id with the target id.",
+            ));
+        }
+    }
+
+    if let Some(snapshot_id) = target_snapshot_id {
+        if !snapshot_id.starts_with("zed-ui-snapshot-") {
+            blockers.push(blocker(
+                "invalid_target_snapshot_id",
+                "Target snapshot ids must come from a Zed UI snapshot receipt.",
+                "Use the snapshot_id returned by inspect_zed_pc_use_ui_snapshot or a future live UI snapshot tool.",
+            ));
+        }
+
+        if snapshot_id.len() > 128 {
+            blockers.push(blocker(
+                "target_snapshot_id_too_long",
+                "Target snapshot ids are bounded to keep PC-use packets auditable.",
+                "Use the exact snapshot_id returned by the Zed UI snapshot tool.",
+            ));
+        }
+
+        if target_id.is_none() {
+            warnings.push(warning(
+                "unused_target_snapshot_id",
+                "A target snapshot id is only meaningful when a target_id is also provided.",
             ));
         }
     }
@@ -674,21 +722,24 @@ fn compose_pc_use_payload(input: &AgentPcUsePayloadToolInput) -> Value {
             "action": action,
             "surface": surface,
             "target_id": target_id,
-            "target_reference": target_id.map(target_reference),
+            "target_snapshot_id": target_snapshot_id,
+            "target_reference": target_id.map(|target_id| target_reference(target_id, target_snapshot_id)),
         }),
         AgentPcUsePayloadAction::Focus | AgentPcUsePayloadAction::InspectUi => serde_json::json!({
             "action": action,
             "surface": surface,
             "target_id": target_id,
             "target_label": target_label,
-            "target_reference": target_id.map(target_reference),
+            "target_snapshot_id": target_snapshot_id,
+            "target_reference": target_id.map(|target_id| target_reference(target_id, target_snapshot_id)),
         }),
         AgentPcUsePayloadAction::Click => serde_json::json!({
             "action": action,
             "surface": surface,
             "target_id": target_id,
             "target_label": target_label,
-            "target_reference": target_id.map(target_reference),
+            "target_snapshot_id": target_snapshot_id,
+            "target_reference": target_id.map(|target_id| target_reference(target_id, target_snapshot_id)),
             "button": button,
             "click_count": click_count,
         }),
@@ -697,7 +748,8 @@ fn compose_pc_use_payload(input: &AgentPcUsePayloadToolInput) -> Value {
             "surface": surface,
             "target_id": target_id,
             "target_label": target_label,
-            "target_reference": target_id.map(target_reference),
+            "target_snapshot_id": target_snapshot_id,
+            "target_reference": target_id.map(|target_id| target_reference(target_id, target_snapshot_id)),
             "text": if valid { Some(text) } else { None },
             "text_len": text_len,
         }),
@@ -746,6 +798,7 @@ fn compose_pc_use_payload(input: &AgentPcUsePayloadToolInput) -> Value {
                 "Use inspect_zed_pc_use_target_snapshot for current read-only workspace or project-panel target ids.",
                 "Use inspect_zed_pc_use_ui_snapshot_contract before accepting future focus, click, or type target ids.",
                 "Use inspect_zed_pc_use_ui_snapshot to see the current partial Zed UI snapshot and live-UI gaps.",
+                "Include target_snapshot_id from the live Zed UI snapshot receipt before composing future focus, click, or type payloads.",
                 "Wait for a future Zed UI inspection receipt before focus, click, or type execution.",
                 "Require explicit user-visible permission before any future screenshot, focus, click, or type action.",
                 "Keep OS-wide desktop automation blocked unless the user grants a separate permission."
@@ -802,15 +855,18 @@ impl PcUseTargetIdKind {
     }
 }
 
-fn target_reference(target_id: &str) -> Value {
+fn target_reference(target_id: &str, target_snapshot_id: Option<&str>) -> Value {
     let kind = classify_pc_use_target_id(target_id);
     serde_json::json!({
         "source": kind.label(),
+        "target_snapshot_id": target_snapshot_id,
         "current_snapshot_target": kind.is_current_snapshot(),
         "input_ready": kind.is_input_ready(),
         "required_surface": kind.required_surface(),
         "safe_for_read_only_actions": true,
         "safe_for_input_actions": kind.is_input_ready(),
+        "requires_live_ui_snapshot": kind.is_input_ready(),
+        "has_target_snapshot_receipt": target_snapshot_id.is_some(),
         "requires_fresh_target_receipt_for_execution": true,
     })
 }

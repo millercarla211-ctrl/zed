@@ -167,6 +167,7 @@ fn inspect_pc_use_ui_snapshot(
                 .map(|(prefix, _, _)| *prefix)
                 .collect::<Vec<_>>(),
             "future_input_requires_fresh_live_ui_snapshot": true,
+            "future_input_payload_requires_target_snapshot_id": true,
             "coordinates_accepted_from_agents": false,
         },
         "required_flow": [

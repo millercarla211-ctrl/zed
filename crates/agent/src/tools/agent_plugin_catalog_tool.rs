@@ -686,6 +686,7 @@ fn pc_use_plugin_manifest(
             "payload_queue_inspection_schema": AGENT_PC_USE_PAYLOAD_QUEUE_INSPECTION_SCHEMA,
             "runner_receipt_schema": AGENT_PC_USE_RUNNER_RECEIPT_SCHEMA,
             "runner_receipt_inspection_schema": AGENT_PC_USE_RUNNER_RECEIPT_INSPECTION_SCHEMA,
+            "future_input_payload_requires_target_snapshot_id": true,
             "plugin_root": workspace_plugin_root
                 .as_ref()
                 .map(|root| root.join("pc-use"))

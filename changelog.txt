@@ -1,3 +1,16 @@
+[2026-05-16] - PC Use Snapshot Receipt Payload Gate
+
+CHANGED:
+- `compose_zed_pc_use_action_payload` now requires `target_snapshot_id` when composing future focus, click, or type payloads against input-ready Zed UI snapshot target ids.
+- PC-use target references now include the snapshot receipt id and whether the target came from a live UI snapshot.
+- Target manifest examples, the UI snapshot contract, the UI snapshot collector, and Agent/WebPreview plugin catalogs now document the snapshot-receipt requirement.
+
+FIXED:
+- Agents can no longer compose a nominally input-ready PC-use payload by guessing a documented future `zed:` target namespace without also carrying a Zed UI snapshot receipt id.
+
+NOTES:
+- This remains payload validation only; it does not dispatch input, take screenshots, focus Zed, launch processes, or control the desktop.
+
 [2026-05-16] - PC Use UI Snapshot Collector
 
 ADDED:

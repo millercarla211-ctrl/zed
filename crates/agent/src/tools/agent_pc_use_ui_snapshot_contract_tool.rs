@@ -153,6 +153,7 @@ fn ui_snapshot_contract(input: AgentPcUseUiSnapshotContractToolInput) -> Value {
             "non_zed_target_ids_input_ready": false,
             "coordinates_accepted_from_agents": false,
             "requires_fresh_snapshot_receipt": true,
+            "requires_target_snapshot_id_in_payload": true,
             "requires_visible_target": true,
             "requires_user_permission_for_focus_click_type": true,
         },
@@ -224,6 +225,11 @@ fn example_target_id(prefix: &str) -> Value {
 
 fn snapshot_fields() -> Vec<Value> {
     vec![
+        serde_json::json!({
+            "field": "snapshot_id",
+            "required": true,
+            "description": "Receipt id that future focus, click, and type payloads must carry as target_snapshot_id.",
+        }),
         serde_json::json!({
             "field": "target_id",
             "required": true,
