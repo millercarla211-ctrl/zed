@@ -7,12 +7,13 @@ use crate::{
     AgentPcUsePayloadTool, AgentPcUseRunnerGateTool, AgentPcUseRunnerReceiptInspectTool,
     AgentPcUseTargetManifestTool, AgentPcUseTargetSnapshotTool, AgentPcUseUiSnapshotContractTool,
     AgentPcUseUiSnapshotTool, AgentPluginBootstrapTool, AgentPluginCatalogTool,
-    ApplyCodeActionTool, CodeActionStore, ContextServerRegistry, CopyPathTool, CreateDirectoryTool,
-    DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool, EditFileTool, FetchTool,
-    FindPathTool, FindReferencesTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool,
-    ListDirectoryTool, MovePathTool, OpenTool, ProjectSnapshot, ReadFileTool, RenameTool,
-    SpawnAgentTool, SystemPromptTemplate, Templates, TerminalTool, ToolPermissionDecision,
-    UpdatePlanTool, WebSearchTool, WriteFileTool, decide_permission_from_settings,
+    AgentPluginRuntimeStatusTool, ApplyCodeActionTool, CodeActionStore, ContextServerRegistry,
+    CopyPathTool, CreateDirectoryTool, DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool,
+    EditFileTool, FetchTool, FindPathTool, FindReferencesTool, GetCodeActionsTool,
+    GoToDefinitionTool, GrepTool, ListDirectoryTool, MovePathTool, OpenTool, ProjectSnapshot,
+    ReadFileTool, RenameTool, SpawnAgentTool, SystemPromptTemplate, Templates, TerminalTool,
+    ToolPermissionDecision, UpdatePlanTool, WebSearchTool, WriteFileTool,
+    decide_permission_from_settings,
 };
 use acp_thread::{MentionUri, UserMessageId};
 use action_log::ActionLog;
@@ -1627,6 +1628,7 @@ impl Thread {
         self.add_tool(TerminalTool::new(self.project.clone(), environment.clone()));
         self.add_tool(WebSearchTool);
         self.add_tool(AgentPluginCatalogTool::new(self.project.clone()));
+        self.add_tool(AgentPluginRuntimeStatusTool::new(self.project.clone()));
         self.add_tool(AgentBrowserPayloadTool);
         self.add_tool(AgentBrowserPayloadStageTool);
         self.add_tool(AgentBrowserPayloadQueueTool::new(self.project.clone()));

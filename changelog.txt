@@ -1,3 +1,16 @@
+[2026-05-16] - Agent Plugin Runtime Status Tool
+
+ADDED:
+- Added the read-only `inspect_agent_plugin_runtime_status` Agent tool to summarize Browser, managed Chrome, and PC-use readiness from one Agent Panel call.
+- Advertised the runtime status tool and schema in both the Agent plugin catalog and WebPreview plugin handoff catalog.
+
+CHANGED:
+- Browser payload queue filename is now exported for shared runtime-status inspection instead of duplicating private queue naming.
+- Runtime status reports managed roots, latest small JSON handoff summaries, Chrome/Playwright host probes, plugin tool names, and next actions without invoking any runner.
+
+NOTES:
+- This tool is inspection-only: it does not write files, run Node, launch Chrome, take screenshots, dispatch mouse or keyboard input, or touch real browser profiles.
+
 [2026-05-16] - PC Use Snapshot Receipt Payload Gate
 
 CHANGED:

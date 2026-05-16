@@ -8396,6 +8396,7 @@ impl WebPreviewView {
                 "default_enabled_plugins": ["zed.browser", "zed.chrome", "zed.pc_use"],
                 "tools": {
                     "discovery": "list_agent_plugins",
+                    "runtime_status": "inspect_agent_plugin_runtime_status",
                     "compose_browser_action_payload": "compose_agent_browser_action_payload",
                     "stage_browser_action_payload": "stage_agent_browser_action_payload",
                     "queue_browser_action_payload": "queue_agent_browser_action_payload",
@@ -8418,6 +8419,12 @@ impl WebPreviewView {
                     "request_zed_pc_use_payload_run": "request_zed_pc_use_payload_run",
                     "inspect_zed_pc_use_runner_receipts": "inspect_zed_pc_use_runner_receipts",
                     "prepare_runtime": "prepare_agent_plugin_runtime"
+                },
+                "runtime_status": {
+                    "tool_name": "inspect_agent_plugin_runtime_status",
+                    "schema": "zed.agent_plugins.runtime_status.v1",
+                    "read_only": true,
+                    "purpose": "Summarize Browser, managed Chrome, and PC-use readiness without launching browsers, running Node, screenshots, or input dispatch."
                 },
                 "available_to": [
                     "agent_panel",

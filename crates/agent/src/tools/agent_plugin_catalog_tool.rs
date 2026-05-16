@@ -22,7 +22,8 @@ use crate::{
     AGENT_PC_USE_TARGET_MANIFEST_TOOL_NAME, AGENT_PC_USE_TARGET_SNAPSHOT_SCHEMA,
     AGENT_PC_USE_TARGET_SNAPSHOT_TOOL_NAME, AGENT_PC_USE_UI_SNAPSHOT_CONTRACT_SCHEMA,
     AGENT_PC_USE_UI_SNAPSHOT_CONTRACT_TOOL_NAME, AGENT_PC_USE_UI_SNAPSHOT_SCHEMA,
-    AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME, AgentTool, ToolCallEventStream, ToolInput,
+    AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME, AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA,
+    AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME, AgentTool, ToolCallEventStream, ToolInput,
 };
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
@@ -166,6 +167,7 @@ fn agent_plugin_catalog(
             "tool_name": AgentPluginCatalogTool::NAME,
             "tools": {
                 "discovery": AgentPluginCatalogTool::NAME,
+                "runtime_status": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
                 "compose_browser_action_payload": AGENT_BROWSER_PAYLOAD_TOOL_NAME,
                 "stage_browser_action_payload": AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME,
                 "queue_browser_action_payload": AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME,
@@ -188,6 +190,18 @@ fn agent_plugin_catalog(
                 "inspect_zed_pc_use_ui_snapshot_contract": AGENT_PC_USE_UI_SNAPSHOT_CONTRACT_TOOL_NAME,
                 "inspect_zed_pc_use_ui_snapshot": AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME,
                 "prepare_runtime": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL
+            },
+            "runtime_status": {
+                "tool_name": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                "schema": AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA,
+                "read_only": true,
+                "payload": {
+                    "root_mode": "workspace",
+                    "include_latest_handoffs": true,
+                    "include_host_checks": true,
+                    "include_next_actions": true
+                },
+                "purpose": "Summarize Browser, managed Chrome, and PC-use readiness without launching browsers, running Node, screenshots, or input dispatch."
             },
             "available_to": [
                 "agent_panel",

@@ -18,7 +18,7 @@ const MAX_TYPE_TEXT_CHARS: usize = 4096;
 pub const AGENT_BROWSER_PAYLOAD_TOOL_NAME: &str = "compose_agent_browser_action_payload";
 pub const AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME: &str = "stage_agent_browser_action_payload";
 pub const AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME: &str = "queue_agent_browser_action_payload";
-const AGENT_BROWSER_PAYLOAD_QUEUE_FILE_NAME: &str = "latest-agent-browser-payload.json";
+pub const AGENT_BROWSER_PAYLOAD_QUEUE_FILE_NAME: &str = "latest-agent-browser-payload.json";
 const ALLOWED_KEYS: &[&str] = &[
     "Escape",
     "Enter",

@@ -16,6 +16,7 @@ mod agent_pc_use_ui_snapshot_contract_tool;
 mod agent_pc_use_ui_snapshot_tool;
 mod agent_plugin_bootstrap_tool;
 mod agent_plugin_catalog_tool;
+mod agent_plugin_runtime_status_tool;
 mod apply_code_action_tool;
 mod context_server_registry;
 mod copy_path_tool;
@@ -93,6 +94,7 @@ pub use agent_pc_use_ui_snapshot_contract_tool::*;
 pub use agent_pc_use_ui_snapshot_tool::*;
 pub use agent_plugin_bootstrap_tool::*;
 pub use agent_plugin_catalog_tool::*;
+pub use agent_plugin_runtime_status_tool::*;
 pub use apply_code_action_tool::*;
 pub use context_server_registry::*;
 pub use copy_path_tool::*;
@@ -211,6 +213,7 @@ tools! {
     AgentPcUseUiSnapshotTool,
     AgentPcUseUiSnapshotContractTool,
     AgentPluginCatalogTool,
+    AgentPluginRuntimeStatusTool,
     ApplyCodeActionTool,
     CopyPathTool,
     CreateDirectoryTool,
