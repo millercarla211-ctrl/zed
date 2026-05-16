@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime Status Packet Catalog Summary
+
+ADDED:
+- WebPreview status packets now expose plugin catalog latest/current compact summaries in the `latest` block.
+- Status-packet handoff metadata now includes the plugin catalog schema, summary schema, copy/send actions, latest summary, and current summary for right-side panels.
+
+CHANGED:
+- Status packets now reuse the action manifest's safe current catalog summary path, avoiding recursive session/catalog generation while still surfacing live Browser, managed Chrome, and PC-use catalog state.
+
+NOTES:
+- This is read-only status-packet metadata only. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, probe proof files, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Action Manifest Catalog Summary
 
 ADDED:

@@ -10169,6 +10169,10 @@ impl WebPreviewView {
                 &runtime_green_final_report_packet,
                 &final_proof_audit,
             );
+        let action_manifest = self.agent_browser_action_manifest(window);
+        let agent_plugin_catalog_current_summary = action_manifest
+            .pointer("/handoffs/plugin_catalog/current_summary")
+            .cloned();
         let context_ready =
             diagnostics_ready || runtime_ready || dom_ready || targets_ready || readiness_ready;
         let audit_ready = plan_ready
@@ -10275,6 +10279,11 @@ impl WebPreviewView {
                     "agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result_summary(),
                     "agent_browser_final_validation_result_import_receipt": self.latest_agent_browser_final_validation_result_import_receipt_summary(),
                     "agent_browser_final_proof_audit": self.latest_agent_browser_final_proof_audit_summary(),
+                    "agent_plugin_catalog": {
+                        "summary_schema": AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA,
+                        "latest_summary": self.latest_agent_plugin_catalog_summary(),
+                        "current_summary": agent_plugin_catalog_current_summary.clone(),
+                    },
                     "managed_chrome_execution": managed_chrome_execution,
                     "pc_use_status": pc_use_status,
                     "runtime_observability_digest": runtime_observability_digest_summary,
@@ -10301,6 +10310,13 @@ impl WebPreviewView {
                     "requires_receipt_after_every_input": true,
                     "managed_chrome_receipts_visible": true,
                     "pc_use_receipts_visible": true,
+                    "agent_plugin_catalog_visible": true,
+                    "agent_plugin_catalog_schema": "zed.agent_plugins.catalog.v1",
+                    "agent_plugin_catalog_summary_schema": AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA,
+                    "agent_plugin_catalog_copy_action": "copy_agent_plugin_catalog",
+                    "agent_plugin_catalog_send_action": "send_agent_plugin_catalog_to_agent",
+                    "agent_plugin_catalog_current_summary": agent_plugin_catalog_current_summary,
+                    "agent_plugin_catalog_latest_summary": self.latest_agent_plugin_catalog_summary(),
                     "runtime_observability_digest_visible": true,
                     "runtime_observability_digest_copy_action": "copy_agent_plugin_runtime_observability_digest",
                     "runtime_observability_digest_send_action": "send_agent_plugin_runtime_observability_digest_to_agent",
