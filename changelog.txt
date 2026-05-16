@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime WebPreview Observability Digest Handoff
+
+ADDED:
+- WebPreview now has Copy/Send Runtime Observability Digest actions for Agent Panel handoff.
+- Session capabilities, status packets, action manifests, final validation bundles, and plugin catalogs now advertise the digest schema and WebPreview copy/send actions.
+- The WebPreview digest packages lane readiness, proof focus, current best next action, and the canonical Agent runtime-status payload in a compact read-only packet.
+
+NOTES:
+- This is read-only WebPreview handoff metadata only; it does not execute browser actions, run Node, launch Chrome, dispatch input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Observability Digest
 
 ADDED:

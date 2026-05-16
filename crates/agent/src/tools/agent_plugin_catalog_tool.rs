@@ -255,6 +255,13 @@ fn agent_plugin_catalog(
                 "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
             },
             "webpreview_handoffs": {
+                "runtime_observability_digest": {
+                    "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_observability_digest",
+                    "send_action": "send_agent_plugin_runtime_observability_digest_to_agent",
+                    "read_only": true,
+                    "purpose": "Share one compact WebPreview runtime health digest with lane readiness, proof focus, and the next operator packet."
+                },
                 "runtime_green_operator_handoff": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
                     "copy_action": "copy_agent_plugin_runtime_green_handoff",

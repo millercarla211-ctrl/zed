@@ -347,6 +347,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_plugin_bootstrap_readiness_to_agent",
     "copy_agent_plugin_runtime_green_handoff",
     "send_agent_plugin_runtime_green_handoff_to_agent",
+    "copy_agent_plugin_runtime_observability_digest",
+    "send_agent_plugin_runtime_observability_digest_to_agent",
     "copy_agent_browser_noop_executor_attempt",
     "send_agent_browser_noop_executor_attempt_to_agent",
     "copy_permissioned_click_preflight_attempt",
@@ -1510,6 +1512,9 @@ impl WebPreviewView {
                 "agent_plugin_runtime_green_operator_handoff": true,
                 "copy_agent_plugin_runtime_green_handoff": true,
                 "send_agent_plugin_runtime_green_handoff_to_agent": true,
+                "agent_plugin_runtime_observability_digest": true,
+                "copy_agent_plugin_runtime_observability_digest": true,
+                "send_agent_plugin_runtime_observability_digest_to_agent": true,
                 "copy_agent_browser_noop_executor_attempt": true,
                 "send_agent_browser_noop_executor_attempt_to_agent": true,
                 "run_permissioned_reload_executor": self.agent_action_permission.interactive_enabled(),
@@ -2732,6 +2737,12 @@ impl WebPreviewView {
             Self::agent_plugin_runtime_green_operator_handoff_summary(
                 &runtime_green_operator_handoff,
             );
+        let runtime_observability_digest = self
+            .agent_plugin_runtime_observability_digest_from_handoff(
+                &runtime_green_operator_handoff,
+            );
+        let runtime_observability_digest_summary =
+            Self::agent_plugin_runtime_observability_digest_summary(&runtime_observability_digest);
 
         serde_json::json!({
             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
@@ -2803,6 +2814,13 @@ impl WebPreviewView {
                     "send_action": "send_agent_plugin_bootstrap_readiness_to_agent",
                     "current_status": bootstrap_readiness.pointer("/status").and_then(Value::as_str),
                     "phase_summary": bootstrap_readiness.pointer("/phase_summary").cloned()
+                },
+                "runtime_observability_digest": {
+                    "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_observability_digest",
+                    "send_action": "send_agent_plugin_runtime_observability_digest_to_agent",
+                    "current_status": runtime_observability_digest.pointer("/status").and_then(Value::as_str),
+                    "latest_summary": runtime_observability_digest_summary
                 },
                 "runtime_green_operator_handoff": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
@@ -4093,6 +4111,183 @@ impl WebPreviewView {
             "lane_count": handoff.pointer("/summary/lane_count").and_then(Value::as_u64),
             "current_best_next_lane": handoff.pointer("/summary/current_best_next_lane").and_then(Value::as_str),
         })
+    }
+
+    fn agent_plugin_runtime_observability_digest(&self, window: &Window) -> Value {
+        let handoff = self.agent_plugin_runtime_green_operator_handoff(window);
+        self.agent_plugin_runtime_observability_digest_from_handoff(&handoff)
+    }
+
+    fn agent_plugin_runtime_observability_digest_from_handoff(&self, handoff: &Value) -> Value {
+        let lanes = handoff
+            .get("lanes")
+            .and_then(Value::as_array)
+            .map(|lanes| {
+                lanes
+                    .iter()
+                    .map(|lane| {
+                        serde_json::json!({
+                            "lane_id": lane.get("lane_id").and_then(Value::as_str),
+                            "status": lane.get("status").and_then(Value::as_str),
+                            "ready": lane.get("ready").and_then(Value::as_bool).unwrap_or(false),
+                            "operator_actions": lane
+                                .get("operator_actions")
+                                .cloned()
+                                .unwrap_or_else(|| serde_json::json!({})),
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let pending_lane_count = lanes
+            .iter()
+            .filter(|lane| !lane.get("ready").and_then(Value::as_bool).unwrap_or(false))
+            .count();
+        let runtime_green_candidate = handoff
+            .get("runtime_green_candidate")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let status = if runtime_green_candidate {
+            "runtime_green_candidate"
+        } else if pending_lane_count == 0 {
+            "ready_for_final_runtime_validation"
+        } else {
+            "operator_action_required"
+        };
+
+        serde_json::json!({
+            "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+            "generated_at_ms": Self::current_epoch_millis(),
+            "source": "web_preview",
+            "status": status,
+            "runtime_green_candidate": runtime_green_candidate,
+            "root_mode": handoff.get("root_mode").and_then(Value::as_str),
+            "session": handoff
+                .get("session")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({})),
+            "summary": {
+                "lane_count": handoff.pointer("/summary/lane_count").and_then(Value::as_u64),
+                "ready_lane_count": handoff.pointer("/summary/ready_lane_count").and_then(Value::as_u64),
+                "pending_lane_count": pending_lane_count,
+                "current_best_next_lane": handoff.pointer("/summary/current_best_next_lane").and_then(Value::as_str),
+            },
+            "lane_statuses": lanes,
+            "proof_focus": {
+                "browser_final_validation": {
+                    "status": handoff.pointer("/webpreview_evidence/final_validation_observability/status").and_then(Value::as_str),
+                    "runtime_green_candidate": handoff.pointer("/webpreview_evidence/final_validation_observability/runtime_green_candidate").and_then(Value::as_bool),
+                    "missing": handoff
+                        .pointer("/webpreview_evidence/final_validation_observability/missing")
+                        .cloned()
+                        .unwrap_or_else(|| serde_json::json!([])),
+                    "recovery_actions": handoff
+                        .pointer("/webpreview_evidence/final_validation_observability/recovery_actions")
+                        .cloned()
+                        .unwrap_or_else(|| serde_json::json!({})),
+                },
+                "managed_chrome": {
+                    "bootstrap_status": handoff.pointer("/webpreview_evidence/plugin_bootstrap_readiness/status").and_then(Value::as_str),
+                    "execution_status": handoff.pointer("/webpreview_evidence/managed_chrome_execution_status/status").and_then(Value::as_str),
+                    "latest_execution_outcome": handoff.pointer("/webpreview_evidence/managed_chrome_execution_status/latest_receipt/read/outcome").and_then(Value::as_str),
+                },
+                "pc_use": {
+                    "status": handoff.pointer("/webpreview_evidence/pc_use_status/status").and_then(Value::as_str),
+                    "latest_outcome": handoff.pointer("/webpreview_evidence/pc_use_status/latest_outcome").and_then(Value::as_str),
+                }
+            },
+            "current_best_next": handoff
+                .get("current_best_next")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({})),
+            "agent_runtime_status_tool": {
+                "tool_name": "inspect_agent_plugin_runtime_status",
+                "schema": "zed.agent_plugins.runtime_status.v1",
+                "observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+                "payload": runtime_green_status_payload(
+                    handoff
+                        .get("root_mode")
+                        .and_then(Value::as_str)
+                        .unwrap_or("workspace"),
+                )
+            },
+            "copy_action": "copy_agent_plugin_runtime_observability_digest",
+            "send_action": "send_agent_plugin_runtime_observability_digest_to_agent",
+            "expanded_operator_handoff": {
+                "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+                "copy_action": "copy_agent_plugin_runtime_green_handoff",
+                "send_action": "send_agent_plugin_runtime_green_handoff_to_agent"
+            },
+            "safety": {
+                "read_only": true,
+                "writes_files": false,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false,
+                "touches_real_browser_profiles": false
+            }
+        })
+    }
+
+    fn agent_plugin_runtime_observability_digest_summary(digest: &Value) -> Value {
+        serde_json::json!({
+            "schema": digest.get("schema").and_then(Value::as_str),
+            "status": digest.get("status").and_then(Value::as_str),
+            "runtime_green_candidate": digest.get("runtime_green_candidate").and_then(Value::as_bool),
+            "root_mode": digest.get("root_mode").and_then(Value::as_str),
+            "ready_lane_count": digest.pointer("/summary/ready_lane_count").and_then(Value::as_u64),
+            "lane_count": digest.pointer("/summary/lane_count").and_then(Value::as_u64),
+            "pending_lane_count": digest.pointer("/summary/pending_lane_count").and_then(Value::as_u64),
+            "current_best_next_lane": digest.pointer("/summary/current_best_next_lane").and_then(Value::as_str),
+        })
+    }
+
+    fn agent_plugin_runtime_observability_digest_json(digest: &Value) -> String {
+        serde_json::to_string_pretty(digest).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_plugin_runtime_observability_digest_agent_blocks(
+        &self,
+        digest: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = digest.pointer("/session/page/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Runtime observability digest:\n\n```json\n{}\n```",
+            Self::agent_plugin_runtime_observability_digest_json(digest)
+        ))));
+        blocks
+    }
+
+    fn copy_agent_plugin_runtime_observability_digest(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let digest = self.agent_plugin_runtime_observability_digest(window);
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_plugin_runtime_observability_digest_json(&digest),
+        ));
+        self.show_toast("Copied runtime observability digest", cx);
+        cx.notify();
+    }
+
+    fn send_agent_plugin_runtime_observability_digest_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let digest = self.agent_plugin_runtime_observability_digest(window);
+        let blocks = self.agent_plugin_runtime_observability_digest_agent_blocks(&digest);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent runtime observability digest to the agent panel", cx);
+        cx.notify();
     }
 
     fn agent_plugin_runtime_green_operator_handoff_json(handoff: &Value) -> String {
@@ -5904,6 +6099,12 @@ impl WebPreviewView {
             Self::agent_plugin_runtime_green_operator_handoff_summary(
                 &runtime_green_operator_handoff,
             );
+        let runtime_observability_digest = self
+            .agent_plugin_runtime_observability_digest_from_handoff(
+                &runtime_green_operator_handoff,
+            );
+        let runtime_observability_digest_summary =
+            Self::agent_plugin_runtime_observability_digest_summary(&runtime_observability_digest);
         let context_ready =
             diagnostics_ready || runtime_ready || dom_ready || targets_ready || readiness_ready;
         let audit_ready = plan_ready
@@ -6002,6 +6203,7 @@ impl WebPreviewView {
                     "agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result_summary(),
                     "managed_chrome_execution": managed_chrome_execution,
                     "pc_use_status": pc_use_status,
+                    "runtime_observability_digest": runtime_observability_digest_summary,
                     "runtime_green_operator_handoff": runtime_green_operator_handoff_summary,
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 },
@@ -6011,6 +6213,9 @@ impl WebPreviewView {
                     "requires_receipt_after_every_input": true,
                     "managed_chrome_receipts_visible": true,
                     "pc_use_receipts_visible": true,
+                    "runtime_observability_digest_visible": true,
+                    "runtime_observability_digest_copy_action": "copy_agent_plugin_runtime_observability_digest",
+                    "runtime_observability_digest_send_action": "send_agent_plugin_runtime_observability_digest_to_agent",
                     "runtime_green_operator_handoff_visible": true,
                     "runtime_green_operator_handoff_copy_action": "copy_agent_plugin_runtime_green_handoff",
                     "runtime_green_operator_handoff_send_action": "send_agent_plugin_runtime_green_handoff_to_agent",
@@ -10314,6 +10519,12 @@ impl WebPreviewView {
             Self::agent_plugin_runtime_green_operator_handoff_summary(
                 &runtime_green_operator_handoff,
             );
+        let runtime_observability_digest = self
+            .agent_plugin_runtime_observability_digest_from_handoff(
+                &runtime_green_operator_handoff,
+            );
+        let runtime_observability_digest_summary =
+            Self::agent_plugin_runtime_observability_digest_summary(&runtime_observability_digest);
 
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_actions.v1",
@@ -10385,6 +10596,14 @@ impl WebPreviewView {
                     "read_only": true,
                     "purpose": "Copy or send the compact host, managed-root, and managed-asset bootstrap readiness packet without requiring the larger plugin catalog or runtime-status tool."
                 },
+                "runtime_observability_digest": {
+                    "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_observability_digest",
+                    "send_action": "send_agent_plugin_runtime_observability_digest_to_agent",
+                    "latest_summary": runtime_observability_digest_summary,
+                    "read_only": true,
+                    "purpose": "Copy or send the compact Browser, managed Chrome, and PC-use runtime health digest without requiring the full runtime-status tree."
+                },
                 "runtime_green_operator_handoff": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
                     "copy_action": "copy_agent_plugin_runtime_green_handoff",
@@ -10397,6 +10616,7 @@ impl WebPreviewView {
             "final_validation_observability": self.agent_browser_final_validation_observability(),
             "browser_function_surfaces": self.agent_browser_function_surfaces(),
             "plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
+            "runtime_observability_digest": runtime_observability_digest,
             "runtime_green_operator_handoff": runtime_green_operator_handoff,
             "notes": [
                 "Read-only actions are always available for context gathering.",
@@ -10506,6 +10726,13 @@ impl WebPreviewView {
                     "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
                 },
                 "webpreview_handoffs": {
+                    "runtime_observability_digest": {
+                        "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+                        "copy_action": "copy_agent_plugin_runtime_observability_digest",
+                        "send_action": "send_agent_plugin_runtime_observability_digest_to_agent",
+                        "read_only": true,
+                        "purpose": "Share one compact runtime health digest from WebPreview with lane readiness, proof focus, and the next operator packet."
+                    },
                     "runtime_green_operator_handoff": {
                         "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
                         "copy_action": "copy_agent_plugin_runtime_green_handoff",
@@ -13852,6 +14079,34 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_agent_plugin_runtime_green_handoff_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Runtime Observability Digest")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_plugin_runtime_observability_digest(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Runtime Observability Digest")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_plugin_runtime_observability_digest_to_agent(
                                                 window, cx,
                                             );
                                         });
