@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime Report Readiness Card
+
+ADDED:
+- `inspect_agent_plugin_runtime_status` now emits `runtime_green_report_readiness_card`, a schema-versioned compact card combining claim readiness, report gate, final report packet, final proof audit, and regression-watch status.
+- WebPreview status packets, final validation bundles, action manifests, session snapshots, and Agent plugin catalogs now advertise the same report-readiness card for right-side panel status surfaces.
+
+CHANGED:
+- Runtime-green catalog metadata now names the report-readiness card beside the final report packet so agents can render one status object before opening larger proof packets.
+
+NOTES:
+- This is read-only observability metadata. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime Final Report Regression Watch Gate
 
 ADDED:

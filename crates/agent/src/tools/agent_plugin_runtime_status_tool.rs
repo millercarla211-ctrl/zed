@@ -104,6 +104,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_proof_guide.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_report_packet.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_report_readiness_card.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA: &str =
@@ -476,6 +478,12 @@ fn inspect_runtime_status(
         &runtime_green_report_gate_value,
         &runtime_green_final_report_packet_value,
     );
+    let runtime_green_report_readiness_card_value = runtime_green_report_readiness_card(
+        &runtime_green_claim_readiness_value,
+        &runtime_green_report_gate_value,
+        &runtime_green_final_report_packet_value,
+        &runtime_green_final_proof_audit_value,
+    );
     let runtime_green_final_proof_audit_summary =
         runtime_green_final_proof_audit_summary(&runtime_green_final_proof_audit_value);
     let runtime_green_claim_gate = input
@@ -523,6 +531,7 @@ fn inspect_runtime_status(
         "runtime_green_final_proof_audit": runtime_green_final_proof_audit_value,
         "runtime_green_final_proof_audit_summary": runtime_green_final_proof_audit_summary,
         "runtime_green_final_report_packet": runtime_green_final_report_packet_value,
+        "runtime_green_report_readiness_card": runtime_green_report_readiness_card_value,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
         "observability_profiles": input
@@ -564,6 +573,7 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
             "final_proof_audit_summary": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_green_final_proof_guide": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
             "runtime_green_final_report_packet": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+            "runtime_green_report_readiness_card": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
         },
         "managed_paths": {
             "queue_dir": dir_probe(&roots.browser_queue_dir),
@@ -2907,7 +2917,8 @@ fn runtime_green_proof_path(
                     "runtime_green_final_proof_guide",
                     "runtime_green_final_proof_audit",
                     "runtime_green_final_proof_audit_summary",
-                    "runtime_green_final_report_packet"
+                    "runtime_green_final_report_packet",
+                    "runtime_green_report_readiness_card"
                 ],
                 "writes_files": false,
                 "dispatches_input": false
@@ -2985,6 +2996,12 @@ fn runtime_green_proof_path(
                 "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
                 "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent"
             },
+            "runtime_green_report_readiness_card": {
+                "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
+                "source": "runtime_green_claim_readiness + runtime_green_report_gate + runtime_green_final_report_packet + runtime_green_final_proof_audit",
+                "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
+                "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent"
+            },
             "runtime_observability_digest": {
                 "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
                 "plugin_matrix_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA,
@@ -3005,7 +3022,8 @@ fn runtime_green_proof_path(
             "runtime_green_readiness_scorecard",
             "runtime_green_final_proof_audit",
             "runtime_green_final_proof_audit_summary",
-            "runtime_green_final_report_packet"
+            "runtime_green_final_report_packet",
+            "runtime_green_report_readiness_card"
         ],
         "safety": {
             "proof_path_is_read_only": true,
@@ -3708,6 +3726,162 @@ fn runtime_green_final_report_packet(
         },
         "webpreview_copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
         "webpreview_send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
+        "read_only": true,
+        "writes_files": false,
+        "runs_node": false,
+        "launches_browser": false,
+        "dispatches_input": false,
+    })
+}
+
+fn runtime_green_report_readiness_card(
+    claim_readiness: &Value,
+    report_gate: &Value,
+    final_report_packet: &Value,
+    final_proof_audit: &Value,
+) -> Value {
+    let may_report_runtime_green = final_report_packet
+        .get("may_report_runtime_green")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let report_gate_can_report = report_gate
+        .get("can_report_runtime_green")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let audit_status = final_proof_audit
+        .pointer("/audit/status")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let status = if may_report_runtime_green && report_gate_can_report {
+        "ready_to_report_runtime_green"
+    } else if audit_status == "awaiting_final_runtime_result_import" {
+        "final_runtime_result_import_required"
+    } else if audit_status == "final_result_needs_evidence_or_blocker_fix" {
+        "final_runtime_result_evidence_required"
+    } else {
+        "runtime_green_report_blocked"
+    };
+    let next_action = final_report_packet
+        .get("next_action")
+        .and_then(Value::as_str)
+        .or_else(|| {
+            final_proof_audit
+                .pointer("/audit/next_action")
+                .and_then(Value::as_str)
+        })
+        .or_else(|| report_gate.get("next_action").and_then(Value::as_str))
+        .unwrap_or("copy_agent_plugin_runtime_green_report_gate");
+    let blocker = final_report_packet
+        .get("blocker")
+        .and_then(Value::as_str)
+        .or_else(|| report_gate.get("blocker").and_then(Value::as_str))
+        .unwrap_or("unknown");
+    let regression_watch = final_report_packet
+        .get("regression_watch")
+        .or_else(|| report_gate.get("regression_watch"))
+        .unwrap_or(&Value::Null);
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
+        "status": status,
+        "may_report_runtime_green": may_report_runtime_green,
+        "blocker": blocker,
+        "next_action": next_action,
+        "final_manual_command": "just run",
+        "claim_readiness": {
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
+            "status": claim_readiness.get("status").and_then(Value::as_str),
+            "can_report_runtime_green": claim_readiness
+                .get("can_report_runtime_green")
+                .and_then(Value::as_bool),
+            "ready_lane_fraction": claim_readiness
+                .get("ready_lane_fraction")
+                .and_then(Value::as_str),
+            "first_pending_lane_label": claim_readiness
+                .get("first_pending_lane_label")
+                .and_then(Value::as_str),
+            "first_pending_lane_status": claim_readiness
+                .get("first_pending_lane_status")
+                .and_then(Value::as_str),
+            "next_required_proof_id": claim_readiness
+                .get("next_required_proof_id")
+                .and_then(Value::as_str),
+            "next_recommended_action": claim_readiness
+                .get("next_recommended_action")
+                .and_then(Value::as_str),
+        },
+        "report_gate": {
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
+            "status": report_gate.get("status").and_then(Value::as_str),
+            "can_report_runtime_green": report_gate_can_report,
+            "blocker": report_gate.get("blocker").and_then(Value::as_str),
+            "severity": report_gate.get("severity").and_then(Value::as_str),
+            "badge": report_gate.get("badge").cloned(),
+            "next_action": report_gate.get("next_action").and_then(Value::as_str),
+        },
+        "final_report_packet": {
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+            "status": final_report_packet.get("status").and_then(Value::as_str),
+            "may_report_runtime_green": may_report_runtime_green,
+            "blocker": final_report_packet.get("blocker").and_then(Value::as_str),
+            "next_action": final_report_packet.get("next_action").and_then(Value::as_str),
+        },
+        "final_proof_audit": {
+            "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
+            "status": audit_status,
+            "runtime_green_candidate": final_proof_audit
+                .pointer("/audit/runtime_green_candidate")
+                .and_then(Value::as_bool),
+            "overall_runtime_green_candidate": final_proof_audit
+                .pointer("/audit/overall_runtime_green_candidate")
+                .and_then(Value::as_bool),
+            "final_result_present": final_proof_audit
+                .pointer("/audit/final_result_present")
+                .and_then(Value::as_bool),
+            "final_result_runtime_green": final_proof_audit
+                .pointer("/audit/final_result_runtime_green")
+                .and_then(Value::as_bool),
+            "missing_required_check_count": final_proof_audit
+                .pointer("/audit/missing_required_checks")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            "missing_required_evidence_count": final_proof_audit
+                .pointer("/audit/missing_required_evidence")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            "required_check_blocker_count": final_proof_audit
+                .pointer("/audit/required_check_blocker_count")
+                .and_then(Value::as_u64),
+            "has_overall_blocker": final_proof_audit
+                .pointer("/audit/has_overall_blocker")
+                .and_then(Value::as_bool),
+            "next_action": final_proof_audit
+                .pointer("/audit/next_action")
+                .and_then(Value::as_str),
+        },
+        "regression_watch": {
+            "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_WATCH_ROLLUP_SCHEMA,
+            "status": regression_watch.get("status").and_then(Value::as_str),
+            "watched_plugin_count": regression_watch
+                .get("watched_plugin_count")
+                .and_then(Value::as_u64),
+            "total_must_recheck_count": regression_watch
+                .get("total_must_recheck_count")
+                .and_then(Value::as_u64),
+            "total_must_not_regress_count": regression_watch
+                .get("total_must_not_regress_count")
+                .and_then(Value::as_u64),
+            "first_watch_status": regression_watch
+                .pointer("/first_watch/status")
+                .and_then(Value::as_str),
+            "review_before_runtime_green_claim": true,
+        },
+        "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
+        "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
+        "report_gate_copy_action": "copy_agent_plugin_runtime_green_report_gate",
+        "report_gate_send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
+        "audit_copy_action": "copy_agent_browser_final_proof_audit",
+        "audit_send_action": "send_agent_browser_final_proof_audit_to_agent",
         "read_only": true,
         "writes_files": false,
         "runs_node": false,
