@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Asset Receipt Freshness
+
+CHANGED:
+- Added the managed asset provisioning receipt to runtime-status proof freshness so missing or stale `agent-plugin-asset-provisioning.json` blocks runtime-green evidence just like payloads, runner receipts, and adapter manifests.
+- Managed Chrome observability now advertises `prepare_agent_plugin_managed_assets` as a proof handoff and lists asset receipts as a watch surface before Chrome execution.
+- Recovery actions now tell agents to run the asset provisioner with `write_asset_receipt=true`, and only copy the DX Chrome extension when a local unpacked extension source is available.
+
+NOTES:
+- This is read-only runtime-status metadata only; it does not copy extensions, download packages, run Node, launch Chrome, dispatch browser input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Managed Asset Provisioner
 
 ADDED:

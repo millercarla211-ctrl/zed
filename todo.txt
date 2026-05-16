@@ -1,5 +1,6 @@
 IN PROGRESS:
 - NEXT 100-POINT FEATURE SET: Agent Plugin Runtime. Goal: bring Codex-app-style plugin capability discovery into the Zed Agent, starting with Browser, Chrome/Playwright, and permissioned PC-use plugins available to every Agent Panel.
+- Agent Plugin Runtime asset-receipt freshness slice: `inspect_agent_plugin_runtime_status` now treats `agent-plugin-asset-provisioning.json` as required managed Chrome proof evidence, advertises the asset provisioner in managed Chrome proof handoffs, and maps missing/stale receipts to the exact non-dispatching recovery payload.
 - Agent Plugin Runtime first slice: add a read-only built-in agent tool plus WebPreview handoff catalog so agents can discover Browser, Chrome, DX Chrome extension, Playwright, and PC-use capabilities before executor/download wiring.
 - Agent Plugin Runtime observability profile slice: Agent and WebPreview catalogs now expose Browser, managed Chrome, and PC-use health profiles with proof handoffs, runtime blockers, watch surfaces, and next validation actions.
 - Agent Plugin Runtime observability status slice: `inspect_agent_plugin_runtime_status` now includes a default-on observability profile summary so agents can see Browser, managed Chrome, and PC-use code scores, blockers, proof handoffs, and final proof order from one read-only tool call.

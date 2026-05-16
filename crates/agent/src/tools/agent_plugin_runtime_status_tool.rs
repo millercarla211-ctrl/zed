@@ -1147,7 +1147,7 @@ fn observability_profiles(runtime_status: &str, roots: &AgentPluginRuntimeRoots)
     serde_json::json!({
         "status": summary_status,
         "runtime_status": runtime_status,
-        "overall_code_score": 93,
+        "overall_code_score": 94,
         "runtime_green_blocker": "Browser, managed Chrome, and PC-use profiles still need one final Windows runtime validation pass plus imported manual result evidence before the product can be called runtime-green.",
         "proof_freshness": observability_proof_freshness(roots),
         "plugins": {
@@ -1173,8 +1173,9 @@ fn observability_profiles(runtime_status: &str, roots: &AgentPluginRuntimeRoots)
             "managed_chrome": {
                 "id": "zed.chrome",
                 "status": "managed_adapter_ready_pending_windows_runtime_validation",
-                "code_score": 92,
+                "code_score": 94,
                 "proof_handoffs": {
+                    "asset_provisioner_tool": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
                     "queue_inspection_tool": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
                     "runner_gate_tool": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
                     "adapter_prepare_tool": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
@@ -1185,6 +1186,7 @@ fn observability_profiles(runtime_status: &str, roots: &AgentPluginRuntimeRoots)
                 },
                 "watch_surfaces": [
                     "managed workspace or Zed-data roots only",
+                    "asset provisioning receipts prove managed assets were prepared before Chrome execution",
                     "real Chrome, Edge, and Firefox profiles stay untouched",
                     "adapter execution remains limited to open_url, screenshot, set_viewport, and wait_for_selector",
                     "click, type, key, and scroll stay blocked in the managed adapter",
@@ -1253,6 +1255,13 @@ fn observability_proof_freshness(roots: &AgentPluginRuntimeRoots) -> Value {
         &mut stale,
     );
     track_required_proof_file(
+        "chrome.asset_provisioning_receipt",
+        &roots.asset_provisioning_receipt,
+        generated_at_ms,
+        &mut missing,
+        &mut stale,
+    );
+    track_required_proof_file(
         "chrome.adapter_manifest",
         &roots.chrome_adapter_manifest,
         generated_at_ms,
@@ -1306,6 +1315,12 @@ fn observability_proof_freshness(roots: &AgentPluginRuntimeRoots) -> Value {
             "chrome_latest_runner_receipt": proof_file_probe(
                 &roots.chrome_latest_runner_receipt,
                 Some(AGENT_CHROME_RUNNER_RECEIPT_SCHEMA),
+                None,
+                generated_at_ms,
+            ),
+            "chrome_asset_provisioning_receipt": proof_file_probe(
+                &roots.asset_provisioning_receipt,
+                Some(AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA),
                 None,
                 generated_at_ms,
             ),
@@ -1401,6 +1416,21 @@ fn observability_recovery_action(label: &str, reason: &str) -> Value {
                 AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
                 AGENT_CHROME_RUNNER_GATE_TOOL_NAME
             ],
+            "dispatches_input": false
+        }),
+        "chrome.asset_provisioning_receipt" => serde_json::json!({
+            "target": label,
+            "reason": reason,
+            "steps": [
+                AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
+                AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                AgentPluginCatalogTool::NAME
+            ],
+            "required_payload_hint": {
+                "write_asset_receipt": true,
+                "copy_dx_chrome_extension": "set true only with a local unpacked extension source",
+                "dx_chrome_extension_source_root": "required only when copying the DX Chrome extension"
+            },
             "dispatches_input": false
         }),
         "chrome.adapter_manifest" => serde_json::json!({
