@@ -76,6 +76,8 @@ const PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA: &str =
 const PC_USE_RUNNER_RECEIPT_SCHEMA: &str = "zed.agent_plugins.pc_use.runner_receipt.v1";
 const AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA: &str =
     "zed.web_preview.agent_browser_executor_validation_progress.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_validation_bundle.v1";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
@@ -288,6 +290,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_executor_readiness_to_agent",
     "copy_agent_browser_executor_validation_progress",
     "send_agent_browser_executor_validation_progress_to_agent",
+    "copy_agent_browser_final_validation_bundle",
+    "send_agent_browser_final_validation_bundle_to_agent",
     "copy_agent_browser_noop_executor_attempt",
     "send_agent_browser_noop_executor_attempt_to_agent",
     "copy_native_click_trace_attempt",
@@ -1401,6 +1405,8 @@ impl WebPreviewView {
                 "send_agent_browser_executor_readiness_to_agent": true,
                 "copy_agent_browser_executor_validation_progress": true,
                 "send_agent_browser_executor_validation_progress_to_agent": true,
+                "copy_agent_browser_final_validation_bundle": true,
+                "send_agent_browser_final_validation_bundle_to_agent": true,
                 "copy_agent_browser_noop_executor_attempt": true,
                 "send_agent_browser_noop_executor_attempt_to_agent": true,
                 "run_permissioned_reload_executor": self.agent_action_permission.interactive_enabled(),
@@ -2266,6 +2272,162 @@ impl WebPreviewView {
         self.latest_agent_browser_executor_validation_progress = Some(progress);
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast("Sent executor validation progress to the agent panel", cx);
+        cx.notify();
+    }
+
+    fn agent_browser_final_validation_bundle(&self, window: &Window) -> Value {
+        let readiness = self.agent_browser_executor_readiness(window);
+        let progress = self.agent_browser_executor_validation_progress();
+        let runbook = self.agent_browser_qa_runbook(window);
+        let manifest = self.agent_browser_action_manifest(window);
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
+            "session": self.browser_session_snapshot(window),
+            "captured_at_ms": Self::current_epoch_millis(),
+            "status": progress.pointer("/status").and_then(Value::as_str),
+            "estimated_code_score": progress.pointer("/estimated_code_score").and_then(Value::as_u64),
+            "final_runtime_command": "just run",
+            "goal": "Prove the Permissioned Agent Browser Executor on Windows without re-opening editor or WebPreview input regressions.",
+            "current_readiness": {
+                "executor_readiness_status": readiness.pointer("/readiness/status").and_then(Value::as_str),
+                "can_dispatch_now": readiness.pointer("/readiness/can_dispatch_now").and_then(Value::as_bool),
+                "interactive_unlocked": readiness.pointer("/readiness/interactive_unlocked").and_then(Value::as_bool),
+                "validation_status": progress.pointer("/status").and_then(Value::as_str),
+                "ready_item_count": progress.pointer("/ready_item_count").and_then(Value::as_u64),
+                "total_item_count": progress.pointer("/total_item_count").and_then(Value::as_u64),
+                "ready_group_count": progress.pointer("/ready_group_count").and_then(Value::as_u64),
+                "total_group_count": progress.pointer("/total_group_count").and_then(Value::as_u64),
+            },
+            "handoff_artifacts": {
+                "status_packet": {
+                    "schema": "zed.web_preview.agent_browser_status_packet.v1",
+                    "copy_action": "copy_agent_browser_status_packet",
+                    "send_action": "send_agent_browser_status_packet_to_agent",
+                    "latest_summary": self.latest_agent_browser_status_packet_summary()
+                },
+                "executor_readiness": {
+                    "schema": "zed.web_preview.agent_browser_executor_readiness.v1",
+                    "copy_action": "copy_agent_browser_executor_readiness",
+                    "send_action": "send_agent_browser_executor_readiness_to_agent",
+                    "latest_summary": self.latest_agent_browser_executor_readiness_summary(),
+                    "current_status": readiness.pointer("/readiness/status").and_then(Value::as_str)
+                },
+                "executor_validation_progress": {
+                    "schema": AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA,
+                    "copy_action": "copy_agent_browser_executor_validation_progress",
+                    "send_action": "send_agent_browser_executor_validation_progress_to_agent",
+                    "latest_summary": self.latest_agent_browser_executor_validation_progress_summary(),
+                    "current_progress": progress
+                },
+                "native_dispatch_qa_checklist": {
+                    "schema": "zed.web_preview.native_dispatch_qa_checklist.v1",
+                    "copy_action": "copy_native_dispatch_qa_checklist",
+                    "send_action": "send_native_dispatch_qa_checklist_to_agent",
+                    "latest_summary": self.latest_agent_browser_native_dispatch_qa_checklist_summary()
+                },
+                "qa_runbook": {
+                    "schema": "zed.web_preview.agent_browser_qa_runbook.v1",
+                    "copy_action": "copy_agent_browser_qa_runbook",
+                    "send_action": "send_agent_browser_qa_runbook_to_agent",
+                    "latest_summary": self.latest_agent_browser_qa_runbook_summary(),
+                    "manual_gates": runbook.pointer("/runbook/manual_gates").cloned()
+                },
+                "action_manifest": {
+                    "schema": "zed.web_preview.agent_browser_actions.v1",
+                    "copy_action": "copy_agent_browser_action_manifest",
+                    "send_action": "send_agent_browser_action_manifest_to_agent",
+                    "handoffs": manifest.pointer("/handoffs").cloned()
+                },
+                "plugin_catalog": {
+                    "schema": "zed.agent_plugins.catalog.v1",
+                    "copy_action": "copy_agent_plugin_catalog",
+                    "send_action": "send_agent_plugin_catalog_to_agent",
+                    "latest_summary": self.latest_agent_plugin_catalog_summary()
+                },
+                "runtime_status_tool": {
+                    "tool_name": "inspect_agent_plugin_runtime_status",
+                    "schema": "zed.agent_plugins.runtime_status.v1",
+                    "payload": {
+                        "root_mode": "workspace",
+                        "include_latest_handoffs": true,
+                        "include_host_checks": true,
+                        "include_next_actions": true,
+                        "include_workflows": true,
+                        "include_validation_matrix": true
+                    }
+                }
+            },
+            "manual_windows_proof_order": [
+                "Start the app once with just run on the current dev branch.",
+                "Verify fast code-editor typing keeps text and caret responsive.",
+                "Verify WebPreview hover, click, right-click, wheel, and keyboard input still work.",
+                "Collect or refresh page diagnostics, runtime events, DOM snapshot, action targets, readiness probe, wait contract, interaction plan, action preflight, request envelope, and receipt templates.",
+                "Run native traces and native executor attempts for click, type, key, scroll, back, forward, and cache-only reset.",
+                "Import one managed Browser payload and confirm the payload-import receipt redacts text while preserving schema/action metadata.",
+                "Inspect managed Chrome and PC-use queue/receipt/status handoffs without touching real browser profiles or OS-wide input.",
+                "Copy or send this final validation bundle with the resulting summaries."
+            ],
+            "success_criteria": [
+                "No editor typing lag or caret disappearance after WebPreview actions.",
+                "No stale WebPreview focus after navigation, reload, tab switch, URL edit, or editor focus.",
+                "Every native action attempt emits a blocked or successful receipt.",
+                "Every external Chrome and PC-use handoff stays under managed roots.",
+                "The final validation-progress packet reports all evidence groups ready before claiming runtime-green."
+            ],
+            "non_goals": [
+                "This bundle does not dispatch browser input.",
+                "This bundle does not launch Chrome, run Node, inspect the live DOM, take screenshots, or mutate profiles.",
+                "This bundle does not replace the final manual Windows runtime pass."
+            ],
+        })
+    }
+
+    fn agent_browser_final_validation_bundle_json(bundle: &Value) -> String {
+        serde_json::to_string_pretty(bundle).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_final_validation_bundle_agent_blocks(
+        &self,
+        bundle: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = bundle.pointer("/session/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview final validation bundle:\n\n```json\n{}\n```",
+            Self::agent_browser_final_validation_bundle_json(bundle)
+        ))));
+        blocks
+    }
+
+    fn copy_agent_browser_final_validation_bundle(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let bundle = self.agent_browser_final_validation_bundle(window);
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_final_validation_bundle_json(&bundle),
+        ));
+        self.show_toast("Copied final validation bundle", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_final_validation_bundle_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let bundle = self.agent_browser_final_validation_bundle(window);
+        let blocks = self.agent_browser_final_validation_bundle_agent_blocks(&bundle);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent final validation bundle to the agent panel", cx);
         cx.notify();
     }
 
@@ -8706,6 +8868,13 @@ impl WebPreviewView {
                     "latest_summary": self.latest_agent_browser_executor_validation_progress_summary(),
                     "read_only": true,
                     "purpose": "Share grouped executor evidence before the final Windows runtime pass without sending browser input."
+                },
+                "final_validation_bundle": {
+                    "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
+                    "copy_action": "copy_agent_browser_final_validation_bundle",
+                    "send_action": "send_agent_browser_final_validation_bundle_to_agent",
+                    "read_only": true,
+                    "purpose": "Share one final proof packet that ties readiness, validation progress, QA runbook, action manifest, plugin catalog, and manual Windows proof order together."
                 }
             },
             "notes": [
@@ -8930,6 +9099,7 @@ impl WebPreviewView {
                             "payload_queue_inspection_schema": "zed.agent_plugins.browser_action_payload_queue_inspection.v1",
                             "payload_import_receipt_schema": "zed.web_preview.agent_browser_action_payload_import_receipt.v1",
                             "executor_validation_progress_schema": AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA,
+                            "final_validation_bundle_schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
                             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
                             "managed_queue_import_action": "import_agent_browser_action_payload_from_managed_queue",
                             "examples": [
@@ -8972,6 +9142,14 @@ impl WebPreviewView {
                             "source": "WebPreview More menu",
                             "purpose": "Copy or send grouped Browser executor evidence without requiring larger status/readiness/runbook packets."
                         },
+                        "final_validation_bundle_handoff": {
+                            "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
+                            "copy_action": "copy_agent_browser_final_validation_bundle",
+                            "send_action": "send_agent_browser_final_validation_bundle_to_agent",
+                            "read_only": true,
+                            "source": "WebPreview More menu",
+                            "purpose": "Copy or send the canonical final Windows validation bundle before claiming runtime-green."
+                        },
                         "capabilities": [
                             {"id": "browser.sessions.list", "state": "available", "description": "List open WebPreview sessions and workspace inventory."},
                             {"id": "browser.session.snapshot", "state": "available", "description": "Read the active WebPreview session metadata, bounds, profile, URL, and policy."},
@@ -9011,6 +9189,7 @@ impl WebPreviewView {
                             {"id": "browser.action.payload_import_queue", "state": "available_explicit_user_action", "description": "Import the latest managed Agent Browser payload queue item into the active WebPreview payload bridge without dispatching input."},
                             {"id": "browser.action.payload_import_receipt", "state": "available", "description": "Copy or send the latest WebPreview payload import receipt, with accepted schema, action metadata, redacted text length, permission state, and next-step safety notes."},
                             {"id": "browser.action.executor_validation_progress", "state": "available", "description": "Copy or send grouped Browser executor validation progress for final Windows proof without dispatching input."},
+                            {"id": "browser.validation.final_bundle", "state": "available", "description": "Copy or send the final Windows validation bundle tying readiness, progress, runbook, manifest, plugin catalog, and proof order together."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},
                             {"id": "browser.action.type", "state": "available_when_unlocked_payload_required", "description": "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."},
                             {"id": "browser.action.key", "state": "available_when_unlocked", "description": "Send allowlisted key presses through the WebView2 DevTools Protocol executor after unlock, fresh preflight, keyboard-focus gate, QA checklist, and receipt logging."},
@@ -11048,6 +11227,34 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_agent_browser_executor_validation_progress_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Final Validation Bundle")
+                                .icon(IconName::Check)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_final_validation_bundle(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Final Validation Bundle")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_final_validation_bundle_to_agent(
                                                 window, cx,
                                             );
                                         });

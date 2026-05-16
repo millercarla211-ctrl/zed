@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Browser Final Validation Bundle
+
+ADDED:
+- Added a read-only WebPreview final validation bundle that summarizes executor readiness, validation progress, required handoff artifacts, final `just run` proof order, and success criteria.
+- Added Copy/Send Final Validation Bundle actions to the WebPreview More menu.
+- Advertised the final validation bundle schema and Browser capability through the WebPreview action/plugin catalog and Agent `list_agent_plugins` catalog.
+
+NOTES:
+- The bundle is orchestration metadata only; it does not dispatch browser input, inspect the live DOM, launch Chrome, run Node, take screenshots, or change editor/WebPreview focus paths.
+
 [2026-05-16] - WebPreview Validation Progress Split Health
 
 FIXED:
