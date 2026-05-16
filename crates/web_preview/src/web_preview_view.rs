@@ -76,6 +76,8 @@ const PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA: &str =
 const PC_USE_RUNNER_RECEIPT_SCHEMA: &str = "zed.agent_plugins.pc_use.runner_receipt.v1";
 const AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA: &str =
     "zed.web_preview.agent_browser_executor_validation_progress.v1";
+const AGENT_BROWSER_NATIVE_DISPATCH_RECEIPT_MATRIX_SCHEMA: &str =
+    "zed.web_preview.native_dispatch_receipt_matrix.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_bundle.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
@@ -417,6 +419,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_native_cache_reset_executor_attempt_to_agent",
     "copy_native_dispatch_qa_checklist",
     "send_native_dispatch_qa_checklist_to_agent",
+    "copy_native_dispatch_receipt_matrix",
+    "send_native_dispatch_receipt_matrix_to_agent",
     "copy_agent_browser_qa_runbook",
     "send_agent_browser_qa_runbook_to_agent",
     "copy_agent_browser_action_manifest",
@@ -762,6 +766,7 @@ pub struct WebPreviewView {
     latest_agent_browser_native_cache_reset_trace_attempt: Option<Value>,
     latest_agent_browser_native_cache_reset_executor_attempt: Option<Value>,
     latest_agent_browser_native_dispatch_qa_checklist: Option<Value>,
+    latest_agent_browser_native_dispatch_receipt_matrix: Option<Value>,
     latest_agent_browser_qa_runbook: Option<Value>,
     latest_agent_plugin_catalog: Option<Value>,
     latest_annotated_screenshot: Option<Value>,
@@ -980,6 +985,7 @@ impl WebPreviewView {
             latest_agent_browser_native_cache_reset_trace_attempt: None,
             latest_agent_browser_native_cache_reset_executor_attempt: None,
             latest_agent_browser_native_dispatch_qa_checklist: None,
+            latest_agent_browser_native_dispatch_receipt_matrix: None,
             latest_agent_browser_qa_runbook: None,
             latest_agent_plugin_catalog: None,
             latest_annotated_screenshot: None,
@@ -1482,6 +1488,7 @@ impl WebPreviewView {
             "agent_browser_native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
             "agent_browser_native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
             "agent_browser_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
+            "agent_browser_native_dispatch_receipt_matrix": self.latest_agent_browser_native_dispatch_receipt_matrix_summary(),
             "agent_browser_qa_runbook": self.latest_agent_browser_qa_runbook_summary(),
             "agent_plugin_catalog": self.latest_agent_plugin_catalog_summary(),
             "managed_chrome_execution": self.managed_chrome_execution_status(),
@@ -1621,6 +1628,8 @@ impl WebPreviewView {
                 "send_permissioned_native_cache_reset_executor_to_agent": self.agent_action_permission.interactive_enabled(),
                 "copy_native_dispatch_qa_checklist": true,
                 "send_native_dispatch_qa_checklist_to_agent": true,
+                "copy_native_dispatch_receipt_matrix": true,
+                "send_native_dispatch_receipt_matrix_to_agent": true,
                 "copy_agent_browser_qa_runbook": true,
                 "send_agent_browser_qa_runbook_to_agent": true,
                 "copy_agent_plugin_catalog": true,
@@ -2540,6 +2549,22 @@ impl WebPreviewView {
         }))
     }
 
+    fn latest_agent_browser_native_dispatch_receipt_matrix_summary(&self) -> Option<Value> {
+        let matrix = self
+            .latest_agent_browser_native_dispatch_receipt_matrix
+            .as_ref()?;
+        Some(serde_json::json!({
+            "captured_at_ms": matrix.pointer("/matrix/captured_at_ms").and_then(Value::as_u64),
+            "url": matrix.pointer("/matrix/url").and_then(Value::as_str),
+            "title": matrix.pointer("/matrix/title").and_then(Value::as_str),
+            "status": matrix.pointer("/matrix/status").and_then(Value::as_str),
+            "ready_family_count": matrix.pointer("/matrix/ready_family_count").and_then(Value::as_u64),
+            "total_family_count": matrix.pointer("/matrix/total_family_count").and_then(Value::as_u64),
+            "first_missing_family": matrix.pointer("/matrix/first_missing_family/id").and_then(Value::as_str),
+            "first_missing_action": matrix.pointer("/matrix/first_missing_family/next_action").and_then(Value::as_str),
+        }))
+    }
+
     fn latest_agent_browser_native_input_trace_attempt_summary(
         attempt: &Option<Value>,
     ) -> Option<Value> {
@@ -2996,6 +3021,13 @@ impl WebPreviewView {
                     "copy_action": "copy_native_dispatch_qa_checklist",
                     "send_action": "send_native_dispatch_qa_checklist_to_agent",
                     "latest_summary": self.latest_agent_browser_native_dispatch_qa_checklist_summary()
+                },
+                "native_dispatch_receipt_matrix": {
+                    "schema": AGENT_BROWSER_NATIVE_DISPATCH_RECEIPT_MATRIX_SCHEMA,
+                    "copy_action": "copy_native_dispatch_receipt_matrix",
+                    "send_action": "send_native_dispatch_receipt_matrix_to_agent",
+                    "latest_summary": self.latest_agent_browser_native_dispatch_receipt_matrix_summary(),
+                    "current_matrix": self.native_dispatch_receipt_matrix(window)
                 },
                 "qa_runbook": {
                     "schema": "zed.web_preview.agent_browser_qa_runbook.v1",
@@ -8310,6 +8342,7 @@ impl WebPreviewView {
                     "agent_browser_native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
                     "agent_browser_native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                     "agent_browser_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
+                    "agent_browser_native_dispatch_receipt_matrix": self.latest_agent_browser_native_dispatch_receipt_matrix_summary(),
                     "agent_browser_executor_validation_progress": self.agent_browser_executor_validation_progress(),
                     "agent_browser_final_validation_bundle": self.latest_agent_browser_final_validation_bundle_summary(),
                     "agent_browser_final_validation_result_template": self.latest_agent_browser_final_validation_result_template_summary(),
@@ -8641,7 +8674,8 @@ impl WebPreviewView {
                 "history_executor": self.latest_agent_browser_native_history_executor_attempt_summary(),
                 "cache_reset": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
                 "cache_reset_executor": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
-                "dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary()
+                "dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
+                "dispatch_receipt_matrix": self.latest_agent_browser_native_dispatch_receipt_matrix_summary()
             },
             "required_before_dispatch": [
                 "interactive permission unlocked for the current WebPreview session",
@@ -8736,6 +8770,7 @@ impl WebPreviewView {
                 "native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
                 "native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                 "native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
+                "native_dispatch_receipt_matrix": self.latest_agent_browser_native_dispatch_receipt_matrix_summary(),
                 "managed_chrome_execution": managed_chrome_execution,
                 "pc_use_status": pc_use_status,
                 "runtime_green_claim_gate": runtime_green_claim_gate,
@@ -12388,6 +12423,237 @@ impl WebPreviewView {
         self.native_cache_reset_executor_attempt(window, cx, true);
     }
 
+    fn native_dispatch_receipt_family(
+        id: &'static str,
+        label: &'static str,
+        preflight: Option<Value>,
+        trace: Option<Value>,
+        executor: Option<Value>,
+        preflight_action: Option<&'static str>,
+        trace_action: &'static str,
+        executor_actions: &'static [&'static str],
+    ) -> Value {
+        let executor_action = executor_actions
+            .first()
+            .copied()
+            .unwrap_or("copy_native_dispatch_receipt_matrix");
+        let preflight_ready = preflight.is_some() || preflight_action.is_none();
+        let trace_ready = trace.is_some();
+        let executor_ready = executor.is_some();
+        let ready = preflight_ready && trace_ready && executor_ready;
+        let next_action = if !preflight_ready {
+            preflight_action.unwrap_or(trace_action)
+        } else if !trace_ready {
+            trace_action
+        } else if !executor_ready {
+            executor_action
+        } else {
+            "copy_native_dispatch_receipt_matrix"
+        };
+
+        serde_json::json!({
+            "id": id,
+            "label": label,
+            "ready": ready,
+            "status": if ready { "receipt_ready" } else { "receipt_missing" },
+            "next_action": next_action,
+            "preflight": {
+                "required": preflight_action.is_some(),
+                "ready": preflight_ready,
+                "copy_action": preflight_action,
+                "summary": preflight
+            },
+            "trace": {
+                "required": true,
+                "ready": trace_ready,
+                "copy_action": trace_action,
+                "summary": trace
+            },
+            "executor": {
+                "required": true,
+                "ready": executor_ready,
+                "copy_action": executor_action,
+                "copy_actions": executor_actions,
+                "summary": executor
+            }
+        })
+    }
+
+    fn native_dispatch_receipt_matrix(&self, window: &Window) -> Value {
+        let families = vec![
+            Self::native_dispatch_receipt_family(
+                "click",
+                "Native click dispatch",
+                self.latest_agent_browser_click_preflight_attempt_summary(),
+                self.latest_agent_browser_native_click_trace_attempt_summary(),
+                self.latest_agent_browser_native_click_executor_attempt_summary(),
+                Some("copy_permissioned_click_preflight_attempt"),
+                "copy_native_click_trace_attempt",
+                &["copy_native_click_executor_attempt"],
+            ),
+            Self::native_dispatch_receipt_family(
+                "type_text",
+                "Native type dispatch",
+                self.latest_agent_browser_type_preflight_attempt_summary(),
+                self.latest_agent_browser_native_type_trace_attempt_summary(),
+                self.latest_agent_browser_native_type_executor_attempt_summary(),
+                Some("copy_permissioned_type_preflight_attempt"),
+                "copy_native_type_trace_attempt",
+                &["copy_native_type_executor_attempt"],
+            ),
+            Self::native_dispatch_receipt_family(
+                "press_key",
+                "Native key dispatch",
+                self.latest_agent_browser_key_preflight_attempt_summary(),
+                self.latest_agent_browser_native_key_trace_attempt_summary(),
+                self.latest_agent_browser_native_key_executor_attempt_summary(),
+                Some("copy_permissioned_key_preflight_attempt"),
+                "copy_native_key_trace_attempt",
+                &["copy_native_key_executor_attempt"],
+            ),
+            Self::native_dispatch_receipt_family(
+                "scroll",
+                "Native scroll dispatch",
+                self.latest_agent_browser_scroll_preflight_attempt_summary(),
+                self.latest_agent_browser_native_scroll_trace_attempt_summary(),
+                self.latest_agent_browser_native_scroll_executor_attempt_summary(),
+                Some("copy_permissioned_scroll_preflight_attempt"),
+                "copy_native_scroll_trace_attempt",
+                &["copy_native_scroll_executor_attempt"],
+            ),
+            Self::native_dispatch_receipt_family(
+                "history",
+                "Native history dispatch",
+                None,
+                self.latest_agent_browser_native_history_trace_attempt_summary(),
+                self.latest_agent_browser_native_history_executor_attempt_summary(),
+                None,
+                "copy_native_history_trace_attempt",
+                &[
+                    "copy_native_back_executor_attempt",
+                    "copy_native_forward_executor_attempt",
+                ],
+            ),
+            Self::native_dispatch_receipt_family(
+                "cache_reset",
+                "Native cache-reset dispatch",
+                None,
+                self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
+                self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
+                None,
+                "copy_native_cache_reset_trace_attempt",
+                &["copy_native_cache_reset_executor_attempt"],
+            ),
+        ];
+        let total_family_count = families.len() as u64;
+        let ready_family_count = families
+            .iter()
+            .filter(|family| {
+                family
+                    .get("ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+            })
+            .count() as u64;
+        let first_missing_family = families
+            .iter()
+            .find(|family| {
+                !family
+                    .get("ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+            })
+            .map(|family| {
+                serde_json::json!({
+                    "id": family.get("id").and_then(Value::as_str),
+                    "label": family.get("label").and_then(Value::as_str),
+                    "next_action": family.get("next_action").and_then(Value::as_str),
+                })
+            });
+        let all_ready = ready_family_count == total_family_count;
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_NATIVE_DISPATCH_RECEIPT_MATRIX_SCHEMA,
+            "session": self.browser_session_snapshot(window),
+            "policy": self.agent_browser_policy_snapshot(),
+            "matrix": {
+                "captured_at_ms": Self::current_epoch_millis(),
+                "session_id": self.session_id.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "url": self.active_url.as_ref(),
+                "status": if all_ready {
+                    "native_dispatch_receipts_complete"
+                } else {
+                    "native_dispatch_receipts_incomplete"
+                },
+                "ready_family_count": ready_family_count,
+                "total_family_count": total_family_count,
+                "first_missing_family": first_missing_family,
+                "families": families,
+                "qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
+                "next_action": if all_ready {
+                    "copy_agent_browser_executor_validation_progress"
+                } else {
+                    "copy_native_dispatch_receipt_matrix"
+                }
+            },
+            "safety": {
+                "read_only": true,
+                "writes_files": false,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false,
+                "requires_explicit_executor_actions_for_receipts": true
+            }
+        })
+    }
+
+    fn native_dispatch_receipt_matrix_json(matrix: &Value) -> String {
+        serde_json::to_string_pretty(matrix).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn native_dispatch_receipt_matrix_agent_blocks(
+        &self,
+        matrix: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = matrix.pointer("/matrix/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Web preview native dispatch receipt matrix:\n\n```json\n{}\n```",
+            Self::native_dispatch_receipt_matrix_json(matrix)
+        ))));
+        blocks
+    }
+
+    fn copy_native_dispatch_receipt_matrix(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let matrix = self.native_dispatch_receipt_matrix(window);
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::native_dispatch_receipt_matrix_json(&matrix),
+        ));
+        self.latest_agent_browser_native_dispatch_receipt_matrix = Some(matrix);
+        self.show_toast("Copied native dispatch receipt matrix", cx);
+        cx.notify();
+    }
+
+    fn send_native_dispatch_receipt_matrix_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let matrix = self.native_dispatch_receipt_matrix(window);
+        let blocks = self.native_dispatch_receipt_matrix_agent_blocks(&matrix);
+        self.latest_agent_browser_native_dispatch_receipt_matrix = Some(matrix);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent native dispatch receipt matrix to the agent panel", cx);
+        cx.notify();
+    }
+
     fn native_dispatch_qa_checklist(&self, window: &Window) -> Value {
         let gate = self.agent_browser_executor_gate();
         let trace_receipts_ready = self
@@ -12587,6 +12853,7 @@ impl WebPreviewView {
                     "latest_native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
                     "latest_native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                     "latest_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
+                    "latest_native_dispatch_receipt_matrix": self.latest_agent_browser_native_dispatch_receipt_matrix_summary(),
                     "executor_validation_progress": self.agent_browser_executor_validation_progress(),
                     "managed_chrome_execution": self.managed_chrome_execution_status(),
                     "pc_use_status": self.pc_use_status(),
@@ -12746,6 +13013,14 @@ impl WebPreviewView {
                     "latest_summary": self.latest_agent_browser_executor_validation_progress_summary(),
                     "read_only": true,
                     "purpose": "Share grouped executor evidence before the final Windows runtime pass without sending browser input."
+                },
+                "native_dispatch_receipt_matrix": {
+                    "schema": AGENT_BROWSER_NATIVE_DISPATCH_RECEIPT_MATRIX_SCHEMA,
+                    "copy_action": "copy_native_dispatch_receipt_matrix",
+                    "send_action": "send_native_dispatch_receipt_matrix_to_agent",
+                    "latest_summary": self.latest_agent_browser_native_dispatch_receipt_matrix_summary(),
+                    "read_only": true,
+                    "purpose": "Share compact click, type, key, scroll, history, and cache-reset receipt readiness with the first missing action before the final Windows proof."
                 },
                 "final_validation_bundle": {
                     "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
@@ -13307,6 +13582,7 @@ impl WebPreviewView {
                             "payload_queue_inspection_schema": "zed.agent_plugins.browser_action_payload_queue_inspection.v1",
                             "payload_import_receipt_schema": "zed.web_preview.agent_browser_action_payload_import_receipt.v1",
                             "executor_validation_progress_schema": AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA,
+                            "native_dispatch_receipt_matrix_schema": AGENT_BROWSER_NATIVE_DISPATCH_RECEIPT_MATRIX_SCHEMA,
                             "final_validation_bundle_schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
                             "final_validation_result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
                             "final_validation_result_import_receipt_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
@@ -13353,6 +13629,14 @@ impl WebPreviewView {
                             "read_only": true,
                             "source": "WebPreview More menu",
                             "purpose": "Copy or send grouped Browser executor evidence without requiring larger status/readiness/runbook packets."
+                        },
+                        "native_dispatch_receipt_matrix_handoff": {
+                            "schema": AGENT_BROWSER_NATIVE_DISPATCH_RECEIPT_MATRIX_SCHEMA,
+                            "copy_action": "copy_native_dispatch_receipt_matrix",
+                            "send_action": "send_native_dispatch_receipt_matrix_to_agent",
+                            "read_only": true,
+                            "source": "WebPreview More menu",
+                            "purpose": "Copy or send the compact native dispatch receipt matrix across click, type, key, scroll, history, and cache-reset receipts."
                         },
                         "final_validation_bundle_handoff": {
                             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
@@ -13506,6 +13790,7 @@ impl WebPreviewView {
                             {"id": "browser.action.payload_import_queue", "state": "available_explicit_user_action", "description": "Import the latest managed Agent Browser payload queue item into the active WebPreview payload bridge without dispatching input."},
                             {"id": "browser.action.payload_import_receipt", "state": "available", "description": "Copy or send the latest WebPreview payload import receipt, with accepted schema, action metadata, redacted text length, permission state, and next-step safety notes."},
                             {"id": "browser.action.executor_validation_progress", "state": "available", "description": "Copy or send grouped Browser executor validation progress for final Windows proof without dispatching input."},
+                            {"id": "browser.dispatch.receipt_matrix", "state": "available", "description": "Copy or send the compact native dispatch receipt matrix for click, type, key, scroll, history, and cache-reset readiness."},
                             {"id": "browser.validation.final_bundle", "state": "available", "description": "Copy or send the final Windows validation bundle tying readiness, progress, runbook, manifest, plugin catalog, and proof order together."},
                             {"id": "browser.validation.final_result_template", "state": "available", "description": "Copy or send the fillable manual Windows result template with allowed status values and runtime-green requirements."},
                             {"id": "browser.validation.final_result", "state": "available", "description": "Import, copy, or send the filled final Windows validation result after manual runtime proof."},
@@ -16295,6 +16580,32 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Copy Native Dispatch Receipt Matrix")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_native_dispatch_receipt_matrix(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Native Dispatch Receipt Matrix")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_native_dispatch_receipt_matrix_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Run Reload Executor")
                                 .icon(IconName::RotateCw)
                                 .handler({
@@ -17896,6 +18207,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_native_cache_reset_trace_attempt: None,
                 latest_agent_browser_native_cache_reset_executor_attempt: None,
                 latest_agent_browser_native_dispatch_qa_checklist: None,
+                latest_agent_browser_native_dispatch_receipt_matrix: None,
                 latest_agent_browser_qa_runbook: None,
                 latest_agent_plugin_catalog: None,
                 latest_annotated_screenshot: None,

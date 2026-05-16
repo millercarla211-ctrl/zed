@@ -48,6 +48,8 @@ use std::{
 const PREPARE_AGENT_PLUGIN_RUNTIME_TOOL: &str = "prepare_agent_plugin_runtime";
 const AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA: &str =
     "zed.web_preview.agent_browser_executor_validation_progress.v1";
+const AGENT_BROWSER_NATIVE_DISPATCH_RECEIPT_MATRIX_SCHEMA: &str =
+    "zed.web_preview.native_dispatch_receipt_matrix.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_bundle.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
@@ -701,6 +703,7 @@ fn browser_plugin_manifest() -> Value {
             "payload_queue_inspect_tool_name": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
             "payload_import_receipt_schema": "zed.web_preview.agent_browser_action_payload_import_receipt.v1",
             "executor_validation_progress_schema": AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA,
+            "native_dispatch_receipt_matrix_schema": AGENT_BROWSER_NATIVE_DISPATCH_RECEIPT_MATRIX_SCHEMA,
             "final_validation_bundle_schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
             "final_validation_result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
             "final_validation_result_import_receipt_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
@@ -747,6 +750,14 @@ fn browser_plugin_manifest() -> Value {
             "read_only": true,
             "source": "WebPreview More menu",
             "purpose": "Copy or send grouped Browser executor evidence without requiring larger status/readiness/runbook packets."
+        },
+        "native_dispatch_receipt_matrix_handoff": {
+            "schema": AGENT_BROWSER_NATIVE_DISPATCH_RECEIPT_MATRIX_SCHEMA,
+            "copy_action": "copy_native_dispatch_receipt_matrix",
+            "send_action": "send_native_dispatch_receipt_matrix_to_agent",
+            "read_only": true,
+            "source": "WebPreview More menu",
+            "purpose": "Copy or send the compact native dispatch receipt matrix across click, type, key, scroll, history, and cache-reset receipts."
         },
         "final_validation_bundle_handoff": {
             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
@@ -900,6 +911,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.action.payload_import_queue", "available_explicit_user_action", "Import the latest managed Agent Browser payload queue item into the active WebPreview payload bridge without dispatching input."),
             capability("browser.action.payload_import_receipt", "available", "Copy or send the latest WebPreview payload import receipt, with accepted schema, action metadata, redacted text length, permission state, and next-step safety notes."),
             capability("browser.action.executor_validation_progress", "available", "Copy or send grouped Browser executor validation progress for final Windows proof without dispatching input."),
+            capability("browser.dispatch.receipt_matrix", "available", "Copy or send the compact native dispatch receipt matrix for click, type, key, scroll, history, and cache-reset readiness."),
             capability("browser.validation.final_bundle", "available", "Copy or send the final Windows validation bundle tying readiness, progress, runbook, manifest, plugin catalog, and proof order together."),
             capability("browser.validation.final_result_template", "available", "Copy or send the fillable manual Windows result template with allowed status values and runtime-green requirements."),
             capability("browser.validation.final_result", "available", "Import, copy, or send the filled final Windows validation result after manual runtime proof."),

@@ -1,3 +1,13 @@
+[2026-05-17] - Permissioned Agent Browser Executor Native Dispatch Receipt Matrix
+
+ADDED:
+- WebPreview now exposes a schema-versioned native dispatch receipt matrix that summarizes click, type, key, scroll, history, and cache-reset preflight, trace, and executor receipts.
+- WebPreview now has Copy/Send Native Dispatch Receipt Matrix actions in the More menu, session snapshots, status packets, executor readiness, QA runbook, final validation bundle, action manifest, and Browser plugin catalog metadata.
+- Agent catalog metadata now advertises the same receipt-matrix schema, copy/send action names, and browser.dispatch.receipt_matrix capability so Agent Panels can discover the compact proof packet without parsing larger bundles.
+
+NOTES:
+- The receipt matrix is read-only. It does not run Node, launch Chrome, dispatch browser or OS input, run `just run`, write proof files, or touch real browser profiles; it only points to the first missing proof action before the final Windows validation pass.
+
 [2026-05-17] - Agent Plugin Runtime Final Report Packet
 
 ADDED:
