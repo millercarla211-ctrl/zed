@@ -1,3 +1,17 @@
+[2026-05-16] - Web Preview Payload Import Receipts
+
+ADDED:
+- Added schema-versioned WebPreview payload import receipts for staged Agent Browser payloads imported from the clipboard.
+- Added More menu actions to copy the latest payload import receipt or send it to the Agent Panel.
+- Advertised the payload import receipt schema and capability through both the WebPreview Browser plugin catalog and the `list_agent_plugins` Agent tool.
+
+CHANGED:
+- Browser session, status packet, and executor readiness handoffs now summarize the latest payload import receipt alongside the payload bridge.
+- Clipboard import now records the accepted schema, action, selector, redacted text length, permission state, and next-step safety notes without dispatching native input or storing raw clipboard text in the receipt.
+
+NOTES:
+- The receipt is an audit/handoff artifact only; it does not execute browser input, run page scripts, touch external Chrome, or loosen the WebPreview focus and permission gates.
+
 [2026-05-16] - Agent Browser Payload Staging Tool
 
 ADDED:
