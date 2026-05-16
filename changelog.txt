@@ -1,3 +1,15 @@
+[2026-05-16] - Agent Plugin Runtime Validation Matrix
+
+ADDED:
+- Added an optional read-only validation matrix to `inspect_agent_plugin_runtime_status`, covering Browser/WebPreview payload execution, managed Chrome/Playwright safe actions, PC-use target/receipt gates, required lightweight checks, and final Windows manual validation evidence.
+
+CHANGED:
+- Agent and WebPreview plugin catalogs now request the runtime validation matrix by default.
+- Marked the Agent Plugin Runtime TODO set as 100/100 code-complete while keeping final `just run` and manual Windows regression validation explicit.
+
+NOTES:
+- The matrix is orchestration metadata only; it does not launch browsers, run Node, take screenshots, write files, dispatch mouse/keyboard input, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Workflow Recipes
 
 ADDED:

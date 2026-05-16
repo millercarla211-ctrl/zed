@@ -91,6 +91,8 @@ pub struct AgentPluginRuntimeStatusToolInput {
     pub include_next_actions: bool,
     /// Include ordered safe workflow recipes for Browser, managed Chrome, and PC-use.
     pub include_workflows: bool,
+    /// Include the final manual/runtime validation matrix for this plugin set.
+    pub include_validation_matrix: bool,
 }
 
 impl Default for AgentPluginRuntimeStatusToolInput {
@@ -101,6 +103,7 @@ impl Default for AgentPluginRuntimeStatusToolInput {
             include_host_checks: true,
             include_next_actions: true,
             include_workflows: true,
+            include_validation_matrix: true,
         }
     }
 }
@@ -355,6 +358,7 @@ fn inspect_runtime_status(
         },
         "host": host_checks,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
+        "validation_matrix": input.include_validation_matrix.then(validation_matrix),
         "next_actions": input.include_next_actions.then(|| next_actions(status, roots)),
         "safety": {
             "read_only": true,
@@ -749,6 +753,95 @@ fn workflow_recipes() -> Value {
                 }
             ],
         }
+    })
+}
+
+fn validation_matrix() -> Value {
+    serde_json::json!({
+        "status": "manual_windows_validation_required_before_claiming_runtime_green",
+        "final_runtime_command": "just run",
+        "lightweight_checks": [
+            "rustfmt touched Rust files",
+            "git diff --check",
+            "git diff --cached --check",
+            "targeted rg for tool registration, catalog payloads, and status schema strings"
+        ],
+        "browser_webpreview": {
+            "goal": "Prove the in-app Browser plugin path can hand off payloads and execute only through permissioned WebPreview UI gates.",
+            "cases": [
+                "compose a click, type_text, press_key, and scroll payload with the Agent tool",
+                "queue the payload in managed workspace or Zed-data roots",
+                "inspect the queue before importing it",
+                "import from WebPreview and confirm an import receipt is copied or sent to Agent Panel",
+                "execute click, type_text, press_key, scroll, back, forward, reload, viewport, and cache-only reset through the permissioned WebPreview executor",
+                "confirm screenshot, selected-area capture, annotated screenshot, inspect element, DevTools, and responsive metadata remain discoverable"
+            ],
+            "must_not_regress": [
+                "normal editor typing appears immediately",
+                "editor caret remains visible while typing",
+                "WebPreview hover, click, right-click, wheel, keyboard focus, and URL editor focus remain separated",
+                "hidden or inactive previews cannot receive stale input"
+            ]
+        },
+        "managed_chrome": {
+            "goal": "Prove the managed external Chrome plugin path can prepare and run only safe Playwright actions from managed profiles.",
+            "cases": [
+                "inspect runtime host probes for Node, npm, Chrome or Edge, Playwright package, DX extension manifest, and managed profile roots",
+                "compose and queue open_url, screenshot, set_viewport, and wait_for_selector payloads",
+                "inspect the managed Chrome queue before any runner request",
+                "write a runner-gate receipt without launching Chrome",
+                "prepare the managed Playwright adapter files",
+                "invoke the adapter only for allowlisted safe actions after a runner-gate receipt exists",
+                "inspect execution request and receipt summaries after invocation"
+            ],
+            "blocked_until_future_gate": [
+                "click",
+                "type_text",
+                "press_key",
+                "scroll"
+            ],
+            "must_not_regress": [
+                "real browser profiles are never mutated in place",
+                "managed Chrome roots stay under workspace tools or Zed data",
+                "blocked actions produce auditable receipts instead of silent success"
+            ]
+        },
+        "pc_use": {
+            "goal": "Prove the PC-use plugin path remains target-aware, receipt-gated, and non-desktop-controlling until a true UI executor exists.",
+            "cases": [
+                "inspect Zed window context and managed PC-use roots",
+                "inspect target manifest, target snapshot, UI snapshot contract, and current UI snapshot",
+                "compose read-only or future input payloads with matching surface and target ids",
+                "require target_snapshot_id for future focus, click, and type target ids",
+                "queue and inspect the managed PC-use payload",
+                "write and inspect runner-gate receipts"
+            ],
+            "blocked_until_future_gate": [
+                "actual_focus",
+                "actual_click",
+                "actual_type",
+                "os_wide_desktop_control",
+                "pixel_screenshot"
+            ],
+            "must_not_regress": [
+                "no screenshots are taken from this read-only status flow",
+                "no Zed focus, keyboard, mouse, or OS-wide input is dispatched",
+                "unknown zed: target namespaces are not treated as input-ready"
+            ]
+        },
+        "evidence_to_capture": [
+            "latest Agent tool JSON output for list_agent_plugins and inspect_agent_plugin_runtime_status",
+            "WebPreview import and executor receipts for Browser payloads",
+            "managed Chrome queue, runner-gate, adapter request, and execution receipt summaries",
+            "PC-use payload queue and runner-gate receipt summaries",
+            "manual Windows notes for editor typing/caret and WebPreview focus regression checks"
+        ],
+        "local_artifacts_to_leave_uncommitted": [
+            ".codex-*.log",
+            "models/",
+            "tools/",
+            "inspirations/"
+        ]
     })
 }
 
