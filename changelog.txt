@@ -1,3 +1,14 @@
+[2026-05-16] - Agent Plugin Runtime Final Proof Guide Actions
+
+ADDED:
+- WebPreview now exposes first-class Copy/Send Runtime-Green Final Proof Guide actions for Agent Panel handoff.
+
+CHANGED:
+- Agent and WebPreview catalogs, status packets, final bundles, and action manifests now advertise the direct final-proof guide action names instead of routing the compact guide through the full final validation bundle.
+
+NOTES:
+- The new actions only copy or send read-only guide metadata; they do not run Node, launch Chrome, dispatch browser or OS input, run `just run`, write proof files, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Final Proof Guide
 
 ADDED:

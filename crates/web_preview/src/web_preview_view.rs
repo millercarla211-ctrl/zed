@@ -367,6 +367,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_plugin_runtime_green_claim_readiness_to_agent",
     "copy_agent_plugin_runtime_green_report_gate",
     "send_agent_plugin_runtime_green_report_gate_to_agent",
+    "copy_agent_plugin_runtime_green_final_proof_guide",
+    "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
     "copy_agent_plugin_runtime_observability_digest",
     "send_agent_plugin_runtime_observability_digest_to_agent",
     "copy_agent_browser_noop_executor_attempt",
@@ -1551,6 +1553,8 @@ impl WebPreviewView {
                 "send_agent_plugin_runtime_green_claim_readiness_to_agent": true,
                 "copy_agent_plugin_runtime_green_report_gate": true,
                 "send_agent_plugin_runtime_green_report_gate_to_agent": true,
+                "copy_agent_plugin_runtime_green_final_proof_guide": true,
+                "send_agent_plugin_runtime_green_final_proof_guide_to_agent": true,
                 "agent_plugin_runtime_observability_digest": true,
                 "copy_agent_plugin_runtime_observability_digest": true,
                 "send_agent_plugin_runtime_observability_digest_to_agent": true,
@@ -3018,8 +3022,8 @@ impl WebPreviewView {
                 },
                 "runtime_green_final_proof_guide": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
-                    "copy_action": "copy_agent_browser_final_validation_bundle",
-                    "send_action": "send_agent_browser_final_validation_bundle_to_agent",
+                    "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
+                    "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
                     "current_status": runtime_green_final_proof_guide.pointer("/status").and_then(Value::as_str),
                     "next_action": runtime_green_final_proof_guide.pointer("/next_action").and_then(Value::as_str),
                     "current_guide": runtime_green_final_proof_guide.clone(),
@@ -4721,8 +4725,8 @@ impl WebPreviewView {
                 }
             ],
             "required_before_status_claim": true,
-            "copy_action": "copy_agent_plugin_runtime_green_report_gate",
-            "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
+            "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
+            "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
             "template_action": "copy_agent_browser_final_validation_result_template",
             "import_action": "import_agent_browser_final_validation_result_from_clipboard",
             "final_bundle_action": "copy_agent_browser_final_validation_bundle",
@@ -5772,6 +5776,45 @@ impl WebPreviewView {
         format!(
             "Runtime-green final proof guide\nStatus: {status}\nCan report runtime-green: {can_report}\nBlocker: {blocker}\nNext action: {next_action}\nOrdered steps: {step_count}"
         )
+    }
+
+    fn agent_plugin_runtime_green_final_proof_guide_json(guide: &Value) -> String {
+        serde_json::to_string_pretty(guide).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_plugin_runtime_green_final_proof_guide_agent_blocks(
+        &self,
+        guide: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "{}\n\n```json\n{}\n```",
+            Self::agent_plugin_runtime_green_final_proof_guide_agent_summary(guide),
+            Self::agent_plugin_runtime_green_final_proof_guide_json(guide)
+        )))]
+    }
+
+    fn copy_agent_plugin_runtime_green_final_proof_guide(&mut self, cx: &mut Context<Self>) {
+        let guide = self.agent_plugin_runtime_green_final_proof_guide_snapshot();
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_plugin_runtime_green_final_proof_guide_json(&guide),
+        ));
+        self.show_toast("Copied runtime-green final proof guide", cx);
+        cx.notify();
+    }
+
+    fn send_agent_plugin_runtime_green_final_proof_guide_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let guide = self.agent_plugin_runtime_green_final_proof_guide_snapshot();
+        let blocks = self.agent_plugin_runtime_green_final_proof_guide_agent_blocks(&guide);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast(
+            "Sent runtime-green final proof guide to the agent panel",
+            cx,
+        );
+        cx.notify();
     }
 
     fn agent_plugin_runtime_green_report_gate_agent_blocks(
@@ -12310,6 +12353,8 @@ impl WebPreviewView {
                 },
                 "runtime_green_final_proof_guide": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
+                    "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
                     "latest_summary": runtime_green_final_proof_guide.clone(),
                     "read_only": true,
                     "purpose": "Guide agents from report badge to final result template, manual just run proof, import, and status recheck without parsing large packets first."
@@ -12496,8 +12541,8 @@ impl WebPreviewView {
                     "runtime_green_final_proof_guide": {
                         "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
                         "source": "runtime_green_report_gate",
-                        "copy_action": "copy_agent_browser_final_validation_bundle",
-                        "send_action": "send_agent_browser_final_validation_bundle_to_agent",
+                        "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
+                        "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
                         "read_only": true,
                         "purpose": "Guide agents from report badge to final result template, manual just run proof, import, and status recheck."
                     }
@@ -12669,7 +12714,7 @@ impl WebPreviewView {
                                 "runtime_green_claim_readiness": "copy_agent_plugin_runtime_green_claim_readiness",
                                 "runtime_green_report_gate": "copy_agent_plugin_runtime_green_report_gate",
                                 "runtime_green_report_badge": "copy_agent_plugin_runtime_green_report_gate",
-                                "runtime_green_final_proof_guide": "copy_agent_browser_final_validation_bundle",
+                                "runtime_green_final_proof_guide": "copy_agent_plugin_runtime_green_final_proof_guide",
                                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -12846,8 +12891,8 @@ impl WebPreviewView {
                         },
                         "runtime_green_final_proof_guide": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
-                            "copy_action": "copy_agent_browser_final_validation_bundle",
-                            "send_action": "send_agent_browser_final_validation_bundle_to_agent",
+                            "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
+                            "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
                             "read_only": true,
                             "source": "WebPreview final validation bundle and status packet",
                             "purpose": "Guide agents from report badge to final result template, manual just run proof, import, and status recheck."
@@ -15998,6 +16043,34 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_agent_plugin_runtime_green_report_gate_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Runtime-Green Final Proof Guide")
+                                .icon(IconName::Check)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_plugin_runtime_green_final_proof_guide(
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Runtime-Green Final Proof Guide")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_plugin_runtime_green_final_proof_guide_to_agent(
                                                 window, cx,
                                             );
                                         });

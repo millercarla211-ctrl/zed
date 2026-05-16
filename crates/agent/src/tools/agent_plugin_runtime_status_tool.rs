@@ -2335,8 +2335,8 @@ fn runtime_green_proof_path(
             "runtime_green_final_proof_guide": {
                 "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
                 "source": "runtime_green_report_gate",
-                "copy_action": "copy_agent_browser_final_validation_bundle",
-                "send_action": "send_agent_browser_final_validation_bundle_to_agent"
+                "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
+                "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent"
             },
             "runtime_observability_digest": {
                 "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
@@ -2862,8 +2862,8 @@ fn runtime_green_final_proof_guide(report_gate: &Value, root_mode: &str) -> Valu
             }
         ],
         "required_before_status_claim": true,
-        "copy_action": "copy_agent_plugin_runtime_green_report_gate",
-        "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
+        "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
+        "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
         "template_action": "copy_agent_browser_final_validation_result_template",
         "import_action": "import_agent_browser_final_validation_result_from_clipboard",
         "final_bundle_action": "copy_agent_browser_final_validation_bundle",

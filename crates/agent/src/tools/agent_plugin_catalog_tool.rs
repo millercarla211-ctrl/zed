@@ -329,8 +329,8 @@ fn agent_plugin_catalog(
                 "runtime_green_final_proof_guide": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
                     "source": "runtime_green_report_gate",
-                    "copy_action": "copy_agent_browser_final_validation_bundle",
-                    "send_action": "send_agent_browser_final_validation_bundle_to_agent",
+                    "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
+                    "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
                     "read_only": true,
                     "purpose": "Guide agents from report badge to final result template, manual just run proof, import, and status recheck."
                 }
@@ -637,7 +637,7 @@ fn browser_plugin_manifest() -> Value {
                 "runtime_green_claim_readiness": "copy_agent_plugin_runtime_green_claim_readiness",
                 "runtime_green_report_gate": "copy_agent_plugin_runtime_green_report_gate",
                 "runtime_green_report_badge": "copy_agent_plugin_runtime_green_report_gate",
-                "runtime_green_final_proof_guide": "copy_agent_browser_final_validation_bundle",
+                "runtime_green_final_proof_guide": "copy_agent_plugin_runtime_green_final_proof_guide",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -813,8 +813,8 @@ fn browser_plugin_manifest() -> Value {
         },
         "runtime_green_final_proof_guide": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
-            "copy_action": "copy_agent_browser_final_validation_bundle",
-            "send_action": "send_agent_browser_final_validation_bundle_to_agent",
+            "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
+            "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
             "read_only": true,
             "source": "WebPreview final validation bundle and status packet",
             "purpose": "Guide agents from report badge to final result template, manual just run proof, import, and status recheck."
