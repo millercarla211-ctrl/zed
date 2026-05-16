@@ -61,6 +61,13 @@ const DEFAULT_WEB_PREVIEW_URL: &str = "https://www.google.com/";
 const GOOGLE_SEARCH_URL: &str = "https://www.google.com/search";
 const BOOKMARKS_FILE_NAME: &str = "bookmarks.json";
 const AGENT_BROWSER_PAYLOAD_QUEUE_FILE_NAME: &str = "latest-agent-browser-payload.json";
+const MANAGED_CHROME_EXECUTIONS_DIR_NAME: &str = "chrome-executions";
+const MANAGED_CHROME_RUN_REQUEST_PREFIX: &str = "managed-chrome-run-request-";
+const MANAGED_CHROME_EXECUTION_RECEIPT_PREFIX: &str = "managed-chrome-execution-receipt-";
+const MANAGED_CHROME_RUN_REQUEST_SCHEMA: &str =
+    "zed.agent_plugins.managed_chrome_playwright_run_request.v1";
+const MANAGED_CHROME_EXECUTION_RECEIPT_SCHEMA: &str =
+    "zed.agent_plugins.managed_chrome_playwright_execution_receipt.v1";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
@@ -295,6 +302,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_qa_runbook_to_agent",
     "copy_agent_plugin_catalog",
     "send_agent_plugin_catalog_to_agent",
+    "copy_managed_chrome_execution_status",
+    "send_managed_chrome_execution_status_to_agent",
     "take_screenshot",
     "capture_selected_area_screenshot",
     "annotate_screenshot",
@@ -1303,6 +1312,7 @@ impl WebPreviewView {
             "agent_browser_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
             "agent_browser_qa_runbook": self.latest_agent_browser_qa_runbook_summary(),
             "agent_plugin_catalog": self.latest_agent_plugin_catalog_summary(),
+            "managed_chrome_execution": self.managed_chrome_execution_status(),
             "annotated_screenshot": self.latest_annotated_screenshot_summary(),
             "native_preview": {
                 "backend": native_backend,
@@ -1398,6 +1408,8 @@ impl WebPreviewView {
                 "send_agent_browser_qa_runbook_to_agent": true,
                 "copy_agent_plugin_catalog": true,
                 "send_agent_plugin_catalog_to_agent": true,
+                "copy_managed_chrome_execution_status": true,
+                "send_managed_chrome_execution_status_to_agent": true,
                 "copy_agent_browser_action_manifest": true,
                 "send_agent_browser_action_manifest_to_agent": true,
                 "interactive_browser_actions": self.agent_action_permission.interactive_enabled(),
@@ -1609,6 +1621,8 @@ impl WebPreviewView {
             "context_ready": packet.pointer("/packet/readiness/context_ready").and_then(Value::as_bool),
             "audit_ready": packet.pointer("/packet/readiness/audit_ready").and_then(Value::as_bool),
             "interactive_unlocked": packet.pointer("/packet/readiness/interactive_unlocked").and_then(Value::as_bool),
+            "managed_chrome_execution_status": packet.pointer("/packet/latest/managed_chrome_execution/status").and_then(Value::as_str),
+            "managed_chrome_latest_outcome": packet.pointer("/packet/latest/managed_chrome_execution/latest_receipt/read/outcome").and_then(Value::as_str),
             "next_step": packet.pointer("/packet/next_step").and_then(Value::as_str),
         }))
     }
@@ -1903,6 +1917,126 @@ impl WebPreviewView {
             "default_enabled_plugins": catalog.pointer("/catalog/default_enabled_plugins").cloned(),
             "available_to": catalog.pointer("/catalog/available_to").cloned(),
         }))
+    }
+
+    fn managed_chrome_execution_status(&self) -> Value {
+        let roots = self.managed_chrome_execution_roots();
+        let latest_receipt = latest_managed_chrome_execution_file(
+            &roots,
+            MANAGED_CHROME_EXECUTION_RECEIPT_PREFIX,
+            MANAGED_CHROME_EXECUTION_RECEIPT_SCHEMA,
+        );
+        let latest_request = latest_managed_chrome_execution_file(
+            &roots,
+            MANAGED_CHROME_RUN_REQUEST_PREFIX,
+            MANAGED_CHROME_RUN_REQUEST_SCHEMA,
+        );
+        let status = if latest_receipt.is_some() {
+            "has_recent_execution_receipt"
+        } else if latest_request.is_some() {
+            "has_request_without_receipt"
+        } else {
+            "empty"
+        };
+        let root_values = roots
+            .iter()
+            .map(|(kind, path)| {
+                serde_json::json!({
+                    "kind": kind,
+                    "path": path.display().to_string(),
+                    "exists": path.is_dir(),
+                })
+            })
+            .collect::<Vec<_>>();
+
+        serde_json::json!({
+            "schema": "zed.web_preview.managed_chrome_execution_status.v1",
+            "generated_at_ms": Self::current_epoch_millis(),
+            "status": status,
+            "roots": root_values,
+            "latest_receipt": latest_receipt,
+            "latest_request": latest_request,
+            "next_actions": managed_chrome_execution_next_actions(status),
+            "safety": {
+                "read_only": true,
+                "launches_browser": false,
+                "runs_node": false,
+                "dispatches_input": false,
+                "managed_roots_only": true,
+                "real_browser_profiles_touched": false,
+            },
+        })
+    }
+
+    fn managed_chrome_execution_roots(&self) -> Vec<(&'static str, PathBuf)> {
+        let mut roots = Vec::new();
+        if let Some(root_path) = self.workspace_context.root_path.as_ref() {
+            roots.push((
+                "workspace",
+                root_path
+                    .join("tools")
+                    .join("agent-plugins")
+                    .join(MANAGED_CHROME_EXECUTIONS_DIR_NAME),
+            ));
+        }
+        roots.push((
+            "zed_data",
+            data_dir()
+                .join("agent-plugins")
+                .join(MANAGED_CHROME_EXECUTIONS_DIR_NAME),
+        ));
+        roots
+    }
+
+    fn managed_chrome_execution_status_json(status: &Value) -> String {
+        serde_json::to_string_pretty(status).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn managed_chrome_execution_status_agent_blocks(
+        &self,
+        status: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = status
+            .pointer("/latest_receipt/read/url")
+            .or_else(|| status.pointer("/latest_request/read/url"))
+            .and_then(Value::as_str)
+            .or_else(|| self.active_url.as_ref().map(|url| url.as_ref()))
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Managed Chrome execution status:\n\n```json\n{}\n```",
+            Self::managed_chrome_execution_status_json(status)
+        ))));
+        blocks
+    }
+
+    fn copy_managed_chrome_execution_status(&mut self, cx: &mut Context<Self>) {
+        let status = self.managed_chrome_execution_status();
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::managed_chrome_execution_status_json(&status),
+        ));
+        self.show_toast("Copied managed Chrome execution status", cx);
+        cx.notify();
+    }
+
+    fn send_managed_chrome_execution_status_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let status = self.managed_chrome_execution_status();
+        let blocks = self.managed_chrome_execution_status_agent_blocks(&status);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast(
+            "Sent managed Chrome execution status to the agent panel",
+            cx,
+        );
+        cx.notify();
     }
 
     fn latest_annotated_screenshot_summary(&self) -> Option<Value> {
@@ -3665,6 +3799,7 @@ impl WebPreviewView {
         let action_request_ready = self.latest_interaction_action_request.is_some();
         let blocked_receipt_ready = self.latest_blocked_interaction_receipt.is_some();
         let success_receipt_ready = self.latest_successful_interaction_receipt.is_some();
+        let managed_chrome_execution = self.managed_chrome_execution_status();
         let context_ready =
             diagnostics_ready || runtime_ready || dom_ready || targets_ready || readiness_ready;
         let audit_ready = plan_ready
@@ -3757,12 +3892,14 @@ impl WebPreviewView {
                     "agent_browser_native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
                     "agent_browser_native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                     "agent_browser_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
+                    "managed_chrome_execution": managed_chrome_execution,
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 },
                 "handoff": {
                     "read_only_only": !interactive_unlocked,
                     "requires_fresh_preflight_before_input": true,
                     "requires_receipt_after_every_input": true,
+                    "managed_chrome_receipts_visible": true,
                     "executor_wired": true,
                     "safe_to_send_to_agent_panel": true,
                 },
@@ -3944,6 +4081,7 @@ impl WebPreviewView {
         } else {
             "Low-risk open_url, reload, set_viewport, clear_data, native click, native type, native scroll, native key, native history, and cache-only reset executors can run after their action-specific preflight, payload, focus, and QA gates pass."
         };
+        let managed_chrome_execution = self.managed_chrome_execution_status();
         let native_input_bridge = serde_json::json!({
             "schema": "zed.web_preview.native_input_bridge_readiness.v1",
             "status": "partial_dispatch_wired_manual_qa_required",
@@ -4019,7 +4157,8 @@ impl WebPreviewView {
                 "route cache-only reset through WebView2 profile browsing-data kinds without touching cookies, storage, or external profiles",
                 "route text and key dispatch only while WebPreview owns keyboard focus",
                 "capture before/after diagnostics and emit a receipt for every attempted dispatch"
-            ]
+            ],
+            "managed_chrome_execution": managed_chrome_execution.clone()
         });
 
         serde_json::json!({
@@ -4036,6 +4175,7 @@ impl WebPreviewView {
                 "can_dispatch_now": gate_ready_for_executor,
                 "gate_ready_for_executor": gate_ready_for_executor,
                 "interactive_unlocked": interactive_unlocked,
+                "managed_chrome_execution": managed_chrome_execution.clone(),
                 "context_ready": context_ready,
                 "observability_ready": observability_ready,
                 "audit_ready": audit_ready,
@@ -4089,6 +4229,7 @@ impl WebPreviewView {
                 "native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
                 "native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                 "native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
+                "managed_chrome_execution": managed_chrome_execution,
             },
             "notes": [
                 "This readiness contract is read-only and does not dispatch browser input.",
@@ -7937,6 +8078,7 @@ impl WebPreviewView {
                     "latest_native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
                     "latest_native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                     "latest_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
+                    "managed_chrome_execution": self.managed_chrome_execution_status(),
                 },
                 "manual_gates": [
                     {
@@ -10958,6 +11100,32 @@ impl WebPreviewView {
                                     }
                                 }),
                         )
+                        .item(
+                            ContextMenuEntry::new("Copy Managed Chrome Execution Status")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_managed_chrome_execution_status(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Managed Chrome Execution Status")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_managed_chrome_execution_status_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
                         .separator()
                         .item(
                             ContextMenuEntry::new("Allow Interactive Agent Actions")
@@ -12548,6 +12716,135 @@ fn preview_file_kind_for_path(path: &Path) -> Option<PreviewFileKind> {
         | "ppsx" | "odp" | "otp" | "key" => Some(PreviewFileKind::Document),
         _ => None,
     }
+}
+
+fn latest_managed_chrome_execution_file(
+    roots: &[(&'static str, PathBuf)],
+    prefix: &str,
+    expected_schema: &str,
+) -> Option<Value> {
+    let mut latest: Option<(u64, String, Value)> = None;
+    for (root_kind, root_path) in roots {
+        let Ok(entries) = fs::read_dir(root_path) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|extension| extension.to_str()) != Some("json") {
+                continue;
+            }
+            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !file_name.starts_with(prefix) {
+                continue;
+            }
+
+            let metadata = entry.metadata().ok();
+            let modified_ms = metadata
+                .as_ref()
+                .and_then(|metadata| metadata.modified().ok())
+                .and_then(system_time_ms)
+                .unwrap_or_default();
+            let bytes = metadata.map(|metadata| metadata.len()).unwrap_or_default();
+            let summary = serde_json::json!({
+                "root_kind": *root_kind,
+                "path": path.display().to_string(),
+                "file_name": file_name,
+                "modified_at_ms": modified_ms,
+                "bytes": bytes,
+                "read": managed_chrome_execution_file_read_summary(&path, expected_schema),
+            });
+
+            let replace = match latest.as_ref() {
+                None => true,
+                Some((latest_modified_ms, latest_file_name, _)) => {
+                    modified_ms > *latest_modified_ms
+                        || (modified_ms == *latest_modified_ms
+                            && file_name > latest_file_name.as_str())
+                }
+            };
+            if replace {
+                latest = Some((modified_ms, file_name.to_string(), summary));
+            }
+        }
+    }
+
+    latest.map(|(_, _, summary)| summary)
+}
+
+fn managed_chrome_execution_file_read_summary(path: &Path, expected_schema: &str) -> Value {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            return serde_json::json!({
+                "ok": false,
+                "state": "read_error",
+                "details": error.to_string(),
+            });
+        }
+    };
+    let value = match serde_json::from_slice::<Value>(&bytes) {
+        Ok(value) => value,
+        Err(error) => {
+            return serde_json::json!({
+                "ok": false,
+                "state": "parse_error",
+                "bytes": bytes.len(),
+                "details": error.to_string(),
+            });
+        }
+    };
+    let schema = value
+        .get("schema")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let schema_ok = schema == expected_schema;
+
+    serde_json::json!({
+        "ok": true,
+        "state": if schema_ok { "ready" } else { "schema_mismatch" },
+        "bytes": bytes.len(),
+        "schema": schema,
+        "schema_ok": schema_ok,
+        "generated_at_ms": value.get("generated_at_ms").cloned(),
+        "source_tool": value.get("source_tool").and_then(Value::as_str),
+        "request_schema": value.get("request_schema").and_then(Value::as_str),
+        "queue_item_schema": value.get("queue_item_schema").and_then(Value::as_str),
+        "outcome": value.get("outcome").and_then(Value::as_str),
+        "action": value.get("action").and_then(Value::as_str)
+            .or_else(|| value.pointer("/payload_packet/payload/action").and_then(Value::as_str))
+            .or_else(|| value.pointer("/queue_item/payload_packet/payload/action").and_then(Value::as_str)),
+        "url": value.get("url").and_then(Value::as_str)
+            .or_else(|| value.pointer("/payload_packet/payload/url").and_then(Value::as_str))
+            .or_else(|| value.pointer("/queue_item/payload_packet/payload/url").and_then(Value::as_str)),
+        "title": value.get("title").and_then(Value::as_str),
+        "screenshot": value.pointer("/artifacts/screenshot").and_then(Value::as_str),
+        "error": value.get("error").and_then(Value::as_str),
+        "receipt_path": value.pointer("/execution/receipt_path").and_then(Value::as_str),
+    })
+}
+
+fn managed_chrome_execution_next_actions(status: &str) -> Vec<&'static str> {
+    match status {
+        "has_recent_execution_receipt" => vec![
+            "Send this status to the Agent Panel when the agent needs the latest external Chrome outcome.",
+            "Inspect the receipt error or screenshot artifact before queueing another managed Chrome action.",
+        ],
+        "has_request_without_receipt" => vec![
+            "Invoke the prepared Playwright adapter after runner-gate readiness passes.",
+            "If invocation already ran, check why the adapter did not write an execution receipt.",
+        ],
+        _ => vec![
+            "Queue a managed Chrome action, request the runner gate, prepare the adapter, then invoke a safe action.",
+        ],
+    }
+}
+
+fn system_time_ms(time: SystemTime) -> Option<u64> {
+    time.duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_millis().min(u64::MAX as u128) as u64)
 }
 
 fn web_preview_file_url(path: &Path, title: &str, kind: PreviewFileKind) -> Option<String> {

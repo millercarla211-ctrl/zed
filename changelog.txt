@@ -1,3 +1,15 @@
+[2026-05-16] - Managed Chrome WebPreview Receipt Surface
+
+ADDED:
+- Added a read-only managed Chrome execution status surface to WebPreview session snapshots, Agent Browser status packets, executor readiness, QA runbook, and the More menu.
+- Added Copy/Send Managed Chrome Execution Status actions for direct Agent Panel handoff of the latest managed Chrome request and receipt summaries.
+
+CHANGED:
+- Browser status handoffs now include the newest managed Chrome execution outcome, screenshot artifact path, URL, title, schema health, and request/receipt root paths without launching Chrome or running Node.
+
+NOTES:
+- The WebPreview status surface only reads managed execution directories under the workspace tools root or Zed data root and never touches real browser profiles.
+
 [2026-05-16] - Managed Chrome Execution Inspection
 
 ADDED:
