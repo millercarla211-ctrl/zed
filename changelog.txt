@@ -1,3 +1,15 @@
+[2026-05-16] - PC Use Runner Gate Receipt
+
+ADDED:
+- Added the permissioned `request_zed_pc_use_payload_run` Agent tool for writing auditable PC-use runner-gate receipts from validated managed queue files.
+- Advertised the runner-gate tool and receipt schema through the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- PC Use plugin manifests now expose a receipt-only runner gate before any importer, screenshot, focus, click, type, process launch, or OS-wide desktop automation executor is enabled.
+
+NOTES:
+- The runner gate asks permission before writing managed receipts and still never screenshots, focuses Zed, dispatches input, launches processes, or controls the OS desktop.
+
 [2026-05-16] - PC Use Queue Inspection
 
 ADDED:
