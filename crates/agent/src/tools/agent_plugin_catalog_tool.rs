@@ -67,6 +67,7 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX: &str =
     "agent-browser-final-validation-result-";
 const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
     "zed.web_preview.agent_browser_function_surfaces.v1";
+const AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA: &str = "zed.agent_plugins.catalog_summary.v1";
 const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstrap_readiness.v1";
 const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstrap_manifest.v1";
 const AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA: &str =
@@ -225,12 +226,16 @@ fn agent_plugin_catalog(
         });
     }
 
+    let catalog_summary = agent_plugin_catalog_summary(&plugins);
+
     serde_json::json!({
         "schema": "zed.agent_plugins.catalog.v1",
         "generated_at_ms": current_epoch_millis(),
+        "catalog_summary": catalog_summary,
         "catalog": {
             "name": "DX Agent Plugin Runtime",
             "status": "discovery_layer_available",
+            "summary_schema": AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA,
             "default_enabled_plugins": ["zed.browser", "zed.chrome", "zed.pc_use"],
             "tool_name": AgentPluginCatalogTool::NAME,
             "tools": {
@@ -557,6 +562,378 @@ fn agent_plugin_catalog(
             },
             "plugins": plugins,
         }
+    })
+}
+
+fn agent_plugin_catalog_summary(plugins: &[Value]) -> Value {
+    let plugin_summaries = plugins
+        .iter()
+        .map(agent_plugin_catalog_plugin_summary)
+        .collect::<Vec<_>>();
+    let next_actions = agent_plugin_catalog_next_actions_summary(&plugin_summaries);
+    let proof_freshness = agent_plugin_catalog_proof_freshness_summary(&plugin_summaries);
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA,
+        "source_schema": "zed.agent_plugins.catalog.v1",
+        "generated_at_ms": current_epoch_millis(),
+        "status": "discovery_layer_available",
+        "tool_name": AgentPluginCatalogTool::NAME,
+        "plugin_count": plugins.len(),
+        "default_enabled_plugins": ["zed.browser", "zed.chrome", "zed.pc_use"],
+        "available_to": [
+            "agent_panel",
+            "subagents",
+            "acp_threads",
+            "web_preview_agent_handoff"
+        ],
+        "runtime_status": {
+            "tool_name": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+            "schema": AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA,
+            "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+            "runtime_observability_matrix_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA,
+            "runtime_green_final_proof_guide_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
+            "runtime_green_final_report_packet_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
+            "runtime_green_report_readiness_card_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
+            "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
+            "read_only": true,
+        },
+        "webpreview_handoffs": {
+            "count": AGENT_PLUGIN_WEBPREVIEW_HANDOFF_IDS.len(),
+            "ids": AGENT_PLUGIN_WEBPREVIEW_HANDOFF_IDS,
+            "summary_schema_count": 3,
+            "current_summary_count": 0,
+        },
+        "next_actions": next_actions,
+        "proof_freshness": proof_freshness,
+        "plugins": plugin_summaries,
+        "read_only": true,
+        "dispatches_input": false,
+    })
+}
+
+const AGENT_PLUGIN_WEBPREVIEW_HANDOFF_IDS: &[&str] = &[
+    "runtime_observability_digest",
+    "runtime_green_operator_handoff",
+    "runtime_green_proof_path",
+    "runtime_green_claim_gate",
+    "runtime_green_claim_readiness",
+    "runtime_green_report_gate",
+    "runtime_green_report_badge",
+    "runtime_green_final_proof_guide",
+    "runtime_green_final_report_packet",
+    "runtime_green_report_readiness_card",
+];
+
+fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
+    let observability = plugin.get("observability_profile");
+    let code_score = observability
+        .and_then(|profile| profile.get("code_score"))
+        .and_then(Value::as_u64);
+    let runtime_green_blocker = observability
+        .and_then(|profile| profile.get("runtime_green_blocker"))
+        .and_then(Value::as_str);
+    let explicit_next_action = observability
+        .and_then(|profile| profile.get("next_action"))
+        .and_then(Value::as_str);
+    let next_action_source = if explicit_next_action.is_some() {
+        Some("observability_profile.next_action")
+    } else if runtime_green_blocker.is_some() {
+        Some("observability_profile.runtime_green_blocker")
+    } else {
+        None
+    };
+    let next_action = explicit_next_action.or(runtime_green_blocker);
+    let needs_runtime_validation = runtime_green_blocker.is_some()
+        || code_score
+            .map(|score| score < 100)
+            .unwrap_or_else(|| plugin.get("status").and_then(Value::as_str) != Some("available"));
+    let proof_handoff_count = observability
+        .and_then(|profile| profile.get("proof_handoffs"))
+        .and_then(Value::as_object)
+        .map(|handoffs| handoffs.len());
+    let watch_surface_count = observability
+        .and_then(|profile| profile.get("watch_surfaces"))
+        .and_then(Value::as_array)
+        .map(Vec::len);
+    let recommended_handoff = agent_plugin_catalog_recommended_handoff(plugin);
+
+    serde_json::json!({
+        "id": plugin.get("id").and_then(Value::as_str),
+        "name": plugin.get("name").and_then(Value::as_str),
+        "status": plugin.get("status").and_then(Value::as_str),
+        "default_enabled": plugin.get("default_enabled").and_then(Value::as_bool),
+        "scope": plugin.get("scope").and_then(Value::as_str),
+        "runtime": {
+            "backend": plugin.pointer("/runtime/backend").and_then(Value::as_str),
+            "requires_external_process": plugin
+                .pointer("/runtime/requires_external_process")
+                .and_then(Value::as_bool),
+            "native_backend": plugin.pointer("/runtime/native_backend").and_then(Value::as_str),
+        },
+        "observability": {
+            "status": observability
+                .and_then(|profile| profile.get("status"))
+                .and_then(Value::as_str),
+            "code_score": code_score,
+            "needs_runtime_validation": needs_runtime_validation,
+            "runtime_green_blocker": runtime_green_blocker,
+            "proof_handoff_count": proof_handoff_count,
+            "watch_surface_count": watch_surface_count,
+            "next_action": {
+                "summary": next_action,
+                "source": next_action_source,
+                "recommended_handoff": recommended_handoff.clone(),
+                "read_only": true,
+                "dispatches_input": false,
+            },
+            "proof_freshness": agent_plugin_catalog_proof_freshness_contract(
+                plugin,
+                recommended_handoff
+            ),
+            "next_feature_set": observability
+                .and_then(|profile| profile.get("next_feature_set"))
+                .and_then(Value::as_str),
+        },
+        "handoffs": {
+            "function_surfaces_schema": plugin
+                .get("function_surfaces_schema")
+                .and_then(Value::as_str),
+            "function_surfaces_copy_action": plugin
+                .pointer("/function_surfaces_handoff/copy_action")
+                .and_then(Value::as_str),
+            "function_surfaces_send_action": plugin
+                .pointer("/function_surfaces_handoff/send_action")
+                .and_then(Value::as_str),
+            "bootstrap_schema": plugin
+                .get("bootstrap_readiness_schema")
+                .and_then(Value::as_str),
+            "proof_summary_schema": plugin
+                .get("proof_summary_schema")
+                .or_else(|| plugin.pointer("/runtime/pc_use_proof_summary_schema"))
+                .and_then(Value::as_str),
+            "runtime_status_proof_summary_field": observability
+                .and_then(|profile| profile.pointer("/proof_handoffs/runtime_status_proof_summary_field"))
+                .and_then(Value::as_str),
+            "capability_count": plugin
+                .get("capabilities")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+        },
+        "safety": {
+            "read_only_summary": true,
+            "dispatches_input": false,
+        },
+    })
+}
+
+fn agent_plugin_catalog_next_actions_summary(plugins: &[Value]) -> Value {
+    let rows = plugins
+        .iter()
+        .filter_map(|plugin| {
+            let next_action = plugin.pointer("/observability/next_action/summary")?;
+
+            Some(serde_json::json!({
+                "plugin_id": plugin.get("id").and_then(Value::as_str),
+                "plugin_name": plugin.get("name").and_then(Value::as_str),
+                "status": plugin.pointer("/observability/status").and_then(Value::as_str),
+                "code_score": plugin.pointer("/observability/code_score").and_then(Value::as_u64),
+                "needs_runtime_validation": plugin
+                    .pointer("/observability/needs_runtime_validation")
+                    .and_then(Value::as_bool),
+                "summary": next_action,
+                "source": plugin.pointer("/observability/next_action/source").and_then(Value::as_str),
+                "recommended_handoff": plugin.pointer("/observability/next_action/recommended_handoff").cloned(),
+            }))
+        })
+        .collect::<Vec<_>>();
+    let blocked_or_pending_count = rows
+        .iter()
+        .filter(|row| {
+            row.get("needs_runtime_validation")
+                .and_then(Value::as_bool)
+                .unwrap_or(true)
+        })
+        .count();
+    let first = rows.first().cloned();
+
+    serde_json::json!({
+        "blocked_or_pending_count": blocked_or_pending_count,
+        "total_count": rows.len(),
+        "first": first,
+        "rows": rows,
+        "read_only": true,
+        "dispatches_input": false,
+    })
+}
+
+fn agent_plugin_catalog_proof_freshness_summary(plugins: &[Value]) -> Value {
+    let rows = plugins
+        .iter()
+        .filter_map(|plugin| plugin.pointer("/observability/proof_freshness").cloned())
+        .collect::<Vec<_>>();
+    let must_recheck_count = rows
+        .iter()
+        .filter(|row| {
+            row.get("must_recheck_before_runtime_green")
+                .and_then(Value::as_bool)
+                .unwrap_or(true)
+        })
+        .count();
+    let read_sequence = rows
+        .iter()
+        .filter_map(|row| row.get("read_sequence").cloned())
+        .collect::<Vec<_>>();
+    let first = rows.first().cloned();
+
+    serde_json::json!({
+        "status": if must_recheck_count == 0 {
+            "no_recheck_required"
+        } else {
+            "final_windows_recheck_required"
+        },
+        "must_recheck_count": must_recheck_count,
+        "lane_count": rows.len(),
+        "first": first,
+        "read_sequence": read_sequence,
+        "rows": rows,
+        "safety": {
+            "read_only_summary": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+            "touches_real_browser_profiles": false,
+        },
+    })
+}
+
+fn agent_plugin_catalog_proof_freshness_contract(
+    plugin: &Value,
+    recommended_handoff: Option<Value>,
+) -> Value {
+    let plugin_id = plugin
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let (lane_id, status, source, runtime_status_field, read_sequence, proof_sources) =
+        match plugin_id {
+            "zed.browser" => (
+                "browser_webpreview",
+                "manual_result_import_recheck_required",
+                "webpreview_evidence.final_validation_observability",
+                "runtime_observability_plugin_matrix.rows[browser_webpreview].evidence_freshness",
+                vec![
+                    "copy_agent_browser_final_validation_bundle",
+                    "copy_agent_browser_final_validation_result_template",
+                    "import_agent_browser_final_validation_result_from_clipboard",
+                    "copy_agent_browser_final_proof_audit",
+                    AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                ],
+                vec![
+                    "final_validation_observability",
+                    "final_validation_result_import_receipt",
+                    "runtime_green_final_proof_audit_summary",
+                ],
+            ),
+            "zed.chrome" => (
+                "managed_chrome",
+                "managed_execution_receipt_recheck_required",
+                "webpreview_evidence.managed_chrome_execution_status",
+                "runtime_observability_plugin_matrix.rows[managed_chrome].evidence_freshness",
+                vec![
+                    "copy_agent_plugin_bootstrap_readiness",
+                    "copy_managed_chrome_execution_status",
+                    AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
+                    AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                ],
+                vec![
+                    "plugin_bootstrap_readiness",
+                    "managed_chrome_execution_status",
+                    "managed_chrome_execution_receipt",
+                ],
+            ),
+            "zed.pc_use" => (
+                "pc_use",
+                "pc_use_runner_receipt_recheck_required",
+                "webpreview_evidence.pc_use_status.proof_summary",
+                "runtime_observability_plugin_matrix.rows[pc_use].evidence_freshness",
+                vec![
+                    "copy_pc_use_status",
+                    AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                    AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
+                    AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                ],
+                vec![
+                    "pc_use_status.proof_summary",
+                    "pc_use_runner_receipt",
+                    "pc_use_payload_queue",
+                ],
+            ),
+            _ => (
+                "unknown",
+                "unknown_plugin_recheck_required",
+                "agent_plugin_catalog.plugins",
+                "runtime_observability_plugin_matrix.rows[].evidence_freshness",
+                vec![AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME],
+                vec!["agent_plugin_catalog"],
+            ),
+        };
+
+    serde_json::json!({
+        "plugin_id": plugin_id,
+        "lane_id": lane_id,
+        "status": status,
+        "source": source,
+        "runtime_status_field": runtime_status_field,
+        "read_sequence": read_sequence,
+        "proof_sources": proof_sources,
+        "recommended_handoff": recommended_handoff,
+        "must_recheck_before_runtime_green": true,
+        "does_not_probe_files": true,
+        "read_only": true,
+        "dispatches_input": false,
+    })
+}
+
+fn agent_plugin_catalog_recommended_handoff(plugin: &Value) -> Option<Value> {
+    let plugin_id = plugin.get("id").and_then(Value::as_str)?;
+    let proof_handoffs = plugin.pointer("/observability_profile/proof_handoffs")?;
+    let preferred_keys: &[&str] = match plugin_id {
+        "zed.browser" => &[
+            "runtime_green_report_readiness_card",
+            "runtime_green_final_report_packet",
+            "runtime_green_final_proof_guide",
+            "final_bundle",
+            "validation_progress",
+        ],
+        "zed.chrome" => &[
+            "execution_inspect_tool",
+            "adapter_invoke_tool",
+            "runner_gate_tool",
+            "queue_inspection_tool",
+            "webpreview_status_copy",
+        ],
+        "zed.pc_use" => &[
+            "webpreview_status_copy",
+            "runner_receipts_tool",
+            "payload_queue_inspect_tool",
+            "target_snapshot_tool",
+            "context_tool",
+        ],
+        _ => &[],
+    };
+
+    preferred_keys.iter().find_map(|key| {
+        proof_handoffs
+            .get(*key)
+            .and_then(Value::as_str)
+            .map(|value| {
+                serde_json::json!({
+                    "id": *key,
+                    "value": value,
+                })
+            })
     })
 }
 

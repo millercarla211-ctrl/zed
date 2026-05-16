@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime Agent Catalog Summary Alignment
+
+ADDED:
+- `list_agent_plugins` now emits a top-level `catalog_summary` using `zed.agent_plugins.catalog_summary.v1`.
+- Agent catalog summaries now include per-plugin status/runtime metadata, next-action rows, proof-freshness contracts, recommended handoffs, runtime-status schema metadata, and read-only/input-dispatch safety flags aligned with the WebPreview compact catalog summary.
+
+CHANGED:
+- Agent panels can now read the same compact Browser, managed Chrome, and PC-use next-step/proof-freshness contract from either `list_agent_plugins` or WebPreview handoffs without expanding full plugin manifests first.
+
+NOTES:
+- This is read-only catalog metadata only. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, probe proof files, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime WebPreview Catalog Proof Freshness
 
 ADDED:
