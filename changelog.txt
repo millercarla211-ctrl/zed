@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Asset Receipt Catalog Alignment
+
+CHANGED:
+- Agent catalog bootstrap readiness now checks the managed asset provisioning receipt schema before reporting managed Chrome bootstrap assets ready.
+- WebPreview bootstrap readiness mirrors the same asset receipt check so UI handoff packets and Agent catalog discovery agree on readiness blockers.
+- Managed Chrome action contracts now publish the asset receipt filename and receipt/result schemas alongside the managed asset provisioner tool.
+
+NOTES:
+- This is read-only catalog/bootstrap metadata only; it does not copy extensions, download packages, run Node, launch Chrome, dispatch browser input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Asset Receipt Freshness
 
 CHANGED:

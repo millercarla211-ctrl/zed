@@ -25,6 +25,7 @@ use crate::{
     AGENT_PC_USE_TARGET_SNAPSHOT_TOOL_NAME, AGENT_PC_USE_UI_SNAPSHOT_CONTRACT_SCHEMA,
     AGENT_PC_USE_UI_SNAPSHOT_CONTRACT_TOOL_NAME, AGENT_PC_USE_UI_SNAPSHOT_SCHEMA,
     AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME, AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
+    AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_FILE_NAME,
     AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA, AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
     AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA, AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME, AgentTool,
     ToolCallEventStream, ToolInput,
@@ -786,7 +787,7 @@ fn chrome_plugin_manifest(
         },
         "observability_profile": {
             "status": "managed_adapter_ready_pending_windows_runtime_validation",
-            "code_score": 92,
+            "code_score": 94,
             "runtime_green_blocker": "Validate the managed Chrome queue, runner gate, Playwright adapter invoke path, and execution receipt inspection on Windows without touching real browser profiles.",
             "proof_handoffs": {
                 "queue_inspection_tool": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
@@ -800,6 +801,7 @@ fn chrome_plugin_manifest(
             },
             "watch_surfaces": [
                 "managed workspace or Zed-data roots only",
+                "asset provisioning receipts prove managed assets were prepared before Chrome execution",
                 "real Chrome, Edge, and Firefox profiles stay untouched",
                 "adapter execution remains limited to open_url, screenshot, set_viewport, and wait_for_selector",
                 "click, type, key, and scroll stay blocked in the managed adapter",
@@ -813,6 +815,7 @@ fn chrome_plugin_manifest(
             "payload_queue_inspect_tool_name": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
             "runner_gate_tool_name": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
             "asset_provisioner_tool_name": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
+            "asset_provisioning_receipt_file": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_FILE_NAME,
             "asset_provisioning_result_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
             "asset_provisioning_receipt_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
             "playwright_adapter_tool_name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
@@ -1097,6 +1100,8 @@ fn agent_plugin_bootstrap_readiness(
         .map(|root| root.join("dx-chrome-extension"))
         .unwrap_or_else(|| default_plugin_root.join("dx-chrome-extension"));
     let bootstrap_manifest = plugin_root.join("agent-plugin-bootstrap.json");
+    let asset_provisioning_receipt =
+        plugin_root.join(AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_FILE_NAME);
     let managed_profile_root = workspace_tools_root
         .as_ref()
         .map(|root| root.join("browser-profiles").join("chrome"))
@@ -1114,6 +1119,9 @@ fn agent_plugin_bootstrap_readiness(
     let bootstrap_manifest_schema = json_file_schema(&bootstrap_manifest);
     let bootstrap_manifest_ready =
         bootstrap_manifest_schema.as_deref() == Some(AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA);
+    let asset_provisioning_receipt_schema = json_file_schema(&asset_provisioning_receipt);
+    let asset_provisioning_receipt_ready = asset_provisioning_receipt_schema.as_deref()
+        == Some(AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA);
 
     let checks = vec![
         bootstrap_check(
@@ -1195,6 +1203,14 @@ fn agent_plugin_bootstrap_readiness(
             Some(bootstrap_manifest.clone()),
             "provision_required",
             "Write the bootstrap manifest so future agents can verify the managed-root policy before provisioning assets.",
+        ),
+        bootstrap_check(
+            "asset.provisioning_receipt",
+            "Managed asset provisioning receipt",
+            asset_provisioning_receipt_ready,
+            Some(asset_provisioning_receipt.clone()),
+            "provision_required",
+            "Run the managed asset provisioner with write_asset_receipt=true so agents can prove managed assets were prepared before Chrome execution.",
         ),
         bootstrap_check(
             "asset.playwright_package",

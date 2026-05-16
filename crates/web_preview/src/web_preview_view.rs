@@ -89,6 +89,12 @@ const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstra
 const AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA: &str =
     "zed.agent_plugins.bootstrap_prepare_request.v1";
 const AGENT_PLUGIN_BOOTSTRAP_ASSET_PLAN_SCHEMA: &str = "zed.agent_plugins.bootstrap_asset_plan.v1";
+const AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA: &str =
+    "zed.agent_plugins.asset_provisioning_result.v1";
+const AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA: &str =
+    "zed.agent_plugins.asset_provisioning_receipt.v1";
+const AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_FILE_NAME: &str =
+    "agent-plugin-asset-provisioning.json";
 const AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA: &str =
     "zed.agent_plugins.managed_chrome_playwright_adapter_manifest.v1";
 const AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME: &str = "zed-managed-chrome-runner";
@@ -3419,6 +3425,8 @@ impl WebPreviewView {
             .map(|root| root.join("browser-profiles").join("chrome"))
             .unwrap_or_else(|| default_plugin_root.join("browser-profiles").join("chrome"));
         let bootstrap_manifest = plugin_root.join("agent-plugin-bootstrap.json");
+        let asset_provisioning_receipt =
+            plugin_root.join(AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_FILE_NAME);
         let playwright_package = playwright_root
             .join("node_modules")
             .join("playwright")
@@ -3431,6 +3439,9 @@ impl WebPreviewView {
         let bootstrap_manifest_schema = json_file_schema(&bootstrap_manifest);
         let bootstrap_manifest_ready =
             bootstrap_manifest_schema.as_deref() == Some(AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA);
+        let asset_provisioning_receipt_schema = json_file_schema(&asset_provisioning_receipt);
+        let asset_provisioning_receipt_ready = asset_provisioning_receipt_schema.as_deref()
+            == Some(AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA);
         let playwright_adapter_manifest_ready =
             adapter_manifest_ready(&playwright_adapter_manifest);
 
@@ -3514,6 +3525,14 @@ impl WebPreviewView {
                 Some(bootstrap_manifest.clone()),
                 "provision_required",
                 "Write the bootstrap manifest so future agents can verify the managed-root policy before provisioning assets.",
+            ),
+            bootstrap_check(
+                "asset.provisioning_receipt",
+                "Managed asset provisioning receipt",
+                asset_provisioning_receipt_ready,
+                Some(asset_provisioning_receipt.clone()),
+                "provision_required",
+                "Run the managed asset provisioner with write_asset_receipt=true so agents can prove managed assets were prepared before Chrome execution.",
             ),
             bootstrap_check(
                 "asset.playwright_package",
@@ -10381,7 +10400,7 @@ impl WebPreviewView {
                         },
                         "observability_profile": {
                             "status": "managed_adapter_ready_pending_windows_runtime_validation",
-                            "code_score": 92,
+                            "code_score": 94,
                             "runtime_green_blocker": "Validate the managed Chrome queue, runner gate, Playwright adapter invoke path, and execution receipt inspection on Windows without touching real browser profiles.",
                             "proof_handoffs": {
                                 "queue_inspection_tool": "inspect_managed_chrome_payload_queue",
@@ -10395,6 +10414,7 @@ impl WebPreviewView {
                             },
                             "watch_surfaces": [
                                 "managed workspace or Zed-data roots only",
+                                "asset provisioning receipts prove managed assets were prepared before Chrome execution",
                                 "real Chrome, Edge, and Firefox profiles stay untouched",
                                 "adapter execution remains limited to open_url, screenshot, set_viewport, and wait_for_selector",
                                 "click, type, key, and scroll stay blocked in the managed adapter",
@@ -10408,6 +10428,9 @@ impl WebPreviewView {
                             "payload_queue_inspect_tool_name": "inspect_managed_chrome_payload_queue",
                             "runner_gate_tool_name": "request_managed_chrome_payload_run",
                             "asset_provisioner_tool_name": PREPARE_AGENT_PLUGIN_MANAGED_ASSETS_TOOL,
+                            "asset_provisioning_receipt_file": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_FILE_NAME,
+                            "asset_provisioning_result_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
+                            "asset_provisioning_receipt_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
                             "playwright_adapter_tool_name": "prepare_managed_chrome_playwright_adapter",
                             "playwright_invoke_tool_name": "invoke_managed_chrome_playwright_adapter",
                             "playwright_execution_inspect_tool_name": "inspect_managed_chrome_playwright_executions",
