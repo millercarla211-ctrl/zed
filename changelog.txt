@@ -1,3 +1,12 @@
+[2026-05-16] - Agent Browser Executor Validation Progress
+
+ADDED:
+- Added grouped validation progress to WebPreview Agent Browser status packets, executor readiness, and QA runbooks.
+- The progress block now summarizes context, audit packets, payload bridge/import receipts, low-risk executors, native preflights, native traces, native dispatch receipts, and managed Chrome/PC-use handoff visibility before the final Windows runtime pass.
+
+NOTES:
+- This is read-only evidence metadata; it does not dispatch browser input, run JavaScript, launch Chrome, take screenshots, or change editor/WebPreview focus paths.
+
 [2026-05-16] - Agent Plugin Runtime Validation Matrix
 
 ADDED:

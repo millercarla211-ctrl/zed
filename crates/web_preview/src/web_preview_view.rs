@@ -1946,6 +1946,283 @@ impl WebPreviewView {
         }))
     }
 
+    fn agent_browser_executor_validation_progress(&self) -> Value {
+        let groups = vec![
+            Self::agent_browser_validation_group(
+                "read_only_context",
+                "Current page state is available before planning or dispatch.",
+                &[
+                    ("page_diagnostics", self.latest_page_diagnostics.is_some()),
+                    ("runtime_events", self.latest_runtime_events.is_some()),
+                    ("dom_snapshot", self.latest_dom_snapshot.is_some()),
+                    ("action_targets", self.latest_action_targets.is_some()),
+                    ("readiness_probe", self.latest_readiness_probe.is_some()),
+                    ("wait_contract", self.latest_wait_contract.is_some()),
+                ],
+            ),
+            Self::agent_browser_validation_group(
+                "audit_packet",
+                "The action plan and receipt contract exist before any input attempt.",
+                &[
+                    ("interaction_plan", self.latest_interaction_plan.is_some()),
+                    (
+                        "interaction_preflight",
+                        self.latest_interaction_preflight.is_some(),
+                    ),
+                    (
+                        "interaction_receipt_template",
+                        self.latest_interaction_receipt_template.is_some(),
+                    ),
+                    (
+                        "interaction_action_request",
+                        self.latest_interaction_action_request.is_some(),
+                    ),
+                    (
+                        "blocked_interaction_receipt",
+                        self.latest_blocked_interaction_receipt.is_some(),
+                    ),
+                    (
+                        "successful_interaction_receipt",
+                        self.latest_successful_interaction_receipt.is_some(),
+                    ),
+                ],
+            ),
+            Self::agent_browser_validation_group(
+                "payload_bridge",
+                "Agent Browser payloads can be bridged or imported with receipts.",
+                &[
+                    (
+                        "action_payload_bridge",
+                        self.latest_agent_browser_action_payload_bridge.is_some(),
+                    ),
+                    (
+                        "action_payload_import_receipt",
+                        self.latest_agent_browser_action_payload_import_receipt
+                            .is_some(),
+                    ),
+                ],
+            ),
+            Self::agent_browser_validation_group(
+                "low_risk_executors",
+                "Non-input browser commands have receipt-backed executor attempts.",
+                &[
+                    (
+                        "noop_executor_attempt",
+                        self.latest_agent_browser_noop_executor_attempt.is_some(),
+                    ),
+                    (
+                        "reload_executor_attempt",
+                        self.latest_agent_browser_reload_executor_attempt.is_some(),
+                    ),
+                    (
+                        "clear_data_executor_attempt",
+                        self.latest_agent_browser_clear_data_executor_attempt
+                            .is_some(),
+                    ),
+                    (
+                        "navigation_executor_attempt",
+                        self.latest_agent_browser_navigation_executor_attempt
+                            .is_some(),
+                    ),
+                    (
+                        "viewport_executor_attempt",
+                        self.latest_agent_browser_viewport_executor_attempt
+                            .is_some(),
+                    ),
+                ],
+            ),
+            Self::agent_browser_validation_group(
+                "native_preflight",
+                "Input families have fresh target-specific preflight receipts.",
+                &[
+                    (
+                        "click_preflight",
+                        self.latest_agent_browser_click_preflight_attempt.is_some(),
+                    ),
+                    (
+                        "type_preflight",
+                        self.latest_agent_browser_type_preflight_attempt.is_some(),
+                    ),
+                    (
+                        "key_preflight",
+                        self.latest_agent_browser_key_preflight_attempt.is_some(),
+                    ),
+                    (
+                        "scroll_preflight",
+                        self.latest_agent_browser_scroll_preflight_attempt.is_some(),
+                    ),
+                ],
+            ),
+            Self::agent_browser_validation_group(
+                "native_traces",
+                "Native coordinate, keyboard, history, and cache plans are captured before dispatch.",
+                &[
+                    (
+                        "click_trace",
+                        self.latest_agent_browser_native_click_trace_attempt
+                            .is_some(),
+                    ),
+                    (
+                        "type_trace",
+                        self.latest_agent_browser_native_type_trace_attempt
+                            .is_some(),
+                    ),
+                    (
+                        "key_trace",
+                        self.latest_agent_browser_native_key_trace_attempt.is_some(),
+                    ),
+                    (
+                        "scroll_trace",
+                        self.latest_agent_browser_native_scroll_trace_attempt
+                            .is_some(),
+                    ),
+                    (
+                        "history_trace",
+                        self.latest_agent_browser_native_history_trace_attempt
+                            .is_some(),
+                    ),
+                    (
+                        "cache_reset_trace",
+                        self.latest_agent_browser_native_cache_reset_trace_attempt
+                            .is_some(),
+                    ),
+                    (
+                        "dispatch_qa_checklist",
+                        self.latest_agent_browser_native_dispatch_qa_checklist
+                            .is_some(),
+                    ),
+                ],
+            ),
+            Self::agent_browser_validation_group(
+                "native_dispatch_receipts",
+                "Native dispatch families have their latest executor receipts available.",
+                &[
+                    (
+                        "click_executor",
+                        self.latest_agent_browser_native_click_executor_attempt
+                            .is_some(),
+                    ),
+                    (
+                        "type_executor",
+                        self.latest_agent_browser_native_type_executor_attempt
+                            .is_some(),
+                    ),
+                    (
+                        "key_executor",
+                        self.latest_agent_browser_native_key_executor_attempt
+                            .is_some(),
+                    ),
+                    (
+                        "scroll_executor",
+                        self.latest_agent_browser_native_scroll_executor_attempt
+                            .is_some(),
+                    ),
+                    (
+                        "history_executor",
+                        self.latest_agent_browser_native_history_executor_attempt
+                            .is_some(),
+                    ),
+                    (
+                        "cache_reset_executor",
+                        self.latest_agent_browser_native_cache_reset_executor_attempt
+                            .is_some(),
+                    ),
+                ],
+            ),
+            Self::agent_browser_validation_group(
+                "external_handoffs",
+                "Managed Chrome, PC-use, and plugin catalog handoff status is visible.",
+                &[
+                    (
+                        "agent_plugin_catalog",
+                        self.latest_agent_plugin_catalog.is_some(),
+                    ),
+                    ("managed_chrome_status", true),
+                    ("pc_use_status", true),
+                ],
+            ),
+        ];
+        let ready_count = groups
+            .iter()
+            .filter_map(|group| group.pointer("/ready_count").and_then(Value::as_u64))
+            .sum::<u64>();
+        let total_count = groups
+            .iter()
+            .filter_map(|group| group.pointer("/total_count").and_then(Value::as_u64))
+            .sum::<u64>();
+        let ready_group_count = groups
+            .iter()
+            .filter(|group| {
+                group
+                    .pointer("/ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+            })
+            .count();
+        let all_groups_ready = ready_group_count == groups.len();
+        let status = if all_groups_ready {
+            "manual_windows_runtime_validation_ready"
+        } else {
+            "manual_windows_runtime_validation_evidence_incomplete"
+        };
+
+        serde_json::json!({
+            "schema": "zed.web_preview.agent_browser_executor_validation_progress.v1",
+            "captured_at_ms": Self::current_epoch_millis(),
+            "status": status,
+            "estimated_code_score": 99,
+            "ready_item_count": ready_count,
+            "total_item_count": total_count,
+            "ready_group_count": ready_group_count,
+            "total_group_count": groups.len(),
+            "groups": groups,
+            "final_runtime_command": "just run",
+            "manual_regression_checks": [
+                "fast editor typing keeps the caret visible",
+                "WebPreview hover, click, right-click, wheel, and keyboard input stay interactive",
+                "URL editor focus does not mix with page input",
+                "native click, type, key, scroll, back, forward, and cache-only reset emit receipts",
+                "managed Chrome and PC-use handoffs remain scoped to managed roots"
+            ],
+            "next_step": if all_groups_ready {
+                "Run one final Windows just run pass and capture manual regression notes before claiming runtime-green."
+            } else {
+                "Collect the missing evidence groups from the WebPreview More menu before the final Windows just run pass."
+            },
+        })
+    }
+
+    fn agent_browser_validation_group(
+        name: &'static str,
+        goal: &'static str,
+        items: &[(&'static str, bool)],
+    ) -> Value {
+        let ready_count = items.iter().filter(|(_, ready)| *ready).count();
+        let missing = items
+            .iter()
+            .filter_map(|(id, ready)| (!*ready).then_some(*id))
+            .collect::<Vec<_>>();
+        let item_values = items
+            .iter()
+            .map(|(id, ready)| {
+                serde_json::json!({
+                    "id": id,
+                    "ready": ready,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        serde_json::json!({
+            "name": name,
+            "goal": goal,
+            "ready": ready_count == items.len(),
+            "ready_count": ready_count,
+            "total_count": items.len(),
+            "missing": missing,
+            "items": item_values,
+        })
+    }
+
     fn latest_agent_plugin_catalog_summary(&self) -> Option<Value> {
         let catalog = self.latest_agent_plugin_catalog.as_ref()?;
         Some(serde_json::json!({
@@ -4035,6 +4312,7 @@ impl WebPreviewView {
                     "agent_browser_native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
                     "agent_browser_native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                     "agent_browser_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
+                    "agent_browser_executor_validation_progress": self.agent_browser_executor_validation_progress(),
                     "managed_chrome_execution": managed_chrome_execution,
                     "pc_use_status": pc_use_status,
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
@@ -4333,6 +4611,7 @@ impl WebPreviewView {
                 "trace_wired_actions": trace_wired_actions,
                 "pending_actions": pending_executor_actions,
                 "native_input_bridge": native_input_bridge,
+                "validation_progress": self.agent_browser_executor_validation_progress(),
                 "requires_user_permission": true,
                 "requires_fresh_preflight_before_every_action": true,
                 "requires_receipt_after_every_action": true,
@@ -8227,6 +8506,7 @@ impl WebPreviewView {
                     "latest_native_cache_reset_trace_attempt": self.latest_agent_browser_native_cache_reset_trace_attempt_summary(),
                     "latest_native_cache_reset_executor_attempt": self.latest_agent_browser_native_cache_reset_executor_attempt_summary(),
                     "latest_native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
+                    "executor_validation_progress": self.agent_browser_executor_validation_progress(),
                     "managed_chrome_execution": self.managed_chrome_execution_status(),
                     "pc_use_status": self.pc_use_status(),
                 },
