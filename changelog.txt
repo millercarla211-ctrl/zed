@@ -1,3 +1,15 @@
+[2026-05-16] - PC Use Target Snapshot
+
+ADDED:
+- Added the read-only `inspect_zed_pc_use_target_snapshot` Agent tool for exposing safe current workspace and project-panel target ids from project state.
+- Advertised the target snapshot tool and schema through the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- PC Use plugin manifests now distinguish the fixed target manifest from the current target snapshot so agents can reference known workspace roots without guessing ids.
+
+NOTES:
+- The target snapshot is read-only and does not screenshot, focus Zed, dispatch input, launch processes, inspect pixels, or control the OS desktop.
+
 [2026-05-16] - PC Use Target Manifest
 
 ADDED:

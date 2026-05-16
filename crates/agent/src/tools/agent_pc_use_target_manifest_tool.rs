@@ -187,6 +187,7 @@ fn inspect_pc_use_targets(
         "required_flow": [
             "inspect_zed_window_context",
             "inspect_zed_pc_use_targets",
+            "inspect_zed_pc_use_target_snapshot",
             "compose_zed_pc_use_action_payload",
             "queue_zed_pc_use_action_payload or stage_zed_pc_use_action_payload",
             "inspect_zed_pc_use_payload_queue",
