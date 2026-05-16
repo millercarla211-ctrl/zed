@@ -102,6 +102,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_readiness_scorecard.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_operator_handoff.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_claim_gate.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_proof_path.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
@@ -1425,6 +1427,7 @@ impl WebPreviewView {
             "agent_browser_final_validation_observability": self.agent_browser_final_validation_observability(),
             "agent_browser_function_surfaces": self.agent_browser_function_surfaces(),
             "agent_plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
+            "agent_plugin_runtime_green_claim_gate": self.agent_plugin_runtime_green_claim_gate_snapshot(),
             "agent_browser_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
             "agent_browser_reload_executor_attempt": self.latest_agent_browser_reload_executor_attempt_summary(),
             "agent_browser_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
@@ -1517,6 +1520,7 @@ impl WebPreviewView {
                 "copy_agent_plugin_runtime_green_handoff": true,
                 "send_agent_plugin_runtime_green_handoff_to_agent": true,
                 "agent_plugin_runtime_green_proof_path": true,
+                "agent_plugin_runtime_green_claim_gate": true,
                 "copy_agent_plugin_runtime_green_proof_path": true,
                 "send_agent_plugin_runtime_green_proof_path_to_agent": true,
                 "agent_plugin_runtime_observability_digest": true,
@@ -1791,6 +1795,10 @@ impl WebPreviewView {
             "managed_chrome_latest_outcome": packet.pointer("/packet/latest/managed_chrome_execution/latest_receipt/read/outcome").and_then(Value::as_str),
             "pc_use_status": packet.pointer("/packet/latest/pc_use_status/status").and_then(Value::as_str),
             "pc_use_latest_outcome": packet.pointer("/packet/latest/pc_use_status/latest_receipt/read/outcome").and_then(Value::as_str),
+            "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
+            "runtime_green_ready_lane_fraction": packet.pointer("/packet/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
+            "runtime_green_first_pending_lane": packet.pointer("/packet/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
+            "runtime_green_can_claim_from_webpreview": packet.pointer("/packet/runtime_green_claim_gate/can_claim_runtime_green_from_webpreview").and_then(Value::as_bool),
             "next_step": packet.pointer("/packet/next_step").and_then(Value::as_str),
         }))
     }
@@ -1805,6 +1813,9 @@ impl WebPreviewView {
             "gate_ready_for_executor": readiness.pointer("/readiness/gate_ready_for_executor").and_then(Value::as_bool),
             "can_dispatch_now": readiness.pointer("/readiness/can_dispatch_now").and_then(Value::as_bool),
             "blocker_count": readiness.pointer("/readiness/blockers").and_then(Value::as_array).map(Vec::len),
+            "runtime_green_claim_gate_status": readiness.pointer("/readiness/runtime_green_claim_gate/status").and_then(Value::as_str),
+            "runtime_green_ready_lane_fraction": readiness.pointer("/readiness/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
+            "runtime_green_first_pending_lane": readiness.pointer("/readiness/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
             "next_step": readiness.pointer("/readiness/next_step").and_then(Value::as_str),
         }))
     }
@@ -1822,6 +1833,9 @@ impl WebPreviewView {
             "total_item_count": progress.pointer("/total_item_count").and_then(Value::as_u64),
             "ready_group_count": progress.pointer("/ready_group_count").and_then(Value::as_u64),
             "total_group_count": progress.pointer("/total_group_count").and_then(Value::as_u64),
+            "runtime_green_claim_gate_status": progress.pointer("/runtime_green_claim_gate/status").and_then(Value::as_str),
+            "runtime_green_ready_lane_fraction": progress.pointer("/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
+            "runtime_green_first_pending_lane": progress.pointer("/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
             "next_step": progress.pointer("/next_step").and_then(Value::as_str),
         }))
     }
@@ -2435,6 +2449,7 @@ impl WebPreviewView {
     }
 
     fn agent_browser_executor_validation_progress(&self) -> Value {
+        let runtime_green_claim_gate = self.agent_plugin_runtime_green_claim_gate_snapshot();
         let groups = vec![
             Self::agent_browser_validation_group(
                 "read_only_context",
@@ -2627,6 +2642,7 @@ impl WebPreviewView {
                     ),
                     ("managed_chrome_status", true),
                     ("pc_use_status", true),
+                    ("runtime_green_claim_gate", true),
                 ],
             ),
         ];
@@ -2669,6 +2685,7 @@ impl WebPreviewView {
             "ready_group_count": ready_group_count,
             "total_group_count": groups.len(),
             "groups": groups,
+            "runtime_green_claim_gate": runtime_green_claim_gate,
             "final_runtime_command": "just run",
             "manual_regression_checks": [
                 "fast editor typing keeps the caret visible",
@@ -2756,6 +2773,7 @@ impl WebPreviewView {
         );
         let runtime_green_proof_path_summary =
             Self::agent_plugin_runtime_green_proof_path_summary(&runtime_green_proof_path);
+        let runtime_green_claim_gate = self.agent_plugin_runtime_green_claim_gate_snapshot();
 
         serde_json::json!({
             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
@@ -2774,6 +2792,9 @@ impl WebPreviewView {
                 "total_item_count": progress.pointer("/total_item_count").and_then(Value::as_u64),
                 "ready_group_count": progress.pointer("/ready_group_count").and_then(Value::as_u64),
                 "total_group_count": progress.pointer("/total_group_count").and_then(Value::as_u64),
+                "runtime_green_claim_gate_status": runtime_green_claim_gate.pointer("/status").and_then(Value::as_str),
+                "runtime_green_ready_lane_fraction": runtime_green_claim_gate.pointer("/ready_lane_fraction").and_then(Value::as_str),
+                "runtime_green_first_pending_lane": runtime_green_claim_gate.pointer("/first_pending_lane_label").and_then(Value::as_str),
             },
             "handoff_artifacts": {
                 "status_packet": {
@@ -2848,6 +2869,15 @@ impl WebPreviewView {
                     "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
                     "current_status": runtime_green_proof_path.pointer("/status").and_then(Value::as_str),
                     "latest_summary": runtime_green_proof_path_summary
+                },
+                "runtime_green_claim_gate": {
+                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
+                    "copy_action": "copy_agent_plugin_runtime_green_proof_path",
+                    "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
+                    "current_status": runtime_green_claim_gate.pointer("/status").and_then(Value::as_str),
+                    "ready_lane_fraction": runtime_green_claim_gate.pointer("/ready_lane_fraction").and_then(Value::as_str),
+                    "first_pending_lane": runtime_green_claim_gate.pointer("/first_pending_lane_label").and_then(Value::as_str),
+                    "current_snapshot": runtime_green_claim_gate.clone()
                 },
                 "runtime_status_tool": {
                     "tool_name": "inspect_agent_plugin_runtime_status",
@@ -3955,6 +3985,167 @@ impl WebPreviewView {
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast("Sent plugin bootstrap readiness to the agent panel", cx);
         cx.notify();
+    }
+
+    fn agent_plugin_runtime_green_claim_gate_snapshot(&self) -> Value {
+        let browser_final_observability = self.agent_browser_final_validation_observability();
+        let browser_result_summary = self.latest_agent_browser_final_validation_result_summary();
+        let bootstrap_readiness = self.agent_plugin_bootstrap_readiness();
+        let managed_chrome_execution = self.managed_chrome_execution_status();
+        let pc_use_status = self.pc_use_status();
+
+        let browser_ready = browser_result_summary
+            .as_ref()
+            .and_then(|summary| summary.get("runtime_green_candidate"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let browser_result_present = browser_result_summary.is_some();
+        let bootstrap_ready = bootstrap_readiness.get("status").and_then(Value::as_str)
+            == Some("ready_for_managed_chrome_executor");
+        let managed_chrome_receipt_completed = managed_chrome_execution
+            .pointer("/latest_receipt/read/outcome")
+            .and_then(Value::as_str)
+            == Some("completed");
+        let managed_chrome_ready = bootstrap_ready && managed_chrome_receipt_completed;
+        let pc_use_ready =
+            pc_use_status.get("status").and_then(Value::as_str) == Some("has_ready_runner_receipt");
+        let lanes = vec![
+            serde_json::json!({
+                "lane_id": "browser_webpreview",
+                "label": "Browser/WebPreview",
+                "ready": browser_ready,
+                "status": if browser_ready {
+                    "ready"
+                } else if browser_result_present {
+                    "manual_result_not_runtime_green"
+                } else {
+                    "missing_final_validation_result"
+                },
+                "primary_actions": [
+                    "send_agent_browser_final_validation_observability_to_agent",
+                    "send_agent_browser_final_validation_bundle_to_agent",
+                    "import_agent_browser_final_validation_result_from_clipboard"
+                ],
+            }),
+            serde_json::json!({
+                "lane_id": "managed_chrome",
+                "label": "Managed Chrome/Playwright",
+                "ready": managed_chrome_ready,
+                "status": if managed_chrome_ready {
+                    "ready"
+                } else if !bootstrap_ready {
+                    "bootstrap_or_assets_not_ready"
+                } else {
+                    managed_chrome_execution
+                        .get("status")
+                        .and_then(Value::as_str)
+                        .unwrap_or("missing_completed_execution_receipt")
+                },
+                "primary_actions": [
+                    "send_agent_plugin_bootstrap_readiness_to_agent",
+                    "send_managed_chrome_execution_status_to_agent"
+                ],
+            }),
+            serde_json::json!({
+                "lane_id": "pc_use",
+                "label": "Zed PC-use",
+                "ready": pc_use_ready,
+                "status": if pc_use_ready {
+                    "ready"
+                } else {
+                    pc_use_status
+                        .get("status")
+                        .and_then(Value::as_str)
+                        .unwrap_or("empty")
+                },
+                "primary_actions": ["send_pc_use_status_to_agent"],
+            }),
+        ];
+        let lane_count = lanes.len();
+        let ready_lane_count = lanes
+            .iter()
+            .filter(|lane| lane.get("ready").and_then(Value::as_bool).unwrap_or(false))
+            .count();
+        let pending_lane_count = lane_count.saturating_sub(ready_lane_count);
+        let runtime_green_candidate = browser_ready && managed_chrome_ready && pc_use_ready;
+        let current_best_next = lanes
+            .iter()
+            .find(|lane| {
+                lane.get("ready")
+                    .and_then(Value::as_bool)
+                    .map(|ready| !ready)
+                    .unwrap_or(true)
+            })
+            .cloned()
+            .unwrap_or_else(|| {
+                serde_json::json!({
+                    "lane_id": "final_runtime_validation",
+                    "label": "Final Windows runtime validation",
+                    "ready": false,
+                    "status": "manual_required",
+                    "primary_actions": [
+                        "copy_agent_plugin_runtime_green_proof_path",
+                        "send_agent_plugin_runtime_green_proof_path_to_agent"
+                    ]
+                })
+            });
+        let first_pending_lane_id = current_best_next
+            .get("lane_id")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_string();
+        let first_pending_lane_label = current_best_next
+            .get("label")
+            .and_then(Value::as_str)
+            .unwrap_or(&first_pending_lane_id)
+            .to_string();
+        let first_pending_lane_status = current_best_next
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_string();
+        let claim_gate_status = if runtime_green_candidate {
+            "ready_for_final_manual_runtime_proof"
+        } else if !browser_ready {
+            "browser_webpreview_evidence_required"
+        } else if !managed_chrome_ready {
+            "managed_chrome_evidence_required"
+        } else if !pc_use_ready {
+            "pc_use_evidence_required"
+        } else {
+            "manual_review_required"
+        };
+
+        serde_json::json!({
+            "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
+            "status": claim_gate_status,
+            "runtime_green_candidate": runtime_green_candidate,
+            "ready_lane_count": ready_lane_count,
+            "lane_count": lane_count,
+            "ready_lane_fraction": format!("{ready_lane_count}/{lane_count}"),
+            "pending_lane_count": pending_lane_count,
+            "first_pending_lane_id": first_pending_lane_id,
+            "first_pending_lane_label": first_pending_lane_label,
+            "first_pending_lane_status": first_pending_lane_status,
+            "can_claim_runtime_green_from_webpreview": runtime_green_candidate,
+            "final_manual_command": "just run",
+            "copy_action": "copy_agent_plugin_runtime_green_proof_path",
+            "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
+            "lanes": lanes,
+            "proof_focus": {
+                "final_validation_observability_status": browser_final_observability.get("status").and_then(Value::as_str),
+                "browser_result_imported": browser_result_present,
+                "bootstrap_status": bootstrap_readiness.get("status").and_then(Value::as_str),
+                "managed_chrome_execution_status": managed_chrome_execution.get("status").and_then(Value::as_str),
+                "pc_use_status": pc_use_status.get("status").and_then(Value::as_str),
+            },
+            "next_operator_step": if runtime_green_candidate {
+                "Run the final manual Windows runtime proof, then import the filled result before reporting runtime-green."
+            } else {
+                "Resolve the first pending evidence lane, then re-read the runtime-green claim gate."
+            },
+            "read_only": true,
+        })
     }
 
     fn agent_plugin_runtime_green_operator_handoff(&self, window: &Window) -> Value {
@@ -6442,6 +6633,7 @@ impl WebPreviewView {
         );
         let runtime_green_proof_path_summary =
             Self::agent_plugin_runtime_green_proof_path_summary(&runtime_green_proof_path);
+        let runtime_green_claim_gate = self.agent_plugin_runtime_green_claim_gate_snapshot();
         let context_ready =
             diagnostics_ready || runtime_ready || dom_ready || targets_ready || readiness_ready;
         let audit_ready = plan_ready
@@ -6479,6 +6671,7 @@ impl WebPreviewView {
                 "url": self.active_url.as_ref(),
                 "status": status,
                 "next_step": next_step,
+                "runtime_green_claim_gate": runtime_green_claim_gate.clone(),
                 "readiness": {
                     "context_ready": context_ready,
                     "audit_ready": audit_ready,
@@ -6543,6 +6736,7 @@ impl WebPreviewView {
                     "runtime_observability_digest": runtime_observability_digest_summary,
                     "runtime_green_operator_handoff": runtime_green_operator_handoff_summary,
                     "runtime_green_proof_path": runtime_green_proof_path_summary,
+                    "runtime_green_claim_gate": runtime_green_claim_gate.clone(),
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 },
                 "handoff": {
@@ -6560,6 +6754,10 @@ impl WebPreviewView {
                     "runtime_green_proof_path_visible": true,
                     "runtime_green_proof_path_copy_action": "copy_agent_plugin_runtime_green_proof_path",
                     "runtime_green_proof_path_send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
+                    "runtime_green_claim_gate_visible": true,
+                    "runtime_green_claim_gate_status": runtime_green_claim_gate.get("status").and_then(Value::as_str),
+                    "runtime_green_claim_gate_first_pending_lane": runtime_green_claim_gate.get("first_pending_lane_label").and_then(Value::as_str),
+                    "runtime_green_claim_gate_ready_lane_fraction": runtime_green_claim_gate.get("ready_lane_fraction").and_then(Value::as_str),
                     "executor_wired": true,
                     "safe_to_send_to_agent_panel": true,
                 },
@@ -6743,6 +6941,7 @@ impl WebPreviewView {
         };
         let managed_chrome_execution = self.managed_chrome_execution_status();
         let pc_use_status = self.pc_use_status();
+        let runtime_green_claim_gate = self.agent_plugin_runtime_green_claim_gate_snapshot();
         let native_input_bridge = serde_json::json!({
             "schema": "zed.web_preview.native_input_bridge_readiness.v1",
             "status": "partial_dispatch_wired_manual_qa_required",
@@ -6820,7 +7019,8 @@ impl WebPreviewView {
                 "capture before/after diagnostics and emit a receipt for every attempted dispatch"
             ],
             "managed_chrome_execution": managed_chrome_execution.clone(),
-            "pc_use_status": pc_use_status.clone()
+            "pc_use_status": pc_use_status.clone(),
+            "runtime_green_claim_gate": runtime_green_claim_gate.clone()
         });
 
         serde_json::json!({
@@ -6839,6 +7039,7 @@ impl WebPreviewView {
                 "interactive_unlocked": interactive_unlocked,
                 "managed_chrome_execution": managed_chrome_execution.clone(),
                 "pc_use_status": pc_use_status.clone(),
+                "runtime_green_claim_gate": runtime_green_claim_gate.clone(),
                 "context_ready": context_ready,
                 "observability_ready": observability_ready,
                 "audit_ready": audit_ready,
@@ -6895,6 +7096,7 @@ impl WebPreviewView {
                 "native_dispatch_qa_checklist": self.latest_agent_browser_native_dispatch_qa_checklist_summary(),
                 "managed_chrome_execution": managed_chrome_execution,
                 "pc_use_status": pc_use_status,
+                "runtime_green_claim_gate": runtime_green_claim_gate,
             },
             "notes": [
                 "This readiness contract is read-only and does not dispatch browser input.",

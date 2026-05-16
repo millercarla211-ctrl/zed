@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Claim Gate Status Surfaces
+
+ADDED:
+- WebPreview session snapshots now expose a lightweight runtime-green claim-gate snapshot without recursively embedding the full proof path.
+- Agent Browser status packets, executor readiness, validation progress, and final validation bundles now surface claim-gate status, ready-lane fraction, first pending lane, and next operator step.
+- Status packet/readiness/progress summaries now include the claim-gate headline fields for Agent Panel handoff consumers.
+
+NOTES:
+- This is read-only status metadata only; it does not run Node, launch Chrome, dispatch browser or OS input, run `just run`, write proof files, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Proof Path Operator Summary
 
 ADDED:
