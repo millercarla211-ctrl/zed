@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime Action Manifest Catalog Summary
+
+ADDED:
+- WebPreview action manifests now advertise the `plugin_catalog` handoff with schema, summary schema, copy/send actions, latest summary, and a fresh current compact catalog summary.
+- Final validation bundles now reuse the action manifest's current plugin catalog summary so right-side panels can render Browser, managed Chrome, and PC-use catalog state without requiring a prior catalog copy/send.
+
+CHANGED:
+- Plugin catalog handoff metadata is now available from both the WebPreview action manifest and the final validation bundle, aligned with the full catalog's top-level `catalog_summary`.
+
+NOTES:
+- This is read-only catalog handoff metadata only. It does not run `just run`, launch browsers, run Node, dispatch browser or OS input, take screenshots, probe proof files, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime WebPreview Full Catalog Summary Alignment
 
 ADDED:

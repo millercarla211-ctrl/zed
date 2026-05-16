@@ -3395,6 +3395,9 @@ impl WebPreviewView {
                 &runtime_green_final_report_packet,
                 &final_proof_audit,
             );
+        let agent_plugin_catalog_current_summary = manifest
+            .pointer("/handoffs/plugin_catalog/current_summary")
+            .cloned();
 
         serde_json::json!({
             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
@@ -3501,6 +3504,7 @@ impl WebPreviewView {
                     "copy_action": "copy_agent_plugin_catalog",
                     "send_action": "send_agent_plugin_catalog_to_agent",
                     "latest_summary": self.latest_agent_plugin_catalog_summary(),
+                    "current_summary": agent_plugin_catalog_current_summary,
                     "read_only": true
                 },
                 "plugin_bootstrap_readiness": {
@@ -14958,6 +14962,13 @@ impl WebPreviewView {
                 &runtime_green_final_report_packet,
                 &final_proof_audit,
             );
+        let agent_plugin_catalog = self.agent_plugin_catalog(window);
+        let agent_plugin_catalog_current_summary = agent_plugin_catalog
+            .get("catalog_summary")
+            .cloned()
+            .unwrap_or_else(|| {
+                Self::agent_plugin_catalog_summary_from_catalog(&agent_plugin_catalog)
+            });
 
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_actions.v1",
@@ -15056,6 +15067,16 @@ impl WebPreviewView {
                     "latest_summary": self.agent_browser_function_surfaces(),
                     "read_only": true,
                     "purpose": "Copy or send the concrete screenshot, inspect, DevTools, and responsive viewport surface map without requiring the larger session or catalog."
+                },
+                "plugin_catalog": {
+                    "schema": "zed.agent_plugins.catalog.v1",
+                    "summary_schema": AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA,
+                    "copy_action": "copy_agent_plugin_catalog",
+                    "send_action": "send_agent_plugin_catalog_to_agent",
+                    "latest_summary": self.latest_agent_plugin_catalog_summary(),
+                    "current_summary": agent_plugin_catalog_current_summary,
+                    "read_only": true,
+                    "purpose": "Copy or send the full Browser, managed Chrome, and PC-use plugin catalog while exposing the compact current summary directly in the manifest."
                 },
                 "plugin_bootstrap_readiness": {
                     "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
