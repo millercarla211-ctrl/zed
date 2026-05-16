@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Report Gate
+
+ADDED:
+- WebPreview now exposes Copy/Send Runtime-Green Report Gate actions with one canonical ready/blocked badge derived from claim readiness.
+- `inspect_agent_plugin_runtime_status` now emits `runtime_green_report_gate` so agents can decide whether a runtime-green report is allowed from one compact gate.
+- Agent and WebPreview plugin catalogs now advertise the report-gate schema and copy/send actions.
+
+NOTES:
+- This is read-only gate metadata only; it does not run Node, launch Chrome, dispatch browser or OS input, run `just run`, write proof files, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Claim Readiness
 
 ADDED:
