@@ -93,6 +93,8 @@ pub struct AgentPluginRuntimeStatusToolInput {
     pub include_workflows: bool,
     /// Include the final manual/runtime validation matrix for this plugin set.
     pub include_validation_matrix: bool,
+    /// Include compact plugin observability profiles and runtime-green blockers.
+    pub include_observability_profiles: bool,
 }
 
 impl Default for AgentPluginRuntimeStatusToolInput {
@@ -104,6 +106,7 @@ impl Default for AgentPluginRuntimeStatusToolInput {
             include_next_actions: true,
             include_workflows: true,
             include_validation_matrix: true,
+            include_observability_profiles: true,
         }
     }
 }
@@ -359,6 +362,7 @@ fn inspect_runtime_status(
         "host": host_checks,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
+        "observability_profiles": input.include_observability_profiles.then(|| observability_profiles(status)),
         "next_actions": input.include_next_actions.then(|| next_actions(status, roots)),
         "safety": {
             "read_only": true,
@@ -616,6 +620,94 @@ fn next_actions(status: &str, roots: &AgentPluginRuntimeRoots) -> Vec<&'static s
         actions.push("Use the plugin-specific inspect tools before any permissioned execution.");
     }
     actions
+}
+
+fn observability_profiles(runtime_status: &str) -> Value {
+    let summary_status = if runtime_status == "ready_for_read_only_discovery" {
+        "profiles_ready_runtime_validation_pending"
+    } else {
+        "profiles_available_with_runtime_status_blockers"
+    };
+
+    serde_json::json!({
+        "status": summary_status,
+        "runtime_status": runtime_status,
+        "overall_code_score": 93,
+        "runtime_green_blocker": "Browser, managed Chrome, and PC-use profiles still need one final Windows runtime validation pass plus imported manual result evidence before the product can be called runtime-green.",
+        "plugins": {
+            "browser": {
+                "id": "zed.browser",
+                "status": "code_complete_pending_windows_runtime_validation",
+                "code_score": 99,
+                "proof_handoffs": {
+                    "validation_progress": "copy_agent_browser_executor_validation_progress",
+                    "final_bundle": "copy_agent_browser_final_validation_bundle",
+                    "final_result_template": "copy_agent_browser_final_validation_result_template",
+                    "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
+                    "final_result_send": "send_agent_browser_final_validation_result_to_agent"
+                },
+                "watch_surfaces": [
+                    "editor caret and typing latency",
+                    "WebPreview focus after navigation or reload",
+                    "native click/type/key/scroll/history/cache receipts",
+                    "managed Chrome execution receipts",
+                    "PC-use queue and runner receipts"
+                ]
+            },
+            "managed_chrome": {
+                "id": "zed.chrome",
+                "status": "managed_adapter_ready_pending_windows_runtime_validation",
+                "code_score": 92,
+                "proof_handoffs": {
+                    "queue_inspection_tool": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                    "runner_gate_tool": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
+                    "adapter_prepare_tool": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+                    "adapter_invoke_tool": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
+                    "execution_inspect_tool": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
+                    "webpreview_status_copy": "copy_managed_chrome_execution_status",
+                    "webpreview_status_send": "send_managed_chrome_execution_status_to_agent"
+                },
+                "watch_surfaces": [
+                    "managed workspace or Zed-data roots only",
+                    "real Chrome, Edge, and Firefox profiles stay untouched",
+                    "adapter execution remains limited to open_url, screenshot, set_viewport, and wait_for_selector",
+                    "click, type, key, and scroll stay blocked in the managed adapter",
+                    "runner and execution receipts stay inspectable"
+                ]
+            },
+            "pc_use": {
+                "id": "zed.pc_use",
+                "status": "payload_and_receipt_gates_ready_pending_ui_executor_validation",
+                "code_score": 90,
+                "proof_handoffs": {
+                    "context_tool": AGENT_PC_USE_INSPECT_TOOL_NAME,
+                    "target_manifest_tool": AGENT_PC_USE_TARGET_MANIFEST_TOOL_NAME,
+                    "target_snapshot_tool": AGENT_PC_USE_TARGET_SNAPSHOT_TOOL_NAME,
+                    "ui_snapshot_contract_tool": AGENT_PC_USE_UI_SNAPSHOT_CONTRACT_TOOL_NAME,
+                    "ui_snapshot_tool": AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME,
+                    "payload_queue_inspect_tool": AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                    "runner_receipts_tool": AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
+                    "webpreview_status_copy": "copy_pc_use_status",
+                    "webpreview_status_send": "send_pc_use_status_to_agent"
+                },
+                "watch_surfaces": [
+                    "read-only or managed-root-scoped operations only",
+                    "future UI snapshot target ids require matching snapshot receipt ids",
+                    "no OS-wide desktop control",
+                    "no focus, click, type, screenshot, or process launch in the current gate",
+                    "runner receipts stay auditable"
+                ]
+            }
+        },
+        "final_proof_order": [
+            "run just run once for final Windows runtime validation",
+            "prove normal editor typing and caret behavior",
+            "prove WebPreview keyboard, pointer, wheel, navigation, and receipt handoffs",
+            "prove managed Chrome safe adapter receipts without real-profile writes",
+            "prove PC-use context, target, queue, and runner receipt chain stays non-dispatching",
+            "fill and import the Browser final validation result template"
+        ]
+    })
 }
 
 fn workflow_recipes() -> Value {

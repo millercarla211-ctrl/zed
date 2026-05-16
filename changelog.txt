@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Observability Status
+
+ADDED:
+- Added default-on observability profile summaries to `inspect_agent_plugin_runtime_status`.
+- Advertised the new `include_observability_profiles` runtime-status payload flag in the Agent and WebPreview plugin catalogs.
+- The summary reports Browser, managed Chrome, and PC-use scores, blockers, proof handoffs, watch surfaces, and final Windows proof order from one read-only tool call.
+
+NOTES:
+- This is read-only runtime-status metadata only; it does not run `just run`, launch Chrome, run Node, dispatch input, take screenshots, focus Zed, or change editor/WebPreview input paths.
+
 [2026-05-16] - Agent Plugin Runtime Chrome PC Observability
 
 ADDED:

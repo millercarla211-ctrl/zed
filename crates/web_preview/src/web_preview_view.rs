@@ -2436,7 +2436,8 @@ impl WebPreviewView {
                         "include_host_checks": true,
                         "include_next_actions": true,
                         "include_workflows": true,
-                        "include_validation_matrix": true
+                        "include_validation_matrix": true,
+                        "include_observability_profiles": true
                     }
                 }
             },
@@ -9315,7 +9316,8 @@ impl WebPreviewView {
                         "include_host_checks": true,
                         "include_next_actions": true,
                         "include_workflows": true,
-                        "include_validation_matrix": true
+                        "include_validation_matrix": true,
+                        "include_observability_profiles": true
                     },
                     "purpose": "Summarize Browser, managed Chrome, and PC-use readiness without launching browsers, running Node, screenshots, or input dispatch."
                 },
