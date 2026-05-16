@@ -106,6 +106,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_report_packet.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
+const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA: &str =
+    "zed.agent_plugins.runtime_observability_plugin_matrix.v1";
 const AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA: &str = "zed.agent_plugins.pc_use.proof_summary.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
@@ -2020,6 +2022,8 @@ fn runtime_observability_digest(
     scorecard: &Value,
 ) -> Value {
     let proof_freshness = observability_proof_freshness(roots);
+    let plugin_matrix =
+        runtime_observability_plugin_matrix(&proof_freshness, blocker_summary, scorecard);
     let missing_required_files = proof_freshness
         .get("missing_required_files")
         .and_then(Value::as_array)
@@ -2105,6 +2109,7 @@ fn runtime_observability_digest(
             .and_then(Value::as_array)
             .map(|lanes| lanes.iter().map(runtime_observability_digest_lane).collect::<Vec<_>>())
             .unwrap_or_default(),
+        "plugin_matrix": plugin_matrix,
         "next_operator_packet": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
             "field": "runtime_green_operator_handoff",
@@ -2114,7 +2119,8 @@ fn runtime_observability_digest(
         "reads_from": [
             "runtime_green_blocker_summary",
             "runtime_green_readiness_scorecard",
-            "observability_proof_freshness"
+            "observability_proof_freshness",
+            "runtime_observability_plugin_matrix"
         ],
         "safety": {
             "digest_is_read_only": true,
@@ -2138,6 +2144,233 @@ fn runtime_observability_digest_lane(lane: &Value) -> Value {
             .cloned()
             .unwrap_or_else(|| serde_json::json!([])),
     })
+}
+
+fn runtime_observability_plugin_matrix(
+    proof_freshness: &Value,
+    blocker_summary: &Value,
+    scorecard: &Value,
+) -> Value {
+    let rows = scorecard
+        .get("lanes")
+        .and_then(Value::as_array)
+        .map(|lanes| {
+            lanes
+                .iter()
+                .map(|lane| {
+                    runtime_observability_plugin_matrix_row(lane, proof_freshness, blocker_summary)
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let plugin_count = rows.len();
+    let ready_plugin_count = rows
+        .iter()
+        .filter(|row| row.get("ready").and_then(Value::as_bool).unwrap_or(false))
+        .count();
+    let pending_plugin_count = plugin_count.saturating_sub(ready_plugin_count);
+    let status = if plugin_count == 0 {
+        "empty"
+    } else if pending_plugin_count == 0 {
+        "all_plugins_have_required_runtime_evidence"
+    } else {
+        "plugin_runtime_evidence_pending"
+    };
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA,
+        "status": status,
+        "plugin_count": plugin_count,
+        "ready_plugin_count": ready_plugin_count,
+        "pending_plugin_count": pending_plugin_count,
+        "rows": rows,
+        "reads_from": [
+            "runtime_green_readiness_scorecard.lanes",
+            "runtime_green_blocker_summary.latest_evidence",
+            "observability_proof_freshness.required_files",
+            "observability_proof_freshness.receipt_classifications"
+        ],
+        "safety": {
+            "matrix_is_read_only": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+            "touches_real_browser_profiles": false,
+        }
+    })
+}
+
+fn runtime_observability_plugin_matrix_row(
+    lane: &Value,
+    proof_freshness: &Value,
+    blocker_summary: &Value,
+) -> Value {
+    let lane_id = lane.get("id").and_then(Value::as_str).unwrap_or("unknown");
+    let ready = lane.get("ready").and_then(Value::as_bool).unwrap_or(false);
+    let proof = runtime_observability_plugin_proof(lane_id, proof_freshness, blocker_summary);
+    let handoff = runtime_observability_plugin_handoff(lane_id);
+
+    serde_json::json!({
+        "lane_id": lane_id,
+        "plugin_id": runtime_observability_plugin_id(lane_id),
+        "label": lane.get("label").and_then(Value::as_str),
+        "status": lane.get("status").and_then(Value::as_str),
+        "ready": ready,
+        "code_score": runtime_observability_plugin_code_score(lane_id),
+        "ready_requirement": lane.get("ready_requirement").and_then(Value::as_str),
+        "blocker_count": lane.get("blocker_count").and_then(Value::as_u64).unwrap_or(0),
+        "first_blocker": lane
+            .get("blockers")
+            .and_then(Value::as_array)
+            .and_then(|blockers| blockers.first())
+            .cloned(),
+        "primary_next_actions": lane
+            .get("primary_next_actions")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([])),
+        "proof": proof,
+        "handoff": handoff,
+        "watch_surfaces": runtime_observability_plugin_watch_surfaces(lane_id),
+        "safety": {
+            "read_only_summary": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+            "touches_real_browser_profiles": false,
+        }
+    })
+}
+
+fn runtime_observability_plugin_proof(
+    lane_id: &str,
+    proof_freshness: &Value,
+    blocker_summary: &Value,
+) -> Value {
+    match lane_id {
+        "browser_webpreview" => serde_json::json!({
+            "status": blocker_summary
+                .pointer("/latest_evidence/browser_final_validation_result/summary/state")
+                .and_then(Value::as_str)
+                .unwrap_or("missing_result"),
+            "required_field": "runtime_green_blocker_summary.latest_evidence.browser_final_validation_result.summary.runtime_green_candidate",
+            "runtime_green_candidate": blocker_summary
+                .pointer("/latest_evidence/browser_final_validation_result/summary/runtime_green_candidate")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            "latest_payload": proof_freshness.pointer("/required_files/browser_latest_payload").cloned(),
+            "final_validation_result": blocker_summary.pointer("/latest_evidence/browser_final_validation_result/summary").cloned(),
+        }),
+        "managed_chrome" => serde_json::json!({
+            "status": proof_freshness
+                .pointer("/receipt_classifications/managed_chrome_execution_receipt/classification/state")
+                .and_then(Value::as_str)
+                .unwrap_or("missing_receipt"),
+            "required_field": "runtime_green_blocker_summary.latest_evidence.managed_chrome_execution_receipt.classification.outcome == completed",
+            "runner_receipt_ready": proof_freshness
+                .pointer("/receipt_classifications/managed_chrome_runner_receipt/classification/ready")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            "execution_receipt_ready": proof_freshness
+                .pointer("/receipt_classifications/managed_chrome_execution_receipt/classification/ready")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            "asset_readiness": proof_freshness.pointer("/required_files/chrome_asset_readiness_summary").cloned(),
+            "latest_execution": proof_freshness.pointer("/latest_optional_execution_files/chrome_execution").cloned(),
+        }),
+        "pc_use" => serde_json::json!({
+            "status": blocker_summary
+                .pointer("/latest_evidence/pc_use_proof_summary/status")
+                .and_then(Value::as_str)
+                .unwrap_or("payload_missing"),
+            "required_field": "runtime_green_blocker_summary.latest_evidence.pc_use_latest_runner_receipt.classification.outcome == ready_future_executor_pending",
+            "payload_ready": blocker_summary
+                .pointer("/latest_evidence/pc_use_proof_summary/payload_ready")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            "runner_receipt_ready": blocker_summary
+                .pointer("/latest_evidence/pc_use_proof_summary/runner_receipt_ready")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            "target_snapshot_id_present": blocker_summary
+                .pointer("/latest_evidence/pc_use_proof_summary/payload/target_snapshot_id_present")
+                .and_then(Value::as_bool),
+            "proof_summary": blocker_summary.pointer("/latest_evidence/pc_use_proof_summary").cloned(),
+        }),
+        _ => serde_json::json!({
+            "status": "unknown_plugin_lane",
+            "required_field": Value::Null,
+        }),
+    }
+}
+
+fn runtime_observability_plugin_id(lane_id: &str) -> &'static str {
+    match lane_id {
+        "browser_webpreview" => "zed.browser",
+        "managed_chrome" => "zed.chrome",
+        "pc_use" => "zed.pc_use",
+        _ => "unknown",
+    }
+}
+
+fn runtime_observability_plugin_code_score(lane_id: &str) -> u64 {
+    match lane_id {
+        "browser_webpreview" => 99,
+        "managed_chrome" => 94,
+        "pc_use" => 91,
+        _ => 0,
+    }
+}
+
+fn runtime_observability_plugin_handoff(lane_id: &str) -> Value {
+    match lane_id {
+        "browser_webpreview" => serde_json::json!({
+            "copy_action": "copy_agent_browser_executor_validation_progress",
+            "send_action": "send_agent_browser_executor_validation_progress_to_agent",
+            "final_bundle_action": "copy_agent_browser_final_validation_bundle",
+            "final_result_template_action": "copy_agent_browser_final_validation_result_template",
+        }),
+        "managed_chrome" => serde_json::json!({
+            "queue_inspection_tool": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+            "runner_gate_tool": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
+            "execution_inspect_tool": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
+            "webpreview_status_copy": "copy_managed_chrome_execution_status",
+            "webpreview_status_send": "send_managed_chrome_execution_status_to_agent",
+        }),
+        "pc_use" => serde_json::json!({
+            "payload_queue_inspect_tool": AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+            "runner_receipts_tool": AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
+            "runtime_status_proof_summary_field": "plugins.pc_use.proof_summary",
+            "webpreview_status_copy": "copy_pc_use_status",
+            "webpreview_status_send": "send_pc_use_status_to_agent",
+        }),
+        _ => serde_json::json!({}),
+    }
+}
+
+fn runtime_observability_plugin_watch_surfaces(lane_id: &str) -> Vec<&'static str> {
+    match lane_id {
+        "browser_webpreview" => vec![
+            "editor caret and typing latency",
+            "WebPreview focus after navigation or reload",
+            "native click/type/key/scroll/history/cache receipts",
+            "manual final validation result evidence",
+        ],
+        "managed_chrome" => vec![
+            "managed workspace or Zed-data roots only",
+            "real Chrome, Edge, and Firefox profiles stay untouched",
+            "safe Playwright action execution receipts",
+            "click, type, key, and scroll stay blocked in the managed adapter",
+        ],
+        "pc_use" => vec![
+            "future UI snapshot target ids require matching snapshot receipt ids",
+            "runner receipts stay auditable before any future executor exists",
+            "no focus, click, type, screenshot, or process launch in the current gate",
+            "OS-wide desktop control stays blocked by default",
+        ],
+        _ => Vec::new(),
+    }
 }
 
 fn runtime_green_proof_path(
@@ -2301,6 +2534,7 @@ fn runtime_green_proof_path(
                 "reads_fields": [
                     "runtime_green_proof_path",
                     "runtime_observability_digest",
+                    "runtime_observability_digest.plugin_matrix",
                     "runtime_green_operator_handoff",
                     "runtime_green_report_gate",
                     "runtime_green_report_badge",
@@ -2315,7 +2549,7 @@ fn runtime_green_proof_path(
             {
                 "step": "read_digest",
                 "field": "runtime_observability_digest",
-                "purpose": "Summarize lane health, stale/missing proof evidence, and immediate recovery actions.",
+                "purpose": "Summarize lane health, plugin matrix proof state, stale/missing proof evidence, and immediate recovery actions.",
                 "writes_files": false,
                 "dispatches_input": false
             },
@@ -2387,6 +2621,7 @@ fn runtime_green_proof_path(
             },
             "runtime_observability_digest": {
                 "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+                "plugin_matrix_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA,
                 "copy_action": "copy_agent_plugin_runtime_observability_digest",
                 "send_action": "send_agent_plugin_runtime_observability_digest_to_agent"
             },

@@ -98,6 +98,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_proof_audit_summary.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_digest.v1";
+const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA: &str =
+    "zed.agent_plugins.runtime_observability_plugin_matrix.v1";
 const AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA: &str = "zed.agent_plugins.pc_use.proof_summary.v1";
 
 /// Lists the built-in DX/Zed agent plugin catalog for browser, Chrome, and PC-use workflows.
@@ -267,6 +269,7 @@ fn agent_plugin_catalog(
                 "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                 "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
                 "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+                "runtime_observability_matrix_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA,
                 "pc_use_proof_summary_schema": AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA,
                 "runtime_green_ready_outcomes": {
                     "browser_final_validation_result": "runtime_green_candidate=true",
@@ -287,15 +290,16 @@ fn agent_plugin_catalog(
                     "include_runtime_green_proof_path": true,
                     "include_runtime_green_claim_gate": true
                 },
-                "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, runtime-green proof path, final proof audit summary, final proof audit, final report packet, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
+                "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, plugin matrix, runtime-green proof path, final proof audit summary, final proof audit, final report packet, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
             },
             "webpreview_handoffs": {
                 "runtime_observability_digest": {
                     "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+                    "plugin_matrix_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA,
                     "copy_action": "copy_agent_plugin_runtime_observability_digest",
                     "send_action": "send_agent_plugin_runtime_observability_digest_to_agent",
                     "read_only": true,
-                    "purpose": "Share one compact WebPreview runtime health digest with lane readiness, proof focus, and the next operator packet."
+                    "purpose": "Share one compact WebPreview runtime health digest with lane readiness, plugin matrix, proof focus, and the next operator packet."
                 },
                 "runtime_green_operator_handoff": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,

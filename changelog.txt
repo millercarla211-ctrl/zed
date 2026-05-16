@@ -1,3 +1,16 @@
+[2026-05-17] - Agent Plugin Runtime Observability Matrix
+
+ADDED:
+- Agent runtime status now emits `zed.agent_plugins.runtime_observability_plugin_matrix.v1` inside the compact runtime observability digest, with Browser, managed Chrome, and PC-use rows.
+- WebPreview runtime observability digests now include the same plugin matrix shape so Agent Panels can read plugin id, readiness, proof fields, handoff actions, watch surfaces, and safety flags from one packet.
+
+CHANGED:
+- Agent and WebPreview plugin catalogs now advertise the observability matrix schema alongside the runtime observability digest schema.
+- Digest summaries now expose matrix readiness counts so status packets can show plugin-level proof progress without parsing every lane.
+
+NOTES:
+- This is read-only observability. It does not launch browsers, run Node, dispatch input, take screenshots, or touch real browser profiles.
+
 [2026-05-17] - Agent Plugin Runtime PC-use Proof Summary
 
 ADDED:
