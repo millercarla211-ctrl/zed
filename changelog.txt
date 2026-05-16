@@ -1,3 +1,15 @@
+[2026-05-16] - PC Use Read-Only Context Tool
+
+ADDED:
+- Added the read-only `inspect_zed_window_context` Agent tool for safe Zed-window/workspace context discovery before future PC-use automation.
+- Registered the tool for Agent Panel use and advertised it through both the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- PC Use plugin manifests now report `read_only_inspection_available`, include the context schema/tool name, and keep screenshot, focus, click, type, and OS-wide desktop automation behind future permission gates.
+
+NOTES:
+- The tool only reads visible worktree roots and managed PC-use plugin root metadata; it does not screenshot, focus, click, type, launch processes, or control the desktop.
+
 [2026-05-16] - Managed Chrome Catalog Handoff Metadata
 
 ADDED:

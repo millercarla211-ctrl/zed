@@ -8256,6 +8256,7 @@ impl WebPreviewView {
                     "prepare_chrome_playwright_adapter": "prepare_managed_chrome_playwright_adapter",
                     "invoke_chrome_playwright_adapter": "invoke_managed_chrome_playwright_adapter",
                     "inspect_chrome_playwright_executions": "inspect_managed_chrome_playwright_executions",
+                    "inspect_zed_window_context": "inspect_zed_window_context",
                     "prepare_runtime": "prepare_agent_plugin_runtime"
                 },
                 "available_to": [
@@ -8603,22 +8604,26 @@ impl WebPreviewView {
                         "id": "zed.pc_use",
                         "name": "PC Use",
                         "kind": "built_in",
-                        "status": "planned_permission_gate",
+                        "status": "read_only_inspection_available",
                         "default_enabled": true,
                         "scope": "zed_window_and_permissioned_desktop",
                         "runtime": {
                             "backend": "zed_window_runtime",
+                            "inspect_tool_name": "inspect_zed_window_context",
+                            "inspect_schema": "zed.agent_plugins.pc_use.zed_window_context.v1",
                             "os_wide_automation": "requires_separate_explicit_permission"
                         },
                         "capabilities": [
+                            {"id": "pc.zed_window.inspect_context", "state": "available", "description": "Use inspect_zed_window_context to read safe workspace and managed-root context before any future PC-use action."},
                             {"id": "pc.zed_window.screenshot", "state": "planned", "description": "Capture Zed-window screenshots for agent context."},
                             {"id": "pc.zed_window.focus", "state": "planned", "description": "Focus Zed panes, panels, and tabs by safe editor-native handles."},
                             {"id": "pc.zed_window.click", "state": "planned_permission_gate", "description": "Click within Zed surfaces only after permission and target preflight."},
                             {"id": "pc.zed_window.type", "state": "planned_permission_gate", "description": "Type within Zed surfaces only after permission and target preflight."},
-                            {"id": "pc.zed_window.inspect_ui", "state": "planned", "description": "Read safe UI metadata for currently visible Zed surfaces."},
+                            {"id": "pc.zed_window.inspect_ui", "state": "planned", "description": "Read safe visible UI metadata for currently visible Zed surfaces."},
                             {"id": "pc.desktop.os_wide", "state": "blocked_by_default", "description": "OS-wide desktop automation remains unavailable until the user explicitly enables it."}
                         ],
                         "safety": {
+                            "read_only_context_available": true,
                             "zed_window_first": true,
                             "os_wide_actions_blocked_by_default": true,
                             "explicit_permission_required_for_input": true,

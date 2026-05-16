@@ -1638,6 +1638,7 @@ impl Thread {
         self.add_tool(AgentChromePlaywrightExecutionInspectTool::new(
             self.project.clone(),
         ));
+        self.add_tool(AgentPcUseInspectTool::new(self.project.clone()));
         self.add_tool(AgentPluginBootstrapTool::new(self.project.clone()));
 
         self.add_tool(DiagnosticsTool::new(self.project.clone()));
