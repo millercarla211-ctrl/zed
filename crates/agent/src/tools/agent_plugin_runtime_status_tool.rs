@@ -2337,6 +2337,12 @@ fn runtime_green_claim_gate(proof_path: &Value) -> Value {
         .get("runtime_green_candidate")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let current_best_next = proof_path
+        .pointer("/current/current_best_next")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let next_required_proof =
+        runtime_green_next_required_proof(&current_best_next, runtime_green_candidate);
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
@@ -2367,6 +2373,7 @@ fn runtime_green_claim_gate(proof_path: &Value) -> Value {
         "requires_final_windows_just_run": claim_gate.get("requires_final_windows_just_run").and_then(Value::as_bool).unwrap_or(true),
         "final_manual_command": "just run",
         "next_operator_step": operator_summary.get("next_operator_step").and_then(Value::as_str),
+        "next_required_proof": next_required_proof,
         "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
         "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
         "proof_path_copy_action": "copy_agent_plugin_runtime_green_proof_path",
@@ -2378,6 +2385,136 @@ fn runtime_green_claim_gate(proof_path: &Value) -> Value {
         "launches_browser": false,
         "dispatches_input": false,
     })
+}
+
+fn runtime_green_next_required_proof(
+    current_best_next: &Value,
+    runtime_green_candidate: bool,
+) -> Value {
+    let lane_id = current_best_next
+        .get("lane_id")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let lane_label = current_best_next
+        .get("label")
+        .and_then(Value::as_str)
+        .unwrap_or(lane_id);
+    let lane_status = current_best_next
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let primary_next_actions = current_best_next
+        .get("primary_next_actions")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
+    let operator_steps = current_best_next
+        .get("operator_steps")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
+    let recommended_tool = current_best_next
+        .pointer("/operator_steps/0/tool")
+        .and_then(Value::as_str);
+    let recommended_action = current_best_next
+        .pointer("/primary_next_actions/0")
+        .and_then(Value::as_str);
+
+    match lane_id {
+        "browser_webpreview" => serde_json::json!({
+            "lane_id": lane_id,
+            "label": lane_label,
+            "status": lane_status,
+            "required_proof_id": "browser_final_validation_result_runtime_green",
+            "required_proof_field": "runtime_green_blocker_summary.latest_evidence.browser_final_validation_result.summary.runtime_green_candidate",
+            "recommended_action": recommended_action.unwrap_or("copy_agent_browser_final_validation_bundle"),
+            "recommended_tool": recommended_tool,
+            "primary_next_actions": primary_next_actions,
+            "operator_steps": operator_steps,
+            "recommended_sequence": [
+                "copy_agent_browser_final_validation_bundle",
+                "copy_agent_browser_final_validation_result_template",
+                "run just run manually when ready for final runtime proof",
+                "import_agent_browser_final_validation_result_from_clipboard",
+                "inspect_agent_plugin_runtime_status with include_runtime_green_claim_gate=true"
+            ],
+            "managed_proof_write": "only WebPreview final-result import writes managed final-proof JSON after explicit user action",
+            "writes_files": false,
+            "dispatches_input": false
+        }),
+        "managed_chrome" => serde_json::json!({
+            "lane_id": lane_id,
+            "label": lane_label,
+            "status": lane_status,
+            "required_proof_id": "managed_chrome_completed_execution_receipt",
+            "required_proof_field": "runtime_green_blocker_summary.latest_evidence.managed_chrome_execution_receipt.read.outcome == completed",
+            "recommended_action": recommended_action,
+            "recommended_tool": recommended_tool.unwrap_or(AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME),
+            "primary_next_actions": primary_next_actions,
+            "operator_steps": operator_steps,
+            "recommended_sequence": [
+                "prepare_agent_plugin_runtime if managed roots are missing",
+                "prepare_agent_plugin_managed_assets if the asset receipt is missing or stale",
+                "prepare_managed_chrome_playwright_adapter",
+                "inspect_managed_chrome_playwright_executions",
+                "inspect_agent_plugin_runtime_status with include_runtime_green_claim_gate=true"
+            ],
+            "managed_proof_write": "permissioned Agent tools may write managed receipts only under managed plugin roots",
+            "writes_files": false,
+            "dispatches_input": false
+        }),
+        "pc_use" => serde_json::json!({
+            "lane_id": lane_id,
+            "label": lane_label,
+            "status": lane_status,
+            "required_proof_id": "pc_use_ready_runner_receipt",
+            "required_proof_field": "runtime_green_blocker_summary.latest_evidence.pc_use_runner_receipt.read.outcome == ready_future_executor_pending",
+            "recommended_action": recommended_action,
+            "recommended_tool": recommended_tool.unwrap_or(AGENT_PC_USE_RUNNER_GATE_TOOL_NAME),
+            "primary_next_actions": primary_next_actions,
+            "operator_steps": operator_steps,
+            "recommended_sequence": [
+                "inspect_zed_pc_use_ui_snapshot",
+                "inspect_zed_pc_use_payload_queue",
+                "request_zed_pc_use_payload_run",
+                "inspect_zed_pc_use_runner_receipts",
+                "inspect_agent_plugin_runtime_status with include_runtime_green_claim_gate=true"
+            ],
+            "managed_proof_write": "request_zed_pc_use_payload_run may write a managed future-executor receipt only after explicit authorization",
+            "takes_screenshot": false,
+            "dispatches_input": false
+        }),
+        _ => serde_json::json!({
+            "lane_id": lane_id,
+            "label": lane_label,
+            "status": lane_status,
+            "required_proof_id": if runtime_green_candidate {
+                "final_manual_windows_runtime_proof"
+            } else {
+                "runtime_green_claim_gate_recheck"
+            },
+            "required_proof_field": if runtime_green_candidate {
+                "manual Windows just run result imported into WebPreview"
+            } else {
+                "runtime_green_claim_gate.status"
+            },
+            "recommended_action": recommended_action.unwrap_or("copy_agent_plugin_runtime_green_claim_gate"),
+            "recommended_tool": recommended_tool.unwrap_or(AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME),
+            "primary_next_actions": primary_next_actions,
+            "operator_steps": operator_steps,
+            "recommended_sequence": if runtime_green_candidate {
+                serde_json::json!([
+                    "run just run manually",
+                    "copy_agent_browser_final_validation_result_template",
+                    "import_agent_browser_final_validation_result_from_clipboard",
+                    "inspect_agent_plugin_runtime_status with include_runtime_green_claim_gate=true"
+                ])
+            } else {
+                serde_json::json!(["inspect_agent_plugin_runtime_status with include_runtime_green_claim_gate=true"])
+            },
+            "managed_proof_write": "only explicit permissioned tools or WebPreview imports write managed proof files",
+            "writes_files": false,
+            "dispatches_input": false
+        }),
+    }
 }
 
 fn runtime_green_operator_handoff(

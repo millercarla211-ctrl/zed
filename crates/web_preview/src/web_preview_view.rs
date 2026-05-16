@@ -4109,6 +4109,10 @@ impl WebPreviewView {
             .and_then(Value::as_str)
             .unwrap_or("unknown")
             .to_string();
+        let next_required_proof = Self::agent_plugin_runtime_green_next_required_proof(
+            &current_best_next,
+            runtime_green_candidate,
+        );
         let claim_gate_status = if runtime_green_candidate {
             "ready_for_final_manual_runtime_proof"
         } else if !browser_ready {
@@ -4138,6 +4142,7 @@ impl WebPreviewView {
             "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
             "proof_path_copy_action": "copy_agent_plugin_runtime_green_proof_path",
             "proof_path_send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
+            "next_required_proof": next_required_proof,
             "lanes": lanes,
             "proof_focus": {
                 "final_validation_observability_status": browser_final_observability.get("status").and_then(Value::as_str),
@@ -4153,6 +4158,119 @@ impl WebPreviewView {
             },
             "read_only": true,
         })
+    }
+
+    fn agent_plugin_runtime_green_next_required_proof(
+        current_best_next: &Value,
+        runtime_green_candidate: bool,
+    ) -> Value {
+        let lane_id = current_best_next
+            .get("lane_id")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let lane_label = current_best_next
+            .get("label")
+            .and_then(Value::as_str)
+            .unwrap_or(lane_id);
+        let lane_status = current_best_next
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let primary_actions = current_best_next
+            .get("primary_actions")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let recommended_action = current_best_next
+            .pointer("/primary_actions/0")
+            .and_then(Value::as_str)
+            .unwrap_or("copy_agent_plugin_runtime_green_claim_gate");
+
+        match lane_id {
+            "browser_webpreview" => serde_json::json!({
+                "lane_id": lane_id,
+                "label": lane_label,
+                "status": lane_status,
+                "required_proof_id": "browser_final_validation_result_runtime_green",
+                "required_proof_field": "agent_browser_final_validation_result.runtime_green_candidate",
+                "recommended_action": recommended_action,
+                "recommended_actions": primary_actions,
+                "recommended_sequence": [
+                    "copy_agent_browser_final_validation_bundle",
+                    "copy_agent_browser_final_validation_result_template",
+                    "run just run manually when ready for final runtime proof",
+                    "import_agent_browser_final_validation_result_from_clipboard",
+                    "copy_agent_plugin_runtime_green_claim_gate"
+                ],
+                "managed_proof_write": "only import_agent_browser_final_validation_result_from_clipboard writes managed final-proof JSON after explicit user action",
+                "writes_files": false,
+                "dispatches_input": false
+            }),
+            "managed_chrome" => serde_json::json!({
+                "lane_id": lane_id,
+                "label": lane_label,
+                "status": lane_status,
+                "required_proof_id": "managed_chrome_completed_execution_receipt",
+                "required_proof_field": "managed_chrome_execution.latest_receipt.read.outcome == completed",
+                "recommended_action": recommended_action,
+                "recommended_actions": primary_actions,
+                "recommended_sequence": [
+                    "send_agent_plugin_bootstrap_readiness_to_agent",
+                    "send_managed_chrome_execution_status_to_agent",
+                    "inspect_agent_plugin_runtime_status with include_runtime_green_claim_gate=true"
+                ],
+                "managed_proof_write": "permissioned Agent tools may write managed receipts only under managed plugin roots",
+                "writes_files": false,
+                "dispatches_input": false
+            }),
+            "pc_use" => serde_json::json!({
+                "lane_id": lane_id,
+                "label": lane_label,
+                "status": lane_status,
+                "required_proof_id": "pc_use_ready_runner_receipt",
+                "required_proof_field": "pc_use_status.status == has_ready_runner_receipt",
+                "recommended_action": recommended_action,
+                "recommended_actions": primary_actions,
+                "recommended_sequence": [
+                    "send_pc_use_status_to_agent",
+                    "inspect_zed_pc_use_payload_queue",
+                    "request_zed_pc_use_payload_run",
+                    "inspect_zed_pc_use_runner_receipts"
+                ],
+                "managed_proof_write": "request_zed_pc_use_payload_run may write a managed future-executor receipt only after explicit authorization",
+                "writes_files": false,
+                "dispatches_input": false
+            }),
+            _ => serde_json::json!({
+                "lane_id": lane_id,
+                "label": lane_label,
+                "status": lane_status,
+                "required_proof_id": if runtime_green_candidate {
+                    "final_manual_windows_runtime_proof"
+                } else {
+                    "runtime_green_claim_gate_recheck"
+                },
+                "required_proof_field": if runtime_green_candidate {
+                    "manual final just run result imported into WebPreview"
+                } else {
+                    "runtime_green_claim_gate.status"
+                },
+                "recommended_action": recommended_action,
+                "recommended_actions": primary_actions,
+                "recommended_sequence": if runtime_green_candidate {
+                    serde_json::json!([
+                        "run just run manually",
+                        "copy_agent_browser_final_validation_result_template",
+                        "import_agent_browser_final_validation_result_from_clipboard",
+                        "copy_agent_plugin_runtime_green_claim_gate"
+                    ])
+                } else {
+                    serde_json::json!(["copy_agent_plugin_runtime_green_claim_gate"])
+                },
+                "managed_proof_write": "only explicit WebPreview import actions write managed proof JSON",
+                "writes_files": false,
+                "dispatches_input": false
+            }),
+        }
     }
 
     fn agent_plugin_runtime_green_operator_handoff(&self, window: &Window) -> Value {
@@ -4800,9 +4918,17 @@ impl WebPreviewView {
             .get("next_operator_step")
             .and_then(Value::as_str)
             .unwrap_or("Re-read the runtime-green claim gate.");
+        let required_proof = claim_gate
+            .pointer("/next_required_proof/required_proof_id")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let recommended_action = claim_gate
+            .pointer("/next_required_proof/recommended_action")
+            .and_then(Value::as_str)
+            .unwrap_or("copy_agent_plugin_runtime_green_claim_gate");
 
         format!(
-            "Runtime-green claim gate\nStatus: {status}\nReady lanes: {ready_lane_fraction}\nFirst pending evidence: {first_pending_lane} ({first_pending_status})\nCan claim from WebPreview: {can_claim_runtime_green}\nNext: {next_step}"
+            "Runtime-green claim gate\nStatus: {status}\nReady lanes: {ready_lane_fraction}\nFirst pending evidence: {first_pending_lane} ({first_pending_status})\nRequired proof: {required_proof}\nRecommended action: {recommended_action}\nCan claim from WebPreview: {can_claim_runtime_green}\nNext: {next_step}"
         )
     }
 

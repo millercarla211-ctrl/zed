@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Claim Gate Next Proof
+
+ADDED:
+- Runtime-green claim gates now include `next_required_proof` with the missing proof id, source field, recommended action or tool, ordered recovery sequence, write policy, and input-dispatch policy.
+- WebPreview claim-gate Agent Panel summaries now show the required proof and recommended action before the JSON payload.
+- Agent runtime-status claim gates now derive the same next-proof packet from the canonical proof path and current best operator lane.
+
+NOTES:
+- This is read-only decision metadata only; it does not run Node, launch Chrome, dispatch browser or OS input, run `just run`, write proof files, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Claim Gate Handoff
 
 ADDED:
