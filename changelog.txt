@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Runtime-Green Blocker Summary
+
+ADDED:
+- Added a schema-versioned runtime-green blocker summary to `inspect_agent_plugin_runtime_status`.
+- The summary groups remaining blockers across Browser/WebPreview final proof, managed Chrome asset readiness, adapter readiness, managed Chrome execution receipts, and PC-use payload/receipt evidence.
+- Agent and WebPreview catalog metadata now advertise the blocker summary schema through the runtime-status discovery block.
+
+NOTES:
+- This is read-only status metadata only; it does not copy extensions, download packages, run Node, launch Chrome, dispatch browser input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Managed Asset Operator Recipe
 
 ADDED:

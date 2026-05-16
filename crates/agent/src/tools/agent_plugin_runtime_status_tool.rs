@@ -15,7 +15,9 @@ use super::{
     },
     agent_chrome_playwright_adapter_tool::{
         AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA, AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME,
-        AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME, AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME,
+        AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+        AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA,
+        AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME,
     },
     agent_chrome_playwright_execution_inspect_tool::{
         AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_RESULT_SCHEMA,
@@ -82,6 +84,9 @@ const AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA: &str =
 const AGENT_PLUGIN_BOOTSTRAP_ASSET_PLAN_SCHEMA: &str = "zed.agent_plugins.bootstrap_asset_plan.v1";
 const AGENT_PLUGIN_MANAGED_ASSET_OPERATOR_RECIPE_SCHEMA: &str =
     "zed.agent_plugins.managed_asset_operator_recipe.v1";
+const AGENT_PLUGIN_RUNTIME_GREEN_BLOCKERS_SCHEMA: &str =
+    "zed.agent_plugins.runtime_green_blocker_summary.v1";
+const MANAGED_CHROME_EXECUTION_RECEIPT_PREFIX: &str = "managed-chrome-execution-receipt-";
 
 const MAX_HANDOFF_PREVIEW_BYTES: u64 = 1_048_576;
 const OBSERVABILITY_FRESHNESS_WINDOW_MS: u64 = 24 * 60 * 60 * 1000;
@@ -388,6 +393,7 @@ fn inspect_runtime_status(
         },
         "host": host_checks,
         "bootstrap_readiness": bootstrap_readiness,
+        "runtime_green_blocker_summary": runtime_green_blocker_summary(status, roots),
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
         "observability_profiles": input
@@ -1257,6 +1263,227 @@ fn next_actions(status: &str, roots: &AgentPluginRuntimeRoots) -> Vec<&'static s
     actions
 }
 
+fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntimeRoots) -> Value {
+    let generated_at_ms = current_epoch_millis();
+    let mut blockers = Vec::new();
+
+    if runtime_status == "blocked_unmanaged_paths" {
+        blockers.push(serde_json::json!({
+            "area": "managed_roots",
+            "id": "unmanaged_paths",
+            "severity": "critical",
+            "reason": "One or more plugin runtime paths are outside the selected managed root.",
+            "next_actions": [
+                "Inspect root_mode and managed root construction before any provisioning or execution.",
+                AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                AgentPluginCatalogTool::NAME
+            ]
+        }));
+    }
+
+    blockers.push(serde_json::json!({
+        "area": "browser_webpreview",
+        "id": "manual_final_result_not_visible_to_runtime_status",
+        "severity": "manual_required",
+        "reason": "Runtime status cannot prove the in-memory WebPreview final validation result. The WebPreview final result must be copied, filled, imported, and sent before claiming runtime-green.",
+        "next_actions": [
+            "copy_agent_browser_final_validation_bundle",
+            "copy_agent_browser_final_validation_result_template",
+            "import_agent_browser_final_validation_result_from_clipboard",
+            "send_agent_browser_final_validation_result_to_agent"
+        ]
+    }));
+
+    if !roots.browser_latest_payload.is_file() {
+        blockers.push(serde_json::json!({
+            "area": "browser_webpreview",
+            "id": "missing_latest_browser_payload",
+            "severity": "runtime_evidence_missing",
+            "reason": "No latest managed Browser payload is present for WebPreview import validation.",
+            "next_actions": [
+                AGENT_BROWSER_PAYLOAD_TOOL_NAME,
+                AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME,
+                AGENT_BROWSER_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                "import_agent_browser_action_payload_from_managed_queue"
+            ]
+        }));
+    }
+
+    let asset_summary = asset_readiness_summary_probe(&roots.asset_provisioning_receipt);
+    if asset_summary
+        .get("ready")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        == false
+    {
+        blockers.push(serde_json::json!({
+            "area": "managed_chrome.assets",
+            "id": "asset_readiness_not_ready",
+            "severity": "runtime_evidence_missing",
+            "reason": "Managed Chrome assets are not fully ready according to the latest asset provisioning receipt.",
+            "summary_state": asset_summary.get("state").and_then(Value::as_str),
+            "summary_status": asset_summary.get("status").and_then(Value::as_str),
+            "asset_blockers": asset_summary.get("blockers").cloned().unwrap_or_else(|| serde_json::json!([])),
+            "asset_warnings": asset_summary.get("warnings").cloned().unwrap_or_else(|| serde_json::json!([])),
+            "next_actions": asset_summary.get("next_actions").cloned().unwrap_or_else(|| serde_json::json!([
+                AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
+                AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME
+            ]))
+        }));
+    }
+
+    if !roots.chrome_adapter_manifest.is_file() || !roots.chrome_runner_script.is_file() {
+        blockers.push(serde_json::json!({
+            "area": "managed_chrome.adapter",
+            "id": "missing_playwright_adapter_files",
+            "severity": "runtime_evidence_missing",
+            "reason": "The managed Playwright adapter manifest and runner script must exist before external Chrome execution.",
+            "next_actions": [
+                AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+                AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME
+            ]
+        }));
+    }
+
+    if !roots.chrome_latest_payload.is_file() {
+        blockers.push(serde_json::json!({
+            "area": "managed_chrome.execution",
+            "id": "missing_latest_chrome_payload",
+            "severity": "runtime_evidence_missing",
+            "reason": "No latest managed Chrome payload exists for the runner gate and adapter invocation.",
+            "next_actions": [
+                AGENT_CHROME_PAYLOAD_TOOL_NAME,
+                AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
+                AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME
+            ]
+        }));
+    }
+
+    if !roots.chrome_latest_runner_receipt.is_file() {
+        blockers.push(serde_json::json!({
+            "area": "managed_chrome.execution",
+            "id": "missing_chrome_runner_gate_receipt",
+            "severity": "runtime_evidence_missing",
+            "reason": "No managed Chrome runner-gate receipt exists for the latest queued payload.",
+            "next_actions": [
+                AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                AGENT_CHROME_RUNNER_GATE_TOOL_NAME
+            ]
+        }));
+    }
+
+    let latest_chrome_execution_receipt = latest_prefixed_json_file_probe(
+        &roots.chrome_execution_dir,
+        MANAGED_CHROME_EXECUTION_RECEIPT_PREFIX,
+        Some(AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA),
+        generated_at_ms,
+    );
+    if latest_chrome_execution_receipt
+        .get("latest_file")
+        .and_then(Value::as_str)
+        .is_none()
+    {
+        blockers.push(serde_json::json!({
+            "area": "managed_chrome.execution",
+            "id": "missing_chrome_execution_receipt",
+            "severity": "runtime_evidence_missing",
+            "reason": "No managed Chrome execution receipt exists from a safe adapter invocation.",
+            "next_actions": [
+                AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
+                AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
+                "copy_managed_chrome_execution_status"
+            ]
+        }));
+    }
+
+    if !roots.pc_use_latest_payload.is_file() {
+        blockers.push(serde_json::json!({
+            "area": "pc_use",
+            "id": "missing_pc_use_payload",
+            "severity": "runtime_evidence_missing",
+            "reason": "No latest PC-use payload exists for the Zed-window receipt-gated path.",
+            "next_actions": [
+                AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME,
+                AGENT_PC_USE_PAYLOAD_TOOL_NAME,
+                AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME,
+                AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME
+            ]
+        }));
+    }
+
+    if !roots.pc_use_latest_receipt.is_file() {
+        blockers.push(serde_json::json!({
+            "area": "pc_use",
+            "id": "missing_pc_use_runner_receipt",
+            "severity": "runtime_evidence_missing",
+            "reason": "No PC-use runner-gate receipt exists for the managed Zed-window path.",
+            "next_actions": [
+                AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                AGENT_PC_USE_RUNNER_GATE_TOOL_NAME,
+                AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME
+            ]
+        }));
+    }
+
+    let runtime_evidence_blockers = blockers
+        .iter()
+        .filter(|blocker| {
+            blocker
+                .get("severity")
+                .and_then(Value::as_str)
+                .is_some_and(|severity| {
+                    severity == "runtime_evidence_missing" || severity == "critical"
+                })
+        })
+        .count();
+    let status = if runtime_evidence_blockers > 0 {
+        "blocked_missing_runtime_evidence"
+    } else {
+        "manual_webpreview_final_result_required"
+    };
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_RUNTIME_GREEN_BLOCKERS_SCHEMA,
+        "generated_at_ms": generated_at_ms,
+        "status": status,
+        "runtime_status": runtime_status,
+        "runtime_green_candidate": false,
+        "blocker_count": blockers.len(),
+        "runtime_evidence_blocker_count": runtime_evidence_blockers,
+        "manual_blocker_count": blockers.len().saturating_sub(runtime_evidence_blockers),
+        "blockers": blockers,
+        "latest_evidence": {
+            "asset_readiness_summary": asset_summary,
+            "managed_chrome_execution_receipt": latest_chrome_execution_receipt,
+            "browser_latest_payload": proof_file_probe(
+                &roots.browser_latest_payload,
+                Some(AGENT_BROWSER_PAYLOAD_QUEUE_ITEM_SCHEMA),
+                Some("/payload_packet/schema"),
+                generated_at_ms,
+            ),
+            "pc_use_latest_runner_receipt": proof_file_probe(
+                &roots.pc_use_latest_receipt,
+                Some(AGENT_PC_USE_RUNNER_RECEIPT_SCHEMA),
+                None,
+                generated_at_ms,
+            ),
+        },
+        "runtime_green_requires": [
+            "no critical or runtime_evidence_missing blockers",
+            "WebPreview final validation result imported with runtime_green_candidate=true",
+            "one final Windows just run pass when the user is ready"
+        ],
+        "safety": {
+            "summary_is_read_only": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+            "touches_real_browser_profiles": false
+        }
+    })
+}
+
 fn observability_profiles(runtime_status: &str, roots: &AgentPluginRuntimeRoots) -> Value {
     let summary_status = if runtime_status == "ready_for_read_only_discovery" {
         "profiles_ready_runtime_validation_pending"
@@ -1691,6 +1918,86 @@ fn latest_json_file_probe(directory: &Path, generated_at_ms: u64) -> Value {
         "latest_modified_at_ms": latest_modified_at_ms,
         "latest_age_seconds": latest_modified_at_ms.map(|modified_at_ms| age_seconds(generated_at_ms, modified_at_ms)),
         "latest_byte_len": latest_path.as_ref().map(|_| latest_byte_len),
+    })
+}
+
+fn latest_prefixed_json_file_probe(
+    directory: &Path,
+    file_name_prefix: &str,
+    expected_schema: Option<&str>,
+    generated_at_ms: u64,
+) -> Value {
+    let entries = match fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return serde_json::json!({
+                "directory": path_string(directory),
+                "file_name_prefix": file_name_prefix,
+                "exists": false,
+                "latest_file": null,
+            });
+        }
+        Err(error) => {
+            return serde_json::json!({
+                "directory": path_string(directory),
+                "file_name_prefix": file_name_prefix,
+                "exists": false,
+                "latest_file": null,
+                "error": error.to_string(),
+            });
+        }
+    };
+
+    let mut latest_path = None;
+    let mut latest_modified_at_ms = None;
+    let mut latest_byte_len = 0;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if !file_name.starts_with(file_name_prefix)
+            || path.extension().and_then(|extension| extension.to_str()) != Some("json")
+        {
+            continue;
+        }
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+        let modified_ms = modified_at_ms(&metadata).unwrap_or_default();
+        if latest_modified_at_ms
+            .map(|latest| modified_ms > latest)
+            .unwrap_or(true)
+        {
+            latest_byte_len = metadata.len();
+            latest_modified_at_ms = Some(modified_ms);
+            latest_path = Some(path);
+        }
+    }
+
+    let json = latest_path.as_ref().map(|path| {
+        if latest_byte_len <= MAX_HANDOFF_PREVIEW_BYTES {
+            json_summary(path, expected_schema, None)
+        } else {
+            serde_json::json!({
+                "state": "skipped_too_large",
+                "max_preview_bytes": MAX_HANDOFF_PREVIEW_BYTES,
+            })
+        }
+    });
+
+    serde_json::json!({
+        "directory": path_string(directory),
+        "file_name_prefix": file_name_prefix,
+        "exists": true,
+        "latest_file": latest_path.as_ref().map(path_string),
+        "latest_modified_at_ms": latest_modified_at_ms,
+        "latest_age_seconds": latest_modified_at_ms.map(|modified_at_ms| age_seconds(generated_at_ms, modified_at_ms)),
+        "latest_byte_len": latest_path.as_ref().map(|_| latest_byte_len),
+        "json": json,
     })
 }
 
