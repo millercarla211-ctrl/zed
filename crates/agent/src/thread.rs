@@ -1,12 +1,12 @@
 use crate::{
     AgentBrowserPayloadQueueTool, AgentBrowserPayloadStageTool, AgentBrowserPayloadTool,
-    AgentChromePayloadQueueTool, AgentChromePayloadTool, AgentPluginBootstrapTool,
-    AgentPluginCatalogTool, ApplyCodeActionTool, CodeActionStore, ContextServerRegistry,
-    CopyPathTool, CreateDirectoryTool, DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool,
-    EditFileTool, FetchTool, FindPathTool, FindReferencesTool, GetCodeActionsTool,
-    GoToDefinitionTool, GrepTool, ListDirectoryTool, MovePathTool, OpenTool, ProjectSnapshot,
-    ReadFileTool, RenameTool, SpawnAgentTool, SystemPromptTemplate, Templates, TerminalTool,
-    ToolPermissionDecision, UpdatePlanTool, WebSearchTool, WriteFileTool,
+    AgentChromePayloadQueueInspectTool, AgentChromePayloadQueueTool, AgentChromePayloadTool,
+    AgentPluginBootstrapTool, AgentPluginCatalogTool, ApplyCodeActionTool, CodeActionStore,
+    ContextServerRegistry, CopyPathTool, CreateDirectoryTool, DbLanguageModel, DbThread,
+    DeletePathTool, DiagnosticsTool, EditFileTool, FetchTool, FindPathTool, FindReferencesTool,
+    GetCodeActionsTool, GoToDefinitionTool, GrepTool, ListDirectoryTool, MovePathTool, OpenTool,
+    ProjectSnapshot, ReadFileTool, RenameTool, SpawnAgentTool, SystemPromptTemplate, Templates,
+    TerminalTool, ToolPermissionDecision, UpdatePlanTool, WebSearchTool, WriteFileTool,
     decide_permission_from_settings,
 };
 use acp_thread::{MentionUri, UserMessageId};
@@ -1627,6 +1627,9 @@ impl Thread {
         self.add_tool(AgentBrowserPayloadQueueTool::new(self.project.clone()));
         self.add_tool(AgentChromePayloadTool);
         self.add_tool(AgentChromePayloadQueueTool::new(self.project.clone()));
+        self.add_tool(AgentChromePayloadQueueInspectTool::new(
+            self.project.clone(),
+        ));
         self.add_tool(AgentPluginBootstrapTool::new(self.project.clone()));
 
         self.add_tool(DiagnosticsTool::new(self.project.clone()));

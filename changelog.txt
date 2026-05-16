@@ -1,3 +1,15 @@
+[2026-05-16] - Managed Chrome Queue Inspection
+
+ADDED:
+- Added the read-only `inspect_managed_chrome_payload_queue` Agent tool for validating the latest managed Chrome payload queue item and runner prerequisites.
+- Advertised the Chrome queue inspection tool through both the Agent plugin catalog and WebPreview handoff catalog.
+
+CHANGED:
+- Managed Chrome payload handoff now has a queue-readiness step that reports missing queues, invalid schemas, host dependency blockers, provisioning requirements, and readiness for the future permissioned runner.
+
+NOTES:
+- Queue inspection is read-only and does not write files, launch Chrome, install Playwright, run page scripts, dispatch input, or touch real browser profiles.
+
 [2026-05-16] - Managed Chrome Payload Queue
 
 ADDED:
