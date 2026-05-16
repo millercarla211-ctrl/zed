@@ -10202,6 +10202,12 @@ impl WebPreviewView {
                     "tool_name": "inspect_agent_plugin_runtime_status",
                     "schema": "zed.agent_plugins.runtime_status.v1",
                     "runtime_green_blocker_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_BLOCKERS_SCHEMA,
+                    "runtime_green_ready_outcomes": {
+                        "browser_final_validation_result": "runtime_green_candidate=true",
+                        "managed_chrome_runner_receipt": "ready_runner_adapter_pending",
+                        "managed_chrome_execution_receipt": "completed",
+                        "pc_use_runner_receipt": "ready_future_executor_pending"
+                    },
                     "read_only": true,
                     "payload": {
                         "root_mode": "workspace",

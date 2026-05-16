@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime Receipt Outcome Classification
+
+ADDED:
+- Runtime status now classifies managed Chrome runner receipts, managed Chrome execution receipts, and PC-use runner receipts by schema and expected outcome before the runtime-green blocker summary can clear them.
+- The blocker summary now reports explicit blockers when receipt files exist but carry blocked, failed, unsupported, stale-shape, or schema-mismatched outcomes.
+- Agent and WebPreview catalog runtime-status metadata now advertise the expected ready outcomes for Browser final proof, managed Chrome runner/execution receipts, and PC-use runner receipts.
+
+NOTES:
+- This is read-only receipt inspection and metadata only; it does not run `just run`, launch Chrome, run Node, dispatch browser input, take screenshots, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Durable Final Proof
 
 ADDED:

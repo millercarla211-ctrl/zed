@@ -92,6 +92,9 @@ const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation"
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME: &str =
     "latest-agent-browser-final-validation-result.json";
 const MANAGED_CHROME_EXECUTION_RECEIPT_PREFIX: &str = "managed-chrome-execution-receipt-";
+const MANAGED_CHROME_RUNNER_READY_OUTCOME: &str = "ready_runner_adapter_pending";
+const MANAGED_CHROME_EXECUTION_READY_OUTCOME: &str = "completed";
+const PC_USE_RUNNER_READY_OUTCOME: &str = "ready_future_executor_pending";
 
 const MAX_HANDOFF_PREVIEW_BYTES: u64 = 1_048_576;
 const OBSERVABILITY_FRESHNESS_WINDOW_MS: u64 = 24 * 60 * 60 * 1000;
@@ -1299,6 +1302,35 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
         .pointer("/summary/runtime_green_candidate")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let chrome_runner_receipt = outcome_receipt_probe(
+        &roots.chrome_latest_runner_receipt,
+        Some(AGENT_CHROME_RUNNER_RECEIPT_SCHEMA),
+        "/result/outcome",
+        &[MANAGED_CHROME_RUNNER_READY_OUTCOME],
+        generated_at_ms,
+    );
+    let chrome_runner_ready = receipt_probe_ready(&chrome_runner_receipt);
+    let latest_chrome_execution_receipt = latest_prefixed_outcome_receipt_probe(
+        &roots.chrome_execution_dir,
+        MANAGED_CHROME_EXECUTION_RECEIPT_PREFIX,
+        Some(AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA),
+        "/outcome",
+        &[MANAGED_CHROME_EXECUTION_READY_OUTCOME],
+        generated_at_ms,
+    );
+    let latest_chrome_execution_receipt_present = latest_chrome_execution_receipt
+        .get("latest_file")
+        .and_then(Value::as_str)
+        .is_some();
+    let latest_chrome_execution_ready = receipt_probe_ready(&latest_chrome_execution_receipt);
+    let pc_use_runner_receipt = outcome_receipt_probe(
+        &roots.pc_use_latest_receipt,
+        Some(AGENT_PC_USE_RUNNER_RECEIPT_SCHEMA),
+        "/result/outcome",
+        &[PC_USE_RUNNER_READY_OUTCOME],
+        generated_at_ms,
+    );
+    let pc_use_runner_ready = receipt_probe_ready(&pc_use_runner_receipt);
 
     if runtime_status == "blocked_unmanaged_paths" {
         blockers.push(serde_json::json!({
@@ -1407,19 +1439,22 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
                 AGENT_CHROME_RUNNER_GATE_TOOL_NAME
             ]
         }));
+    } else if !chrome_runner_ready {
+        blockers.push(serde_json::json!({
+            "area": "managed_chrome.execution",
+            "id": "chrome_runner_gate_receipt_not_ready",
+            "severity": "runtime_evidence_missing",
+            "reason": "The latest managed Chrome runner-gate receipt exists but does not report the ready outcome required before adapter execution.",
+            "classification": chrome_runner_receipt.get("classification").cloned().unwrap_or_else(|| serde_json::json!({})),
+            "next_actions": [
+                AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
+                AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME
+            ]
+        }));
     }
 
-    let latest_chrome_execution_receipt = latest_prefixed_json_file_probe(
-        &roots.chrome_execution_dir,
-        MANAGED_CHROME_EXECUTION_RECEIPT_PREFIX,
-        Some(AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA),
-        generated_at_ms,
-    );
-    if latest_chrome_execution_receipt
-        .get("latest_file")
-        .and_then(Value::as_str)
-        .is_none()
-    {
+    if !latest_chrome_execution_receipt_present {
         blockers.push(serde_json::json!({
             "area": "managed_chrome.execution",
             "id": "missing_chrome_execution_receipt",
@@ -1429,6 +1464,21 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
                 AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
                 AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
                 "copy_managed_chrome_execution_status"
+            ]
+        }));
+    } else if !latest_chrome_execution_ready {
+        blockers.push(serde_json::json!({
+            "area": "managed_chrome.execution",
+            "id": "chrome_execution_receipt_not_completed",
+            "severity": "runtime_evidence_missing",
+            "reason": "The latest managed Chrome execution receipt exists but its outcome is not a completed safe adapter action.",
+            "classification": latest_chrome_execution_receipt.get("classification").cloned().unwrap_or_else(|| serde_json::json!({})),
+            "next_actions": [
+                AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
+                AGENT_CHROME_PAYLOAD_TOOL_NAME,
+                AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
+                AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
+                AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME
             ]
         }));
     }
@@ -1458,6 +1508,20 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
                 AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
                 AGENT_PC_USE_RUNNER_GATE_TOOL_NAME,
                 AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME
+            ]
+        }));
+    } else if !pc_use_runner_ready {
+        blockers.push(serde_json::json!({
+            "area": "pc_use",
+            "id": "pc_use_runner_receipt_not_ready",
+            "severity": "runtime_evidence_missing",
+            "reason": "The latest PC-use runner-gate receipt exists but does not report the ready future-executor outcome.",
+            "classification": pc_use_runner_receipt.get("classification").cloned().unwrap_or_else(|| serde_json::json!({})),
+            "next_actions": [
+                AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+                AGENT_PC_USE_RUNNER_GATE_TOOL_NAME,
+                AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
+                AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME
             ]
         }));
     }
@@ -1495,22 +1559,21 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
             "browser_final_validation_result": browser_final_validation_result,
             "asset_readiness_summary": asset_summary,
             "managed_chrome_execution_receipt": latest_chrome_execution_receipt,
+            "managed_chrome_runner_receipt": chrome_runner_receipt,
             "browser_latest_payload": proof_file_probe(
                 &roots.browser_latest_payload,
                 Some(AGENT_BROWSER_PAYLOAD_QUEUE_ITEM_SCHEMA),
                 Some("/payload_packet/schema"),
                 generated_at_ms,
             ),
-            "pc_use_latest_runner_receipt": proof_file_probe(
-                &roots.pc_use_latest_receipt,
-                Some(AGENT_PC_USE_RUNNER_RECEIPT_SCHEMA),
-                None,
-                generated_at_ms,
-            ),
+            "pc_use_latest_runner_receipt": pc_use_runner_receipt,
         },
         "runtime_green_requires": [
             "no critical or runtime_evidence_missing blockers",
             "managed WebPreview final validation result file reports runtime_green_candidate=true",
+            "managed Chrome runner receipt outcome == ready_runner_adapter_pending",
+            "managed Chrome execution receipt outcome == completed",
+            "PC-use runner receipt outcome == ready_future_executor_pending",
             "one final Windows just run pass when the user is ready"
         ],
         "safety": {
@@ -1739,6 +1802,30 @@ fn observability_proof_freshness(roots: &AgentPluginRuntimeRoots) -> Value {
         },
         "latest_optional_execution_files": {
             "chrome_execution": latest_json_file_probe(&roots.chrome_execution_dir, generated_at_ms),
+        },
+        "receipt_classifications": {
+            "managed_chrome_runner_receipt": outcome_receipt_probe(
+                &roots.chrome_latest_runner_receipt,
+                Some(AGENT_CHROME_RUNNER_RECEIPT_SCHEMA),
+                "/result/outcome",
+                &[MANAGED_CHROME_RUNNER_READY_OUTCOME],
+                generated_at_ms,
+            ),
+            "managed_chrome_execution_receipt": latest_prefixed_outcome_receipt_probe(
+                &roots.chrome_execution_dir,
+                MANAGED_CHROME_EXECUTION_RECEIPT_PREFIX,
+                Some(AGENT_CHROME_PLAYWRIGHT_EXECUTION_RECEIPT_SCHEMA),
+                "/outcome",
+                &[MANAGED_CHROME_EXECUTION_READY_OUTCOME],
+                generated_at_ms,
+            ),
+            "pc_use_runner_receipt": outcome_receipt_probe(
+                &roots.pc_use_latest_receipt,
+                Some(AGENT_PC_USE_RUNNER_RECEIPT_SCHEMA),
+                "/result/outcome",
+                &[PC_USE_RUNNER_READY_OUTCOME],
+                generated_at_ms,
+            ),
         },
         "manual_session_state_required": [
             "WebPreview final validation bundle copy/send state",
@@ -2022,6 +2109,155 @@ fn browser_final_validation_result_summary(result: &Value) -> Value {
         "missing_required_checks": missing_required_checks,
         "runtime_green_candidate": runtime_green_candidate,
         "overall_blocker": result.pointer("/overall_blocker").cloned(),
+    })
+}
+
+fn outcome_receipt_probe(
+    path: &Path,
+    expected_schema: Option<&str>,
+    outcome_pointer: &str,
+    ready_outcomes: &[&str],
+    generated_at_ms: u64,
+) -> Value {
+    let mut probe = proof_file_probe(path, expected_schema, None, generated_at_ms);
+    probe["classification"] =
+        receipt_outcome_classification(path, expected_schema, outcome_pointer, ready_outcomes);
+    probe
+}
+
+fn latest_prefixed_outcome_receipt_probe(
+    directory: &Path,
+    file_name_prefix: &str,
+    expected_schema: Option<&str>,
+    outcome_pointer: &str,
+    ready_outcomes: &[&str],
+    generated_at_ms: u64,
+) -> Value {
+    let mut probe = latest_prefixed_json_file_probe(
+        directory,
+        file_name_prefix,
+        expected_schema,
+        generated_at_ms,
+    );
+    let Some(latest_file) = probe.get("latest_file").and_then(Value::as_str) else {
+        probe["classification"] = serde_json::json!({
+            "state": "missing_receipt",
+            "ready": false,
+            "expected_outcomes": ready_outcomes,
+        });
+        return probe;
+    };
+    let path = PathBuf::from(latest_file);
+    let receipt_probe = outcome_receipt_probe(
+        &path,
+        expected_schema,
+        outcome_pointer,
+        ready_outcomes,
+        generated_at_ms,
+    );
+    probe["classification"] = receipt_probe
+        .get("classification")
+        .cloned()
+        .unwrap_or_else(|| {
+            serde_json::json!({
+                "state": "missing_classification",
+                "ready": false,
+                "expected_outcomes": ready_outcomes,
+            })
+        });
+    probe["receipt"] = receipt_probe;
+    probe
+}
+
+fn receipt_probe_ready(probe: &Value) -> bool {
+    probe
+        .pointer("/classification/ready")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn receipt_outcome_classification(
+    path: &Path,
+    expected_schema: Option<&str>,
+    outcome_pointer: &str,
+    ready_outcomes: &[&str],
+) -> Value {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return serde_json::json!({
+                "state": "missing_receipt",
+                "ready": false,
+                "expected_schema": expected_schema,
+                "expected_outcomes": ready_outcomes,
+            });
+        }
+        Err(error) => {
+            return serde_json::json!({
+                "state": "read_error",
+                "ready": false,
+                "expected_schema": expected_schema,
+                "expected_outcomes": ready_outcomes,
+                "error": error.to_string(),
+            });
+        }
+    };
+
+    if bytes.len() as u64 > MAX_HANDOFF_PREVIEW_BYTES {
+        return serde_json::json!({
+            "state": "skipped_too_large",
+            "ready": false,
+            "expected_schema": expected_schema,
+            "expected_outcomes": ready_outcomes,
+            "max_preview_bytes": MAX_HANDOFF_PREVIEW_BYTES,
+        });
+    }
+
+    let parsed = match serde_json::from_slice::<Value>(&bytes) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            return serde_json::json!({
+                "state": "parse_error",
+                "ready": false,
+                "expected_schema": expected_schema,
+                "expected_outcomes": ready_outcomes,
+                "error": error.to_string(),
+            });
+        }
+    };
+
+    let schema = parsed.get("schema").and_then(Value::as_str);
+    let schema_matches = expected_schema
+        .map(|expected| schema == Some(expected))
+        .unwrap_or(true);
+    let outcome = parsed.pointer(outcome_pointer).and_then(Value::as_str);
+    let outcome_ready = outcome.is_some_and(|outcome| ready_outcomes.contains(&outcome));
+    let ready = schema_matches && outcome_ready;
+
+    serde_json::json!({
+        "state": if ready {
+            "ready"
+        } else if !schema_matches {
+            "schema_mismatch"
+        } else {
+            "outcome_not_ready"
+        },
+        "ready": ready,
+        "schema": schema,
+        "expected_schema": expected_schema,
+        "schema_matches": schema_matches,
+        "outcome_pointer": outcome_pointer,
+        "outcome": outcome,
+        "expected_outcomes": ready_outcomes,
+        "action": parsed.pointer("/action")
+            .or_else(|| parsed.pointer("/queue/action"))
+            .or_else(|| parsed.pointer("/payload_packet/payload/action"))
+            .and_then(Value::as_str),
+        "error": parsed.get("error").and_then(Value::as_str),
+        "queue_blockers": parsed.get("queue_blockers").cloned(),
+        "host_blockers": parsed.get("host_blockers").cloned(),
+        "provision_required": parsed.get("provision_required").cloned(),
+        "executor_pending": parsed.get("executor_pending").cloned(),
     })
 }
 
