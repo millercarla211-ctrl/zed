@@ -337,6 +337,14 @@ fn agent_plugin_catalog(
                     workspace_tools_root.as_ref(),
                 )
             }),
+            "bootstrap_readiness_handoff": {
+                "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
+                "copy_action": "copy_agent_plugin_bootstrap_readiness",
+                "send_action": "send_agent_plugin_bootstrap_readiness_to_agent",
+                "read_only": true,
+                "source": "WebPreview More menu",
+                "purpose": "Copy or send the compact bootstrap readiness packet without copying the full plugin catalog or runtime-status output."
+            },
             "permission_model": {
                 "read_only_discovery_without_prompt": true,
                 "browser_interactions_require_explicit_session_unlock": true,
@@ -499,6 +507,14 @@ fn browser_plugin_manifest() -> Value {
             "source": "WebPreview More menu",
             "purpose": "Copy or send the concrete screenshot, inspect, DevTools, and responsive viewport surface map without requiring the larger session or catalog."
         },
+        "bootstrap_readiness_handoff": {
+            "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
+            "copy_action": "copy_agent_plugin_bootstrap_readiness",
+            "send_action": "send_agent_plugin_bootstrap_readiness_to_agent",
+            "read_only": true,
+            "source": "WebPreview More menu",
+            "purpose": "Copy or send the compact host dependency, managed-root, and managed-asset readiness packet before managed Chrome or PC-use provisioning."
+        },
         "entrypoints": [
             "WebPreview More menu",
             "Agent Panel content handoff",
@@ -614,6 +630,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.devtools.open", "available", "Open the native browser DevTools for the active WebPreview backend."),
             capability("browser.viewport.responsive", "available", "Switch the active WebPreview between full, phone, tablet, laptop, and rotated responsive viewports."),
             capability("browser.function_surfaces", "available", "Copy or send the concrete WebPreview screenshot, inspect, DevTools, and responsive viewport surface map."),
+            capability("browser.plugin_bootstrap_readiness", "available", "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."),
             capability("browser.action.open_url", "available_when_unlocked", "Open the current URL/search editor text through the permissioned WebPreview executor shell."),
             capability("browser.action.reload", "available_when_unlocked", "Reload through the permissioned WebPreview executor shell."),
             capability("browser.action.go_back", "available_when_unlocked", "Navigate back through the native WebPreview history executor after unlock, native history trace, QA checklist, and receipt logging."),

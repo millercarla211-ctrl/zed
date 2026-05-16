@@ -1,3 +1,13 @@
+[2026-05-16] - Agent Plugin Runtime WebPreview Bootstrap Handoff
+
+ADDED:
+- Added direct WebPreview More-menu actions to copy or send the compact Agent Plugin Runtime bootstrap readiness packet.
+- Exposed bootstrap readiness in WebPreview session snapshots, action manifests, final validation bundles, and the WebPreview plugin catalog.
+- Advertised the WebPreview bootstrap-readiness handoff through the Agent plugin catalog so agents can discover the copy/send actions without guessing menu names.
+
+NOTES:
+- This is read-only bootstrap metadata only; it does not create roots, write manifests, install Playwright, download extensions, launch Chrome, run Node, dispatch input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Status Bootstrap Mirror
 
 ADDED:

@@ -16,7 +16,7 @@ use project::{Project, ProjectEntryId, ProjectPath};
 use serde_json::Value;
 use std::{
     cell::{Cell, RefCell},
-    fs, io,
+    env, fs, io,
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
     rc::Rc,
@@ -84,6 +84,13 @@ const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
 const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
     "zed.web_preview.agent_browser_function_surfaces.v1";
+const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstrap_readiness.v1";
+const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstrap_manifest.v1";
+const AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA: &str =
+    "zed.agent_plugins.managed_chrome_playwright_adapter_manifest.v1";
+const AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME: &str = "zed-managed-chrome-runner";
+const AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME: &str = "managed_chrome_runner.mjs";
+const PREPARE_AGENT_PLUGIN_RUNTIME_TOOL: &str = "prepare_agent_plugin_runtime";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
@@ -307,6 +314,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_final_validation_observability_to_agent",
     "copy_agent_browser_function_surfaces",
     "send_agent_browser_function_surfaces_to_agent",
+    "copy_agent_plugin_bootstrap_readiness",
+    "send_agent_plugin_bootstrap_readiness_to_agent",
     "copy_agent_browser_noop_executor_attempt",
     "send_agent_browser_noop_executor_attempt_to_agent",
     "copy_permissioned_click_preflight_attempt",
@@ -1378,6 +1387,7 @@ impl WebPreviewView {
             "agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result_summary(),
             "agent_browser_final_validation_observability": self.agent_browser_final_validation_observability(),
             "agent_browser_function_surfaces": self.agent_browser_function_surfaces(),
+            "agent_plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
             "agent_browser_noop_executor_attempt": self.latest_agent_browser_noop_executor_attempt_summary(),
             "agent_browser_reload_executor_attempt": self.latest_agent_browser_reload_executor_attempt_summary(),
             "agent_browser_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
@@ -1463,6 +1473,9 @@ impl WebPreviewView {
                 "agent_browser_function_surfaces": true,
                 "copy_agent_browser_function_surfaces": true,
                 "send_agent_browser_function_surfaces_to_agent": true,
+                "agent_plugin_bootstrap_readiness": true,
+                "copy_agent_plugin_bootstrap_readiness": true,
+                "send_agent_plugin_bootstrap_readiness_to_agent": true,
                 "copy_agent_browser_noop_executor_attempt": true,
                 "send_agent_browser_noop_executor_attempt_to_agent": true,
                 "run_permissioned_reload_executor": self.agent_action_permission.interactive_enabled(),
@@ -2532,6 +2545,7 @@ impl WebPreviewView {
         let progress = self.agent_browser_executor_validation_progress();
         let runbook = self.agent_browser_qa_runbook(window);
         let manifest = self.agent_browser_action_manifest(window);
+        let bootstrap_readiness = self.agent_plugin_bootstrap_readiness();
         let manual_evidence_template = self.agent_browser_final_validation_result_template();
 
         serde_json::json!({
@@ -2597,6 +2611,13 @@ impl WebPreviewView {
                     "copy_action": "copy_agent_plugin_catalog",
                     "send_action": "send_agent_plugin_catalog_to_agent",
                     "latest_summary": self.latest_agent_plugin_catalog_summary()
+                },
+                "plugin_bootstrap_readiness": {
+                    "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
+                    "copy_action": "copy_agent_plugin_bootstrap_readiness",
+                    "send_action": "send_agent_plugin_bootstrap_readiness_to_agent",
+                    "current_status": bootstrap_readiness.pointer("/status").and_then(Value::as_str),
+                    "phase_summary": bootstrap_readiness.pointer("/phase_summary").cloned()
                 },
                 "runtime_status_tool": {
                     "tool_name": "inspect_agent_plugin_runtime_status",
@@ -3355,6 +3376,279 @@ impl WebPreviewView {
         let blocks = self.agent_browser_function_surfaces_agent_blocks();
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast("Sent browser function surfaces to the agent panel", cx);
+        cx.notify();
+    }
+
+    fn agent_plugin_bootstrap_readiness(&self) -> Value {
+        let default_plugin_root = data_dir().join("agent-plugins");
+        let workspace_tools_root = self
+            .workspace_context
+            .root_path
+            .as_ref()
+            .map(|root| root.join("tools"));
+        let workspace_plugin_root = workspace_tools_root
+            .as_ref()
+            .map(|root| root.join("agent-plugins"));
+        let managed_base_root = workspace_tools_root
+            .clone()
+            .unwrap_or_else(|| default_plugin_root.clone());
+        let plugin_root = workspace_plugin_root
+            .clone()
+            .unwrap_or_else(|| default_plugin_root.clone());
+        let playwright_root = workspace_tools_root
+            .as_ref()
+            .map(|root| root.join("playwright"))
+            .unwrap_or_else(|| default_plugin_root.join("playwright"));
+        let playwright_adapter_root =
+            playwright_root.join(AGENT_CHROME_PLAYWRIGHT_ADAPTER_ROOT_NAME);
+        let playwright_adapter_manifest = playwright_adapter_root.join("adapter-manifest.json");
+        let playwright_runner_script =
+            playwright_adapter_root.join(AGENT_CHROME_PLAYWRIGHT_RUNNER_SCRIPT_NAME);
+        let dx_extension_root = workspace_plugin_root
+            .as_ref()
+            .map(|root| root.join("dx-chrome-extension"))
+            .unwrap_or_else(|| default_plugin_root.join("dx-chrome-extension"));
+        let managed_profile_root = workspace_tools_root
+            .as_ref()
+            .map(|root| root.join("browser-profiles").join("chrome"))
+            .unwrap_or_else(|| default_plugin_root.join("browser-profiles").join("chrome"));
+        let bootstrap_manifest = plugin_root.join("agent-plugin-bootstrap.json");
+        let playwright_package = playwright_root
+            .join("node_modules")
+            .join("playwright")
+            .join("package.json");
+        let dx_extension_manifest = dx_extension_root.join("manifest.json");
+
+        let node = find_executable(&["node", "node.exe"]);
+        let npm = find_executable(&["npm", "npm.cmd", "npm.exe"]);
+        let browser = find_browser_executable();
+        let bootstrap_manifest_schema = json_file_schema(&bootstrap_manifest);
+        let bootstrap_manifest_ready =
+            bootstrap_manifest_schema.as_deref() == Some(AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA);
+        let playwright_adapter_manifest_ready =
+            adapter_manifest_ready(&playwright_adapter_manifest);
+
+        let checks = vec![
+            bootstrap_check(
+                "workspace.root",
+                "Workspace root",
+                self.workspace_context.root_path.is_some(),
+                self.workspace_context.root_path.clone(),
+                "host_blocker",
+                "A workspace root is needed so managed browser tools stay inside the project.",
+            ),
+            bootstrap_check(
+                "host.node",
+                "Node.js runtime",
+                node.is_some(),
+                node.clone(),
+                "host_blocker",
+                "Playwright and Chrome plugin bootstrapping need Node.js.",
+            ),
+            bootstrap_check(
+                "host.npm",
+                "npm package manager",
+                npm.is_some(),
+                npm.clone(),
+                "host_blocker",
+                "Playwright package provisioning needs npm or a compatible npm executable.",
+            ),
+            bootstrap_check(
+                "host.chrome_or_edge",
+                "Chrome or Edge executable",
+                browser.is_some(),
+                browser.clone(),
+                "host_blocker",
+                "External Chrome control needs Chrome, Edge, or Chromium on this OS.",
+            ),
+            bootstrap_check(
+                "root.managed_base",
+                "Managed runtime base root",
+                managed_base_root.is_dir(),
+                Some(managed_base_root.clone()),
+                "provision_required",
+                "Create this managed base root before writing plugin queues, assets, profiles, or receipts.",
+            ),
+            bootstrap_check(
+                "root.plugin",
+                "Managed plugin root",
+                plugin_root.is_dir(),
+                Some(plugin_root.clone()),
+                "provision_required",
+                "Create this managed plugin root before writing Browser, Chrome, or PC-use handoff files.",
+            ),
+            bootstrap_check(
+                "root.playwright",
+                "Managed Playwright root",
+                playwright_root.is_dir(),
+                Some(playwright_root.clone()),
+                "provision_required",
+                "Create this managed Playwright root before installing or preparing Playwright adapter files.",
+            ),
+            bootstrap_check(
+                "root.dx_chrome_extension",
+                "Managed DX Chrome extension root",
+                dx_extension_root.is_dir(),
+                Some(dx_extension_root.clone()),
+                "provision_required",
+                "Create this managed extension root before unpacking the DX Chrome extension.",
+            ),
+            bootstrap_check(
+                "profile.managed_chrome",
+                "Managed Chrome profile root",
+                managed_profile_root.is_dir(),
+                Some(managed_profile_root.clone()),
+                "provision_required",
+                "Create this profile root and never write into a user's real Chrome, Edge, or Firefox profile.",
+            ),
+            bootstrap_check(
+                "asset.bootstrap_manifest",
+                "Agent plugin bootstrap manifest",
+                bootstrap_manifest_ready,
+                Some(bootstrap_manifest.clone()),
+                "provision_required",
+                "Write the bootstrap manifest so future agents can verify the managed-root policy before provisioning assets.",
+            ),
+            bootstrap_check(
+                "asset.playwright_package",
+                "Managed Playwright package",
+                playwright_package.is_file(),
+                Some(playwright_package.clone()),
+                "provision_required",
+                "Install Playwright into the managed tools root before launching external Chrome.",
+            ),
+            bootstrap_check(
+                "asset.playwright_adapter_manifest",
+                "Managed Playwright adapter manifest",
+                playwright_adapter_manifest_ready,
+                Some(playwright_adapter_manifest.clone()),
+                "provision_required",
+                "Prepare the managed Playwright adapter artifact before launching external Chrome.",
+            ),
+            bootstrap_check(
+                "asset.playwright_adapter_runner",
+                "Managed Playwright adapter runner",
+                playwright_runner_script.is_file(),
+                Some(playwright_runner_script.clone()),
+                "provision_required",
+                "Prepare the managed Playwright runner script before launching external Chrome.",
+            ),
+            bootstrap_check(
+                "asset.dx_chrome_extension",
+                "DX Chrome extension manifest",
+                dx_extension_manifest.is_file(),
+                Some(dx_extension_manifest.clone()),
+                "provision_required",
+                "Download or unpack the DX Chrome extension before loading managed Chrome with the bridge.",
+            ),
+        ];
+
+        let host_blockers = readiness_issues(&checks, "host_blocker");
+        let provision_required = readiness_issues(&checks, "provision_required");
+        let status = if !host_blockers.is_empty() {
+            "blocked_missing_host_dependencies"
+        } else if !provision_required.is_empty() {
+            "ready_to_provision"
+        } else {
+            "ready_for_managed_chrome_executor"
+        };
+
+        serde_json::json!({
+            "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
+            "generated_at_ms": Self::current_epoch_millis(),
+            "status": status,
+            "prepare_tool_name": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL,
+            "project_root": self.workspace_context.root_path.as_ref().map(path_string),
+            "phase_summary": bootstrap_phase_summary(&checks),
+            "prepare_runtime_handoff": {
+                "tool_name": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL,
+                "dry_run_payload": {
+                    "root_mode": "workspace",
+                    "create_managed_roots": false,
+                    "write_bootstrap_manifest": false
+                },
+                "workspace_payload": {
+                    "root_mode": "workspace",
+                    "create_managed_roots": true,
+                    "write_bootstrap_manifest": true
+                },
+                "zed_data_payload": {
+                    "root_mode": "zed_data",
+                    "create_managed_roots": true,
+                    "write_bootstrap_manifest": true
+                },
+                "requires_permission_for_writes": true,
+                "downloads_packages": false,
+                "launches_browser": false,
+                "touches_real_browser_profiles": false
+            },
+            "roots": {
+                "zed_data_plugin_root": path_string(&default_plugin_root),
+                "managed_base_root": path_string(&managed_base_root),
+                "plugin_root": path_string(&plugin_root),
+                "workspace_plugin_root": workspace_plugin_root.as_ref().map(path_string),
+                "workspace_tools_root": workspace_tools_root.as_ref().map(path_string),
+                "playwright_root": path_string(&playwright_root),
+                "playwright_adapter_root": path_string(&playwright_adapter_root),
+                "playwright_adapter_manifest": path_string(&playwright_adapter_manifest),
+                "playwright_runner_script": path_string(&playwright_runner_script),
+                "dx_chrome_extension_root": path_string(&dx_extension_root),
+                "managed_chrome_profile_root": path_string(&managed_profile_root),
+                "bootstrap_manifest": path_string(&bootstrap_manifest),
+            },
+            "host": {
+                "node": node.as_ref().map(path_string),
+                "npm": npm.as_ref().map(path_string),
+                "chrome_or_edge": browser.as_ref().map(path_string),
+            },
+            "manifest": {
+                "path": path_string(&bootstrap_manifest),
+                "expected_schema": AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA,
+                "actual_schema": bootstrap_manifest_schema,
+                "ready": bootstrap_manifest_ready,
+            },
+            "checks": checks,
+            "host_blockers": host_blockers,
+            "provision_required": provision_required,
+            "next_actions": bootstrap_next_actions(status),
+            "safety": {
+                "read_only": true,
+                "write_scope": "managed Zed data roots or workspace tools roots only",
+                "never_write_to_user_browser_profiles": true,
+                "external_browser_input_requires_user_permission": true,
+                "receipts_required_for_executor_actions": true,
+            },
+        })
+    }
+
+    fn agent_plugin_bootstrap_readiness_json(&self) -> String {
+        serde_json::to_string_pretty(&self.agent_plugin_bootstrap_readiness())
+            .unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_plugin_bootstrap_readiness_agent_blocks(&self) -> Vec<acp::ContentBlock> {
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Agent plugin bootstrap readiness:\n\n```json\n{}\n```",
+            self.agent_plugin_bootstrap_readiness_json()
+        )))]
+    }
+
+    fn copy_agent_plugin_bootstrap_readiness(&mut self, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            self.agent_plugin_bootstrap_readiness_json(),
+        ));
+        self.show_toast("Copied plugin bootstrap readiness", cx);
+        cx.notify();
+    }
+
+    fn send_agent_plugin_bootstrap_readiness_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let blocks = self.agent_plugin_bootstrap_readiness_agent_blocks();
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent plugin bootstrap readiness to the agent panel", cx);
         cx.notify();
     }
 
@@ -9570,10 +9864,19 @@ impl WebPreviewView {
                     "latest_summary": self.agent_browser_function_surfaces(),
                     "read_only": true,
                     "purpose": "Copy or send the concrete screenshot, inspect, DevTools, and responsive viewport surface map without requiring the larger session or catalog."
+                },
+                "plugin_bootstrap_readiness": {
+                    "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
+                    "copy_action": "copy_agent_plugin_bootstrap_readiness",
+                    "send_action": "send_agent_plugin_bootstrap_readiness_to_agent",
+                    "latest_summary": self.agent_plugin_bootstrap_readiness(),
+                    "read_only": true,
+                    "purpose": "Copy or send the compact host, managed-root, and managed-asset bootstrap readiness packet without requiring the larger plugin catalog or runtime-status tool."
                 }
             },
             "final_validation_observability": self.agent_browser_final_validation_observability(),
             "browser_function_surfaces": self.agent_browser_function_surfaces(),
+            "plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
             "notes": [
                 "Read-only actions are always available for context gathering.",
                 "Interactive actions must remain locked until the user explicitly allows them for this WebPreview session.",
@@ -9761,6 +10064,15 @@ impl WebPreviewView {
                         "managed_by": "DX Code Editor"
                     }
                 },
+                "bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
+                "bootstrap_readiness_handoff": {
+                    "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
+                    "copy_action": "copy_agent_plugin_bootstrap_readiness",
+                    "send_action": "send_agent_plugin_bootstrap_readiness_to_agent",
+                    "read_only": true,
+                    "source": "WebPreview More menu",
+                    "purpose": "Copy or send host dependency, managed-root, and managed-asset readiness without copying the full plugin catalog."
+                },
                 "permission_model": {
                     "read_only_discovery_without_prompt": true,
                     "browser_interactions_require_explicit_session_unlock": true,
@@ -9811,6 +10123,14 @@ impl WebPreviewView {
                             "read_only": true,
                             "source": "WebPreview More menu",
                             "purpose": "Copy or send the concrete screenshot, inspect, DevTools, and responsive viewport surface map without requiring the larger session or catalog."
+                        },
+                        "bootstrap_readiness_handoff": {
+                            "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
+                            "copy_action": "copy_agent_plugin_bootstrap_readiness",
+                            "send_action": "send_agent_plugin_bootstrap_readiness_to_agent",
+                            "read_only": true,
+                            "source": "WebPreview More menu",
+                            "purpose": "Copy or send the compact plugin bootstrap readiness packet before managed Chrome or PC-use provisioning."
                         },
                         "entrypoints": [
                             "WebPreview More menu",
@@ -9927,6 +10247,7 @@ impl WebPreviewView {
                             {"id": "browser.devtools.open", "state": "available", "description": "Open the native browser DevTools for the active WebPreview backend."},
                             {"id": "browser.viewport.responsive", "state": "available", "description": "Switch the active WebPreview between full, phone, tablet, laptop, and rotated responsive viewports."},
                             {"id": "browser.function_surfaces", "state": "available", "description": "Copy or send the concrete WebPreview screenshot, inspect, DevTools, and responsive viewport surface map."},
+                            {"id": "browser.plugin_bootstrap_readiness", "state": "available", "description": "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."},
                             {"id": "browser.action.open_url", "state": "available_when_unlocked", "description": "Open the current URL/search editor text through the permissioned WebPreview executor shell."},
                             {"id": "browser.action.reload", "state": "available_when_unlocked", "description": "Reload through the permissioned WebPreview executor shell."},
                             {"id": "browser.action.go_back", "state": "available_when_unlocked", "description": "Navigate back through the native WebPreview history executor after unlock, native history trace, QA checklist, and receipt logging."},
@@ -12892,6 +13213,32 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Copy Plugin Bootstrap Readiness")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_plugin_bootstrap_readiness(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Plugin Bootstrap Readiness")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_plugin_bootstrap_readiness_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy Managed Chrome Execution Status")
                                 .icon(IconName::Info)
                                 .handler({
@@ -14810,6 +15157,215 @@ fn pc_use_status_next_actions(status: &str, latest_outcome: &str) -> Vec<&'stati
             "Compose and queue a Zed PC-use payload, then request the runner gate before any future executor work.",
         ],
     }
+}
+
+fn bootstrap_check(
+    id: &str,
+    label: &str,
+    ready: bool,
+    path: Option<PathBuf>,
+    missing_kind: &str,
+    details: &str,
+) -> Value {
+    serde_json::json!({
+        "id": id,
+        "label": label,
+        "state": if ready { "ready" } else { missing_kind },
+        "ready": ready,
+        "path": path.as_ref().map(path_string),
+        "details": details,
+    })
+}
+
+fn readiness_issues(checks: &[Value], state: &str) -> Vec<Value> {
+    checks
+        .iter()
+        .filter(|check| {
+            check
+                .get("state")
+                .and_then(Value::as_str)
+                .is_some_and(|check_state| check_state == state)
+        })
+        .cloned()
+        .collect()
+}
+
+fn bootstrap_phase_summary(checks: &[Value]) -> Value {
+    let host = bootstrap_phase("host_dependencies", checks, &["workspace.", "host."]);
+    let roots = bootstrap_phase("managed_roots", checks, &["root.", "profile."]);
+    let assets = bootstrap_phase("managed_assets", checks, &["asset."]);
+    let ready_phase_count = [&host, &roots, &assets]
+        .into_iter()
+        .filter(|phase| phase.get("ready").and_then(Value::as_bool).unwrap_or(false))
+        .count();
+
+    serde_json::json!({
+        "host_dependencies": host,
+        "managed_roots": roots,
+        "managed_assets": assets,
+        "ready_phase_count": ready_phase_count,
+        "total_phase_count": 3,
+    })
+}
+
+fn bootstrap_phase(name: &str, checks: &[Value], prefixes: &[&str]) -> Value {
+    let phase_checks = checks
+        .iter()
+        .filter(|check| {
+            check
+                .get("id")
+                .and_then(Value::as_str)
+                .is_some_and(|id| prefixes.iter().any(|prefix| id.starts_with(prefix)))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let total = phase_checks.len();
+    let ready = phase_checks
+        .iter()
+        .filter(|check| check.get("ready").and_then(Value::as_bool).unwrap_or(false))
+        .count();
+    let missing = phase_checks
+        .iter()
+        .filter_map(|check| {
+            let is_ready = check.get("ready").and_then(Value::as_bool).unwrap_or(false);
+            (!is_ready)
+                .then(|| check.get("id").and_then(Value::as_str).map(str::to_owned))
+                .flatten()
+        })
+        .collect::<Vec<_>>();
+
+    serde_json::json!({
+        "name": name,
+        "ready": ready == total && total > 0,
+        "ready_check_count": ready,
+        "total_check_count": total,
+        "missing": missing,
+    })
+}
+
+fn adapter_manifest_ready(path: &Path) -> bool {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(_) => return false,
+    };
+    serde_json::from_slice::<Value>(&bytes)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("schema")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        })
+        .is_some_and(|schema| schema == AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA)
+}
+
+fn json_file_schema(path: &Path) -> Option<String> {
+    let bytes = fs::read(path).ok()?;
+    serde_json::from_slice::<Value>(&bytes)
+        .ok()?
+        .get("schema")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+}
+
+fn bootstrap_next_actions(status: &str) -> Vec<&'static str> {
+    match status {
+        "blocked_missing_host_dependencies" => vec![
+            "Install missing host dependencies first: Node.js, npm, and Chrome/Edge/Chromium.",
+            "Copy or send WebPreview plugin bootstrap readiness again before provisioning.",
+        ],
+        "ready_to_provision" => vec![
+            "Run prepare_agent_plugin_runtime with create_managed_roots=true and write_bootstrap_manifest=true to create the managed roots.",
+            "Install Playwright into the managed tools root.",
+            "Run prepare_managed_chrome_playwright_adapter with write_adapter_files=true.",
+            "Download or unpack the DX Chrome extension into the managed agent plugin root.",
+            "Keep managed Chrome profile data in the prepared profile root; never touch real user browser profiles.",
+        ],
+        _ => vec![
+            "Chrome plugin bootstrap assets are present.",
+            "Invoke the prepared Playwright adapter for safe actions, then inspect execution receipts before enabling input dispatch.",
+        ],
+    }
+}
+
+fn find_browser_executable() -> Option<PathBuf> {
+    find_executable(&[
+        "chrome",
+        "chrome.exe",
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium",
+        "chromium-browser",
+        "msedge",
+        "msedge.exe",
+        "microsoft-edge",
+    ])
+    .or_else(|| existing_file(common_browser_candidates()))
+}
+
+fn common_browser_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+
+    if cfg!(target_os = "windows") {
+        for env_name in ["PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"] {
+            if let Some(root) = env_path(env_name) {
+                candidates.push(
+                    root.join("Google")
+                        .join("Chrome")
+                        .join("Application")
+                        .join("chrome.exe"),
+                );
+                candidates.push(
+                    root.join("Microsoft")
+                        .join("Edge")
+                        .join("Application")
+                        .join("msedge.exe"),
+                );
+            }
+        }
+    } else if cfg!(target_os = "macos") {
+        candidates.push(
+            PathBuf::from("/Applications")
+                .join("Google Chrome.app")
+                .join("Contents")
+                .join("MacOS")
+                .join("Google Chrome"),
+        );
+        candidates.push(
+            PathBuf::from("/Applications")
+                .join("Microsoft Edge.app")
+                .join("Contents")
+                .join("MacOS")
+                .join("Microsoft Edge"),
+        );
+    }
+
+    candidates
+}
+
+fn find_executable(names: &[&str]) -> Option<PathBuf> {
+    let paths = env::var_os("PATH")?;
+    for dir in env::split_paths(&paths) {
+        for name in names {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+fn existing_file(candidates: Vec<PathBuf>) -> Option<PathBuf> {
+    candidates.into_iter().find(|candidate| candidate.is_file())
+}
+
+fn env_path(name: &str) -> Option<PathBuf> {
+    env::var_os(name).map(PathBuf::from)
+}
+
+fn path_string(path: impl AsRef<Path>) -> String {
+    path.as_ref().display().to_string()
 }
 
 fn system_time_ms(time: SystemTime) -> Option<u64> {
