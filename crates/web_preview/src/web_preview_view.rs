@@ -82,6 +82,11 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
+const AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME: &str =
+    "latest-agent-browser-final-validation-result.json";
+const AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX: &str =
+    "agent-browser-final-validation-result-";
 const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
     "zed.web_preview.agent_browser_function_surfaces.v1";
 const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstrap_readiness.v1";
@@ -1838,16 +1843,160 @@ impl WebPreviewView {
         Some(Self::agent_browser_final_validation_result_summary(result))
     }
 
+    fn agent_browser_final_validation_result_latest_paths(
+        &self,
+    ) -> Vec<(&'static str, PathBuf, PathBuf)> {
+        let mut paths = Vec::new();
+        if let Some(root_path) = self.workspace_context.root_path.as_ref() {
+            let managed_root = root_path.join("tools").join("agent-plugins");
+            let latest_path = managed_root
+                .join(AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME)
+                .join(AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME);
+            paths.push(("workspace", managed_root, latest_path));
+        }
+
+        let managed_root = data_dir().join("agent-plugins");
+        let latest_path = managed_root
+            .join(AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME)
+            .join(AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME);
+        paths.push(("zed_data", managed_root, latest_path));
+        paths
+    }
+
+    fn persist_agent_browser_final_validation_result(&self, result: &Value) -> Result<Vec<Value>> {
+        let result_json = Self::agent_browser_final_validation_result_json(result);
+        let generated_at_ms = Self::current_epoch_millis();
+        let mut writes = Vec::new();
+
+        for (root_mode, managed_root, latest_path) in
+            self.agent_browser_final_validation_result_latest_paths()
+        {
+            if !latest_path.starts_with(&managed_root) {
+                return Err(anyhow!(
+                    "Refusing to write final validation result outside managed root: {}",
+                    latest_path.display()
+                ));
+            }
+            let result_dir = latest_path
+                .parent()
+                .ok_or_else(|| anyhow!("Final validation result path has no parent"))?;
+            let archive_path = result_dir.join(format!(
+                "{}{}.json",
+                AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX, generated_at_ms
+            ));
+
+            fs::create_dir_all(result_dir).with_context(|| {
+                format!(
+                    "failed to prepare final validation result directory {}",
+                    result_dir.display()
+                )
+            })?;
+            fs::write(&latest_path, result_json.as_bytes()).with_context(|| {
+                format!(
+                    "failed to write final validation result {}",
+                    latest_path.display()
+                )
+            })?;
+            fs::write(&archive_path, result_json.as_bytes()).with_context(|| {
+                format!(
+                    "failed to archive final validation result {}",
+                    archive_path.display()
+                )
+            })?;
+
+            writes.push(serde_json::json!({
+                "root_mode": root_mode,
+                "latest_path": path_string(&latest_path),
+                "archive_path": path_string(&archive_path),
+                "byte_len": result_json.len(),
+            }));
+        }
+
+        Ok(writes)
+    }
+
+    fn agent_browser_final_validation_result_durable_evidence(&self) -> Value {
+        let mut entries = Vec::new();
+        let mut runtime_green_candidate = false;
+        for (root_mode, managed_root, latest_path) in
+            self.agent_browser_final_validation_result_latest_paths()
+        {
+            let entry = match fs::metadata(&latest_path) {
+                Ok(metadata) if metadata.is_file() => {
+                    let parsed = fs::read(&latest_path)
+                        .ok()
+                        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+                    let summary = parsed
+                        .as_ref()
+                        .map(Self::agent_browser_final_validation_result_summary);
+                    runtime_green_candidate |= summary
+                        .as_ref()
+                        .and_then(|summary| summary.pointer("/runtime_green_candidate"))
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
+                    serde_json::json!({
+                        "root_mode": root_mode,
+                        "managed_root": path_string(&managed_root),
+                        "latest_path": path_string(&latest_path),
+                        "exists": true,
+                        "byte_len": metadata.len(),
+                        "modified_at_ms": metadata.modified().ok().and_then(system_time_ms),
+                        "summary": summary,
+                    })
+                }
+                Ok(_) => serde_json::json!({
+                    "root_mode": root_mode,
+                    "managed_root": path_string(&managed_root),
+                    "latest_path": path_string(&latest_path),
+                    "exists": false,
+                    "reason": "not_a_file",
+                }),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => serde_json::json!({
+                    "root_mode": root_mode,
+                    "managed_root": path_string(&managed_root),
+                    "latest_path": path_string(&latest_path),
+                    "exists": false,
+                }),
+                Err(error) => serde_json::json!({
+                    "root_mode": root_mode,
+                    "managed_root": path_string(&managed_root),
+                    "latest_path": path_string(&latest_path),
+                    "exists": false,
+                    "error": error.to_string(),
+                }),
+            };
+            entries.push(entry);
+        }
+
+        serde_json::json!({
+            "status": if runtime_green_candidate {
+                "managed_final_result_runtime_green_candidate"
+            } else {
+                "managed_final_result_missing_or_not_green"
+            },
+            "runtime_green_candidate": runtime_green_candidate,
+            "result_file_name": AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME,
+            "archive_prefix": AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX,
+            "roots": entries,
+        })
+    }
+
     fn agent_browser_final_validation_observability(&self) -> Value {
         let bundle_summary = self.latest_agent_browser_final_validation_bundle_summary();
         let result_template_summary =
             self.latest_agent_browser_final_validation_result_template_summary();
         let result_summary = self.latest_agent_browser_final_validation_result_summary();
-        let result_runtime_green_candidate = result_summary
-            .as_ref()
-            .and_then(|summary| summary.pointer("/runtime_green_candidate"))
+        let durable_evidence = self.agent_browser_final_validation_result_durable_evidence();
+        let durable_runtime_green_candidate = durable_evidence
+            .pointer("/runtime_green_candidate")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let result_runtime_green_candidate = durable_runtime_green_candidate
+            || result_summary
+                .as_ref()
+                .and_then(|summary| summary.pointer("/runtime_green_candidate"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
 
         let mut missing = Vec::new();
         if bundle_summary.is_none() {
@@ -1856,7 +2005,7 @@ impl WebPreviewView {
         if result_template_summary.is_none() {
             missing.push("final_validation_result_template");
         }
-        if result_summary.is_none() {
+        if result_summary.is_none() && !durable_runtime_green_candidate {
             missing.push("final_validation_result");
         }
 
@@ -1880,6 +2029,7 @@ impl WebPreviewView {
                 "final_validation_result_template": result_template_summary,
                 "final_validation_result": result_summary,
             },
+            "durable_evidence": durable_evidence,
             "runtime_green_candidate": result_runtime_green_candidate,
             "recovery_actions": self.agent_browser_final_validation_observability_actions(
                 status,
@@ -2780,6 +2930,17 @@ impl WebPreviewView {
             .filter_map(Value::as_str)
             .filter(|check_id| checks.and_then(|checks| checks.get(*check_id)).is_none())
             .collect::<Vec<_>>();
+        let required_check_blocker_count = required_check_ids
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|check_id| {
+                checks
+                    .and_then(|checks| checks.get(*check_id))
+                    .and_then(|check| check.pointer("/blocker"))
+                    .map(|blocker| !blocker.is_null())
+                    .unwrap_or(false)
+            })
+            .count();
         let runtime_green_candidate = result.pointer("/schema").and_then(Value::as_str)
             == Some(AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA)
             && result.pointer("/status").and_then(Value::as_str) == Some("pass")
@@ -2789,6 +2950,7 @@ impl WebPreviewView {
                 .pointer("/overall_blocker")
                 .map(Value::is_null)
                 .unwrap_or(true)
+            && required_check_blocker_count == 0
             && missing_required_checks.is_empty();
 
         serde_json::json!({
@@ -2801,6 +2963,7 @@ impl WebPreviewView {
             "completed_at": result.pointer("/completed_at").cloned(),
             "required_check_count": required_check_count,
             "pass_required_check_count": pass_required_check_count,
+            "required_check_blocker_count": required_check_blocker_count,
             "missing_required_checks": missing_required_checks,
             "runtime_green_candidate": runtime_green_candidate,
             "overall_blocker": result.pointer("/overall_blocker").cloned(),
@@ -2925,11 +3088,39 @@ impl WebPreviewView {
             .and_then(Value::as_bool)
             .unwrap_or(false);
         self.latest_agent_browser_final_validation_result = Some(result);
+        let Some(result) = self.latest_agent_browser_final_validation_result.as_ref() else {
+            self.show_toast(
+                "Final validation result import did not persist in memory",
+                cx,
+            );
+            return;
+        };
+        let durable_writes = match self.persist_agent_browser_final_validation_result(result) {
+            Ok(writes) => writes,
+            Err(error) => {
+                self.report_action_error(
+                    "Final validation result managed proof write failed",
+                    error,
+                    cx,
+                );
+                cx.notify();
+                return;
+            }
+        };
         if runtime_green_candidate {
-            self.show_toast("Imported passing final validation result", cx);
+            self.show_toast(
+                format!(
+                    "Imported passing final validation result and wrote {} managed proof file(s)",
+                    durable_writes.len()
+                ),
+                cx,
+            );
         } else {
             self.show_toast(
-                "Imported final validation result with incomplete evidence",
+                format!(
+                    "Imported incomplete final validation result and wrote {} managed proof file(s)",
+                    durable_writes.len()
+                ),
                 cx,
             );
         }
@@ -10309,9 +10500,15 @@ impl WebPreviewView {
                             "import_action": "import_agent_browser_final_validation_result_from_clipboard",
                             "copy_action": "copy_agent_browser_final_validation_result",
                             "send_action": "send_agent_browser_final_validation_result_to_agent",
-                            "read_only": true,
+                            "managed_result_dir": AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME,
+                            "managed_result_file": AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME,
+                            "managed_result_archive_prefix": AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX,
+                            "runtime_status_field": "runtime_green_blocker_summary.latest_evidence.browser_final_validation_result",
+                            "copy_send_read_only": true,
+                            "import_writes_managed_result": true,
+                            "managed_roots_only": true,
                             "source": "WebPreview More menu",
-                            "purpose": "Import, copy, or send the filled manual Windows result after the final runtime proof."
+                            "purpose": "Import, persist, copy, or send the filled manual Windows result after the final runtime proof."
                         },
                         "final_validation_observability_handoff": {
                             "schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,

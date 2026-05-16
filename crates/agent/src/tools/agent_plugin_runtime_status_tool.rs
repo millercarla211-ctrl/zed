@@ -86,6 +86,11 @@ const AGENT_PLUGIN_MANAGED_ASSET_OPERATOR_RECIPE_SCHEMA: &str =
     "zed.agent_plugins.managed_asset_operator_recipe.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_BLOCKERS_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_blocker_summary.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_validation_result.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
+const AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME: &str =
+    "latest-agent-browser-final-validation-result.json";
 const MANAGED_CHROME_EXECUTION_RECEIPT_PREFIX: &str = "managed-chrome-execution-receipt-";
 
 const MAX_HANDOFF_PREVIEW_BYTES: u64 = 1_048_576;
@@ -210,6 +215,8 @@ struct AgentPluginRuntimeRoots {
     asset_provisioning_receipt: PathBuf,
     browser_queue_dir: PathBuf,
     browser_latest_payload: PathBuf,
+    browser_final_validation_dir: PathBuf,
+    browser_final_validation_latest_result: PathBuf,
     chrome_queue_dir: PathBuf,
     chrome_latest_payload: PathBuf,
     chrome_receipt_dir: PathBuf,
@@ -258,6 +265,10 @@ impl AgentPluginRuntimeRoots {
             plugin_root.join(AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_FILE_NAME);
         let browser_queue_dir = plugin_root.join("browser-payloads");
         let browser_latest_payload = browser_queue_dir.join(AGENT_BROWSER_PAYLOAD_QUEUE_FILE_NAME);
+        let browser_final_validation_dir =
+            plugin_root.join(AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME);
+        let browser_final_validation_latest_result =
+            browser_final_validation_dir.join(AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME);
         let chrome_queue_dir = plugin_root.join("chrome-payloads");
         let chrome_latest_payload = chrome_queue_dir.join(AGENT_CHROME_PAYLOAD_QUEUE_FILE_NAME);
         let chrome_receipt_dir = plugin_root.join("chrome-receipts");
@@ -287,6 +298,8 @@ impl AgentPluginRuntimeRoots {
             asset_provisioning_receipt,
             browser_queue_dir,
             browser_latest_payload,
+            browser_final_validation_dir,
+            browser_final_validation_latest_result,
             chrome_queue_dir,
             chrome_latest_payload,
             chrome_receipt_dir,
@@ -327,6 +340,8 @@ impl AgentPluginRuntimeRoots {
             &self.asset_provisioning_receipt,
             &self.browser_queue_dir,
             &self.browser_latest_payload,
+            &self.browser_final_validation_dir,
+            &self.browser_final_validation_latest_result,
             &self.chrome_queue_dir,
             &self.chrome_latest_payload,
             &self.chrome_receipt_dir,
@@ -429,6 +444,7 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
         "schemas": {
             "payload_queue_item": AGENT_BROWSER_PAYLOAD_QUEUE_ITEM_SCHEMA,
             "payload_queue_inspection": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECTION_SCHEMA,
+            "final_validation_result": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
         },
         "managed_paths": {
             "queue_dir": dir_probe(&roots.browser_queue_dir),
@@ -436,6 +452,13 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
                 &roots.browser_latest_payload,
                 Some(AGENT_BROWSER_PAYLOAD_QUEUE_ITEM_SCHEMA),
                 Some("/payload_packet/schema"),
+                include_latest_handoff,
+            ),
+            "final_validation_dir": dir_probe(&roots.browser_final_validation_dir),
+            "latest_final_validation_result": file_probe(
+                &roots.browser_final_validation_latest_result,
+                Some(AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA),
+                None,
                 include_latest_handoff,
             ),
         },
@@ -1057,6 +1080,8 @@ fn roots_value(roots: &AgentPluginRuntimeRoots) -> Value {
         "bootstrap_manifest": path_string(&roots.bootstrap_manifest),
         "asset_provisioning_receipt": path_string(&roots.asset_provisioning_receipt),
         "browser_queue_dir": path_string(&roots.browser_queue_dir),
+        "browser_final_validation_dir": path_string(&roots.browser_final_validation_dir),
+        "browser_final_validation_latest_result": path_string(&roots.browser_final_validation_latest_result),
         "chrome_queue_dir": path_string(&roots.chrome_queue_dir),
         "chrome_receipt_dir": path_string(&roots.chrome_receipt_dir),
         "chrome_execution_dir": path_string(&roots.chrome_execution_dir),
@@ -1266,6 +1291,14 @@ fn next_actions(status: &str, roots: &AgentPluginRuntimeRoots) -> Vec<&'static s
 fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntimeRoots) -> Value {
     let generated_at_ms = current_epoch_millis();
     let mut blockers = Vec::new();
+    let browser_final_validation_result = browser_final_validation_result_probe(
+        &roots.browser_final_validation_latest_result,
+        generated_at_ms,
+    );
+    let final_result_runtime_green_candidate = browser_final_validation_result
+        .pointer("/summary/runtime_green_candidate")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     if runtime_status == "blocked_unmanaged_paths" {
         blockers.push(serde_json::json!({
@@ -1281,18 +1314,22 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
         }));
     }
 
-    blockers.push(serde_json::json!({
-        "area": "browser_webpreview",
-        "id": "manual_final_result_not_visible_to_runtime_status",
-        "severity": "manual_required",
-        "reason": "Runtime status cannot prove the in-memory WebPreview final validation result. The WebPreview final result must be copied, filled, imported, and sent before claiming runtime-green.",
-        "next_actions": [
-            "copy_agent_browser_final_validation_bundle",
-            "copy_agent_browser_final_validation_result_template",
-            "import_agent_browser_final_validation_result_from_clipboard",
-            "send_agent_browser_final_validation_result_to_agent"
-        ]
-    }));
+    if !final_result_runtime_green_candidate {
+        blockers.push(serde_json::json!({
+            "area": "browser_webpreview",
+            "id": "final_validation_result_not_runtime_green",
+            "severity": "manual_required",
+            "reason": "The managed WebPreview final validation result is missing or does not yet prove runtime_green_candidate=true.",
+            "latest_result": browser_final_validation_result.get("summary").cloned().unwrap_or_else(|| serde_json::json!({})),
+            "next_actions": [
+                "copy_agent_browser_final_validation_bundle",
+                "copy_agent_browser_final_validation_result_template",
+                "import_agent_browser_final_validation_result_from_clipboard",
+                "send_agent_browser_final_validation_result_to_agent",
+                AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME
+            ]
+        }));
+    }
 
     if !roots.browser_latest_payload.is_file() {
         blockers.push(serde_json::json!({
@@ -1438,6 +1475,8 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
         .count();
     let status = if runtime_evidence_blockers > 0 {
         "blocked_missing_runtime_evidence"
+    } else if final_result_runtime_green_candidate {
+        "runtime_green_candidate"
     } else {
         "manual_webpreview_final_result_required"
     };
@@ -1447,12 +1486,13 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
         "generated_at_ms": generated_at_ms,
         "status": status,
         "runtime_status": runtime_status,
-        "runtime_green_candidate": false,
+        "runtime_green_candidate": runtime_evidence_blockers == 0 && final_result_runtime_green_candidate,
         "blocker_count": blockers.len(),
         "runtime_evidence_blocker_count": runtime_evidence_blockers,
         "manual_blocker_count": blockers.len().saturating_sub(runtime_evidence_blockers),
         "blockers": blockers,
         "latest_evidence": {
+            "browser_final_validation_result": browser_final_validation_result,
             "asset_readiness_summary": asset_summary,
             "managed_chrome_execution_receipt": latest_chrome_execution_receipt,
             "browser_latest_payload": proof_file_probe(
@@ -1470,7 +1510,7 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
         },
         "runtime_green_requires": [
             "no critical or runtime_evidence_missing blockers",
-            "WebPreview final validation result imported with runtime_green_candidate=true",
+            "managed WebPreview final validation result file reports runtime_green_candidate=true",
             "one final Windows just run pass when the user is ready"
         ],
         "safety": {
@@ -1653,6 +1693,10 @@ fn observability_proof_freshness(roots: &AgentPluginRuntimeRoots) -> Value {
                 Some("/payload_packet/schema"),
                 generated_at_ms,
             ),
+            "browser_final_validation_result": browser_final_validation_result_probe(
+                &roots.browser_final_validation_latest_result,
+                generated_at_ms,
+            ),
             "chrome_latest_payload": proof_file_probe(
                 &roots.chrome_latest_payload,
                 Some(AGENT_CHROME_PAYLOAD_QUEUE_ITEM_SCHEMA),
@@ -1699,7 +1743,8 @@ fn observability_proof_freshness(roots: &AgentPluginRuntimeRoots) -> Value {
         "manual_session_state_required": [
             "WebPreview final validation bundle copy/send state",
             "WebPreview final result template copy/send state",
-            "WebPreview imported final result state"
+            "WebPreview imported final result state",
+            "Managed WebPreview final validation result file"
         ],
     })
 }
@@ -1864,6 +1909,120 @@ fn proof_file_probe(
         );
     }
     probe
+}
+
+fn browser_final_validation_result_probe(path: &Path, generated_at_ms: u64) -> Value {
+    let mut probe = proof_file_probe(
+        path,
+        Some(AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA),
+        None,
+        generated_at_ms,
+    );
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            probe["summary"] = serde_json::json!({
+                "state": "missing_result",
+                "runtime_green_candidate": false,
+            });
+            return probe;
+        }
+        Err(error) => {
+            probe["summary"] = serde_json::json!({
+                "state": "read_error",
+                "error": error.to_string(),
+                "runtime_green_candidate": false,
+            });
+            return probe;
+        }
+    };
+    if bytes.len() as u64 > MAX_HANDOFF_PREVIEW_BYTES {
+        probe["summary"] = serde_json::json!({
+            "state": "skipped_too_large",
+            "max_preview_bytes": MAX_HANDOFF_PREVIEW_BYTES,
+            "runtime_green_candidate": false,
+        });
+        return probe;
+    }
+    let result = match serde_json::from_slice::<Value>(&bytes) {
+        Ok(result) => result,
+        Err(error) => {
+            probe["summary"] = serde_json::json!({
+                "state": "parse_error",
+                "error": error.to_string(),
+                "runtime_green_candidate": false,
+            });
+            return probe;
+        }
+    };
+
+    probe["summary"] = browser_final_validation_result_summary(&result);
+    probe
+}
+
+fn browser_final_validation_result_summary(result: &Value) -> Value {
+    let checks = result.pointer("/checks").and_then(Value::as_object);
+    let required_check_ids = result
+        .pointer("/required_check_ids")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let required_check_count = required_check_ids.len();
+    let pass_required_check_count = required_check_ids
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|check_id| {
+            checks
+                .and_then(|checks| checks.get(*check_id))
+                .and_then(|check| check.pointer("/status"))
+                .and_then(Value::as_str)
+                == Some("pass")
+        })
+        .count();
+    let missing_required_checks = required_check_ids
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|check_id| checks.and_then(|checks| checks.get(*check_id)).is_none())
+        .collect::<Vec<_>>();
+    let required_check_blocker_count = required_check_ids
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|check_id| {
+            checks
+                .and_then(|checks| checks.get(*check_id))
+                .and_then(|check| check.pointer("/blocker"))
+                .map(|blocker| !blocker.is_null())
+                .unwrap_or(false)
+        })
+        .count();
+    let runtime_green_candidate = result.pointer("/schema").and_then(Value::as_str)
+        == Some(AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA)
+        && result.pointer("/status").and_then(Value::as_str) == Some("pass")
+        && required_check_count > 0
+        && pass_required_check_count == required_check_count
+        && result
+            .pointer("/overall_blocker")
+            .map(Value::is_null)
+            .unwrap_or(true)
+        && required_check_blocker_count == 0
+        && missing_required_checks.is_empty();
+
+    serde_json::json!({
+        "state": "parsed_result",
+        "schema": result.pointer("/schema").and_then(Value::as_str),
+        "status": result.pointer("/status").and_then(Value::as_str),
+        "runtime_command": result.pointer("/runtime_command").and_then(Value::as_str),
+        "branch": result.pointer("/branch").and_then(Value::as_str),
+        "commit": result.pointer("/commit").and_then(Value::as_str),
+        "started_at": result.pointer("/started_at").cloned(),
+        "completed_at": result.pointer("/completed_at").cloned(),
+        "required_check_count": required_check_count,
+        "pass_required_check_count": pass_required_check_count,
+        "required_check_blocker_count": required_check_blocker_count,
+        "missing_required_checks": missing_required_checks,
+        "runtime_green_candidate": runtime_green_candidate,
+        "overall_blocker": result.pointer("/overall_blocker").cloned(),
+    })
 }
 
 fn latest_json_file_probe(directory: &Path, generated_at_ms: u64) -> Value {

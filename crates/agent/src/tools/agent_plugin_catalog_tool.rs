@@ -54,6 +54,11 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
+const AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME: &str =
+    "latest-agent-browser-final-validation-result.json";
+const AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX: &str =
+    "agent-browser-final-validation-result-";
 const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
     "zed.web_preview.agent_browser_function_surfaces.v1";
 const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstrap_readiness.v1";
@@ -653,9 +658,15 @@ fn browser_plugin_manifest() -> Value {
             "import_action": "import_agent_browser_final_validation_result_from_clipboard",
             "copy_action": "copy_agent_browser_final_validation_result",
             "send_action": "send_agent_browser_final_validation_result_to_agent",
-            "read_only": true,
+            "managed_result_dir": AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME,
+            "managed_result_file": AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME,
+            "managed_result_archive_prefix": AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX,
+            "runtime_status_field": "runtime_green_blocker_summary.latest_evidence.browser_final_validation_result",
+            "copy_send_read_only": true,
+            "import_writes_managed_result": true,
+            "managed_roots_only": true,
             "source": "WebPreview More menu",
-            "purpose": "Import, copy, or send the filled manual Windows result after the final runtime proof."
+            "purpose": "Import, persist, copy, or send the filled manual Windows result after the final runtime proof."
         },
         "final_validation_observability_handoff": {
             "schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,

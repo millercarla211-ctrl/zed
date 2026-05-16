@@ -1,3 +1,16 @@
+[2026-05-16] - Agent Plugin Runtime Durable Final Proof
+
+ADDED:
+- WebPreview now writes imported final validation results to managed `browser-final-validation/latest-agent-browser-final-validation-result.json` proof files, with timestamped archives under workspace and Zed-data plugin roots.
+- Runtime status now exposes the managed WebPreview final result path and parses the durable result summary before deciding whether the Browser/WebPreview runtime-green blocker can clear.
+- Agent and WebPreview plugin catalogs now advertise the managed final result file, archive prefix, and runtime-status field for final-proof discovery.
+
+CHANGED:
+- Final validation result summaries now require every required check blocker to be null before reporting `runtime_green_candidate=true`.
+
+NOTES:
+- This only writes user-triggered final-proof JSON into managed plugin roots during WebPreview import; it does not run `just run`, launch Chrome, run Node, dispatch browser input, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Runtime-Green Blocker Summary
 
 ADDED:
