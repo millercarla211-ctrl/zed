@@ -1,3 +1,12 @@
+[2026-05-16] - Agent Browser Final Validation Result Template
+
+ADDED:
+- Added a structured manual evidence template to the final validation bundle for editor typing, WebPreview input, native executor receipts, payload bridge, managed Chrome, and PC-use runtime checks.
+- Advertised the final validation result schema through the WebPreview action/plugin catalog and Agent `list_agent_plugins` catalog.
+
+NOTES:
+- This remains read-only proof metadata; it does not run `just run`, dispatch browser input, launch Chrome, run Node, inspect the live page, or alter focus paths.
+
 [2026-05-16] - Agent Browser Final Validation Summary
 
 ADDED:

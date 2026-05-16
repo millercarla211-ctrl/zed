@@ -78,6 +78,8 @@ const AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA: &str =
     "zed.web_preview.agent_browser_executor_validation_progress.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_bundle.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_validation_result.v1";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
@@ -2388,6 +2390,49 @@ impl WebPreviewView {
                 "Inspect managed Chrome and PC-use queue/receipt/status handoffs without touching real browser profiles or OS-wide input.",
                 "Copy or send this final validation bundle with the resulting summaries."
             ],
+            "manual_evidence_template": {
+                "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+                "status": "not_run",
+                "runtime_command": "just run",
+                "branch": "dev",
+                "commit": "fill with git rev-parse --short HEAD before runtime pass",
+                "started_at": null,
+                "completed_at": null,
+                "checks": {
+                    "editor_typing": {
+                        "status": "not_run",
+                        "evidence": "Type quickly in a normal code file; text appears immediately and caret stays visible.",
+                        "blocker": null
+                    },
+                    "webpreview_input": {
+                        "status": "not_run",
+                        "evidence": "Hover, click, right-click, wheel, URL edit, page typing, reload, and focus switching all work.",
+                        "blocker": null
+                    },
+                    "native_executor_receipts": {
+                        "status": "not_run",
+                        "evidence": "Click, type, key, scroll, back, forward, and cache-only reset attempts emit blocked or successful receipts.",
+                        "blocker": null
+                    },
+                    "payload_bridge": {
+                        "status": "not_run",
+                        "evidence": "Managed Browser payload import emits a redacted schema/action receipt.",
+                        "blocker": null
+                    },
+                    "managed_chrome": {
+                        "status": "not_run",
+                        "evidence": "Managed Chrome queue, runner gate, adapter, and execution inspection stay under managed roots.",
+                        "blocker": null
+                    },
+                    "pc_use": {
+                        "status": "not_run",
+                        "evidence": "PC-use target, queue, runner, and receipt inspection stay read-only or managed-root scoped.",
+                        "blocker": null
+                    }
+                },
+                "overall_blocker": null,
+                "claim_runtime_green_only_when": "all checks are pass and the validation-progress packet reports all evidence groups ready"
+            },
             "success_criteria": [
                 "No editor typing lag or caret disappearance after WebPreview actions.",
                 "No stale WebPreview focus after navigation, reload, tab switch, URL edit, or editor focus.",
@@ -8894,6 +8939,7 @@ impl WebPreviewView {
                 },
                 "final_validation_bundle": {
                     "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
+                    "result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
                     "copy_action": "copy_agent_browser_final_validation_bundle",
                     "send_action": "send_agent_browser_final_validation_bundle_to_agent",
                     "latest_summary": self.latest_agent_browser_final_validation_bundle_summary(),
@@ -9124,6 +9170,7 @@ impl WebPreviewView {
                             "payload_import_receipt_schema": "zed.web_preview.agent_browser_action_payload_import_receipt.v1",
                             "executor_validation_progress_schema": AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA,
                             "final_validation_bundle_schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
+                            "final_validation_result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
                             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
                             "managed_queue_import_action": "import_agent_browser_action_payload_from_managed_queue",
                             "examples": [
@@ -9168,6 +9215,7 @@ impl WebPreviewView {
                         },
                         "final_validation_bundle_handoff": {
                             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
+                            "result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
                             "copy_action": "copy_agent_browser_final_validation_bundle",
                             "send_action": "send_agent_browser_final_validation_bundle_to_agent",
                             "read_only": true,

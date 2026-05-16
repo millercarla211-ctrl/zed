@@ -47,6 +47,8 @@ const AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA: &str =
     "zed.web_preview.agent_browser_executor_validation_progress.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_bundle.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_validation_result.v1";
 
 /// Lists the built-in DX/Zed agent plugin catalog for browser, Chrome, and PC-use workflows.
 ///
@@ -376,6 +378,7 @@ fn browser_plugin_manifest() -> Value {
             "payload_import_receipt_schema": "zed.web_preview.agent_browser_action_payload_import_receipt.v1",
             "executor_validation_progress_schema": AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA,
             "final_validation_bundle_schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
+            "final_validation_result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
             "clipboard_import_action": "import_agent_browser_action_payload_from_clipboard",
             "managed_queue_import_action": "import_agent_browser_action_payload_from_managed_queue",
             "examples": [
@@ -420,6 +423,7 @@ fn browser_plugin_manifest() -> Value {
         },
         "final_validation_bundle_handoff": {
             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
+            "result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
             "copy_action": "copy_agent_browser_final_validation_bundle",
             "send_action": "send_agent_browser_final_validation_bundle_to_agent",
             "read_only": true,
