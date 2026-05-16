@@ -213,7 +213,7 @@ fn agent_plugin_catalog(
                     "include_validation_matrix": true,
                     "include_observability_profiles": true
                 },
-                "purpose": "Summarize Browser, managed Chrome, and PC-use readiness without launching browsers, running Node, screenshots, or input dispatch."
+                "purpose": "Summarize Browser, managed Chrome, PC-use readiness, observability profiles, and proof freshness without launching browsers, running Node, screenshots, or input dispatch."
             },
             "available_to": [
                 "agent_panel",

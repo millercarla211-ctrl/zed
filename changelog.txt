@@ -1,3 +1,16 @@
+[2026-05-16] - Agent Plugin Runtime Proof Freshness
+
+ADDED:
+- Added a read-only proof freshness block to `inspect_agent_plugin_runtime_status` observability profiles.
+- The freshness summary reports missing or stale Browser, managed Chrome, and PC-use payload/receipt artifacts with age, schema summaries, and a 24-hour freshness window.
+- Added optional latest Chrome execution JSON discovery so agents can see whether managed Playwright execution evidence exists without reading directories manually.
+
+CHANGED:
+- Updated Agent and WebPreview runtime-status catalog copy to mention observability proof freshness.
+
+NOTES:
+- This is metadata inspection only; it reads managed handoff file metadata and small JSON summaries, but does not write files, run `just run`, launch Chrome, run Node, take screenshots, focus Zed, or dispatch input.
+
 [2026-05-16] - Agent Plugin Runtime Observability Status
 
 ADDED:

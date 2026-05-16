@@ -71,6 +71,7 @@ pub const AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME: &str = "inspect_agent_plugin_ru
 pub const AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA: &str = "zed.agent_plugins.runtime_status.v1";
 
 const MAX_HANDOFF_PREVIEW_BYTES: u64 = 1_048_576;
+const OBSERVABILITY_FRESHNESS_WINDOW_MS: u64 = 24 * 60 * 60 * 1000;
 
 /// Summarizes Browser, managed Chrome, and PC-use plugin readiness without executing anything.
 ///
@@ -362,7 +363,9 @@ fn inspect_runtime_status(
         "host": host_checks,
         "workflow_recipes": input.include_workflows.then(workflow_recipes),
         "validation_matrix": input.include_validation_matrix.then(validation_matrix),
-        "observability_profiles": input.include_observability_profiles.then(|| observability_profiles(status)),
+        "observability_profiles": input
+            .include_observability_profiles
+            .then(|| observability_profiles(status, roots)),
         "next_actions": input.include_next_actions.then(|| next_actions(status, roots)),
         "safety": {
             "read_only": true,
@@ -622,7 +625,7 @@ fn next_actions(status: &str, roots: &AgentPluginRuntimeRoots) -> Vec<&'static s
     actions
 }
 
-fn observability_profiles(runtime_status: &str) -> Value {
+fn observability_profiles(runtime_status: &str, roots: &AgentPluginRuntimeRoots) -> Value {
     let summary_status = if runtime_status == "ready_for_read_only_discovery" {
         "profiles_ready_runtime_validation_pending"
     } else {
@@ -634,6 +637,7 @@ fn observability_profiles(runtime_status: &str) -> Value {
         "runtime_status": runtime_status,
         "overall_code_score": 93,
         "runtime_green_blocker": "Browser, managed Chrome, and PC-use profiles still need one final Windows runtime validation pass plus imported manual result evidence before the product can be called runtime-green.",
+        "proof_freshness": observability_proof_freshness(roots),
         "plugins": {
             "browser": {
                 "id": "zed.browser",
@@ -707,6 +711,213 @@ fn observability_profiles(runtime_status: &str) -> Value {
             "prove PC-use context, target, queue, and runner receipt chain stays non-dispatching",
             "fill and import the Browser final validation result template"
         ]
+    })
+}
+
+fn observability_proof_freshness(roots: &AgentPluginRuntimeRoots) -> Value {
+    let generated_at_ms = current_epoch_millis();
+    let mut missing = Vec::new();
+    let mut stale = Vec::new();
+
+    track_required_proof_file(
+        "browser.latest_payload",
+        &roots.browser_latest_payload,
+        generated_at_ms,
+        &mut missing,
+        &mut stale,
+    );
+    track_required_proof_file(
+        "chrome.latest_payload",
+        &roots.chrome_latest_payload,
+        generated_at_ms,
+        &mut missing,
+        &mut stale,
+    );
+    track_required_proof_file(
+        "chrome.latest_runner_receipt",
+        &roots.chrome_latest_runner_receipt,
+        generated_at_ms,
+        &mut missing,
+        &mut stale,
+    );
+    track_required_proof_file(
+        "chrome.adapter_manifest",
+        &roots.chrome_adapter_manifest,
+        generated_at_ms,
+        &mut missing,
+        &mut stale,
+    );
+    track_required_proof_file(
+        "pc_use.latest_payload",
+        &roots.pc_use_latest_payload,
+        generated_at_ms,
+        &mut missing,
+        &mut stale,
+    );
+    track_required_proof_file(
+        "pc_use.latest_runner_receipt",
+        &roots.pc_use_latest_receipt,
+        generated_at_ms,
+        &mut missing,
+        &mut stale,
+    );
+
+    let status = if !missing.is_empty() {
+        "missing_runtime_evidence"
+    } else if !stale.is_empty() {
+        "stale_runtime_evidence"
+    } else {
+        "latest_runtime_evidence_present"
+    };
+
+    serde_json::json!({
+        "status": status,
+        "generated_at_ms": generated_at_ms,
+        "freshness_window_ms": OBSERVABILITY_FRESHNESS_WINDOW_MS,
+        "missing_required_files": missing,
+        "stale_required_files": stale,
+        "required_files": {
+            "browser_latest_payload": proof_file_probe(
+                &roots.browser_latest_payload,
+                Some(AGENT_BROWSER_PAYLOAD_QUEUE_ITEM_SCHEMA),
+                Some("/payload_packet/schema"),
+                generated_at_ms,
+            ),
+            "chrome_latest_payload": proof_file_probe(
+                &roots.chrome_latest_payload,
+                Some(AGENT_CHROME_PAYLOAD_QUEUE_ITEM_SCHEMA),
+                Some("/payload_packet/schema"),
+                generated_at_ms,
+            ),
+            "chrome_latest_runner_receipt": proof_file_probe(
+                &roots.chrome_latest_runner_receipt,
+                Some(AGENT_CHROME_RUNNER_RECEIPT_SCHEMA),
+                None,
+                generated_at_ms,
+            ),
+            "chrome_adapter_manifest": proof_file_probe(
+                &roots.chrome_adapter_manifest,
+                Some(AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA),
+                None,
+                generated_at_ms,
+            ),
+            "pc_use_latest_payload": proof_file_probe(
+                &roots.pc_use_latest_payload,
+                Some(AGENT_PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA),
+                Some("/payload_packet/schema"),
+                generated_at_ms,
+            ),
+            "pc_use_latest_runner_receipt": proof_file_probe(
+                &roots.pc_use_latest_receipt,
+                Some(AGENT_PC_USE_RUNNER_RECEIPT_SCHEMA),
+                None,
+                generated_at_ms,
+            ),
+        },
+        "latest_optional_execution_files": {
+            "chrome_execution": latest_json_file_probe(&roots.chrome_execution_dir, generated_at_ms),
+        },
+        "manual_session_state_required": [
+            "WebPreview final validation bundle copy/send state",
+            "WebPreview final result template copy/send state",
+            "WebPreview imported final result state"
+        ],
+    })
+}
+
+fn track_required_proof_file(
+    label: &'static str,
+    path: &Path,
+    generated_at_ms: u64,
+    missing: &mut Vec<&'static str>,
+    stale: &mut Vec<&'static str>,
+) {
+    let metadata = match fs::metadata(path) {
+        Ok(metadata) if metadata.is_file() => metadata,
+        _ => {
+            missing.push(label);
+            return;
+        }
+    };
+
+    if modified_at_ms(&metadata)
+        .map(|modified_at_ms| {
+            generated_at_ms.saturating_sub(modified_at_ms) > OBSERVABILITY_FRESHNESS_WINDOW_MS
+        })
+        .unwrap_or(false)
+    {
+        stale.push(label);
+    }
+}
+
+fn proof_file_probe(
+    path: &Path,
+    expected_schema: Option<&str>,
+    nested_schema_pointer: Option<&str>,
+    generated_at_ms: u64,
+) -> Value {
+    let mut probe = file_probe(path, expected_schema, nested_schema_pointer, true);
+    if let Some(modified_at_ms) = probe.get("modified_at_ms").and_then(Value::as_u64) {
+        probe["age_seconds"] = serde_json::json!(age_seconds(generated_at_ms, modified_at_ms));
+        probe["fresh_within_window"] = serde_json::json!(
+            generated_at_ms.saturating_sub(modified_at_ms) <= OBSERVABILITY_FRESHNESS_WINDOW_MS
+        );
+    }
+    probe
+}
+
+fn latest_json_file_probe(directory: &Path, generated_at_ms: u64) -> Value {
+    let entries = match fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return serde_json::json!({
+                "directory": path_string(directory),
+                "exists": false,
+                "latest_file": null,
+            });
+        }
+        Err(error) => {
+            return serde_json::json!({
+                "directory": path_string(directory),
+                "exists": false,
+                "latest_file": null,
+                "error": error.to_string(),
+            });
+        }
+    };
+
+    let mut latest_path = None;
+    let mut latest_modified_at_ms = None;
+    let mut latest_byte_len = 0;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|extension| extension.to_str()) != Some("json") {
+            continue;
+        }
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+        let modified_ms = modified_at_ms(&metadata).unwrap_or_default();
+        if latest_modified_at_ms
+            .map(|latest| modified_ms > latest)
+            .unwrap_or(true)
+        {
+            latest_byte_len = metadata.len();
+            latest_modified_at_ms = Some(modified_ms);
+            latest_path = Some(path);
+        }
+    }
+
+    serde_json::json!({
+        "directory": path_string(directory),
+        "exists": true,
+        "latest_file": latest_path.as_ref().map(path_string),
+        "latest_modified_at_ms": latest_modified_at_ms,
+        "latest_age_seconds": latest_modified_at_ms.map(|modified_at_ms| age_seconds(generated_at_ms, modified_at_ms)),
+        "latest_byte_len": latest_path.as_ref().map(|_| latest_byte_len),
     })
 }
 
@@ -1109,6 +1320,10 @@ fn modified_at_ms(metadata: &fs::Metadata) -> Option<u64> {
         .modified()
         .ok()
         .and_then(|modified| epoch_millis(modified))
+}
+
+fn age_seconds(generated_at_ms: u64, modified_at_ms: u64) -> u64 {
+    generated_at_ms.saturating_sub(modified_at_ms) / 1000
 }
 
 fn current_epoch_millis() -> u64 {
