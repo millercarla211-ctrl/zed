@@ -52,7 +52,7 @@ use super::{
         AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
         AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_FILE_NAME,
         AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
-        AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
+        AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA, AGENT_PLUGIN_ASSET_READINESS_SUMMARY_SCHEMA,
     },
     agent_plugin_bootstrap_tool::AgentPluginBootstrapTool,
     agent_plugin_catalog_tool::AgentPluginCatalogTool,
@@ -521,6 +521,7 @@ fn chrome_status(
                 None,
                 include_latest_handoff,
             ),
+            "asset_readiness_summary": asset_readiness_summary_probe(&roots.asset_provisioning_receipt),
             "adapter_root": dir_probe(&roots.chrome_adapter_root),
             "adapter_manifest": file_probe(
                 &roots.chrome_adapter_manifest,
@@ -1324,6 +1325,9 @@ fn observability_proof_freshness(roots: &AgentPluginRuntimeRoots) -> Value {
                 None,
                 generated_at_ms,
             ),
+            "chrome_asset_readiness_summary": asset_readiness_summary_probe(
+                &roots.asset_provisioning_receipt,
+            ),
             "chrome_adapter_manifest": proof_file_probe(
                 &roots.chrome_adapter_manifest,
                 Some(AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA),
@@ -1911,6 +1915,68 @@ fn json_summary(
             .as_object()
             .map(|object| object.keys().cloned().collect::<Vec<_>>())
             .unwrap_or_default(),
+    })
+}
+
+fn asset_readiness_summary_probe(path: &Path) -> Value {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return serde_json::json!({
+                "state": "missing_receipt",
+                "path": path_string(path),
+            });
+        }
+        Err(error) => {
+            return serde_json::json!({
+                "state": "read_error",
+                "path": path_string(path),
+                "error": error.to_string(),
+            });
+        }
+    };
+    let parsed = match serde_json::from_slice::<Value>(&bytes) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            return serde_json::json!({
+                "state": "parse_error",
+                "path": path_string(path),
+                "error": error.to_string(),
+            });
+        }
+    };
+
+    let receipt_schema = parsed.get("schema").and_then(Value::as_str);
+    let summary = parsed.get("asset_readiness_summary");
+    let summary_schema = summary
+        .and_then(|summary| summary.get("schema"))
+        .and_then(Value::as_str);
+    let receipt_schema_matches =
+        receipt_schema == Some(AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA);
+    let summary_schema_matches =
+        summary_schema == Some(AGENT_PLUGIN_ASSET_READINESS_SUMMARY_SCHEMA);
+    let state = if receipt_schema_matches && summary_schema_matches {
+        "ready"
+    } else if !receipt_schema_matches {
+        "receipt_schema_mismatch"
+    } else {
+        "summary_missing_or_schema_mismatch"
+    };
+
+    serde_json::json!({
+        "state": state,
+        "path": path_string(path),
+        "receipt_schema": receipt_schema,
+        "receipt_schema_matches": receipt_schema_matches,
+        "summary_schema": summary_schema,
+        "summary_schema_matches": summary_schema_matches,
+        "status": summary.and_then(|summary| summary.get("status")).and_then(Value::as_str),
+        "ready": summary.and_then(|summary| summary.get("ready")).and_then(Value::as_bool),
+        "ready_count": summary.and_then(|summary| summary.get("ready_count")).and_then(Value::as_u64),
+        "required_count": summary.and_then(|summary| summary.get("required_count")).and_then(Value::as_u64),
+        "blockers": summary.and_then(|summary| summary.get("blockers")).cloned().unwrap_or_else(|| serde_json::json!([])),
+        "warnings": summary.and_then(|summary| summary.get("warnings")).cloned().unwrap_or_else(|| serde_json::json!([])),
+        "next_actions": summary.and_then(|summary| summary.get("next_actions")).cloned().unwrap_or_else(|| serde_json::json!([])),
     })
 }
 

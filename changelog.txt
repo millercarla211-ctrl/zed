@@ -1,3 +1,12 @@
+[2026-05-16] - Agent Plugin Runtime Asset Readiness Runtime Status
+
+ADDED:
+- Runtime status now extracts `asset_readiness_summary` from the managed asset provisioning receipt.
+- Managed Chrome status and observability proof freshness expose the summary state, ready flag, ready counts, blockers, warnings, and next actions without requiring agents to read the receipt file directly.
+
+NOTES:
+- This is read-only receipt inspection only; it does not copy extensions, download packages, run Node, launch Chrome, dispatch browser input, run `just run`, or touch real browser profiles.
+
 [2026-05-16] - Agent Plugin Runtime Asset Readiness Summary
 
 ADDED:
