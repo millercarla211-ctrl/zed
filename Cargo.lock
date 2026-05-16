@@ -6621,9 +6621,12 @@ name = "font_panel"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "db",
  "editor",
  "fs",
  "gpui",
+ "serde",
+ "serde_json",
  "settings",
  "theme",
  "theme_settings",
@@ -9072,6 +9075,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "assets",
+ "db",
  "editor",
  "gpui",
  "serde",
@@ -11157,8 +11161,13 @@ name = "media_panel"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "db",
  "editor",
+ "futures 0.3.32",
  "gpui",
+ "http_client",
+ "serde",
+ "serde_json",
  "ui",
  "url",
  "web_preview",
@@ -17100,6 +17109,7 @@ name = "shadcn_ui_panel"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "db",
  "editor",
  "gpui",
  "memmap2",

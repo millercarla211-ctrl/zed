@@ -1,3 +1,15 @@
+[2026-05-17] - Agent Plugin Runtime Final Runtime Proof Recheck
+
+FIXED:
+- Synced `Cargo.lock` with the already-declared panel crate dependencies for `font_panel`, `icon_picker`, `media_panel`, and `shadcn_ui_panel`.
+
+CHANGED:
+- Updated `todo.txt` with the current final-runtime proof blocker and next validation target.
+
+NOTES:
+- Attempted the final `just run` proof. The updated recipe reached the zed-plus-cli build phase, but the run failed before launch while compiling `syn` with `rustc` exit code `0xffffffff` after package-cache lock contention.
+- The previous launcher blocker is therefore addressed in recipe code but not yet runtime-proven. No browser, Chrome, Playwright, Node, screenshot, page input, or OS-control action was reached.
+
 [2026-05-17] - Agent Plugin Runtime Final Runtime Launcher Readiness
 
 FIXED:
