@@ -112,6 +112,8 @@ const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_recovery_card.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_inspection_checklist.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_headroom_size_inspection.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_readiness_gate.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA: &str =
@@ -2177,6 +2179,9 @@ impl WebPreviewView {
             "final_runtime_headroom_inspection_checklist_step_count": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_inspection_checklist/steps").and_then(Value::as_array).map(Vec::len),
             "final_runtime_headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
             "final_runtime_headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
+            "final_runtime_headroom_size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
+            "final_runtime_headroom_size_inspection_status": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/size_inspection/status").and_then(Value::as_str),
+            "final_runtime_headroom_size_inspection_command_count": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/size_inspection/commands").and_then(Value::as_array).map(Vec::len),
             "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
             "final_runtime_headroom_readiness_gate_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_readiness_gate/status").and_then(Value::as_str),
             "final_runtime_headroom_readiness_gate_ready": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_readiness_gate/ready_for_just_run").and_then(Value::as_bool),
@@ -2525,6 +2530,8 @@ impl WebPreviewView {
             "headroom_recovery_card_blocked": capacity.pointer("/headroom_recovery_card/blocked").and_then(Value::as_bool),
             "headroom_inspection_checklist_schema": capacity.pointer("/headroom_recovery_plan/inspection_checklist/schema").and_then(Value::as_str),
             "headroom_inspection_checklist_status": capacity.pointer("/headroom_recovery_plan/inspection_checklist/status").and_then(Value::as_str),
+            "headroom_size_inspection_schema": capacity.pointer("/headroom_recovery_plan/size_inspection/schema").and_then(Value::as_str),
+            "headroom_size_inspection_status": capacity.pointer("/headroom_recovery_plan/size_inspection/status").and_then(Value::as_str),
             "headroom_reclaim_candidates_schema": capacity.pointer("/headroom_reclaim_candidates/schema").and_then(Value::as_str),
             "headroom_reclaim_candidates_status": capacity.pointer("/headroom_reclaim_candidates/status").and_then(Value::as_str),
             "headroom_reclaim_candidate_count": capacity.pointer("/headroom_reclaim_candidates/candidate_reclaim_zones").and_then(Value::as_array).map(Vec::len),
@@ -2544,6 +2551,9 @@ impl WebPreviewView {
             "inspection_checklist_schema": plan.pointer("/inspection_checklist/schema").and_then(Value::as_str),
             "inspection_checklist_status": plan.pointer("/inspection_checklist/status").and_then(Value::as_str),
             "inspection_step_count": plan.pointer("/inspection_checklist/steps").and_then(Value::as_array).map(Vec::len),
+            "size_inspection_schema": plan.pointer("/size_inspection/schema").and_then(Value::as_str),
+            "size_inspection_status": plan.pointer("/size_inspection/status").and_then(Value::as_str),
+            "size_inspection_command_count": plan.pointer("/size_inspection/commands").and_then(Value::as_array).map(Vec::len),
             "candidate_reclaim_zone_count": plan.pointer("/candidate_reclaim_zones").and_then(Value::as_array).map(Vec::len),
             "preserve_policy_count": plan.pointer("/preserve_policy").and_then(Value::as_array).map(Vec::len),
             "target_drive_policy_schema": plan.pointer("/target_drive_policy/schema").and_then(Value::as_str),
@@ -2564,6 +2574,8 @@ impl WebPreviewView {
             "first_action": card.pointer("/first_action/id").and_then(Value::as_str),
             "inspection_checklist_status": card.pointer("/inspection_checklist/status").and_then(Value::as_str),
             "inspection_step_count": card.pointer("/inspection_checklist/step_count").and_then(Value::as_u64),
+            "size_inspection_schema": card.pointer("/inspection_checklist/size_inspection_schema").and_then(Value::as_str),
+            "size_inspection_command_count": card.pointer("/inspection_checklist/size_inspection_command_count").and_then(Value::as_u64),
             "target_drive_policy_schema": card.pointer("/target_drive_policy/schema").and_then(Value::as_str),
             "target_move_allowed_by_default": card.pointer("/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
             "copy_plan_action": card.pointer("/actions/copy_recovery_plan").and_then(Value::as_str),
@@ -2584,6 +2596,8 @@ impl WebPreviewView {
             "forbidden_action_count": checklist.pointer("/forbidden_actions").and_then(Value::as_array).map(Vec::len),
             "target_drive_policy_schema": checklist.pointer("/target_drive_policy/schema").and_then(Value::as_str),
             "target_move_allowed_by_default": checklist.pointer("/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
+            "size_inspection_schema": checklist.pointer("/size_inspection/schema").and_then(Value::as_str),
+            "size_inspection_command_count": checklist.pointer("/size_inspection/commands").and_then(Value::as_array).map(Vec::len),
             "ready_to_cleanup_condition": checklist.pointer("/ready_to_cleanup_condition").and_then(Value::as_str),
             "read_only": checklist.pointer("/read_only").and_then(Value::as_bool),
         })
@@ -2626,6 +2640,8 @@ impl WebPreviewView {
             "forbidden_action_count": candidates.pointer("/forbidden_actions").and_then(Value::as_array).map(Vec::len),
             "target_drive_policy_schema": candidates.pointer("/target_drive_policy/schema").and_then(Value::as_str),
             "target_move_allowed_by_default": candidates.pointer("/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
+            "size_inspection_schema": candidates.pointer("/size_inspection/schema").and_then(Value::as_str),
+            "size_inspection_command_count": candidates.pointer("/size_inspection/commands").and_then(Value::as_array).map(Vec::len),
             "recommended_action": candidates.pointer("/recommended_action").and_then(Value::as_str),
             "copy_action": candidates.pointer("/actions/copy_reclaim_candidates").and_then(Value::as_str),
             "send_action": candidates.pointer("/actions/send_reclaim_candidates").and_then(Value::as_str),
@@ -3358,6 +3374,45 @@ impl WebPreviewView {
             "target_headroom_blocked" => "target_drive_cleanup_required",
             _ => "target_drive_unknown",
         };
+        let size_inspection_status = match recovery_status {
+            "target_drive_cleanup_required" => "manual_size_inspection_recommended",
+            "no_recovery_needed" => "size_inspection_not_required",
+            _ => "target_drive_detection_required",
+        };
+        let size_inspection = serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
+            "status": size_inspection_status,
+            "target_drive_policy": target_drive_policy.clone(),
+            "commands": [
+                {
+                    "id": "measure_target_top_level_children",
+                    "label": "Measure top-level target children by total file size before any manual cleanup.",
+                    "command": "Get-ChildItem -LiteralPath <target-dir> -Force | ForEach-Object { $sizeBytes = if ($_.PSIsContainer) { $sum = (Get-ChildItem -LiteralPath $_.FullName -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum; if ($null -eq $sum) { 0 } else { $sum } } else { $_.Length }; [pscustomobject]@{ Name = $_.Name; FullName = $_.FullName; Kind = if ($_.PSIsContainer) { 'Directory' } else { 'File' }; SizeGB = [math]::Round(($sizeBytes / 1GB), 2); LastWriteTime = $_.LastWriteTime } } | Sort-Object SizeGB -Descending | Select-Object -First 20",
+                    "writes_files": false
+                },
+                {
+                    "id": "measure_workspace_run_logs",
+                    "label": "Measure local Codex run logs separately before deciding whether any are disposable.",
+                    "command": "Get-ChildItem -LiteralPath <workspace-root> -Filter '.codex-just-run*.log' -Force -ErrorAction SilentlyContinue | Select-Object Name, FullName, Length, LastWriteTime",
+                    "writes_files": false
+                },
+                {
+                    "id": "confirm_target_drive_after_manual_cleanup",
+                    "label": "After any operator-performed cleanup, confirm target-drive free space again.",
+                    "command": "Get-PSDrive -Name <target-drive-letter>",
+                    "writes_files": false
+                }
+            ],
+            "interpretation_rules": [
+                "Large size is not permission to delete; only the operator may decide what is rebuildable.",
+                "Prefer explicitly rebuildable target/cache artifacts over source trees, models, tools, inspirations, assets, or unmanaged user folders.",
+                "After manual cleanup, rerun the final runtime capacity packet and just --dry-run run before just run."
+            ],
+            "read_only": true,
+            "dispatches_input": false,
+            "deletes_files": false,
+            "moves_target_dir": false
+        });
         let first_action = match recovery_status {
             "no_recovery_needed" => serde_json::json!({
                 "id": "continue_to_manual_panel_and_runtime_proof",
@@ -3398,6 +3453,7 @@ impl WebPreviewView {
                 "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                 "status": inspection_status,
                 "target_drive_policy": target_drive_policy.clone(),
+                "size_inspection": size_inspection.clone(),
                 "steps": [
                     {
                         "id": "confirm_target_drive",
@@ -3415,6 +3471,12 @@ impl WebPreviewView {
                         "id": "rank_rebuildable_children",
                         "label": "Rank large target/cache children manually before deleting anything outside the editor.",
                         "command": "Get-ChildItem -LiteralPath <target-dir> -Directory -Force | Sort-Object LastWriteTime -Descending",
+                        "writes_files": false
+                    },
+                    {
+                        "id": "measure_target_size",
+                        "label": "Run the read-only size inspection command pack to rank rebuildable target/cache space.",
+                        "command": "Use size_inspection.commands.measure_target_top_level_children",
                         "writes_files": false
                     },
                     {
@@ -3448,9 +3510,11 @@ impl WebPreviewView {
             "safe_inspection_commands": [
                 "Get-PSDrive -Name <target-drive-letter>",
                 "Get-ChildItem -LiteralPath <target-dir> -Force",
+                "Use size_inspection.commands.measure_target_top_level_children",
                 "Get-ChildItem -LiteralPath <workspace-root> -Directory -Force | Sort-Object LastWriteTime -Descending",
                 "just --dry-run run"
             ],
+            "size_inspection": size_inspection,
             "candidate_reclaim_zones": [
                 {
                     "id": "workspace_target_dir",
@@ -3520,6 +3584,8 @@ impl WebPreviewView {
                 "status": plan.pointer("/inspection_checklist/status").and_then(Value::as_str),
                 "step_count": plan.pointer("/inspection_checklist/steps").and_then(Value::as_array).map(Vec::len),
                 "first_step": plan.pointer("/inspection_checklist/steps/0/id").and_then(Value::as_str),
+                "size_inspection_schema": plan.pointer("/size_inspection/schema").and_then(Value::as_str),
+                "size_inspection_command_count": plan.pointer("/size_inspection/commands").and_then(Value::as_array).map(Vec::len),
                 "preserve_root_count": plan.pointer("/inspection_checklist/preserve_roots").and_then(Value::as_array).map(Vec::len),
                 "forbidden_action_count": plan.pointer("/inspection_checklist/forbidden_actions").and_then(Value::as_array).map(Vec::len),
                 "ready_to_cleanup_condition": plan.pointer("/inspection_checklist/ready_to_cleanup_condition").and_then(Value::as_str),
@@ -3897,6 +3963,7 @@ impl WebPreviewView {
             "preserve_roots": plan.pointer("/inspection_checklist/preserve_roots").cloned().unwrap_or_else(|| serde_json::json!([])),
             "forbidden_actions": plan.pointer("/inspection_checklist/forbidden_actions").cloned().unwrap_or_else(|| serde_json::json!([])),
             "safe_inspection_commands": plan.pointer("/safe_inspection_commands").cloned().unwrap_or_else(|| serde_json::json!([])),
+            "size_inspection": plan.pointer("/size_inspection").cloned().unwrap_or_else(|| serde_json::json!({})),
             "ready_to_cleanup_condition": plan.pointer("/inspection_checklist/ready_to_cleanup_condition").and_then(Value::as_str),
             "ready_condition": plan.pointer("/ready_condition").and_then(Value::as_str),
             "recommended_action": recommended_action,
@@ -6074,6 +6141,8 @@ impl WebPreviewView {
                     "headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                     "headroom_recovery_plan_field": "headroom_recovery_plan",
                     "headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                    "headroom_size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
+                    "headroom_size_inspection_field": "headroom_recovery_plan.size_inspection",
                     "headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                     "headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                     "headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
@@ -6102,6 +6171,8 @@ impl WebPreviewView {
                     "target_move_allowed_by_default": false,
                     "recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
                     "inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                    "size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
+                    "size_inspection_field": "size_inspection",
                     "inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                     "inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                     "readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
@@ -6127,6 +6198,7 @@ impl WebPreviewView {
                     "source_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                     "target_drive_policy_schema": AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA,
                     "inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                    "size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
                     "inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                     "inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                     "copy_action": "copy_agent_browser_final_runtime_headroom_recovery_card",
@@ -6143,6 +6215,8 @@ impl WebPreviewView {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                     "source_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                     "target_drive_policy_schema": AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA,
+                    "size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
+                    "size_inspection_field": "size_inspection",
                     "copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                     "send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                     "latest_summary": self.latest_agent_browser_final_runtime_headroom_inspection_checklist_summary(),
@@ -6158,6 +6232,8 @@ impl WebPreviewView {
                     "source_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                     "source_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
                     "target_drive_policy_schema": AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA,
+                    "size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
+                    "size_inspection_field": "size_inspection",
                     "copy_action": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
                     "send_action": "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent",
                     "latest_summary": self.latest_agent_browser_final_runtime_headroom_reclaim_candidates_summary(),
@@ -7252,6 +7328,12 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "final_runtime_headroom_inspection_checklist_schema": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_schema")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_size_inspection_schema": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_size_inspection_schema")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_size_inspection_field": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_size_inspection_field")
                     .and_then(Value::as_str),
                 "final_runtime_headroom_inspection_checklist_copy_action": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_copy_action")
@@ -18341,6 +18423,15 @@ impl WebPreviewView {
                     "final_runtime_headroom_inspection_checklist": Self::agent_browser_final_runtime_headroom_inspection_checklist_summary(
                         &agent_browser_final_runtime_headroom_inspection_checklist
                     ),
+                    "final_runtime_headroom_size_inspection_visible": true,
+                    "final_runtime_headroom_size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
+                    "final_runtime_headroom_size_inspection_status": agent_browser_final_runtime_proof_capacity
+                        .pointer("/headroom_recovery_plan/size_inspection/status")
+                        .and_then(Value::as_str),
+                    "final_runtime_headroom_size_inspection_command_count": agent_browser_final_runtime_proof_capacity
+                        .pointer("/headroom_recovery_plan/size_inspection/commands")
+                        .and_then(Value::as_array)
+                        .map(Vec::len),
                     "final_runtime_headroom_readiness_gate_visible": true,
                     "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
                     "final_runtime_headroom_readiness_gate_copy_action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
@@ -24178,6 +24269,7 @@ impl WebPreviewView {
                             "final_runtime_headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                             "final_runtime_headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
                             "final_runtime_headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                            "final_runtime_headroom_size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
                             "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
                             "final_runtime_headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
                             "final_runtime_blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
@@ -24310,6 +24402,8 @@ impl WebPreviewView {
                             "headroom_recovery_plan_field": "headroom_recovery_plan",
                             "headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                             "headroom_inspection_checklist_field": "headroom_recovery_plan.inspection_checklist",
+                            "headroom_size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
+                            "headroom_size_inspection_field": "headroom_recovery_plan.size_inspection",
                             "headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                             "headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                             "headroom_inspection_checklist_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_inspection_checklist",
@@ -24496,6 +24590,7 @@ impl WebPreviewView {
                             {"id": "browser.validation.final_runtime_headroom_recovery", "state": "available", "description": "Copy or send the non-destructive target-drive recovery plan before final just run proof."},
                             {"id": "browser.validation.final_runtime_headroom_readiness_gate", "state": "available", "description": "Copy or send the compact target-drive headroom gate before final just run proof."},
                             {"id": "browser.validation.final_runtime_headroom_reclaim_candidates", "state": "available", "description": "Copy or send read-only target-drive reclaim candidates with preserve rules before manual cleanup."},
+                            {"id": "browser.validation.final_runtime_headroom_size_inspection", "state": "available", "description": "Expose read-only target/cache size inspection commands before manual headroom recovery."},
                             {"id": "browser.validation.final_runtime_blocker_board", "state": "available", "description": "Copy or send the ordered final-runtime blocker board across panel-result, panel-proof, and target-drive gates."},
                             {"id": "browser.validation.final_proof_audit", "state": "available", "description": "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},

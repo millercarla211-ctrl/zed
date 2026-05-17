@@ -1,3 +1,16 @@
+[2026-05-17] - Final Runtime Headroom Size Inspection
+
+ADDED:
+- `crates/web_preview/src/web_preview_view.rs` now embeds `agent_browser_final_runtime_headroom_size_inspection` inside final-runtime headroom recovery plans, with read-only target/cache size measurement commands and interpretation rules.
+- Recovery cards, inspection checklists, reclaim-candidate packets, status summaries, and final-runtime capacity summaries now expose the size-inspection schema/status/count metadata for AI panels.
+
+CHANGED:
+- Agent and WebPreview plugin catalogs now advertise the final-runtime headroom size-inspection schema, field, and Browser capability beside the existing recovery/checklist/readiness/reclaim/blocker handoffs.
+- `todo.txt` now records the headroom size-inspection slice while keeping the feature set at 99/100 until live UI exercise and final runtime proof can run with enough G: headroom.
+
+NOTES:
+- This slice is read-only and manual-recovery oriented. It does not delete files, move target directories, run Cargo, run `just run`, launch browsers, dispatch input, or mutate browser profiles.
+
 [2026-05-17] - Final Runtime Target Drive Policy Handoff
 
 ADDED:
