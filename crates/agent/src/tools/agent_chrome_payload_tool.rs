@@ -325,11 +325,9 @@ impl AgentTool for AgentChromePayloadQueueTool {
                     format!("{} queued bytes", queue_item_json.len()),
                 ],
             );
-            let authorize = cx
-                .update(|cx| {
-                    event_stream.authorize(self.initial_title(Ok(input.clone()), cx), context, cx)
-                })
-                .map_err(|error| error.to_string())?;
+            let authorize = cx.update(|cx| {
+                event_stream.authorize(self.initial_title(Ok(input.clone()), cx), context, cx)
+            });
             authorize.await.map_err(|error| error.to_string())?;
 
             fs::create_dir_all(&queue.queue_dir).map_err(|error| {

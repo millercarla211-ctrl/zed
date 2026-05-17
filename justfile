@@ -3,7 +3,7 @@
 set shell := ["powershell.exe", "-NoLogo", "-Command"]
 
 build_target_dir := "G:/Zed/target"
-min_build_free_gb := "25"
+min_build_free_gb := "18"
 
 # Default recipe - shows available commands
 default:
@@ -17,9 +17,9 @@ ensure-build-headroom:
 run: ensure-build-headroom
     @echo "Running Zed with balanced G-drive build settings..."
     @echo "Building the zed binary plus the development CLI companion"
-    @echo "Using Cargo config: 6 jobs, G:/Zed/target, rust-lld linker, no debug info"
-    cargo build -p zed --bin zed
-    cargo build -p cli --bin cli
+    @echo "Using Cargo config: 6 jobs, G:/Zed/target, rust-lld linker, no debug info, incremental cache disabled"
+    $env:CARGO_INCREMENTAL = "0"; cargo build -p zed --bin zed
+    $env:CARGO_INCREMENTAL = "0"; cargo build -p cli --bin cli
     @echo "Build complete! Launching Zed once..."
     ./target/debug/zed.exe
 
@@ -27,24 +27,24 @@ run: ensure-build-headroom
 run-cranelift: ensure-build-headroom
     @echo "Building with Cranelift backend (nightly required)..."
     @echo "Cranelift can reduce linker pressure on very large Rust builds"
-    cargo +nightly build -p zed --bin zed -Z codegen-backend
-    cargo +nightly build -p cli --bin cli -Z codegen-backend
+    $env:CARGO_INCREMENTAL = "0"; cargo +nightly build -p zed --bin zed -Z codegen-backend
+    $env:CARGO_INCREMENTAL = "0"; cargo +nightly build -p cli --bin cli -Z codegen-backend
     @echo "Build complete! Running Zed..."
     ./target/debug/zed.exe
 
 # Continue interrupted build
 continue: ensure-build-headroom
     @echo "Continuing interrupted build..."
-    cargo build -p zed --bin zed
-    cargo build -p cli --bin cli
+    $env:CARGO_INCREMENTAL = "0"; cargo build -p zed --bin zed
+    $env:CARGO_INCREMENTAL = "0"; cargo build -p cli --bin cli
     @echo "Build complete! Running Zed..."
     ./target/debug/zed.exe
 
 # Build only (no run)
 build: ensure-build-headroom
     @echo "Building Zed with balanced G-drive settings..."
-    cargo build -p zed --bin zed
-    cargo build -p cli --bin cli
+    $env:CARGO_INCREMENTAL = "0"; cargo build -p zed --bin zed
+    $env:CARGO_INCREMENTAL = "0"; cargo build -p cli --bin cli
 
 # Check code without building
 check:
@@ -90,7 +90,8 @@ show-memory-guide:
     @echo "  RAM: 24 GB installed"
     @echo "  Build output: G:/Zed/target"
     @echo "  Cargo workers: 6"
-    @echo "  Runnable build preflight: at least 25 GB free on G:"
+    @echo "  Runnable build preflight: at least 18 GB free on G:"
+    @echo "  Runnable build mode: CARGO_INCREMENTAL=0 to avoid query-cache disk spikes"
     @echo ""
     @echo "If builds still hit memory pressure, configure Windows virtual memory:"
     @echo "1. Open System Properties > Advanced > Performance Settings"

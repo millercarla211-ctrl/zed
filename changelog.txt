@@ -1,3 +1,34 @@
+[2026-05-17] - Agent Plugin Runtime Observability Final Proof
+
+FIXED:
+- Corrected Agent plugin tool authorization calls to match the existing async `cx.update` task pattern, so Browser, managed Chrome, PC-use, bootstrap, asset provisioner, runner gate, and adapter tools compile cleanly.
+- Fixed stale plugin runtime-status imports for managed Chrome queue inspection and PC-use context inspection.
+- Fixed WebPreview compile blockers in the session manifest recursion budget, Windows WebView2 BOOL handling, active URL fallback, profile context field, and Agent Panel append window signature.
+- Fixed asset panel compile blockers in Font Panel query comparisons and Media Panel remote preview URL ownership, remote asset dedupe keys, and static remote asset catalog storage.
+
+CHANGED:
+- Runnable Just recipes now use the lean `CARGO_INCREMENTAL=0` zed-plus-cli proof path with an 18 GB preflight threshold, matching the observed low-headroom Windows checkout while keeping the canonical `just run` validation path intact.
+- Added stable tooltip ids to Font, Icon, Media, and shadcn panel status chips so GPUI tooltip handling compiles consistently.
+
+VERIFIED:
+- Ran `rustfmt` on all touched Rust files.
+- Ran `git diff --check`.
+- Ran `just --dry-run run`.
+- Ran `just run`; it built `zed`, built `cli`, launched `./target/debug/zed.exe`, and exited with code 0.
+
+NOTES:
+- Agent Plugin Runtime Observability is now 100/100 by the repo's current proof gate. The next 100-point set is Browser/Chrome Functional Plugin Execution Hardening, focused on screenshot annotation, inspect element, DevTools, responsive viewport, and managed Chrome handoff functionality.
+- After the successful proof, `G:` is around 17 GB free, below the 18 GB guard. Avoid more heavy runtime proof loops until space is freed or the target directory moves.
+
+[2026-05-17] - Agent Plugin Runtime Lean Runtime Proof Recipe
+
+CHANGED:
+- `just run`, `just continue`, `just run-cranelift`, and `just build` now invoke Cargo with `CARGO_INCREMENTAL=0` to avoid the incremental query-cache disk spike that previously exhausted `G:`.
+- Lowered the runnable build headroom guard from 25 GB to 18 GB because the proof recipes no longer write incremental query caches.
+
+NOTES:
+- This keeps the canonical `just run` proof path intact while making it more reliable on the current low-headroom Windows checkout. No cleanup, browser launch, Playwright run, screenshot, page input, or OS-control action was performed by this recipe edit.
+
 [2026-05-17] - Agent Plugin Runtime Catalog Compile Readiness
 
 FIXED:

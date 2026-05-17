@@ -4690,7 +4690,7 @@ impl WebPreviewView {
             .pointer("/latest_receipt/read/url")
             .or_else(|| status.pointer("/latest_request/read/url"))
             .and_then(Value::as_str)
-            .or_else(|| self.active_url.as_ref().map(|url| url.as_ref()))
+            .or_else(|| Some(self.active_url.as_ref()))
             && let Some(url_block) = self.url_attachment_block(url)
         {
             blocks.push(url_block);
@@ -14108,7 +14108,7 @@ impl WebPreviewView {
             },
             "profile_context": {
                 "workspace_id": self.workspace_context.workspace_id.as_ref(),
-                "profile_id": self.workspace_context.profile_id.as_ref(),
+                "profile_id": self.workspace_context.preview_key.as_ref(),
                 "profile_dir": self.workspace_context.profile_dir.to_string_lossy(),
             },
             "dispatch_note": "Cache reset is planned for audit only; no native browsing-data command is sent by this trace.",
@@ -17261,7 +17261,7 @@ impl WebPreviewView {
     fn append_content_blocks_to_agent_panel(
         &mut self,
         blocks: Vec<acp::ContentBlock>,
-        window: &mut Window,
+        window: &Window,
         cx: &mut Context<Self>,
     ) {
         if blocks.is_empty() {

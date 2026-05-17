@@ -244,7 +244,11 @@ impl ManagedChromePlaywrightExecutionInspector {
             {
                 continue;
             }
-            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            let Some(file_name) = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(str::to_owned)
+            else {
                 continue;
             };
             let kind = if file_name.starts_with("managed-chrome-execution-receipt-") {
@@ -264,7 +268,7 @@ impl ManagedChromePlaywrightExecutionInspector {
             entries.push(ExecutionEntry {
                 kind,
                 path,
-                file_name: file_name.to_string(),
+                file_name,
                 modified_ms,
                 bytes,
             });

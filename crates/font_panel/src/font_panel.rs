@@ -379,7 +379,7 @@ impl FontPanel {
 
         if source_filter.matches(FontSource::System) {
             for font in &self.fonts {
-                exact_match |= font.as_ref().eq_ignore_ascii_case(query.as_str());
+                exact_match |= font.as_ref().eq_ignore_ascii_case(query);
                 if !self.font_matches(font.as_ref(), &query_terms) {
                     continue;
                 }
@@ -396,7 +396,7 @@ impl FontPanel {
 
         if source_filter.matches(FontSource::Web) {
             for font_name in google_fonts::GOOGLE_FONT_FAMILIES {
-                exact_match |= font_name.eq_ignore_ascii_case(query.as_str());
+                exact_match |= font_name.eq_ignore_ascii_case(query);
                 if !self.font_matches(font_name, &query_terms) {
                     continue;
                 }
@@ -1226,12 +1226,15 @@ impl FontPanel {
                             .items_center()
                             .child(Label::new("Fonts").size(LabelSize::Small))
                             .child(
-                                div().tooltip(Tooltip::text(readiness_tooltip)).child(
-                                    Label::new(readiness_label)
-                                        .size(LabelSize::XSmall)
-                                        .color(readiness_color)
-                                        .truncate(),
-                                ),
+                                div()
+                                    .id("font-panel-readiness-status")
+                                    .tooltip(Tooltip::text(readiness_tooltip))
+                                    .child(
+                                        Label::new(readiness_label)
+                                            .size(LabelSize::XSmall)
+                                            .color(readiness_color)
+                                            .truncate(),
+                                    ),
                             ),
                     )
                     .child(
@@ -1240,12 +1243,15 @@ impl FontPanel {
                             .items_center()
                             .when_some(working_set_label, |this, working_set_label| {
                                 this.child(
-                                    div().tooltip(Tooltip::text(working_set_tooltip)).child(
-                                        Label::new(working_set_label)
-                                            .size(LabelSize::XSmall)
-                                            .color(Color::Muted)
-                                            .truncate(),
-                                    ),
+                                    div()
+                                        .id("font-panel-working-set-status")
+                                        .tooltip(Tooltip::text(working_set_tooltip))
+                                        .child(
+                                            Label::new(working_set_label)
+                                                .size(LabelSize::XSmall)
+                                                .color(Color::Muted)
+                                                .truncate(),
+                                        ),
                                 )
                             })
                             .child(

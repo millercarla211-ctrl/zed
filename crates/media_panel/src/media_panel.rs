@@ -1010,7 +1010,7 @@ impl MediaPanel {
         cx: &mut Context<Self>,
     ) {
         let Some(preview_url) =
-            local_media_preview_url(&label, kind, MediaPreviewSource::Remote(url))
+            local_media_preview_url(&label, kind, MediaPreviewSource::Remote(url.clone()))
         else {
             self.status = Some("Could not create media preview".into());
             cx.notify();
@@ -2279,12 +2279,15 @@ impl Render for MediaPanel {
                                     .items_center()
                                     .child(Label::new("Media").size(LabelSize::Small))
                                     .child(
-                                        div().tooltip(Tooltip::text(readiness_tooltip)).child(
-                                            Label::new(readiness_label)
-                                                .size(LabelSize::XSmall)
-                                                .color(readiness_color)
-                                                .truncate(),
-                                        ),
+                                        div()
+                                            .id("media-panel-readiness-status")
+                                            .tooltip(Tooltip::text(readiness_tooltip))
+                                            .child(
+                                                Label::new(readiness_label)
+                                                    .size(LabelSize::XSmall)
+                                                    .color(readiness_color)
+                                                    .truncate(),
+                                            ),
                                     ),
                             )
                             .child(
@@ -2308,6 +2311,7 @@ impl Render for MediaPanel {
                                     .when_some(working_set_label, |this, working_set_label| {
                                         this.child(
                                             div()
+                                                .id("media-panel-working-set-status")
                                                 .tooltip(Tooltip::text(working_set_tooltip))
                                                 .child(
                                                     Label::new(working_set_label)
@@ -4171,7 +4175,7 @@ async fn fetch_json<T: for<'de> Deserialize<'de>>(
 
 fn dedupe_remote_assets(assets: &mut Vec<RemoteMediaAsset>) {
     let mut seen = HashSet::<SharedString>::with_capacity(assets.len());
-    assets.retain(|asset| seen.insert(asset.url.clone()));
+    assets.retain(|asset| seen.insert(asset.url.as_ref().into()));
 }
 
 fn media_kind_for_mime(mime: &str) -> Option<DraggedMediaKind> {
@@ -5253,7 +5257,9 @@ fn contains_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
 }
 
 fn remote_media_assets() -> &'static [RemoteMediaAsset] {
-    &[
+    static ASSETS: OnceLock<Vec<RemoteMediaAsset>> = OnceLock::new();
+
+    ASSETS.get_or_init(|| vec![
         RemoteMediaAsset::borrowed(
             "wikimedia-fronalpstock",
             "Fronalpstock landscape",
@@ -5398,7 +5404,7 @@ fn remote_media_assets() -> &'static [RemoteMediaAsset] {
             "royalty-free sample",
             "music mp3 sample soundtrack background audio",
         ),
-    ]
+    ]).as_slice()
 }
 
 struct FreeMediaSource {

@@ -258,7 +258,11 @@ impl AgentPcUseRunnerReceiptInspector {
             {
                 continue;
             }
-            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            let Some(file_name) = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(str::to_owned)
+            else {
                 continue;
             };
             if file_name != AGENT_PC_USE_RUNNER_RECEIPT_FILE_NAME
@@ -275,7 +279,7 @@ impl AgentPcUseRunnerReceiptInspector {
             let bytes = metadata.map(|metadata| metadata.len()).unwrap_or_default();
             entries.push(ReceiptEntry {
                 path,
-                file_name: file_name.to_string(),
+                file_name: file_name.clone(),
                 modified_ms,
                 bytes,
                 is_latest: file_name == AGENT_PC_USE_RUNNER_RECEIPT_FILE_NAME,

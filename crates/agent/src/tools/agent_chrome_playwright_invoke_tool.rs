@@ -154,11 +154,9 @@ impl AgentTool for AgentChromePlaywrightInvokeTool {
                     format!("{timeout_ms} ms timeout"),
                 ],
             );
-            let authorize = cx
-                .update(|cx| {
-                    event_stream.authorize(self.initial_title(Ok(input.clone()), cx), context, cx)
-                })
-                .map_err(|error| error.to_string())?;
+            let authorize = cx.update(|cx| {
+                event_stream.authorize(self.initial_title(Ok(input.clone()), cx), context, cx)
+            });
             authorize.await.map_err(|error| error.to_string())?;
 
             let request = invocation.request_value(&readiness, timeout_ms)?;

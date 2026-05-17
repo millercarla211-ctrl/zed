@@ -1,3 +1,5 @@
+#![recursion_limit = "1024"]
+
 #[cfg(target_os = "windows")]
 use gpui::{App, actions};
 #[cfg(target_os = "windows")]

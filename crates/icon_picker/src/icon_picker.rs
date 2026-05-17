@@ -1432,12 +1432,15 @@ impl Render for IconPickerPanel {
                                     .items_center()
                                     .child(Label::new("Icons").size(LabelSize::Small))
                                     .child(
-                                        div().tooltip(Tooltip::text(readiness_tooltip)).child(
-                                            Label::new(readiness_label)
-                                                .size(LabelSize::XSmall)
-                                                .color(readiness_color)
-                                                .truncate(),
-                                        ),
+                                        div()
+                                            .id("icon-picker-readiness-status")
+                                            .tooltip(Tooltip::text(readiness_tooltip))
+                                            .child(
+                                                Label::new(readiness_label)
+                                                    .size(LabelSize::XSmall)
+                                                    .color(readiness_color)
+                                                    .truncate(),
+                                            ),
                                     ),
                             )
                             .child(
@@ -1456,6 +1459,7 @@ impl Render for IconPickerPanel {
                                     .when_some(working_set_label, |this, working_set_label| {
                                         this.child(
                                             div()
+                                                .id("icon-picker-working-set-status")
                                                 .tooltip(Tooltip::text(working_set_tooltip))
                                                 .child(
                                                     Label::new(working_set_label)

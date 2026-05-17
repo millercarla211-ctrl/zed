@@ -239,17 +239,14 @@ impl AgentTool for AgentPcUsePayloadStageTool {
                     format!("{} clipboard characters", packet_json.chars().count()),
                 ],
             );
-            let authorize = cx
-                .update(|cx| {
-                    event_stream.authorize(self.initial_title(Ok(input.clone()), cx), context, cx)
-                })
-                .map_err(|error| error.to_string())?;
+            let authorize = cx.update(|cx| {
+                event_stream.authorize(self.initial_title(Ok(input.clone()), cx), context, cx)
+            });
             authorize.await.map_err(|error| error.to_string())?;
 
             cx.update(|cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(packet_json.clone()));
-            })
-            .map_err(|error| error.to_string())?;
+            });
 
             let output = serde_json::json!({
                 "schema": "zed.agent_plugins.pc_use.action_payload_stage_result.v1",
@@ -392,11 +389,9 @@ impl AgentTool for AgentPcUsePayloadQueueTool {
                     format!("{} queued bytes", queue_item_json.len()),
                 ],
             );
-            let authorize = cx
-                .update(|cx| {
-                    event_stream.authorize(self.initial_title(Ok(input.clone()), cx), context, cx)
-                })
-                .map_err(|error| error.to_string())?;
+            let authorize = cx.update(|cx| {
+                event_stream.authorize(self.initial_title(Ok(input.clone()), cx), context, cx)
+            });
             authorize.await.map_err(|error| error.to_string())?;
 
             fs::create_dir_all(&queue.queue_dir).map_err(|error| {

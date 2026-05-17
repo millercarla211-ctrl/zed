@@ -21,13 +21,13 @@ use webview2_com::{
 };
 use windows::{
     Win32::{
-        Foundation::{BOOL, E_POINTER, HWND, RECT},
+        Foundation::{E_POINTER, HWND, RECT},
         Globalization::{
             GetUserDefaultUILanguage, LCIDToLocaleName, LOCALE_ALLOW_NEUTRAL_NAMES, MAX_LOCALE_NAME,
         },
         UI::{Input::KeyboardAndMouse::SetFocus, WindowsAndMessaging::HCURSOR},
     },
-    core::{HSTRING, IUnknown, Interface, PCWSTR, PWSTR},
+    core::{BOOL, HSTRING, IUnknown, Interface, PCWSTR, PWSTR},
 };
 
 use webview2_com::Microsoft::Web::WebView2::Win32::*;

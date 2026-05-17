@@ -1636,12 +1636,15 @@ impl Render for ShadcnUiPanel {
                                     .items_center()
                                     .child(Label::new("UI").size(LabelSize::Small))
                                     .child(
-                                        div().tooltip(Tooltip::text(readiness_tooltip)).child(
-                                            Label::new(readiness_label)
-                                                .size(LabelSize::XSmall)
-                                                .color(readiness_color)
-                                                .truncate(),
-                                        ),
+                                        div()
+                                            .id("shadcn-ui-readiness-status")
+                                            .tooltip(Tooltip::text(readiness_tooltip))
+                                            .child(
+                                                Label::new(readiness_label)
+                                                    .size(LabelSize::XSmall)
+                                                    .color(readiness_color)
+                                                    .truncate(),
+                                            ),
                                     ),
                             )
                             .child(
@@ -1672,6 +1675,7 @@ impl Render for ShadcnUiPanel {
                                     .when_some(working_set_label, |this, working_set_label| {
                                         this.child(
                                             div()
+                                                .id("shadcn-ui-working-set-status")
                                                 .tooltip(Tooltip::text(working_set_tooltip))
                                                 .child(
                                                     Label::new(working_set_label)

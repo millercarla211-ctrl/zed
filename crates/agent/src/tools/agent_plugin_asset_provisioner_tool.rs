@@ -122,15 +122,9 @@ impl AgentTool for AgentPluginAssetProvisionerTool {
             if input.write_asset_receipt || input.copy_dx_chrome_extension {
                 let context =
                     ToolPermissionContext::new(Self::NAME, plan.permission_values(&input));
-                let authorize = cx
-                    .update(|cx| {
-                        event_stream.authorize(
-                            self.initial_title(Ok(input.clone()), cx),
-                            context,
-                            cx,
-                        )
-                    })
-                    .map_err(|error| error.to_string())?;
+                let authorize = cx.update(|cx| {
+                    event_stream.authorize(self.initial_title(Ok(input.clone()), cx), context, cx)
+                });
                 authorize.await.map_err(|error| error.to_string())?;
             }
 
