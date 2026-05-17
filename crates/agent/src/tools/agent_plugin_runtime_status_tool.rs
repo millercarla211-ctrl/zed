@@ -69,12 +69,18 @@ use project::Project;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+#[cfg(target_os = "windows")]
+use std::os::windows::ffi::OsStrExt;
 use std::{
     env, fs,
     path::{Path, PathBuf},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
+#[cfg(target_os = "windows")]
+use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+#[cfg(target_os = "windows")]
+use windows::core::PCWSTR;
 
 pub const AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME: &str = "inspect_agent_plugin_runtime_status";
 pub const AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA: &str = "zed.agent_plugins.runtime_status.v1";
@@ -124,6 +130,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result_import_receipt.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_proof_capacity.v1";
 const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_proof_audit.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA: &str =
@@ -138,6 +146,7 @@ const PC_USE_RUNNER_READY_OUTCOME: &str = "ready_future_executor_pending";
 
 const MAX_HANDOFF_PREVIEW_BYTES: u64 = 1_048_576;
 const OBSERVABILITY_FRESHNESS_WINDOW_MS: u64 = 24 * 60 * 60 * 1000;
+const AGENT_BROWSER_FINAL_RUNTIME_MIN_FREE_BYTES: u64 = 18 * 1024 * 1024 * 1024;
 
 /// Summarizes Browser, managed Chrome, and PC-use plugin readiness without executing anything.
 ///
@@ -447,11 +456,15 @@ fn inspect_runtime_status(
     let runtime_observability_digest = input
         .include_observability_digest
         .then(|| runtime_observability_digest_value.clone());
+    let final_runtime_proof_capacity_value = final_runtime_proof_capacity(roots);
+    let final_runtime_proof_capacity_summary_value =
+        final_runtime_proof_capacity_summary(&final_runtime_proof_capacity_value);
     let runtime_green_operator_handoff = runtime_green_operator_handoff(
         runtime_request_root_mode(roots),
         status,
         &runtime_green_blocker_summary,
         &runtime_green_readiness_scorecard,
+        &final_runtime_proof_capacity_value,
     );
     let runtime_green_proof_path_value = runtime_green_proof_path(
         status,
@@ -460,11 +473,15 @@ fn inspect_runtime_status(
         &runtime_green_readiness_scorecard,
         &runtime_observability_digest_value,
         &runtime_green_operator_handoff,
+        &final_runtime_proof_capacity_value,
     );
     let runtime_green_proof_path = input
         .include_runtime_green_proof_path
         .then(|| runtime_green_proof_path_value.clone());
-    let runtime_green_claim_gate_value = runtime_green_claim_gate(&runtime_green_proof_path_value);
+    let runtime_green_claim_gate_value = runtime_green_claim_gate(
+        &runtime_green_proof_path_value,
+        &final_runtime_proof_capacity_value,
+    );
     let runtime_green_claim_readiness_value = runtime_green_claim_readiness(
         &runtime_green_proof_path_value,
         &runtime_green_claim_gate_value,
@@ -535,6 +552,8 @@ fn inspect_runtime_status(
         "runtime_green_operator_handoff": runtime_green_operator_handoff,
         "runtime_observability_digest": runtime_observability_digest,
         "runtime_green_proof_path": runtime_green_proof_path,
+        "final_runtime_proof_capacity": final_runtime_proof_capacity_value,
+        "final_runtime_proof_capacity_summary": final_runtime_proof_capacity_summary_value,
         "runtime_green_claim_gate": runtime_green_claim_gate,
         "runtime_green_claim_gate_summary": runtime_green_claim_gate_summary,
         "runtime_green_claim_readiness": runtime_green_claim_readiness_value,
@@ -585,6 +604,7 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
             "payload_queue_inspection": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECTION_SCHEMA,
             "final_validation_result": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
             "final_validation_result_import_receipt": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
+            "final_runtime_proof_capacity": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
             "final_proof_audit": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
             "final_proof_audit_summary": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_green_final_proof_guide": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
@@ -1242,6 +1262,194 @@ fn roots_value(roots: &AgentPluginRuntimeRoots) -> Value {
         "chrome_receipt_dir": path_string(&roots.chrome_receipt_dir),
         "chrome_execution_dir": path_string(&roots.chrome_execution_dir),
         "pc_use_root": path_string(&roots.pc_use_root),
+    })
+}
+
+fn gib_from_bytes(bytes: u64) -> f64 {
+    ((bytes as f64 / 1024.0 / 1024.0 / 1024.0) * 100.0).round() / 100.0
+}
+
+fn final_runtime_target_dir(roots: &AgentPluginRuntimeRoots) -> (PathBuf, &'static str) {
+    if let Some(target_dir) = env::var_os("CARGO_TARGET_DIR") {
+        return (PathBuf::from(target_dir), "CARGO_TARGET_DIR");
+    }
+
+    if let Some(root) = roots.active_project_root.as_ref() {
+        return (root.join("target"), "workspace_root_target");
+    }
+
+    env::current_dir()
+        .map(|cwd| (cwd.join("target"), "current_dir_target"))
+        .unwrap_or_else(|_| {
+            (
+                roots.managed_base_root.join("target"),
+                "managed_base_target",
+            )
+        })
+}
+
+fn absolute_final_runtime_target_dir(
+    roots: &AgentPluginRuntimeRoots,
+    target_dir: &Path,
+) -> PathBuf {
+    if target_dir.is_absolute() {
+        return target_dir.to_path_buf();
+    }
+
+    roots
+        .active_project_root
+        .as_ref()
+        .map(|root| root.join(target_dir))
+        .or_else(|| env::current_dir().ok().map(|cwd| cwd.join(target_dir)))
+        .unwrap_or_else(|| target_dir.to_path_buf())
+}
+
+#[cfg(target_os = "windows")]
+fn final_runtime_target_root(
+    roots: &AgentPluginRuntimeRoots,
+    target_dir: &Path,
+) -> Option<PathBuf> {
+    let absolute = absolute_final_runtime_target_dir(roots, target_dir);
+    for component in absolute.components() {
+        let std::path::Component::Prefix(prefix) = component else {
+            continue;
+        };
+
+        return match prefix.kind() {
+            std::path::Prefix::Disk(drive) | std::path::Prefix::VerbatimDisk(drive) => {
+                Some(PathBuf::from(format!("{}:\\", drive as char)))
+            }
+            std::path::Prefix::UNC(server, share)
+            | std::path::Prefix::VerbatimUNC(server, share) => Some(PathBuf::from(format!(
+                "\\\\{}\\{}\\",
+                server.to_string_lossy(),
+                share.to_string_lossy()
+            ))),
+            _ => None,
+        };
+    }
+    None
+}
+
+#[cfg(not(target_os = "windows"))]
+fn final_runtime_target_root(
+    _roots: &AgentPluginRuntimeRoots,
+    _target_dir: &Path,
+) -> Option<PathBuf> {
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn final_runtime_target_space(root: &Path) -> Option<(u64, u64)> {
+    let mut free_to_caller = 0_u64;
+    let mut total_bytes = 0_u64;
+    let mut total_free_bytes = 0_u64;
+    let mut wide = root.as_os_str().encode_wide().collect::<Vec<u16>>();
+    wide.push(0);
+
+    unsafe {
+        GetDiskFreeSpaceExW(
+            PCWSTR::from_raw(wide.as_ptr()),
+            Some(&mut free_to_caller as *mut u64),
+            Some(&mut total_bytes as *mut u64),
+            Some(&mut total_free_bytes as *mut u64),
+        )
+        .ok()?;
+    }
+
+    Some((free_to_caller, total_bytes))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn final_runtime_target_space(_root: &Path) -> Option<(u64, u64)> {
+    None
+}
+
+fn final_runtime_proof_capacity(roots: &AgentPluginRuntimeRoots) -> Value {
+    let (target_dir, target_source) = final_runtime_target_dir(roots);
+    let absolute_target_dir = absolute_final_runtime_target_dir(roots, &target_dir);
+    let target_root = final_runtime_target_root(roots, &target_dir);
+    let disk_space = target_root
+        .as_ref()
+        .and_then(|root| final_runtime_target_space(root));
+    let observed_free_bytes = disk_space.map(|(free_bytes, _)| free_bytes);
+    let total_bytes = disk_space.map(|(_, total_bytes)| total_bytes);
+    let missing_free_bytes = observed_free_bytes
+        .map(|free_bytes| AGENT_BROWSER_FINAL_RUNTIME_MIN_FREE_BYTES.saturating_sub(free_bytes));
+    let ready_for_just_run = observed_free_bytes
+        .map(|free_bytes| free_bytes >= AGENT_BROWSER_FINAL_RUNTIME_MIN_FREE_BYTES)
+        .unwrap_or(false);
+    let status = if ready_for_just_run {
+        "target_headroom_ready"
+    } else if observed_free_bytes.is_some() {
+        "target_headroom_blocked"
+    } else {
+        "target_headroom_unknown"
+    };
+    let next_action = if ready_for_just_run {
+        "Continue to the panel live-validation gate and final Windows just run proof when the user is ready."
+    } else if observed_free_bytes.is_some() {
+        "Free target/cache space or move CARGO_TARGET_DIR to a drive with at least 18 GiB free before starting just run."
+    } else {
+        "Open a Windows workspace with a resolvable target drive, then re-run inspect_agent_plugin_runtime_status before just run."
+    };
+
+    serde_json::json!({
+        "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+        "status": status,
+        "captured_at_ms": current_epoch_millis(),
+        "manual_command": "just run",
+        "ready_for_just_run": ready_for_just_run,
+        "target": {
+            "target_dir": path_string(&absolute_target_dir),
+            "target_source": target_source,
+            "target_root": target_root.as_ref().map(|root| path_string(root)),
+            "required_free_bytes": AGENT_BROWSER_FINAL_RUNTIME_MIN_FREE_BYTES,
+            "required_free_gib": gib_from_bytes(AGENT_BROWSER_FINAL_RUNTIME_MIN_FREE_BYTES),
+            "observed_free_bytes": observed_free_bytes,
+            "observed_free_gib": observed_free_bytes.map(gib_from_bytes),
+            "missing_free_bytes": missing_free_bytes,
+            "missing_free_gib": missing_free_bytes.map(gib_from_bytes),
+            "total_bytes": total_bytes,
+            "total_gib": total_bytes.map(gib_from_bytes),
+        },
+        "recipe_guard": {
+            "source": "just run dry-run recipe",
+            "minimum_target_drive_free_gib": 18.0,
+            "guarded_reason": "Avoid starting the large Zed build/run proof when the target drive cannot satisfy the recipe headroom check."
+        },
+        "webpreview_handoff": {
+            "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
+            "send_action": "send_agent_browser_final_runtime_proof_capacity_to_agent",
+            "status_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity"
+        },
+        "next_action": next_action,
+        "safety": {
+            "read_only": true,
+            "writes_files": false,
+            "runs_just": false,
+            "runs_cargo": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+            "touches_real_browser_profiles": false
+        }
+    })
+}
+
+fn final_runtime_proof_capacity_summary(capacity: &Value) -> Value {
+    serde_json::json!({
+        "schema": capacity.get("schema").and_then(Value::as_str),
+        "status": capacity.get("status").and_then(Value::as_str),
+        "ready_for_just_run": capacity.get("ready_for_just_run").and_then(Value::as_bool),
+        "target_dir": capacity.pointer("/target/target_dir").and_then(Value::as_str),
+        "target_root": capacity.pointer("/target/target_root").and_then(Value::as_str),
+        "required_free_gib": capacity.pointer("/target/required_free_gib").and_then(Value::as_f64),
+        "observed_free_gib": capacity.pointer("/target/observed_free_gib").and_then(Value::as_f64),
+        "missing_free_gib": capacity.pointer("/target/missing_free_gib").and_then(Value::as_f64),
+        "copy_action": capacity.pointer("/webpreview_handoff/copy_action").and_then(Value::as_str),
+        "next_action": capacity.get("next_action").and_then(Value::as_str),
+        "read_only": capacity.pointer("/safety/read_only").and_then(Value::as_bool),
     })
 }
 
@@ -2762,6 +2970,7 @@ fn runtime_green_proof_path(
     scorecard: &Value,
     digest: &Value,
     operator_handoff: &Value,
+    final_runtime_proof_capacity: &Value,
 ) -> Value {
     let root_mode = runtime_request_root_mode(roots);
     let runtime_green_candidate = blocker_summary
@@ -2860,6 +3069,9 @@ fn runtime_green_proof_path(
             "scorecard_status": scorecard.get("status").and_then(Value::as_str),
             "blocker_summary_status": blocker_summary.get("status").and_then(Value::as_str),
             "current_best_next": current_best_next,
+            "final_runtime_proof_capacity": final_runtime_proof_capacity_summary(
+                final_runtime_proof_capacity
+            ),
             "regression_watch_rollup": regression_watch_rollup.clone(),
             "final_validation_result": blocker_summary
                 .pointer("/latest_evidence/browser_final_validation_result/summary")
@@ -2876,6 +3088,10 @@ fn runtime_green_proof_path(
             "stale_required_file_count": stale_required_file_count,
             "browser_final_validation_runtime_green": browser_final_validation_candidate,
             "requires_final_windows_just_run": true,
+            "requires_final_runtime_proof_capacity": true,
+            "final_runtime_proof_capacity_ready": final_runtime_proof_capacity
+                .get("ready_for_just_run")
+                .and_then(Value::as_bool),
             "claim_only_when": [
                 "runtime_green_candidate == true",
                 "ready_lane_count == lane_count",
@@ -2883,6 +3099,7 @@ fn runtime_green_proof_path(
                 "manual_blocker_count == 0",
                 "missing_required_file_count == 0",
                 "stale_required_file_count == 0",
+                "final_runtime_proof_capacity.ready_for_just_run == true before manual just run",
                 "browser_final_validation_runtime_green == true"
             ]
         },
@@ -2931,6 +3148,8 @@ fn runtime_green_proof_path(
                     "runtime_observability_digest.plugin_matrix",
                     "runtime_observability_digest.plugin_matrix.regression_watch_rollup",
                     "runtime_green_operator_handoff",
+                    "final_runtime_proof_capacity",
+                    "final_runtime_proof_capacity_summary",
                     "runtime_green_report_gate",
                     "runtime_green_report_badge",
                     "runtime_green_final_proof_guide",
@@ -3000,6 +3219,12 @@ fn runtime_green_proof_path(
                 "copy_action": "copy_agent_plugin_runtime_green_report_gate",
                 "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent"
             },
+            "final_runtime_proof_capacity": {
+                "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                "source": "inspect_agent_plugin_runtime_status.final_runtime_proof_capacity",
+                "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
+                "send_action": "send_agent_browser_final_runtime_proof_capacity_to_agent"
+            },
             "runtime_green_final_proof_guide": {
                 "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
                 "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
@@ -3048,6 +3273,7 @@ fn runtime_green_proof_path(
             "runtime_green_operator_handoff",
             "runtime_green_blocker_summary",
             "runtime_green_readiness_scorecard",
+            "final_runtime_proof_capacity",
             "runtime_green_final_proof_guide_summary",
             "runtime_green_final_proof_audit",
             "runtime_green_final_proof_audit_summary",
@@ -3067,7 +3293,7 @@ fn runtime_green_proof_path(
     })
 }
 
-fn runtime_green_claim_gate(proof_path: &Value) -> Value {
+fn runtime_green_claim_gate(proof_path: &Value, final_runtime_proof_capacity: &Value) -> Value {
     let claim_gate = proof_path
         .get("claim_gate")
         .cloned()
@@ -3106,7 +3332,12 @@ fn runtime_green_claim_gate(proof_path: &Value) -> Value {
         &next_required_proof,
         runtime_green_candidate,
         root_mode,
+        final_runtime_proof_capacity,
     );
+    let final_runtime_capacity_ready = final_runtime_proof_capacity
+        .get("ready_for_just_run")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let regression_watch_rollup = proof_path
         .pointer("/current/regression_watch_rollup")
         .cloned()
@@ -3139,6 +3370,9 @@ fn runtime_green_claim_gate(proof_path: &Value) -> Value {
             .cloned()
             .unwrap_or_else(|| serde_json::json!([])),
         "requires_final_windows_just_run": claim_gate.get("requires_final_windows_just_run").and_then(Value::as_bool).unwrap_or(true),
+        "requires_final_runtime_proof_capacity": true,
+        "final_runtime_proof_capacity": final_runtime_proof_capacity_summary(final_runtime_proof_capacity),
+        "final_runtime_capacity_ready": final_runtime_capacity_ready,
         "final_manual_command": "just run",
         "next_operator_step": operator_summary.get("next_operator_step").and_then(Value::as_str),
         "next_required_proof": next_required_proof,
@@ -3178,6 +3412,18 @@ fn runtime_green_claim_gate_summary(claim_gate: &Value) -> Value {
     let checklist = claim_gate
         .get("final_operator_checklist")
         .unwrap_or(&Value::Null);
+    let final_runtime_capacity = claim_gate
+        .get("final_runtime_proof_capacity")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let final_runtime_capacity_ready = final_runtime_capacity
+        .get("ready_for_just_run")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let can_run_final_manual_command = checklist
+        .get("can_run_final_manual_command")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     serde_json::json!({
         "status": claim_gate.get("status").and_then(Value::as_str),
@@ -3198,6 +3444,12 @@ fn runtime_green_claim_gate_summary(claim_gate: &Value) -> Value {
             .and_then(Value::as_str),
         "next_recommended_action": claim_gate
             .pointer("/next_required_proof/recommended_action")
+            .and_then(Value::as_str),
+        "final_runtime_capacity_ready": claim_gate
+            .get("final_runtime_capacity_ready")
+            .and_then(Value::as_bool),
+        "final_runtime_capacity_status": claim_gate
+            .pointer("/final_runtime_proof_capacity/status")
             .and_then(Value::as_str),
         "regression_watch_status": claim_gate.pointer("/regression_watch/status").and_then(Value::as_str),
         "regression_watch_lane_count": claim_gate
@@ -3317,6 +3569,7 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
         "next_recommended_tool": claim_gate
             .pointer("/next_required_proof/recommended_tool")
             .and_then(Value::as_str),
+        "final_runtime_capacity": final_runtime_capacity,
         "regression_watch": {
             "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_WATCH_ROLLUP_SCHEMA,
             "status": regression_watch_rollup.get("status").and_then(Value::as_str),
@@ -3340,6 +3593,7 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
             "can_run_final_manual_command": checklist
                 .get("can_run_final_manual_command")
                 .and_then(Value::as_bool),
+            "final_runtime_capacity_ready": final_runtime_capacity_ready,
             "first_required_proof_id": checklist
                 .get("first_required_proof_id")
                 .and_then(Value::as_str),
@@ -3363,6 +3617,8 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
             "requires_runtime_green_candidate": true,
             "requires_imported_final_result": true,
             "requires_final_manual_command": "just run",
+            "requires_final_runtime_capacity_ready": true,
+            "can_run_final_manual_command": can_run_final_manual_command,
             "requires_regression_watch_review_before_manual_claim": true
         },
         "read_only": true,
@@ -3390,10 +3646,20 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
         .get("final_result_runtime_green")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let final_runtime_capacity = readiness
+        .get("final_runtime_capacity")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let final_runtime_capacity_ready = final_runtime_capacity
+        .get("ready_for_just_run")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let status = if can_report {
         "ready_to_report_runtime_green"
     } else if !runtime_green_candidate {
         "blocked_by_runtime_evidence"
+    } else if !final_result_present && !final_runtime_capacity_ready {
+        "blocked_by_final_runtime_capacity"
     } else if !final_result_present {
         "blocked_by_missing_final_result"
     } else if !final_result_runtime_green {
@@ -3405,6 +3671,8 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
         "none"
     } else if !runtime_green_candidate {
         "runtime_green_candidate_false"
+    } else if !final_result_present && !final_runtime_capacity_ready {
+        "final_runtime_capacity_not_ready"
     } else if !final_result_present {
         "final_validation_result_missing"
     } else if !final_result_runtime_green {
@@ -3438,6 +3706,7 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
         "claim_gate_status": readiness.get("claim_gate_status").and_then(Value::as_str),
         "next_required_proof_id": readiness.get("next_required_proof_id").and_then(Value::as_str),
         "regression_watch": readiness.get("regression_watch").cloned(),
+        "final_runtime_capacity": final_runtime_capacity,
         "final_result_present": final_result_present,
         "final_result_runtime_green": final_result_runtime_green,
         "final_manual_command": "just run",
@@ -3450,6 +3719,7 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
             "may_report_runtime_green": can_report,
             "requires_runtime_green_candidate": true,
             "requires_imported_final_result": true,
+            "requires_final_runtime_capacity_before_manual_run": true,
             "requires_final_manual_command": "just run",
             "requires_regression_watch_review_before_manual_claim": true
         },
@@ -3538,6 +3808,8 @@ fn runtime_green_final_proof_guide(report_gate: &Value, root_mode: &str) -> Valu
         .unwrap_or("unknown");
     let status = if can_report {
         "ready_to_report_runtime_green"
+    } else if blocker == "final_runtime_capacity_not_ready" {
+        "final_runtime_capacity_required"
     } else if blocker == "final_validation_result_missing"
         || blocker == "final_validation_result_not_runtime_green"
     {
@@ -3547,6 +3819,8 @@ fn runtime_green_final_proof_guide(report_gate: &Value, root_mode: &str) -> Valu
     };
     let next_action = if can_report {
         "copy_agent_plugin_runtime_green_report_gate"
+    } else if blocker == "final_runtime_capacity_not_ready" {
+        "copy_agent_browser_final_runtime_proof_capacity"
     } else if blocker == "final_validation_result_missing"
         || blocker == "final_validation_result_not_runtime_green"
     {
@@ -3567,12 +3841,20 @@ fn runtime_green_final_proof_guide(report_gate: &Value, root_mode: &str) -> Valu
         "blocker": blocker,
         "next_action": next_action,
         "report_gate_status": report_gate.get("status").and_then(Value::as_str),
+        "final_runtime_capacity": report_gate.get("final_runtime_capacity").cloned(),
         "manual_command": "just run",
         "ordered_steps": [
             {
                 "id": "read_report_badge",
                 "action": "copy_agent_plugin_runtime_green_report_gate",
                 "purpose": "Start from the compact ready/blocked status row before opening larger proof packets.",
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "copy_final_runtime_capacity",
+                "action": "copy_agent_browser_final_runtime_proof_capacity",
+                "purpose": "Confirm the target drive satisfies the 18 GiB recipe guard before the manual runtime proof.",
                 "writes_files": false,
                 "dispatches_input": false
             },
@@ -3733,6 +4015,10 @@ fn runtime_green_final_report_packet(
         .get("regression_watch")
         .cloned()
         .unwrap_or_else(|| serde_json::json!({}));
+    let final_runtime_capacity = report_gate
+        .get("final_runtime_capacity")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -3742,6 +4028,7 @@ fn runtime_green_final_report_packet(
         "blocker": if can_report { "none" } else { report_gate_blocker },
         "next_action": next_action,
         "final_manual_command": "just run",
+        "final_runtime_capacity": final_runtime_capacity.clone(),
         "regression_watch": regression_watch,
         "report_gate": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
@@ -3778,6 +4065,15 @@ fn runtime_green_final_report_packet(
                 "required_for_final_status_claim": true
             },
             {
+                "id": "final_runtime_capacity_before_manual_run",
+                "ready": final_runtime_capacity
+                    .get("ready_for_just_run")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                "source": "runtime_green_report_gate.final_runtime_capacity.ready_for_just_run",
+                "required_before_manual_command": "just run"
+            },
+            {
                 "id": "durable_final_validation_result",
                 "ready": report_gate
                     .get("final_result_runtime_green")
@@ -3797,6 +4093,7 @@ fn runtime_green_final_report_packet(
         "reporting_policy": {
             "may_report_runtime_green": can_report,
             "source_of_truth": "runtime_green_report_gate",
+            "requires_final_runtime_capacity_before_manual_run": true,
             "requires_final_manual_command": "just run",
             "requires_imported_final_result": true,
             "import_receipt_recommended_for_handoff": true,
@@ -3919,6 +4216,10 @@ fn runtime_green_report_readiness_card(
         .get("regression_watch")
         .or_else(|| report_gate.get("regression_watch"))
         .unwrap_or(&Value::Null);
+    let final_runtime_capacity = final_report_packet
+        .get("final_runtime_capacity")
+        .or_else(|| report_gate.get("final_runtime_capacity"))
+        .unwrap_or(&Value::Null);
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
@@ -3927,6 +4228,7 @@ fn runtime_green_report_readiness_card(
         "blocker": blocker,
         "next_action": next_action,
         "final_manual_command": "just run",
+        "final_runtime_capacity": final_runtime_capacity,
         "claim_readiness": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
             "status": claim_readiness.get("status").and_then(Value::as_str),
@@ -3948,6 +4250,9 @@ fn runtime_green_report_readiness_card(
             "next_recommended_action": claim_readiness
                 .get("next_recommended_action")
                 .and_then(Value::as_str),
+            "final_runtime_capacity_ready": claim_readiness
+                .pointer("/final_runtime_capacity/ready_for_just_run")
+                .and_then(Value::as_bool),
         },
         "report_gate": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
@@ -3957,6 +4262,9 @@ fn runtime_green_report_readiness_card(
             "severity": report_gate.get("severity").and_then(Value::as_str),
             "badge": report_gate.get("badge").cloned(),
             "next_action": report_gate.get("next_action").and_then(Value::as_str),
+            "final_runtime_capacity_ready": report_gate
+                .pointer("/final_runtime_capacity/ready_for_just_run")
+                .and_then(Value::as_bool),
         },
         "final_report_packet": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -4071,6 +4379,15 @@ fn runtime_green_report_readiness_card_summary(card: &Value) -> Value {
         "final_report_packet_may_report": card
             .pointer("/final_report_packet/may_report_runtime_green")
             .and_then(Value::as_bool),
+        "final_runtime_capacity_status": card
+            .pointer("/final_runtime_capacity/status")
+            .and_then(Value::as_str),
+        "final_runtime_capacity_ready": card
+            .pointer("/final_runtime_capacity/ready_for_just_run")
+            .and_then(Value::as_bool),
+        "final_runtime_capacity_observed_free_gib": card
+            .pointer("/final_runtime_capacity/target/observed_free_gib")
+            .and_then(Value::as_f64),
         "final_proof_audit_status": card
             .pointer("/final_proof_audit/status")
             .and_then(Value::as_str),
@@ -4462,6 +4779,7 @@ fn runtime_green_final_operator_checklist(
     next_required_proof: &Value,
     runtime_green_candidate: bool,
     root_mode: &str,
+    final_runtime_proof_capacity: &Value,
 ) -> Value {
     let required_proof_id = next_required_proof
         .get("required_proof_id")
@@ -4479,16 +4797,30 @@ fn runtime_green_final_operator_checklist(
         .get("recommended_sequence")
         .cloned()
         .unwrap_or_else(|| serde_json::json!([]));
-    let status = if runtime_green_candidate {
+    let final_runtime_capacity_ready = final_runtime_proof_capacity
+        .get("ready_for_just_run")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let final_runtime_capacity_status = final_runtime_proof_capacity
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("target_headroom_unknown");
+    let can_run_final_manual_command = runtime_green_candidate && final_runtime_capacity_ready;
+    let status = if can_run_final_manual_command {
         "ready_for_final_windows_runtime_proof"
+    } else if runtime_green_candidate {
+        "blocked_by_final_runtime_capacity"
     } else {
         "blocked_by_required_proof"
     };
 
     serde_json::json!({
         "status": status,
-        "can_run_final_manual_command": runtime_green_candidate,
+        "can_run_final_manual_command": can_run_final_manual_command,
         "final_manual_command": "just run",
+        "final_runtime_proof_capacity": final_runtime_proof_capacity_summary(
+            final_runtime_proof_capacity
+        ),
         "first_required_proof_id": required_proof_id,
         "first_recommended_action": recommended_action,
         "first_recommended_tool": recommended_tool,
@@ -4520,9 +4852,21 @@ fn runtime_green_final_operator_checklist(
                     .unwrap_or(false)
             },
             {
+                "id": "check_final_runtime_capacity",
+                "label": "Confirm the target drive has at least 18 GiB free before the final manual proof.",
+                "status": if final_runtime_capacity_ready { "ready" } else { "blocked" },
+                "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                "capacity_status": final_runtime_capacity_status,
+                "webpreview_action": "copy_agent_browser_final_runtime_proof_capacity",
+                "tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+                "payload": runtime_green_status_inspect_payload(root_mode),
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
                 "id": "run_final_windows_runtime_proof",
                 "label": "Run the final manual Windows runtime proof only after required proof is available.",
-                "status": if runtime_green_candidate { "required" } else { "blocked" },
+                "status": if can_run_final_manual_command { "required" } else { "blocked" },
                 "command": "just run",
                 "writes_files": false,
                 "dispatches_input": false
@@ -4530,7 +4874,7 @@ fn runtime_green_final_operator_checklist(
             {
                 "id": "import_final_result",
                 "label": "Import the filled final validation result after the manual proof.",
-                "status": if runtime_green_candidate { "pending_manual_result" } else { "blocked" },
+                "status": if can_run_final_manual_command { "pending_manual_result" } else { "blocked" },
                 "webpreview_action": "import_agent_browser_final_validation_result_from_clipboard",
                 "managed_proof_write": "writes managed final-proof JSON only after explicit WebPreview import",
                 "dispatches_input": false
@@ -4567,6 +4911,7 @@ fn runtime_green_operator_handoff(
     runtime_status: &str,
     blocker_summary: &Value,
     scorecard: &Value,
+    final_runtime_proof_capacity: &Value,
 ) -> Value {
     let lanes = scorecard
         .get("lanes")
@@ -4586,7 +4931,9 @@ fn runtime_green_operator_handoff(
                 .unwrap_or(true)
         })
         .cloned()
-        .unwrap_or_else(|| runtime_green_final_operator_handoff(root_mode));
+        .unwrap_or_else(|| {
+            runtime_green_final_operator_handoff(root_mode, final_runtime_proof_capacity)
+        });
     let runtime_green_candidate = scorecard
         .get("runtime_green_candidate")
         .and_then(Value::as_bool)
@@ -4618,7 +4965,11 @@ fn runtime_green_operator_handoff(
         "current_best_next": current_best_next,
         "lane_handoffs": lane_handoffs,
         "canonical_inspect_payload": runtime_green_status_inspect_payload(root_mode),
-        "final_runtime_validation": runtime_green_final_operator_handoff(root_mode),
+        "final_runtime_proof_capacity": final_runtime_proof_capacity_summary(final_runtime_proof_capacity),
+        "final_runtime_validation": runtime_green_final_operator_handoff(
+            root_mode,
+            final_runtime_proof_capacity
+        ),
         "handoff_consumers": [
             "agent_panel",
             "subagents",
@@ -4627,7 +4978,8 @@ fn runtime_green_operator_handoff(
         ],
         "reads_from": [
             "runtime_green_blocker_summary",
-            "runtime_green_readiness_scorecard"
+            "runtime_green_readiness_scorecard",
+            "final_runtime_proof_capacity"
         ],
         "safety": {
             "handoff_is_read_only_metadata": true,
@@ -4821,12 +5173,29 @@ fn runtime_green_status_inspect_payload(root_mode: &str) -> Value {
     })
 }
 
-fn runtime_green_final_operator_handoff(root_mode: &str) -> Value {
+fn runtime_green_final_operator_handoff(
+    root_mode: &str,
+    final_runtime_proof_capacity: &Value,
+) -> Value {
+    let final_runtime_capacity_ready = final_runtime_proof_capacity
+        .get("ready_for_just_run")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let final_runtime_capacity_status = final_runtime_proof_capacity
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("target_headroom_unknown");
+
     serde_json::json!({
         "lane_id": "final_runtime_validation",
         "label": "Final Windows runtime validation",
-        "status": "manual_required",
+        "status": if final_runtime_capacity_ready {
+            "manual_required"
+        } else {
+            "blocked_by_final_runtime_capacity"
+        },
         "ready": false,
+        "final_runtime_proof_capacity": final_runtime_proof_capacity_summary(final_runtime_proof_capacity),
         "operator_steps": [
             {
                 "id": "inspect_runtime_status_before_final_pass",
@@ -4838,9 +5207,21 @@ fn runtime_green_final_operator_handoff(root_mode: &str) -> Value {
                 "dispatches_input": false
             },
             {
+                "id": "check_final_runtime_capacity",
+                "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                "status": final_runtime_capacity_status,
+                "ready": final_runtime_capacity_ready,
+                "webpreview_action": "copy_agent_browser_final_runtime_proof_capacity",
+                "required_free_gib": 18.0,
+                "writes_files": false,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
                 "id": "manual_just_run",
                 "manual_command": "just run",
-                "when": "Only after Browser/WebPreview, managed Chrome, and PC-use lanes are ready and the user wants one final runtime pass.",
+                "when": "Only after Browser/WebPreview, managed Chrome, PC-use lanes, and final runtime capacity are ready and the user wants one final runtime pass.",
                 "writes_files": false,
                 "dispatches_input": "manual_validation_only"
             }
@@ -4859,7 +5240,7 @@ fn observability_profiles(runtime_status: &str, roots: &AgentPluginRuntimeRoots)
         "status": summary_status,
         "runtime_status": runtime_status,
         "overall_code_score": 94,
-        "runtime_green_blocker": "Browser, managed Chrome, and PC-use profiles still need one final Windows runtime validation pass plus imported manual result evidence before the product can be called runtime-green.",
+        "runtime_green_blocker": "Browser, managed Chrome, and PC-use profiles still need final target-drive capacity, one final Windows runtime validation pass, and imported manual result evidence before the product can be called runtime-green.",
         "proof_freshness": observability_proof_freshness(roots),
         "plugins": {
             "browser": {
@@ -4869,6 +5250,7 @@ fn observability_profiles(runtime_status: &str, roots: &AgentPluginRuntimeRoots)
                 "proof_handoffs": {
                     "validation_progress": "copy_agent_browser_executor_validation_progress",
                     "final_bundle": "copy_agent_browser_final_validation_bundle",
+                    "final_runtime_proof_capacity": "copy_agent_browser_final_runtime_proof_capacity",
                     "final_result_template": "copy_agent_browser_final_validation_result_template",
                     "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
                     "final_result_import_receipt": "copy_agent_browser_final_validation_result_import_receipt",

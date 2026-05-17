@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Runtime Status Capacity
+
+ADDED:
+- `inspect_agent_plugin_runtime_status` now emits `zed.web_preview.agent_browser_final_runtime_proof_capacity.v1` with target drive headroom, required/observed/missing GiB, and WebPreview copy/send handoff metadata.
+- Runtime-green proof paths, claim gates, report gates, final proof guides, final report packets, report-readiness cards, and observability handoffs now carry final runtime capacity readiness so AI panels can block `just run` claims before the drive has enough space.
+
+CHANGED:
+- Final manual runtime command readiness now requires both runtime evidence readiness and final target-drive capacity readiness before the manual `just run` step is marked runnable.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 87/100 and the remaining live UI/runtime validation targets.
+
+NOTES:
+- This slice is read-only runtime-status evidence. It does not run `just`, run Cargo, launch browsers, run Node or Playwright, take screenshots, dispatch input, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Final Runtime Capacity
 
 ADDED:
