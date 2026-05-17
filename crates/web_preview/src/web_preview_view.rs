@@ -16795,10 +16795,37 @@ impl WebPreviewView {
             .pointer("/latest/final_runtime_proof_capacity")
             .cloned()
             .unwrap_or_else(|| serde_json::json!({}));
+        let final_runtime_blocker_board_summary = observability
+            .pointer("/latest/final_runtime_blocker_board")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
         let final_runtime_capacity_ready = observability
             .get("final_runtime_capacity_ready")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let final_result_runtime_green_candidate = observability
+            .get("final_result_runtime_green_candidate")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let panel_live_validation_result_gate_ready = observability
+            .get("panel_live_validation_result_gate_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let panel_live_validation_result_gate_status = observability
+            .pointer("/panel_live_validation_result_gate/status")
+            .and_then(Value::as_str);
+        let final_runtime_capacity_status = final_runtime_capacity_summary
+            .get("status")
+            .and_then(Value::as_str);
+        let final_runtime_capacity_missing_free_gib = final_runtime_capacity_summary
+            .get("missing_free_gib")
+            .and_then(Value::as_f64);
+        let final_runtime_first_blocker = final_runtime_blocker_board_summary
+            .get("first_blocker")
+            .and_then(Value::as_str);
+        let final_runtime_recommended_action = final_runtime_blocker_board_summary
+            .get("recommended_action")
+            .and_then(Value::as_str);
         let final_result_has_stale_required_checks = missing_expected_required_check_count > 0;
         let can_report = report_gate_can_report
             && !final_result_has_stale_required_checks
@@ -16878,9 +16905,23 @@ impl WebPreviewView {
                 "schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
                 "status": observability.get("status").and_then(Value::as_str),
                 "runtime_green_candidate": observability_runtime_green,
+                "final_result_runtime_green_candidate": final_result_runtime_green_candidate,
                 "durable_runtime_green_candidate": durable_runtime_green,
                 "missing_expected_required_checks": missing_expected_required_checks,
                 "missing_expected_required_check_count": missing_expected_required_check_count,
+                "panel_live_validation_result_gate_ready": panel_live_validation_result_gate_ready,
+                "panel_live_validation_result_gate_status": panel_live_validation_result_gate_status,
+                "final_runtime_capacity_ready": final_runtime_capacity_ready,
+                "final_runtime_capacity_status": final_runtime_capacity_status,
+                "final_runtime_capacity_missing_free_gib": final_runtime_capacity_missing_free_gib,
+                "final_runtime_blocker_board_status": final_runtime_blocker_board_summary
+                    .get("status")
+                    .and_then(Value::as_str),
+                "final_runtime_blocker_count": final_runtime_blocker_board_summary
+                    .get("blocker_count")
+                    .and_then(Value::as_u64),
+                "final_runtime_first_blocker": final_runtime_first_blocker,
+                "final_runtime_recommended_action": final_runtime_recommended_action,
                 "missing": observability.get("missing").cloned(),
                 "recovery_actions": observability.get("recovery_actions").cloned()
             },
@@ -17094,6 +17135,42 @@ impl WebPreviewView {
                 "import_receipt_present": final_report_packet
                     .pointer("/final_result_import_receipt/present_in_session")
                     .and_then(Value::as_bool),
+            },
+            "browser_final_observability": {
+                "schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
+                "status": final_report_packet
+                    .pointer("/final_validation_observability/status")
+                    .and_then(Value::as_str),
+                "runtime_green_candidate": final_report_packet
+                    .pointer("/final_validation_observability/runtime_green_candidate")
+                    .and_then(Value::as_bool),
+                "final_result_runtime_green_candidate": final_report_packet
+                    .pointer("/final_validation_observability/final_result_runtime_green_candidate")
+                    .and_then(Value::as_bool),
+                "stale_final_result_missing_expected_required_check_count": final_report_packet
+                    .pointer("/final_validation_observability/missing_expected_required_check_count")
+                    .and_then(Value::as_u64),
+                "panel_live_validation_result_gate_ready": final_report_packet
+                    .pointer("/final_validation_observability/panel_live_validation_result_gate_ready")
+                    .and_then(Value::as_bool),
+                "panel_live_validation_result_gate_status": final_report_packet
+                    .pointer("/final_validation_observability/panel_live_validation_result_gate_status")
+                    .and_then(Value::as_str),
+                "final_runtime_capacity_ready": final_report_packet
+                    .pointer("/final_validation_observability/final_runtime_capacity_ready")
+                    .and_then(Value::as_bool),
+                "final_runtime_capacity_status": final_report_packet
+                    .pointer("/final_validation_observability/final_runtime_capacity_status")
+                    .and_then(Value::as_str),
+                "final_runtime_capacity_missing_free_gib": final_report_packet
+                    .pointer("/final_validation_observability/final_runtime_capacity_missing_free_gib")
+                    .and_then(Value::as_f64),
+                "final_runtime_first_blocker": final_report_packet
+                    .pointer("/final_validation_observability/final_runtime_first_blocker")
+                    .and_then(Value::as_str),
+                "final_runtime_recommended_action": final_report_packet
+                    .pointer("/final_validation_observability/final_runtime_recommended_action")
+                    .and_then(Value::as_str),
             },
             "final_runtime_headroom": final_report_packet
                 .get("final_runtime_headroom")
@@ -19185,6 +19262,27 @@ impl WebPreviewView {
             "final_result_runtime_green": card
                 .pointer("/final_proof_audit/final_result_runtime_green")
                 .and_then(Value::as_bool),
+            "stale_final_result_missing_expected_required_check_count": card
+                .pointer("/browser_final_observability/stale_final_result_missing_expected_required_check_count")
+                .and_then(Value::as_u64),
+            "browser_panel_live_validation_result_gate_ready": card
+                .pointer("/browser_final_observability/panel_live_validation_result_gate_ready")
+                .and_then(Value::as_bool),
+            "browser_panel_live_validation_result_gate_status": card
+                .pointer("/browser_final_observability/panel_live_validation_result_gate_status")
+                .and_then(Value::as_str),
+            "browser_final_runtime_capacity_ready": card
+                .pointer("/browser_final_observability/final_runtime_capacity_ready")
+                .and_then(Value::as_bool),
+            "browser_final_runtime_capacity_status": card
+                .pointer("/browser_final_observability/final_runtime_capacity_status")
+                .and_then(Value::as_str),
+            "browser_final_runtime_missing_free_gib": card
+                .pointer("/browser_final_observability/final_runtime_capacity_missing_free_gib")
+                .and_then(Value::as_f64),
+            "browser_final_runtime_first_blocker": card
+                .pointer("/browser_final_observability/final_runtime_first_blocker")
+                .and_then(Value::as_str),
             "missing_required_check_count": card
                 .pointer("/final_proof_audit/missing_required_check_count")
                 .and_then(Value::as_u64),
@@ -27250,7 +27348,14 @@ impl WebPreviewView {
                         "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
                         "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
                         "read_only": true,
-                        "purpose": "Share the compact final reporting packet agents must read before making the final runtime-green status claim."
+                        "browser_final_observability_fields": [
+                            "final_validation_observability.final_result_runtime_green_candidate",
+                            "final_validation_observability.panel_live_validation_result_gate_ready",
+                            "final_validation_observability.final_runtime_capacity_ready",
+                            "final_validation_observability.final_runtime_capacity_missing_free_gib",
+                            "final_validation_observability.final_runtime_first_blocker"
+                        ],
+                        "purpose": "Share the compact final reporting packet agents must read before making the final runtime-green status claim, including Browser final-observability blockers."
                     },
                     "runtime_green_report_readiness_card": {
                         "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
@@ -27260,7 +27365,14 @@ impl WebPreviewView {
                         "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
                         "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
                         "read_only": true,
-                        "purpose": "Share one compact status card for right-side panels with claim readiness, report gate, final packet, proof audit, and regression-watch state."
+                        "browser_final_observability_summary_fields": [
+                            "browser_final_observability.stale_final_result_missing_expected_required_check_count",
+                            "browser_final_observability.panel_live_validation_result_gate_ready",
+                            "browser_final_observability.final_runtime_capacity_ready",
+                            "browser_final_observability.final_runtime_capacity_missing_free_gib",
+                            "browser_final_observability.final_runtime_first_blocker"
+                        ],
+                        "purpose": "Share one compact status card for right-side panels with claim readiness, report gate, final packet, proof audit, Browser final blockers, and regression-watch state."
                     }
                 },
                 "available_to": [

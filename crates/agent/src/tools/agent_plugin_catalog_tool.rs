@@ -493,7 +493,7 @@ fn agent_plugin_catalog_webpreview_handoffs_manifest() -> Value {
             "runtime_green_report_gate + final_validation_result_import_receipt",
             "copy_agent_plugin_runtime_green_final_report_packet",
             "send_agent_plugin_runtime_green_final_report_packet_to_agent",
-            "Share the compact final reporting packet agents must read before making the final runtime-green status claim.",
+            "Share the compact final reporting packet agents must read before making the final runtime-green status claim, including Browser final-observability blockers.",
         ),
         "runtime_green_report_readiness_card": agent_plugin_catalog_summary_handoff_manifest(
             AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
@@ -502,7 +502,7 @@ fn agent_plugin_catalog_webpreview_handoffs_manifest() -> Value {
             "runtime_green_claim_readiness + runtime_green_report_gate + runtime_green_final_report_packet + runtime_green_final_proof_audit",
             "copy_agent_plugin_runtime_green_report_readiness_card",
             "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
-            "Share one compact status card for right-side panels that combines claim readiness, report gate, final report packet, final proof audit, and regression-watch status.",
+            "Share one compact status card for right-side panels that combines claim readiness, report gate, final report packet, final proof audit, Browser final blockers, and regression-watch status.",
         )
     })
 }

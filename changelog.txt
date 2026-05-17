@@ -1,3 +1,17 @@
+[2026-05-18] - Final Report Blocker Summary Fields
+
+ADDED:
+- Final report packets now carry Browser final-observability fields for final-result readiness, panel live-validation gate readiness, final runtime capacity readiness, missing free GiB, and the first final-runtime blocker.
+- Report-readiness cards now expose those Browser blocker fields in their compact summary so right-side panels can render the final claim blocker without parsing the full observability payload.
+- WebPreview catalog metadata now advertises the Browser final-observability fields available in final report packets and readiness cards.
+
+CHANGED:
+- Agent catalog descriptions for final report packets and report-readiness cards now call out Browser final blockers as part of the final runtime-green status claim surface.
+- `todo.txt` records the final report blocker summary slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is compact final-report metadata hardening. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Plugin Matrix Final Blocker Proof Fields
 
 ADDED:
