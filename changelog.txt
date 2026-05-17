@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Live Result Template
+
+ADDED:
+- WebPreview now exposes Copy/Send Panel Result Template actions that generate only the fillable `zed.web_preview.agent_browser_panel_card_control_result.v1` payload from the current panel live-validation packet.
+- Agent/WebPreview plugin catalogs now advertise `browser.panel_live_validation_result_template` plus the result-template copy/send/import handoff metadata.
+
+CHANGED:
+- Session snapshots, Agent Browser status packets, final validation bundles, and action manifests now include panel live-validation result-template summaries so Agent panels can render the next import step without parsing the full validation packet.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 72/100 and the remaining live UI/runtime validation targets.
+
+NOTES:
+- This is a read-only template-handoff slice. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Live Validation
 
 ADDED:

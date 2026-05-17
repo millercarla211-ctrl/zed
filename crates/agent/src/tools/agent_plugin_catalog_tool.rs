@@ -922,6 +922,12 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "panel_live_validation_send_action": plugin
                 .pointer("/panel_live_validation/send_action")
                 .and_then(Value::as_str),
+            "panel_live_validation_result_template_copy_action": plugin
+                .pointer("/panel_live_validation/result_template_copy_action")
+                .and_then(Value::as_str),
+            "panel_live_validation_result_template_send_action": plugin
+                .pointer("/panel_live_validation/result_template_send_action")
+                .and_then(Value::as_str),
             "panel_card_deck_interaction_validation_schema": plugin
                 .pointer("/panel_card_deck/interaction_validation_schema")
                 .and_then(Value::as_str),
@@ -1322,6 +1328,7 @@ fn browser_plugin_manifest() -> Value {
                 "panel_control_result_import_receipt": "copy_agent_browser_panel_control_result_import_receipt",
                 "panel_control_result_ledger": "copy_agent_browser_panel_control_result_ledger",
                 "panel_live_validation": "copy_agent_browser_panel_live_validation",
+                "panel_live_validation_result_template": "copy_agent_browser_panel_live_validation_result_template",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -1426,6 +1433,11 @@ fn browser_plugin_manifest() -> Value {
             "import_receipt_schema": AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA,
             "copy_action": "copy_agent_browser_panel_live_validation",
             "send_action": "send_agent_browser_panel_live_validation_to_agent",
+            "result_template_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
+            "result_template_copy_action": "copy_agent_browser_panel_live_validation_result_template",
+            "result_template_send_action": "send_agent_browser_panel_live_validation_result_template_to_agent",
+            "result_template_status_packet_field": "packet.latest.agent_browser_panel_live_validation_result_template",
+            "result_template_import_action": "import_agent_browser_panel_control_result_from_clipboard",
             "status_packet_field": "packet.latest.agent_browser_panel_live_validation",
             "source_fields": [
                 "session.agent_browser_panel_card_deck",
@@ -1467,6 +1479,7 @@ fn browser_plugin_manifest() -> Value {
             "panel_control_result_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
             "panel_control_result_import_receipt_schema": AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA,
             "panel_live_validation_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
+            "panel_live_validation_result_template_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_green_final_proof_guide_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
@@ -1673,6 +1686,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.panel_control_result_import_receipt", "available_after_import", "Copy or send the latest durable panel control result import receipt with managed proof paths."),
             capability("browser.panel_control_result_ledger", "available", "Copy or send normalized panel control results derived from the latest receipt and import surfaces."),
             capability("browser.panel_live_validation", "available", "Copy or send the right-side panel live-validation checklist before the final runtime proof."),
+            capability("browser.panel_live_validation_result_template", "available", "Copy or send the fillable panel control-result template for the live panel validation exercise."),
             capability("browser.plugin_bootstrap_readiness", "available", "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."),
             capability("browser.runtime_green_claim_readiness", "available", "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."),
             capability("browser.runtime_green_report_gate", "available", "Copy or send the canonical runtime-green ready/blocked report gate."),
