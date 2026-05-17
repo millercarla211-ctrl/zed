@@ -801,6 +801,7 @@ pub struct WebPreviewView {
     latest_agent_plugin_catalog: Option<Value>,
     latest_annotated_screenshot: Option<Value>,
     latest_inspected_element: Option<Value>,
+    latest_devtools_open_attempt: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -1022,6 +1023,7 @@ impl WebPreviewView {
             latest_agent_plugin_catalog: None,
             latest_annotated_screenshot: None,
             latest_inspected_element: None,
+            latest_devtools_open_attempt: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1530,6 +1532,7 @@ impl WebPreviewView {
             "pc_use_status": self.pc_use_status(),
             "annotated_screenshot": self.latest_annotated_screenshot_summary(),
             "inspected_element": self.latest_inspected_element_summary(),
+            "devtools_open_attempt": self.latest_devtools_open_attempt_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -4871,6 +4874,47 @@ impl WebPreviewView {
         }))
     }
 
+    fn latest_devtools_open_attempt_summary(&self) -> Option<Value> {
+        let attempt = self.latest_devtools_open_attempt.as_ref()?;
+        Some(serde_json::json!({
+            "schema": attempt.get("schema").and_then(Value::as_str),
+            "attempted_at_ms": attempt.get("attempted_at_ms").and_then(Value::as_u64),
+            "state": attempt.get("state").and_then(Value::as_str),
+            "opened": attempt.get("opened").and_then(Value::as_bool),
+            "blocked_reason": attempt.get("blocked_reason").and_then(Value::as_str),
+            "backend": attempt.get("backend").and_then(Value::as_str),
+            "url": attempt.get("url").and_then(Value::as_str),
+            "title": attempt.get("title").and_then(Value::as_str),
+            "viewport": attempt.get("viewport").cloned(),
+        }))
+    }
+
+    fn devtools_open_attempt(&self, opened: bool, blocked_reason: Option<&str>) -> Value {
+        serde_json::json!({
+            "schema": "zed.web_preview.devtools_open_attempt.v1",
+            "attempted_at_ms": Self::current_epoch_millis(),
+            "state": if opened { "opened" } else { "blocked" },
+            "opened": opened,
+            "blocked_reason": blocked_reason,
+            "backend": self.browser_native_backend_name(),
+            "platform_supported": cfg!(any(target_os = "windows", target_os = "macos")),
+            "url": self.active_url.as_ref(),
+            "title": self.current_tab_title().as_ref(),
+            "viewport": self.viewport_mode.snapshot(),
+            "output": if opened {
+                serde_json::json!(["native_devtools_window"])
+            } else {
+                serde_json::json!([])
+            },
+            "safety": {
+                "dispatches_input": false,
+                "uses_page_script": false,
+                "mutates_external_browser_profiles": false,
+                "requires_interactive_unlock": false,
+            },
+        })
+    }
+
     fn agent_browser_function_surfaces(&self) -> Value {
         let screenshot_state = if cfg!(target_os = "windows") {
             "available"
@@ -4905,6 +4949,7 @@ impl WebPreviewView {
                 "action_targets": self.latest_action_targets_summary(),
                 "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 "inspected_element": self.latest_inspected_element_summary(),
+                "devtools_open_attempt": self.latest_devtools_open_attempt_summary(),
                 "viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
             },
             "surfaces": [
@@ -4959,6 +5004,7 @@ impl WebPreviewView {
                     "menu_action": "open_devtools",
                     "menu_label": "Open DevTools",
                     "output": ["native_devtools_window"],
+                    "latest_summary": self.latest_devtools_open_attempt_summary(),
                     "uses_page_script": false,
                     "dispatches_input": false,
                     "requires_interactive_unlock": false,
@@ -10315,6 +10361,7 @@ impl WebPreviewView {
                     },
                     "managed_chrome_execution": managed_chrome_execution,
                     "pc_use_status": pc_use_status,
+                    "devtools_open_attempt": self.latest_devtools_open_attempt_summary(),
                     "runtime_observability_digest": runtime_observability_digest_summary,
                     "runtime_green_operator_handoff": runtime_green_operator_handoff_summary,
                     "runtime_green_proof_path": runtime_green_proof_path_summary,
@@ -10332,6 +10379,7 @@ impl WebPreviewView {
                         &runtime_green_report_readiness_card
                     ),
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
+                    "inspected_element": self.latest_inspected_element_summary(),
                 },
                 "handoff": {
                     "read_only_only": !interactive_unlocked,
@@ -16330,9 +16378,12 @@ impl WebPreviewView {
     }
 
     fn open_devtools(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let mut opened = false;
+        let mut blocked_reason = None;
+
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
-            let opened = {
+            opened = {
                 let borrow = self.native_preview.borrow();
                 if let Some(preview) = borrow.as_ref() {
                     preview.open_devtools();
@@ -16341,10 +16392,24 @@ impl WebPreviewView {
                     false
                 }
             };
-            if opened {
-                self.show_toast("Opened DevTools", cx);
+            if !opened {
+                blocked_reason = Some("native_preview_not_mounted");
             }
         }
+
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        {
+            blocked_reason = Some("platform_unavailable");
+        }
+
+        self.latest_devtools_open_attempt =
+            Some(self.devtools_open_attempt(opened, blocked_reason));
+        if opened {
+            self.show_toast("Opened DevTools", cx);
+        } else {
+            self.show_toast("DevTools unavailable for this WebPreview session", cx);
+        }
+        cx.notify();
     }
 
     fn inspect_element(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -20420,6 +20485,7 @@ impl Item for WebPreviewView {
                 latest_agent_plugin_catalog: None,
                 latest_annotated_screenshot: None,
                 latest_inspected_element: None,
+                latest_devtools_open_attempt: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,

@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome DevTools Receipt Surface
+
+ADDED:
+- WebPreview now records a typed `zed.web_preview.devtools_open_attempt.v1` receipt whenever native DevTools is requested, including opened/blocked state, backend, URL/title, viewport, blocked reason, platform support, and no-input/no-profile-mutation safety flags.
+- WebPreview session snapshots, Agent Browser status packets, and Browser function-surfaces packets now expose the latest DevTools open-attempt summary beside screenshot, inspect-element, and viewport evidence.
+
+CHANGED:
+- Agent Browser status packets now include the latest inspected-element summary alongside annotated screenshot and DevTools receipt summaries, keeping right-side panel evidence consistent across the Browser/Chrome hardening set.
+- Updated `todo.txt` with the Browser/Chrome Functional Plugin Execution Hardening status and next remaining proof targets.
+
+NOTES:
+- This is an auditability/wiring slice only. It does not launch external Chrome, run Playwright, dispatch page input, mutate browser profiles, or bypass the existing DevTools menu action.
+
 [2026-05-17] - Browser Chrome Functional Inspect Evidence
 
 ADDED:
