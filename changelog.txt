@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Deck Handoff
+
+ADDED:
+- WebPreview now has first-class Copy/Send Agent Browser Panel Card Deck actions that build the current `zed.web_preview.agent_browser_panel_card_deck.v1` snapshot and hand it to the clipboard or Agent Panel.
+- Agent Browser status packet sends now include a readable compact deck summary before the full JSON packet, listing card readiness, lane, state, title, and source fields for each browser, managed Chrome, and PC-use card.
+
+CHANGED:
+- WebPreview policy, action manifests, More menu entries, and Agent/WebPreview plugin catalogs now advertise `copy_agent_browser_panel_card_deck` and `send_agent_browser_panel_card_deck_to_agent` as read-only panel handoffs.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 33/100 and the next remaining proof targets.
+
+NOTES:
+- This is an Agent Panel handoff/rendering slice only. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Card Deck
 
 ADDED:

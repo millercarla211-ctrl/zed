@@ -825,6 +825,12 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "panel_card_deck_status_packet_field": plugin
                 .pointer("/panel_card_deck/status_packet_field")
                 .and_then(Value::as_str),
+            "panel_card_deck_copy_action": plugin
+                .pointer("/panel_card_deck/copy_action")
+                .and_then(Value::as_str),
+            "panel_card_deck_send_action": plugin
+                .pointer("/panel_card_deck/send_action")
+                .and_then(Value::as_str),
             "bootstrap_schema": plugin
                 .get("bootstrap_readiness_schema")
                 .and_then(Value::as_str),
@@ -1208,6 +1214,7 @@ fn browser_plugin_manifest() -> Value {
                 "runtime_green_final_proof_guide": "copy_agent_plugin_runtime_green_final_proof_guide",
                 "runtime_green_final_report_packet": "copy_agent_plugin_runtime_green_final_report_packet",
                 "runtime_green_report_readiness_card": "copy_agent_plugin_runtime_green_report_readiness_card",
+                "panel_card_deck": "copy_agent_browser_panel_card_deck",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -1238,6 +1245,8 @@ fn browser_plugin_manifest() -> Value {
             "schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
             "session_field": "agent_browser_panel_card_deck",
             "status_packet_field": "packet.latest.agent_browser_panel_card_deck",
+            "copy_action": "copy_agent_browser_panel_card_deck",
+            "send_action": "send_agent_browser_panel_card_deck_to_agent",
             "read_only": true,
             "purpose": "Render one compact Agent Panel deck for screenshot, annotation, inspect, DevTools, responsive viewport, managed Chrome, and PC-use proof cards.",
             "card_sources": [
@@ -1479,6 +1488,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.devtools.open", "available", "Open the native browser DevTools for the active WebPreview backend."),
             capability("browser.viewport.responsive", "available", "Switch the active WebPreview between full, phone, tablet, laptop, and rotated responsive viewports."),
             capability("browser.function_surfaces", "available", "Copy or send the concrete WebPreview screenshot, inspect, DevTools, and responsive viewport surface map."),
+            capability("browser.panel_card_deck", "available", "Copy or send one compact Agent Panel deck for screenshot, annotation, inspect, DevTools, responsive viewport, managed Chrome, and PC-use proof cards."),
             capability("browser.plugin_bootstrap_readiness", "available", "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."),
             capability("browser.runtime_green_claim_readiness", "available", "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."),
             capability("browser.runtime_green_report_gate", "available", "Copy or send the canonical runtime-green ready/blocked report gate."),

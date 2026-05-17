@@ -399,6 +399,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_final_proof_audit_to_agent",
     "copy_agent_browser_function_surfaces",
     "send_agent_browser_function_surfaces_to_agent",
+    "copy_agent_browser_panel_card_deck",
+    "send_agent_browser_panel_card_deck_to_agent",
     "copy_agent_plugin_bootstrap_readiness",
     "send_agent_plugin_bootstrap_readiness_to_agent",
     "copy_agent_plugin_runtime_green_handoff",
@@ -1618,6 +1620,9 @@ impl WebPreviewView {
                 "agent_browser_function_surfaces": true,
                 "copy_agent_browser_function_surfaces": true,
                 "send_agent_browser_function_surfaces_to_agent": true,
+                "agent_browser_panel_card_deck": true,
+                "copy_agent_browser_panel_card_deck": true,
+                "send_agent_browser_panel_card_deck_to_agent": true,
                 "agent_plugin_bootstrap_readiness": true,
                 "copy_agent_plugin_bootstrap_readiness": true,
                 "send_agent_plugin_bootstrap_readiness_to_agent": true,
@@ -4499,6 +4504,12 @@ impl WebPreviewView {
                 "panel_card_deck_status_packet_field": plugin
                     .pointer("/panel_card_deck/status_packet_field")
                     .and_then(Value::as_str),
+                "panel_card_deck_copy_action": plugin
+                    .pointer("/panel_card_deck/copy_action")
+                    .and_then(Value::as_str),
+                "panel_card_deck_send_action": plugin
+                    .pointer("/panel_card_deck/send_action")
+                    .and_then(Value::as_str),
                 "bootstrap_schema": plugin
                     .get("bootstrap_readiness_schema")
                     .and_then(Value::as_str),
@@ -5151,6 +5162,109 @@ impl WebPreviewView {
             | "payload_not_ready" => "warning",
             _ => "neutral",
         }
+    }
+
+    fn agent_browser_panel_card_deck_snapshot(&self) -> Value {
+        let managed_chrome_execution = self.managed_chrome_execution_status();
+        let pc_use_status = self.pc_use_status();
+        self.agent_browser_panel_card_deck(&managed_chrome_execution, &pc_use_status)
+    }
+
+    fn agent_browser_panel_card_deck_json(deck: &Value) -> String {
+        serde_json::to_string_pretty(deck).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_panel_card_deck_agent_summary(deck: &Value) -> String {
+        let card_count = deck
+            .pointer("/summary/card_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let ready_card_count = deck
+            .pointer("/summary/ready_card_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let title = deck
+            .pointer("/page/title")
+            .and_then(Value::as_str)
+            .filter(|title| !title.is_empty())
+            .unwrap_or("Untitled WebPreview");
+        let url = deck
+            .pointer("/page/url")
+            .and_then(Value::as_str)
+            .filter(|url| !url.is_empty())
+            .unwrap_or("no-url");
+
+        let mut lines = vec![
+            "Agent Browser panel card deck".to_string(),
+            format!("Ready cards: {ready_card_count}/{card_count}"),
+            format!("Page: {title} ({url})"),
+        ];
+
+        if let Some(cards) = deck.get("cards").and_then(Value::as_array) {
+            for card in cards {
+                let label = card.get("label").and_then(Value::as_str).unwrap_or("Card");
+                let lane = card
+                    .get("lane")
+                    .and_then(Value::as_str)
+                    .unwrap_or("browser");
+                let state = card
+                    .pointer("/card_state/state")
+                    .and_then(Value::as_str)
+                    .unwrap_or("empty");
+                let ready = card
+                    .pointer("/card_state/ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let readiness = if ready { "ready" } else { "pending" };
+                let title = card
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .filter(|title| !title.is_empty())
+                    .unwrap_or(label);
+                let source = card
+                    .get("source_field")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown");
+                lines.push(format!(
+                    "- {lane} | {label} | {readiness} | {state} | {title} | source: {source}"
+                ));
+            }
+        }
+
+        lines.push(
+            "Safety: read-only handoff; does not dispatch input, launch Chrome, run Node, or mutate browser profiles."
+                .to_string(),
+        );
+        lines.join("\n")
+    }
+
+    fn agent_browser_panel_card_deck_agent_blocks(deck: &Value) -> Vec<acp::ContentBlock> {
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "{}\n\n```json\n{}\n```",
+            Self::agent_browser_panel_card_deck_agent_summary(deck),
+            Self::agent_browser_panel_card_deck_json(deck)
+        )))]
+    }
+
+    fn copy_agent_browser_panel_card_deck(&mut self, cx: &mut Context<Self>) {
+        let deck = self.agent_browser_panel_card_deck_snapshot();
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_panel_card_deck_json(&deck),
+        ));
+        self.show_toast("Copied Agent Browser panel card deck", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_panel_card_deck_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let deck = self.agent_browser_panel_card_deck_snapshot();
+        let blocks = Self::agent_browser_panel_card_deck_agent_blocks(&deck);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent Agent Browser panel card deck to the agent panel", cx);
+        cx.notify();
     }
 
     fn copy_pc_use_status(&mut self, cx: &mut Context<Self>) {
@@ -11075,6 +11189,14 @@ impl WebPreviewView {
                 .unwrap_or_else(|_| "{}".to_string())
             ))));
         }
+        if let Some(panel_card_deck) =
+            packet.pointer("/packet/latest/agent_browser_panel_card_deck")
+        {
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+                "{}\n\n",
+                Self::agent_browser_panel_card_deck_agent_summary(panel_card_deck)
+            ))));
+        }
 
         blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
             "Web preview agent browser status packet:\n\n```json\n{}\n```",
@@ -15645,6 +15767,10 @@ impl WebPreviewView {
             );
         let agent_plugin_catalog_current_summary =
             self.current_agent_plugin_catalog_summary(window);
+        let managed_chrome_execution = self.managed_chrome_execution_status();
+        let pc_use_status = self.pc_use_status();
+        let agent_browser_panel_card_deck =
+            self.agent_browser_panel_card_deck(&managed_chrome_execution, &pc_use_status);
 
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_actions.v1",
@@ -15743,6 +15869,14 @@ impl WebPreviewView {
                     "latest_summary": self.agent_browser_function_surfaces(),
                     "read_only": true,
                     "purpose": "Copy or send the concrete screenshot, inspect, DevTools, and responsive viewport surface map without requiring the larger session or catalog."
+                },
+                "browser_panel_card_deck": {
+                    "schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
+                    "copy_action": "copy_agent_browser_panel_card_deck",
+                    "send_action": "send_agent_browser_panel_card_deck_to_agent",
+                    "latest_summary": agent_browser_panel_card_deck.clone(),
+                    "read_only": true,
+                    "purpose": "Copy or send one compact right-side Agent Panel deck for screenshot, annotation, inspect, DevTools, responsive viewport, managed Chrome, and PC-use proof cards."
                 },
                 "plugin_catalog": {
                     "schema": "zed.agent_plugins.catalog.v1",
@@ -15863,6 +15997,7 @@ impl WebPreviewView {
             "final_validation_observability": self.agent_browser_final_validation_observability(),
             "final_proof_audit": final_proof_audit,
             "browser_function_surfaces": self.agent_browser_function_surfaces(),
+            "agent_browser_panel_card_deck": agent_browser_panel_card_deck,
             "plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
             "runtime_observability_digest": runtime_observability_digest,
             "runtime_green_operator_handoff": runtime_green_operator_handoff,
@@ -16254,6 +16389,7 @@ impl WebPreviewView {
                                 "runtime_green_final_proof_guide": "copy_agent_plugin_runtime_green_final_proof_guide",
                                 "runtime_green_final_report_packet": "copy_agent_plugin_runtime_green_final_report_packet",
                                 "runtime_green_report_readiness_card": "copy_agent_plugin_runtime_green_report_readiness_card",
+                                "panel_card_deck": "copy_agent_browser_panel_card_deck",
                                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -16285,6 +16421,8 @@ impl WebPreviewView {
                             "schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
                             "session_field": "agent_browser_panel_card_deck",
                             "status_packet_field": "packet.latest.agent_browser_panel_card_deck",
+                            "copy_action": "copy_agent_browser_panel_card_deck",
+                            "send_action": "send_agent_browser_panel_card_deck_to_agent",
                             "read_only": true,
                             "purpose": "Render one compact Agent Panel deck for screenshot, annotation, inspect, DevTools, responsive viewport, managed Chrome, and PC-use proof cards.",
                             "card_sources": [
@@ -16525,6 +16663,7 @@ impl WebPreviewView {
                             {"id": "browser.devtools.open", "state": "available", "description": "Open the native browser DevTools for the active WebPreview backend."},
                             {"id": "browser.viewport.responsive", "state": "available", "description": "Switch the active WebPreview between full, phone, tablet, laptop, and rotated responsive viewports."},
                             {"id": "browser.function_surfaces", "state": "available", "description": "Copy or send the concrete WebPreview screenshot, inspect, DevTools, and responsive viewport surface map."},
+                            {"id": "browser.panel_card_deck", "state": "available", "description": "Copy or send one compact Agent Panel deck for screenshot, annotation, inspect, DevTools, responsive viewport, managed Chrome, and PC-use proof cards."},
                             {"id": "browser.plugin_bootstrap_readiness", "state": "available", "description": "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."},
                             {"id": "browser.runtime_green_claim_readiness", "state": "available", "description": "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."},
                             {"id": "browser.runtime_green_report_gate", "state": "available", "description": "Copy or send the canonical runtime-green ready/blocked report gate."},
@@ -18971,6 +19110,32 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_agent_browser_function_surfaces_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Agent Browser Panel Card Deck")
+                                .icon(IconName::Screen)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_panel_card_deck(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Agent Browser Panel Card Deck")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_panel_card_deck_to_agent(
                                                 window, cx,
                                             );
                                         });
