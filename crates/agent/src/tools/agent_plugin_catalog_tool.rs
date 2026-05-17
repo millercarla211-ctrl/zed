@@ -467,7 +467,7 @@ fn agent_plugin_catalog_webpreview_handoffs_manifest() -> Value {
             "copy_agent_plugin_runtime_green_report_gate",
             "send_agent_plugin_runtime_green_report_gate_to_agent",
             None,
-            "Share the canonical ready/blocked badge agents must check before reporting runtime-green.",
+            "Share the canonical ready/blocked badge agents must check before reporting runtime-green, including Browser final blocker fields.",
         ),
         "runtime_green_report_badge": agent_plugin_catalog_handoff_manifest(
             AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
@@ -475,7 +475,7 @@ fn agent_plugin_catalog_webpreview_handoffs_manifest() -> Value {
             "copy_agent_plugin_runtime_green_report_gate",
             "send_agent_plugin_runtime_green_report_gate_to_agent",
             Some("runtime_green_report_gate.badge"),
-            "Render the compact runtime-green ready/blocked row before showing larger proof packets.",
+            "Render the compact runtime-green ready/blocked row with Browser stale-result, panel-gate, and final headroom blockers before showing larger proof packets.",
         ),
         "runtime_green_final_proof_guide": agent_plugin_catalog_summary_handoff_manifest(
             AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
@@ -2348,7 +2348,7 @@ fn browser_plugin_manifest() -> Value {
             "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
             "read_only": true,
             "source": "WebPreview More menu",
-            "purpose": "Copy or send the ready/blocked report gate that agents must check before reporting runtime-green, including final target-drive headroom blockers."
+            "purpose": "Copy or send the ready/blocked report gate that agents must check before reporting runtime-green, including Browser final stale-result, panel-gate, and target-drive headroom blockers."
         },
         "runtime_green_report_badge": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
@@ -2356,7 +2356,17 @@ fn browser_plugin_manifest() -> Value {
             "copy_action": "copy_agent_plugin_runtime_green_report_gate",
             "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
             "read_only": true,
-            "purpose": "Render the compact runtime-green ready/blocked row before showing larger proof packets."
+            "browser_final_blocker_fields": [
+                "runtime_green_report_gate.badge.stale_final_result_missing_expected_required_check_count",
+                "runtime_green_report_gate.badge.browser_panel_live_validation_result_gate_ready",
+                "runtime_green_report_gate.badge.browser_panel_live_validation_result_gate_status",
+                "runtime_green_report_gate.badge.browser_final_runtime_capacity_ready",
+                "runtime_green_report_gate.badge.browser_final_runtime_capacity_status",
+                "runtime_green_report_gate.badge.browser_final_runtime_missing_free_gib",
+                "runtime_green_report_gate.badge.browser_final_runtime_first_blocker",
+                "runtime_green_report_gate.badge.browser_final_runtime_recommended_action"
+            ],
+            "purpose": "Render the compact runtime-green ready/blocked row with Browser stale-result, panel-gate, and final headroom blockers before showing larger proof packets."
         },
         "runtime_green_final_proof_guide": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
@@ -2424,7 +2434,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.plugin_bootstrap_readiness", "available", "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."),
             capability("browser.runtime_green_claim_readiness", "available", "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."),
             capability("browser.runtime_green_report_gate", "available", "Copy or send the canonical runtime-green ready/blocked report gate."),
-            capability("browser.runtime_green_report_badge", "available", "Render the runtime-green ready/blocked status row from the report gate."),
+            capability("browser.runtime_green_report_badge", "available", "Render the runtime-green ready/blocked status row plus Browser final blockers from the report gate."),
             capability("browser.runtime_green_final_proof_guide", "available", "Follow the compact final proof guide from report badge through template, manual just run proof, import, and recheck."),
             capability("browser.runtime_green_final_report_packet", "available", "Copy or send the final reporting packet that gates the runtime-green status claim on report-gate and final-result evidence."),
             capability("browser.runtime_green_report_readiness_card", "available", "Read the compact runtime-green report readiness card for right-side panel status without parsing every proof packet."),

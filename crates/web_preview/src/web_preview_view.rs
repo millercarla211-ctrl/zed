@@ -16213,6 +16213,12 @@ impl WebPreviewView {
         let final_runtime_capacity_missing_free_gib = final_observability
             .pointer("/latest/final_runtime_proof_capacity/missing_free_gib")
             .and_then(Value::as_f64);
+        let final_runtime_first_blocker = final_observability
+            .pointer("/latest/final_runtime_blocker_board/first_blocker")
+            .and_then(Value::as_str);
+        let final_runtime_recommended_action = final_observability
+            .pointer("/latest/final_runtime_blocker_board/recommended_action")
+            .and_then(Value::as_str);
         let final_result_missing_expected_required_checks = final_observability
             .pointer("/final_result_missing_expected_required_checks")
             .cloned()
@@ -16264,6 +16270,8 @@ impl WebPreviewView {
             "final_runtime_capacity_ready": final_runtime_capacity_ready,
             "final_runtime_capacity_status": final_runtime_capacity_status,
             "final_runtime_capacity_missing_free_gib": final_runtime_capacity_missing_free_gib,
+            "final_runtime_first_blocker": final_runtime_first_blocker,
+            "final_runtime_recommended_action": final_runtime_recommended_action,
             "final_runtime_headroom_required": final_runtime_headroom_required,
             "final_result_missing_expected_required_checks": final_result_missing_expected_required_checks,
             "final_result_missing_expected_required_check_count": final_result_missing_expected_required_check_count,
@@ -16295,6 +16303,8 @@ impl WebPreviewView {
                 "final_runtime_capacity_ready": final_runtime_capacity_ready,
                 "final_runtime_capacity_status": final_runtime_capacity_status,
                 "final_runtime_capacity_missing_free_gib": final_runtime_capacity_missing_free_gib,
+                "final_runtime_first_blocker": final_runtime_first_blocker,
+                "final_runtime_recommended_action": final_runtime_recommended_action,
                 "final_runtime_headroom_required": final_runtime_headroom_required,
                 "missing_expected_required_checks": final_observability
                     .pointer("/final_result_missing_expected_required_checks")
@@ -16376,6 +16386,13 @@ impl WebPreviewView {
         let final_runtime_capacity_missing_free_gib = readiness
             .get("final_runtime_capacity_missing_free_gib")
             .and_then(Value::as_f64);
+        let final_runtime_first_blocker = readiness
+            .get("final_runtime_first_blocker")
+            .and_then(Value::as_str);
+        let final_runtime_recommended_action = readiness
+            .get("final_runtime_recommended_action")
+            .and_then(Value::as_str)
+            .unwrap_or("copy_agent_browser_final_runtime_headroom_readiness_gate");
         let final_result_missing_expected_required_check_count = readiness
             .get("final_result_missing_expected_required_check_count")
             .and_then(Value::as_u64)
@@ -16433,22 +16450,14 @@ impl WebPreviewView {
             if final_result_present && final_result_missing_expected_required_check_count > 0 {
                 "copy_agent_browser_final_validation_result_template"
             } else if final_runtime_headroom_required {
-                "copy_agent_browser_final_runtime_headroom_readiness_gate"
+                final_runtime_recommended_action
             } else {
                 readiness
                     .get("next_recommended_action")
                     .and_then(Value::as_str)
                     .unwrap_or("copy_agent_plugin_runtime_green_claim_readiness")
             };
-        let badge = Self::agent_plugin_runtime_green_report_badge_from_fields(
-            status,
-            label,
-            can_report,
-            blocker,
-            next_action,
-        );
-
-        serde_json::json!({
+        let mut report_gate = serde_json::json!({
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
             "status": status,
             "label": label,
@@ -16462,7 +16471,7 @@ impl WebPreviewView {
                 .cloned()
                 .unwrap_or_else(|| serde_json::json!([])),
             "next_action": next_action,
-            "badge": badge,
+            "badge": null,
             "ready_lane_fraction": readiness.get("ready_lane_fraction").and_then(Value::as_str),
             "claim_readiness_status": readiness.get("status").and_then(Value::as_str),
             "claim_gate_status": readiness.get("claim_gate_status").and_then(Value::as_str),
@@ -16476,6 +16485,8 @@ impl WebPreviewView {
             "final_runtime_capacity_ready": final_runtime_capacity_ready,
             "final_runtime_capacity_status": final_runtime_capacity_status,
             "final_runtime_capacity_missing_free_gib": final_runtime_capacity_missing_free_gib,
+            "final_runtime_first_blocker": final_runtime_first_blocker,
+            "final_runtime_recommended_action": final_runtime_recommended_action,
             "final_runtime_headroom_required": final_runtime_headroom_required,
             "final_manual_command": "just run",
             "source_schema": readiness.get("schema").and_then(Value::as_str),
@@ -16495,7 +16506,10 @@ impl WebPreviewView {
             "runs_node": false,
             "launches_browser": false,
             "dispatches_input": false,
-        })
+        });
+        report_gate["badge"] =
+            Self::agent_plugin_runtime_green_report_badge_from_gate(&report_gate);
+        report_gate
     }
 
     fn agent_plugin_runtime_green_report_badge_from_fields(
@@ -16571,13 +16585,74 @@ impl WebPreviewView {
             .and_then(Value::as_str)
             .unwrap_or("copy_agent_plugin_runtime_green_report_gate");
 
-        Self::agent_plugin_runtime_green_report_badge_from_fields(
+        let badge = Self::agent_plugin_runtime_green_report_badge_from_fields(
             status,
             label,
             can_report,
             blocker,
             next_action,
-        )
+        );
+
+        Self::agent_plugin_runtime_green_report_badge_with_gate_blockers(badge, report_gate)
+    }
+
+    fn agent_plugin_runtime_green_report_badge_with_gate_blockers(
+        mut badge: Value,
+        report_gate: &Value,
+    ) -> Value {
+        let missing_required_check_count = report_gate
+            .get("final_result_missing_expected_required_check_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        badge["stale_final_result_missing_expected_required_check_count"] =
+            serde_json::json!(missing_required_check_count);
+        badge["final_result_missing_expected_required_check_count"] =
+            serde_json::json!(missing_required_check_count);
+        badge["final_result_missing_expected_required_checks"] = report_gate
+            .get("final_result_missing_expected_required_checks")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        badge["browser_panel_live_validation_result_gate_ready"] = serde_json::json!(
+            report_gate
+                .get("panel_live_validation_result_gate_ready")
+                .and_then(Value::as_bool)
+        );
+        badge["browser_panel_live_validation_result_gate_status"] = serde_json::json!(
+            report_gate
+                .get("panel_live_validation_result_gate_status")
+                .and_then(Value::as_str)
+        );
+        badge["browser_final_runtime_capacity_ready"] = serde_json::json!(
+            report_gate
+                .get("final_runtime_capacity_ready")
+                .and_then(Value::as_bool)
+        );
+        badge["browser_final_runtime_capacity_status"] = serde_json::json!(
+            report_gate
+                .get("final_runtime_capacity_status")
+                .and_then(Value::as_str)
+        );
+        badge["browser_final_runtime_missing_free_gib"] = serde_json::json!(
+            report_gate
+                .get("final_runtime_capacity_missing_free_gib")
+                .and_then(Value::as_f64)
+        );
+        badge["browser_final_runtime_first_blocker"] = serde_json::json!(
+            report_gate
+                .get("final_runtime_first_blocker")
+                .and_then(Value::as_str)
+        );
+        badge["browser_final_runtime_recommended_action"] = serde_json::json!(
+            report_gate
+                .get("final_runtime_recommended_action")
+                .and_then(Value::as_str)
+        );
+        badge["browser_final_runtime_headroom_required"] = serde_json::json!(
+            report_gate
+                .get("final_runtime_headroom_required")
+                .and_then(Value::as_bool)
+        );
+        badge
     }
 
     fn agent_plugin_runtime_green_final_proof_guide_snapshot(&self) -> Value {
@@ -19055,9 +19130,34 @@ impl WebPreviewView {
             .get("next_action")
             .and_then(Value::as_str)
             .unwrap_or("copy_agent_plugin_runtime_green_report_gate");
+        let stale_required_check_count = badge
+            .get("stale_final_result_missing_expected_required_check_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let panel_gate_status = badge
+            .get("browser_panel_live_validation_result_gate_status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let final_capacity_status = badge
+            .get("browser_final_runtime_capacity_status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let final_capacity_ready = badge
+            .get("browser_final_runtime_capacity_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let final_missing_free_gib = badge
+            .get("browser_final_runtime_missing_free_gib")
+            .and_then(Value::as_f64)
+            .map(|value| format!("{value:.2}"))
+            .unwrap_or_else(|| "unknown".to_string());
+        let final_first_blocker = badge
+            .get("browser_final_runtime_first_blocker")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
 
         format!(
-            "{label}\nTone: {tone}\nStatus: {status}\nCan report runtime-green: {can_report}\nBlocker: {blocker}\nNext action: {next_action}"
+            "{label}\nTone: {tone}\nStatus: {status}\nCan report runtime-green: {can_report}\nBlocker: {blocker}\nBrowser final blockers: stale checks {stale_required_check_count}, panel gate {panel_gate_status}, final capacity {final_capacity_status} (ready: {final_capacity_ready}, missing GiB: {final_missing_free_gib}), first blocker {final_first_blocker}\nNext action: {next_action}"
         )
     }
 
@@ -19181,6 +19281,30 @@ impl WebPreviewView {
                 .and_then(Value::as_bool),
             "final_validation_observability_status": packet
                 .pointer("/final_validation_observability/status")
+                .and_then(Value::as_str),
+            "stale_final_result_missing_expected_required_check_count": packet
+                .pointer("/final_validation_observability/missing_expected_required_check_count")
+                .and_then(Value::as_u64),
+            "browser_panel_live_validation_result_gate_ready": packet
+                .pointer("/final_validation_observability/panel_live_validation_result_gate_ready")
+                .and_then(Value::as_bool),
+            "browser_panel_live_validation_result_gate_status": packet
+                .pointer("/final_validation_observability/panel_live_validation_result_gate_status")
+                .and_then(Value::as_str),
+            "browser_final_runtime_capacity_ready": packet
+                .pointer("/final_validation_observability/final_runtime_capacity_ready")
+                .and_then(Value::as_bool),
+            "browser_final_runtime_capacity_status": packet
+                .pointer("/final_validation_observability/final_runtime_capacity_status")
+                .and_then(Value::as_str),
+            "browser_final_runtime_missing_free_gib": packet
+                .pointer("/final_validation_observability/final_runtime_capacity_missing_free_gib")
+                .and_then(Value::as_f64),
+            "browser_final_runtime_first_blocker": packet
+                .pointer("/final_validation_observability/final_runtime_first_blocker")
+                .and_then(Value::as_str),
+            "browser_final_runtime_recommended_action": packet
+                .pointer("/final_validation_observability/final_runtime_recommended_action")
                 .and_then(Value::as_str),
             "regression_watch_status": packet.pointer("/regression_watch/status").and_then(Value::as_str),
             "regression_watch_lane_count": packet
@@ -27060,7 +27184,7 @@ impl WebPreviewView {
                     "latest_summary": runtime_green_report_gate.clone(),
                     "badge": runtime_green_report_badge.clone(),
                     "read_only": true,
-                    "purpose": "Copy or send the canonical ready/blocked badge agents must check before reporting runtime-green."
+                    "purpose": "Copy or send the canonical ready/blocked badge agents must check before reporting runtime-green, including Browser final blocker fields."
                 },
                 "runtime_green_report_badge": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
@@ -27069,7 +27193,17 @@ impl WebPreviewView {
                     "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
                     "latest_summary": runtime_green_report_badge.clone(),
                     "read_only": true,
-                    "purpose": "Render the compact runtime-green ready/blocked row before showing larger proof packets."
+                    "browser_final_blocker_fields": [
+                        "runtime_green_report_gate.badge.stale_final_result_missing_expected_required_check_count",
+                        "runtime_green_report_gate.badge.browser_panel_live_validation_result_gate_ready",
+                        "runtime_green_report_gate.badge.browser_panel_live_validation_result_gate_status",
+                        "runtime_green_report_gate.badge.browser_final_runtime_capacity_ready",
+                        "runtime_green_report_gate.badge.browser_final_runtime_capacity_status",
+                        "runtime_green_report_gate.badge.browser_final_runtime_missing_free_gib",
+                        "runtime_green_report_gate.badge.browser_final_runtime_first_blocker",
+                        "runtime_green_report_gate.badge.browser_final_runtime_recommended_action"
+                    ],
+                    "purpose": "Render the compact runtime-green ready/blocked row with Browser stale-result, panel-gate, and final headroom blockers before showing larger proof packets."
                 },
                 "runtime_green_final_proof_guide": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
@@ -27320,7 +27454,7 @@ impl WebPreviewView {
                         "copy_action": "copy_agent_plugin_runtime_green_report_gate",
                         "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
                         "read_only": true,
-                        "purpose": "Share the canonical ready/blocked badge agents must check before reporting runtime-green."
+                        "purpose": "Share the canonical ready/blocked badge agents must check before reporting runtime-green, including Browser final blocker fields."
                     },
                     "runtime_green_report_badge": {
                         "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
@@ -27328,7 +27462,17 @@ impl WebPreviewView {
                         "copy_action": "copy_agent_plugin_runtime_green_report_gate",
                         "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
                         "read_only": true,
-                        "purpose": "Render the compact runtime-green ready/blocked row before showing larger proof packets."
+                        "browser_final_blocker_fields": [
+                            "runtime_green_report_gate.badge.stale_final_result_missing_expected_required_check_count",
+                            "runtime_green_report_gate.badge.browser_panel_live_validation_result_gate_ready",
+                            "runtime_green_report_gate.badge.browser_panel_live_validation_result_gate_status",
+                            "runtime_green_report_gate.badge.browser_final_runtime_capacity_ready",
+                            "runtime_green_report_gate.badge.browser_final_runtime_capacity_status",
+                            "runtime_green_report_gate.badge.browser_final_runtime_missing_free_gib",
+                            "runtime_green_report_gate.badge.browser_final_runtime_first_blocker",
+                            "runtime_green_report_gate.badge.browser_final_runtime_recommended_action"
+                        ],
+                        "purpose": "Render the compact runtime-green ready/blocked row with Browser stale-result, panel-gate, and final headroom blockers before showing larger proof packets."
                     },
                     "runtime_green_final_proof_guide": {
                         "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
@@ -28074,7 +28218,7 @@ impl WebPreviewView {
                             "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
                             "read_only": true,
                             "source": "WebPreview More menu",
-                            "purpose": "Copy or send the ready/blocked report gate that agents must check before reporting runtime-green, including final target-drive headroom blockers."
+                            "purpose": "Copy or send the ready/blocked report gate that agents must check before reporting runtime-green, including Browser final stale-result, panel-gate, and target-drive headroom blockers."
                         },
                         "runtime_green_report_badge": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
@@ -28082,7 +28226,17 @@ impl WebPreviewView {
                             "copy_action": "copy_agent_plugin_runtime_green_report_gate",
                             "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
                             "read_only": true,
-                            "purpose": "Render the compact runtime-green ready/blocked row before showing larger proof packets."
+                            "browser_final_blocker_fields": [
+                                "runtime_green_report_gate.badge.stale_final_result_missing_expected_required_check_count",
+                                "runtime_green_report_gate.badge.browser_panel_live_validation_result_gate_ready",
+                                "runtime_green_report_gate.badge.browser_panel_live_validation_result_gate_status",
+                                "runtime_green_report_gate.badge.browser_final_runtime_capacity_ready",
+                                "runtime_green_report_gate.badge.browser_final_runtime_capacity_status",
+                                "runtime_green_report_gate.badge.browser_final_runtime_missing_free_gib",
+                                "runtime_green_report_gate.badge.browser_final_runtime_first_blocker",
+                                "runtime_green_report_gate.badge.browser_final_runtime_recommended_action"
+                            ],
+                            "purpose": "Render the compact runtime-green ready/blocked row with Browser stale-result, panel-gate, and final headroom blockers before showing larger proof packets."
                         },
                         "runtime_green_final_proof_guide": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
@@ -28150,7 +28304,7 @@ impl WebPreviewView {
                             {"id": "browser.plugin_bootstrap_readiness", "state": "available", "description": "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."},
                             {"id": "browser.runtime_green_claim_readiness", "state": "available", "description": "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."},
                             {"id": "browser.runtime_green_report_gate", "state": "available", "description": "Copy or send the canonical runtime-green ready/blocked report gate."},
-                            {"id": "browser.runtime_green_report_badge", "state": "available", "description": "Render the runtime-green ready/blocked status row from the report gate."},
+                            {"id": "browser.runtime_green_report_badge", "state": "available", "description": "Render the runtime-green ready/blocked status row plus Browser final blockers from the report gate."},
                             {"id": "browser.runtime_green_final_proof_guide", "state": "available", "description": "Follow the compact final proof guide from report badge through template, manual just run proof, import, and recheck."},
                             {"id": "browser.runtime_green_final_report_packet", "state": "available", "description": "Copy or send the final reporting packet that gates the runtime-green status claim on report-gate and final-result evidence."},
                             {"id": "browser.runtime_green_report_readiness_card", "state": "available", "description": "Read the compact runtime-green report readiness card for right-side panel status without parsing every proof packet."},

@@ -1,3 +1,18 @@
+[2026-05-18] - Report Badge Browser Final Blocker Strip
+
+ADDED:
+- Runtime-green report badges now carry Browser final blocker fields for stale required checks, panel live-validation result gate status, final runtime capacity status, missing free GiB, first final-runtime blocker, and recommended recovery action.
+- Final report packet summaries now expose the same Browser final blocker strip so compact panel summaries can show the active final blocker without opening the full report packet.
+- Agent and WebPreview catalog metadata now advertise the badge-level Browser final blocker fields.
+
+CHANGED:
+- Runtime-green report gates now thread final-runtime blocker-board first blocker and recommended action through claim readiness into the badge.
+- Badge agent summaries now include stale-result, panel-gate, and final-headroom status in the compact text block.
+- `todo.txt` records the report-badge blocker strip slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is compact status metadata hardening. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Final Report Blocker Summary Fields
 
 ADDED:
