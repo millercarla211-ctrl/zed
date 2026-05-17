@@ -1555,11 +1555,18 @@ fn agent_plugin_catalog_proof_freshness_contract(
                     "copy_agent_browser_final_validation_bundle",
                     "copy_agent_browser_final_validation_result_template",
                     "import_agent_browser_final_validation_result_from_clipboard",
+                    "copy_agent_browser_panel_live_validation_result_gate",
+                    "copy_agent_browser_final_runtime_headroom_readiness_gate",
+                    "copy_agent_browser_final_runtime_blocker_board",
                     "copy_agent_browser_final_proof_audit",
                     AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
                 ],
                 vec![
                     "final_validation_observability",
+                    "panel_live_validation_result_gate",
+                    "final_runtime_proof_capacity",
+                    "final_runtime_blocker_board",
+                    "runtime_observability_plugin_matrix.rows[browser_webpreview].proof",
                     "final_validation_result_import_receipt",
                     "runtime_green_final_proof_audit_summary",
                 ],
@@ -1616,6 +1623,18 @@ fn agent_plugin_catalog_proof_freshness_contract(
         "runtime_status_field": runtime_status_field,
         "read_sequence": read_sequence,
         "proof_sources": proof_sources,
+        "browser_final_observability_proof_fields": if plugin_id == "zed.browser" {
+            serde_json::json!([
+                "runtime_observability_plugin_matrix.rows[browser_webpreview].proof.final_result_runtime_green_candidate",
+                "runtime_observability_plugin_matrix.rows[browser_webpreview].proof.stale_final_result_missing_expected_required_check_count",
+                "runtime_observability_plugin_matrix.rows[browser_webpreview].proof.panel_live_validation_result_gate_ready",
+                "runtime_observability_plugin_matrix.rows[browser_webpreview].proof.final_runtime_capacity_ready",
+                "runtime_observability_plugin_matrix.rows[browser_webpreview].proof.final_runtime_capacity_missing_free_gib",
+                "runtime_observability_plugin_matrix.rows[browser_webpreview].proof.final_runtime_first_blocker"
+            ])
+        } else {
+            Value::Null
+        },
         "recommended_handoff": recommended_handoff,
         "must_recheck_before_runtime_green": true,
         "does_not_probe_files": true,

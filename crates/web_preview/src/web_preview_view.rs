@@ -18313,6 +18313,59 @@ impl WebPreviewView {
                     .pointer("/webpreview_evidence/final_validation_observability/runtime_green_candidate")
                     .and_then(Value::as_bool)
                     .unwrap_or(false),
+                "final_result_runtime_green_candidate": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/final_result_runtime_green_candidate")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                "stale_final_result_missing_expected_required_checks": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/final_result_missing_expected_required_checks")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
+                "stale_final_result_missing_expected_required_check_count": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/final_result_missing_expected_required_check_count")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0),
+                "panel_live_validation_result_gate_ready": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/panel_live_validation_result_gate_ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                "panel_live_validation_result_gate_status": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/panel_live_validation_result_gate/status")
+                    .and_then(Value::as_str),
+                "final_runtime_capacity_ready": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/final_runtime_capacity_ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                "final_runtime_capacity_status": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/latest/final_runtime_proof_capacity/status")
+                    .and_then(Value::as_str),
+                "final_runtime_capacity_missing_free_gib": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/latest/final_runtime_proof_capacity/missing_free_gib")
+                    .and_then(Value::as_f64),
+                "final_runtime_blocker_board_status": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/latest/final_runtime_blocker_board/status")
+                    .and_then(Value::as_str),
+                "final_runtime_blocker_count": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/latest/final_runtime_blocker_board/blocker_count")
+                    .and_then(Value::as_u64),
+                "final_runtime_first_blocker": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/latest/final_runtime_blocker_board/first_blocker")
+                    .and_then(Value::as_str),
+                "final_runtime_recommended_action": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/latest/final_runtime_blocker_board/recommended_action")
+                    .and_then(Value::as_str),
+                "headroom_readiness_gate_status": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/final_runtime_headroom_readiness_gate/status")
+                    .and_then(Value::as_str),
+                "headroom_readiness_gate_first_blocker": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/final_runtime_headroom_readiness_gate/first_blocker/id")
+                    .and_then(Value::as_str),
+                "headroom_cleanup_result_gate_status": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/final_runtime_headroom_cleanup_result_gate/status")
+                    .and_then(Value::as_str),
+                "headroom_cleanup_result_ready_for_capacity_recheck": handoff
+                    .pointer("/webpreview_evidence/final_validation_observability/final_runtime_headroom_cleanup_result_gate/ready_for_capacity_recheck")
+                    .and_then(Value::as_bool),
                 "missing": handoff
                     .pointer("/webpreview_evidence/final_validation_observability/missing")
                     .cloned()
@@ -27123,7 +27176,15 @@ impl WebPreviewView {
                         "copy_action": "copy_agent_plugin_runtime_observability_digest",
                         "send_action": "send_agent_plugin_runtime_observability_digest_to_agent",
                         "read_only": true,
-                        "purpose": "Share one compact runtime health digest from WebPreview with lane readiness, plugin matrix, proof focus, and the next operator packet."
+                        "purpose": "Share one compact runtime health digest from WebPreview with lane readiness, plugin matrix, proof focus, and the next operator packet.",
+                        "browser_plugin_matrix_proof_fields": [
+                            "plugin_matrix.rows[browser_webpreview].proof.final_result_runtime_green_candidate",
+                            "plugin_matrix.rows[browser_webpreview].proof.stale_final_result_missing_expected_required_check_count",
+                            "plugin_matrix.rows[browser_webpreview].proof.panel_live_validation_result_gate_ready",
+                            "plugin_matrix.rows[browser_webpreview].proof.final_runtime_capacity_ready",
+                            "plugin_matrix.rows[browser_webpreview].proof.final_runtime_capacity_missing_free_gib",
+                            "plugin_matrix.rows[browser_webpreview].proof.final_runtime_first_blocker"
+                        ]
                     },
                     "runtime_green_operator_handoff": {
                         "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
