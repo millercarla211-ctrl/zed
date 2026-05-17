@@ -60,6 +60,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_proof_capacity.v1";
+const AGENT_PLUGIN_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_STATUS_SCHEMA: &str =
+    "zed.agent_plugins.final_runtime_headroom_cleanup_result_status.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_target_drive_policy.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA: &str =
@@ -1053,6 +1055,26 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
                     "/final_runtime_proof_capacity/headroom_cleanup_result_template_send_action",
                 )
                 .and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_runtime_status_schema": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_cleanup_result_runtime_status_schema",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_runtime_status_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_cleanup_result_runtime_status_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_plugin_status_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_cleanup_result_plugin_status_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_capacity_status_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_cleanup_result_capacity_status_field",
+                )
+                .and_then(Value::as_str),
             "final_runtime_headroom_cleanup_result_import_action": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_import_action")
                 .and_then(Value::as_str),
@@ -1762,6 +1784,7 @@ fn browser_plugin_manifest() -> Value {
             "final_runtime_headroom_cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
             "final_runtime_headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
             "final_runtime_headroom_cleanup_result_import_receipt_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
+            "final_runtime_headroom_cleanup_result_status_schema": AGENT_PLUGIN_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_STATUS_SCHEMA,
             "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
             "final_runtime_headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
             "final_runtime_blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
@@ -1902,6 +1925,10 @@ fn browser_plugin_manifest() -> Value {
             "headroom_cleanup_result_template_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
             "headroom_cleanup_result_template_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_template_to_agent",
             "headroom_cleanup_result_template_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_template",
+            "headroom_cleanup_result_runtime_status_schema": AGENT_PLUGIN_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_STATUS_SCHEMA,
+            "headroom_cleanup_result_runtime_status_field": "final_runtime_headroom_cleanup_result_status",
+            "headroom_cleanup_result_plugin_status_field": "plugins.browser.final_runtime_headroom_cleanup_result_status",
+            "headroom_cleanup_result_capacity_status_field": "final_runtime_proof_capacity.headroom_cleanup_result_status",
             "headroom_cleanup_result_import_action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
             "headroom_cleanup_result_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result",
             "headroom_cleanup_result_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_to_agent",
@@ -2093,6 +2120,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.validation.final_runtime_headroom_cleanup_result_import", "available_explicit_user_action", "Import a filled target-drive cleanup result from the clipboard and persist it under managed Browser proof roots."),
             capability("browser.validation.final_runtime_headroom_cleanup_result_import_receipt", "available_after_import", "Copy or send the latest target-drive cleanup-result import receipt with managed proof paths."),
             capability("browser.validation.final_runtime_headroom_cleanup_result_gate", "available", "Expose a compact gate for manual cleanup-result readiness before capacity recheck."),
+            capability("browser.validation.final_runtime_headroom_cleanup_result_runtime_status", "available_in_runtime_status", "Read durable cleanup-result readiness from inspect_agent_plugin_runtime_status before capacity recheck."),
             capability("browser.validation.final_runtime_blocker_board", "available", "Copy or send the ordered final-runtime blocker board across panel-result, panel-proof, and target-drive gates."),
             capability("browser.validation.final_proof_audit", "available", "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."),
             capability("browser.action.click", "available_when_unlocked", "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."),

@@ -1,3 +1,16 @@
+[2026-05-18] - Final Runtime Cleanup Result Runtime Status
+
+ADDED:
+- `crates/agent/src/tools/agent_plugin_runtime_status_tool.rs` now reads durable final-runtime headroom cleanup-result proof files from managed workspace and Zed-data roots and exposes a read-only cleanup-result status packet.
+- Browser plugin runtime status, final runtime capacity summaries, proof paths, operator handoffs, and observability freshness now surface cleanup-result gate readiness so panels can choose template/import/gate/recheck actions without an active WebPreview session.
+
+CHANGED:
+- `crates/agent/src/tools/agent_plugin_catalog_tool.rs` now advertises the cleanup-result runtime-status schema and fields beside the WebPreview cleanup-result handoff actions.
+- `todo.txt` records the runtime cleanup-result status slice while keeping Browser/Chrome Functional Plugin Execution Hardening at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only in runtime status. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-17] - Final Runtime Headroom Cleanup Result Import
 
 ADDED:

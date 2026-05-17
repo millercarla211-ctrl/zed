@@ -132,6 +132,14 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result_import_receipt.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_proof_capacity.v1";
+const AGENT_PLUGIN_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_STATUS_SCHEMA: &str =
+    "zed.agent_plugins.final_runtime_headroom_cleanup_result_status.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_headroom_cleanup_result_template.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_headroom_cleanup_result_gate.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_headroom_cleanup_result_import_receipt.v1";
 const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_proof_audit.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA: &str =
@@ -143,6 +151,12 @@ const AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_READINESS_CARD_SCHEMA: &str =
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME: &str =
     "latest-agent-browser-final-validation-result.json";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_DIR_NAME: &str =
+    "browser-final-runtime-headroom-cleanup-results";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_FILE_NAME: &str =
+    "latest-agent-browser-final-runtime-headroom-cleanup-result.json";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_ARCHIVE_PREFIX: &str =
+    "agent-browser-final-runtime-headroom-cleanup-result-";
 const AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_control_result.v1";
 const AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
@@ -297,6 +311,8 @@ struct AgentPluginRuntimeRoots {
     browser_latest_payload: PathBuf,
     browser_final_validation_dir: PathBuf,
     browser_final_validation_latest_result: PathBuf,
+    browser_final_runtime_headroom_cleanup_result_dir: PathBuf,
+    browser_final_runtime_headroom_cleanup_result_latest_result: PathBuf,
     browser_panel_control_result_dir: PathBuf,
     browser_panel_control_result_latest_result: PathBuf,
     chrome_queue_dir: PathBuf,
@@ -351,6 +367,11 @@ impl AgentPluginRuntimeRoots {
             plugin_root.join(AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME);
         let browser_final_validation_latest_result =
             browser_final_validation_dir.join(AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME);
+        let browser_final_runtime_headroom_cleanup_result_dir =
+            plugin_root.join(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_DIR_NAME);
+        let browser_final_runtime_headroom_cleanup_result_latest_result =
+            browser_final_runtime_headroom_cleanup_result_dir
+                .join(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_FILE_NAME);
         let browser_panel_control_result_dir =
             plugin_root.join(AGENT_BROWSER_PANEL_CONTROL_RESULT_DIR_NAME);
         let browser_panel_control_result_latest_result =
@@ -386,6 +407,8 @@ impl AgentPluginRuntimeRoots {
             browser_latest_payload,
             browser_final_validation_dir,
             browser_final_validation_latest_result,
+            browser_final_runtime_headroom_cleanup_result_dir,
+            browser_final_runtime_headroom_cleanup_result_latest_result,
             browser_panel_control_result_dir,
             browser_panel_control_result_latest_result,
             chrome_queue_dir,
@@ -430,6 +453,8 @@ impl AgentPluginRuntimeRoots {
             &self.browser_latest_payload,
             &self.browser_final_validation_dir,
             &self.browser_final_validation_latest_result,
+            &self.browser_final_runtime_headroom_cleanup_result_dir,
+            &self.browser_final_runtime_headroom_cleanup_result_latest_result,
             &self.browser_panel_control_result_dir,
             &self.browser_panel_control_result_latest_result,
             &self.chrome_queue_dir,
@@ -467,6 +492,26 @@ impl AgentPluginRuntimeRoots {
         paths.push(("zed_data", managed_root, latest_path));
         paths
     }
+
+    fn browser_final_runtime_headroom_cleanup_result_latest_paths(
+        &self,
+    ) -> Vec<(&'static str, PathBuf, PathBuf)> {
+        let mut paths = Vec::new();
+        if let Some(root_path) = self.active_project_root.as_ref() {
+            let managed_root = root_path.join("tools").join("agent-plugins");
+            let latest_path = managed_root
+                .join(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_DIR_NAME)
+                .join(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_FILE_NAME);
+            paths.push(("workspace", managed_root, latest_path));
+        }
+
+        let managed_root = data_dir().join("agent-plugins");
+        let latest_path = managed_root
+            .join(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_DIR_NAME)
+            .join(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_FILE_NAME);
+        paths.push(("zed_data", managed_root, latest_path));
+        paths
+    }
 }
 
 fn inspect_runtime_status(
@@ -488,10 +533,13 @@ fn inspect_runtime_status(
     let bootstrap_readiness = input
         .include_host_checks
         .then(|| bootstrap_readiness(roots, host_checks.as_ref()));
+    let generated_at_ms = current_epoch_millis();
     let browser_panel_live_proof_status_value =
-        browser_panel_live_proof_status(roots, current_epoch_millis());
+        browser_panel_live_proof_status(roots, generated_at_ms);
     let browser_panel_live_proof_readiness_card_value =
         browser_panel_live_proof_readiness_card(&browser_panel_live_proof_status_value);
+    let final_runtime_headroom_cleanup_result_status_value =
+        final_runtime_headroom_cleanup_result_status(roots, generated_at_ms);
     let browser = browser_status(roots, input.include_latest_handoffs);
     let chrome = chrome_status(roots, input.include_latest_handoffs, host_checks.as_ref());
     let pc_use = pc_use_status(roots, input.include_latest_handoffs);
@@ -577,7 +625,7 @@ fn inspect_runtime_status(
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA,
         "result": {
-            "generated_at_ms": current_epoch_millis(),
+            "generated_at_ms": generated_at_ms,
             "status": status,
             "root_mode": roots.root_mode_label(),
             "managed_paths_valid": managed_paths_valid,
@@ -598,6 +646,7 @@ fn inspect_runtime_status(
         },
         "browser_panel_live_proof_status": browser_panel_live_proof_status_value,
         "browser_panel_live_proof_readiness_card": browser_panel_live_proof_readiness_card_value,
+        "final_runtime_headroom_cleanup_result_status": final_runtime_headroom_cleanup_result_status_value,
         "host": host_checks,
         "bootstrap_readiness": bootstrap_readiness,
         "runtime_green_blocker_summary": runtime_green_blocker_summary,
@@ -641,9 +690,12 @@ fn inspect_runtime_status(
 }
 
 fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool) -> Value {
-    let panel_live_proof_status = browser_panel_live_proof_status(roots, current_epoch_millis());
+    let generated_at_ms = current_epoch_millis();
+    let panel_live_proof_status = browser_panel_live_proof_status(roots, generated_at_ms);
     let panel_live_proof_readiness_card =
         browser_panel_live_proof_readiness_card(&panel_live_proof_status);
+    let final_runtime_headroom_cleanup_result_status =
+        final_runtime_headroom_cleanup_result_status(roots, generated_at_ms);
 
     serde_json::json!({
         "id": "zed.browser",
@@ -679,6 +731,10 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
             "runtime_green_final_report_packet_summary": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
             "runtime_green_report_readiness_card": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
             "runtime_green_report_readiness_card_summary": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
+            "final_runtime_headroom_cleanup_result_status": AGENT_PLUGIN_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_STATUS_SCHEMA,
+            "final_runtime_headroom_cleanup_result_template": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
+            "final_runtime_headroom_cleanup_result_gate": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+            "final_runtime_headroom_cleanup_result_import_receipt": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
         },
         "managed_paths": {
             "queue_dir": dir_probe(&roots.browser_queue_dir),
@@ -702,9 +758,19 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
                 None,
                 include_latest_handoff,
             ),
+            "final_runtime_headroom_cleanup_result_dir": dir_probe(
+                &roots.browser_final_runtime_headroom_cleanup_result_dir
+            ),
+            "latest_final_runtime_headroom_cleanup_result": file_probe(
+                &roots.browser_final_runtime_headroom_cleanup_result_latest_result,
+                Some(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA),
+                None,
+                include_latest_handoff,
+            ),
         },
         "panel_live_proof_status": panel_live_proof_status,
         "panel_live_proof_readiness_card": panel_live_proof_readiness_card,
+        "final_runtime_headroom_cleanup_result_status": final_runtime_headroom_cleanup_result_status,
         "requirements_before_input": [
             "active WebPreview session",
             "interactive browser action unlock",
@@ -1333,6 +1399,8 @@ fn roots_value(roots: &AgentPluginRuntimeRoots) -> Value {
         "browser_queue_dir": path_string(&roots.browser_queue_dir),
         "browser_final_validation_dir": path_string(&roots.browser_final_validation_dir),
         "browser_final_validation_latest_result": path_string(&roots.browser_final_validation_latest_result),
+        "browser_final_runtime_headroom_cleanup_result_dir": path_string(&roots.browser_final_runtime_headroom_cleanup_result_dir),
+        "browser_final_runtime_headroom_cleanup_result_latest_result": path_string(&roots.browser_final_runtime_headroom_cleanup_result_latest_result),
         "browser_panel_control_result_dir": path_string(&roots.browser_panel_control_result_dir),
         "browser_panel_control_result_latest_result": path_string(&roots.browser_panel_control_result_latest_result),
         "chrome_queue_dir": path_string(&roots.chrome_queue_dir),
@@ -1456,6 +1524,12 @@ fn final_runtime_proof_capacity(roots: &AgentPluginRuntimeRoots) -> Value {
     let ready_for_just_run = observed_free_bytes
         .map(|free_bytes| free_bytes >= AGENT_BROWSER_FINAL_RUNTIME_MIN_FREE_BYTES)
         .unwrap_or(false);
+    let headroom_cleanup_result_status =
+        final_runtime_headroom_cleanup_result_status(roots, current_epoch_millis());
+    let cleanup_result_ready_for_capacity_recheck = headroom_cleanup_result_status
+        .get("ready_for_capacity_recheck")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let status = if ready_for_just_run {
         "target_headroom_ready"
     } else if observed_free_bytes.is_some() {
@@ -1465,8 +1539,10 @@ fn final_runtime_proof_capacity(roots: &AgentPluginRuntimeRoots) -> Value {
     };
     let next_action = if ready_for_just_run {
         "Continue to the panel live-validation gate and final Windows just run proof when the user is ready."
+    } else if cleanup_result_ready_for_capacity_recheck {
+        "Recheck final runtime capacity now that the imported cleanup result is ready, then continue only when ready_for_just_run=true."
     } else if observed_free_bytes.is_some() {
-        "Free target/cache space or move CARGO_TARGET_DIR to a drive with at least 18 GiB free before starting just run."
+        "Use the headroom inspection, size inspection, and cleanup-result template handoffs after safe manual target/cache cleanup, then recheck capacity before starting just run."
     } else {
         "Open a Windows workspace with a resolvable target drive, then re-run inspect_agent_plugin_runtime_status before just run."
     };
@@ -1495,6 +1571,7 @@ fn final_runtime_proof_capacity(roots: &AgentPluginRuntimeRoots) -> Value {
             "minimum_target_drive_free_gib": 18.0,
             "guarded_reason": "Avoid starting the large Zed build/run proof when the target drive cannot satisfy the recipe headroom check."
         },
+        "headroom_cleanup_result_status": headroom_cleanup_result_status,
         "webpreview_handoff": {
             "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
             "send_action": "send_agent_browser_final_runtime_proof_capacity_to_agent",
@@ -1524,6 +1601,15 @@ fn final_runtime_proof_capacity_summary(capacity: &Value) -> Value {
         "required_free_gib": capacity.pointer("/target/required_free_gib").and_then(Value::as_f64),
         "observed_free_gib": capacity.pointer("/target/observed_free_gib").and_then(Value::as_f64),
         "missing_free_gib": capacity.pointer("/target/missing_free_gib").and_then(Value::as_f64),
+        "headroom_cleanup_result_status_schema": capacity
+            .pointer("/headroom_cleanup_result_status/schema")
+            .and_then(Value::as_str),
+        "headroom_cleanup_result_status": capacity
+            .pointer("/headroom_cleanup_result_status/status")
+            .and_then(Value::as_str),
+        "headroom_cleanup_result_ready_for_capacity_recheck": capacity
+            .pointer("/headroom_cleanup_result_status/ready_for_capacity_recheck")
+            .and_then(Value::as_bool),
         "copy_action": capacity.pointer("/webpreview_handoff/copy_action").and_then(Value::as_str),
         "next_action": capacity.get("next_action").and_then(Value::as_str),
         "read_only": capacity.pointer("/safety/read_only").and_then(Value::as_bool),
@@ -1953,6 +2039,448 @@ fn browser_panel_control_result_summary(result: &Value) -> Value {
     })
 }
 
+fn final_runtime_headroom_cleanup_result_status(
+    roots: &AgentPluginRuntimeRoots,
+    generated_at_ms: u64,
+) -> Value {
+    let durable_evidence =
+        final_runtime_headroom_cleanup_result_durable_evidence(roots, generated_at_ms);
+    let durable_roots = durable_evidence
+        .get("roots")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let latest_result_summary = durable_roots
+        .iter()
+        .filter_map(|root| root.get("summary"))
+        .find(|summary| {
+            summary
+                .get("schema_valid")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        })
+        .cloned()
+        .or_else(|| {
+            durable_roots
+                .iter()
+                .filter_map(|root| root.get("summary"))
+                .find(|summary| {
+                    summary.get("state").and_then(Value::as_str) == Some("parsed_result")
+                })
+                .cloned()
+        })
+        .or_else(|| {
+            durable_roots
+                .iter()
+                .find_map(|root| root.get("summary").cloned())
+        });
+    let latest_gate_summary = durable_roots
+        .iter()
+        .filter_map(|root| root.get("cleanup_result_gate_summary"))
+        .find(|gate| {
+            gate.get("ready_for_capacity_recheck")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        })
+        .cloned()
+        .or_else(|| {
+            durable_roots
+                .iter()
+                .filter_map(|root| root.get("cleanup_result_gate_summary"))
+                .find(|gate| {
+                    gate.get("status")
+                        .and_then(Value::as_str)
+                        .is_some_and(|status| status != "cleanup_result_unavailable")
+                })
+                .cloned()
+        })
+        .or_else(|| {
+            durable_roots
+                .iter()
+                .find_map(|root| root.get("cleanup_result_gate_summary").cloned())
+        });
+    let has_result = durable_evidence
+        .get("has_result")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let has_valid_result = durable_evidence
+        .get("has_valid_result")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let ready_for_capacity_recheck = durable_evidence
+        .get("ready_for_capacity_recheck")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let status = if ready_for_capacity_recheck {
+        "cleanup_result_ready_for_capacity_recheck"
+    } else if has_valid_result {
+        "cleanup_result_imported_not_ready"
+    } else if has_result {
+        "cleanup_result_imported_schema_invalid"
+    } else {
+        "awaiting_cleanup_result_import"
+    };
+    let next_action = match status {
+        "cleanup_result_ready_for_capacity_recheck" => {
+            "copy_agent_browser_final_runtime_proof_capacity"
+        }
+        "cleanup_result_imported_not_ready" => {
+            "copy_agent_browser_final_runtime_headroom_cleanup_result_gate"
+        }
+        "cleanup_result_imported_schema_invalid" => {
+            "copy_agent_browser_final_runtime_headroom_cleanup_result_template"
+        }
+        _ => "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
+    };
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_STATUS_SCHEMA,
+        "status": status,
+        "generated_at_ms": generated_at_ms,
+        "ready_for_capacity_recheck": ready_for_capacity_recheck,
+        "result": {
+            "present": has_result,
+            "schema_valid": has_valid_result,
+            "status": latest_result_summary
+                .as_ref()
+                .and_then(|summary| summary.get("status"))
+                .and_then(Value::as_str),
+            "summary": latest_result_summary,
+        },
+        "cleanup_result_gate_summary": latest_gate_summary,
+        "durable_evidence": durable_evidence,
+        "webpreview_handoff": {
+            "template_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
+            "template_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_template_to_agent",
+            "result_import_action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+            "result_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result",
+            "result_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_to_agent",
+            "import_receipt_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
+            "import_receipt_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent",
+            "gate_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
+            "gate_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_gate_to_agent",
+            "capacity_recheck_action": "copy_agent_browser_final_runtime_proof_capacity",
+            "runtime_status_field": "final_runtime_headroom_cleanup_result_status",
+            "browser_plugin_status_field": "plugins.browser.final_runtime_headroom_cleanup_result_status",
+            "capacity_status_field": "final_runtime_proof_capacity.headroom_cleanup_result_status",
+            "result_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result",
+            "gate_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_gate",
+        },
+        "required_order": [
+            "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+            "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
+            "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+            "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
+            "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
+            AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+            "copy_agent_browser_final_runtime_proof_capacity"
+        ],
+        "next_action": next_action,
+        "safety": {
+            "read_only": true,
+            "writes_files": false,
+            "runs_just": false,
+            "runs_cargo": false,
+            "runs_node": false,
+            "runs_playwright": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+            "touches_real_browser_profiles": false,
+            "import_action_writes_managed_proof_only": true,
+        }
+    })
+}
+
+fn final_runtime_headroom_cleanup_result_durable_evidence(
+    roots: &AgentPluginRuntimeRoots,
+    generated_at_ms: u64,
+) -> Value {
+    let mut entries = Vec::new();
+    let mut has_result = false;
+    let mut has_valid_result = false;
+    let mut ready_for_capacity_recheck = false;
+    let mut latest_status: Option<String> = None;
+
+    for (root_mode, managed_root, latest_path) in
+        roots.browser_final_runtime_headroom_cleanup_result_latest_paths()
+    {
+        let mut probe = proof_file_probe(
+            &latest_path,
+            Some(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA),
+            None,
+            generated_at_ms,
+        );
+        let (summary, gate) = match read_compact_json_file(&latest_path) {
+            Ok(result) => {
+                let summary = final_runtime_headroom_cleanup_result_summary(&result);
+                let gate = final_runtime_headroom_cleanup_result_gate_from_template(&result);
+                (summary, gate)
+            }
+            Err(error) => (
+                serde_json::json!({
+                    "state": error.get("state").and_then(Value::as_str).unwrap_or("read_error"),
+                    "status": "not_run",
+                    "schema_valid": false,
+                    "error": error,
+                }),
+                serde_json::json!({
+                    "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+                    "status": "cleanup_result_unavailable",
+                    "ready_for_capacity_recheck": false,
+                    "pending_template_fields": ["schema"],
+                    "read_only": true,
+                }),
+            ),
+        };
+
+        let summary_schema_valid = summary
+            .get("schema_valid")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let summary_is_parsed_result =
+            summary.get("state").and_then(Value::as_str) == Some("parsed_result");
+        let gate_ready = gate
+            .get("ready_for_capacity_recheck")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        has_result |= summary_is_parsed_result;
+        has_valid_result |= summary_schema_valid;
+        ready_for_capacity_recheck |= gate_ready;
+        if summary_schema_valid || (summary_is_parsed_result && latest_status.is_none()) {
+            latest_status = summary
+                .get("status")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+        }
+        probe["summary"] = summary.clone();
+        probe["cleanup_result_gate_summary"] =
+            final_runtime_headroom_cleanup_result_gate_summary(&gate);
+        let exists = probe
+            .get("exists")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+
+        entries.push(serde_json::json!({
+            "root_mode": root_mode,
+            "managed_root": path_string(&managed_root),
+            "latest_path": path_string(&latest_path),
+            "probe": probe,
+            "exists": exists,
+            "summary": summary,
+            "cleanup_result_gate": gate,
+            "cleanup_result_gate_summary": final_runtime_headroom_cleanup_result_gate_summary(&gate),
+        }));
+    }
+
+    serde_json::json!({
+        "status": if ready_for_capacity_recheck {
+            "managed_cleanup_result_ready_for_capacity_recheck"
+        } else if has_valid_result {
+            "managed_cleanup_result_imported_not_ready"
+        } else if has_result {
+            "managed_cleanup_result_schema_invalid"
+        } else {
+            "managed_cleanup_result_missing"
+        },
+        "has_result": has_result,
+        "has_valid_result": has_valid_result,
+        "ready_for_capacity_recheck": ready_for_capacity_recheck,
+        "latest_result_status": latest_status,
+        "result_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
+        "gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+        "import_receipt_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
+        "result_file_name": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_FILE_NAME,
+        "archive_prefix": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_ARCHIVE_PREFIX,
+        "roots": entries,
+        "read_only": true,
+    })
+}
+
+fn final_runtime_headroom_cleanup_result_summary(result: &Value) -> Value {
+    let schema_valid = result.pointer("/schema").and_then(Value::as_str)
+        == Some(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA);
+    let cleanup_summary_present = result
+        .pointer("/operator_fields/cleanup_summary")
+        .and_then(Value::as_str)
+        .is_some_and(|summary| !summary.trim().is_empty());
+    let dry_run_summary_present = result
+        .pointer("/operator_fields/dry_run_output_summary")
+        .and_then(Value::as_str)
+        .is_some_and(|summary| !summary.trim().is_empty());
+
+    serde_json::json!({
+        "state": "parsed_result",
+        "schema": result.pointer("/schema").and_then(Value::as_str),
+        "schema_valid": schema_valid,
+        "status": result.pointer("/status").and_then(Value::as_str),
+        "operator_fills_manually": result.pointer("/operator_fills_manually").and_then(Value::as_bool),
+        "operator_field_count": result.pointer("/operator_fields").and_then(Value::as_object).map(|fields| fields.len()),
+        "cleanup_performed": result.pointer("/operator_fields/cleanup_performed").and_then(Value::as_bool),
+        "cleanup_summary_present": cleanup_summary_present,
+        "after_cleanup_free_gib": result.pointer("/operator_fields/after_cleanup_free_gib").and_then(Value::as_f64),
+        "minimum_required_free_gib": result.pointer("/target/minimum_required_free_gib").and_then(Value::as_f64),
+        "dry_run_command": result.pointer("/operator_fields/dry_run_command").and_then(Value::as_str),
+        "dry_run_status": result.pointer("/operator_fields/dry_run_status").and_then(Value::as_str),
+        "dry_run_summary_present": dry_run_summary_present,
+        "removed_or_archived_path_count": result.pointer("/operator_fields/removed_or_archived_paths").and_then(Value::as_array).map(Vec::len),
+        "target_root": result.pointer("/target/target_root").and_then(Value::as_str),
+        "target_dir": result.pointer("/target/target_dir").and_then(Value::as_str),
+        "target_drive_policy_schema": result.pointer("/target_drive_policy/schema").and_then(Value::as_str),
+        "target_move_allowed_by_default": result.pointer("/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
+        "copy_gate_action": result.pointer("/actions/copy_cleanup_result_gate").and_then(Value::as_str),
+        "read_only": result
+            .pointer("/read_only")
+            .and_then(Value::as_bool)
+            .or_else(|| result.pointer("/safety/read_only").and_then(Value::as_bool)),
+    })
+}
+
+fn final_runtime_headroom_cleanup_result_gate_from_template(template: &Value) -> Value {
+    let schema_valid = template.pointer("/schema").and_then(Value::as_str)
+        == Some(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA);
+    let result_status = template.pointer("/status").and_then(Value::as_str);
+    let cleanup_not_required = result_status == Some("cleanup_result_not_required");
+    let cleanup_performed = template
+        .pointer("/operator_fields/cleanup_performed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let cleanup_summary_present = template
+        .pointer("/operator_fields/cleanup_summary")
+        .and_then(Value::as_str)
+        .is_some_and(|summary| !summary.trim().is_empty());
+    let after_cleanup_free_gib = template
+        .pointer("/operator_fields/after_cleanup_free_gib")
+        .and_then(Value::as_f64);
+    let minimum_required_free_gib = template
+        .pointer("/target/minimum_required_free_gib")
+        .and_then(Value::as_f64)
+        .unwrap_or(gib_from_bytes(AGENT_BROWSER_FINAL_RUNTIME_MIN_FREE_BYTES));
+    let free_space_ready = after_cleanup_free_gib
+        .map(|observed| observed >= minimum_required_free_gib)
+        .unwrap_or(false);
+    let dry_run_status = template
+        .pointer("/operator_fields/dry_run_status")
+        .and_then(Value::as_str);
+    let dry_run_passed = dry_run_status
+        .map(|status| {
+            let normalized = status.to_ascii_lowercase();
+            matches!(
+                normalized.as_str(),
+                "pass" | "passed" | "success" | "succeeded" | "ok"
+            )
+        })
+        .unwrap_or(false);
+    let dry_run_summary_present = template
+        .pointer("/operator_fields/dry_run_output_summary")
+        .and_then(Value::as_str)
+        .is_some_and(|summary| !summary.trim().is_empty());
+
+    let mut pending_template_fields = Vec::new();
+    if !schema_valid {
+        pending_template_fields.push(serde_json::json!("schema"));
+    }
+    if !cleanup_not_required {
+        if !cleanup_performed {
+            pending_template_fields.push(serde_json::json!("operator_fields.cleanup_performed"));
+        }
+        if !cleanup_summary_present {
+            pending_template_fields.push(serde_json::json!("operator_fields.cleanup_summary"));
+        }
+        if !free_space_ready {
+            pending_template_fields
+                .push(serde_json::json!("operator_fields.after_cleanup_free_gib"));
+        }
+        if !dry_run_passed {
+            pending_template_fields.push(serde_json::json!("operator_fields.dry_run_status"));
+        }
+        if !dry_run_summary_present {
+            pending_template_fields
+                .push(serde_json::json!("operator_fields.dry_run_output_summary"));
+        }
+    }
+
+    let ready_for_capacity_recheck = schema_valid
+        && (cleanup_not_required
+            || (cleanup_performed
+                && cleanup_summary_present
+                && free_space_ready
+                && dry_run_passed
+                && dry_run_summary_present));
+    let status = if ready_for_capacity_recheck {
+        "cleanup_result_ready_for_capacity_recheck"
+    } else if schema_valid {
+        "blocked_cleanup_result_incomplete"
+    } else {
+        "blocked_wrong_cleanup_result_schema"
+    };
+    let recommended_next_action = if ready_for_capacity_recheck {
+        "copy_agent_browser_final_runtime_proof_capacity"
+    } else {
+        "copy_agent_browser_final_runtime_headroom_cleanup_result_template"
+    };
+
+    serde_json::json!({
+        "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+        "source_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
+        "source": "managed_cleanup_result",
+        "status": status,
+        "ready_for_capacity_recheck": ready_for_capacity_recheck,
+        "target_drive_policy": template.pointer("/target_drive_policy").cloned(),
+        "target": template.pointer("/target").cloned(),
+        "validation": {
+            "schema_valid": schema_valid,
+            "cleanup_not_required": cleanup_not_required,
+            "cleanup_performed": cleanup_performed,
+            "cleanup_summary_present": cleanup_summary_present,
+            "after_cleanup_free_gib": after_cleanup_free_gib,
+            "minimum_required_free_gib": minimum_required_free_gib,
+            "free_space_ready": free_space_ready,
+            "dry_run_status": dry_run_status,
+            "dry_run_passed": dry_run_passed,
+            "dry_run_summary_present": dry_run_summary_present,
+            "removed_or_archived_path_count": template
+                .pointer("/operator_fields/removed_or_archived_paths")
+                .and_then(Value::as_array)
+                .map(Vec::len)
+        },
+        "required_template_fields": [
+            "operator_fields.cleanup_performed",
+            "operator_fields.cleanup_summary",
+            "operator_fields.after_cleanup_free_gib",
+            "operator_fields.dry_run_status",
+            "operator_fields.dry_run_output_summary"
+        ],
+        "pending_template_fields": pending_template_fields,
+        "recommended_next_action": recommended_next_action,
+        "recheck_action": "copy_agent_browser_final_runtime_proof_capacity",
+        "dry_run_command": template
+            .pointer("/operator_fields/dry_run_command")
+            .and_then(Value::as_str)
+            .unwrap_or("just --dry-run run"),
+        "read_only": true,
+        "dispatches_input": false,
+        "deletes_files": false,
+        "moves_target_dir": false,
+        "runs_just": false,
+        "runs_cargo": false
+    })
+}
+
+fn final_runtime_headroom_cleanup_result_gate_summary(gate: &Value) -> Value {
+    serde_json::json!({
+        "schema": gate.pointer("/schema").and_then(Value::as_str),
+        "source_template_schema": gate.pointer("/source_template_schema").and_then(Value::as_str),
+        "status": gate.pointer("/status").and_then(Value::as_str),
+        "ready_for_capacity_recheck": gate.pointer("/ready_for_capacity_recheck").and_then(Value::as_bool),
+        "required_template_field_count": gate.pointer("/required_template_fields").and_then(Value::as_array).map(Vec::len),
+        "pending_template_field_count": gate.pointer("/pending_template_fields").and_then(Value::as_array).map(Vec::len),
+        "recommended_next_action": gate.pointer("/recommended_next_action").and_then(Value::as_str),
+        "recheck_action": gate.pointer("/recheck_action").and_then(Value::as_str),
+        "dry_run_command": gate.pointer("/dry_run_command").and_then(Value::as_str),
+        "read_only": gate.pointer("/read_only").and_then(Value::as_bool),
+    })
+}
+
 fn runtime_request_root_mode(roots: &AgentPluginRuntimeRoots) -> &'static str {
     if roots.active_project_root.is_some()
         && matches!(roots.root_mode, AgentPluginRuntimeStatusRootMode::Workspace)
@@ -2160,6 +2688,8 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
         generated_at_ms,
     );
     let browser_panel_live_proof_status = browser_panel_live_proof_status(roots, generated_at_ms);
+    let final_runtime_headroom_cleanup_result_status =
+        final_runtime_headroom_cleanup_result_status(roots, generated_at_ms);
     let final_result_runtime_green_candidate = browser_final_validation_result
         .pointer("/summary/runtime_green_candidate")
         .and_then(Value::as_bool)
@@ -2451,6 +2981,7 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
         "latest_evidence": {
             "browser_final_validation_result": browser_final_validation_result,
             "browser_panel_live_proof_status": browser_panel_live_proof_status,
+            "final_runtime_headroom_cleanup_result_status": final_runtime_headroom_cleanup_result_status,
             "asset_readiness_summary": asset_summary,
             "managed_chrome_execution_receipt": latest_chrome_execution_receipt,
             "managed_chrome_runner_receipt": chrome_runner_receipt,
@@ -3564,6 +4095,15 @@ fn runtime_green_proof_path(
         .unwrap_or_else(|| serde_json::json!({}));
     let browser_panel_live_proof_readiness_card =
         browser_panel_live_proof_readiness_card(&browser_panel_live_proof_status);
+    let final_runtime_headroom_cleanup_result_status = final_runtime_proof_capacity
+        .get("headroom_cleanup_result_status")
+        .cloned()
+        .or_else(|| {
+            blocker_summary
+                .pointer("/latest_evidence/final_runtime_headroom_cleanup_result_status")
+                .cloned()
+        })
+        .unwrap_or_else(|| serde_json::json!({}));
     let current_best_next = operator_handoff
         .get("current_best_next")
         .cloned()
@@ -3633,6 +4173,7 @@ fn runtime_green_proof_path(
             "final_runtime_proof_capacity": final_runtime_proof_capacity_summary(
                 final_runtime_proof_capacity
             ),
+            "final_runtime_headroom_cleanup_result_status": final_runtime_headroom_cleanup_result_status,
             "regression_watch_rollup": regression_watch_rollup.clone(),
             "final_validation_result": blocker_summary
                 .pointer("/latest_evidence/browser_final_validation_result/summary")
@@ -3655,6 +4196,9 @@ fn runtime_green_proof_path(
             "requires_final_runtime_proof_capacity": true,
             "final_runtime_proof_capacity_ready": final_runtime_proof_capacity
                 .get("ready_for_just_run")
+                .and_then(Value::as_bool),
+            "final_runtime_headroom_cleanup_result_ready_for_capacity_recheck": final_runtime_proof_capacity
+                .pointer("/headroom_cleanup_result_status/ready_for_capacity_recheck")
                 .and_then(Value::as_bool),
             "claim_only_when": [
                 "runtime_green_candidate == true",
@@ -3696,6 +4240,9 @@ fn runtime_green_proof_path(
         },
         "proof_files": {
             "browser_final_validation_result": path_string(&roots.browser_final_validation_latest_result),
+            "browser_final_runtime_headroom_cleanup_result": path_string(
+                &roots.browser_final_runtime_headroom_cleanup_result_latest_result
+            ),
             "browser_panel_control_result": path_string(&roots.browser_panel_control_result_latest_result),
             "browser_latest_payload": path_string(&roots.browser_latest_payload),
             "managed_chrome_latest_payload": path_string(&roots.chrome_latest_payload),
@@ -3717,6 +4264,7 @@ fn runtime_green_proof_path(
                     "runtime_green_operator_handoff",
                     "browser_panel_live_proof_status",
                     "browser_panel_live_proof_readiness_card",
+                    "final_runtime_headroom_cleanup_result_status",
                     "final_runtime_proof_capacity",
                     "final_runtime_proof_capacity_summary",
                     "runtime_green_report_gate",
@@ -5836,6 +6384,10 @@ fn runtime_green_operator_handoff(
         "lane_handoffs": lane_handoffs,
         "canonical_inspect_payload": runtime_green_status_inspect_payload(root_mode),
         "final_runtime_proof_capacity": final_runtime_proof_capacity_summary(final_runtime_proof_capacity),
+        "final_runtime_headroom_cleanup_result_status": final_runtime_proof_capacity
+            .get("headroom_cleanup_result_status")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({})),
         "final_runtime_validation": runtime_green_final_operator_handoff(
             root_mode,
             final_runtime_proof_capacity
@@ -5850,6 +6402,7 @@ fn runtime_green_operator_handoff(
             "runtime_green_blocker_summary",
             "runtime_green_readiness_scorecard",
             "browser_panel_live_proof_status",
+            "final_runtime_headroom_cleanup_result_status",
             "final_runtime_proof_capacity"
         ],
         "safety": {
@@ -6070,6 +6623,10 @@ fn runtime_green_final_operator_handoff(
         .get("status")
         .and_then(Value::as_str)
         .unwrap_or("target_headroom_unknown");
+    let headroom_cleanup_result_status = final_runtime_proof_capacity
+        .get("headroom_cleanup_result_status")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
 
     serde_json::json!({
         "lane_id": "final_runtime_validation",
@@ -6081,11 +6638,29 @@ fn runtime_green_final_operator_handoff(
         },
         "ready": false,
         "final_runtime_proof_capacity": final_runtime_proof_capacity_summary(final_runtime_proof_capacity),
+        "final_runtime_headroom_cleanup_result_status": headroom_cleanup_result_status,
         "operator_steps": [
             {
                 "id": "inspect_runtime_status_before_final_pass",
                 "tool": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
                 "payload": runtime_green_status_inspect_payload(root_mode),
+                "writes_files": false,
+                "runs_node": false,
+                "launches_browser": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "check_headroom_cleanup_result",
+                "schema": AGENT_PLUGIN_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_STATUS_SCHEMA,
+                "status": final_runtime_proof_capacity
+                    .pointer("/headroom_cleanup_result_status/status")
+                    .and_then(Value::as_str),
+                "ready_for_capacity_recheck": final_runtime_proof_capacity
+                    .pointer("/headroom_cleanup_result_status/ready_for_capacity_recheck")
+                    .and_then(Value::as_bool),
+                "webpreview_template_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
+                "webpreview_import_action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+                "webpreview_gate_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
                 "writes_files": false,
                 "runs_node": false,
                 "launches_browser": false,
@@ -6343,6 +6918,10 @@ fn observability_proof_freshness(roots: &AgentPluginRuntimeRoots) -> Value {
         },
         "latest_optional_execution_files": {
             "chrome_execution": latest_json_file_probe(&roots.chrome_execution_dir, generated_at_ms),
+            "browser_final_runtime_headroom_cleanup_result": final_runtime_headroom_cleanup_result_status(
+                roots,
+                generated_at_ms,
+            ),
         },
         "receipt_classifications": {
             "managed_chrome_runner_receipt": outcome_receipt_probe(
