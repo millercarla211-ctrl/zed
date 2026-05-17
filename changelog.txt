@@ -1,3 +1,16 @@
+[2026-05-18] - F Drive Checkout Relocation
+
+ADDED:
+- Copied the cleaned Zed checkout to `F:\Zed` so the remaining runtime proof work can use the larger F: drive.
+- Retargeted Cargo build output for the relocated checkout to `F:/Zed/target`.
+
+CHANGED:
+- Updated `just` runnable-build headroom messages and build guide text from the old G-drive target to the F-drive target.
+- `todo.txt` now points the remaining 99/100 runtime proof work at the relocated F: checkout.
+
+NOTES:
+- The original `G:\Zed` source tree was left in place as a fallback; only build artifacts were cleaned with the user-requested `cargo clean`.
+
 [2026-05-18] - Agent Final Result Diagnostics Parity
 
 ADDED:

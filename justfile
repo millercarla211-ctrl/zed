@@ -1,8 +1,8 @@
 # Justfile for running Zed on this upgraded Windows dev machine.
-# Cargo output is pinned to G:/Zed/target in .cargo/config.toml.
+# Cargo output is pinned to F:/Zed/target in .cargo/config.toml.
 set shell := ["powershell.exe", "-NoLogo", "-Command"]
 
-build_target_dir := "G:/Zed/target"
+build_target_dir := "F:/Zed/target"
 min_build_free_gb := "18"
 
 # Default recipe - shows available commands
@@ -11,13 +11,13 @@ default:
 
 # Guard runnable builds before Cargo starts filling the incremental cache.
 ensure-build-headroom:
-    @$targetDir = "{{build_target_dir}}"; $driveName = (Split-Path -Qualifier $targetDir).TrimEnd(":"); $drive = Get-PSDrive -Name $driveName; $freeGb = [math]::Round($drive.Free / 1GB, 2); $minBytes = [int64]{{min_build_free_gb}} * 1GB; if ($drive.Free -lt $minBytes) { throw "Zed build target drive $($drive.Name): has only $freeGb GB free; need at least {{min_build_free_gb}} GB before running Cargo. Free rebuildable target/cache space on the configured G-drive target, then rerun this recipe." } else { Write-Host "Build target headroom OK: $freeGb GB free on $($drive.Name):" }
+    @$targetDir = "{{build_target_dir}}"; $driveName = (Split-Path -Qualifier $targetDir).TrimEnd(":"); $drive = Get-PSDrive -Name $driveName; $freeGb = [math]::Round($drive.Free / 1GB, 2); $minBytes = [int64]{{min_build_free_gb}} * 1GB; if ($drive.Free -lt $minBytes) { throw "Zed build target drive $($drive.Name): has only $freeGb GB free; need at least {{min_build_free_gb}} GB before running Cargo. Free rebuildable target/cache space on the configured F-drive target, then rerun this recipe." } else { Write-Host "Build target headroom OK: $freeGb GB free on $($drive.Name):" }
 
 # RECOMMENDED: Run Zed with balanced local settings
 run: ensure-build-headroom
-    @echo "Running Zed with balanced G-drive build settings..."
+    @echo "Running Zed with balanced F-drive build settings..."
     @echo "Building the zed binary plus the development CLI companion"
-    @echo "Using Cargo config: 6 jobs, G:/Zed/target, rust-lld linker, no debug info, incremental cache disabled"
+    @echo "Using Cargo config: 6 jobs, F:/Zed/target, rust-lld linker, no debug info, incremental cache disabled"
     $env:CARGO_INCREMENTAL = "0"; cargo build -p zed --bin zed
     $env:CARGO_INCREMENTAL = "0"; cargo build -p cli --bin cli
     @echo "Build complete! Launching Zed once..."
@@ -42,7 +42,7 @@ continue: ensure-build-headroom
 
 # Build only (no run)
 build: ensure-build-headroom
-    @echo "Building Zed with balanced G-drive settings..."
+    @echo "Building Zed with balanced F-drive settings..."
     $env:CARGO_INCREMENTAL = "0"; cargo build -p zed --bin zed
     $env:CARGO_INCREMENTAL = "0"; cargo build -p cli --bin cli
 
@@ -88,9 +88,9 @@ show-memory-guide:
     @echo "Current verified machine profile:"
     @echo "  CPU: Ryzen 5 5600G, 6 cores / 12 logical processors"
     @echo "  RAM: 24 GB installed"
-    @echo "  Build output: G:/Zed/target"
+    @echo "  Build output: F:/Zed/target"
     @echo "  Cargo workers: 6"
-    @echo "  Runnable build preflight: at least 18 GB free on G:"
+    @echo "  Runnable build preflight: at least 18 GB free on F:"
     @echo "  Runnable build mode: CARGO_INCREMENTAL=0 to avoid query-cache disk spikes"
     @echo ""
     @echo "If builds still hit memory pressure, configure Windows virtual memory:"
@@ -109,8 +109,8 @@ help:
     @echo "=== ZED LOCAL BUILD GUIDE ==="
     @echo ""
     @echo "RECOMMENDED BUILD COMMANDS:"
-    @echo "  just ensure-build-headroom - Check G: free space before any runnable Cargo build"
-    @echo "  just run           - Build zed + cli and run with balanced G-drive settings"
+    @echo "  just ensure-build-headroom - Check F: free space before any runnable Cargo build"
+    @echo "  just run           - Build zed + cli and run with balanced F-drive settings"
     @echo "  just run-cranelift - Build zed + cli with Cranelift backend"
     @echo "  just continue      - Resume interrupted zed + cli build"
     @echo "  just fmt           - Format the workspace with rustfmt"
