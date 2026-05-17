@@ -116,6 +116,8 @@ const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_size_inspection.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_cleanup_result_template.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_headroom_cleanup_result_gate.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_readiness_gate.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA: &str =
@@ -2186,6 +2188,9 @@ impl WebPreviewView {
             "final_runtime_headroom_size_inspection_command_count": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/size_inspection/commands").and_then(Value::as_array).map(Vec::len),
             "final_runtime_headroom_cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
             "final_runtime_headroom_cleanup_result_template_status": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_template/status").and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+            "final_runtime_headroom_cleanup_result_gate_status": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate/status").and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_gate_ready": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate/ready_for_capacity_recheck").and_then(Value::as_bool),
             "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
             "final_runtime_headroom_readiness_gate_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_readiness_gate/status").and_then(Value::as_str),
             "final_runtime_headroom_readiness_gate_ready": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_readiness_gate/ready_for_just_run").and_then(Value::as_bool),
@@ -2538,6 +2543,9 @@ impl WebPreviewView {
             "headroom_size_inspection_status": capacity.pointer("/headroom_recovery_plan/size_inspection/status").and_then(Value::as_str),
             "headroom_cleanup_result_template_schema": capacity.pointer("/headroom_recovery_plan/cleanup_result_template/schema").and_then(Value::as_str),
             "headroom_cleanup_result_template_status": capacity.pointer("/headroom_recovery_plan/cleanup_result_template/status").and_then(Value::as_str),
+            "headroom_cleanup_result_gate_schema": capacity.pointer("/headroom_recovery_plan/cleanup_result_gate/schema").and_then(Value::as_str),
+            "headroom_cleanup_result_gate_status": capacity.pointer("/headroom_recovery_plan/cleanup_result_gate/status").and_then(Value::as_str),
+            "headroom_cleanup_result_gate_ready": capacity.pointer("/headroom_recovery_plan/cleanup_result_gate/ready_for_capacity_recheck").and_then(Value::as_bool),
             "headroom_reclaim_candidates_schema": capacity.pointer("/headroom_reclaim_candidates/schema").and_then(Value::as_str),
             "headroom_reclaim_candidates_status": capacity.pointer("/headroom_reclaim_candidates/status").and_then(Value::as_str),
             "headroom_reclaim_candidate_count": capacity.pointer("/headroom_reclaim_candidates/candidate_reclaim_zones").and_then(Value::as_array).map(Vec::len),
@@ -2562,6 +2570,9 @@ impl WebPreviewView {
             "size_inspection_command_count": plan.pointer("/size_inspection/commands").and_then(Value::as_array).map(Vec::len),
             "cleanup_result_template_schema": plan.pointer("/cleanup_result_template/schema").and_then(Value::as_str),
             "cleanup_result_template_status": plan.pointer("/cleanup_result_template/status").and_then(Value::as_str),
+            "cleanup_result_gate_schema": plan.pointer("/cleanup_result_gate/schema").and_then(Value::as_str),
+            "cleanup_result_gate_status": plan.pointer("/cleanup_result_gate/status").and_then(Value::as_str),
+            "cleanup_result_gate_ready": plan.pointer("/cleanup_result_gate/ready_for_capacity_recheck").and_then(Value::as_bool),
             "candidate_reclaim_zone_count": plan.pointer("/candidate_reclaim_zones").and_then(Value::as_array).map(Vec::len),
             "preserve_policy_count": plan.pointer("/preserve_policy").and_then(Value::as_array).map(Vec::len),
             "target_drive_policy_schema": plan.pointer("/target_drive_policy/schema").and_then(Value::as_str),
@@ -2586,6 +2597,8 @@ impl WebPreviewView {
             "size_inspection_command_count": card.pointer("/inspection_checklist/size_inspection_command_count").and_then(Value::as_u64),
             "cleanup_result_template_schema": card.pointer("/cleanup_result_template/schema").and_then(Value::as_str),
             "cleanup_result_template_status": card.pointer("/cleanup_result_template/status").and_then(Value::as_str),
+            "cleanup_result_gate_schema": card.pointer("/cleanup_result_gate/schema").and_then(Value::as_str),
+            "cleanup_result_gate_status": card.pointer("/cleanup_result_gate/status").and_then(Value::as_str),
             "target_drive_policy_schema": card.pointer("/target_drive_policy/schema").and_then(Value::as_str),
             "target_move_allowed_by_default": card.pointer("/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
             "copy_plan_action": card.pointer("/actions/copy_recovery_plan").and_then(Value::as_str),
@@ -2610,6 +2623,8 @@ impl WebPreviewView {
             "size_inspection_command_count": checklist.pointer("/size_inspection/commands").and_then(Value::as_array).map(Vec::len),
             "cleanup_result_template_schema": checklist.pointer("/cleanup_result_template/schema").and_then(Value::as_str),
             "cleanup_result_template_status": checklist.pointer("/cleanup_result_template/status").and_then(Value::as_str),
+            "cleanup_result_gate_schema": checklist.pointer("/cleanup_result_gate/schema").and_then(Value::as_str),
+            "cleanup_result_gate_status": checklist.pointer("/cleanup_result_gate/status").and_then(Value::as_str),
             "ready_to_cleanup_condition": checklist.pointer("/ready_to_cleanup_condition").and_then(Value::as_str),
             "read_only": checklist.pointer("/read_only").and_then(Value::as_bool),
         })
@@ -2656,6 +2671,8 @@ impl WebPreviewView {
             "size_inspection_command_count": candidates.pointer("/size_inspection/commands").and_then(Value::as_array).map(Vec::len),
             "cleanup_result_template_schema": candidates.pointer("/cleanup_result_template/schema").and_then(Value::as_str),
             "cleanup_result_template_status": candidates.pointer("/cleanup_result_template/status").and_then(Value::as_str),
+            "cleanup_result_gate_schema": candidates.pointer("/cleanup_result_gate/schema").and_then(Value::as_str),
+            "cleanup_result_gate_status": candidates.pointer("/cleanup_result_gate/status").and_then(Value::as_str),
             "recommended_action": candidates.pointer("/recommended_action").and_then(Value::as_str),
             "copy_action": candidates.pointer("/actions/copy_reclaim_candidates").and_then(Value::as_str),
             "send_action": candidates.pointer("/actions/send_reclaim_candidates").and_then(Value::as_str),
@@ -3477,6 +3494,62 @@ impl WebPreviewView {
             "runs_just": false,
             "runs_cargo": false
         });
+        let cleanup_result_gate_status = match recovery_status {
+            "target_drive_cleanup_required" => "blocked_waiting_for_manual_cleanup_result",
+            "no_recovery_needed" => "cleanup_result_not_required",
+            _ => "target_drive_detection_required",
+        };
+        let cleanup_result_gate_pending_fields =
+            if recovery_status == "target_drive_cleanup_required" {
+                serde_json::json!([
+                    "operator_fields.cleanup_performed",
+                    "operator_fields.cleanup_summary",
+                    "operator_fields.after_cleanup_free_gib",
+                    "operator_fields.dry_run_status",
+                    "operator_fields.dry_run_output_summary"
+                ])
+            } else {
+                serde_json::json!([])
+            };
+        let cleanup_result_gate_next_action = match recovery_status {
+            "target_drive_cleanup_required" => {
+                "Fill cleanup_result_template after manual cleanup, then regenerate final runtime capacity."
+            }
+            "no_recovery_needed" => {
+                "Regenerate final runtime capacity and continue to the panel live UI proof gate."
+            }
+            _ => "Resolve target-drive detection, then regenerate final runtime capacity.",
+        };
+        let cleanup_result_gate = serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+            "source_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
+            "status": cleanup_result_gate_status,
+            "ready_for_capacity_recheck": recovery_status == "no_recovery_needed",
+            "target_drive_policy": target_drive_policy.clone(),
+            "required_template_fields": [
+                "operator_fields.cleanup_performed",
+                "operator_fields.cleanup_summary",
+                "operator_fields.after_cleanup_free_gib",
+                "operator_fields.dry_run_status",
+                "operator_fields.dry_run_output_summary"
+            ],
+            "pending_template_fields": cleanup_result_gate_pending_fields,
+            "acceptance_conditions": [
+                "cleanup_performed is true only after the operator manually cleaned confirmed rebuildable target/cache artifacts.",
+                "after_cleanup_free_gib is at least the configured minimum target-drive free GiB.",
+                "dry_run_status is pass after running just --dry-run run.",
+                "removed_or_archived_paths do not include protected roots, browser profiles, or target-dir relocation."
+            ],
+            "recommended_next_action": cleanup_result_gate_next_action,
+            "recheck_action": "copy_agent_browser_final_runtime_proof_capacity",
+            "dry_run_command": "just --dry-run run",
+            "read_only": true,
+            "dispatches_input": false,
+            "deletes_files": false,
+            "moves_target_dir": false,
+            "runs_just": false,
+            "runs_cargo": false
+        });
         let first_action = match recovery_status {
             "no_recovery_needed" => serde_json::json!({
                 "id": "continue_to_manual_panel_and_runtime_proof",
@@ -3519,6 +3592,7 @@ impl WebPreviewView {
                 "target_drive_policy": target_drive_policy.clone(),
                 "size_inspection": size_inspection.clone(),
                 "cleanup_result_template": cleanup_result_template.clone(),
+                "cleanup_result_gate": cleanup_result_gate.clone(),
                 "steps": [
                     {
                         "id": "confirm_target_drive",
@@ -3581,6 +3655,7 @@ impl WebPreviewView {
             ],
             "size_inspection": size_inspection,
             "cleanup_result_template": cleanup_result_template,
+            "cleanup_result_gate": cleanup_result_gate,
             "candidate_reclaim_zones": [
                 {
                     "id": "workspace_target_dir",
@@ -3661,6 +3736,12 @@ impl WebPreviewView {
                 "status": plan.pointer("/cleanup_result_template/status").and_then(Value::as_str),
                 "operator_fields": plan.pointer("/cleanup_result_template/operator_fields").cloned(),
                 "operator_fills_manually": plan.pointer("/cleanup_result_template/operator_fills_manually").and_then(Value::as_bool),
+            },
+            "cleanup_result_gate": {
+                "schema": plan.pointer("/cleanup_result_gate/schema").and_then(Value::as_str),
+                "status": plan.pointer("/cleanup_result_gate/status").and_then(Value::as_str),
+                "ready_for_capacity_recheck": plan.pointer("/cleanup_result_gate/ready_for_capacity_recheck").and_then(Value::as_bool),
+                "recommended_next_action": plan.pointer("/cleanup_result_gate/recommended_next_action").and_then(Value::as_str),
             },
             "actions": {
                 "copy_recovery_plan": "copy_agent_browser_final_runtime_headroom_recovery_plan",
@@ -3775,6 +3856,7 @@ impl WebPreviewView {
                 "If target_headroom_blocked, inspect and free only rebuildable target/cache space on the configured target drive.",
                 "Do not move CARGO_TARGET_DIR or redirect build outputs unless the user explicitly changes the build-output policy.",
                 "After manual cleanup, fill headroom_recovery_plan.cleanup_result_template with the new free space and just --dry-run run result.",
+                "Check headroom_recovery_plan.cleanup_result_gate before regenerating capacity.",
                 "Run just --dry-run run to confirm the recipe still points at the expected target directory.",
                 "Run just run only after this packet reports ready_for_just_run=true and panel live-validation gate is ready."
             ],
@@ -4038,6 +4120,7 @@ impl WebPreviewView {
             "safe_inspection_commands": plan.pointer("/safe_inspection_commands").cloned().unwrap_or_else(|| serde_json::json!([])),
             "size_inspection": plan.pointer("/size_inspection").cloned().unwrap_or_else(|| serde_json::json!({})),
             "cleanup_result_template": plan.pointer("/cleanup_result_template").cloned().unwrap_or_else(|| serde_json::json!({})),
+            "cleanup_result_gate": plan.pointer("/cleanup_result_gate").cloned().unwrap_or_else(|| serde_json::json!({})),
             "ready_to_cleanup_condition": plan.pointer("/inspection_checklist/ready_to_cleanup_condition").and_then(Value::as_str),
             "ready_condition": plan.pointer("/ready_condition").and_then(Value::as_str),
             "recommended_action": recommended_action,
@@ -6219,6 +6302,8 @@ impl WebPreviewView {
                     "headroom_size_inspection_field": "headroom_recovery_plan.size_inspection",
                     "headroom_cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
                     "headroom_cleanup_result_template_field": "headroom_recovery_plan.cleanup_result_template",
+                    "headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+                    "headroom_cleanup_result_gate_field": "headroom_recovery_plan.cleanup_result_gate",
                     "headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                     "headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                     "headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
@@ -6251,6 +6336,8 @@ impl WebPreviewView {
                     "size_inspection_field": "size_inspection",
                     "cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
                     "cleanup_result_template_field": "cleanup_result_template",
+                    "cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+                    "cleanup_result_gate_field": "cleanup_result_gate",
                     "inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                     "inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                     "readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
@@ -6278,6 +6365,7 @@ impl WebPreviewView {
                     "inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                     "size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
                     "cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
+                    "cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
                     "inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                     "inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                     "copy_action": "copy_agent_browser_final_runtime_headroom_recovery_card",
@@ -6298,6 +6386,8 @@ impl WebPreviewView {
                     "size_inspection_field": "size_inspection",
                     "cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
                     "cleanup_result_template_field": "cleanup_result_template",
+                    "cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+                    "cleanup_result_gate_field": "cleanup_result_gate",
                     "copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                     "send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                     "latest_summary": self.latest_agent_browser_final_runtime_headroom_inspection_checklist_summary(),
@@ -6317,6 +6407,8 @@ impl WebPreviewView {
                     "size_inspection_field": "size_inspection",
                     "cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
                     "cleanup_result_template_field": "cleanup_result_template",
+                    "cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+                    "cleanup_result_gate_field": "cleanup_result_gate",
                     "copy_action": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
                     "send_action": "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent",
                     "latest_summary": self.latest_agent_browser_final_runtime_headroom_reclaim_candidates_summary(),
@@ -7423,6 +7515,12 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "final_runtime_headroom_cleanup_result_template_field": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_template_field")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_cleanup_result_gate_schema": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_gate_schema")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_cleanup_result_gate_field": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_gate_field")
                     .and_then(Value::as_str),
                 "final_runtime_headroom_inspection_checklist_copy_action": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_copy_action")
@@ -18526,6 +18624,14 @@ impl WebPreviewView {
                     "final_runtime_headroom_cleanup_result_template_status": agent_browser_final_runtime_proof_capacity
                         .pointer("/headroom_recovery_plan/cleanup_result_template/status")
                         .and_then(Value::as_str),
+                    "final_runtime_headroom_cleanup_result_gate_visible": true,
+                    "final_runtime_headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+                    "final_runtime_headroom_cleanup_result_gate_status": agent_browser_final_runtime_proof_capacity
+                        .pointer("/headroom_recovery_plan/cleanup_result_gate/status")
+                        .and_then(Value::as_str),
+                    "final_runtime_headroom_cleanup_result_gate_ready": agent_browser_final_runtime_proof_capacity
+                        .pointer("/headroom_recovery_plan/cleanup_result_gate/ready_for_capacity_recheck")
+                        .and_then(Value::as_bool),
                     "final_runtime_headroom_readiness_gate_visible": true,
                     "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
                     "final_runtime_headroom_readiness_gate_copy_action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
@@ -24365,6 +24471,7 @@ impl WebPreviewView {
                             "final_runtime_headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                             "final_runtime_headroom_size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
                             "final_runtime_headroom_cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
+                            "final_runtime_headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
                             "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
                             "final_runtime_headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
                             "final_runtime_blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
@@ -24501,6 +24608,8 @@ impl WebPreviewView {
                             "headroom_size_inspection_field": "headroom_recovery_plan.size_inspection",
                             "headroom_cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
                             "headroom_cleanup_result_template_field": "headroom_recovery_plan.cleanup_result_template",
+                            "headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+                            "headroom_cleanup_result_gate_field": "headroom_recovery_plan.cleanup_result_gate",
                             "headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                             "headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                             "headroom_inspection_checklist_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_inspection_checklist",
@@ -24689,6 +24798,7 @@ impl WebPreviewView {
                             {"id": "browser.validation.final_runtime_headroom_reclaim_candidates", "state": "available", "description": "Copy or send read-only target-drive reclaim candidates with preserve rules before manual cleanup."},
                             {"id": "browser.validation.final_runtime_headroom_size_inspection", "state": "available", "description": "Expose read-only target/cache size inspection commands before manual headroom recovery."},
                             {"id": "browser.validation.final_runtime_headroom_cleanup_result_template", "state": "available", "description": "Expose a manual cleanup-result template for target-drive headroom recovery evidence."},
+                            {"id": "browser.validation.final_runtime_headroom_cleanup_result_gate", "state": "available", "description": "Expose a compact gate for manual cleanup-result readiness before capacity recheck."},
                             {"id": "browser.validation.final_runtime_blocker_board", "state": "available", "description": "Copy or send the ordered final-runtime blocker board across panel-result, panel-proof, and target-drive gates."},
                             {"id": "browser.validation.final_proof_audit", "state": "available", "description": "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},

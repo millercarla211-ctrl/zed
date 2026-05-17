@@ -72,6 +72,8 @@ const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_size_inspection.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_cleanup_result_template.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_headroom_cleanup_result_gate.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_readiness_gate.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA: &str =
@@ -1039,6 +1041,12 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "final_runtime_headroom_cleanup_result_template_field": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_template_field")
                 .and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_gate_schema": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_gate_schema")
+                .and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_gate_field": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_gate_field")
+                .and_then(Value::as_str),
             "final_runtime_headroom_inspection_checklist_copy_action": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_copy_action")
                 .and_then(Value::as_str),
@@ -1705,6 +1713,7 @@ fn browser_plugin_manifest() -> Value {
             "final_runtime_headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
             "final_runtime_headroom_size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
             "final_runtime_headroom_cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
+            "final_runtime_headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
             "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
             "final_runtime_headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
             "final_runtime_blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
@@ -1842,6 +1851,8 @@ fn browser_plugin_manifest() -> Value {
             "headroom_size_inspection_field": "headroom_recovery_plan.size_inspection",
             "headroom_cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
             "headroom_cleanup_result_template_field": "headroom_recovery_plan.cleanup_result_template",
+            "headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+            "headroom_cleanup_result_gate_field": "headroom_recovery_plan.cleanup_result_gate",
             "headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
             "headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
             "headroom_inspection_checklist_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_inspection_checklist",
@@ -2017,6 +2028,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.validation.final_runtime_headroom_reclaim_candidates", "available", "Copy or send read-only target-drive reclaim candidates with preserve rules before manual cleanup."),
             capability("browser.validation.final_runtime_headroom_size_inspection", "available", "Expose read-only target/cache size inspection commands before manual headroom recovery."),
             capability("browser.validation.final_runtime_headroom_cleanup_result_template", "available", "Expose a manual cleanup-result template for target-drive headroom recovery evidence."),
+            capability("browser.validation.final_runtime_headroom_cleanup_result_gate", "available", "Expose a compact gate for manual cleanup-result readiness before capacity recheck."),
             capability("browser.validation.final_runtime_blocker_board", "available", "Copy or send the ordered final-runtime blocker board across panel-result, panel-proof, and target-drive gates."),
             capability("browser.validation.final_proof_audit", "available", "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."),
             capability("browser.action.click", "available_when_unlocked", "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."),

@@ -1,3 +1,16 @@
+[2026-05-17] - Final Runtime Headroom Cleanup Result Gate
+
+ADDED:
+- `crates/web_preview/src/web_preview_view.rs` now embeds `agent_browser_final_runtime_headroom_cleanup_result_gate` inside final-runtime headroom recovery plans and inspection checklists.
+- Recovery cards, reclaim-candidate packets, status summaries, action manifests, and final-runtime capacity summaries now expose cleanup-result gate schema/status/readiness metadata for AI panels.
+
+CHANGED:
+- `crates/agent/src/tools/agent_plugin_catalog_tool.rs` and the WebPreview plugin catalog now advertise the cleanup-result gate schema, field, and Browser capability beside the cleanup-result template and size-inspection handoffs.
+- `todo.txt` now records the cleanup-result gate slice while keeping the feature set at 99/100 until live UI exercise and final runtime proof can run with enough G: headroom.
+
+NOTES:
+- This slice is read-only and gate-only. It does not delete files, move target directories, run Cargo, run `just run`, launch browsers, dispatch input, or mutate browser profiles.
+
 [2026-05-17] - Final Runtime Headroom Cleanup Result Template
 
 ADDED:
