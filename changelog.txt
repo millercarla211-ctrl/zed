@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Live Result Gate
+
+ADDED:
+- WebPreview now exposes Copy/Send Panel Result Gate actions that report whether the latest imported panel control result clears the live UI validation step before final runtime proof.
+- Agent/WebPreview plugin catalogs now advertise `browser.panel_live_validation_result_gate` plus the result-gate schema, status-packet field, and copy/send handoff metadata.
+
+CHANGED:
+- Session snapshots, Agent Browser status packets, final validation bundles, and action manifests now include panel live-validation result-gate summaries beside the existing live-validation and result-template handoffs.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 75/100 and the remaining live UI/runtime validation targets.
+
+NOTES:
+- This is a read-only gate slice. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Live Result Template
 
 ADDED:

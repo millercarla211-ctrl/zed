@@ -83,6 +83,8 @@ const AGENT_BROWSER_PANEL_CONTROL_RESULT_LEDGER_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_control_result_ledger.v1";
 const AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_live_validation.v1";
+const AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_live_validation_result_gate.v1";
 const AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_control_result_import_receipt.v1";
 const AGENT_BROWSER_PANEL_CONTROL_RESULT_DIR_NAME: &str = "browser-panel-control-results";
@@ -928,6 +930,15 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "panel_live_validation_result_template_send_action": plugin
                 .pointer("/panel_live_validation/result_template_send_action")
                 .and_then(Value::as_str),
+            "panel_live_validation_result_gate_schema": plugin
+                .pointer("/panel_live_validation/result_gate_schema")
+                .and_then(Value::as_str),
+            "panel_live_validation_result_gate_copy_action": plugin
+                .pointer("/panel_live_validation/result_gate_copy_action")
+                .and_then(Value::as_str),
+            "panel_live_validation_result_gate_send_action": plugin
+                .pointer("/panel_live_validation/result_gate_send_action")
+                .and_then(Value::as_str),
             "panel_card_deck_interaction_validation_schema": plugin
                 .pointer("/panel_card_deck/interaction_validation_schema")
                 .and_then(Value::as_str),
@@ -1329,6 +1340,7 @@ fn browser_plugin_manifest() -> Value {
                 "panel_control_result_ledger": "copy_agent_browser_panel_control_result_ledger",
                 "panel_live_validation": "copy_agent_browser_panel_live_validation",
                 "panel_live_validation_result_template": "copy_agent_browser_panel_live_validation_result_template",
+                "panel_live_validation_result_gate": "copy_agent_browser_panel_live_validation_result_gate",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -1438,6 +1450,10 @@ fn browser_plugin_manifest() -> Value {
             "result_template_send_action": "send_agent_browser_panel_live_validation_result_template_to_agent",
             "result_template_status_packet_field": "packet.latest.agent_browser_panel_live_validation_result_template",
             "result_template_import_action": "import_agent_browser_panel_control_result_from_clipboard",
+            "result_gate_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
+            "result_gate_copy_action": "copy_agent_browser_panel_live_validation_result_gate",
+            "result_gate_send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
+            "result_gate_status_packet_field": "packet.latest.agent_browser_panel_live_validation_result_gate",
             "status_packet_field": "packet.latest.agent_browser_panel_live_validation",
             "source_fields": [
                 "session.agent_browser_panel_card_deck",
@@ -1480,6 +1496,7 @@ fn browser_plugin_manifest() -> Value {
             "panel_control_result_import_receipt_schema": AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA,
             "panel_live_validation_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
             "panel_live_validation_result_template_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
+            "panel_live_validation_result_gate_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_green_final_proof_guide_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
@@ -1687,6 +1704,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.panel_control_result_ledger", "available", "Copy or send normalized panel control results derived from the latest receipt and import surfaces."),
             capability("browser.panel_live_validation", "available", "Copy or send the right-side panel live-validation checklist before the final runtime proof."),
             capability("browser.panel_live_validation_result_template", "available", "Copy or send the fillable panel control-result template for the live panel validation exercise."),
+            capability("browser.panel_live_validation_result_gate", "available", "Copy or send the live panel result gate before final runtime proof."),
             capability("browser.plugin_bootstrap_readiness", "available", "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."),
             capability("browser.runtime_green_claim_readiness", "available", "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."),
             capability("browser.runtime_green_report_gate", "available", "Copy or send the canonical runtime-green ready/blocked report gate."),
