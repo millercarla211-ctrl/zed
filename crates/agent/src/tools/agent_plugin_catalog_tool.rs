@@ -54,6 +54,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_bundle.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_ALLOWED_STATUS_VALUES: &[&str] =
+    &["not_run", "pass", "fail", "blocked", "skipped"];
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result_import_receipt.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
@@ -2140,6 +2142,7 @@ fn browser_plugin_manifest() -> Value {
         },
         "final_validation_result_template_handoff": {
             "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+            "allowed_status_values": AGENT_BROWSER_FINAL_VALIDATION_ALLOWED_STATUS_VALUES,
             "expected_required_check_ids": [
                 "editor_typing",
                 "webpreview_input",
@@ -2170,6 +2173,10 @@ fn browser_plugin_manifest() -> Value {
             "managed_result_file": AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME,
             "managed_result_archive_prefix": AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX,
             "runtime_status_field": "runtime_green_blocker_summary.latest_evidence.browser_final_validation_result",
+            "allowed_status_values_field": "allowed_status_values",
+            "non_pass_required_checks_field": "non_pass_required_checks",
+            "missing_required_statuses_field": "missing_required_statuses",
+            "invalid_required_check_statuses_field": "invalid_required_check_statuses",
             "stale_required_check_blocker_field": "missing_expected_required_checks",
             "copy_send_read_only": true,
             "import_writes_managed_result": true,

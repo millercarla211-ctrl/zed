@@ -98,6 +98,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SUMMARY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_bundle_summary.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_ALLOWED_STATUS_VALUES: &[&str] =
+    &["not_run", "pass", "fail", "blocked", "skipped"];
 const AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS: &[&str] = &[
     "editor_typing",
     "webpreview_input",
@@ -8782,7 +8784,7 @@ impl WebPreviewView {
             "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
             "status": "not_run",
             "runtime_command": "just run",
-            "allowed_status_values": ["not_run", "pass", "fail", "blocked", "skipped"],
+            "allowed_status_values": AGENT_BROWSER_FINAL_VALIDATION_ALLOWED_STATUS_VALUES,
             "required_check_ids": AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS,
             "branch": "dev",
             "commit": "fill with git rev-parse --short HEAD before runtime pass",
@@ -8889,6 +8891,7 @@ impl WebPreviewView {
         let expected_required_check_ids = AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS;
         let declared_required_check_count = declared_required_check_ids.len();
         let expected_required_check_count = expected_required_check_ids.len();
+        let allowed_status_values = AGENT_BROWSER_FINAL_VALIDATION_ALLOWED_STATUS_VALUES;
         let missing_expected_required_checks = expected_required_check_ids
             .iter()
             .filter(|check_id| {
@@ -8927,6 +8930,50 @@ impl WebPreviewView {
             })
             .copied()
             .collect::<Vec<_>>();
+        let non_pass_required_checks = expected_required_check_ids
+            .iter()
+            .filter(|check_id| {
+                checks
+                    .and_then(|checks| checks.get(**check_id))
+                    .and_then(|check| check.pointer("/status"))
+                    .and_then(Value::as_str)
+                    .is_some_and(|status| status != "pass")
+            })
+            .copied()
+            .collect::<Vec<_>>();
+        let missing_required_statuses = expected_required_check_ids
+            .iter()
+            .filter(|check_id| {
+                checks
+                    .and_then(|checks| checks.get(**check_id))
+                    .is_some_and(|check| {
+                        check
+                            .pointer("/status")
+                            .and_then(Value::as_str)
+                            .map(str::trim)
+                            .filter(|status| !status.is_empty())
+                            .is_none()
+                    })
+            })
+            .copied()
+            .collect::<Vec<_>>();
+        let invalid_required_check_statuses = expected_required_check_ids
+            .iter()
+            .filter_map(|check_id| {
+                let status = checks
+                    .and_then(|checks| checks.get(*check_id))
+                    .and_then(|check| check.pointer("/status"))
+                    .and_then(Value::as_str)?;
+                if allowed_status_values.contains(&status) {
+                    None
+                } else {
+                    Some(serde_json::json!({
+                        "check_id": *check_id,
+                        "status": status,
+                    }))
+                }
+            })
+            .collect::<Vec<_>>();
         let required_check_blocker_count = expected_required_check_ids
             .iter()
             .filter(|check_id| {
@@ -8949,6 +8996,8 @@ impl WebPreviewView {
                 .unwrap_or(true)
             && required_check_blocker_count == 0
             && missing_required_checks.is_empty()
+            && missing_required_statuses.is_empty()
+            && invalid_required_check_statuses.is_empty()
             && missing_expected_required_checks.is_empty();
 
         serde_json::json!({
@@ -8964,7 +9013,11 @@ impl WebPreviewView {
             "expected_required_check_count": expected_required_check_count,
             "declared_required_check_ids": declared_required_check_ids,
             "expected_required_check_ids": expected_required_check_ids,
+            "allowed_status_values": allowed_status_values,
             "pass_required_check_count": pass_required_check_count,
+            "non_pass_required_checks": non_pass_required_checks,
+            "missing_required_statuses": missing_required_statuses,
+            "invalid_required_check_statuses": invalid_required_check_statuses,
             "required_check_blocker_count": required_check_blocker_count,
             "missing_required_checks": missing_required_checks,
             "missing_expected_required_checks": missing_expected_required_checks,
@@ -28323,6 +28376,7 @@ impl WebPreviewView {
                         },
                         "final_validation_result_template_handoff": {
                             "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+                            "allowed_status_values": AGENT_BROWSER_FINAL_VALIDATION_ALLOWED_STATUS_VALUES,
                             "expected_required_check_ids": AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS,
                             "headroom_recovery_sequence_required_check_id": "final_headroom_recovery_sequence",
                             "headroom_recovery_sequence_bundle_field": "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_sequence",
@@ -28341,6 +28395,10 @@ impl WebPreviewView {
                             "managed_result_file": AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME,
                             "managed_result_archive_prefix": AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX,
                             "runtime_status_field": "runtime_green_blocker_summary.latest_evidence.browser_final_validation_result",
+                            "allowed_status_values_field": "allowed_status_values",
+                            "non_pass_required_checks_field": "non_pass_required_checks",
+                            "missing_required_statuses_field": "missing_required_statuses",
+                            "invalid_required_check_statuses_field": "invalid_required_check_statuses",
                             "stale_required_check_blocker_field": "missing_expected_required_checks",
                             "copy_send_read_only": true,
                             "import_writes_managed_result": true,

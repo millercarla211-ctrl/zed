@@ -1,3 +1,16 @@
+[2026-05-18] - Final Result Status Diagnostics
+
+ADDED:
+- Final validation result summaries now expose allowed status values, non-pass required checks, missing required statuses, and invalid required status payloads.
+- Agent and WebPreview catalog metadata now advertise those final-result status diagnostics.
+
+CHANGED:
+- Imported final proof failures now show actionable required-check status diagnostics instead of only a generic not-runtime-green summary.
+- `todo.txt` records the final-result status diagnostics slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is source-level validation contract hardening. It does not run `just`, run Cargo, launch browsers, dispatch input, delete files, or move the target directory.
+
 [2026-05-18] - Final Result Dry Run Proof
 
 ADDED:
