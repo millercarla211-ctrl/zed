@@ -1006,6 +1006,12 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "final_runtime_headroom_inspection_checklist_schema": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_schema")
                 .and_then(Value::as_str),
+            "final_runtime_headroom_inspection_checklist_copy_action": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_copy_action")
+                .and_then(Value::as_str),
+            "final_runtime_headroom_inspection_checklist_send_action": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_send_action")
+                .and_then(Value::as_str),
             "final_runtime_headroom_recovery_plan_field": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_field")
                 .and_then(Value::as_str),
@@ -1441,6 +1447,7 @@ fn browser_plugin_manifest() -> Value {
                 "final_runtime_proof_capacity": "copy_agent_browser_final_runtime_proof_capacity",
                 "final_runtime_headroom_recovery_plan": "copy_agent_browser_final_runtime_headroom_recovery_plan",
                 "final_runtime_headroom_recovery_card": "copy_agent_browser_final_runtime_headroom_recovery_card",
+                "final_runtime_headroom_inspection_checklist": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -1757,6 +1764,9 @@ fn browser_plugin_manifest() -> Value {
             "headroom_recovery_plan_field": "headroom_recovery_plan",
             "headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
             "headroom_inspection_checklist_field": "headroom_recovery_plan.inspection_checklist",
+            "headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+            "headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
+            "headroom_inspection_checklist_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_inspection_checklist",
             "headroom_recovery_plan_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
             "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
             "headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,

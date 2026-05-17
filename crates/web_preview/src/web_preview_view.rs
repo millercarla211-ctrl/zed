@@ -450,6 +450,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
     "copy_agent_browser_final_runtime_headroom_recovery_card",
     "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
+    "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+    "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
     "copy_agent_browser_final_proof_audit",
     "send_agent_browser_final_proof_audit_to_agent",
     "copy_agent_browser_function_surfaces",
@@ -861,6 +863,7 @@ pub struct WebPreviewView {
     latest_agent_browser_final_runtime_proof_capacity: Option<Value>,
     latest_agent_browser_final_runtime_headroom_recovery_plan: Option<Value>,
     latest_agent_browser_final_runtime_headroom_recovery_card: Option<Value>,
+    latest_agent_browser_final_runtime_headroom_inspection_checklist: Option<Value>,
     latest_agent_browser_panel_control_result: Option<Value>,
     latest_agent_browser_panel_control_result_import_receipt: Option<Value>,
     latest_agent_browser_panel_live_validation: Option<Value>,
@@ -1096,6 +1099,7 @@ impl WebPreviewView {
             latest_agent_browser_final_runtime_proof_capacity: None,
             latest_agent_browser_final_runtime_headroom_recovery_plan: None,
             latest_agent_browser_final_runtime_headroom_recovery_card: None,
+            latest_agent_browser_final_runtime_headroom_inspection_checklist: None,
             latest_agent_browser_panel_control_result: None,
             latest_agent_browser_panel_control_result_import_receipt: None,
             latest_agent_browser_panel_live_validation: None,
@@ -1620,6 +1624,7 @@ impl WebPreviewView {
             "agent_browser_final_runtime_proof_capacity": self.latest_agent_browser_final_runtime_proof_capacity_summary(),
             "agent_browser_final_runtime_headroom_recovery_plan": self.latest_agent_browser_final_runtime_headroom_recovery_plan_summary(),
             "agent_browser_final_runtime_headroom_recovery_card": self.latest_agent_browser_final_runtime_headroom_recovery_card_summary(),
+            "agent_browser_final_runtime_headroom_inspection_checklist": self.latest_agent_browser_final_runtime_headroom_inspection_checklist_summary(),
             "agent_browser_final_proof_audit": self.latest_agent_browser_final_proof_audit_summary(),
             "agent_browser_function_surfaces": self.agent_browser_function_surfaces(),
             "agent_browser_panel_control_result": self.latest_agent_browser_panel_control_result_summary(),
@@ -1737,6 +1742,8 @@ impl WebPreviewView {
                 "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent": true,
                 "copy_agent_browser_final_runtime_headroom_recovery_card": true,
                 "send_agent_browser_final_runtime_headroom_recovery_card_to_agent": true,
+                "copy_agent_browser_final_runtime_headroom_inspection_checklist": true,
+                "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent": true,
                 "copy_agent_browser_final_proof_audit": true,
                 "send_agent_browser_final_proof_audit_to_agent": true,
                 "agent_browser_function_surfaces": true,
@@ -2134,6 +2141,11 @@ impl WebPreviewView {
             "final_runtime_headroom_recovery_card_blocked": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_card/blocked").and_then(Value::as_bool),
             "final_runtime_headroom_recovery_card_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_card",
             "final_runtime_headroom_recovery_card_send_action": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
+            "final_runtime_headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+            "final_runtime_headroom_inspection_checklist_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_inspection_checklist/status").and_then(Value::as_str),
+            "final_runtime_headroom_inspection_checklist_step_count": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_inspection_checklist/steps").and_then(Value::as_array).map(Vec::len),
+            "final_runtime_headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+            "final_runtime_headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
             "panel_control_result_ledger_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/status").and_then(Value::as_str),
             "panel_control_result_ledger_result_count": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/result_count").and_then(Value::as_u64),
             "panel_control_result_ledger_latest_result_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/latest_result_status").and_then(Value::as_str),
@@ -2161,6 +2173,7 @@ impl WebPreviewView {
             "agent_browser_final_runtime_proof_capacity": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity").cloned(),
             "agent_browser_final_runtime_headroom_recovery_plan": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_recovery_plan").cloned(),
             "agent_browser_final_runtime_headroom_recovery_card": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_recovery_card").cloned(),
+            "agent_browser_final_runtime_headroom_inspection_checklist": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_inspection_checklist").cloned(),
             "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
             "runtime_green_ready_lane_fraction": packet.pointer("/packet/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
             "runtime_green_first_pending_lane": packet.pointer("/packet/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
@@ -2404,6 +2417,15 @@ impl WebPreviewView {
         Some(Self::agent_browser_final_runtime_headroom_recovery_card_summary(card))
     }
 
+    fn latest_agent_browser_final_runtime_headroom_inspection_checklist_summary(
+        &self,
+    ) -> Option<Value> {
+        let checklist = self
+            .latest_agent_browser_final_runtime_headroom_inspection_checklist
+            .as_ref()?;
+        Some(Self::agent_browser_final_runtime_headroom_inspection_checklist_summary(checklist))
+    }
+
     fn agent_browser_final_runtime_proof_capacity_summary(capacity: &Value) -> Value {
         serde_json::json!({
             "schema": capacity.pointer("/schema").and_then(Value::as_str),
@@ -2459,6 +2481,22 @@ impl WebPreviewView {
             "inspection_step_count": card.pointer("/inspection_checklist/step_count").and_then(Value::as_u64),
             "copy_plan_action": card.pointer("/actions/copy_recovery_plan").and_then(Value::as_str),
             "copy_capacity_action": card.pointer("/actions/copy_final_runtime_capacity").and_then(Value::as_str),
+        })
+    }
+
+    fn agent_browser_final_runtime_headroom_inspection_checklist_summary(
+        checklist: &Value,
+    ) -> Value {
+        serde_json::json!({
+            "schema": checklist.pointer("/schema").and_then(Value::as_str),
+            "source_schema": checklist.pointer("/source_schema").and_then(Value::as_str),
+            "status": checklist.pointer("/status").and_then(Value::as_str),
+            "step_count": checklist.pointer("/steps").and_then(Value::as_array).map(Vec::len),
+            "first_step": checklist.pointer("/steps/0/id").and_then(Value::as_str),
+            "preserve_root_count": checklist.pointer("/preserve_roots").and_then(Value::as_array).map(Vec::len),
+            "forbidden_action_count": checklist.pointer("/forbidden_actions").and_then(Value::as_array).map(Vec::len),
+            "ready_to_cleanup_condition": checklist.pointer("/ready_to_cleanup_condition").and_then(Value::as_str),
+            "read_only": checklist.pointer("/read_only").and_then(Value::as_bool),
         })
     }
 
@@ -3272,6 +3310,8 @@ impl WebPreviewView {
                 "send_recovery_plan": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
                 "copy_recovery_card": "copy_agent_browser_final_runtime_headroom_recovery_card",
                 "send_recovery_card": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
+                "copy_inspection_checklist": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+                "send_inspection_checklist": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                 "copy_final_runtime_capacity": "copy_agent_browser_final_runtime_proof_capacity",
                 "send_final_runtime_capacity": "send_agent_browser_final_runtime_proof_capacity_to_agent"
             },
@@ -3284,6 +3324,7 @@ impl WebPreviewView {
                     "copy_agent_browser_final_runtime_proof_capacity"
                 },
                 "secondary_action": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
+                "checklist_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
             },
             "safety": {
                 "read_only": true,
@@ -3433,6 +3474,59 @@ impl WebPreviewView {
         )))]
     }
 
+    fn agent_browser_final_runtime_headroom_inspection_checklist_from_plan(plan: &Value) -> Value {
+        plan.pointer("/inspection_checklist")
+            .cloned()
+            .map(|mut checklist| {
+                if let Some(checklist_object) = checklist.as_object_mut() {
+                    checklist_object
+                        .entry("source_schema")
+                        .or_insert_with(|| {
+                            Value::String(
+                                AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA.into(),
+                            )
+                        });
+                }
+                checklist
+            })
+            .unwrap_or_else(|| {
+                serde_json::json!({
+                    "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                    "source_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
+                    "status": "unavailable",
+                    "steps": [],
+                    "preserve_roots": [],
+                    "forbidden_actions": [
+                        "Copy final runtime headroom recovery plan again to regenerate the inspection checklist."
+                    ],
+                    "read_only": true
+                })
+            })
+    }
+
+    fn agent_browser_final_runtime_headroom_inspection_checklist_from_capacity(
+        capacity: &Value,
+    ) -> Value {
+        let plan = Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(capacity);
+        Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan)
+    }
+
+    fn agent_browser_final_runtime_headroom_inspection_checklist_json(checklist: &Value) -> String {
+        serde_json::to_string_pretty(checklist).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_final_runtime_headroom_inspection_checklist_agent_blocks(
+        checklist: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let summary =
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_summary(checklist);
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Agent Browser final runtime headroom inspection checklist:\n\nSummary:\n```json\n{}\n```\n\nInspection checklist:\n```json\n{}\n```",
+            serde_json::to_string_pretty(&summary).unwrap_or_else(|_| "{}".to_string()),
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_json(checklist)
+        )))]
+    }
+
     fn agent_browser_final_runtime_headroom_recovery_card_from_capacity(capacity: &Value) -> Value {
         let plan = Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(capacity);
         Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan)
@@ -3459,12 +3553,17 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
         let card =
             Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
+        let checklist =
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_from_capacity(
+                &capacity,
+            );
         cx.write_to_clipboard(ClipboardItem::new_string(
             Self::agent_browser_final_runtime_proof_capacity_json(&capacity),
         ));
         self.latest_agent_browser_final_runtime_proof_capacity = Some(capacity);
         self.latest_agent_browser_final_runtime_headroom_recovery_plan = Some(plan);
         self.latest_agent_browser_final_runtime_headroom_recovery_card = Some(card);
+        self.latest_agent_browser_final_runtime_headroom_inspection_checklist = Some(checklist);
         self.show_toast("Copied final runtime proof capacity", cx);
         cx.notify();
     }
@@ -3480,9 +3579,14 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
         let card =
             Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
+        let checklist =
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_from_capacity(
+                &capacity,
+            );
         self.latest_agent_browser_final_runtime_proof_capacity = Some(capacity);
         self.latest_agent_browser_final_runtime_headroom_recovery_plan = Some(plan);
         self.latest_agent_browser_final_runtime_headroom_recovery_card = Some(card);
+        self.latest_agent_browser_final_runtime_headroom_inspection_checklist = Some(checklist);
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast("Sent final runtime proof capacity to the agent panel", cx);
         cx.notify();
@@ -3493,12 +3597,15 @@ impl WebPreviewView {
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
         let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let checklist =
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         cx.write_to_clipboard(ClipboardItem::new_string(
             Self::agent_browser_final_runtime_headroom_recovery_plan_json(&plan),
         ));
         self.latest_agent_browser_final_runtime_proof_capacity = Some(capacity);
         self.latest_agent_browser_final_runtime_headroom_recovery_plan = Some(plan);
         self.latest_agent_browser_final_runtime_headroom_recovery_card = Some(card);
+        self.latest_agent_browser_final_runtime_headroom_inspection_checklist = Some(checklist);
         self.show_toast("Copied final runtime headroom recovery plan", cx);
         cx.notify();
     }
@@ -3512,10 +3619,13 @@ impl WebPreviewView {
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
         let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let checklist =
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let blocks = Self::agent_browser_final_runtime_headroom_recovery_plan_agent_blocks(&plan);
         self.latest_agent_browser_final_runtime_proof_capacity = Some(capacity);
         self.latest_agent_browser_final_runtime_headroom_recovery_plan = Some(plan);
         self.latest_agent_browser_final_runtime_headroom_recovery_card = Some(card);
+        self.latest_agent_browser_final_runtime_headroom_inspection_checklist = Some(checklist);
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast(
             "Sent final runtime headroom recovery plan to the agent panel",
@@ -3529,12 +3639,15 @@ impl WebPreviewView {
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
         let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let checklist =
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         cx.write_to_clipboard(ClipboardItem::new_string(
             Self::agent_browser_final_runtime_headroom_recovery_card_json(&card),
         ));
         self.latest_agent_browser_final_runtime_proof_capacity = Some(capacity);
         self.latest_agent_browser_final_runtime_headroom_recovery_plan = Some(plan);
         self.latest_agent_browser_final_runtime_headroom_recovery_card = Some(card);
+        self.latest_agent_browser_final_runtime_headroom_inspection_checklist = Some(checklist);
         self.show_toast("Copied final runtime headroom recovery card", cx);
         cx.notify();
     }
@@ -3548,13 +3661,63 @@ impl WebPreviewView {
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
         let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let checklist =
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let blocks = Self::agent_browser_final_runtime_headroom_recovery_card_agent_blocks(&card);
         self.latest_agent_browser_final_runtime_proof_capacity = Some(capacity);
         self.latest_agent_browser_final_runtime_headroom_recovery_plan = Some(plan);
         self.latest_agent_browser_final_runtime_headroom_recovery_card = Some(card);
+        self.latest_agent_browser_final_runtime_headroom_inspection_checklist = Some(checklist);
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast(
             "Sent final runtime headroom recovery card to the agent panel",
+            cx,
+        );
+        cx.notify();
+    }
+
+    fn copy_agent_browser_final_runtime_headroom_inspection_checklist(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let capacity = self.agent_browser_final_runtime_proof_capacity();
+        let plan =
+            Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
+        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let checklist =
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_json(&checklist),
+        ));
+        self.latest_agent_browser_final_runtime_proof_capacity = Some(capacity);
+        self.latest_agent_browser_final_runtime_headroom_recovery_plan = Some(plan);
+        self.latest_agent_browser_final_runtime_headroom_recovery_card = Some(card);
+        self.latest_agent_browser_final_runtime_headroom_inspection_checklist = Some(checklist);
+        self.show_toast("Copied final runtime headroom inspection checklist", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let capacity = self.agent_browser_final_runtime_proof_capacity();
+        let plan =
+            Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
+        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let checklist =
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
+        let blocks = Self::agent_browser_final_runtime_headroom_inspection_checklist_agent_blocks(
+            &checklist,
+        );
+        self.latest_agent_browser_final_runtime_proof_capacity = Some(capacity);
+        self.latest_agent_browser_final_runtime_headroom_recovery_plan = Some(plan);
+        self.latest_agent_browser_final_runtime_headroom_recovery_card = Some(card);
+        self.latest_agent_browser_final_runtime_headroom_inspection_checklist = Some(checklist);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast(
+            "Sent final runtime headroom inspection checklist to the agent panel",
             cx,
         );
         cx.notify();
@@ -3574,6 +3737,10 @@ impl WebPreviewView {
             .unwrap_or(false);
         let final_runtime_headroom_recovery_card =
             Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(
+                &final_runtime_proof_capacity,
+            );
+        let final_runtime_headroom_inspection_checklist =
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_from_capacity(
                 &final_runtime_proof_capacity,
             );
         let panel_live_validation_result_gate =
@@ -3647,6 +3814,7 @@ impl WebPreviewView {
             "durable_evidence": durable_evidence,
             "final_runtime_proof_capacity": final_runtime_proof_capacity,
             "final_runtime_headroom_recovery_card": final_runtime_headroom_recovery_card,
+            "final_runtime_headroom_inspection_checklist": final_runtime_headroom_inspection_checklist,
             "final_runtime_capacity_ready": final_runtime_capacity_ready,
             "panel_live_validation_result_gate": panel_live_validation_result_gate,
             "panel_live_validation_result_gate_ready": panel_live_validation_result_gate_ready,
@@ -3695,6 +3863,13 @@ impl WebPreviewView {
                 "action": "copy_agent_browser_final_runtime_headroom_recovery_card",
                 "alternative_action": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
                 "reason": "render_target_drive_headroom_blocker",
+                "dispatches_input": false
+            }));
+            actions.push(serde_json::json!({
+                "target": "final_runtime_headroom_inspection_checklist",
+                "action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+                "alternative_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
+                "reason": "manual_target_drive_inspection_required",
                 "dispatches_input": false
             }));
         }
@@ -4862,6 +5037,10 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(
                 &final_runtime_headroom_recovery_plan,
             );
+        let final_runtime_headroom_inspection_checklist =
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(
+                &final_runtime_headroom_recovery_plan,
+            );
         let agent_plugin_catalog_current_summary = manifest
             .pointer("/handoffs/plugin_catalog/current_summary")
             .cloned();
@@ -5065,6 +5244,8 @@ impl WebPreviewView {
                     "headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                     "headroom_recovery_plan_field": "headroom_recovery_plan",
                     "headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                    "headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+                    "headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                     "headroom_recovery_plan_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
                     "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
                     "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
@@ -5082,6 +5263,8 @@ impl WebPreviewView {
                     "source_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
                     "recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
                     "inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                    "inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+                    "inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                     "recovery_card_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_card",
                     "recovery_card_send_action": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
                     "copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
@@ -5098,6 +5281,8 @@ impl WebPreviewView {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
                     "source_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                     "inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                    "inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+                    "inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                     "copy_action": "copy_agent_browser_final_runtime_headroom_recovery_card",
                     "send_action": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
                     "latest_summary": self.latest_agent_browser_final_runtime_headroom_recovery_card_summary(),
@@ -5107,6 +5292,19 @@ impl WebPreviewView {
                     "current_card": final_runtime_headroom_recovery_card.clone(),
                     "read_only": true,
                     "purpose": "Render a compact headroom blocker card in the AI panel before cleanup and final just run proof."
+                },
+                "final_runtime_headroom_inspection_checklist": {
+                    "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                    "source_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
+                    "copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+                    "send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
+                    "latest_summary": self.latest_agent_browser_final_runtime_headroom_inspection_checklist_summary(),
+                    "current_summary": Self::agent_browser_final_runtime_headroom_inspection_checklist_summary(
+                        &final_runtime_headroom_inspection_checklist
+                    ),
+                    "current_checklist": final_runtime_headroom_inspection_checklist.clone(),
+                    "read_only": true,
+                    "purpose": "Copy or send only the safe manual disk-recovery inspection checklist before final just run proof."
                 },
                 "final_proof_audit": {
                     "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
@@ -6157,6 +6355,12 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "final_runtime_headroom_inspection_checklist_schema": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_schema")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_inspection_checklist_copy_action": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_copy_action")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_inspection_checklist_send_action": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_send_action")
                     .and_then(Value::as_str),
                 "final_runtime_headroom_recovery_plan_field": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_field")
@@ -10324,6 +10528,10 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(
                 final_runtime_capacity,
             );
+        let final_runtime_headroom_inspection_checklist =
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_from_capacity(
+                final_runtime_capacity,
+            );
         let suggested_action = result_template
             .pointer("/action")
             .and_then(Value::as_str)
@@ -10493,6 +10701,13 @@ impl WebPreviewView {
                         &final_runtime_headroom_recovery_card
                     ),
                     "payload": final_runtime_headroom_recovery_card,
+                },
+                "final_runtime_headroom_inspection_checklist": {
+                    "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                    "summary": Self::agent_browser_final_runtime_headroom_inspection_checklist_summary(
+                        &final_runtime_headroom_inspection_checklist
+                    ),
+                    "payload": final_runtime_headroom_inspection_checklist,
                 }
             },
             "actions": {
@@ -10513,6 +10728,8 @@ impl WebPreviewView {
                 "send_final_capacity": "send_agent_browser_final_runtime_proof_capacity_to_agent",
                 "copy_headroom_recovery_card": "copy_agent_browser_final_runtime_headroom_recovery_card",
                 "send_headroom_recovery_card": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
+                "copy_headroom_inspection_checklist": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+                "send_headroom_inspection_checklist": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                 "final_manual_command": "just run",
             },
             "next_action": next_action,
@@ -16869,6 +17086,10 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(
                 &agent_browser_final_runtime_headroom_recovery_plan,
             );
+        let agent_browser_final_runtime_headroom_inspection_checklist =
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(
+                &agent_browser_final_runtime_headroom_recovery_plan,
+            );
         let agent_browser_panel_live_ui_proof_checklist =
             Self::agent_browser_panel_live_ui_proof_checklist_from_parts(
                 &agent_browser_panel_live_validation,
@@ -17004,6 +17225,7 @@ impl WebPreviewView {
                     "agent_browser_final_runtime_proof_capacity": agent_browser_final_runtime_proof_capacity.clone(),
                     "agent_browser_final_runtime_headroom_recovery_plan": agent_browser_final_runtime_headroom_recovery_plan.clone(),
                     "agent_browser_final_runtime_headroom_recovery_card": agent_browser_final_runtime_headroom_recovery_card.clone(),
+                    "agent_browser_final_runtime_headroom_inspection_checklist": agent_browser_final_runtime_headroom_inspection_checklist.clone(),
                     "agent_browser_panel_card_deck": agent_browser_panel_card_deck,
                     "agent_browser_panel_control_result_ledger": agent_browser_panel_control_result_ledger,
                     "managed_chrome_execution": managed_chrome_execution,
@@ -17034,6 +17256,9 @@ impl WebPreviewView {
                     ),
                     "final_runtime_headroom_recovery_card": Self::agent_browser_final_runtime_headroom_recovery_card_summary(
                         &agent_browser_final_runtime_headroom_recovery_card
+                    ),
+                    "final_runtime_headroom_inspection_checklist": Self::agent_browser_final_runtime_headroom_inspection_checklist_summary(
+                        &agent_browser_final_runtime_headroom_inspection_checklist
                     ),
                     "screenshot_capture": self.latest_screenshot_capture_summary(),
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
@@ -17123,6 +17348,13 @@ impl WebPreviewView {
                     "final_runtime_headroom_recovery_card_send_action": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
                     "final_runtime_headroom_recovery_card": Self::agent_browser_final_runtime_headroom_recovery_card_summary(
                         &agent_browser_final_runtime_headroom_recovery_card
+                    ),
+                    "final_runtime_headroom_inspection_checklist_visible": true,
+                    "final_runtime_headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                    "final_runtime_headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+                    "final_runtime_headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
+                    "final_runtime_headroom_inspection_checklist": Self::agent_browser_final_runtime_headroom_inspection_checklist_summary(
+                        &agent_browser_final_runtime_headroom_inspection_checklist
                     ),
                     "executor_wired": true,
                     "safe_to_send_to_agent_panel": true,
@@ -21791,6 +22023,10 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(
                 &final_runtime_headroom_recovery_plan,
             );
+        let final_runtime_headroom_inspection_checklist =
+            Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(
+                &final_runtime_headroom_recovery_plan,
+            );
         let agent_browser_panel_live_ui_proof_checklist =
             Self::agent_browser_panel_live_ui_proof_checklist_from_parts(
                 &agent_browser_panel_live_validation,
@@ -21889,6 +22125,9 @@ impl WebPreviewView {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                     "source_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
                     "recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
+                    "inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                    "inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+                    "inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                     "recovery_card_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_card",
                     "recovery_card_send_action": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
                     "copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
@@ -21903,6 +22142,9 @@ impl WebPreviewView {
                 "final_runtime_headroom_recovery_card": {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
                     "source_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
+                    "inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                    "inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+                    "inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                     "copy_action": "copy_agent_browser_final_runtime_headroom_recovery_card",
                     "send_action": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
                     "latest_summary": self.latest_agent_browser_final_runtime_headroom_recovery_card_summary(),
@@ -21911,6 +22153,18 @@ impl WebPreviewView {
                     ),
                     "read_only": true,
                     "purpose": "Render the compact target-drive headroom blocker card before final runtime proof."
+                },
+                "final_runtime_headroom_inspection_checklist": {
+                    "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                    "source_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
+                    "copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+                    "send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
+                    "latest_summary": self.latest_agent_browser_final_runtime_headroom_inspection_checklist_summary(),
+                    "current_summary": Self::agent_browser_final_runtime_headroom_inspection_checklist_summary(
+                        &final_runtime_headroom_inspection_checklist
+                    ),
+                    "read_only": true,
+                    "purpose": "Copy or send the safe manual target-drive inspection checklist before cleanup or final runtime proof."
                 },
                 "final_proof_audit": {
                     "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
@@ -22662,6 +22916,7 @@ impl WebPreviewView {
                                 "final_runtime_proof_capacity": "copy_agent_browser_final_runtime_proof_capacity",
                                 "final_runtime_headroom_recovery_plan": "copy_agent_browser_final_runtime_headroom_recovery_plan",
                                 "final_runtime_headroom_recovery_card": "copy_agent_browser_final_runtime_headroom_recovery_card",
+                                "final_runtime_headroom_inspection_checklist": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -22978,6 +23233,9 @@ impl WebPreviewView {
                             "headroom_recovery_plan_field": "headroom_recovery_plan",
                             "headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                             "headroom_inspection_checklist_field": "headroom_recovery_plan.inspection_checklist",
+                            "headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+                            "headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
+                            "headroom_inspection_checklist_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_inspection_checklist",
                             "headroom_recovery_plan_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
                             "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
                             "headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
@@ -25587,6 +25845,32 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Copy Headroom Inspection Checklist")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_final_runtime_headroom_inspection_checklist(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Headroom Inspection Checklist")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy Final Proof Audit")
                                 .icon(IconName::Info)
                                 .handler({
@@ -28071,6 +28355,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_final_runtime_proof_capacity: None,
                 latest_agent_browser_final_runtime_headroom_recovery_plan: None,
                 latest_agent_browser_final_runtime_headroom_recovery_card: None,
+                latest_agent_browser_final_runtime_headroom_inspection_checklist: None,
                 latest_agent_browser_panel_control_result: None,
                 latest_agent_browser_panel_control_result_import_receipt: None,
                 latest_agent_browser_panel_live_validation: None,

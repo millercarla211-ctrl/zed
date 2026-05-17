@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Headroom Inspection Checklist Handoff
+
+ADDED:
+- WebPreview now exposes Copy/Send Headroom Inspection Checklist actions for `zed.web_preview.agent_browser_final_runtime_headroom_inspection_checklist.v1`.
+- Session snapshots, status packets, final validation bundles, action manifests, panel proof checklists, final observability recovery actions, More-menu entries, and Agent/WebPreview catalogs now surface the direct checklist handoff.
+
+CHANGED:
+- Final runtime capacity, recovery-plan, and recovery-card handoffs now refresh the latest inspection checklist summary together so AI panels can render the safe manual inspection steps without parsing the full capacity payload.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening still at 99/100 and the remaining live UI/runtime validation target after target-drive headroom is restored.
+
+NOTES:
+- This slice is a read-only checklist handoff. It does not delete files, run `just`, run Cargo, launch browsers, run Node or Playwright, take screenshots, dispatch input, or touch browser profiles.
+
 [2026-05-17] - Browser Chrome Headroom Inspection Checklist
 
 ADDED:
