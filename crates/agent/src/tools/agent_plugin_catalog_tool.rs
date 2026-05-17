@@ -1099,6 +1099,26 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
                     "/final_runtime_proof_capacity/headroom_cleanup_result_import_receipt_send_action",
                 )
                 .and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_import_receipt_status_packet_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_cleanup_result_import_receipt_status_packet_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_import_receipt_ready_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_cleanup_result_import_receipt_ready_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_import_receipt_next_action_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_cleanup_result_import_receipt_next_action_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_import_receipt_durable_write_count_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_cleanup_result_import_receipt_durable_write_count_field",
+                )
+                .and_then(Value::as_str),
             "final_runtime_headroom_cleanup_result_gate_schema": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_gate_schema")
                 .and_then(Value::as_str),
@@ -2057,6 +2077,9 @@ fn browser_plugin_manifest() -> Value {
             "headroom_cleanup_result_import_receipt_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent",
             "headroom_cleanup_result_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result",
             "headroom_cleanup_result_import_receipt_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
+            "headroom_cleanup_result_import_receipt_ready_field": "cleanup_result_gate.ready_for_capacity_recheck",
+            "headroom_cleanup_result_import_receipt_next_action_field": "post_import.next_action",
+            "headroom_cleanup_result_import_receipt_durable_write_count_field": "durable_write_count",
             "headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
             "headroom_cleanup_result_gate_field": "headroom_recovery_plan.cleanup_result_gate",
             "headroom_cleanup_result_gate_current_capacity_field": "headroom_cleanup_result_gate",

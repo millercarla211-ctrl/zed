@@ -2346,6 +2346,9 @@ impl WebPreviewView {
             "final_runtime_headroom_cleanup_result_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_to_agent",
             "final_runtime_headroom_cleanup_result_import_receipt_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
             "final_runtime_headroom_cleanup_result_import_receipt_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_import_receipt/status").and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_import_receipt_ready": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_import_receipt/ready_for_capacity_recheck").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_import_receipt/cleanup_result_gate/ready_for_capacity_recheck")).and_then(Value::as_bool),
+            "final_runtime_headroom_cleanup_result_import_receipt_next_action": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_import_receipt/post_import/next_action").and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_import_receipt_durable_write_count": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_import_receipt/durable_write_count").and_then(Value::as_u64),
             "final_runtime_headroom_cleanup_result_import_receipt_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
             "final_runtime_headroom_cleanup_result_import_receipt_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent",
             "final_runtime_headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
@@ -9024,6 +9027,26 @@ impl WebPreviewView {
                 "final_runtime_headroom_cleanup_result_import_receipt_send_action": plugin
                     .pointer(
                         "/final_runtime_proof_capacity/headroom_cleanup_result_import_receipt_send_action",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_cleanup_result_import_receipt_status_packet_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_cleanup_result_import_receipt_status_packet_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_cleanup_result_import_receipt_ready_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_cleanup_result_import_receipt_ready_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_cleanup_result_import_receipt_next_action_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_cleanup_result_import_receipt_next_action_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_cleanup_result_import_receipt_durable_write_count_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_cleanup_result_import_receipt_durable_write_count_field",
                     )
                     .and_then(Value::as_str),
                 "final_runtime_headroom_cleanup_result_gate_schema": plugin
@@ -26425,6 +26448,9 @@ impl WebPreviewView {
                             "headroom_cleanup_result_import_receipt_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent",
                             "headroom_cleanup_result_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result",
                             "headroom_cleanup_result_import_receipt_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
+                            "headroom_cleanup_result_import_receipt_ready_field": "cleanup_result_gate.ready_for_capacity_recheck",
+                            "headroom_cleanup_result_import_receipt_next_action_field": "post_import.next_action",
+                            "headroom_cleanup_result_import_receipt_durable_write_count_field": "durable_write_count",
                             "headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
                             "headroom_cleanup_result_gate_field": "headroom_recovery_plan.cleanup_result_gate",
                             "headroom_cleanup_result_gate_current_capacity_field": "headroom_cleanup_result_gate",

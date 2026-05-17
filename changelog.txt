@@ -1,3 +1,16 @@
+[2026-05-18] - Cleanup Result Import Receipt Catalog Alignment
+
+ADDED:
+- WebPreview status summaries now expose final-runtime cleanup-result import-receipt readiness, next action, and durable-write count.
+- Agent and WebPreview plugin catalogs now advertise cleanup-result import-receipt status, readiness, next-action, and durable-write fields.
+
+CHANGED:
+- Compact Browser/Chrome panels can decide whether an imported cleanup result is ready for a capacity recheck without opening the full import receipt payload.
+- `todo.txt` records the cleanup-result import receipt catalog slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only status/catalog metadata. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Blocker Board Derived Payload Fallback
 
 ADDED:
