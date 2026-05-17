@@ -435,7 +435,7 @@ fn agent_plugin_catalog_webpreview_handoffs_manifest() -> Value {
             "copy_agent_plugin_runtime_green_handoff",
             "send_agent_plugin_runtime_green_handoff_to_agent",
             None,
-            "Share one compact WebPreview runtime-green operator packet with current lane evidence and the Agent runtime-status payload.",
+            "Share one compact WebPreview runtime-green operator packet with current lane evidence, final observability gates, panel/headroom blockers, and the Agent runtime-status payload.",
         ),
         "runtime_green_proof_path": agent_plugin_catalog_handoff_manifest(
             AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,

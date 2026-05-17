@@ -1,3 +1,18 @@
+[2026-05-18] - Operator Handoff Final Observability Alignment
+
+ADDED:
+- Runtime-green operator handoff summaries now expose first pending lane status plus Browser final runtime capacity and panel gate readiness.
+- Observability digests now carry Browser final-result, panel-gate, final-headroom, and stale required-check fields.
+- Browser/WebPreview freshness now distinguishes stale final results, pending panel live-validation gates, and pending final-runtime headroom.
+
+CHANGED:
+- Browser/WebPreview operator handoff readiness now reads final validation observability instead of the older final-result-only summary.
+- Browser/WebPreview operator actions now include panel proof card and final-runtime headroom/blocker copy-send handoffs.
+- Agent and WebPreview catalogs describe the final-observability-aware runtime-green operator packet.
+
+NOTES:
+- This slice is compact handoff/readiness hardening. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Report Gate Headroom Specificity
 
 ADDED:

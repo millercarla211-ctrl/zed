@@ -17389,12 +17389,51 @@ impl WebPreviewView {
         let managed_chrome_execution = self.managed_chrome_execution_status();
         let pc_use_status = self.pc_use_status();
 
-        let browser_ready = browser_result_summary
-            .as_ref()
-            .and_then(|summary| summary.get("runtime_green_candidate"))
+        let browser_ready = browser_final_observability
+            .get("runtime_green_candidate")
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let browser_result_present = browser_result_summary.is_some();
+        let browser_final_result_ready = browser_final_observability
+            .get("final_result_runtime_green_candidate")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let browser_panel_gate_ready = browser_final_observability
+            .get("panel_live_validation_result_gate_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let browser_panel_gate_status = browser_final_observability
+            .pointer("/panel_live_validation_result_gate/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let browser_final_runtime_capacity_ready = browser_final_observability
+            .get("final_runtime_capacity_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let browser_final_runtime_capacity_status = browser_final_observability
+            .pointer("/latest/final_runtime_proof_capacity/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let browser_final_runtime_capacity_missing_free_gib = browser_final_observability
+            .pointer("/latest/final_runtime_proof_capacity/missing_free_gib")
+            .and_then(Value::as_f64);
+        let browser_missing_expected_required_checks = browser_final_observability
+            .pointer("/final_result_missing_expected_required_checks")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let browser_missing_expected_required_check_count = browser_final_observability
+            .pointer("/final_result_missing_expected_required_check_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let browser_result_present = browser_result_summary.is_some()
+            || browser_final_observability
+                .pointer("/durable_evidence/roots")
+                .and_then(Value::as_array)
+                .map(|roots| {
+                    roots
+                        .iter()
+                        .any(|root| root.get("exists").and_then(Value::as_bool).unwrap_or(false))
+                })
+                .unwrap_or(false);
         let bootstrap_ready = bootstrap_readiness.get("status").and_then(Value::as_str)
             == Some("ready_for_managed_chrome_executor");
         let managed_chrome_receipt_completed = managed_chrome_execution
@@ -17410,8 +17449,17 @@ impl WebPreviewView {
                 "lane_id": "browser_webpreview",
                 "label": "Browser/WebPreview",
                 "ready": browser_ready,
-                "status": if browser_ready {
+                "status": if browser_missing_expected_required_check_count > 0 {
+                    "stale_final_validation_result_required_checks"
+                } else if browser_ready {
                     "ready"
+                } else if browser_final_result_ready && !browser_panel_gate_ready {
+                    "panel_live_validation_result_gate_not_ready"
+                } else if browser_final_result_ready
+                    && browser_panel_gate_ready
+                    && !browser_final_runtime_capacity_ready
+                {
+                    "final_runtime_proof_capacity_not_ready"
                 } else if browser_result_present {
                     "manual_result_not_runtime_green"
                 } else {
@@ -17419,6 +17467,14 @@ impl WebPreviewView {
                 },
                 "checks": {
                     "final_validation_result_runtime_green": browser_ready,
+                    "final_result_runtime_green_candidate": browser_final_result_ready,
+                    "missing_expected_required_checks": browser_missing_expected_required_checks,
+                    "missing_expected_required_check_count": browser_missing_expected_required_check_count,
+                    "panel_live_validation_result_gate_ready": browser_panel_gate_ready,
+                    "panel_live_validation_result_gate_status": browser_panel_gate_status,
+                    "final_runtime_capacity_ready": browser_final_runtime_capacity_ready,
+                    "final_runtime_capacity_status": browser_final_runtime_capacity_status,
+                    "final_runtime_capacity_missing_free_gib": browser_final_runtime_capacity_missing_free_gib,
                     "final_validation_observability_status": browser_final_observability.get("status").and_then(Value::as_str),
                     "latest_result_summary": browser_result_summary,
                 },
@@ -17429,7 +17485,17 @@ impl WebPreviewView {
                     "send_final_validation_bundle": "send_agent_browser_final_validation_bundle_to_agent",
                     "import_final_result": "import_agent_browser_final_validation_result_from_clipboard",
                     "copy_final_result_import_receipt": "copy_agent_browser_final_validation_result_import_receipt",
-                    "send_final_result_import_receipt": "send_agent_browser_final_validation_result_import_receipt_to_agent"
+                    "send_final_result_import_receipt": "send_agent_browser_final_validation_result_import_receipt_to_agent",
+                    "copy_panel_live_validation_result_gate": "copy_agent_browser_panel_live_validation_result_gate",
+                    "send_panel_live_validation_result_gate": "send_agent_browser_panel_live_validation_result_gate_to_agent",
+                    "copy_panel_live_proof_card": "copy_agent_browser_panel_live_proof_readiness_card",
+                    "send_panel_live_proof_card": "send_agent_browser_panel_live_proof_readiness_card_to_agent",
+                    "copy_final_runtime_blocker_board": "copy_agent_browser_final_runtime_blocker_board",
+                    "send_final_runtime_blocker_board": "send_agent_browser_final_runtime_blocker_board_to_agent",
+                    "copy_final_runtime_headroom_readiness_gate": "copy_agent_browser_final_runtime_headroom_readiness_gate",
+                    "send_final_runtime_headroom_readiness_gate": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
+                    "copy_final_runtime_proof_capacity": "copy_agent_browser_final_runtime_proof_capacity",
+                    "send_final_runtime_proof_capacity": "send_agent_browser_final_runtime_proof_capacity_to_agent"
                 }
             }),
             serde_json::json!({
@@ -17519,6 +17585,11 @@ impl WebPreviewView {
                 "lane_count": lanes.len(),
                 "ready_lane_count": ready_lane_count,
                 "current_best_next_lane": current_best_next.get("lane_id").and_then(Value::as_str),
+                "current_best_next_status": current_best_next.get("status").and_then(Value::as_str),
+                "first_pending_lane_status": current_best_next.get("status").and_then(Value::as_str),
+                "browser_final_runtime_capacity_ready": browser_final_runtime_capacity_ready,
+                "browser_final_runtime_capacity_missing_free_gib": browser_final_runtime_capacity_missing_free_gib,
+                "browser_panel_live_validation_result_gate_ready": browser_panel_gate_ready,
             },
             "current_best_next": current_best_next,
             "lanes": lanes,
@@ -17559,6 +17630,17 @@ impl WebPreviewView {
             "ready_lane_count": handoff.pointer("/summary/ready_lane_count").and_then(Value::as_u64),
             "lane_count": handoff.pointer("/summary/lane_count").and_then(Value::as_u64),
             "current_best_next_lane": handoff.pointer("/summary/current_best_next_lane").and_then(Value::as_str),
+            "current_best_next_status": handoff.pointer("/summary/current_best_next_status").and_then(Value::as_str),
+            "first_pending_lane_status": handoff.pointer("/summary/first_pending_lane_status").and_then(Value::as_str),
+            "browser_final_runtime_capacity_ready": handoff
+                .pointer("/summary/browser_final_runtime_capacity_ready")
+                .and_then(Value::as_bool),
+            "browser_final_runtime_capacity_missing_free_gib": handoff
+                .pointer("/summary/browser_final_runtime_capacity_missing_free_gib")
+                .and_then(Value::as_f64),
+            "browser_panel_live_validation_result_gate_ready": handoff
+                .pointer("/summary/browser_panel_live_validation_result_gate_ready")
+                .and_then(Value::as_bool),
         })
     }
 
@@ -17622,6 +17704,8 @@ impl WebPreviewView {
                 "ready_lane_count": handoff.pointer("/summary/ready_lane_count").and_then(Value::as_u64),
                 "pending_lane_count": pending_lane_count,
                 "current_best_next_lane": handoff.pointer("/summary/current_best_next_lane").and_then(Value::as_str),
+                "current_best_next_status": handoff.pointer("/summary/current_best_next_status").and_then(Value::as_str),
+                "first_pending_lane_status": handoff.pointer("/summary/first_pending_lane_status").and_then(Value::as_str),
             },
             "lane_statuses": lanes,
             "plugin_matrix": plugin_matrix,
@@ -17637,6 +17721,27 @@ impl WebPreviewView {
                         .pointer("/webpreview_evidence/final_validation_observability/recovery_actions")
                         .cloned()
                         .unwrap_or_else(|| serde_json::json!({})),
+                    "final_result_runtime_green_candidate": handoff
+                        .pointer("/webpreview_evidence/final_validation_observability/final_result_runtime_green_candidate")
+                        .and_then(Value::as_bool),
+                    "panel_live_validation_result_gate_ready": handoff
+                        .pointer("/webpreview_evidence/final_validation_observability/panel_live_validation_result_gate_ready")
+                        .and_then(Value::as_bool),
+                    "panel_live_validation_result_gate_status": handoff
+                        .pointer("/webpreview_evidence/final_validation_observability/panel_live_validation_result_gate/status")
+                        .and_then(Value::as_str),
+                    "final_runtime_capacity_ready": handoff
+                        .pointer("/webpreview_evidence/final_validation_observability/final_runtime_capacity_ready")
+                        .and_then(Value::as_bool),
+                    "final_runtime_capacity_status": handoff
+                        .pointer("/webpreview_evidence/final_validation_observability/latest/final_runtime_proof_capacity/status")
+                        .and_then(Value::as_str),
+                    "final_runtime_capacity_missing_free_gib": handoff
+                        .pointer("/webpreview_evidence/final_validation_observability/latest/final_runtime_proof_capacity/missing_free_gib")
+                        .and_then(Value::as_f64),
+                    "missing_expected_required_check_count": handoff
+                        .pointer("/webpreview_evidence/final_validation_observability/final_result_missing_expected_required_check_count")
+                        .and_then(Value::as_u64),
                 },
                 "managed_chrome": {
                     "bootstrap_status": handoff.pointer("/webpreview_evidence/plugin_bootstrap_readiness/status").and_then(Value::as_str),
@@ -17702,6 +17807,8 @@ impl WebPreviewView {
             "regression_watch_lane_count": digest.pointer("/plugin_matrix/regression_watch_rollup/watched_plugin_count").and_then(Value::as_u64),
             "first_regression_watch_status": digest.pointer("/plugin_matrix/regression_watch_rollup/first_watch/status").and_then(Value::as_str),
             "current_best_next_lane": digest.pointer("/summary/current_best_next_lane").and_then(Value::as_str),
+            "current_best_next_status": digest.pointer("/summary/current_best_next_status").and_then(Value::as_str),
+            "first_pending_lane_status": digest.pointer("/summary/first_pending_lane_status").and_then(Value::as_str),
         })
     }
 
@@ -17915,18 +18022,78 @@ impl WebPreviewView {
                     .pointer("/webpreview_evidence/final_validation_observability/runtime_green_candidate")
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
+                let final_result_runtime_green_candidate = handoff
+                    .pointer(
+                        "/webpreview_evidence/final_validation_observability/final_result_runtime_green_candidate",
+                    )
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let panel_live_validation_result_gate_ready = handoff
+                    .pointer(
+                        "/webpreview_evidence/final_validation_observability/panel_live_validation_result_gate_ready",
+                    )
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let panel_live_validation_result_gate_status = handoff
+                    .pointer(
+                        "/webpreview_evidence/final_validation_observability/panel_live_validation_result_gate/status",
+                    )
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown");
+                let final_runtime_capacity_ready = handoff
+                    .pointer(
+                        "/webpreview_evidence/final_validation_observability/final_runtime_capacity_ready",
+                    )
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let final_runtime_capacity_status = handoff
+                    .pointer(
+                        "/webpreview_evidence/final_validation_observability/latest/final_runtime_proof_capacity/status",
+                    )
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown");
+                let final_runtime_capacity_missing_free_gib = handoff
+                    .pointer(
+                        "/webpreview_evidence/final_validation_observability/latest/final_runtime_proof_capacity/missing_free_gib",
+                    )
+                    .and_then(Value::as_f64);
+                let missing_expected_required_check_count = handoff
+                    .pointer(
+                        "/webpreview_evidence/final_validation_observability/final_result_missing_expected_required_check_count",
+                    )
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
                 let missing = handoff
                     .pointer("/webpreview_evidence/final_validation_observability/missing")
                     .cloned()
                     .unwrap_or_else(|| serde_json::json!([]));
+                let status = if missing_expected_required_check_count > 0 {
+                    "stale_final_result_required_checks"
+                } else if runtime_green_candidate {
+                    "session_evidence_current"
+                } else if final_result_runtime_green_candidate
+                    && !panel_live_validation_result_gate_ready
+                {
+                    "panel_live_validation_result_gate_pending"
+                } else if final_result_runtime_green_candidate
+                    && panel_live_validation_result_gate_ready
+                    && !final_runtime_capacity_ready
+                {
+                    "final_runtime_headroom_pending"
+                } else {
+                    "manual_result_pending"
+                };
 
                 serde_json::json!({
-                    "status": if runtime_green_candidate {
-                        "session_evidence_current"
-                    } else {
-                        "manual_result_pending"
-                    },
+                    "status": status,
                     "source": "webpreview_evidence.final_validation_observability",
+                    "final_result_runtime_green_candidate": final_result_runtime_green_candidate,
+                    "panel_live_validation_result_gate_ready": panel_live_validation_result_gate_ready,
+                    "panel_live_validation_result_gate_status": panel_live_validation_result_gate_status,
+                    "final_runtime_capacity_ready": final_runtime_capacity_ready,
+                    "final_runtime_capacity_status": final_runtime_capacity_status,
+                    "final_runtime_capacity_missing_free_gib": final_runtime_capacity_missing_free_gib,
+                    "missing_expected_required_check_count": missing_expected_required_check_count,
                     "missing": missing,
                     "does_not_probe_files": true,
                     "read_only": true,
@@ -18026,10 +18193,19 @@ impl WebPreviewView {
         freshness_status: &str,
     ) -> Option<&'static str> {
         match lane_id {
-            "browser_webpreview" if freshness_status == "manual_result_pending" => {
-                Some("copy_agent_browser_final_validation_bundle")
-            }
-            "browser_webpreview" => Some("copy_agent_browser_final_validation_observability"),
+            "browser_webpreview" => match freshness_status {
+                "stale_final_result_required_checks" => {
+                    Some("copy_agent_browser_final_validation_result_template")
+                }
+                "panel_live_validation_result_gate_pending" => {
+                    Some("copy_agent_browser_panel_live_validation_result_gate")
+                }
+                "final_runtime_headroom_pending" => {
+                    Some("copy_agent_browser_final_runtime_headroom_readiness_gate")
+                }
+                "manual_result_pending" => Some("copy_agent_browser_final_validation_bundle"),
+                _ => Some("copy_agent_browser_final_validation_observability"),
+            },
             "managed_chrome" if freshness_status == "bootstrap_or_assets_pending" => {
                 Some("copy_agent_plugin_bootstrap_readiness")
             }
@@ -26954,7 +27130,9 @@ impl WebPreviewView {
                         "copy_action": "copy_agent_plugin_runtime_green_handoff",
                         "send_action": "send_agent_plugin_runtime_green_handoff_to_agent",
                         "read_only": true,
-                        "purpose": "Share one compact runtime-green operator packet from WebPreview with the current best next lane and the Agent runtime-status payload."
+                        "purpose": "Share one compact runtime-green operator packet from WebPreview with current lane evidence, final observability gates, panel/headroom blockers, and the Agent runtime-status payload.",
+                        "browser_lane_uses_final_observability_field": "webpreview_evidence.final_validation_observability.runtime_green_candidate",
+                        "browser_lane_final_headroom_ready_field": "webpreview_evidence.final_validation_observability.final_runtime_capacity_ready"
                     },
                     "runtime_green_proof_path": {
                         "schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
