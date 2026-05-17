@@ -2304,11 +2304,15 @@ fn browser_plugin_manifest() -> Value {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
             "stale_final_result_missing_expected_required_checks_field": "final_result_missing_expected_required_checks",
             "stale_final_result_missing_expected_required_check_count_field": "final_result_missing_expected_required_check_count",
+            "final_runtime_headroom_required_field": "final_runtime_headroom_required",
+            "final_runtime_capacity_ready_field": "final_runtime_capacity_ready",
+            "final_runtime_capacity_status_field": "final_runtime_capacity_status",
+            "final_runtime_capacity_missing_free_field": "final_runtime_capacity_missing_free_gib",
             "copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
             "send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent",
             "read_only": true,
             "source": "WebPreview More menu",
-            "purpose": "Copy or send the compact runtime-green claim readiness packet without requiring the larger proof path."
+            "purpose": "Copy or send the compact runtime-green claim readiness packet, including final headroom blocker state, without requiring the larger proof path."
         },
         "runtime_green_report_gate_handoff": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
@@ -2316,11 +2320,16 @@ fn browser_plugin_manifest() -> Value {
             "stale_final_result_blocker": "final_validation_result_stale_required_checks",
             "stale_final_result_missing_expected_required_checks_field": "final_result_missing_expected_required_checks",
             "stale_final_result_missing_expected_required_check_count_field": "final_result_missing_expected_required_check_count",
+            "final_runtime_headroom_blocker": "final_runtime_proof_capacity",
+            "final_runtime_headroom_required_field": "final_runtime_headroom_required",
+            "final_runtime_capacity_ready_field": "final_runtime_capacity_ready",
+            "final_runtime_capacity_status_field": "final_runtime_capacity_status",
+            "final_runtime_capacity_missing_free_field": "final_runtime_capacity_missing_free_gib",
             "copy_action": "copy_agent_plugin_runtime_green_report_gate",
             "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
             "read_only": true,
             "source": "WebPreview More menu",
-            "purpose": "Copy or send the ready/blocked report gate that agents must check before reporting runtime-green."
+            "purpose": "Copy or send the ready/blocked report gate that agents must check before reporting runtime-green, including final target-drive headroom blockers."
         },
         "runtime_green_report_badge": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,

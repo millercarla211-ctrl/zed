@@ -1,3 +1,18 @@
+[2026-05-18] - Report Gate Headroom Specificity
+
+ADDED:
+- Runtime-green claim readiness now exposes final runtime capacity readiness, capacity status, missing free GiB, panel gate readiness, and a dedicated final headroom-required flag.
+- Runtime-green report gates now carry the same headroom-specific blocker fields so compact panels can render target-drive pressure without opening the final report packet.
+- Agent and WebPreview catalogs now advertise the headroom fields available on claim-readiness and report-gate handoffs.
+
+CHANGED:
+- Report gates now prefer `blocked_by_final_runtime_headroom` and `final_runtime_proof_capacity` when final result and panel evidence are ready but target-drive headroom is not.
+- Report-gate agent summaries include the final runtime capacity status and missing free GiB when headroom is the active blocker.
+- `todo.txt` records the report-gate headroom specificity slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is compact report-gate metadata hardening. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Final Headroom Report Gate
 
 ADDED:

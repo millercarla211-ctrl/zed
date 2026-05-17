@@ -16190,6 +16190,29 @@ impl WebPreviewView {
             .get("runtime_green_candidate")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let final_result_runtime_green_candidate = final_observability
+            .get("final_result_runtime_green_candidate")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let panel_live_validation_result_gate_ready = final_observability
+            .get("panel_live_validation_result_gate_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let panel_live_validation_result_gate_status = final_observability
+            .pointer("/panel_live_validation_result_gate/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let final_runtime_capacity_ready = final_observability
+            .get("final_runtime_capacity_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let final_runtime_capacity_status = final_observability
+            .pointer("/latest/final_runtime_proof_capacity/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let final_runtime_capacity_missing_free_gib = final_observability
+            .pointer("/latest/final_runtime_proof_capacity/missing_free_gib")
+            .and_then(Value::as_f64);
         let final_result_missing_expected_required_checks = final_observability
             .pointer("/final_result_missing_expected_required_checks")
             .cloned()
@@ -16205,11 +16228,17 @@ impl WebPreviewView {
             .unwrap_or(false);
         let final_result_has_stale_required_checks =
             final_result_present && final_result_missing_expected_required_check_count > 0;
+        let final_runtime_headroom_required = final_result_runtime_green_candidate
+            && panel_live_validation_result_gate_ready
+            && !final_runtime_capacity_ready;
         let can_report_runtime_green = runtime_green_candidate
             && final_result_runtime_green
-            && !final_result_has_stale_required_checks;
+            && !final_result_has_stale_required_checks
+            && final_runtime_capacity_ready;
         let status = if final_result_has_stale_required_checks {
             "final_validation_result_stale_required_checks"
+        } else if final_runtime_headroom_required {
+            "final_runtime_headroom_required"
         } else if can_report_runtime_green {
             "ready_to_report_runtime_green"
         } else if !runtime_green_candidate {
@@ -16229,6 +16258,13 @@ impl WebPreviewView {
             "runtime_green_candidate": runtime_green_candidate,
             "final_result_present": final_result_present,
             "final_result_runtime_green": final_result_runtime_green,
+            "final_result_runtime_green_candidate": final_result_runtime_green_candidate,
+            "panel_live_validation_result_gate_ready": panel_live_validation_result_gate_ready,
+            "panel_live_validation_result_gate_status": panel_live_validation_result_gate_status,
+            "final_runtime_capacity_ready": final_runtime_capacity_ready,
+            "final_runtime_capacity_status": final_runtime_capacity_status,
+            "final_runtime_capacity_missing_free_gib": final_runtime_capacity_missing_free_gib,
+            "final_runtime_headroom_required": final_runtime_headroom_required,
             "final_result_missing_expected_required_checks": final_result_missing_expected_required_checks,
             "final_result_missing_expected_required_check_count": final_result_missing_expected_required_check_count,
             "final_manual_command": "just run",
@@ -16253,6 +16289,13 @@ impl WebPreviewView {
                 "durable_runtime_green_candidate": final_observability
                     .pointer("/durable_evidence/runtime_green_candidate")
                     .and_then(Value::as_bool),
+                "final_result_runtime_green_candidate": final_result_runtime_green_candidate,
+                "panel_live_validation_result_gate_ready": panel_live_validation_result_gate_ready,
+                "panel_live_validation_result_gate_status": panel_live_validation_result_gate_status,
+                "final_runtime_capacity_ready": final_runtime_capacity_ready,
+                "final_runtime_capacity_status": final_runtime_capacity_status,
+                "final_runtime_capacity_missing_free_gib": final_runtime_capacity_missing_free_gib,
+                "final_runtime_headroom_required": final_runtime_headroom_required,
                 "missing_expected_required_checks": final_observability
                     .pointer("/final_result_missing_expected_required_checks")
                     .cloned()
@@ -16310,15 +16353,49 @@ impl WebPreviewView {
             .get("final_result_runtime_green")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let final_result_runtime_green_candidate = readiness
+            .get("final_result_runtime_green_candidate")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let panel_live_validation_result_gate_ready = readiness
+            .get("panel_live_validation_result_gate_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let panel_live_validation_result_gate_status = readiness
+            .get("panel_live_validation_result_gate_status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let final_runtime_capacity_ready = readiness
+            .get("final_runtime_capacity_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let final_runtime_capacity_status = readiness
+            .get("final_runtime_capacity_status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let final_runtime_capacity_missing_free_gib = readiness
+            .get("final_runtime_capacity_missing_free_gib")
+            .and_then(Value::as_f64);
         let final_result_missing_expected_required_check_count = readiness
             .get("final_result_missing_expected_required_check_count")
             .and_then(Value::as_u64)
             .unwrap_or(0);
         let final_result_has_stale_required_checks =
             final_result_present && final_result_missing_expected_required_check_count > 0;
-        let can_report = readiness_can_report && !final_result_has_stale_required_checks;
+        let final_runtime_headroom_required = readiness
+            .get("final_runtime_headroom_required")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+            || (final_result_runtime_green_candidate
+                && panel_live_validation_result_gate_ready
+                && !final_runtime_capacity_ready);
+        let can_report = readiness_can_report
+            && !final_result_has_stale_required_checks
+            && !final_runtime_headroom_required;
         let status = if final_result_has_stale_required_checks {
             "blocked_by_stale_final_result"
+        } else if final_runtime_headroom_required {
+            "blocked_by_final_runtime_headroom"
         } else if can_report {
             "ready_to_report_runtime_green"
         } else if !runtime_green_candidate {
@@ -16332,6 +16409,8 @@ impl WebPreviewView {
         };
         let blocker = if final_result_has_stale_required_checks {
             "final_validation_result_stale_required_checks"
+        } else if final_runtime_headroom_required {
+            "final_runtime_proof_capacity"
         } else if can_report {
             "none"
         } else if !runtime_green_candidate {
@@ -16345,12 +16424,16 @@ impl WebPreviewView {
         };
         let label = if can_report {
             "Runtime-green ready to report"
+        } else if final_runtime_headroom_required {
+            "Runtime-green blocked by final headroom"
         } else {
             "Runtime-green blocked by proof"
         };
         let next_action =
             if final_result_present && final_result_missing_expected_required_check_count > 0 {
                 "copy_agent_browser_final_validation_result_template"
+            } else if final_runtime_headroom_required {
+                "copy_agent_browser_final_runtime_headroom_readiness_gate"
             } else {
                 readiness
                     .get("next_recommended_action")
@@ -16387,6 +16470,13 @@ impl WebPreviewView {
             "regression_watch": readiness.get("regression_watch").cloned(),
             "final_result_present": final_result_present,
             "final_result_runtime_green": final_result_runtime_green,
+            "final_result_runtime_green_candidate": final_result_runtime_green_candidate,
+            "panel_live_validation_result_gate_ready": panel_live_validation_result_gate_ready,
+            "panel_live_validation_result_gate_status": panel_live_validation_result_gate_status,
+            "final_runtime_capacity_ready": final_runtime_capacity_ready,
+            "final_runtime_capacity_status": final_runtime_capacity_status,
+            "final_runtime_capacity_missing_free_gib": final_runtime_capacity_missing_free_gib,
+            "final_runtime_headroom_required": final_runtime_headroom_required,
             "final_manual_command": "just run",
             "source_schema": readiness.get("schema").and_then(Value::as_str),
             "copy_action": "copy_agent_plugin_runtime_green_report_gate",
@@ -18612,7 +18702,26 @@ impl WebPreviewView {
         let badge = report_gate.get("badge").cloned().unwrap_or_else(|| {
             Self::agent_plugin_runtime_green_report_badge_from_gate(report_gate)
         });
-        Self::agent_plugin_runtime_green_report_badge_agent_summary(&badge)
+        let mut summary = Self::agent_plugin_runtime_green_report_badge_agent_summary(&badge);
+        if report_gate
+            .get("final_runtime_headroom_required")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            let capacity_status = report_gate
+                .get("final_runtime_capacity_status")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            let missing_free_gib = report_gate
+                .get("final_runtime_capacity_missing_free_gib")
+                .and_then(Value::as_f64)
+                .map(|value| format!("{value:.2}"))
+                .unwrap_or_else(|| "unknown".to_string());
+            summary.push_str(&format!(
+                "\nFinal runtime headroom: {capacity_status}\nMissing free GiB: {missing_free_gib}"
+            ));
+        }
+        summary
     }
 
     fn agent_plugin_runtime_green_report_badge_agent_summary(badge: &Value) -> String {
@@ -27589,11 +27698,15 @@ impl WebPreviewView {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
                             "stale_final_result_missing_expected_required_checks_field": "final_result_missing_expected_required_checks",
                             "stale_final_result_missing_expected_required_check_count_field": "final_result_missing_expected_required_check_count",
+                            "final_runtime_headroom_required_field": "final_runtime_headroom_required",
+                            "final_runtime_capacity_ready_field": "final_runtime_capacity_ready",
+                            "final_runtime_capacity_status_field": "final_runtime_capacity_status",
+                            "final_runtime_capacity_missing_free_field": "final_runtime_capacity_missing_free_gib",
                             "copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
                             "send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent",
                             "read_only": true,
                             "source": "WebPreview More menu",
-                            "purpose": "Copy or send the compact runtime-green claim readiness packet without requiring the larger proof path."
+                            "purpose": "Copy or send the compact runtime-green claim readiness packet, including final headroom blocker state, without requiring the larger proof path."
                         },
                         "runtime_green_report_gate_handoff": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
@@ -27601,11 +27714,16 @@ impl WebPreviewView {
                             "stale_final_result_blocker": "final_validation_result_stale_required_checks",
                             "stale_final_result_missing_expected_required_checks_field": "final_result_missing_expected_required_checks",
                             "stale_final_result_missing_expected_required_check_count_field": "final_result_missing_expected_required_check_count",
+                            "final_runtime_headroom_blocker": "final_runtime_proof_capacity",
+                            "final_runtime_headroom_required_field": "final_runtime_headroom_required",
+                            "final_runtime_capacity_ready_field": "final_runtime_capacity_ready",
+                            "final_runtime_capacity_status_field": "final_runtime_capacity_status",
+                            "final_runtime_capacity_missing_free_field": "final_runtime_capacity_missing_free_gib",
                             "copy_action": "copy_agent_plugin_runtime_green_report_gate",
                             "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
                             "read_only": true,
                             "source": "WebPreview More menu",
-                            "purpose": "Copy or send the ready/blocked report gate that agents must check before reporting runtime-green."
+                            "purpose": "Copy or send the ready/blocked report gate that agents must check before reporting runtime-green, including final target-drive headroom blockers."
                         },
                         "runtime_green_report_badge": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
