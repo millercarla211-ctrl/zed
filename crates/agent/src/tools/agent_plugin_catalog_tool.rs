@@ -85,6 +85,8 @@ const AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_live_validation.v1";
 const AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_live_validation_result_gate.v1";
+const AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_live_validation_exercise_plan.v1";
 const AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_control_result_import_receipt.v1";
 const AGENT_BROWSER_PANEL_CONTROL_RESULT_DIR_NAME: &str = "browser-panel-control-results";
@@ -939,6 +941,15 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "panel_live_validation_result_gate_send_action": plugin
                 .pointer("/panel_live_validation/result_gate_send_action")
                 .and_then(Value::as_str),
+            "panel_live_validation_exercise_plan_schema": plugin
+                .pointer("/panel_live_validation/exercise_plan_schema")
+                .and_then(Value::as_str),
+            "panel_live_validation_exercise_plan_copy_action": plugin
+                .pointer("/panel_live_validation/exercise_plan_copy_action")
+                .and_then(Value::as_str),
+            "panel_live_validation_exercise_plan_send_action": plugin
+                .pointer("/panel_live_validation/exercise_plan_send_action")
+                .and_then(Value::as_str),
             "panel_card_deck_interaction_validation_schema": plugin
                 .pointer("/panel_card_deck/interaction_validation_schema")
                 .and_then(Value::as_str),
@@ -1341,6 +1352,7 @@ fn browser_plugin_manifest() -> Value {
                 "panel_live_validation": "copy_agent_browser_panel_live_validation",
                 "panel_live_validation_result_template": "copy_agent_browser_panel_live_validation_result_template",
                 "panel_live_validation_result_gate": "copy_agent_browser_panel_live_validation_result_gate",
+                "panel_live_validation_exercise_plan": "copy_agent_browser_panel_live_validation_exercise_plan",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -1454,6 +1466,10 @@ fn browser_plugin_manifest() -> Value {
             "result_gate_copy_action": "copy_agent_browser_panel_live_validation_result_gate",
             "result_gate_send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
             "result_gate_status_packet_field": "packet.latest.agent_browser_panel_live_validation_result_gate",
+            "exercise_plan_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
+            "exercise_plan_copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
+            "exercise_plan_send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
+            "exercise_plan_status_packet_field": "packet.latest.agent_browser_panel_live_validation_exercise_plan",
             "status_packet_field": "packet.latest.agent_browser_panel_live_validation",
             "source_fields": [
                 "session.agent_browser_panel_card_deck",
@@ -1497,6 +1513,7 @@ fn browser_plugin_manifest() -> Value {
             "panel_live_validation_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
             "panel_live_validation_result_template_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
             "panel_live_validation_result_gate_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
+            "panel_live_validation_exercise_plan_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_green_final_proof_guide_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
@@ -1706,6 +1723,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.panel_live_validation", "available", "Copy or send the right-side panel live-validation checklist before the final runtime proof."),
             capability("browser.panel_live_validation_result_template", "available", "Copy or send the fillable panel control-result template for the live panel validation exercise."),
             capability("browser.panel_live_validation_result_gate", "available", "Copy or send the live panel result gate before final runtime proof."),
+            capability("browser.panel_live_validation_exercise_plan", "available", "Copy or send the ordered right-side panel exercise, result import, and gate-check plan."),
             capability("browser.plugin_bootstrap_readiness", "available", "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."),
             capability("browser.runtime_green_claim_readiness", "available", "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."),
             capability("browser.runtime_green_report_gate", "available", "Copy or send the canonical runtime-green ready/blocked report gate."),

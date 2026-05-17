@@ -1,3 +1,15 @@
+[2026-05-17] - Browser Chrome Panel Live Exercise Plan
+
+ADDED:
+- WebPreview now exposes Copy/Send Panel Exercise Plan actions that produce an ordered right-side panel exercise plan with suggested enabled controls, result-template handoff, result import, and gate verification steps.
+- Agent Browser status packets, final validation bundles, action manifests, More-menu actions, and Agent/WebPreview plugin catalogs now advertise the panel live-validation exercise-plan schema and handoffs.
+
+CHANGED:
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 81/100 and the remaining live UI/runtime validation targets.
+
+NOTES:
+- This slice is a read-only operator handoff. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Live Runtime Gate
 
 ADDED:

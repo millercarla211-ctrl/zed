@@ -131,6 +131,8 @@ const AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_live_validation.v1";
 const AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_live_validation_result_gate.v1";
+const AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_live_validation_exercise_plan.v1";
 const AGENT_BROWSER_PANEL_CARD_INTERACTION_VALIDATION_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_interaction_validation.v1";
 const AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA: &str =
@@ -441,6 +443,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_panel_live_validation_result_template_to_agent",
     "copy_agent_browser_panel_live_validation_result_gate",
     "send_agent_browser_panel_live_validation_result_gate_to_agent",
+    "copy_agent_browser_panel_live_validation_exercise_plan",
+    "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
     "copy_agent_plugin_bootstrap_readiness",
     "send_agent_plugin_bootstrap_readiness_to_agent",
     "copy_agent_plugin_runtime_green_handoff",
@@ -829,6 +833,7 @@ pub struct WebPreviewView {
     latest_agent_browser_panel_live_validation: Option<Value>,
     latest_agent_browser_panel_live_validation_result_template: Option<Value>,
     latest_agent_browser_panel_live_validation_result_gate: Option<Value>,
+    latest_agent_browser_panel_live_validation_exercise_plan: Option<Value>,
     latest_agent_browser_final_proof_audit: Option<Value>,
     latest_agent_browser_noop_executor_attempt: Option<Value>,
     latest_agent_browser_reload_executor_attempt: Option<Value>,
@@ -1058,6 +1063,7 @@ impl WebPreviewView {
             latest_agent_browser_panel_live_validation: None,
             latest_agent_browser_panel_live_validation_result_template: None,
             latest_agent_browser_panel_live_validation_result_gate: None,
+            latest_agent_browser_panel_live_validation_exercise_plan: None,
             latest_agent_browser_final_proof_audit: None,
             latest_agent_browser_noop_executor_attempt: None,
             latest_agent_browser_reload_executor_attempt: None,
@@ -1579,6 +1585,7 @@ impl WebPreviewView {
             "agent_browser_panel_live_validation": self.latest_agent_browser_panel_live_validation_summary(),
             "agent_browser_panel_live_validation_result_template": self.latest_agent_browser_panel_live_validation_result_template_summary(),
             "agent_browser_panel_live_validation_result_gate": self.latest_agent_browser_panel_live_validation_result_gate_summary(),
+            "agent_browser_panel_live_validation_exercise_plan": self.latest_agent_browser_panel_live_validation_exercise_plan_summary(),
             "agent_browser_panel_card_deck": agent_browser_panel_card_deck,
             "agent_browser_panel_control_result_ledger": agent_browser_panel_control_result_ledger,
             "agent_plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
@@ -1701,6 +1708,8 @@ impl WebPreviewView {
                 "send_agent_browser_panel_live_validation_result_template_to_agent": true,
                 "copy_agent_browser_panel_live_validation_result_gate": true,
                 "send_agent_browser_panel_live_validation_result_gate_to_agent": true,
+                "copy_agent_browser_panel_live_validation_exercise_plan": true,
+                "send_agent_browser_panel_live_validation_exercise_plan_to_agent": true,
                 "agent_plugin_bootstrap_readiness": true,
                 "copy_agent_plugin_bootstrap_readiness": true,
                 "send_agent_plugin_bootstrap_readiness_to_agent": true,
@@ -2040,6 +2049,9 @@ impl WebPreviewView {
             "panel_live_validation_result_gate_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
             "panel_live_validation_result_gate_status": packet.pointer("/packet/latest/agent_browser_panel_live_validation_result_gate/status").and_then(Value::as_str),
             "panel_live_validation_result_gate_result_status": packet.pointer("/packet/latest/agent_browser_panel_live_validation_result_gate/result/status").and_then(Value::as_str),
+            "panel_live_validation_exercise_plan_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
+            "panel_live_validation_exercise_plan_status": packet.pointer("/packet/latest/agent_browser_panel_live_validation_exercise_plan/status").and_then(Value::as_str),
+            "panel_live_validation_exercise_plan_suggested_control_count": packet.pointer("/packet/latest/agent_browser_panel_live_validation_exercise_plan/summary/suggested_control_count").and_then(Value::as_u64),
             "panel_control_result_ledger_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/status").and_then(Value::as_str),
             "panel_control_result_ledger_result_count": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/result_count").and_then(Value::as_u64),
             "panel_control_result_ledger_latest_result_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/latest_result_status").and_then(Value::as_str),
@@ -2061,6 +2073,7 @@ impl WebPreviewView {
             "agent_browser_panel_live_validation": packet.pointer("/packet/latest/agent_browser_panel_live_validation").cloned(),
             "agent_browser_panel_live_validation_result_template": packet.pointer("/packet/latest/agent_browser_panel_live_validation_result_template").cloned(),
             "agent_browser_panel_live_validation_result_gate": packet.pointer("/packet/latest/agent_browser_panel_live_validation_result_gate").cloned(),
+            "agent_browser_panel_live_validation_exercise_plan": packet.pointer("/packet/latest/agent_browser_panel_live_validation_exercise_plan").cloned(),
             "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
             "runtime_green_ready_lane_fraction": packet.pointer("/packet/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
             "runtime_green_first_pending_lane": packet.pointer("/packet/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
@@ -2326,6 +2339,13 @@ impl WebPreviewView {
         Some(Self::agent_browser_panel_live_validation_result_gate_summary(gate))
     }
 
+    fn latest_agent_browser_panel_live_validation_exercise_plan_summary(&self) -> Option<Value> {
+        let plan = self
+            .latest_agent_browser_panel_live_validation_exercise_plan
+            .as_ref()?;
+        Some(Self::agent_browser_panel_live_validation_exercise_plan_summary(plan))
+    }
+
     fn agent_browser_panel_live_validation_summary(validation: &Value) -> Value {
         serde_json::json!({
             "schema": validation.pointer("/schema").and_then(Value::as_str),
@@ -2358,6 +2378,22 @@ impl WebPreviewView {
             "action": gate.pointer("/result/action").and_then(Value::as_str),
             "ready_for_final_runtime": gate.pointer("/ready_for_final_runtime").and_then(Value::as_bool),
             "next_action": gate.pointer("/next_action").and_then(Value::as_str),
+        })
+    }
+
+    fn agent_browser_panel_live_validation_exercise_plan_summary(plan: &Value) -> Value {
+        serde_json::json!({
+            "schema": plan.pointer("/schema").and_then(Value::as_str),
+            "status": plan.pointer("/status").and_then(Value::as_str),
+            "captured_at_ms": plan.pointer("/captured_at_ms").and_then(Value::as_u64),
+            "validation_status": plan.pointer("/validation/status").and_then(Value::as_str),
+            "result_gate_status": plan.pointer("/result_gate/status").and_then(Value::as_str),
+            "result_gate_ready": plan.pointer("/result_gate/ready_for_final_runtime").and_then(Value::as_bool),
+            "suggested_control_count": plan.pointer("/summary/suggested_control_count").and_then(Value::as_u64),
+            "first_suggested_action": plan.pointer("/suggested_controls/0/action").and_then(Value::as_str),
+            "copy_action": plan.pointer("/actions/plan_copy_action").and_then(Value::as_str),
+            "send_action": plan.pointer("/actions/plan_send_action").and_then(Value::as_str),
+            "next_action": plan.pointer("/next_action").and_then(Value::as_str),
         })
     }
 
@@ -3989,6 +4025,8 @@ impl WebPreviewView {
             .agent_browser_panel_live_validation_result_gate_from_validation(
                 &panel_live_validation,
             );
+        let panel_live_validation_exercise_plan =
+            self.agent_browser_panel_live_validation_exercise_plan(window);
 
         serde_json::json!({
             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
@@ -4073,6 +4111,8 @@ impl WebPreviewView {
                     "result_template_send_action": "send_agent_browser_panel_live_validation_result_template_to_agent",
                     "result_gate_copy_action": "copy_agent_browser_panel_live_validation_result_gate",
                     "result_gate_send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
+                    "exercise_plan_copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
+                    "exercise_plan_send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
                     "latest_summary": self.latest_agent_browser_panel_live_validation_summary(),
                     "current_summary": Self::agent_browser_panel_live_validation_summary(
                         &panel_live_validation
@@ -4099,6 +4139,18 @@ impl WebPreviewView {
                     ),
                     "read_only": true,
                     "purpose": "Report whether the imported live panel result is sufficient before final runtime proof."
+                },
+                "panel_live_validation_exercise_plan": {
+                    "schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
+                    "source_validation_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
+                    "copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
+                    "send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
+                    "latest_summary": self.latest_agent_browser_panel_live_validation_exercise_plan_summary(),
+                    "current_summary": Self::agent_browser_panel_live_validation_exercise_plan_summary(
+                        &panel_live_validation_exercise_plan
+                    ),
+                    "read_only": true,
+                    "purpose": "Give the operator an ordered right-side panel exercise, result import, and gate-check plan before final runtime proof."
                 },
                 "action_manifest": {
                     "schema": "zed.web_preview.agent_browser_actions.v1",
@@ -5103,6 +5155,15 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "panel_live_validation_result_gate_send_action": plugin
                     .pointer("/panel_live_validation/result_gate_send_action")
+                    .and_then(Value::as_str),
+                "panel_live_validation_exercise_plan_schema": plugin
+                    .pointer("/panel_live_validation/exercise_plan_schema")
+                    .and_then(Value::as_str),
+                "panel_live_validation_exercise_plan_copy_action": plugin
+                    .pointer("/panel_live_validation/exercise_plan_copy_action")
+                    .and_then(Value::as_str),
+                "panel_live_validation_exercise_plan_send_action": plugin
+                    .pointer("/panel_live_validation/exercise_plan_send_action")
                     .and_then(Value::as_str),
                 "panel_control_result_ledger_copy_action": plugin
                     .pointer("/panel_control_result_ledger/copy_action")
@@ -8815,6 +8876,205 @@ impl WebPreviewView {
         )))]
     }
 
+    fn agent_browser_panel_live_validation_exercise_controls(deck: &Value) -> Vec<Value> {
+        let mut controls = Vec::new();
+        let Some(cards) = deck.get("cards").and_then(Value::as_array) else {
+            return controls;
+        };
+
+        for card in cards {
+            let Some(affordances) = card
+                .pointer("/display/affordances")
+                .and_then(Value::as_array)
+            else {
+                continue;
+            };
+
+            for affordance in affordances {
+                let action = affordance
+                    .get("action")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|action| !action.is_empty());
+                let Some(action) = action else {
+                    continue;
+                };
+                let enabled = affordance
+                    .pointer("/control_state/enabled")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                if !enabled {
+                    continue;
+                }
+
+                controls.push(serde_json::json!({
+                    "card_id": card.get("id").and_then(Value::as_str),
+                    "card_title": card.pointer("/display/title").and_then(Value::as_str),
+                    "card_lane": card.get("lane").and_then(Value::as_str),
+                    "source_field": card.get("source_field").and_then(Value::as_str),
+                    "affordance_id": affordance.get("id").and_then(Value::as_str),
+                    "label": affordance.get("label").and_then(Value::as_str),
+                    "role": affordance.get("role").and_then(Value::as_str),
+                    "action": action,
+                    "action_group": affordance
+                        .pointer("/control_state/action_group")
+                        .and_then(Value::as_str),
+                    "event_id": affordance.pointer("/event/event_id").and_then(Value::as_str),
+                    "result_id": affordance
+                        .pointer("/result_contract/result_id")
+                        .and_then(Value::as_str),
+                    "result_status_values": affordance
+                        .pointer("/result_contract/status_values")
+                        .cloned(),
+                    "requires_permission": affordance
+                        .pointer("/control_state/permission/required")
+                        .and_then(Value::as_bool),
+                    "requires_variant_selection": affordance
+                        .get("requires_variant_selection")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
+                    "variant_actions": affordance
+                        .get("variant_actions")
+                        .cloned()
+                        .unwrap_or_else(|| serde_json::json!([])),
+                }));
+
+                if controls.len() >= 8 {
+                    return controls;
+                }
+            }
+        }
+
+        controls
+    }
+
+    fn agent_browser_panel_live_validation_exercise_plan(&self, window: &Window) -> Value {
+        let managed_chrome_execution = self.managed_chrome_execution_status();
+        let pc_use_status = self.pc_use_status();
+        let deck = self.agent_browser_panel_card_deck(&managed_chrome_execution, &pc_use_status);
+        let validation = self.agent_browser_panel_live_validation(window);
+        let result_template =
+            Self::agent_browser_panel_live_validation_result_template_from_validation(&validation);
+        let result_gate =
+            self.agent_browser_panel_live_validation_result_gate_from_validation(&validation);
+        let suggested_controls = Self::agent_browser_panel_live_validation_exercise_controls(&deck);
+        let validation_ready = validation.pointer("/status").and_then(Value::as_str)
+            == Some("ready_for_live_ui_validation");
+        let result_gate_ready =
+            Self::agent_browser_panel_live_validation_result_gate_ready(&result_gate);
+        let status = if result_gate_ready {
+            "live_panel_exercise_complete"
+        } else if validation_ready && !suggested_controls.is_empty() {
+            "ready_to_exercise_panel"
+        } else if validation_ready {
+            "panel_controls_missing"
+        } else {
+            "live_validation_evidence_incomplete"
+        };
+        let next_action = match status {
+            "live_panel_exercise_complete" => "copy_agent_browser_final_validation_bundle",
+            "ready_to_exercise_panel" => {
+                "Exercise one suggested right-side panel control, fill the result template with status completed, import it, then copy the result gate again."
+            }
+            "panel_controls_missing" => {
+                "Copy the panel card deck and fix missing enabled affordances before importing a live panel result."
+            }
+            _ => {
+                "Copy panel live validation first, then refresh the panel card deck and result ledger evidence."
+            }
+        };
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
+            "status": status,
+            "captured_at_ms": Self::current_epoch_millis(),
+            "session": {
+                "session_id": self.session_id.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "url": self.active_url.as_ref(),
+                "native_keyboard_focus": self.native_preview_has_keyboard_focus(window),
+            },
+            "summary": {
+                "validation_ready": validation_ready,
+                "suggested_control_count": suggested_controls.len(),
+                "result_gate_ready": result_gate_ready,
+                "requires_import": !result_gate_ready,
+                "final_runtime_command": "just run",
+            },
+            "validation": Self::agent_browser_panel_live_validation_summary(&validation),
+            "result_template": Self::agent_browser_panel_control_result_summary(&result_template),
+            "result_gate": Self::agent_browser_panel_live_validation_result_gate_summary(&result_gate),
+            "suggested_controls": suggested_controls,
+            "operator_steps": [
+                {
+                    "id": "copy_validation",
+                    "action": "copy_agent_browser_panel_live_validation",
+                    "expected": "Validation status is ready_for_live_ui_validation before live exercise."
+                },
+                {
+                    "id": "copy_template",
+                    "action": "copy_agent_browser_panel_live_validation_result_template",
+                    "expected": "Template schema is zed.web_preview.agent_browser_panel_card_control_result.v1."
+                },
+                {
+                    "id": "exercise_panel_control",
+                    "action": "manual_right_side_panel_interaction",
+                    "expected": "One suggested enabled panel control is visibly exercised in the right-side Agent Browser panel."
+                },
+                {
+                    "id": "fill_result",
+                    "action": "manual_template_edit",
+                    "expected": "Set status to completed, action to the exercised control action, message to the observed result, and timestamp_ms to the exercise time."
+                },
+                {
+                    "id": "import_result",
+                    "action": "import_agent_browser_panel_control_result_from_clipboard",
+                    "expected": "Import writes managed latest/archive proof files and creates an import receipt."
+                },
+                {
+                    "id": "copy_gate",
+                    "action": "copy_agent_browser_panel_live_validation_result_gate",
+                    "expected": "Gate status is ready_for_final_runtime before the final Windows just run proof."
+                }
+            ],
+            "actions": {
+                "plan_copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
+                "plan_send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
+                "validation_copy_action": "copy_agent_browser_panel_live_validation",
+                "template_copy_action": "copy_agent_browser_panel_live_validation_result_template",
+                "import_action": "import_agent_browser_panel_control_result_from_clipboard",
+                "gate_copy_action": "copy_agent_browser_panel_live_validation_result_gate",
+                "final_bundle_copy_action": "copy_agent_browser_final_validation_bundle"
+            },
+            "next_action": next_action,
+            "safety": {
+                "read_only": true,
+                "writes_files": false,
+                "plan_dispatches_input": false,
+                "import_action_writes_managed_proof_only": true,
+                "launches_browser": false,
+                "runs_node": false,
+                "runs_playwright": false,
+                "mutates_external_browser_profiles": false
+            }
+        })
+    }
+
+    fn agent_browser_panel_live_validation_exercise_plan_json(plan: &Value) -> String {
+        serde_json::to_string_pretty(plan).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_panel_live_validation_exercise_plan_agent_blocks(
+        plan: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let summary = Self::agent_browser_panel_live_validation_exercise_plan_summary(plan);
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Agent Browser panel live validation exercise plan:\n\nSummary:\n```json\n{}\n```\n\nPlan:\n```json\n{}\n```",
+            serde_json::to_string_pretty(&summary).unwrap_or_else(|_| "{}".to_string()),
+            Self::agent_browser_panel_live_validation_exercise_plan_json(plan)
+        )))]
+    }
+
     fn agent_browser_panel_live_validation(&self, window: &Window) -> Value {
         let managed_chrome_execution = self.managed_chrome_execution_status();
         let pc_use_status = self.pc_use_status();
@@ -8835,6 +9095,8 @@ impl WebPreviewView {
             "send_agent_browser_panel_live_validation_result_template_to_agent",
             "copy_agent_browser_panel_live_validation_result_gate",
             "send_agent_browser_panel_live_validation_result_gate_to_agent",
+            "copy_agent_browser_panel_live_validation_exercise_plan",
+            "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
         ];
         let ready_signals = [
             deck.pointer("/render_contract/status")
@@ -8927,6 +9189,8 @@ impl WebPreviewView {
                 "actions": [
                     "copy_agent_browser_panel_live_validation",
                     "send_agent_browser_panel_live_validation_to_agent",
+                    "copy_agent_browser_panel_live_validation_exercise_plan",
+                    "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
                     "copy_agent_browser_panel_live_validation_result_template",
                     "send_agent_browser_panel_live_validation_result_template_to_agent"
                 ],
@@ -9116,6 +9380,36 @@ impl WebPreviewView {
         self.append_content_blocks_to_agent_panel(blocks, window, cx);
         self.show_toast(
             "Sent panel live validation result gate to the agent panel",
+            cx,
+        );
+        cx.notify();
+    }
+
+    fn copy_agent_browser_panel_live_validation_exercise_plan(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let plan = self.agent_browser_panel_live_validation_exercise_plan(window);
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_panel_live_validation_exercise_plan_json(&plan),
+        ));
+        self.latest_agent_browser_panel_live_validation_exercise_plan = Some(plan);
+        self.show_toast("Copied panel live validation exercise plan", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_panel_live_validation_exercise_plan_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let plan = self.agent_browser_panel_live_validation_exercise_plan(window);
+        let blocks = Self::agent_browser_panel_live_validation_exercise_plan_agent_blocks(&plan);
+        self.latest_agent_browser_panel_live_validation_exercise_plan = Some(plan);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast(
+            "Sent panel live validation exercise plan to the agent panel",
             cx,
         );
         cx.notify();
@@ -14761,6 +15055,8 @@ impl WebPreviewView {
             .agent_browser_panel_live_validation_result_gate_from_validation(
                 &agent_browser_panel_live_validation,
             );
+        let agent_browser_panel_live_validation_exercise_plan =
+            self.agent_browser_panel_live_validation_exercise_plan(window);
         let runtime_green_operator_handoff =
             self.agent_plugin_runtime_green_operator_handoff(window);
         let runtime_green_operator_handoff_summary =
@@ -14924,6 +15220,7 @@ impl WebPreviewView {
                     "agent_browser_panel_live_validation": agent_browser_panel_live_validation,
                     "agent_browser_panel_live_validation_result_template": agent_browser_panel_live_validation_result_template,
                     "agent_browser_panel_live_validation_result_gate": agent_browser_panel_live_validation_result_gate,
+                    "agent_browser_panel_live_validation_exercise_plan": agent_browser_panel_live_validation_exercise_plan,
                     "agent_browser_panel_card_deck": agent_browser_panel_card_deck,
                     "agent_browser_panel_control_result_ledger": agent_browser_panel_control_result_ledger,
                     "managed_chrome_execution": managed_chrome_execution,
@@ -19673,6 +19970,8 @@ impl WebPreviewView {
             .agent_browser_panel_live_validation_result_gate_from_validation(
                 &agent_browser_panel_live_validation,
             );
+        let agent_browser_panel_live_validation_exercise_plan =
+            self.agent_browser_panel_live_validation_exercise_plan(window);
 
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_actions.v1",
@@ -19874,6 +20173,8 @@ impl WebPreviewView {
                     "result_template_send_action": "send_agent_browser_panel_live_validation_result_template_to_agent",
                     "result_gate_copy_action": "copy_agent_browser_panel_live_validation_result_gate",
                     "result_gate_send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
+                    "exercise_plan_copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
+                    "exercise_plan_send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
                     "latest_summary": self.latest_agent_browser_panel_live_validation_summary(),
                     "current_summary": Self::agent_browser_panel_live_validation_summary(
                         &agent_browser_panel_live_validation
@@ -19911,6 +20212,18 @@ impl WebPreviewView {
                     ),
                     "read_only": true,
                     "purpose": "Copy or send the read-only gate that reports whether the imported panel result clears the live validation step before final runtime proof."
+                },
+                "browser_panel_live_validation_exercise_plan": {
+                    "schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
+                    "source_validation_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
+                    "copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
+                    "send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
+                    "latest_summary": self.latest_agent_browser_panel_live_validation_exercise_plan_summary(),
+                    "current_summary": Self::agent_browser_panel_live_validation_exercise_plan_summary(
+                        &agent_browser_panel_live_validation_exercise_plan
+                    ),
+                    "read_only": true,
+                    "purpose": "Copy or send the ordered right-side panel exercise, result import, and gate-check plan before final runtime proof."
                 },
                 "plugin_catalog": {
                     "schema": "zed.agent_plugins.catalog.v1",
@@ -20039,6 +20352,7 @@ impl WebPreviewView {
             "agent_browser_panel_live_validation": agent_browser_panel_live_validation,
             "agent_browser_panel_live_validation_result_template": agent_browser_panel_live_validation_result_template,
             "agent_browser_panel_live_validation_result_gate": agent_browser_panel_live_validation_result_gate,
+            "agent_browser_panel_live_validation_exercise_plan": agent_browser_panel_live_validation_exercise_plan,
             "plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
             "runtime_observability_digest": runtime_observability_digest,
             "runtime_green_operator_handoff": runtime_green_operator_handoff,
@@ -20437,6 +20751,7 @@ impl WebPreviewView {
                                 "panel_live_validation": "copy_agent_browser_panel_live_validation",
                                 "panel_live_validation_result_template": "copy_agent_browser_panel_live_validation_result_template",
                                 "panel_live_validation_result_gate": "copy_agent_browser_panel_live_validation_result_gate",
+                                "panel_live_validation_exercise_plan": "copy_agent_browser_panel_live_validation_exercise_plan",
                                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -20551,6 +20866,10 @@ impl WebPreviewView {
                             "result_gate_copy_action": "copy_agent_browser_panel_live_validation_result_gate",
                             "result_gate_send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
                             "result_gate_status_packet_field": "packet.latest.agent_browser_panel_live_validation_result_gate",
+                            "exercise_plan_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
+                            "exercise_plan_copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
+                            "exercise_plan_send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
+                            "exercise_plan_status_packet_field": "packet.latest.agent_browser_panel_live_validation_exercise_plan",
                             "status_packet_field": "packet.latest.agent_browser_panel_live_validation",
                             "source_fields": [
                                 "session.agent_browser_panel_card_deck",
@@ -20594,6 +20913,7 @@ impl WebPreviewView {
                             "panel_live_validation_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
                             "panel_live_validation_result_template_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
                             "panel_live_validation_result_gate_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
+                            "panel_live_validation_exercise_plan_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
                             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
                             "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -20802,6 +21122,7 @@ impl WebPreviewView {
                             {"id": "browser.panel_live_validation", "state": "available", "description": "Copy or send the right-side panel live-validation checklist before the final runtime proof."},
                             {"id": "browser.panel_live_validation_result_template", "state": "available", "description": "Copy or send the fillable panel control-result template for the live panel validation exercise."},
                             {"id": "browser.panel_live_validation_result_gate", "state": "available", "description": "Copy or send the live panel result gate before final runtime proof."},
+                            {"id": "browser.panel_live_validation_exercise_plan", "state": "available", "description": "Copy or send the ordered right-side panel exercise, result import, and gate-check plan."},
                             {"id": "browser.plugin_bootstrap_readiness", "state": "available", "description": "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."},
                             {"id": "browser.runtime_green_claim_readiness", "state": "available", "description": "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."},
                             {"id": "browser.runtime_green_report_gate", "state": "available", "description": "Copy or send the canonical runtime-green ready/blocked report gate."},
@@ -23461,6 +23782,34 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Copy Panel Exercise Plan")
+                                .icon(IconName::Check)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_panel_live_validation_exercise_plan(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Panel Exercise Plan")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_panel_live_validation_exercise_plan_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy No-op Executor Attempt")
                                 .icon(IconName::Warning)
                                 .handler({
@@ -25605,6 +25954,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_panel_live_validation: None,
                 latest_agent_browser_panel_live_validation_result_template: None,
                 latest_agent_browser_panel_live_validation_result_gate: None,
+                latest_agent_browser_panel_live_validation_exercise_plan: None,
                 latest_agent_browser_final_proof_audit: None,
                 latest_agent_browser_noop_executor_attempt: None,
                 latest_agent_browser_reload_executor_attempt: None,
