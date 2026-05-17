@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Screenshot Receipt Surface
+
+ADDED:
+- WebPreview now records a typed `zed.web_preview.screenshot_capture_receipt.v1` receipt for viewport, selected-area, and annotated screenshot captures, including path, file size, crop, annotation counts, URL/title, viewport, backend, Agent handoff flags, and no-input/no-profile-mutation safety flags.
+- WebPreview session snapshots, Agent Browser status packets, and Browser function-surfaces packets now expose the latest screenshot capture receipt beside annotated screenshot, inspect-element, DevTools, and viewport evidence.
+
+CHANGED:
+- Browser screenshot function surfaces now expose kind-aware latest summaries for viewport captures, selected-area captures, and annotated captures so panels do not confuse one screenshot mode with another.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 12/100 and the next remaining proof targets.
+
+NOTES:
+- This is an auditability/wiring slice only. It does not launch external Chrome, run Playwright, dispatch page input, mutate browser profiles, or bypass the existing screenshot and annotation UI.
+
 [2026-05-17] - Browser Chrome DevTools Receipt Surface
 
 ADDED:

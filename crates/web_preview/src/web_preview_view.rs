@@ -799,6 +799,7 @@ pub struct WebPreviewView {
     latest_agent_browser_native_dispatch_receipt_matrix: Option<Value>,
     latest_agent_browser_qa_runbook: Option<Value>,
     latest_agent_plugin_catalog: Option<Value>,
+    latest_screenshot_capture: Option<Value>,
     latest_annotated_screenshot: Option<Value>,
     latest_inspected_element: Option<Value>,
     latest_devtools_open_attempt: Option<Value>,
@@ -1021,6 +1022,7 @@ impl WebPreviewView {
             latest_agent_browser_native_dispatch_receipt_matrix: None,
             latest_agent_browser_qa_runbook: None,
             latest_agent_plugin_catalog: None,
+            latest_screenshot_capture: None,
             latest_annotated_screenshot: None,
             latest_inspected_element: None,
             latest_devtools_open_attempt: None,
@@ -1530,6 +1532,7 @@ impl WebPreviewView {
             "agent_plugin_catalog": self.latest_agent_plugin_catalog_summary(),
             "managed_chrome_execution": self.managed_chrome_execution_status(),
             "pc_use_status": self.pc_use_status(),
+            "screenshot_capture": self.latest_screenshot_capture_summary(),
             "annotated_screenshot": self.latest_annotated_screenshot_summary(),
             "inspected_element": self.latest_inspected_element_summary(),
             "devtools_open_attempt": self.latest_devtools_open_attempt_summary(),
@@ -4846,6 +4849,78 @@ impl WebPreviewView {
         cx.notify();
     }
 
+    fn latest_screenshot_capture_summary(&self) -> Option<Value> {
+        let capture = self.latest_screenshot_capture.as_ref()?;
+        Some(serde_json::json!({
+            "schema": capture.get("schema").and_then(Value::as_str),
+            "captured_at_ms": capture.get("captured_at_ms").and_then(Value::as_u64),
+            "capture_kind": capture.get("capture_kind").and_then(Value::as_str),
+            "source": capture.get("source").and_then(Value::as_str),
+            "path": capture.get("path").and_then(Value::as_str),
+            "file_size_bytes": capture.get("file_size_bytes").and_then(Value::as_u64),
+            "crop": capture.get("crop").cloned(),
+            "annotation_counts": capture.get("annotation_counts").cloned(),
+            "url": capture.get("url").and_then(Value::as_str),
+            "title": capture.get("title").and_then(Value::as_str),
+            "viewport": capture.get("viewport").cloned(),
+            "backend": capture.get("backend").and_then(Value::as_str),
+        }))
+    }
+
+    fn latest_screenshot_capture_summary_for(&self, capture_kind: &str) -> Option<Value> {
+        let summary = self.latest_screenshot_capture_summary()?;
+        if summary.get("capture_kind").and_then(Value::as_str) == Some(capture_kind) {
+            Some(summary)
+        } else {
+            None
+        }
+    }
+
+    fn screenshot_capture_receipt(
+        &self,
+        capture_kind: &str,
+        source: &str,
+        path: &Path,
+        crop: Option<BrowserRect>,
+        annotation: Option<&Value>,
+    ) -> Value {
+        let crop = crop.map(|rect| {
+            serde_json::json!({
+                "x": rect.x,
+                "y": rect.y,
+                "width": rect.width,
+                "height": rect.height,
+            })
+        });
+        let file_size_bytes = fs::metadata(path).ok().map(|metadata| metadata.len());
+        serde_json::json!({
+            "schema": "zed.web_preview.screenshot_capture_receipt.v1",
+            "captured_at_ms": Self::current_epoch_millis(),
+            "capture_kind": capture_kind,
+            "source": source,
+            "path": path.display().to_string(),
+            "file_size_bytes": file_size_bytes,
+            "crop": crop,
+            "annotation_counts": annotation
+                .and_then(|value| value.pointer("/annotation/counts"))
+                .cloned(),
+            "url": self.active_url.as_ref(),
+            "title": self.current_tab_title().as_ref(),
+            "viewport": self.viewport_mode.snapshot(),
+            "backend": self.browser_native_backend_name(),
+            "agent_handoff": {
+                "clipboard_image_written": true,
+                "agent_panel_image_attached": true,
+                "url_attachment_included": self.current_url_attachment_block().is_some(),
+            },
+            "safety": {
+                "dispatches_input": false,
+                "mutates_external_browser_profiles": false,
+                "requires_interactive_unlock": false,
+            },
+        })
+    }
+
     fn latest_annotated_screenshot_summary(&self) -> Option<Value> {
         let screenshot = self.latest_annotated_screenshot.as_ref()?;
         Some(serde_json::json!({
@@ -4947,6 +5022,7 @@ impl WebPreviewView {
                 "page_diagnostics": self.latest_page_diagnostics_summary(),
                 "dom_snapshot": self.latest_dom_snapshot_summary(),
                 "action_targets": self.latest_action_targets_summary(),
+                "screenshot_capture": self.latest_screenshot_capture_summary(),
                 "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 "inspected_element": self.latest_inspected_element_summary(),
                 "devtools_open_attempt": self.latest_devtools_open_attempt_summary(),
@@ -4959,6 +5035,7 @@ impl WebPreviewView {
                     "menu_action": "take_screenshot",
                     "menu_label": "Take Screenshot",
                     "output": ["clipboard_image", "agent_panel_image_attachment", "profile_screenshots_png"],
+                    "latest_summary": self.latest_screenshot_capture_summary_for("viewport"),
                     "uses_page_script": false,
                     "dispatches_input": false,
                     "requires_interactive_unlock": false,
@@ -4970,6 +5047,7 @@ impl WebPreviewView {
                     "menu_label": "Capture Area",
                     "overlay_completion_kind": "capture-area",
                     "output": ["cropped_clipboard_image", "agent_panel_image_attachment", "profile_screenshots_png"],
+                    "latest_summary": self.latest_screenshot_capture_summary_for("selected_area"),
                     "uses_page_script": true,
                     "dispatches_input": false,
                     "requires_interactive_unlock": false,
@@ -4982,6 +5060,7 @@ impl WebPreviewView {
                     "overlay_completion_kind": "annotated-screenshot",
                     "output": ["clipboard_image", "agent_panel_image_attachment", "annotation_metadata_json"],
                     "latest_summary": self.latest_annotated_screenshot_summary(),
+                    "latest_capture_summary": self.latest_screenshot_capture_summary_for("annotated_viewport"),
                     "uses_page_script": true,
                     "dispatches_input": false,
                     "requires_interactive_unlock": false,
@@ -10378,6 +10457,7 @@ impl WebPreviewView {
                     "runtime_green_report_readiness_card": Self::agent_plugin_runtime_green_report_readiness_card_summary(
                         &runtime_green_report_readiness_card
                     ),
+                    "screenshot_capture": self.latest_screenshot_capture_summary(),
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                     "inspected_element": self.latest_inspected_element_summary(),
                 },
@@ -16499,7 +16579,14 @@ impl WebPreviewView {
         match catch_unwind(AssertUnwindSafe(|| {
             self.capture_screenshot_payload(None, window)
         })) {
-            Ok(Ok((_path, image, blocks))) => {
+            Ok(Ok((path, image, blocks))) => {
+                self.latest_screenshot_capture = Some(self.screenshot_capture_receipt(
+                    "viewport",
+                    "take_screenshot_menu",
+                    &path,
+                    None,
+                    None,
+                ));
                 cx.write_to_clipboard(ClipboardItem::new_image(&image));
                 self.append_content_blocks_to_agent_panel(blocks, window, cx);
                 self.show_toast(
@@ -17291,7 +17378,14 @@ impl WebPreviewView {
                     let _ = self.evaluate_script(
                         "window.__zedWebPreview && window.__zedWebPreview.clearActiveOverlay();",
                     );
-                    let (_path, image, mut blocks) = captured?;
+                    let (path, image, mut blocks) = captured?;
+                    self.latest_screenshot_capture = Some(self.screenshot_capture_receipt(
+                        "annotated_viewport",
+                        "annotation_overlay",
+                        &path,
+                        None,
+                        Some(&screenshot),
+                    ));
                     blocks.push(acp::ContentBlock::Text(acp::TextContent::new(
                         "\n\nAnnotated screenshot metadata:\n\n".to_string(),
                     )));
@@ -17337,8 +17431,15 @@ impl WebPreviewView {
                         width: rect.width * scale,
                         height: rect.height * scale,
                     };
-                    let (_path, image, blocks) =
+                    let (path, image, blocks) =
                         self.capture_screenshot_payload(Some(crop), window)?;
+                    self.latest_screenshot_capture = Some(self.screenshot_capture_receipt(
+                        "selected_area",
+                        "capture_area_overlay",
+                        &path,
+                        Some(crop),
+                        None,
+                    ));
                     cx.write_to_clipboard(ClipboardItem::new_image(&image));
                     self.append_content_blocks_to_agent_panel(blocks, window, cx);
                     Ok(())
@@ -20483,6 +20584,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_native_dispatch_receipt_matrix: None,
                 latest_agent_browser_qa_runbook: None,
                 latest_agent_plugin_catalog: None,
+                latest_screenshot_capture: None,
                 latest_annotated_screenshot: None,
                 latest_inspected_element: None,
                 latest_devtools_open_attempt: None,
