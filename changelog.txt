@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Card Refresh Actions
+
+ADDED:
+- Agent Browser panel deck card displays now expose `display.actions.refresh` descriptors with card-specific labels, actions, refresh kind, updated fields, operator instructions, and no-input safety flags.
+- Screenshot, annotation, inspect-element, DevTools, responsive viewport, managed Chrome status, and PC-use status cards now point refresh behavior at their own proof-producing action instead of only the deck copy action.
+
+CHANGED:
+- Agent and WebPreview plugin catalogs now mirror card refresh actions and labels in `panel_card_deck.card_handoff_actions` for static right-side panel discovery.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 42/100 and the next remaining proof targets.
+
+NOTES:
+- This is a panel behavior metadata slice. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Card Display
 
 ADDED:

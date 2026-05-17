@@ -1268,13 +1268,13 @@ fn browser_plugin_manifest() -> Value {
                 "session.pc_use_status.latest_proof_card"
             ],
             "card_handoff_actions": {
-                "browser.screenshot.capture": {"primary_action": "take_screenshot", "details_action": "send_agent_browser_status_packet_to_agent"},
-                "browser.screenshot.annotate": {"primary_action": "annotate_screenshot", "details_action": "send_agent_browser_status_packet_to_agent"},
-                "browser.element.inspect": {"primary_action": "inspect_element", "details_action": "send_agent_browser_status_packet_to_agent"},
-                "browser.devtools.open": {"primary_action": "open_devtools", "details_action": "send_agent_browser_status_packet_to_agent"},
-                "browser.viewport.responsive": {"primary_action": "set_responsive_viewport", "details_action": "send_agent_browser_status_packet_to_agent"},
-                "chrome.managed.latest_action": {"primary_action": "copy_managed_chrome_execution_status", "details_action": "send_managed_chrome_execution_status_to_agent"},
-                "pc_use.latest_proof": {"primary_action": "copy_pc_use_status", "details_action": "send_pc_use_status_to_agent"}
+                "browser.screenshot.capture": {"primary_action": "take_screenshot", "refresh_action": "take_screenshot", "refresh_label": "Refresh Screenshot", "details_action": "send_agent_browser_status_packet_to_agent"},
+                "browser.screenshot.annotate": {"primary_action": "annotate_screenshot", "refresh_action": "annotate_screenshot", "refresh_label": "Refresh Annotation", "details_action": "send_agent_browser_status_packet_to_agent"},
+                "browser.element.inspect": {"primary_action": "inspect_element", "refresh_action": "inspect_element", "refresh_label": "Refresh Inspect Evidence", "details_action": "send_agent_browser_status_packet_to_agent"},
+                "browser.devtools.open": {"primary_action": "open_devtools", "refresh_action": "open_devtools", "refresh_label": "Refresh DevTools Evidence", "details_action": "send_agent_browser_status_packet_to_agent"},
+                "browser.viewport.responsive": {"primary_action": "set_responsive_viewport", "refresh_action": "set_responsive_viewport", "refresh_label": "Refresh Viewport Proof", "details_action": "send_agent_browser_status_packet_to_agent"},
+                "chrome.managed.latest_action": {"primary_action": "copy_managed_chrome_execution_status", "refresh_action": "copy_managed_chrome_execution_status", "refresh_label": "Refresh Managed Chrome Status", "details_action": "send_managed_chrome_execution_status_to_agent"},
+                "pc_use.latest_proof": {"primary_action": "copy_pc_use_status", "refresh_action": "copy_pc_use_status", "refresh_label": "Refresh PC-use Status", "details_action": "send_pc_use_status_to_agent"}
             }
         },
         "bootstrap_readiness_handoff": {

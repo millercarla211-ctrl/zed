@@ -5088,6 +5088,7 @@ impl WebPreviewView {
             "panel_guidance": [
                 "Render cards by ascending priority.",
                 "Use each card handoff.primary_action as the compact follow-up control before opening larger packets.",
+                "Use each card display.actions.refresh descriptor when one card needs fresh proof.",
                 "Open the full source packet only when the compact card detail is insufficient.",
                 "Treat this deck as read-only evidence; browser input still requires the existing permission, preflight, and receipt gates."
             ],
@@ -5210,6 +5211,11 @@ impl WebPreviewView {
             .get("primary_label")
             .and_then(Value::as_str)
             .unwrap_or("Copy Panel Card Deck");
+        let refresh = Self::agent_browser_panel_card_refresh_from_handoff(handoff);
+        let refresh_action = refresh
+            .get("action")
+            .and_then(Value::as_str)
+            .map(str::to_string);
 
         serde_json::json!({
             "schema": AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA,
@@ -5245,7 +5251,8 @@ impl WebPreviewView {
                     })
                 }),
                 "details": handoff.get("details_action").and_then(Value::as_str),
-                "refresh": handoff.get("refresh_action").and_then(Value::as_str),
+                "refresh_action": refresh_action,
+                "refresh": refresh,
             },
             "source": {
                 "field": source_field,
@@ -5254,6 +5261,64 @@ impl WebPreviewView {
             },
             "read_only": true,
             "dispatches_input": false,
+        })
+    }
+
+    fn agent_browser_panel_card_refresh_from_handoff(handoff: &Value) -> Value {
+        handoff.get("refresh").cloned().unwrap_or_else(|| {
+            let action = handoff
+                .get("refresh_action")
+                .or_else(|| handoff.get("primary_action"))
+                .and_then(Value::as_str)
+                .unwrap_or("copy_agent_browser_panel_card_deck");
+            let label = handoff
+                .get("refresh_label")
+                .and_then(Value::as_str)
+                .unwrap_or("Refresh Card");
+            serde_json::json!({
+                "label": label,
+                "action": action,
+                "kind": "generic_panel_card_refresh",
+                "requires_variant_selection": false,
+                "updates": [],
+                "safety": {
+                    "requires_interactive_unlock": false,
+                    "dispatches_input": false,
+                    "uses_page_script": false,
+                    "mutates_external_browser_profiles": false,
+                }
+            })
+        })
+    }
+
+    fn agent_browser_panel_card_refresh_descriptor(
+        label: &str,
+        action: &str,
+        kind: &str,
+        source_field: &str,
+        status_packet_field: &str,
+        uses_page_script: bool,
+        requires_variant_selection: bool,
+        variant_actions: &[&str],
+        updates: &[&str],
+        instructions: &[&str],
+    ) -> Value {
+        serde_json::json!({
+            "label": label,
+            "action": action,
+            "kind": kind,
+            "source_field": source_field,
+            "status_packet_field": status_packet_field,
+            "requires_variant_selection": requires_variant_selection,
+            "variant_actions": variant_actions,
+            "updates": updates,
+            "instructions": instructions,
+            "safety": {
+                "requires_interactive_unlock": false,
+                "dispatches_input": false,
+                "uses_page_script": uses_page_script,
+                "mutates_external_browser_profiles": false,
+            },
         })
     }
 
@@ -5516,7 +5581,24 @@ impl WebPreviewView {
                 "primary_label": "Take Screenshot",
                 "status_packet_field": "packet.latest.screenshot_capture",
                 "session_field": source_field,
-                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "refresh_action": "take_screenshot",
+                "refresh_label": "Refresh Screenshot",
+                "refresh": Self::agent_browser_panel_card_refresh_descriptor(
+                    "Refresh Screenshot",
+                    "take_screenshot",
+                    "webpreview_viewport_capture",
+                    source_field,
+                    "packet.latest.screenshot_capture",
+                    false,
+                    false,
+                    &[],
+                    &[
+                        "session.screenshot_capture",
+                        "packet.latest.screenshot_capture",
+                        "agent_browser_panel_card_deck.cards.browser.screenshot.capture",
+                    ],
+                    &["Capture the current WebPreview viewport, then rebuild the panel card deck."]
+                ),
                 "details_action": "send_agent_browser_status_packet_to_agent",
                 "kind": "webpreview_capture",
                 "safety": common,
@@ -5526,7 +5608,24 @@ impl WebPreviewView {
                 "primary_label": "Annotate Screenshot",
                 "status_packet_field": "packet.latest.annotated_screenshot",
                 "session_field": source_field,
-                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "refresh_action": "annotate_screenshot",
+                "refresh_label": "Refresh Annotation",
+                "refresh": Self::agent_browser_panel_card_refresh_descriptor(
+                    "Refresh Annotation",
+                    "annotate_screenshot",
+                    "webpreview_annotation_overlay",
+                    source_field,
+                    "packet.latest.annotated_screenshot",
+                    true,
+                    false,
+                    &[],
+                    &[
+                        "session.annotated_screenshot",
+                        "packet.latest.annotated_screenshot",
+                        "agent_browser_panel_card_deck.cards.browser.screenshot.annotate",
+                    ],
+                    &["Open the annotation overlay, save the annotated capture, then rebuild the panel card deck."]
+                ),
                 "details_action": "send_agent_browser_status_packet_to_agent",
                 "kind": "webpreview_annotation",
                 "safety": common,
@@ -5536,7 +5635,24 @@ impl WebPreviewView {
                 "primary_label": "Inspect Element",
                 "status_packet_field": "packet.latest.inspected_element_evidence_card",
                 "session_field": source_field,
-                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "refresh_action": "inspect_element",
+                "refresh_label": "Refresh Inspect Evidence",
+                "refresh": Self::agent_browser_panel_card_refresh_descriptor(
+                    "Refresh Inspect Evidence",
+                    "inspect_element",
+                    "webpreview_inspect_overlay",
+                    source_field,
+                    "packet.latest.inspected_element_evidence_card",
+                    true,
+                    false,
+                    &[],
+                    &[
+                        "session.inspected_element_evidence_card",
+                        "packet.latest.inspected_element_evidence_card",
+                        "agent_browser_panel_card_deck.cards.browser.element.inspect",
+                    ],
+                    &["Open the inspect overlay, select an element, then rebuild the panel card deck."]
+                ),
                 "details_action": "send_agent_browser_status_packet_to_agent",
                 "kind": "webpreview_inspection",
                 "safety": common,
@@ -5546,7 +5662,24 @@ impl WebPreviewView {
                 "primary_label": "Open DevTools",
                 "status_packet_field": "packet.latest.devtools_evidence_card",
                 "session_field": source_field,
-                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "refresh_action": "open_devtools",
+                "refresh_label": "Refresh DevTools Evidence",
+                "refresh": Self::agent_browser_panel_card_refresh_descriptor(
+                    "Refresh DevTools Evidence",
+                    "open_devtools",
+                    "webpreview_native_devtools",
+                    source_field,
+                    "packet.latest.devtools_evidence_card",
+                    false,
+                    false,
+                    &[],
+                    &[
+                        "session.devtools_evidence_card",
+                        "packet.latest.devtools_evidence_card",
+                        "agent_browser_panel_card_deck.cards.browser.devtools.open",
+                    ],
+                    &["Open native DevTools for the current WebPreview backend, then rebuild the panel card deck."]
+                ),
                 "details_action": "send_agent_browser_status_packet_to_agent",
                 "kind": "webpreview_devtools",
                 "safety": common,
@@ -5556,7 +5689,30 @@ impl WebPreviewView {
                 "primary_label": "Set Responsive Viewport",
                 "status_packet_field": "packet.latest.responsive_viewport_change",
                 "session_field": source_field,
-                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "refresh_action": "set_responsive_viewport",
+                "refresh_label": "Refresh Viewport Proof",
+                "refresh": Self::agent_browser_panel_card_refresh_descriptor(
+                    "Refresh Viewport Proof",
+                    "set_responsive_viewport",
+                    "webpreview_responsive_viewport",
+                    source_field,
+                    "packet.latest.responsive_viewport_change",
+                    false,
+                    true,
+                    &[
+                        "viewport_full",
+                        "viewport_iphone_15",
+                        "viewport_ipad_air",
+                        "viewport_laptop",
+                        "viewport_rotate",
+                    ],
+                    &[
+                        "session.responsive_viewport_change",
+                        "packet.latest.responsive_viewport_change",
+                        "agent_browser_panel_card_deck.cards.browser.viewport.responsive",
+                    ],
+                    &["Choose one responsive viewport menu action, then rebuild the panel card deck."]
+                ),
                 "details_action": "send_agent_browser_status_packet_to_agent",
                 "kind": "webpreview_viewport",
                 "safety": common,
@@ -5567,7 +5723,24 @@ impl WebPreviewView {
                 "secondary_action": "send_managed_chrome_execution_status_to_agent",
                 "status_packet_field": "packet.latest.managed_chrome_execution.latest_action_card",
                 "session_field": source_field,
-                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "refresh_action": "copy_managed_chrome_execution_status",
+                "refresh_label": "Refresh Managed Chrome Status",
+                "refresh": Self::agent_browser_panel_card_refresh_descriptor(
+                    "Refresh Managed Chrome Status",
+                    "copy_managed_chrome_execution_status",
+                    "managed_chrome_status_copy",
+                    source_field,
+                    "packet.latest.managed_chrome_execution.latest_action_card",
+                    false,
+                    false,
+                    &[],
+                    &[
+                        "session.managed_chrome_execution.latest_action_card",
+                        "packet.latest.managed_chrome_execution.latest_action_card",
+                        "agent_browser_panel_card_deck.cards.chrome.managed.latest_action",
+                    ],
+                    &["Copy the latest managed Chrome execution status, then rebuild the panel card deck."]
+                ),
                 "details_action": "send_managed_chrome_execution_status_to_agent",
                 "kind": "managed_chrome_receipt",
                 "safety": common,
@@ -5578,7 +5751,24 @@ impl WebPreviewView {
                 "secondary_action": "send_pc_use_status_to_agent",
                 "status_packet_field": "packet.latest.pc_use_status.latest_proof_card",
                 "session_field": source_field,
-                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "refresh_action": "copy_pc_use_status",
+                "refresh_label": "Refresh PC-use Status",
+                "refresh": Self::agent_browser_panel_card_refresh_descriptor(
+                    "Refresh PC-use Status",
+                    "copy_pc_use_status",
+                    "pc_use_status_copy",
+                    source_field,
+                    "packet.latest.pc_use_status.latest_proof_card",
+                    false,
+                    false,
+                    &[],
+                    &[
+                        "session.pc_use_status.latest_proof_card",
+                        "packet.latest.pc_use_status.latest_proof_card",
+                        "agent_browser_panel_card_deck.cards.pc_use.latest_proof",
+                    ],
+                    &["Copy the latest PC-use status, then rebuild the panel card deck."]
+                ),
                 "details_action": "send_pc_use_status_to_agent",
                 "kind": "pc_use_receipt",
                 "safety": common,
@@ -16899,13 +17089,13 @@ impl WebPreviewView {
                                 "session.pc_use_status.latest_proof_card"
                             ],
                             "card_handoff_actions": {
-                                "browser.screenshot.capture": {"primary_action": "take_screenshot", "details_action": "send_agent_browser_status_packet_to_agent"},
-                                "browser.screenshot.annotate": {"primary_action": "annotate_screenshot", "details_action": "send_agent_browser_status_packet_to_agent"},
-                                "browser.element.inspect": {"primary_action": "inspect_element", "details_action": "send_agent_browser_status_packet_to_agent"},
-                                "browser.devtools.open": {"primary_action": "open_devtools", "details_action": "send_agent_browser_status_packet_to_agent"},
-                                "browser.viewport.responsive": {"primary_action": "set_responsive_viewport", "details_action": "send_agent_browser_status_packet_to_agent"},
-                                "chrome.managed.latest_action": {"primary_action": "copy_managed_chrome_execution_status", "details_action": "send_managed_chrome_execution_status_to_agent"},
-                                "pc_use.latest_proof": {"primary_action": "copy_pc_use_status", "details_action": "send_pc_use_status_to_agent"}
+                                "browser.screenshot.capture": {"primary_action": "take_screenshot", "refresh_action": "take_screenshot", "refresh_label": "Refresh Screenshot", "details_action": "send_agent_browser_status_packet_to_agent"},
+                                "browser.screenshot.annotate": {"primary_action": "annotate_screenshot", "refresh_action": "annotate_screenshot", "refresh_label": "Refresh Annotation", "details_action": "send_agent_browser_status_packet_to_agent"},
+                                "browser.element.inspect": {"primary_action": "inspect_element", "refresh_action": "inspect_element", "refresh_label": "Refresh Inspect Evidence", "details_action": "send_agent_browser_status_packet_to_agent"},
+                                "browser.devtools.open": {"primary_action": "open_devtools", "refresh_action": "open_devtools", "refresh_label": "Refresh DevTools Evidence", "details_action": "send_agent_browser_status_packet_to_agent"},
+                                "browser.viewport.responsive": {"primary_action": "set_responsive_viewport", "refresh_action": "set_responsive_viewport", "refresh_label": "Refresh Viewport Proof", "details_action": "send_agent_browser_status_packet_to_agent"},
+                                "chrome.managed.latest_action": {"primary_action": "copy_managed_chrome_execution_status", "refresh_action": "copy_managed_chrome_execution_status", "refresh_label": "Refresh Managed Chrome Status", "details_action": "send_managed_chrome_execution_status_to_agent"},
+                                "pc_use.latest_proof": {"primary_action": "copy_pc_use_status", "refresh_action": "copy_pc_use_status", "refresh_label": "Refresh PC-use Status", "details_action": "send_pc_use_status_to_agent"}
                             }
                         },
                         "bootstrap_readiness_handoff": {
