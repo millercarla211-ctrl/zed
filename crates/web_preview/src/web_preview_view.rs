@@ -110,6 +110,8 @@ const AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_deck.v1";
 const AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_display.v1";
+const AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_card_render_contract.v1";
 const INSPECTED_ELEMENT_SCHEMA: &str = "zed.web_preview.inspected_element.v1";
 const INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA: &str =
     "zed.web_preview.inspected_element_evidence_card.v1";
@@ -1934,8 +1936,12 @@ impl WebPreviewView {
             "pc_use_latest_outcome": packet.pointer("/packet/latest/pc_use_status/latest_receipt/read/outcome").and_then(Value::as_str),
             "pc_use_latest_proof_card": packet.pointer("/packet/latest/pc_use_status/latest_proof_card").cloned(),
             "panel_card_deck_schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
+            "panel_card_deck_render_contract_schema": AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA,
+            "panel_card_deck_render_status": packet.pointer("/packet/latest/agent_browser_panel_card_deck/render_contract/status").and_then(Value::as_str),
             "panel_card_deck_card_count": packet.pointer("/packet/latest/agent_browser_panel_card_deck/summary/card_count").and_then(Value::as_u64),
             "panel_card_deck_ready_card_count": packet.pointer("/packet/latest/agent_browser_panel_card_deck/summary/ready_card_count").and_then(Value::as_u64),
+            "panel_card_deck_display_card_count": packet.pointer("/packet/latest/agent_browser_panel_card_deck/summary/cards_with_display_count").and_then(Value::as_u64),
+            "panel_card_deck_refresh_card_count": packet.pointer("/packet/latest/agent_browser_panel_card_deck/summary/cards_with_refresh_descriptor_count").and_then(Value::as_u64),
             "agent_browser_panel_card_deck": packet.pointer("/packet/latest/agent_browser_panel_card_deck").cloned(),
             "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
             "runtime_green_ready_lane_fraction": packet.pointer("/packet/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
@@ -4518,6 +4524,12 @@ impl WebPreviewView {
                 "panel_card_deck_display_schema": plugin
                     .pointer("/panel_card_deck/card_display_schema")
                     .and_then(Value::as_str),
+                "panel_card_deck_render_contract_schema": plugin
+                    .pointer("/panel_card_deck/render_contract_schema")
+                    .and_then(Value::as_str),
+                "panel_card_deck_render_contract_field": plugin
+                    .pointer("/panel_card_deck/render_contract_field")
+                    .and_then(Value::as_str),
                 "bootstrap_schema": plugin
                     .get("bootstrap_readiness_schema")
                     .and_then(Value::as_str),
@@ -5068,6 +5080,28 @@ impl WebPreviewView {
             .iter()
             .filter(|card| card.pointer("/handoff/primary_action").is_some())
             .count();
+        let cards_with_display_count = cards
+            .iter()
+            .filter(|card| {
+                card.pointer("/display/schema").and_then(Value::as_str)
+                    == Some(AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA)
+            })
+            .count();
+        let cards_with_refresh_descriptor_count = cards
+            .iter()
+            .filter(|card| {
+                card.pointer("/display/actions/refresh/action")
+                    .and_then(Value::as_str)
+                    .filter(|action| !action.is_empty())
+                    .is_some()
+            })
+            .count();
+        let render_contract = Self::agent_browser_panel_card_deck_render_contract(&cards);
+        let render_status = render_contract
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_string();
 
         serde_json::json!({
             "schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
@@ -5083,7 +5117,11 @@ impl WebPreviewView {
                 "ready_card_count": ready_card_count,
                 "empty_or_pending_card_count": card_count.saturating_sub(ready_card_count),
                 "cards_with_primary_handoff_count": cards_with_primary_handoff_count,
+                "cards_with_display_count": cards_with_display_count,
+                "cards_with_refresh_descriptor_count": cards_with_refresh_descriptor_count,
+                "render_status": render_status,
             },
+            "render_contract": render_contract,
             "cards": cards,
             "panel_guidance": [
                 "Render cards by ascending priority.",
@@ -5099,6 +5137,134 @@ impl WebPreviewView {
                 "runs_node": false,
                 "mutates_external_browser_profiles": false,
             },
+        })
+    }
+
+    fn agent_browser_panel_card_deck_render_contract(cards: &[Value]) -> Value {
+        let card_count = cards.len();
+        let display_cards: Vec<&Value> = cards
+            .iter()
+            .filter(|card| {
+                card.pointer("/display/schema").and_then(Value::as_str)
+                    == Some(AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA)
+            })
+            .collect();
+        let refresh_cards: Vec<&Value> = cards
+            .iter()
+            .filter(|card| {
+                card.pointer("/display/actions/refresh/action")
+                    .and_then(Value::as_str)
+                    .filter(|action| !action.is_empty())
+                    .is_some()
+            })
+            .collect();
+        let primary_action_cards: Vec<&Value> = cards
+            .iter()
+            .filter(|card| {
+                card.pointer("/display/actions/primary/action")
+                    .and_then(Value::as_str)
+                    .filter(|action| !action.is_empty())
+                    .is_some()
+            })
+            .collect();
+        let detail_row_cards = cards
+            .iter()
+            .filter(|card| {
+                card.pointer("/display/detail_rows")
+                    .and_then(Value::as_array)
+                    .is_some_and(|rows| !rows.is_empty())
+            })
+            .count();
+        let variant_refresh_cards = cards
+            .iter()
+            .filter(|card| {
+                card.pointer("/display/actions/refresh/requires_variant_selection")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+            })
+            .count();
+        let missing_display_cards: Vec<Value> = cards
+            .iter()
+            .filter(|card| {
+                card.pointer("/display/schema").and_then(Value::as_str)
+                    != Some(AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA)
+            })
+            .map(Self::agent_browser_panel_card_render_issue)
+            .collect();
+        let missing_refresh_cards: Vec<Value> = cards
+            .iter()
+            .filter(|card| {
+                card.pointer("/display/actions/refresh/action")
+                    .and_then(Value::as_str)
+                    .filter(|action| !action.is_empty())
+                    .is_none()
+            })
+            .map(Self::agent_browser_panel_card_render_issue)
+            .collect();
+        let missing_primary_action_cards: Vec<Value> = cards
+            .iter()
+            .filter(|card| {
+                card.pointer("/display/actions/primary/action")
+                    .and_then(Value::as_str)
+                    .filter(|action| !action.is_empty())
+                    .is_none()
+            })
+            .map(Self::agent_browser_panel_card_render_issue)
+            .collect();
+        let render_ready = missing_display_cards.is_empty()
+            && missing_refresh_cards.is_empty()
+            && missing_primary_action_cards.is_empty();
+        let missing_display_card_count = missing_display_cards.len();
+        let missing_refresh_card_count = missing_refresh_cards.len();
+        let missing_primary_action_card_count = missing_primary_action_cards.len();
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA,
+            "status": if render_ready { "ready" } else { "needs_panel_metadata" },
+            "card_display_schema": AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA,
+            "card_count": card_count,
+            "counts": {
+                "cards_with_display": display_cards.len(),
+                "cards_with_refresh_descriptor": refresh_cards.len(),
+                "cards_with_primary_action": primary_action_cards.len(),
+                "cards_with_detail_rows": detail_row_cards,
+                "cards_with_variant_refresh": variant_refresh_cards,
+            },
+            "missing": {
+                "display_card_count": missing_display_card_count,
+                "display_cards": missing_display_cards,
+                "refresh_card_count": missing_refresh_card_count,
+                "refresh_cards": missing_refresh_cards,
+                "primary_action_card_count": missing_primary_action_card_count,
+                "primary_action_cards": missing_primary_action_cards,
+            },
+            "render_instructions": [
+                "Read /cards/*/display for compact card rendering before opening /cards/*/card.",
+                "Use /cards/*/display/actions/primary for the default card button.",
+                "Use /cards/*/display/actions/refresh for one-card proof refresh affordances.",
+                "When refresh.requires_variant_selection is true, render refresh.variant_actions as explicit choices.",
+            ],
+            "safety": {
+                "read_only": true,
+                "dispatches_input": false,
+                "launches_browser": false,
+                "runs_node": false,
+                "mutates_external_browser_profiles": false,
+            },
+        })
+    }
+
+    fn agent_browser_panel_card_render_issue(card: &Value) -> Value {
+        serde_json::json!({
+            "id": card.get("id").and_then(Value::as_str),
+            "label": card.get("label").and_then(Value::as_str),
+            "lane": card.get("lane").and_then(Value::as_str),
+            "source_field": card.get("source_field").and_then(Value::as_str),
+            "state": card.pointer("/card_state/state").and_then(Value::as_str),
+            "title": card
+                .pointer("/display/title")
+                .or_else(|| card.get("title"))
+                .and_then(Value::as_str),
         })
     }
 
@@ -5828,6 +5994,18 @@ impl WebPreviewView {
             .pointer("/summary/ready_card_count")
             .and_then(Value::as_u64)
             .unwrap_or(0);
+        let display_card_count = deck
+            .pointer("/summary/cards_with_display_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let refresh_card_count = deck
+            .pointer("/summary/cards_with_refresh_descriptor_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let render_status = deck
+            .pointer("/render_contract/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
         let title = deck
             .pointer("/page/title")
             .and_then(Value::as_str)
@@ -5842,6 +6020,9 @@ impl WebPreviewView {
         let mut lines = vec![
             "Agent Browser panel card deck".to_string(),
             format!("Ready cards: {ready_card_count}/{card_count}"),
+            format!(
+                "Panel render: {render_status}; display cards {display_card_count}/{card_count}; refresh controls {refresh_card_count}/{card_count}"
+            ),
             format!("Page: {title} ({url})"),
         ];
 
@@ -5862,25 +6043,62 @@ impl WebPreviewView {
                     .unwrap_or(false);
                 let readiness = if ready { "ready" } else { "pending" };
                 let title = card
-                    .get("title")
+                    .pointer("/display/title")
+                    .or_else(|| card.get("title"))
                     .and_then(Value::as_str)
                     .filter(|title| !title.is_empty())
                     .unwrap_or(label);
+                let subtitle = card
+                    .pointer("/display/subtitle")
+                    .and_then(Value::as_str)
+                    .filter(|subtitle| !subtitle.is_empty());
                 let source = card
-                    .get("source_field")
+                    .pointer("/display/source/field")
+                    .or_else(|| card.get("source_field"))
                     .and_then(Value::as_str)
                     .unwrap_or("unknown");
                 let primary_action = card
-                    .pointer("/handoff/primary_action")
+                    .pointer("/display/actions/primary/action")
+                    .or_else(|| card.pointer("/handoff/primary_action"))
                     .and_then(Value::as_str)
                     .unwrap_or("copy_agent_browser_panel_card_deck");
                 let primary_label = card
-                    .pointer("/handoff/primary_label")
+                    .pointer("/display/actions/primary/label")
+                    .or_else(|| card.pointer("/handoff/primary_label"))
                     .and_then(Value::as_str)
                     .unwrap_or("Copy Panel Card Deck");
+                let refresh_action = card
+                    .pointer("/display/actions/refresh/action")
+                    .and_then(Value::as_str)
+                    .unwrap_or("copy_agent_browser_panel_card_deck");
+                let refresh_label = card
+                    .pointer("/display/actions/refresh/label")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Refresh Card");
                 lines.push(format!(
-                    "- {lane} | {label} | {readiness} | {state} | {title} | next: {primary_label} ({primary_action}) | source: {source}"
+                    "- {lane} | {label} | {readiness} | {state} | {title} | refresh: {refresh_label} ({refresh_action}) | next: {primary_label} ({primary_action}) | source: {source}"
                 ));
+                if let Some(subtitle) = subtitle {
+                    lines.push(format!("  subtitle: {subtitle}"));
+                }
+                let detail_summary = card
+                    .pointer("/display/detail_rows")
+                    .and_then(Value::as_array)
+                    .map(|rows| {
+                        rows.iter()
+                            .take(2)
+                            .filter_map(|row| {
+                                let label = row.get("label").and_then(Value::as_str)?;
+                                let value = row.get("value").and_then(Value::as_str)?;
+                                Some(format!("{label}: {value}"))
+                            })
+                            .collect::<Vec<_>>()
+                            .join("; ")
+                    })
+                    .filter(|details| !details.is_empty());
+                if let Some(detail_summary) = detail_summary {
+                    lines.push(format!("  details: {detail_summary}"));
+                }
             }
         }
 
@@ -16525,8 +16743,12 @@ impl WebPreviewView {
                 },
                 "browser_panel_card_deck": {
                     "schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
+                    "render_contract_schema": AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA,
                     "copy_action": "copy_agent_browser_panel_card_deck",
                     "send_action": "send_agent_browser_panel_card_deck_to_agent",
+                    "render_contract_status": agent_browser_panel_card_deck
+                        .pointer("/render_contract/status")
+                        .and_then(Value::as_str),
                     "latest_summary": agent_browser_panel_card_deck.clone(),
                     "read_only": true,
                     "purpose": "Copy or send one compact right-side Agent Panel deck for screenshot, annotation, inspect, DevTools, responsive viewport, managed Chrome, and PC-use proof cards."
@@ -17073,6 +17295,8 @@ impl WebPreviewView {
                         "panel_card_deck": {
                             "schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
                             "card_display_schema": AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA,
+                            "render_contract_schema": AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA,
+                            "render_contract_field": "agent_browser_panel_card_deck.render_contract",
                             "session_field": "agent_browser_panel_card_deck",
                             "status_packet_field": "packet.latest.agent_browser_panel_card_deck",
                             "copy_action": "copy_agent_browser_panel_card_deck",

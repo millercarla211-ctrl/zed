@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Card Render Contract
+
+ADDED:
+- Agent Browser panel decks now include `zed.web_preview.agent_browser_panel_card_render_contract.v1` with render status, display-card coverage, refresh-control coverage, primary-action coverage, missing-card diagnostics, variant-refresh counts, render instructions, and safety flags.
+- Agent Browser status summaries and Agent/WebPreview plugin catalogs now advertise the panel deck render-contract schema and field.
+
+CHANGED:
+- Agent Panel deck summaries now read from card `display` metadata, including refresh labels/actions, primary action labels/actions, subtitles, and compact detail rows.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 45/100 and the next remaining proof targets.
+
+NOTES:
+- This is a panel rendering validation slice. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Card Refresh Actions
 
 ADDED:

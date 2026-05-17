@@ -71,6 +71,8 @@ const AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_deck.v1";
 const AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_display.v1";
+const AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_card_render_contract.v1";
 const INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA: &str =
     "zed.web_preview.inspected_element_evidence_card.v1";
 const DEVTOOLS_EVIDENCE_CARD_SCHEMA: &str = "zed.web_preview.devtools_evidence_card.v1";
@@ -839,6 +841,12 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "panel_card_deck_display_schema": plugin
                 .pointer("/panel_card_deck/card_display_schema")
                 .and_then(Value::as_str),
+            "panel_card_deck_render_contract_schema": plugin
+                .pointer("/panel_card_deck/render_contract_schema")
+                .and_then(Value::as_str),
+            "panel_card_deck_render_contract_field": plugin
+                .pointer("/panel_card_deck/render_contract_field")
+                .and_then(Value::as_str),
             "bootstrap_schema": plugin
                 .get("bootstrap_readiness_schema")
                 .and_then(Value::as_str),
@@ -1252,6 +1260,8 @@ fn browser_plugin_manifest() -> Value {
         "panel_card_deck": {
             "schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
             "card_display_schema": AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA,
+            "render_contract_schema": AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA,
+            "render_contract_field": "agent_browser_panel_card_deck.render_contract",
             "session_field": "agent_browser_panel_card_deck",
             "status_packet_field": "packet.latest.agent_browser_panel_card_deck",
             "copy_action": "copy_agent_browser_panel_card_deck",
