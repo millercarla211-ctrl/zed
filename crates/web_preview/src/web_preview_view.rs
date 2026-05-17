@@ -124,6 +124,8 @@ const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_readiness_gate.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_reclaim_candidates.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_SEQUENCE_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_headroom_recovery_sequence.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_blocker_board.v1";
 const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
@@ -6289,6 +6291,13 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(
                 &final_runtime_proof_capacity,
             );
+        let final_runtime_headroom_recovery_sequence =
+            Self::agent_browser_final_runtime_headroom_recovery_sequence(
+                &final_runtime_proof_capacity,
+                &final_runtime_headroom_size_inspection,
+                &final_runtime_headroom_cleanup_result_gate,
+                &final_runtime_headroom_readiness_gate,
+            );
         let panel_live_validation_result_gate =
             self.agent_browser_panel_live_validation_result_gate_snapshot();
         let panel_live_validation_result_gate_ready =
@@ -6375,6 +6384,9 @@ impl WebPreviewView {
                 "final_runtime_headroom_size_inspection": Self::agent_browser_final_runtime_headroom_size_inspection_summary(
                     &final_runtime_headroom_size_inspection
                 ),
+                "final_runtime_headroom_recovery_sequence": Self::agent_browser_final_runtime_headroom_recovery_sequence_summary(
+                    &final_runtime_headroom_recovery_sequence
+                ),
             },
             "durable_evidence": durable_evidence,
             "headroom_cleanup_result_durable_evidence": self.agent_browser_final_runtime_headroom_cleanup_result_durable_evidence(),
@@ -6386,6 +6398,7 @@ impl WebPreviewView {
             "final_runtime_headroom_cleanup_result_gate": final_runtime_headroom_cleanup_result_gate,
             "final_runtime_headroom_readiness_gate": final_runtime_headroom_readiness_gate,
             "final_runtime_headroom_reclaim_candidates": final_runtime_headroom_reclaim_candidates,
+            "final_runtime_headroom_recovery_sequence": final_runtime_headroom_recovery_sequence,
             "final_runtime_blocker_board": final_runtime_blocker_board,
             "final_runtime_capacity_ready": final_runtime_capacity_ready,
             "panel_live_validation_result_gate": panel_live_validation_result_gate,
@@ -6432,6 +6445,13 @@ impl WebPreviewView {
             }));
         }
         if !final_runtime_capacity_ready {
+            actions.push(serde_json::json!({
+                "target": "final_runtime_headroom_recovery_sequence",
+                "action": "copy_agent_browser_final_validation_observability",
+                "alternative_action": "send_agent_browser_final_validation_observability_to_agent",
+                "reason": "show_ordered_headroom_recovery_sequence",
+                "dispatches_input": false
+            }));
             actions.push(serde_json::json!({
                 "target": "final_runtime_headroom_readiness_gate",
                 "action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
@@ -6574,6 +6594,177 @@ impl WebPreviewView {
                 "final_validation_action_required"
             },
             "actions": actions
+        })
+    }
+
+    fn agent_browser_final_runtime_headroom_recovery_sequence(
+        capacity: &Value,
+        size_inspection: &Value,
+        cleanup_result_gate: &Value,
+        readiness_gate: &Value,
+    ) -> Value {
+        let capacity_ready = capacity
+            .pointer("/ready_for_just_run")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let cleanup_result_ready_for_capacity_recheck = cleanup_result_gate
+            .pointer("/ready_for_capacity_recheck")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let target_status = capacity
+            .pointer("/status")
+            .and_then(Value::as_str)
+            .unwrap_or("target_drive_unknown");
+        let status = if capacity_ready {
+            "headroom_ready_for_final_runtime_proof"
+        } else if cleanup_result_ready_for_capacity_recheck {
+            "capacity_recheck_required_after_cleanup"
+        } else if target_status == "target_drive_unknown" {
+            "target_drive_detection_required"
+        } else {
+            "manual_headroom_recovery_required"
+        };
+        let next_action = match status {
+            "headroom_ready_for_final_runtime_proof" => {
+                "Continue to the panel live UI proof checklist and final validation bundle before running just run."
+            }
+            "capacity_recheck_required_after_cleanup" => {
+                "Copy final runtime capacity again and confirm ready_for_just_run before any full just run proof."
+            }
+            "target_drive_detection_required" => {
+                "Open a workspace with a resolvable configured target drive, then copy final runtime capacity again."
+            }
+            _ => {
+                "Copy the read-only size-inspection packet, let the operator clean only confirmed rebuildable target/cache artifacts, then import cleanup evidence."
+            }
+        };
+        let first_blocked_step = match status {
+            "headroom_ready_for_final_runtime_proof" => Value::Null,
+            "capacity_recheck_required_after_cleanup" => serde_json::json!({
+                "id": "recheck_capacity",
+                "action": "copy_agent_browser_final_runtime_proof_capacity",
+                "reason": "cleanup_result_gate_ready_but_capacity_not_rechecked"
+            }),
+            "target_drive_detection_required" => serde_json::json!({
+                "id": "read_capacity",
+                "action": "copy_agent_browser_final_runtime_proof_capacity",
+                "reason": "target_drive_status_unknown"
+            }),
+            _ => serde_json::json!({
+                "id": "inspect_sizes",
+                "action": "copy_agent_browser_final_runtime_headroom_size_inspection",
+                "reason": "manual_size_inspection_required_before_operator_cleanup"
+            }),
+        };
+        let steps = serde_json::json!([
+            {
+                "id": "read_blocker_board",
+                "action": "copy_agent_browser_final_runtime_blocker_board",
+                "state": if capacity_ready { "complete_or_not_required" } else { "recommended" },
+                "read_only": true,
+                "dispatches_input": false
+            },
+            {
+                "id": "inspect_sizes",
+                "action": "copy_agent_browser_final_runtime_headroom_size_inspection",
+                "state": if capacity_ready { "not_required" } else { "next_when_capacity_blocked" },
+                "first_command": size_inspection.pointer("/commands/0/id").and_then(Value::as_str),
+                "read_only": size_inspection.pointer("/read_only").and_then(Value::as_bool),
+                "deletes_files": size_inspection.pointer("/deletes_files").and_then(Value::as_bool),
+                "moves_target_dir": size_inspection.pointer("/moves_target_dir").and_then(Value::as_bool)
+            },
+            {
+                "id": "operator_cleanup_outside_panel",
+                "action": "manual_operator_cleanup_outside_panel",
+                "state": if capacity_ready { "not_required" } else if cleanup_result_ready_for_capacity_recheck { "completed_by_operator_evidence" } else { "operator_only_after_size_inspection" },
+                "automation_allowed": false,
+                "requires_explicit_operator_decision": true
+            },
+            {
+                "id": "fill_cleanup_result_template",
+                "action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
+                "state": if capacity_ready { "not_required" } else if cleanup_result_ready_for_capacity_recheck { "complete" } else { "pending_after_operator_cleanup" },
+                "read_only": true
+            },
+            {
+                "id": "import_cleanup_result",
+                "action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+                "state": if capacity_ready { "not_required" } else if cleanup_result_ready_for_capacity_recheck { "complete" } else { "pending_filled_template" },
+                "writes_managed_result": true,
+                "requires_user_clipboard_payload": true
+            },
+            {
+                "id": "check_cleanup_gate",
+                "action": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
+                "state": if cleanup_result_ready_for_capacity_recheck { "ready_for_capacity_recheck" } else if capacity_ready { "not_required" } else { "blocked_waiting_for_cleanup_result" },
+                "ready_for_capacity_recheck": cleanup_result_ready_for_capacity_recheck,
+                "status": cleanup_result_gate.pointer("/status").and_then(Value::as_str)
+            },
+            {
+                "id": "recheck_capacity",
+                "action": "copy_agent_browser_final_runtime_proof_capacity",
+                "state": if capacity_ready { "complete" } else if cleanup_result_ready_for_capacity_recheck { "next" } else { "blocked_until_cleanup_result_gate_ready" },
+                "observed_free_gib": capacity.pointer("/target/observed_free_gib").and_then(Value::as_f64),
+                "missing_free_gib": capacity.pointer("/target/missing_free_gib").and_then(Value::as_f64),
+                "ready_for_just_run": capacity_ready
+            },
+            {
+                "id": "check_readiness_gate",
+                "action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
+                "state": if capacity_ready { "ready" } else { "blocked" },
+                "status": readiness_gate.pointer("/status").and_then(Value::as_str),
+                "ready": readiness_gate.pointer("/ready_for_just_run").and_then(Value::as_bool)
+            },
+            {
+                "id": "dry_run_recipe",
+                "action": "just --dry-run run",
+                "state": if capacity_ready { "operator_recommended_before_final_run" } else { "blocked_until_capacity_ready" },
+                "operator_runs_command": true,
+                "agent_runs_command": false
+            },
+            {
+                "id": "final_runtime_proof",
+                "action": "just run",
+                "state": if capacity_ready { "ready_after_panel_gate_and_final_bundle" } else { "blocked_until_capacity_ready" },
+                "operator_runs_command": true,
+                "agent_runs_command": false
+            }
+        ]);
+        let step_count = steps.as_array().map(Vec::len).unwrap_or(0);
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_SEQUENCE_SCHEMA,
+            "status": status,
+            "target_status": target_status,
+            "capacity_ready": capacity_ready,
+            "cleanup_result_ready_for_capacity_recheck": cleanup_result_ready_for_capacity_recheck,
+            "readiness_gate_status": readiness_gate.pointer("/status").and_then(Value::as_str),
+            "first_blocked_step": first_blocked_step,
+            "next_action": next_action,
+            "step_count": step_count,
+            "steps": steps,
+            "safety": {
+                "read_only_packet": true,
+                "dispatches_input": false,
+                "deletes_files": false,
+                "moves_target_dir": false,
+                "runs_just": false,
+                "runs_cargo": false,
+                "operator_only_cleanup": true
+            }
+        })
+    }
+
+    fn agent_browser_final_runtime_headroom_recovery_sequence_summary(sequence: &Value) -> Value {
+        serde_json::json!({
+            "schema": sequence.pointer("/schema").and_then(Value::as_str),
+            "status": sequence.pointer("/status").and_then(Value::as_str),
+            "target_status": sequence.pointer("/target_status").and_then(Value::as_str),
+            "capacity_ready": sequence.pointer("/capacity_ready").and_then(Value::as_bool),
+            "cleanup_result_ready_for_capacity_recheck": sequence.pointer("/cleanup_result_ready_for_capacity_recheck").and_then(Value::as_bool),
+            "first_blocked_step": sequence.pointer("/first_blocked_step/id").and_then(Value::as_str),
+            "next_action": sequence.pointer("/next_action").and_then(Value::as_str),
+            "step_count": sequence.pointer("/step_count").and_then(Value::as_u64),
         })
     }
 
@@ -9208,6 +9399,45 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "panel_live_proof_readiness_card_send_action": plugin
                     .pointer("/panel_live_validation/proof_readiness_card_send_action")
+                    .and_then(Value::as_str),
+                "final_validation_observability_schema": plugin
+                    .pointer("/final_validation_observability_handoff/schema")
+                    .and_then(Value::as_str),
+                "final_validation_observability_copy_action": plugin
+                    .pointer("/final_validation_observability_handoff/copy_action")
+                    .and_then(Value::as_str),
+                "final_validation_observability_send_action": plugin
+                    .pointer("/final_validation_observability_handoff/send_action")
+                    .and_then(Value::as_str),
+                "final_validation_observability_headroom_recovery_sequence_schema": plugin
+                    .pointer(
+                        "/final_validation_observability_handoff/headroom_recovery_sequence_schema",
+                    )
+                    .and_then(Value::as_str),
+                "final_validation_observability_headroom_recovery_sequence_field": plugin
+                    .pointer(
+                        "/final_validation_observability_handoff/headroom_recovery_sequence_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_validation_observability_headroom_recovery_sequence_status_field": plugin
+                    .pointer(
+                        "/final_validation_observability_handoff/headroom_recovery_sequence_status_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_validation_observability_headroom_recovery_sequence_next_action_field": plugin
+                    .pointer(
+                        "/final_validation_observability_handoff/headroom_recovery_sequence_next_action_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_validation_observability_headroom_recovery_sequence_first_blocked_step_field": plugin
+                    .pointer(
+                        "/final_validation_observability_handoff/headroom_recovery_sequence_first_blocked_step_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_validation_observability_headroom_recovery_sequence_step_count_field": plugin
+                    .pointer(
+                        "/final_validation_observability_handoff/headroom_recovery_sequence_step_count_field",
+                    )
                     .and_then(Value::as_str),
                 "final_runtime_proof_capacity_schema": plugin
                     .pointer("/final_runtime_proof_capacity/schema")
@@ -26446,6 +26676,7 @@ impl WebPreviewView {
                                 "final_runtime_headroom_cleanup_result_gate": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
                                 "final_runtime_headroom_readiness_gate": "copy_agent_browser_final_runtime_headroom_readiness_gate",
                                 "final_runtime_headroom_reclaim_candidates": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
+                                "final_runtime_headroom_recovery_sequence": "copy_agent_browser_final_validation_observability",
                                 "final_runtime_blocker_board": "copy_agent_browser_final_runtime_blocker_board",
                                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                                 "final_result_template": "copy_agent_browser_final_validation_result_template",
@@ -26650,6 +26881,7 @@ impl WebPreviewView {
                             "final_runtime_headroom_cleanup_result_import_receipt_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
                             "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
                             "final_runtime_headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
+                            "final_runtime_headroom_recovery_sequence_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_SEQUENCE_SCHEMA,
                             "final_runtime_blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
                             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
@@ -26763,6 +26995,12 @@ impl WebPreviewView {
                         },
                         "final_validation_observability_handoff": {
                             "schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
+                            "headroom_recovery_sequence_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_SEQUENCE_SCHEMA,
+                            "headroom_recovery_sequence_field": "final_runtime_headroom_recovery_sequence",
+                            "headroom_recovery_sequence_status_field": "final_runtime_headroom_recovery_sequence.status",
+                            "headroom_recovery_sequence_next_action_field": "final_runtime_headroom_recovery_sequence.next_action",
+                            "headroom_recovery_sequence_first_blocked_step_field": "final_runtime_headroom_recovery_sequence.first_blocked_step.id",
+                            "headroom_recovery_sequence_step_count_field": "final_runtime_headroom_recovery_sequence.step_count",
                             "copy_action": "copy_agent_browser_final_validation_observability",
                             "send_action": "send_agent_browser_final_validation_observability_to_agent",
                             "read_only": true,
@@ -27022,6 +27260,7 @@ impl WebPreviewView {
                             {"id": "browser.validation.final_runtime_capacity", "state": "available", "description": "Copy or send target-drive headroom before final just run proof."},
                             {"id": "browser.validation.final_runtime_target_drive_policy", "state": "available", "description": "Expose the configured target-drive policy so panels keep Zed build outputs on the configured drive unless the user explicitly changes that policy."},
                             {"id": "browser.validation.final_runtime_headroom_recovery", "state": "available", "description": "Copy or send the non-destructive target-drive recovery plan before final just run proof."},
+                            {"id": "browser.validation.final_runtime_headroom_recovery_sequence", "state": "available", "description": "Read the ordered headroom recovery sequence from final validation observability before final just run proof."},
                             {"id": "browser.validation.final_runtime_headroom_readiness_gate", "state": "available", "description": "Copy or send the compact target-drive headroom gate before final just run proof."},
                             {"id": "browser.validation.final_runtime_headroom_reclaim_candidates", "state": "available", "description": "Copy or send read-only target-drive reclaim candidates with preserve rules before manual cleanup."},
                             {"id": "browser.validation.final_runtime_headroom_size_inspection", "state": "available", "description": "Expose read-only target/cache size inspection commands before manual headroom recovery."},

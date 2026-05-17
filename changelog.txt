@@ -1,3 +1,16 @@
+[2026-05-18] - Headroom Recovery Sequence Observability
+
+ADDED:
+- Final validation observability now includes `agent_browser_final_runtime_headroom_recovery_sequence`, an ordered last-mile sequence from blocker board and read-only size inspection through cleanup evidence, gate recheck, dry-run, and final `just run`.
+- Agent and WebPreview plugin catalogs now advertise the recovery-sequence schema plus status, next-action, first-blocked-step, and step-count fields.
+
+CHANGED:
+- Right-side AI panels can render the target-drive recovery order from one compact observability packet instead of stitching recovery plan, cleanup gate, readiness gate, and capacity state by hand.
+- `todo.txt` records the headroom recovery sequence slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only status/catalog metadata. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Headroom Size Inspection Safety Catalog
 
 ADDED:

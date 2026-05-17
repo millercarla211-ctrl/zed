@@ -82,6 +82,8 @@ const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_readiness_gate.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_reclaim_candidates.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_SEQUENCE_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_headroom_recovery_sequence.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_blocker_board.v1";
 const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
@@ -1015,6 +1017,45 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "panel_live_proof_readiness_card_send_action": plugin
                 .pointer("/panel_live_validation/proof_readiness_card_send_action")
                 .and_then(Value::as_str),
+            "final_validation_observability_schema": plugin
+                .pointer("/final_validation_observability_handoff/schema")
+                .and_then(Value::as_str),
+            "final_validation_observability_copy_action": plugin
+                .pointer("/final_validation_observability_handoff/copy_action")
+                .and_then(Value::as_str),
+            "final_validation_observability_send_action": plugin
+                .pointer("/final_validation_observability_handoff/send_action")
+                .and_then(Value::as_str),
+            "final_validation_observability_headroom_recovery_sequence_schema": plugin
+                .pointer(
+                    "/final_validation_observability_handoff/headroom_recovery_sequence_schema",
+                )
+                .and_then(Value::as_str),
+            "final_validation_observability_headroom_recovery_sequence_field": plugin
+                .pointer(
+                    "/final_validation_observability_handoff/headroom_recovery_sequence_field",
+                )
+                .and_then(Value::as_str),
+            "final_validation_observability_headroom_recovery_sequence_status_field": plugin
+                .pointer(
+                    "/final_validation_observability_handoff/headroom_recovery_sequence_status_field",
+                )
+                .and_then(Value::as_str),
+            "final_validation_observability_headroom_recovery_sequence_next_action_field": plugin
+                .pointer(
+                    "/final_validation_observability_handoff/headroom_recovery_sequence_next_action_field",
+                )
+                .and_then(Value::as_str),
+            "final_validation_observability_headroom_recovery_sequence_first_blocked_step_field": plugin
+                .pointer(
+                    "/final_validation_observability_handoff/headroom_recovery_sequence_first_blocked_step_field",
+                )
+                .and_then(Value::as_str),
+            "final_validation_observability_headroom_recovery_sequence_step_count_field": plugin
+                .pointer(
+                    "/final_validation_observability_handoff/headroom_recovery_sequence_step_count_field",
+                )
+                .and_then(Value::as_str),
             "final_runtime_proof_capacity_schema": plugin
                 .pointer("/final_runtime_proof_capacity/schema")
                 .and_then(Value::as_str),
@@ -1765,6 +1806,7 @@ fn browser_plugin_manifest() -> Value {
                 "final_runtime_headroom_cleanup_result_gate": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
                 "final_runtime_headroom_readiness_gate": "copy_agent_browser_final_runtime_headroom_readiness_gate",
                 "final_runtime_headroom_reclaim_candidates": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
+                "final_runtime_headroom_recovery_sequence": "copy_agent_browser_final_validation_observability",
                 "final_runtime_blocker_board": "copy_agent_browser_final_runtime_blocker_board",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
@@ -1969,6 +2011,7 @@ fn browser_plugin_manifest() -> Value {
             "final_runtime_headroom_cleanup_result_status_schema": AGENT_PLUGIN_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_STATUS_SCHEMA,
             "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
             "final_runtime_headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
+            "final_runtime_headroom_recovery_sequence_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_SEQUENCE_SCHEMA,
             "final_runtime_blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
@@ -2083,6 +2126,12 @@ fn browser_plugin_manifest() -> Value {
         },
         "final_validation_observability_handoff": {
             "schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
+            "headroom_recovery_sequence_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_SEQUENCE_SCHEMA,
+            "headroom_recovery_sequence_field": "final_runtime_headroom_recovery_sequence",
+            "headroom_recovery_sequence_status_field": "final_runtime_headroom_recovery_sequence.status",
+            "headroom_recovery_sequence_next_action_field": "final_runtime_headroom_recovery_sequence.next_action",
+            "headroom_recovery_sequence_first_blocked_step_field": "final_runtime_headroom_recovery_sequence.first_blocked_step.id",
+            "headroom_recovery_sequence_step_count_field": "final_runtime_headroom_recovery_sequence.step_count",
             "copy_action": "copy_agent_browser_final_validation_observability",
             "send_action": "send_agent_browser_final_validation_observability_to_agent",
             "read_only": true,
@@ -2327,6 +2376,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.validation.final_runtime_capacity", "available", "Copy or send target-drive headroom before final just run proof."),
             capability("browser.validation.final_runtime_target_drive_policy", "available", "Expose the configured target-drive policy so panels keep Zed build outputs on the configured drive unless the user explicitly changes that policy."),
             capability("browser.validation.final_runtime_headroom_recovery", "available", "Copy or send the non-destructive target-drive recovery plan before final just run proof."),
+            capability("browser.validation.final_runtime_headroom_recovery_sequence", "available", "Read the ordered headroom recovery sequence from final validation observability before final just run proof."),
             capability("browser.validation.final_runtime_headroom_readiness_gate", "available", "Copy or send the compact target-drive headroom gate before final just run proof."),
             capability("browser.validation.final_runtime_headroom_reclaim_candidates", "available", "Copy or send read-only target-drive reclaim candidates with preserve rules before manual cleanup."),
             capability("browser.validation.final_runtime_headroom_size_inspection", "available", "Expose read-only target/cache size inspection commands before manual headroom recovery."),
