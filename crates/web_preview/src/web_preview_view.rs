@@ -2229,8 +2229,8 @@ impl WebPreviewView {
             "final_runtime_headroom_recovery_card_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_card",
             "final_runtime_headroom_recovery_card_send_action": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
             "final_runtime_headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
-            "final_runtime_headroom_inspection_checklist_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_inspection_checklist/status").and_then(Value::as_str),
-            "final_runtime_headroom_inspection_checklist_step_count": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_inspection_checklist/steps").and_then(Value::as_array).map(Vec::len),
+            "final_runtime_headroom_inspection_checklist_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_inspection_checklist/status").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/inspection_checklist/status")).and_then(Value::as_str),
+            "final_runtime_headroom_inspection_checklist_step_count": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_inspection_checklist/steps").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/inspection_checklist/steps")).and_then(Value::as_array).map(Vec::len),
             "final_runtime_headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
             "final_runtime_headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
             "final_runtime_headroom_size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
@@ -2300,7 +2300,7 @@ impl WebPreviewView {
             "agent_browser_final_runtime_proof_capacity": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity").cloned(),
             "agent_browser_final_runtime_headroom_recovery_plan": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_recovery_plan").cloned(),
             "agent_browser_final_runtime_headroom_recovery_card": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_recovery_card").cloned(),
-            "agent_browser_final_runtime_headroom_inspection_checklist": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_inspection_checklist").cloned(),
+            "agent_browser_final_runtime_headroom_inspection_checklist": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_inspection_checklist").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/inspection_checklist")).cloned(),
             "agent_browser_final_runtime_headroom_cleanup_result_template": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_template").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_template")).cloned(),
             "agent_browser_final_runtime_headroom_cleanup_result": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result").cloned(),
             "agent_browser_final_runtime_headroom_cleanup_result_import_receipt": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_import_receipt").cloned(),
@@ -8954,6 +8954,19 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "final_runtime_headroom_inspection_checklist_send_action": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_send_action")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_inspection_checklist_field": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_field")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_inspection_checklist_status_packet_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_inspection_checklist_status_packet_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_inspection_checklist_capacity_packet_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_inspection_checklist_capacity_packet_field",
+                    )
                     .and_then(Value::as_str),
                 "final_runtime_headroom_readiness_gate_schema": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_readiness_gate_schema")
@@ -26251,6 +26264,7 @@ impl WebPreviewView {
                             "headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                             "headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                             "headroom_inspection_checklist_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_inspection_checklist",
+                            "headroom_inspection_checklist_capacity_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_recovery_plan.inspection_checklist",
                             "headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
                             "headroom_readiness_gate_copy_action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
                             "headroom_readiness_gate_send_action": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",

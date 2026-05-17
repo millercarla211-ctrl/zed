@@ -1127,6 +1127,19 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "final_runtime_headroom_inspection_checklist_send_action": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_send_action")
                 .and_then(Value::as_str),
+            "final_runtime_headroom_inspection_checklist_field": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_field")
+                .and_then(Value::as_str),
+            "final_runtime_headroom_inspection_checklist_status_packet_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_inspection_checklist_status_packet_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_inspection_checklist_capacity_packet_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_inspection_checklist_capacity_packet_field",
+                )
+                .and_then(Value::as_str),
             "final_runtime_headroom_readiness_gate_schema": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_readiness_gate_schema")
                 .and_then(Value::as_str),
@@ -1984,6 +1997,7 @@ fn browser_plugin_manifest() -> Value {
             "headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
             "headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
             "headroom_inspection_checklist_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_inspection_checklist",
+            "headroom_inspection_checklist_capacity_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_recovery_plan.inspection_checklist",
             "headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
             "headroom_readiness_gate_copy_action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
             "headroom_readiness_gate_send_action": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
