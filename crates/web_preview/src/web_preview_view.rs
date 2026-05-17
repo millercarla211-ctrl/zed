@@ -8154,6 +8154,10 @@ impl WebPreviewView {
                 "runtime_green_report_badge": runtime_green_report_badge.clone(),
                 "runtime_green_final_proof_guide_status": runtime_green_final_proof_guide.pointer("/status").and_then(Value::as_str),
                 "runtime_green_final_proof_next_action": runtime_green_final_proof_guide.pointer("/next_action").and_then(Value::as_str),
+                "runtime_green_final_proof_guide_browser_final_blocker_strip": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip").cloned(),
+                "runtime_green_final_proof_guide_first_blocker": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_first_blocker").and_then(Value::as_str),
+                "runtime_green_final_proof_guide_recommended_action": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_recommended_action").and_then(Value::as_str),
+                "runtime_green_final_proof_guide_missing_free_gib": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_missing_free_gib").and_then(Value::as_f64),
                 "runtime_green_final_report_packet_status": runtime_green_final_report_packet.pointer("/status").and_then(Value::as_str),
                 "runtime_green_final_report_may_report": runtime_green_final_report_packet.pointer("/may_report_runtime_green").and_then(Value::as_bool),
                 "runtime_green_report_readiness_card_status": runtime_green_report_readiness_card.pointer("/status").and_then(Value::as_str),
@@ -8681,6 +8685,10 @@ impl WebPreviewView {
                     "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
                     "current_status": runtime_green_final_proof_guide.pointer("/status").and_then(Value::as_str),
                     "next_action": runtime_green_final_proof_guide.pointer("/next_action").and_then(Value::as_str),
+                    "current_browser_final_blocker_strip": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip").cloned(),
+                    "current_first_blocker": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_first_blocker").and_then(Value::as_str),
+                    "current_recommended_action": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_recommended_action").and_then(Value::as_str),
+                    "current_missing_free_gib": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_missing_free_gib").and_then(Value::as_f64),
                     "current_summary": Self::agent_plugin_runtime_green_final_proof_guide_summary(&runtime_green_final_proof_guide),
                     "current_guide": runtime_green_final_proof_guide.clone(),
                     "read_only": true
@@ -27325,6 +27333,10 @@ impl WebPreviewView {
                     "latest_summary": Self::agent_plugin_runtime_green_final_proof_guide_summary(
                         &runtime_green_final_proof_guide
                     ),
+                    "current_browser_final_blocker_strip": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip").cloned(),
+                    "current_first_blocker": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_first_blocker").and_then(Value::as_str),
+                    "current_recommended_action": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_recommended_action").and_then(Value::as_str),
+                    "current_missing_free_gib": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_missing_free_gib").and_then(Value::as_f64),
                     "read_only": true,
                     "browser_final_blocker_strip_field": "runtime_green_final_proof_guide_summary.browser_final_blocker_strip",
                     "status_summary_direct_fields": [
@@ -27332,6 +27344,12 @@ impl WebPreviewView {
                         "runtime_green_final_proof_guide_first_blocker",
                         "runtime_green_final_proof_guide_recommended_action",
                         "runtime_green_final_proof_guide_missing_free_gib"
+                    ],
+                    "handoff_current_fields": [
+                        "handoff_artifacts.runtime_green_final_proof_guide.current_browser_final_blocker_strip",
+                        "handoff_artifacts.runtime_green_final_proof_guide.current_first_blocker",
+                        "handoff_artifacts.runtime_green_final_proof_guide.current_recommended_action",
+                        "handoff_artifacts.runtime_green_final_proof_guide.current_missing_free_gib"
                     ],
                     "purpose": "Guide agents from report badge and Browser final blocker strip to final result template, manual just run proof, import, and status recheck without parsing large packets first."
                 },
@@ -27606,6 +27624,12 @@ impl WebPreviewView {
                             "runtime_green_final_proof_guide_first_blocker",
                             "runtime_green_final_proof_guide_recommended_action",
                             "runtime_green_final_proof_guide_missing_free_gib"
+                        ],
+                        "handoff_current_fields": [
+                            "handoff_artifacts.runtime_green_final_proof_guide.current_browser_final_blocker_strip",
+                            "handoff_artifacts.runtime_green_final_proof_guide.current_first_blocker",
+                            "handoff_artifacts.runtime_green_final_proof_guide.current_recommended_action",
+                            "handoff_artifacts.runtime_green_final_proof_guide.current_missing_free_gib"
                         ],
                         "purpose": "Guide agents from report badge and Browser final blocker strip to final result template, manual just run proof, import, and status recheck."
                     },
@@ -28377,6 +28401,12 @@ impl WebPreviewView {
                                 "runtime_green_final_proof_guide_first_blocker",
                                 "runtime_green_final_proof_guide_recommended_action",
                                 "runtime_green_final_proof_guide_missing_free_gib"
+                            ],
+                            "handoff_current_fields": [
+                                "handoff_artifacts.runtime_green_final_proof_guide.current_browser_final_blocker_strip",
+                                "handoff_artifacts.runtime_green_final_proof_guide.current_first_blocker",
+                                "handoff_artifacts.runtime_green_final_proof_guide.current_recommended_action",
+                                "handoff_artifacts.runtime_green_final_proof_guide.current_missing_free_gib"
                             ],
                             "purpose": "Guide agents from report badge and Browser final blocker strip to final result template, manual just run proof, import, and status recheck."
                         },

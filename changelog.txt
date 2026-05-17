@@ -1,3 +1,17 @@
+[2026-05-18] - Handoff Current Browser Blocker Strip
+
+ADDED:
+- Final-validation bundle readiness now exposes the current final proof guide Browser blocker strip, first blocker, recommended action, and missing free GiB directly.
+- Runtime-green final proof guide handoff artifacts now expose the same current blocker strip beside the copy/send actions.
+- Agent and WebPreview catalog metadata now advertise the handoff-current blocker strip fields.
+
+CHANGED:
+- Action manifests can now route final proof guide recovery from the handoff artifact itself, without requiring panel renderers to parse the nested guide or summary payload first.
+- `todo.txt` records the handoff-current blocker strip slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is compact handoff metadata hardening. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Status Summary Browser Blocker Strip
 
 ADDED:

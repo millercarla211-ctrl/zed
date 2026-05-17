@@ -2383,6 +2383,12 @@ fn browser_plugin_manifest() -> Value {
                 "runtime_green_final_proof_guide_recommended_action",
                 "runtime_green_final_proof_guide_missing_free_gib"
             ],
+            "handoff_current_fields": [
+                "handoff_artifacts.runtime_green_final_proof_guide.current_browser_final_blocker_strip",
+                "handoff_artifacts.runtime_green_final_proof_guide.current_first_blocker",
+                "handoff_artifacts.runtime_green_final_proof_guide.current_recommended_action",
+                "handoff_artifacts.runtime_green_final_proof_guide.current_missing_free_gib"
+            ],
             "purpose": "Guide agents from report badge and Browser final blocker strip to final result template, manual just run proof, import, and status recheck."
         },
         "runtime_green_final_report_packet_handoff": {
