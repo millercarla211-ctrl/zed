@@ -1,3 +1,18 @@
+[2026-05-18] - Final Headroom Report Gate
+
+ADDED:
+- Final report packets now include a `final_runtime_headroom` section and a required `final_runtime_headroom_ready` evidence row.
+- Report readiness cards now expose final runtime headroom readiness and missing free-space context from the final proof audit.
+- Agent and WebPreview catalogs now advertise final runtime headroom fields for final-report and report-readiness handoffs.
+
+CHANGED:
+- Runtime-green observability, claim gates, final proof audits, final report packets, and readiness cards now require final runtime capacity before reportability.
+- Capacity-blocked final runtime states now point panels toward the headroom readiness/capacity handoffs instead of allowing a runtime-green report path.
+- `todo.txt` records the final headroom report gate slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only reportability/catalog hardening. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Headroom Deficit Summary Surfacing
 
 ADDED:

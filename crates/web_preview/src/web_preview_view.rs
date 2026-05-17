@@ -6432,8 +6432,9 @@ impl WebPreviewView {
                     .and_then(|summary| summary.pointer("/runtime_green_candidate"))
                     .and_then(Value::as_bool)
                     .unwrap_or(false));
-        let result_runtime_green_candidate =
-            final_result_runtime_green_candidate && panel_live_validation_result_gate_ready;
+        let result_runtime_green_candidate = final_result_runtime_green_candidate
+            && panel_live_validation_result_gate_ready
+            && final_runtime_capacity_ready;
 
         let mut missing = Vec::new();
         if bundle_summary.is_none() {
@@ -6461,6 +6462,11 @@ impl WebPreviewView {
             "manual_runtime_result_imported_runtime_green_candidate"
         } else if final_result_runtime_green_candidate && !panel_live_validation_result_gate_ready {
             "panel_live_validation_result_gate_blocking_runtime_green"
+        } else if final_result_runtime_green_candidate
+            && panel_live_validation_result_gate_ready
+            && !final_runtime_capacity_ready
+        {
+            "final_runtime_proof_capacity_blocked"
         } else if !final_runtime_capacity_ready {
             "final_runtime_proof_capacity_blocked"
         } else if result_summary.is_some() {
@@ -6937,6 +6943,14 @@ impl WebPreviewView {
             Self::agent_browser_panel_live_validation_result_gate_ready(
                 &panel_live_validation_result_gate,
             );
+        let final_runtime_capacity_ready = observability
+            .get("final_runtime_capacity_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let final_runtime_capacity_summary = observability
+            .pointer("/latest/final_runtime_proof_capacity")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
         let final_result_present = result_summary.is_some()
             || observability
                 .pointer("/durable_evidence/roots")
@@ -6978,8 +6992,9 @@ impl WebPreviewView {
         let final_result_has_stale_required_checks = missing_expected_required_check_count > 0;
         let final_result_runtime_green_candidate =
             raw_final_result_runtime_green_candidate && !final_result_has_stale_required_checks;
-        let runtime_green_candidate =
-            final_result_runtime_green_candidate && panel_live_validation_result_gate_ready;
+        let runtime_green_candidate = final_result_runtime_green_candidate
+            && panel_live_validation_result_gate_ready
+            && final_runtime_capacity_ready;
         let overall_runtime_green_candidate = report_gate
             .get("runtime_green_candidate")
             .and_then(Value::as_bool)
@@ -6988,7 +7003,8 @@ impl WebPreviewView {
             .get("can_report_runtime_green")
             .and_then(Value::as_bool)
             .unwrap_or(false)
-            && !final_result_has_stale_required_checks;
+            && !final_result_has_stale_required_checks
+            && final_runtime_capacity_ready;
         let missing_required_evidence = result_summary
             .as_ref()
             .and_then(|summary| summary.pointer("/missing_required_evidence"))
@@ -7012,6 +7028,11 @@ impl WebPreviewView {
             "runtime_green_result_waiting_for_report_gate"
         } else if final_result_runtime_green_candidate && !panel_live_validation_result_gate_ready {
             "panel_live_validation_result_gate_required"
+        } else if final_result_runtime_green_candidate
+            && panel_live_validation_result_gate_ready
+            && !final_runtime_capacity_ready
+        {
+            "final_runtime_proof_capacity_blocked"
         } else if result_summary.is_some() {
             "final_result_needs_evidence_or_blocker_fix"
         } else if template_summary.is_some() && bundle_summary.is_some() {
@@ -7031,6 +7052,11 @@ impl WebPreviewView {
             "import_agent_browser_final_validation_result_from_clipboard"
         } else if final_result_runtime_green_candidate && !panel_live_validation_result_gate_ready {
             "copy_agent_browser_panel_live_validation_result_gate"
+        } else if final_result_runtime_green_candidate
+            && panel_live_validation_result_gate_ready
+            && !final_runtime_capacity_ready
+        {
+            "copy_agent_browser_final_runtime_headroom_readiness_gate"
         } else if runtime_green_candidate {
             "copy_agent_plugin_runtime_green_report_gate"
         } else {
@@ -7049,6 +7075,8 @@ impl WebPreviewView {
                 "panel_live_validation_result_gate_ready": panel_live_validation_result_gate_ready,
                 "may_report_runtime_green": may_report_runtime_green,
                 "next_action": next_action,
+                "final_runtime_capacity_ready": final_runtime_capacity_ready,
+                "final_runtime_proof_capacity": final_runtime_capacity_summary,
                 "missing_required_checks": missing_required_checks,
                 "missing_expected_required_checks": missing_expected_required_checks,
                 "missing_expected_required_check_count": missing_expected_required_check_count,
@@ -15864,6 +15892,17 @@ impl WebPreviewView {
             .pointer("/panel_live_validation_result_gate/status")
             .and_then(Value::as_str)
             .unwrap_or("unknown");
+        let browser_final_runtime_capacity_ready = browser_final_observability
+            .get("final_runtime_capacity_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let browser_final_runtime_capacity_status = browser_final_observability
+            .pointer("/latest/final_runtime_proof_capacity/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let browser_final_runtime_capacity_missing_free_gib = browser_final_observability
+            .pointer("/latest/final_runtime_proof_capacity/missing_free_gib")
+            .and_then(Value::as_f64);
         let browser_result_present = browser_result_summary.is_some()
             || browser_final_observability
                 .pointer("/durable_evidence/roots")
@@ -15902,6 +15941,15 @@ impl WebPreviewView {
                 "copy_agent_browser_panel_live_validation_result_gate",
                 "send_agent_browser_final_validation_observability_to_agent"
             ])
+        } else if browser_final_result_ready
+            && browser_panel_gate_ready
+            && !browser_final_runtime_capacity_ready
+        {
+            serde_json::json!([
+                "copy_agent_browser_final_runtime_blocker_board",
+                "copy_agent_browser_final_runtime_headroom_readiness_gate",
+                "copy_agent_browser_final_runtime_proof_capacity"
+            ])
         } else if browser_result_present {
             serde_json::json!([
                 "copy_agent_browser_final_validation_result",
@@ -15926,6 +15974,11 @@ impl WebPreviewView {
                     "ready"
                 } else if browser_final_result_ready && !browser_panel_gate_ready {
                     "panel_live_validation_result_gate_not_ready"
+                } else if browser_final_result_ready
+                    && browser_panel_gate_ready
+                    && !browser_final_runtime_capacity_ready
+                {
+                    "final_runtime_proof_capacity_not_ready"
                 } else if browser_result_present {
                     "manual_result_not_runtime_green"
                 } else {
@@ -15934,6 +15987,9 @@ impl WebPreviewView {
                 "panel_live_validation_result_gate_status": browser_panel_gate_status,
                 "missing_expected_required_checks": browser_missing_expected_required_checks.clone(),
                 "missing_expected_required_check_count": browser_missing_expected_required_check_count,
+                "final_runtime_capacity_ready": browser_final_runtime_capacity_ready,
+                "final_runtime_capacity_status": browser_final_runtime_capacity_status,
+                "final_runtime_capacity_missing_free_gib": browser_final_runtime_capacity_missing_free_gib,
                 "primary_actions": browser_primary_actions,
             }),
             serde_json::json!({
@@ -16098,6 +16154,9 @@ impl WebPreviewView {
                 "browser_final_result_missing_expected_required_check_count": browser_missing_expected_required_check_count,
                 "browser_panel_live_validation_result_gate_ready": browser_panel_gate_ready,
                 "browser_panel_live_validation_result_gate_status": browser_panel_gate_status,
+                "browser_final_runtime_capacity_ready": browser_final_runtime_capacity_ready,
+                "browser_final_runtime_capacity_status": browser_final_runtime_capacity_status,
+                "browser_final_runtime_capacity_missing_free_gib": browser_final_runtime_capacity_missing_free_gib,
                 "bootstrap_status": bootstrap_readiness.get("status").and_then(Value::as_str),
                 "managed_chrome_execution_status": managed_chrome_execution.get("status").and_then(Value::as_str),
                 "pc_use_status": pc_use_status.get("status").and_then(Value::as_str),
@@ -16642,11 +16701,23 @@ impl WebPreviewView {
             .pointer("/final_result_missing_expected_required_check_count")
             .and_then(Value::as_u64)
             .unwrap_or(0);
+        let final_runtime_capacity_summary = observability
+            .pointer("/latest/final_runtime_proof_capacity")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
+        let final_runtime_capacity_ready = observability
+            .get("final_runtime_capacity_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let final_result_has_stale_required_checks = missing_expected_required_check_count > 0;
-        let can_report = report_gate_can_report && !final_result_has_stale_required_checks;
+        let can_report = report_gate_can_report
+            && !final_result_has_stale_required_checks
+            && final_runtime_capacity_ready;
         let import_receipt_present = import_receipt_summary.is_some();
         let status = if final_result_has_stale_required_checks {
             "blocked_by_stale_final_result"
+        } else if !final_runtime_capacity_ready {
+            "blocked_by_final_runtime_headroom"
         } else if can_report && import_receipt_present {
             "ready_to_report_runtime_green_with_import_receipt"
         } else if can_report {
@@ -16656,6 +16727,8 @@ impl WebPreviewView {
         };
         let next_action = if final_result_has_stale_required_checks {
             "copy_agent_browser_final_validation_result_template"
+        } else if !final_runtime_capacity_ready {
+            "copy_agent_browser_final_runtime_headroom_readiness_gate"
         } else if can_report {
             "copy_agent_plugin_runtime_green_report_gate"
         } else {
@@ -16663,6 +16736,8 @@ impl WebPreviewView {
         };
         let blocker = if final_result_has_stale_required_checks {
             "final_validation_result_stale_required_checks"
+        } else if !final_runtime_capacity_ready {
+            "final_runtime_proof_capacity"
         } else if can_report {
             "none"
         } else {
@@ -16719,6 +16794,20 @@ impl WebPreviewView {
                 "missing": observability.get("missing").cloned(),
                 "recovery_actions": observability.get("recovery_actions").cloned()
             },
+            "final_runtime_headroom": {
+                "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                "status": final_runtime_capacity_summary.get("status").and_then(Value::as_str),
+                "ready_for_just_run": final_runtime_capacity_ready,
+                "target_root": final_runtime_capacity_summary.get("target_root").and_then(Value::as_str),
+                "required_free_gib": final_runtime_capacity_summary.get("required_free_gib").and_then(Value::as_f64),
+                "observed_free_gib": final_runtime_capacity_summary.get("observed_free_gib").and_then(Value::as_f64),
+                "missing_free_gib": final_runtime_capacity_summary.get("missing_free_gib").and_then(Value::as_f64),
+                "headroom_recovery_plan_status": final_runtime_capacity_summary.get("headroom_recovery_plan_status").and_then(Value::as_str),
+                "headroom_cleanup_result_gate_status": final_runtime_capacity_summary.get("headroom_cleanup_result_gate_status").and_then(Value::as_str),
+                "next_action": final_runtime_capacity_summary.get("next_action").and_then(Value::as_str),
+                "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
+                "readiness_gate_action": "copy_agent_browser_final_runtime_headroom_readiness_gate"
+            },
             "final_proof_guide": {
                 "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
                 "status": final_proof_guide.get("status").and_then(Value::as_str),
@@ -16744,6 +16833,12 @@ impl WebPreviewView {
                     "id": "fresh_final_validation_required_checks",
                     "ready": missing_expected_required_check_count == 0,
                     "source": "final_validation_observability.final_result_missing_expected_required_check_count",
+                    "required_for_final_status_claim": true
+                },
+                {
+                    "id": "final_runtime_headroom_ready",
+                    "ready": final_runtime_capacity_ready,
+                    "source": "final_runtime_headroom.ready_for_just_run",
                     "required_for_final_status_claim": true
                 },
                 {
@@ -16824,6 +16919,8 @@ impl WebPreviewView {
             .unwrap_or(false);
         let status = if audit_status == "final_result_stale_required_checks" {
             "final_runtime_result_template_refresh_required"
+        } else if audit_status == "final_runtime_proof_capacity_blocked" {
+            "final_runtime_headroom_required"
         } else if may_report_runtime_green && report_gate_can_report {
             "ready_to_report_runtime_green"
         } else if audit_status == "awaiting_final_runtime_result_import" {
@@ -16908,6 +17005,10 @@ impl WebPreviewView {
                     .pointer("/final_result_import_receipt/present_in_session")
                     .and_then(Value::as_bool),
             },
+            "final_runtime_headroom": final_report_packet
+                .get("final_runtime_headroom")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({})),
             "final_proof_audit": {
                 "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                 "status": audit_status,
@@ -16919,6 +17020,12 @@ impl WebPreviewView {
                 "may_report_runtime_green": final_proof_audit
                     .pointer("/audit/may_report_runtime_green")
                     .and_then(Value::as_bool),
+                "final_runtime_capacity_ready": final_proof_audit
+                    .pointer("/audit/final_runtime_capacity_ready")
+                    .and_then(Value::as_bool),
+                "final_runtime_missing_free_gib": final_proof_audit
+                    .pointer("/audit/final_runtime_proof_capacity/missing_free_gib")
+                    .and_then(Value::as_f64),
                 "missing_required_check_count": final_proof_audit
                     .pointer("/audit/missing_required_checks")
                     .and_then(Value::as_array)
@@ -27524,22 +27631,28 @@ impl WebPreviewView {
                             "runtime_status_summary_field": "runtime_green_final_report_packet_summary",
                             "stale_final_result_required_evidence_id": "fresh_final_validation_required_checks",
                             "stale_final_result_missing_expected_required_check_count_field": "final_validation_observability.missing_expected_required_check_count",
+                            "final_runtime_headroom_field": "final_runtime_headroom",
+                            "final_runtime_headroom_ready_field": "final_runtime_headroom.ready_for_just_run",
+                            "final_runtime_headroom_missing_free_field": "final_runtime_headroom.missing_free_gib",
                             "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
                             "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
                             "read_only": true,
                             "source": "WebPreview More menu",
-                            "purpose": "Copy or send the compact final reporting packet that combines the report gate, import receipt, final-proof guide, and observability state."
+                            "purpose": "Copy or send the compact final reporting packet that combines the report gate, import receipt, final-proof guide, observability state, and final runtime headroom gate."
                         },
                         "runtime_green_report_readiness_card_handoff": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
                             "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
                             "runtime_status_summary_field": "runtime_green_report_readiness_card_summary",
                             "stale_final_result_missing_expected_required_check_count_field": "final_proof_audit.missing_expected_required_check_count",
+                            "final_runtime_headroom_field": "final_runtime_headroom",
+                            "final_runtime_headroom_ready_field": "final_proof_audit.final_runtime_capacity_ready",
+                            "final_runtime_headroom_missing_free_field": "final_proof_audit.final_runtime_missing_free_gib",
                             "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
                             "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
                             "read_only": true,
                             "source": "WebPreview status packet, final validation bundle, and Agent runtime status",
-                            "purpose": "Expose one compact status card for right-side panels with claim readiness, report gate, final report packet, final proof audit, and regression-watch state."
+                            "purpose": "Expose one compact status card for right-side panels with claim readiness, report gate, final report packet, final proof audit, final runtime headroom, and regression-watch state."
                         },
                         "capabilities": [
                             {"id": "browser.sessions.list", "state": "available", "description": "List open WebPreview sessions and workspace inventory."},

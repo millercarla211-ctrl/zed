@@ -2346,22 +2346,28 @@ fn browser_plugin_manifest() -> Value {
             "runtime_status_summary_field": "runtime_green_final_report_packet_summary",
             "stale_final_result_required_evidence_id": "fresh_final_validation_required_checks",
             "stale_final_result_missing_expected_required_check_count_field": "final_validation_observability.missing_expected_required_check_count",
+            "final_runtime_headroom_field": "final_runtime_headroom",
+            "final_runtime_headroom_ready_field": "final_runtime_headroom.ready_for_just_run",
+            "final_runtime_headroom_missing_free_field": "final_runtime_headroom.missing_free_gib",
             "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
             "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
             "read_only": true,
             "source": "WebPreview More menu",
-            "purpose": "Copy or send the compact final reporting packet that combines report gate, import receipt, final-proof guide, and final observability state."
+            "purpose": "Copy or send the compact final reporting packet that combines report gate, import receipt, final-proof guide, final observability state, and final runtime headroom gate."
         },
         "runtime_green_report_readiness_card_handoff": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
             "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
             "runtime_status_summary_field": "runtime_green_report_readiness_card_summary",
             "stale_final_result_missing_expected_required_check_count_field": "final_proof_audit.missing_expected_required_check_count",
+            "final_runtime_headroom_field": "final_runtime_headroom",
+            "final_runtime_headroom_ready_field": "final_proof_audit.final_runtime_capacity_ready",
+            "final_runtime_headroom_missing_free_field": "final_proof_audit.final_runtime_missing_free_gib",
             "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
             "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
             "read_only": true,
             "source": "WebPreview status packet, final validation bundle, and Agent runtime status",
-            "purpose": "Expose one compact status card for right-side panels with claim readiness, report gate, final report packet, final proof audit, and regression-watch state."
+            "purpose": "Expose one compact status card for right-side panels with claim readiness, report gate, final report packet, final proof audit, final runtime headroom, and regression-watch state."
         },
         "capabilities": [
             capability("browser.sessions.list", "available", "List open WebPreview sessions and workspace inventory."),
