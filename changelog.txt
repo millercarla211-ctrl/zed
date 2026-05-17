@@ -1,3 +1,16 @@
+[2026-05-18] - Reclaim Candidate Capacity Payload Fallback
+
+ADDED:
+- WebPreview compact function surfaces now read `agent_browser_final_runtime_headroom_reclaim_candidates` from standalone handoffs, embedded final-runtime capacity packets, or a capacity-derived fallback.
+- Agent and WebPreview plugin catalogs now advertise the reclaim-candidate standalone status-packet field and capacity-packet fallback field.
+
+CHANGED:
+- Compact Browser/Chrome panels can render read-only reclaim candidates and preserve rules from current capacity evidence before an operator copies or sends the standalone reclaim-candidate handoff.
+- `todo.txt` records the reclaim-candidate capacity payload fallback slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only status/catalog metadata. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Readiness Gate Capacity Payload Fallback
 
 ADDED:

@@ -2190,6 +2190,21 @@ impl WebPreviewView {
                     .pointer("/packet/latest/agent_browser_final_runtime_proof_capacity")
                     .map(Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity)
             });
+        let final_runtime_headroom_reclaim_candidates_payload = packet
+            .pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates")
+            .cloned()
+            .or_else(|| {
+                packet
+                    .pointer(
+                        "/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_reclaim_candidates",
+                    )
+                    .cloned()
+            })
+            .or_else(|| {
+                packet
+                    .pointer("/packet/latest/agent_browser_final_runtime_proof_capacity")
+                    .map(Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity)
+            });
         Some(serde_json::json!({
             "schema": AGENT_BROWSER_STATUS_PACKET_SUMMARY_SCHEMA,
             "source_schema": packet.get("schema").and_then(Value::as_str),
@@ -2354,7 +2369,7 @@ impl WebPreviewView {
             "agent_browser_final_runtime_headroom_cleanup_result_import_receipt": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_import_receipt").cloned(),
             "agent_browser_final_runtime_headroom_cleanup_result_gate": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_gate").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_cleanup_result_gate")).or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate")).cloned(),
             "agent_browser_final_runtime_headroom_readiness_gate": final_runtime_headroom_readiness_gate_payload,
-            "agent_browser_final_runtime_headroom_reclaim_candidates": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates").cloned(),
+            "agent_browser_final_runtime_headroom_reclaim_candidates": final_runtime_headroom_reclaim_candidates_payload,
             "agent_browser_final_runtime_blocker_board": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board").or_else(|| packet.pointer("/packet/latest/agent_browser_panel_live_ui_proof_checklist/artifacts/final_runtime_blocker_board/payload")).cloned(),
             "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
             "runtime_green_ready_lane_fraction": packet.pointer("/packet/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
@@ -9044,6 +9059,16 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "final_runtime_headroom_reclaim_candidates_field": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_reclaim_candidates_field")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_reclaim_candidates_status_packet_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_reclaim_candidates_status_packet_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_reclaim_candidates_capacity_packet_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_reclaim_candidates_capacity_packet_field",
+                    )
                     .and_then(Value::as_str),
                 "final_runtime_headroom_reclaim_candidates_cleanup_result_gate_source_field": plugin
                     .pointer(
@@ -26354,6 +26379,7 @@ impl WebPreviewView {
                             "headroom_readiness_gate_capacity_observed_free_field": "target.observed_free_gib",
                             "headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
                             "headroom_reclaim_candidates_field": "headroom_reclaim_candidates",
+                            "headroom_reclaim_candidates_capacity_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_reclaim_candidates",
                             "headroom_reclaim_candidates_cleanup_result_gate_source_field": "headroom_reclaim_candidates.cleanup_result_gate.source",
                             "headroom_reclaim_candidates_cleanup_result_gate_ready_field": "headroom_reclaim_candidates.cleanup_result_gate.ready_for_capacity_recheck",
                             "headroom_reclaim_candidates_copy_action": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
