@@ -1,3 +1,16 @@
+[2026-05-18] - Readiness Gate Capacity Payload Fallback
+
+ADDED:
+- WebPreview compact function surfaces now synthesize `agent_browser_final_runtime_headroom_readiness_gate` from the final-runtime capacity packet when no standalone readiness-gate handoff is present.
+- Agent and WebPreview plugin catalogs now advertise the capacity-packet field used as the readiness-gate payload fallback.
+
+CHANGED:
+- Compact Browser/Chrome panels can render the full target-drive readiness-gate payload from current capacity evidence before an operator copies or sends the standalone gate.
+- `todo.txt` records the readiness-gate capacity payload fallback slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only status/catalog metadata. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Readiness Gate Capacity Fallback Alignment
 
 ADDED:

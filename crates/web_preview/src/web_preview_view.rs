@@ -2182,6 +2182,14 @@ impl WebPreviewView {
                     None
                 }
             });
+        let final_runtime_headroom_readiness_gate_payload = packet
+            .pointer("/packet/latest/agent_browser_final_runtime_headroom_readiness_gate")
+            .cloned()
+            .or_else(|| {
+                packet
+                    .pointer("/packet/latest/agent_browser_final_runtime_proof_capacity")
+                    .map(Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity)
+            });
         Some(serde_json::json!({
             "schema": AGENT_BROWSER_STATUS_PACKET_SUMMARY_SCHEMA,
             "source_schema": packet.get("schema").and_then(Value::as_str),
@@ -2345,7 +2353,7 @@ impl WebPreviewView {
             "agent_browser_final_runtime_headroom_cleanup_result": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result").cloned(),
             "agent_browser_final_runtime_headroom_cleanup_result_import_receipt": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_import_receipt").cloned(),
             "agent_browser_final_runtime_headroom_cleanup_result_gate": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_gate").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_cleanup_result_gate")).or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate")).cloned(),
-            "agent_browser_final_runtime_headroom_readiness_gate": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_readiness_gate").cloned(),
+            "agent_browser_final_runtime_headroom_readiness_gate": final_runtime_headroom_readiness_gate_payload,
             "agent_browser_final_runtime_headroom_reclaim_candidates": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates").cloned(),
             "agent_browser_final_runtime_blocker_board": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board").or_else(|| packet.pointer("/packet/latest/agent_browser_panel_live_ui_proof_checklist/artifacts/final_runtime_blocker_board/payload")).cloned(),
             "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
@@ -9019,6 +9027,9 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "final_runtime_headroom_readiness_gate_status_packet_field": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_readiness_gate_status_packet_field")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_readiness_gate_capacity_packet_field": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_readiness_gate_capacity_packet_field")
                     .and_then(Value::as_str),
                 "final_runtime_headroom_readiness_gate_capacity_ready_field": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_readiness_gate_capacity_ready_field")
@@ -26338,6 +26349,7 @@ impl WebPreviewView {
                             "headroom_readiness_gate_copy_action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
                             "headroom_readiness_gate_send_action": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
                             "headroom_readiness_gate_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_readiness_gate",
+                            "headroom_readiness_gate_capacity_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity",
                             "headroom_readiness_gate_capacity_ready_field": "ready_for_just_run",
                             "headroom_readiness_gate_capacity_observed_free_field": "target.observed_free_gib",
                             "headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,

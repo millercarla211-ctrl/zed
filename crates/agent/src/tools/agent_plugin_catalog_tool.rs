@@ -1152,6 +1152,9 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "final_runtime_headroom_readiness_gate_status_packet_field": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_readiness_gate_status_packet_field")
                 .and_then(Value::as_str),
+            "final_runtime_headroom_readiness_gate_capacity_packet_field": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_readiness_gate_capacity_packet_field")
+                .and_then(Value::as_str),
             "final_runtime_headroom_readiness_gate_capacity_ready_field": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_readiness_gate_capacity_ready_field")
                 .and_then(Value::as_str),
@@ -2031,6 +2034,7 @@ fn browser_plugin_manifest() -> Value {
             "headroom_readiness_gate_copy_action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
             "headroom_readiness_gate_send_action": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
             "headroom_readiness_gate_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_readiness_gate",
+            "headroom_readiness_gate_capacity_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity",
             "headroom_readiness_gate_capacity_ready_field": "ready_for_just_run",
             "headroom_readiness_gate_capacity_observed_free_field": "target.observed_free_gib",
             "headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
