@@ -11,7 +11,7 @@ default:
 
 # Guard runnable builds before Cargo starts filling the incremental cache.
 ensure-build-headroom:
-    @$targetDir = "{{build_target_dir}}"; $driveName = (Split-Path -Qualifier $targetDir).TrimEnd(":"); $drive = Get-PSDrive -Name $driveName; $freeGb = [math]::Round($drive.Free / 1GB, 2); $minBytes = [int64]{{min_build_free_gb}} * 1GB; if ($drive.Free -lt $minBytes) { throw "Zed build target drive $($drive.Name): has only $freeGb GB free; need at least {{min_build_free_gb}} GB before running Cargo. Free target/cache space or move CARGO_TARGET_DIR, then rerun this recipe." } else { Write-Host "Build target headroom OK: $freeGb GB free on $($drive.Name):" }
+    @$targetDir = "{{build_target_dir}}"; $driveName = (Split-Path -Qualifier $targetDir).TrimEnd(":"); $drive = Get-PSDrive -Name $driveName; $freeGb = [math]::Round($drive.Free / 1GB, 2); $minBytes = [int64]{{min_build_free_gb}} * 1GB; if ($drive.Free -lt $minBytes) { throw "Zed build target drive $($drive.Name): has only $freeGb GB free; need at least {{min_build_free_gb}} GB before running Cargo. Free rebuildable target/cache space on the configured G-drive target, then rerun this recipe." } else { Write-Host "Build target headroom OK: $freeGb GB free on $($drive.Name):" }
 
 # RECOMMENDED: Run Zed with balanced local settings
 run: ensure-build-headroom

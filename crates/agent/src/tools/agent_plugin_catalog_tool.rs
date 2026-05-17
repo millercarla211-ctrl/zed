@@ -60,6 +60,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_proof_capacity.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_target_drive_policy.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_recovery_plan.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA: &str =
@@ -1006,6 +1008,15 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "final_runtime_proof_capacity_schema": plugin
                 .pointer("/final_runtime_proof_capacity/schema")
                 .and_then(Value::as_str),
+            "final_runtime_target_drive_policy_schema": plugin
+                .pointer("/final_runtime_proof_capacity/target_drive_policy_schema")
+                .and_then(Value::as_str),
+            "final_runtime_target_move_allowed_by_default": plugin
+                .pointer("/final_runtime_proof_capacity/target_move_allowed_by_default")
+                .and_then(Value::as_bool),
+            "final_runtime_target_move_requires_explicit_user_request": plugin
+                .pointer("/final_runtime_proof_capacity/target_move_requires_explicit_user_request")
+                .and_then(Value::as_bool),
             "final_runtime_headroom_recovery_plan_schema": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_schema")
                 .and_then(Value::as_str),
@@ -1672,6 +1683,7 @@ fn browser_plugin_manifest() -> Value {
             "browser_panel_live_proof_status_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
             "browser_panel_live_proof_readiness_card_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_READINESS_CARD_SCHEMA,
             "final_runtime_proof_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+            "final_runtime_target_drive_policy_schema": AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA,
             "final_runtime_headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
             "final_runtime_headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
             "final_runtime_headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
@@ -1799,6 +1811,11 @@ fn browser_plugin_manifest() -> Value {
         },
         "final_runtime_proof_capacity": {
             "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+            "target_drive_policy_schema": AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA,
+            "target_drive_policy_field": "target_drive_policy",
+            "target_move_allowed_by_default": false,
+            "target_move_requires_explicit_user_request": true,
+            "target_policy_sources": [".cargo/config.toml target-dir", "justfile build_target_dir"],
             "headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
             "headroom_recovery_plan_field": "headroom_recovery_plan",
             "headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
@@ -1972,6 +1989,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.validation.final_result_import_receipt", "available", "Copy or send the final result import receipt with durable proof paths and the next runtime-status recheck."),
             capability("browser.validation.final_proof_state", "available", "Copy or send compact final proof-state observability and recovery actions without generating larger proof packets."),
             capability("browser.validation.final_runtime_capacity", "available", "Copy or send target-drive headroom before final just run proof."),
+            capability("browser.validation.final_runtime_target_drive_policy", "available", "Expose the configured target-drive policy so panels keep Zed build outputs on the configured drive unless the user explicitly changes that policy."),
             capability("browser.validation.final_runtime_headroom_recovery", "available", "Copy or send the non-destructive target-drive recovery plan before final just run proof."),
             capability("browser.validation.final_runtime_headroom_readiness_gate", "available", "Copy or send the compact target-drive headroom gate before final just run proof."),
             capability("browser.validation.final_runtime_headroom_reclaim_candidates", "available", "Copy or send read-only target-drive reclaim candidates with preserve rules before manual cleanup."),

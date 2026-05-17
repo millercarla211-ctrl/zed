@@ -1,3 +1,17 @@
+[2026-05-17] - Final Runtime Target Drive Policy Handoff
+
+ADDED:
+- `crates/web_preview/src/web_preview_view.rs` now emits `agent_browser_final_runtime_target_drive_policy` inside final-runtime capacity and recovery packets.
+- Final-runtime recovery cards, inspection checklists, readiness gates, and reclaim-candidate packets now carry target-drive policy metadata that keeps build outputs on the configured target drive by default.
+
+CHANGED:
+- Agent and WebPreview plugin catalogs now advertise the target-drive policy schema and explicit target-move constraints for AI panels.
+- `justfile` now reports the headroom blocker as a configured G-drive target/cache-space issue instead of recommending a default `CARGO_TARGET_DIR` move.
+- `todo.txt` now records the target-drive policy slice while keeping the feature set at 99/100 until live UI exercise and final runtime proof can run with enough G: headroom.
+
+NOTES:
+- This slice is policy-only and read-only at runtime. It does not delete files, move build output, run Cargo, run `just run`, launch browsers, dispatch input, or touch browser profiles.
+
 [2026-05-17] - Final Runtime Blocker Board Handoff
 
 ADDED:

@@ -104,6 +104,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_proof_capacity.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_target_drive_policy.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_recovery_plan.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA: &str =
@@ -2160,6 +2162,8 @@ impl WebPreviewView {
             "final_runtime_proof_capacity_status": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/status").and_then(Value::as_str),
             "final_runtime_proof_capacity_ready": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/ready_for_just_run").and_then(Value::as_bool),
             "final_runtime_proof_capacity_observed_free_gib": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/target/observed_free_gib").and_then(Value::as_f64),
+            "final_runtime_target_drive_policy_schema": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/target_drive_policy/schema").and_then(Value::as_str),
+            "final_runtime_target_move_allowed_by_default": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
             "final_runtime_headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
             "final_runtime_headroom_recovery_plan_status": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/status").and_then(Value::as_str),
             "final_runtime_headroom_recovery_first_action": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/first_action/id").and_then(Value::as_str),
@@ -2509,6 +2513,10 @@ impl WebPreviewView {
             "required_free_gib": capacity.pointer("/target/required_free_gib").and_then(Value::as_f64),
             "observed_free_gib": capacity.pointer("/target/observed_free_gib").and_then(Value::as_f64),
             "missing_free_gib": capacity.pointer("/target/missing_free_gib").and_then(Value::as_f64),
+            "target_drive_policy_schema": capacity.pointer("/target_drive_policy/schema").and_then(Value::as_str),
+            "target_drive_policy_status": capacity.pointer("/target_drive_policy/status").and_then(Value::as_str),
+            "target_move_allowed_by_default": capacity.pointer("/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
+            "target_move_requires_explicit_user_request": capacity.pointer("/target_drive_policy/target_move_requires_explicit_user_request").and_then(Value::as_bool),
             "headroom_recovery_plan_schema": capacity.pointer("/headroom_recovery_plan/schema").and_then(Value::as_str),
             "headroom_recovery_plan_status": capacity.pointer("/headroom_recovery_plan/status").and_then(Value::as_str),
             "headroom_recovery_first_action": capacity.pointer("/headroom_recovery_plan/first_action/id").and_then(Value::as_str),
@@ -2538,6 +2546,8 @@ impl WebPreviewView {
             "inspection_step_count": plan.pointer("/inspection_checklist/steps").and_then(Value::as_array).map(Vec::len),
             "candidate_reclaim_zone_count": plan.pointer("/candidate_reclaim_zones").and_then(Value::as_array).map(Vec::len),
             "preserve_policy_count": plan.pointer("/preserve_policy").and_then(Value::as_array).map(Vec::len),
+            "target_drive_policy_schema": plan.pointer("/target_drive_policy/schema").and_then(Value::as_str),
+            "target_move_allowed_by_default": plan.pointer("/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
             "ready_condition": plan.pointer("/ready_condition").and_then(Value::as_str),
         })
     }
@@ -2554,6 +2564,8 @@ impl WebPreviewView {
             "first_action": card.pointer("/first_action/id").and_then(Value::as_str),
             "inspection_checklist_status": card.pointer("/inspection_checklist/status").and_then(Value::as_str),
             "inspection_step_count": card.pointer("/inspection_checklist/step_count").and_then(Value::as_u64),
+            "target_drive_policy_schema": card.pointer("/target_drive_policy/schema").and_then(Value::as_str),
+            "target_move_allowed_by_default": card.pointer("/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
             "copy_plan_action": card.pointer("/actions/copy_recovery_plan").and_then(Value::as_str),
             "copy_capacity_action": card.pointer("/actions/copy_final_runtime_capacity").and_then(Value::as_str),
         })
@@ -2570,6 +2582,8 @@ impl WebPreviewView {
             "first_step": checklist.pointer("/steps/0/id").and_then(Value::as_str),
             "preserve_root_count": checklist.pointer("/preserve_roots").and_then(Value::as_array).map(Vec::len),
             "forbidden_action_count": checklist.pointer("/forbidden_actions").and_then(Value::as_array).map(Vec::len),
+            "target_drive_policy_schema": checklist.pointer("/target_drive_policy/schema").and_then(Value::as_str),
+            "target_move_allowed_by_default": checklist.pointer("/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
             "ready_to_cleanup_condition": checklist.pointer("/ready_to_cleanup_condition").and_then(Value::as_str),
             "read_only": checklist.pointer("/read_only").and_then(Value::as_bool),
         })
@@ -2584,6 +2598,8 @@ impl WebPreviewView {
             "target_root": gate.pointer("/target/target_root").and_then(Value::as_str),
             "observed_free_gib": gate.pointer("/target/observed_free_gib").and_then(Value::as_f64),
             "missing_free_gib": gate.pointer("/target/missing_free_gib").and_then(Value::as_f64),
+            "target_drive_policy_schema": gate.pointer("/target_drive_policy/schema").and_then(Value::as_str),
+            "target_move_allowed_by_default": gate.pointer("/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
             "first_blocker": gate.pointer("/first_blocker/id").and_then(Value::as_str),
             "recommended_action": gate.pointer("/recommended_action").and_then(Value::as_str),
             "copy_action": gate.pointer("/actions/copy_gate").and_then(Value::as_str),
@@ -2608,6 +2624,8 @@ impl WebPreviewView {
             "preserve_policy_count": candidates.pointer("/preserve_policy").and_then(Value::as_array).map(Vec::len),
             "preserve_root_count": candidates.pointer("/preserve_roots").and_then(Value::as_array).map(Vec::len),
             "forbidden_action_count": candidates.pointer("/forbidden_actions").and_then(Value::as_array).map(Vec::len),
+            "target_drive_policy_schema": candidates.pointer("/target_drive_policy/schema").and_then(Value::as_str),
+            "target_move_allowed_by_default": candidates.pointer("/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
             "recommended_action": candidates.pointer("/recommended_action").and_then(Value::as_str),
             "copy_action": candidates.pointer("/actions/copy_reclaim_candidates").and_then(Value::as_str),
             "send_action": candidates.pointer("/actions/send_reclaim_candidates").and_then(Value::as_str),
@@ -3269,6 +3287,61 @@ impl WebPreviewView {
         None
     }
 
+    fn agent_browser_final_runtime_target_drive_policy(
+        absolute_target_dir: &Path,
+        target_root: Option<&Path>,
+    ) -> Value {
+        let configured_target_dir = path_string(absolute_target_dir);
+        let configured_target_root = target_root.map(path_string);
+        let target_label = configured_target_root
+            .as_deref()
+            .unwrap_or("the configured target drive");
+        let source = if env::var_os("CARGO_TARGET_DIR").is_some() {
+            serde_json::json!(["CARGO_TARGET_DIR", "justfile build_target_dir"])
+        } else {
+            serde_json::json!([
+                ".cargo/config.toml target-dir",
+                "justfile build_target_dir",
+                "workspace target dir"
+            ])
+        };
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA,
+            "status": "configured_target_drive_required",
+            "configured_target_dir": configured_target_dir,
+            "configured_target_root": configured_target_root,
+            "source": source,
+            "default_recovery_policy": "keep_build_outputs_on_configured_target_drive",
+            "target_move_allowed_by_default": false,
+            "target_move_requires_explicit_user_request": true,
+            "preferred_first_action": "inspect_rebuildable_target_artifacts",
+            "operator_message": format!(
+                "Keep Zed build outputs on {target_label} unless the user explicitly changes the build-output policy."
+            ),
+            "forbidden_panel_actions": [
+                "Do not move CARGO_TARGET_DIR from this panel packet.",
+                "Do not redirect build outputs away from the configured target drive unless the user explicitly changes the build-output policy.",
+                "Do not delete source trees, models, inspirations, tools, assets, or unmanaged user folders."
+            ],
+            "safe_recovery_order": [
+                "Inspect the configured target drive.",
+                "Identify only rebuildable target/cache artifacts.",
+                "Let the operator perform any manual cleanup outside the AI panel.",
+                "Rerun the capacity packet and just --dry-run run before just run."
+            ],
+            "safety": {
+                "read_only": true,
+                "mutates_files": false,
+                "deletes_files": false,
+                "moves_target_dir": false,
+                "dispatches_input": false,
+                "runs_just": false,
+                "runs_cargo": false
+            }
+        })
+    }
+
     fn agent_browser_final_runtime_headroom_recovery_plan(
         status: &str,
         absolute_target_dir: &Path,
@@ -3276,6 +3349,8 @@ impl WebPreviewView {
         observed_free_bytes: Option<u64>,
         missing_free_bytes: Option<u64>,
     ) -> Value {
+        let target_drive_policy =
+            Self::agent_browser_final_runtime_target_drive_policy(absolute_target_dir, target_root);
         let target_dir = path_string(absolute_target_dir);
         let target_root = target_root.map(|root| path_string(root));
         let recovery_status = match status {
@@ -3296,7 +3371,7 @@ impl WebPreviewView {
             }),
             _ => serde_json::json!({
                 "id": "resolve_target_drive_detection",
-                "label": "Open a workspace with a resolvable target drive or set CARGO_TARGET_DIR, then regenerate this capacity packet.",
+                "label": "Open a workspace with a resolvable configured target drive, then regenerate this capacity packet.",
                 "writes_files": false,
             }),
         };
@@ -3309,6 +3384,7 @@ impl WebPreviewView {
         serde_json::json!({
             "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
             "status": recovery_status,
+            "target_drive_policy": target_drive_policy.clone(),
             "target": {
                 "target_dir": target_dir,
                 "target_root": target_root,
@@ -3321,6 +3397,7 @@ impl WebPreviewView {
             "inspection_checklist": {
                 "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                 "status": inspection_status,
+                "target_drive_policy": target_drive_policy.clone(),
                 "steps": [
                     {
                         "id": "confirm_target_drive",
@@ -3362,6 +3439,7 @@ impl WebPreviewView {
                     "Do not run Remove-Item from this panel packet.",
                     "Do not delete source trees, models, inspirations, tools, assets, or unmanaged user folders.",
                     "Do not clean browser profiles, cookies, cache, or extension data while proving Browser/Chrome behavior.",
+                    "Do not move CARGO_TARGET_DIR or redirect build outputs away from the configured target drive unless the user explicitly changes the build-output policy.",
                     "Do not run just run until the capacity packet reports ready_for_just_run=true."
                 ],
                 "ready_to_cleanup_condition": "Operator has manually identified explicitly rebuildable target/cache artifacts outside preserve_roots.",
@@ -3392,6 +3470,7 @@ impl WebPreviewView {
             ],
             "preserve_policy": [
                 "Never delete source trees, user assets, models, inspirations, tools, or unmanaged folders from this packet.",
+                "Keep build outputs on the configured target drive by default; moving CARGO_TARGET_DIR requires an explicit user policy change.",
                 "Do not perform cleanup from the AI panel; this is an inspection-only recovery plan.",
                 "After manual cleanup, rerun the capacity packet and then just --dry-run run before the final just run proof."
             ],
@@ -3426,6 +3505,14 @@ impl WebPreviewView {
                 "target_root": plan.pointer("/target/target_root").and_then(Value::as_str),
                 "observed_free_gib": plan.pointer("/target/observed_free_gib").and_then(Value::as_f64),
                 "missing_free_gib": plan.pointer("/target/missing_free_gib").and_then(Value::as_f64),
+            },
+            "target_drive_policy": {
+                "schema": plan.pointer("/target_drive_policy/schema").and_then(Value::as_str),
+                "status": plan.pointer("/target_drive_policy/status").and_then(Value::as_str),
+                "configured_target_root": plan.pointer("/target_drive_policy/configured_target_root").and_then(Value::as_str),
+                "target_move_allowed_by_default": plan.pointer("/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
+                "target_move_requires_explicit_user_request": plan.pointer("/target_drive_policy/target_move_requires_explicit_user_request").and_then(Value::as_bool),
+                "operator_message": plan.pointer("/target_drive_policy/operator_message").and_then(Value::as_str),
             },
             "first_action": plan.pointer("/first_action").cloned(),
             "inspection_checklist": {
@@ -3497,10 +3584,14 @@ impl WebPreviewView {
         let next_action = if ready_for_just_run {
             "Run the final Windows just run proof only after panel live-validation and manual result templates are ready."
         } else if observed_free_bytes.is_some() {
-            "Free target-drive space or move CARGO_TARGET_DIR until the target drive has at least 18 GiB free, then rerun the capacity preflight before just run."
+            "Free rebuildable target/cache space on the configured target drive until it has at least 18 GiB free, then rerun the capacity preflight before just run."
         } else {
             "Open a Windows WebPreview workspace with a resolvable target drive, then rerun the capacity preflight before just run."
         };
+        let target_drive_policy = Self::agent_browser_final_runtime_target_drive_policy(
+            &absolute_target_dir,
+            target_root.as_deref(),
+        );
         let headroom_recovery_plan = Self::agent_browser_final_runtime_headroom_recovery_plan(
             status,
             &absolute_target_dir,
@@ -3515,6 +3606,7 @@ impl WebPreviewView {
             "captured_at_ms": Self::current_epoch_millis(),
             "manual_command": "just run",
             "ready_for_just_run": ready_for_just_run,
+            "target_drive_policy": target_drive_policy,
             "target": {
                 "target_dir": path_string(&absolute_target_dir),
                 "target_root": target_root.as_ref().map(|root| path_string(root)),
@@ -3530,7 +3622,8 @@ impl WebPreviewView {
             "recipe_guard": {
                 "source": "just run dry-run recipe",
                 "minimum_target_drive_free_gib": 18.0,
-                "guarded_reason": "Avoid starting the large Zed build/run proof when the target drive cannot satisfy the recipe headroom check."
+                "guarded_reason": "Avoid starting the large Zed build/run proof when the configured target drive cannot satisfy the recipe headroom check.",
+                "target_move_allowed_by_default": false
             },
             "headroom_recovery_plan": headroom_recovery_plan,
             "headroom_recovery_card": Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(
@@ -3541,7 +3634,8 @@ impl WebPreviewView {
             ),
             "operator_steps": [
                 "Read this preflight before copying the final validation bundle or running just run.",
-                "If target_headroom_blocked, free target/cache space or move CARGO_TARGET_DIR to a drive with at least 18 GiB free.",
+                "If target_headroom_blocked, inspect and free only rebuildable target/cache space on the configured target drive.",
+                "Do not move CARGO_TARGET_DIR or redirect build outputs unless the user explicitly changes the build-output policy.",
                 "Run just --dry-run run to confirm the recipe still points at the expected target directory.",
                 "Run just run only after this packet reports ready_for_just_run=true and panel live-validation gate is ready."
             ],
@@ -3719,6 +3813,7 @@ impl WebPreviewView {
                 "observed_free_bytes": capacity.pointer("/target/observed_free_bytes").and_then(Value::as_u64),
                 "missing_free_bytes": capacity.pointer("/target/missing_free_bytes").and_then(Value::as_u64),
             },
+            "target_drive_policy": capacity.pointer("/target_drive_policy").cloned().unwrap_or_else(|| serde_json::json!({})),
             "first_blocker": first_blocker,
             "recommended_action": recommended_action,
             "actions": {
@@ -3795,6 +3890,7 @@ impl WebPreviewView {
                 "missing_free_bytes": plan.pointer("/target/missing_free_bytes").and_then(Value::as_u64),
                 "missing_free_gib": plan.pointer("/target/missing_free_gib").and_then(Value::as_f64),
             },
+            "target_drive_policy": plan.pointer("/target_drive_policy").cloned().unwrap_or_else(|| serde_json::json!({})),
             "candidate_reclaim_zones": plan.pointer("/candidate_reclaim_zones").cloned().unwrap_or_else(|| serde_json::json!([])),
             "first_candidate": plan.pointer("/candidate_reclaim_zones/0").cloned().unwrap_or(Value::Null),
             "preserve_policy": plan.pointer("/preserve_policy").cloned().unwrap_or_else(|| serde_json::json!([])),
@@ -5635,7 +5731,7 @@ impl WebPreviewView {
             "next_step": if all_groups_ready {
                 "Run one final Windows just run pass and capture manual regression notes before claiming runtime-green."
             } else if !final_runtime_capacity_ready {
-                "Free target-drive space or move CARGO_TARGET_DIR, then copy the final runtime proof capacity again before just run."
+                "Free rebuildable target/cache space on the configured target drive, then copy the final runtime proof capacity again before just run."
             } else {
                 "Collect the missing evidence groups from the WebPreview More menu before the final Windows just run pass."
             },
@@ -5971,6 +6067,10 @@ impl WebPreviewView {
                 },
                 "final_runtime_proof_capacity": {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                    "target_drive_policy_schema": AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA,
+                    "target_drive_policy_field": "target_drive_policy",
+                    "target_move_allowed_by_default": false,
+                    "target_move_requires_explicit_user_request": true,
                     "headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                     "headroom_recovery_plan_field": "headroom_recovery_plan",
                     "headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
@@ -5997,6 +6097,9 @@ impl WebPreviewView {
                 "final_runtime_headroom_recovery_plan": {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                     "source_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                    "target_drive_policy_schema": AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA,
+                    "target_drive_policy_field": "target_drive_policy",
+                    "target_move_allowed_by_default": false,
                     "recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
                     "inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                     "inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
@@ -6022,6 +6125,7 @@ impl WebPreviewView {
                 "final_runtime_headroom_recovery_card": {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
                     "source_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
+                    "target_drive_policy_schema": AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA,
                     "inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                     "inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                     "inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
@@ -6038,6 +6142,7 @@ impl WebPreviewView {
                 "final_runtime_headroom_inspection_checklist": {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                     "source_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
+                    "target_drive_policy_schema": AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA,
                     "copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                     "send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
                     "latest_summary": self.latest_agent_browser_final_runtime_headroom_inspection_checklist_summary(),
@@ -6052,6 +6157,7 @@ impl WebPreviewView {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
                     "source_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                     "source_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                    "target_drive_policy_schema": AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA,
                     "copy_action": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
                     "send_action": "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent",
                     "latest_summary": self.latest_agent_browser_final_runtime_headroom_reclaim_candidates_summary(),
@@ -6077,6 +6183,7 @@ impl WebPreviewView {
                 "final_runtime_headroom_readiness_gate": {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
                     "source_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                    "target_drive_policy_schema": AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA,
                     "copy_action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
                     "send_action": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
                     "latest_summary": self.latest_agent_browser_final_runtime_headroom_readiness_gate_summary(),
@@ -7131,6 +7238,15 @@ impl WebPreviewView {
                 "final_runtime_proof_capacity_schema": plugin
                     .pointer("/final_runtime_proof_capacity/schema")
                     .and_then(Value::as_str),
+                "final_runtime_target_drive_policy_schema": plugin
+                    .pointer("/final_runtime_proof_capacity/target_drive_policy_schema")
+                    .and_then(Value::as_str),
+                "final_runtime_target_move_allowed_by_default": plugin
+                    .pointer("/final_runtime_proof_capacity/target_move_allowed_by_default")
+                    .and_then(Value::as_bool),
+                "final_runtime_target_move_requires_explicit_user_request": plugin
+                    .pointer("/final_runtime_proof_capacity/target_move_requires_explicit_user_request")
+                    .and_then(Value::as_bool),
                 "final_runtime_headroom_recovery_plan_schema": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_schema")
                     .and_then(Value::as_str),
@@ -11414,7 +11530,7 @@ impl WebPreviewView {
                 "Copy the panel proof card and resolve its first blocker before final runtime proof."
             }
             _ => {
-                "Free target-drive space or move CARGO_TARGET_DIR, then rerun final runtime capacity before just run."
+                "Free rebuildable target/cache space on the configured target drive, then rerun final runtime capacity before just run."
             }
         };
         let manual_steps = serde_json::json!([
@@ -24058,6 +24174,7 @@ impl WebPreviewView {
                             "browser_panel_live_proof_status_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
                             "browser_panel_live_proof_readiness_card_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_READINESS_CARD_SCHEMA,
                             "final_runtime_proof_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                            "final_runtime_target_drive_policy_schema": AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA,
                             "final_runtime_headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                             "final_runtime_headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
                             "final_runtime_headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
@@ -24184,6 +24301,11 @@ impl WebPreviewView {
                         },
                         "final_runtime_proof_capacity": {
                             "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                            "target_drive_policy_schema": AGENT_BROWSER_FINAL_RUNTIME_TARGET_DRIVE_POLICY_SCHEMA,
+                            "target_drive_policy_field": "target_drive_policy",
+                            "target_move_allowed_by_default": false,
+                            "target_move_requires_explicit_user_request": true,
+                            "target_policy_sources": [".cargo/config.toml target-dir", "justfile build_target_dir"],
                             "headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                             "headroom_recovery_plan_field": "headroom_recovery_plan",
                             "headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
@@ -24370,6 +24492,7 @@ impl WebPreviewView {
                             {"id": "browser.validation.final_result_import_receipt", "state": "available", "description": "Copy or send the final result import receipt with durable proof paths and the next runtime-status recheck."},
                             {"id": "browser.validation.final_proof_state", "state": "available", "description": "Copy or send compact final proof-state observability and recovery actions without generating larger proof packets."},
                             {"id": "browser.validation.final_runtime_capacity", "state": "available", "description": "Copy or send target-drive headroom before final just run proof."},
+                            {"id": "browser.validation.final_runtime_target_drive_policy", "state": "available", "description": "Expose the configured target-drive policy so panels keep Zed build outputs on the configured drive unless the user explicitly changes that policy."},
                             {"id": "browser.validation.final_runtime_headroom_recovery", "state": "available", "description": "Copy or send the non-destructive target-drive recovery plan before final just run proof."},
                             {"id": "browser.validation.final_runtime_headroom_readiness_gate", "state": "available", "description": "Copy or send the compact target-drive headroom gate before final just run proof."},
                             {"id": "browser.validation.final_runtime_headroom_reclaim_candidates", "state": "available", "description": "Copy or send read-only target-drive reclaim candidates with preserve rules before manual cleanup."},
