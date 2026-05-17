@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Live Runtime Gate
+
+ADDED:
+- WebPreview final validation progress now includes a dedicated panel live-validation result group that requires the live-validation packet, an imported panel result, and a gate-ready state before reporting manual Windows runtime readiness.
+- Final validation result templates now require a `panel_live_validation` check with evidence from the panel live-validation result gate.
+
+CHANGED:
+- Runtime-green claim gates, final validation observability, final proof audits, manual proof order, and final bundle/catalog requirements now treat `panel_live_validation_result_gate.ready_for_final_runtime == true` as a required proof condition.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 78/100 and the remaining live UI/runtime validation targets.
+
+NOTES:
+- This slice is read-only readiness enforcement. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Live Result Gate
 
 ADDED:

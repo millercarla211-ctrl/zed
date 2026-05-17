@@ -1563,6 +1563,7 @@ fn browser_plugin_manifest() -> Value {
                 "manual_evidence_template.status == pass",
                 "every required manual_evidence_template.checks entry has status == pass",
                 "manual_evidence_template.overall_blocker == null",
+                "panel_live_validation_result_gate.ready_for_final_runtime == true",
                 "executor_validation_progress.status == manual_windows_runtime_validation_ready"
             ],
             "copy_action": "copy_agent_browser_final_validation_bundle",

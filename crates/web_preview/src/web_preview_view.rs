@@ -2383,6 +2383,12 @@ impl WebPreviewView {
             "final_result_runtime_green": audit
                 .pointer("/audit/final_result_runtime_green")
                 .and_then(Value::as_bool),
+            "panel_live_validation_result_gate_ready": audit
+                .pointer("/audit/panel_live_validation_result_gate_ready")
+                .and_then(Value::as_bool),
+            "panel_live_validation_result_gate_status": audit
+                .pointer("/latest/panel_live_validation_result_gate/status")
+                .and_then(Value::as_str),
             "next_action": audit.pointer("/audit/next_action").and_then(Value::as_str),
             "missing_required_checks": audit.pointer("/audit/missing_required_checks").cloned(),
             "missing_required_check_count": audit
@@ -2737,17 +2743,25 @@ impl WebPreviewView {
         let result_summary = self.latest_agent_browser_final_validation_result_summary();
         let result_import_receipt_summary =
             self.latest_agent_browser_final_validation_result_import_receipt_summary();
+        let panel_live_validation_result_gate =
+            self.agent_browser_panel_live_validation_result_gate_snapshot();
+        let panel_live_validation_result_gate_ready =
+            Self::agent_browser_panel_live_validation_result_gate_ready(
+                &panel_live_validation_result_gate,
+            );
         let durable_evidence = self.agent_browser_final_validation_result_durable_evidence();
         let durable_runtime_green_candidate = durable_evidence
             .pointer("/runtime_green_candidate")
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let result_runtime_green_candidate = durable_runtime_green_candidate
+        let final_result_runtime_green_candidate = durable_runtime_green_candidate
             || result_summary
                 .as_ref()
                 .and_then(|summary| summary.pointer("/runtime_green_candidate"))
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
+        let result_runtime_green_candidate =
+            final_result_runtime_green_candidate && panel_live_validation_result_gate_ready;
 
         let mut missing = Vec::new();
         if bundle_summary.is_none() {
@@ -2759,9 +2773,14 @@ impl WebPreviewView {
         if result_summary.is_none() && !durable_runtime_green_candidate {
             missing.push("final_validation_result");
         }
+        if !panel_live_validation_result_gate_ready {
+            missing.push("panel_live_validation_result_gate");
+        }
 
         let status = if result_runtime_green_candidate {
             "manual_runtime_result_imported_runtime_green_candidate"
+        } else if final_result_runtime_green_candidate && !panel_live_validation_result_gate_ready {
+            "panel_live_validation_result_gate_blocking_runtime_green"
         } else if result_summary.is_some() {
             "manual_runtime_result_imported_not_green"
         } else if bundle_summary.is_some() && result_template_summary.is_some() {
@@ -2780,15 +2799,24 @@ impl WebPreviewView {
                 "final_validation_result_template": result_template_summary,
                 "final_validation_result": result_summary,
                 "final_validation_result_import_receipt": result_import_receipt_summary,
+                "panel_live_validation_result_gate": Self::agent_browser_panel_live_validation_result_gate_summary(
+                    &panel_live_validation_result_gate
+                ),
             },
             "durable_evidence": durable_evidence,
+            "panel_live_validation_result_gate": panel_live_validation_result_gate,
+            "panel_live_validation_result_gate_ready": panel_live_validation_result_gate_ready,
+            "final_result_runtime_green_candidate": final_result_runtime_green_candidate,
             "runtime_green_candidate": result_runtime_green_candidate,
             "recovery_actions": self.agent_browser_final_validation_observability_actions(
                 status,
                 result_runtime_green_candidate,
+                final_result_runtime_green_candidate,
+                panel_live_validation_result_gate_ready,
             ),
             "required_final_state": [
                 "Copy or send the final validation bundle before the runtime pass.",
+                "Copy or send the panel live-validation result gate and confirm it reports ready_for_final_runtime=true.",
                 "Copy or send the final validation result template before the runtime pass.",
                 "Run one final Windows just run pass when validation is intended.",
                 "Fill the result template with pass/fail evidence.",
@@ -2803,8 +2831,19 @@ impl WebPreviewView {
         &self,
         status: &str,
         result_runtime_green_candidate: bool,
+        final_result_runtime_green_candidate: bool,
+        panel_live_validation_result_gate_ready: bool,
     ) -> Value {
         let mut actions = Vec::new();
+        if !panel_live_validation_result_gate_ready {
+            actions.push(serde_json::json!({
+                "target": "panel_live_validation_result_gate",
+                "action": "copy_agent_browser_panel_live_validation_result_gate",
+                "alternative_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
+                "reason": "panel_live_validation_result_gate_not_ready",
+                "dispatches_input": false
+            }));
+        }
         if self.latest_agent_browser_final_validation_bundle.is_none() {
             actions.push(serde_json::json!({
                 "target": "final_validation_bundle",
@@ -2833,7 +2872,7 @@ impl WebPreviewView {
                 "reason": "missing_after_manual_runtime_pass",
                 "dispatches_input": false
             }));
-        } else if !result_runtime_green_candidate {
+        } else if !result_runtime_green_candidate && !final_result_runtime_green_candidate {
             actions.push(serde_json::json!({
                 "target": "final_validation_result",
                 "action": "import_agent_browser_final_validation_result_from_clipboard",
@@ -2922,6 +2961,12 @@ impl WebPreviewView {
             self.latest_agent_browser_final_validation_result_import_receipt_summary();
         let template_summary = self.latest_agent_browser_final_validation_result_template_summary();
         let bundle_summary = self.latest_agent_browser_final_validation_bundle_summary();
+        let panel_live_validation_result_gate =
+            self.agent_browser_panel_live_validation_result_gate_snapshot();
+        let panel_live_validation_result_gate_ready =
+            Self::agent_browser_panel_live_validation_result_gate_ready(
+                &panel_live_validation_result_gate,
+            );
         let final_result_present = result_summary.is_some()
             || observability
                 .pointer("/durable_evidence/roots")
@@ -2932,7 +2977,7 @@ impl WebPreviewView {
                         .any(|root| root.get("exists").and_then(Value::as_bool).unwrap_or(false))
                 })
                 .unwrap_or(false);
-        let runtime_green_candidate = result_summary
+        let final_result_runtime_green_candidate = result_summary
             .as_ref()
             .and_then(|summary| summary.pointer("/runtime_green_candidate"))
             .and_then(Value::as_bool)
@@ -2941,6 +2986,8 @@ impl WebPreviewView {
                 .pointer("/durable_evidence/runtime_green_candidate")
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
+        let runtime_green_candidate =
+            final_result_runtime_green_candidate && panel_live_validation_result_gate_ready;
         let overall_runtime_green_candidate = report_gate
             .get("runtime_green_candidate")
             .and_then(Value::as_bool)
@@ -2973,6 +3020,8 @@ impl WebPreviewView {
             "ready_to_report_runtime_green"
         } else if runtime_green_candidate {
             "runtime_green_result_waiting_for_report_gate"
+        } else if final_result_runtime_green_candidate && !panel_live_validation_result_gate_ready {
+            "panel_live_validation_result_gate_required"
         } else if result_summary.is_some() {
             "final_result_needs_evidence_or_blocker_fix"
         } else if template_summary.is_some() && bundle_summary.is_some() {
@@ -2988,6 +3037,8 @@ impl WebPreviewView {
             "copy_agent_browser_final_validation_result_template"
         } else if result_summary.is_none() {
             "import_agent_browser_final_validation_result_from_clipboard"
+        } else if final_result_runtime_green_candidate && !panel_live_validation_result_gate_ready {
+            "copy_agent_browser_panel_live_validation_result_gate"
         } else if runtime_green_candidate {
             "copy_agent_plugin_runtime_green_report_gate"
         } else {
@@ -3002,7 +3053,8 @@ impl WebPreviewView {
                 "runtime_green_candidate": runtime_green_candidate,
                 "overall_runtime_green_candidate": overall_runtime_green_candidate,
                 "final_result_present": final_result_present,
-                "final_result_runtime_green": runtime_green_candidate,
+                "final_result_runtime_green": final_result_runtime_green_candidate,
+                "panel_live_validation_result_gate_ready": panel_live_validation_result_gate_ready,
                 "may_report_runtime_green": may_report_runtime_green,
                 "next_action": next_action,
                 "missing_required_checks": missing_required_checks,
@@ -3037,6 +3089,9 @@ impl WebPreviewView {
                 "final_validation_result_template": template_summary,
                 "final_validation_result": result_summary,
                 "final_validation_result_import_receipt": import_receipt_summary,
+                "panel_live_validation_result_gate": Self::agent_browser_panel_live_validation_result_gate_summary(
+                    &panel_live_validation_result_gate
+                ),
                 "final_validation_observability": observability,
                 "final_report_packet": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -3054,6 +3109,7 @@ impl WebPreviewView {
                 "final_validation_result.status == pass",
                 "all required checks have status pass",
                 "all required checks include non-empty evidence",
+                "panel_live_validation_result_gate.ready_for_final_runtime == true",
                 "overall_blocker is null",
                 "every required check blocker is null",
                 "runtime_green_report_gate.can_report_runtime_green == true"
@@ -3134,13 +3190,23 @@ impl WebPreviewView {
             .or_else(|| audit.get("report_gate_blocker"))
             .and_then(Value::as_str)
             .unwrap_or("none");
+        let panel_result_gate_ready = audit
+            .pointer("/audit/panel_live_validation_result_gate_ready")
+            .or_else(|| audit.get("panel_live_validation_result_gate_ready"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let panel_result_gate_status = audit
+            .pointer("/latest/panel_live_validation_result_gate/status")
+            .or_else(|| audit.get("panel_live_validation_result_gate_status"))
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
         let regression_watch_status = audit
             .pointer("/audit/regression_watch/status")
             .and_then(Value::as_str)
             .unwrap_or("unknown");
 
         format!(
-            "Web preview final proof audit\nStatus: {status}\nRuntime-green candidate: {runtime_green_candidate}\nMay report runtime-green: {may_report_runtime_green}\nMissing required checks: {missing_required_check_count}\nMissing required evidence: {missing_required_evidence_count}\nRequired check blockers: {required_check_blocker_count}\nOverall blocker present: {has_overall_blocker}\nReport gate: {report_gate_status} (blocker: {report_gate_blocker})\nRegression watch: {regression_watch_status}\nNext action: {next_action}"
+            "Web preview final proof audit\nStatus: {status}\nRuntime-green candidate: {runtime_green_candidate}\nMay report runtime-green: {may_report_runtime_green}\nPanel result gate: {panel_result_gate_status} (ready: {panel_result_gate_ready})\nMissing required checks: {missing_required_check_count}\nMissing required evidence: {missing_required_evidence_count}\nRequired check blockers: {required_check_blocker_count}\nOverall blocker present: {has_overall_blocker}\nReport gate: {report_gate_status} (blocker: {report_gate_blocker})\nRegression watch: {regression_watch_status}\nNext action: {next_action}"
         )
     }
 
@@ -3533,6 +3599,16 @@ impl WebPreviewView {
 
     fn agent_browser_executor_validation_progress(&self) -> Value {
         let runtime_green_claim_gate = self.agent_plugin_runtime_green_claim_gate_snapshot();
+        let panel_live_validation_result_gate =
+            self.agent_browser_panel_live_validation_result_gate_snapshot();
+        let panel_live_validation_result_gate_ready =
+            Self::agent_browser_panel_live_validation_result_gate_ready(
+                &panel_live_validation_result_gate,
+            );
+        let panel_control_result_present = self.latest_agent_browser_panel_control_result.is_some()
+            || self
+                .latest_durable_agent_browser_panel_control_result()
+                .is_some();
         let groups = vec![
             Self::agent_browser_validation_group(
                 "read_only_context",
@@ -3716,6 +3792,24 @@ impl WebPreviewView {
                 ],
             ),
             Self::agent_browser_validation_group(
+                "panel_live_validation_result",
+                "The right-side panel live exercise has an imported result and gate-cleared status before final runtime proof.",
+                &[
+                    (
+                        "panel_live_validation_packet",
+                        self.latest_agent_browser_panel_live_validation.is_some(),
+                    ),
+                    (
+                        "panel_control_result_imported",
+                        panel_control_result_present,
+                    ),
+                    (
+                        "panel_live_validation_result_gate_ready",
+                        panel_live_validation_result_gate_ready,
+                    ),
+                ],
+            ),
+            Self::agent_browser_validation_group(
                 "external_handoffs",
                 "Managed Chrome, PC-use, and plugin catalog handoff status is visible.",
                 &[
@@ -3768,11 +3862,13 @@ impl WebPreviewView {
             "ready_group_count": ready_group_count,
             "total_group_count": groups.len(),
             "groups": groups,
+            "panel_live_validation_result_gate": panel_live_validation_result_gate,
             "runtime_green_claim_gate": runtime_green_claim_gate,
             "final_runtime_command": "just run",
             "manual_regression_checks": [
                 "fast editor typing keeps the caret visible",
                 "WebPreview hover, click, right-click, wheel, and keyboard input stay interactive",
+                "Right-side Agent Browser panel live-validation result gate reports ready_for_final_runtime=true",
                 "URL editor focus does not mix with page input",
                 "native click, type, key, scroll, back, forward, and cache-only reset emit receipts",
                 "managed Chrome and PC-use handoffs remain scoped to managed roots"
@@ -4164,6 +4260,7 @@ impl WebPreviewView {
                 "Run native traces and native executor attempts for click, type, key, scroll, back, forward, and cache-only reset.",
                 "Import one managed Browser payload and confirm the payload-import receipt redacts text while preserving schema/action metadata.",
                 "Inspect managed Chrome and PC-use queue/receipt/status handoffs without touching real browser profiles or OS-wide input.",
+                "Copy or send the panel live-validation result gate and confirm ready_for_final_runtime is true.",
                 "Copy or send the runtime-green proof path and confirm its claim gate still points at the first pending evidence lane.",
                 "Copy or send this final validation bundle with the resulting summaries."
             ],
@@ -4171,6 +4268,7 @@ impl WebPreviewView {
             "success_criteria": [
                 "No editor typing lag or caret disappearance after WebPreview actions.",
                 "No stale WebPreview focus after navigation, reload, tab switch, URL edit, or editor focus.",
+                "The right-side panel live-validation result gate reports ready_for_final_runtime=true after an imported completed panel result.",
                 "Every native action attempt emits a blocked or successful receipt.",
                 "Every external Chrome and PC-use handoff stays under managed roots.",
                 "The final validation-progress packet reports all evidence groups ready before claiming runtime-green."
@@ -4192,6 +4290,7 @@ impl WebPreviewView {
             "required_check_ids": [
                 "editor_typing",
                 "webpreview_input",
+                "panel_live_validation",
                 "native_executor_receipts",
                 "payload_bridge",
                 "managed_chrome",
@@ -4210,6 +4309,11 @@ impl WebPreviewView {
                 "webpreview_input": {
                     "status": "not_run",
                     "evidence": "Hover, click, right-click, wheel, URL edit, page typing, reload, and focus switching all work.",
+                    "blocker": null
+                },
+                "panel_live_validation": {
+                    "status": "not_run",
+                    "evidence": "Copy or send the panel live-validation result gate after importing a completed panel control result; ready_for_final_runtime is true.",
                     "blocker": null
                 },
                 "native_executor_receipts": {
@@ -4238,10 +4342,11 @@ impl WebPreviewView {
                 "top_level_status": "pass",
                 "required_check_status": "pass",
                 "validation_progress_status": "manual_windows_runtime_validation_ready",
+                "panel_live_validation_result_gate": "ready_for_final_runtime",
                 "evidence_rule": "Every required check id must have status pass and non-empty evidence.",
                 "blocker_rule": "overall_blocker and every required check blocker must be null."
             },
-            "claim_runtime_green_only_when": "all required checks are pass, blockers are null, and the validation-progress packet reports manual_windows_runtime_validation_ready"
+            "claim_runtime_green_only_when": "all required checks are pass, blockers are null, the panel live-validation result gate reports ready_for_final_runtime=true, and the validation-progress packet reports manual_windows_runtime_validation_ready"
         })
     }
 
@@ -8660,6 +8765,31 @@ impl WebPreviewView {
         )
     }
 
+    fn agent_browser_panel_live_validation_result_gate_snapshot(&self) -> Value {
+        if let Some(validation) = self.latest_agent_browser_panel_live_validation.as_ref() {
+            return self
+                .agent_browser_panel_live_validation_result_gate_from_validation(validation);
+        }
+        if let Some(gate) = self
+            .latest_agent_browser_panel_live_validation_result_gate
+            .as_ref()
+        {
+            return gate.clone();
+        }
+
+        self.agent_browser_panel_live_validation_result_gate_from_status(
+            "live_ui_validation_evidence_incomplete",
+            0,
+            1,
+        )
+    }
+
+    fn agent_browser_panel_live_validation_result_gate_ready(gate: &Value) -> bool {
+        gate.pointer("/ready_for_final_runtime")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
     fn agent_browser_panel_live_validation_result_gate(&self, window: &Window) -> Value {
         let validation = self.agent_browser_panel_live_validation(window);
         validation
@@ -9789,6 +9919,18 @@ impl WebPreviewView {
             .get("runtime_green_candidate")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let browser_final_result_ready = browser_final_observability
+            .get("final_result_runtime_green_candidate")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let browser_panel_gate_ready = browser_final_observability
+            .get("panel_live_validation_result_gate_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let browser_panel_gate_status = browser_final_observability
+            .pointer("/panel_live_validation_result_gate/status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
         let browser_result_present = browser_result_summary.is_some()
             || browser_final_observability
                 .pointer("/durable_evidence/roots")
@@ -9815,12 +9957,16 @@ impl WebPreviewView {
                 "ready": browser_ready,
                 "status": if browser_ready {
                     "ready"
+                } else if browser_final_result_ready && !browser_panel_gate_ready {
+                    "panel_live_validation_result_gate_not_ready"
                 } else if browser_result_present {
                     "manual_result_not_runtime_green"
                 } else {
                     "missing_final_validation_result"
                 },
+                "panel_live_validation_result_gate_status": browser_panel_gate_status,
                 "primary_actions": [
+                    "copy_agent_browser_panel_live_validation_result_gate",
                     "send_agent_browser_final_validation_observability_to_agent",
                     "send_agent_browser_final_validation_bundle_to_agent",
                     "import_agent_browser_final_validation_result_from_clipboard"
@@ -9983,6 +10129,9 @@ impl WebPreviewView {
             "proof_focus": {
                 "final_validation_observability_status": browser_final_observability.get("status").and_then(Value::as_str),
                 "browser_result_imported": browser_result_present,
+                "browser_final_result_runtime_green_candidate": browser_final_result_ready,
+                "browser_panel_live_validation_result_gate_ready": browser_panel_gate_ready,
+                "browser_panel_live_validation_result_gate_status": browser_panel_gate_status,
                 "bootstrap_status": bootstrap_readiness.get("status").and_then(Value::as_str),
                 "managed_chrome_execution_status": managed_chrome_execution.get("status").and_then(Value::as_str),
                 "pc_use_status": pc_use_status.get("status").and_then(Value::as_str),
@@ -19564,6 +19713,7 @@ impl WebPreviewView {
                         "manual_evidence_template.status == pass",
                         "every required manual_evidence_template.checks entry has status == pass",
                         "manual_evidence_template.overall_blocker == null",
+                        "panel_live_validation_result_gate.ready_for_final_runtime == true",
                         "executor_validation_progress.status == manual_windows_runtime_validation_ready"
                     ],
                     "copy_action": "copy_agent_browser_final_validation_bundle",
@@ -20509,6 +20659,7 @@ impl WebPreviewView {
                                 "manual_evidence_template.status == pass",
                                 "every required manual_evidence_template.checks entry has status == pass",
                                 "manual_evidence_template.overall_blocker == null",
+                                "panel_live_validation_result_gate.ready_for_final_runtime == true",
                                 "executor_validation_progress.status == manual_windows_runtime_validation_ready"
                             ],
                             "copy_action": "copy_agent_browser_final_validation_bundle",
