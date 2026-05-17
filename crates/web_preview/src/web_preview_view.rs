@@ -127,6 +127,8 @@ const AGENT_BROWSER_PANEL_CONTROL_RESULT_FILE_NAME: &str =
     "latest-agent-browser-panel-control-result.json";
 const AGENT_BROWSER_PANEL_CONTROL_RESULT_ARCHIVE_PREFIX: &str =
     "agent-browser-panel-control-result-";
+const AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_live_validation.v1";
 const AGENT_BROWSER_PANEL_CARD_INTERACTION_VALIDATION_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_interaction_validation.v1";
 const AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA: &str =
@@ -431,6 +433,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_panel_control_result_to_agent",
     "copy_agent_browser_panel_control_result_ledger",
     "send_agent_browser_panel_control_result_ledger_to_agent",
+    "copy_agent_browser_panel_live_validation",
+    "send_agent_browser_panel_live_validation_to_agent",
     "copy_agent_plugin_bootstrap_readiness",
     "send_agent_plugin_bootstrap_readiness_to_agent",
     "copy_agent_plugin_runtime_green_handoff",
@@ -816,6 +820,7 @@ pub struct WebPreviewView {
     latest_agent_browser_final_validation_result_import_receipt: Option<Value>,
     latest_agent_browser_panel_control_result: Option<Value>,
     latest_agent_browser_panel_control_result_import_receipt: Option<Value>,
+    latest_agent_browser_panel_live_validation: Option<Value>,
     latest_agent_browser_final_proof_audit: Option<Value>,
     latest_agent_browser_noop_executor_attempt: Option<Value>,
     latest_agent_browser_reload_executor_attempt: Option<Value>,
@@ -1042,6 +1047,7 @@ impl WebPreviewView {
             latest_agent_browser_final_validation_result_import_receipt: None,
             latest_agent_browser_panel_control_result: None,
             latest_agent_browser_panel_control_result_import_receipt: None,
+            latest_agent_browser_panel_live_validation: None,
             latest_agent_browser_final_proof_audit: None,
             latest_agent_browser_noop_executor_attempt: None,
             latest_agent_browser_reload_executor_attempt: None,
@@ -1560,6 +1566,7 @@ impl WebPreviewView {
             "agent_browser_panel_control_result": self.latest_agent_browser_panel_control_result_summary(),
             "agent_browser_panel_control_result_import_receipt": self.latest_agent_browser_panel_control_result_import_receipt_summary(),
             "agent_browser_panel_control_result_durable_evidence": self.agent_browser_panel_control_result_durable_evidence(),
+            "agent_browser_panel_live_validation": self.latest_agent_browser_panel_live_validation_summary(),
             "agent_browser_panel_card_deck": agent_browser_panel_card_deck,
             "agent_browser_panel_control_result_ledger": agent_browser_panel_control_result_ledger,
             "agent_plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
@@ -1676,6 +1683,8 @@ impl WebPreviewView {
                 "agent_browser_panel_control_result_ledger": true,
                 "copy_agent_browser_panel_control_result_ledger": true,
                 "send_agent_browser_panel_control_result_ledger_to_agent": true,
+                "copy_agent_browser_panel_live_validation": true,
+                "send_agent_browser_panel_live_validation_to_agent": true,
                 "agent_plugin_bootstrap_readiness": true,
                 "copy_agent_plugin_bootstrap_readiness": true,
                 "send_agent_plugin_bootstrap_readiness_to_agent": true,
@@ -2006,6 +2015,10 @@ impl WebPreviewView {
             "panel_control_result_action": packet.pointer("/packet/latest/agent_browser_panel_control_result/action").and_then(Value::as_str),
             "panel_control_result_import_receipt_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_import_receipt/status").and_then(Value::as_str),
             "panel_control_result_durable_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_durable_evidence/status").and_then(Value::as_str),
+            "panel_live_validation_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
+            "panel_live_validation_status": packet.pointer("/packet/latest/agent_browser_panel_live_validation/status").and_then(Value::as_str),
+            "panel_live_validation_ready_signal_count": packet.pointer("/packet/latest/agent_browser_panel_live_validation/summary/ready_signal_count").and_then(Value::as_u64),
+            "panel_live_validation_missing_signal_count": packet.pointer("/packet/latest/agent_browser_panel_live_validation/summary/missing_signal_count").and_then(Value::as_u64),
             "panel_control_result_ledger_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/status").and_then(Value::as_str),
             "panel_control_result_ledger_result_count": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/result_count").and_then(Value::as_u64),
             "panel_control_result_ledger_latest_result_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/latest_result_status").and_then(Value::as_str),
@@ -2024,6 +2037,7 @@ impl WebPreviewView {
             "agent_browser_panel_control_result": packet.pointer("/packet/latest/agent_browser_panel_control_result").cloned(),
             "agent_browser_panel_control_result_import_receipt": packet.pointer("/packet/latest/agent_browser_panel_control_result_import_receipt").cloned(),
             "agent_browser_panel_control_result_ledger": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger").cloned(),
+            "agent_browser_panel_live_validation": packet.pointer("/packet/latest/agent_browser_panel_live_validation").cloned(),
             "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
             "runtime_green_ready_lane_fraction": packet.pointer("/packet/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
             "runtime_green_first_pending_lane": packet.pointer("/packet/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
@@ -2266,6 +2280,31 @@ impl WebPreviewView {
             "ledger_latest_result_status": receipt.pointer("/post_import/panel_control_result_ledger/summary/latest_result_status").and_then(Value::as_str),
             "next_action": receipt.pointer("/post_import/next_action").and_then(Value::as_str),
         }))
+    }
+
+    fn latest_agent_browser_panel_live_validation_summary(&self) -> Option<Value> {
+        let validation = self.latest_agent_browser_panel_live_validation.as_ref()?;
+        Some(Self::agent_browser_panel_live_validation_summary(
+            validation,
+        ))
+    }
+
+    fn agent_browser_panel_live_validation_summary(validation: &Value) -> Value {
+        serde_json::json!({
+            "schema": validation.pointer("/schema").and_then(Value::as_str),
+            "status": validation.pointer("/status").and_then(Value::as_str),
+            "captured_at_ms": validation.pointer("/captured_at_ms").and_then(Value::as_u64),
+            "url": validation.pointer("/session/url").and_then(Value::as_str),
+            "title": validation.pointer("/session/title").and_then(Value::as_str),
+            "required_action_count": validation.pointer("/summary/required_action_count").and_then(Value::as_u64),
+            "manual_check_count": validation.pointer("/summary/manual_check_count").and_then(Value::as_u64),
+            "ready_signal_count": validation.pointer("/summary/ready_signal_count").and_then(Value::as_u64),
+            "missing_signal_count": validation.pointer("/summary/missing_signal_count").and_then(Value::as_u64),
+            "panel_deck_status": validation.pointer("/evidence/panel_card_deck/render_status").and_then(Value::as_str),
+            "panel_result_ledger_status": validation.pointer("/evidence/panel_control_result_ledger/status").and_then(Value::as_str),
+            "panel_result_import_status": validation.pointer("/evidence/panel_control_result/status").and_then(Value::as_str),
+            "next_action": validation.pointer("/next_action").and_then(Value::as_str),
+        })
     }
 
     fn latest_agent_browser_final_proof_audit_summary(&self) -> Option<Value> {
@@ -3867,6 +3906,15 @@ impl WebPreviewView {
                     "latest_summary": self.latest_agent_browser_qa_runbook_summary(),
                     "manual_gates": runbook.pointer("/runbook/manual_gates").cloned()
                 },
+                "panel_live_validation": {
+                    "schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
+                    "copy_action": "copy_agent_browser_panel_live_validation",
+                    "send_action": "send_agent_browser_panel_live_validation_to_agent",
+                    "latest_summary": self.latest_agent_browser_panel_live_validation_summary(),
+                    "current_summary": Self::agent_browser_panel_live_validation_summary(
+                        &self.agent_browser_panel_live_validation(window)
+                    )
+                },
                 "action_manifest": {
                     "schema": "zed.web_preview.agent_browser_actions.v1",
                     "copy_action": "copy_agent_browser_action_manifest",
@@ -4837,6 +4885,15 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "panel_control_result_import_receipt_send_action": plugin
                     .pointer("/panel_control_result_ledger/import_receipt_send_action")
+                    .and_then(Value::as_str),
+                "panel_live_validation_schema": plugin
+                    .pointer("/panel_live_validation/schema")
+                    .and_then(Value::as_str),
+                "panel_live_validation_copy_action": plugin
+                    .pointer("/panel_live_validation/copy_action")
+                    .and_then(Value::as_str),
+                "panel_live_validation_send_action": plugin
+                    .pointer("/panel_live_validation/send_action")
                     .and_then(Value::as_str),
                 "panel_control_result_ledger_copy_action": plugin
                     .pointer("/panel_control_result_ledger/copy_action")
@@ -8278,6 +8335,249 @@ impl WebPreviewView {
             "Sent Agent Browser panel control result ledger to the agent panel",
             cx,
         );
+        cx.notify();
+    }
+
+    fn agent_browser_panel_live_validation(&self, window: &Window) -> Value {
+        let managed_chrome_execution = self.managed_chrome_execution_status();
+        let pc_use_status = self.pc_use_status();
+        let deck = self.agent_browser_panel_card_deck(&managed_chrome_execution, &pc_use_status);
+        let ledger = self.agent_browser_panel_control_result_ledger(&deck);
+        let durable_evidence = self.agent_browser_panel_control_result_durable_evidence();
+        let required_actions = vec![
+            "copy_agent_browser_panel_card_deck",
+            "send_agent_browser_panel_card_deck_to_agent",
+            "import_agent_browser_panel_control_result_from_clipboard",
+            "copy_agent_browser_panel_control_result",
+            "send_agent_browser_panel_control_result_to_agent",
+            "copy_agent_browser_panel_control_result_import_receipt",
+            "send_agent_browser_panel_control_result_import_receipt_to_agent",
+            "copy_agent_browser_panel_control_result_ledger",
+            "send_agent_browser_panel_control_result_ledger_to_agent",
+        ];
+        let ready_signals = [
+            deck.pointer("/render_contract/status")
+                .and_then(Value::as_str)
+                == Some("ready"),
+            deck.pointer("/summary/control_result_status")
+                .and_then(Value::as_str)
+                == Some("ready"),
+            deck.pointer("/summary/control_event_status")
+                .and_then(Value::as_str)
+                == Some("ready"),
+            ledger.pointer("/schema").and_then(Value::as_str)
+                == Some(AGENT_BROWSER_PANEL_CONTROL_RESULT_LEDGER_SCHEMA),
+            durable_evidence
+                .pointer("/roots")
+                .and_then(Value::as_array)
+                .is_some_and(|roots| !roots.is_empty()),
+        ];
+        let ready_signal_count = ready_signals.iter().filter(|ready| **ready).count();
+        let missing_signal_count = ready_signals.len().saturating_sub(ready_signal_count);
+        let manual_checks = serde_json::json!([
+            {
+                "id": "panel_deck_visible",
+                "label": "Panel deck renders in the right-side Agent Browser surface.",
+                "actions": [
+                    "copy_agent_browser_panel_card_deck",
+                    "send_agent_browser_panel_card_deck_to_agent"
+                ],
+                "expected": "Deck JSON includes display cards, affordances, control state, event, result contracts, and render_contract.status == ready."
+            },
+            {
+                "id": "panel_controls_match_actions",
+                "label": "Every visible panel control points at a declared WebPreview action.",
+                "actions": [
+                    "copy_agent_browser_panel_card_deck",
+                    "copy_agent_browser_action_manifest"
+                ],
+                "expected": "No unknown panel actions; disabled controls stay disabled with clear disabled reasons."
+            },
+            {
+                "id": "panel_result_import_round_trip",
+                "label": "A filled panel control result imports and survives as managed proof.",
+                "actions": [
+                    "import_agent_browser_panel_control_result_from_clipboard",
+                    "copy_agent_browser_panel_control_result",
+                    "copy_agent_browser_panel_control_result_import_receipt"
+                ],
+                "expected": "Import receipt reports managed workspace and Zed-data latest/archive paths, and copy result returns the imported schema."
+            },
+            {
+                "id": "panel_result_ledger_refresh",
+                "label": "Panel result ledger reflects the imported result plus latest receipt surfaces.",
+                "actions": [
+                    "copy_agent_browser_panel_control_result_ledger",
+                    "send_agent_browser_panel_control_result_ledger_to_agent"
+                ],
+                "expected": "Ledger latest_result.status mirrors the imported result unless a newer non-skipped receipt exists."
+            },
+            {
+                "id": "agent_panel_handoff",
+                "label": "Send actions append bounded JSON to the Agent Panel without stealing editor input.",
+                "actions": [
+                    "send_agent_browser_panel_card_deck_to_agent",
+                    "send_agent_browser_panel_control_result_to_agent",
+                    "send_agent_browser_panel_control_result_import_receipt_to_agent",
+                    "send_agent_browser_panel_control_result_ledger_to_agent"
+                ],
+                "expected": "Agent Panel receives readable blocks; editor caret and WebPreview focus remain stable."
+            },
+            {
+                "id": "safety_boundary",
+                "label": "Panel validation remains read-only except explicit managed proof import.",
+                "actions": [
+                    "copy_agent_browser_panel_live_validation",
+                    "send_agent_browser_panel_live_validation_to_agent"
+                ],
+                "expected": "No action launches Chrome, runs Node or Playwright, dispatches browser input, or touches real browser profiles."
+            }
+        ]);
+        let manual_check_count = manual_checks.as_array().map(Vec::len).unwrap_or(0);
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
+            "status": if missing_signal_count == 0 {
+                "ready_for_live_ui_validation"
+            } else {
+                "live_ui_validation_evidence_incomplete"
+            },
+            "captured_at_ms": Self::current_epoch_millis(),
+            "session": {
+                "session_id": self.session_id.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "url": self.active_url.as_ref(),
+                "native_keyboard_focus": self.native_preview_has_keyboard_focus(window),
+            },
+            "summary": {
+                "required_action_count": required_actions.len(),
+                "manual_check_count": manual_check_count,
+                "ready_signal_count": ready_signal_count,
+                "missing_signal_count": missing_signal_count,
+                "requires_final_runtime_pass": true,
+                "final_runtime_command": "just run",
+            },
+            "required_actions": required_actions,
+            "evidence": {
+                "panel_card_deck": {
+                    "schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
+                    "render_status": deck.pointer("/render_contract/status").and_then(Value::as_str),
+                    "interaction_validation_status": deck.pointer("/render_contract/interaction_validation/status").and_then(Value::as_str),
+                    "control_state_status": deck.pointer("/summary/control_state_status").and_then(Value::as_str),
+                    "control_event_status": deck.pointer("/summary/control_event_status").and_then(Value::as_str),
+                    "control_result_status": deck.pointer("/summary/control_result_status").and_then(Value::as_str),
+                    "card_count": deck.pointer("/summary/card_count").and_then(Value::as_u64),
+                    "affordance_card_count": deck.pointer("/summary/cards_with_affordance_count").and_then(Value::as_u64),
+                    "control_result_contract_count": deck.pointer("/summary/control_result_contract_count").and_then(Value::as_u64),
+                },
+                "panel_control_result": self.latest_agent_browser_panel_control_result_summary(),
+                "panel_control_result_import_receipt": self.latest_agent_browser_panel_control_result_import_receipt_summary(),
+                "panel_control_result_durable_evidence": durable_evidence,
+                "panel_control_result_ledger": {
+                    "schema": AGENT_BROWSER_PANEL_CONTROL_RESULT_LEDGER_SCHEMA,
+                    "status": ledger.pointer("/summary/status").and_then(Value::as_str),
+                    "latest_result_status": ledger.pointer("/summary/latest_result_status").and_then(Value::as_str),
+                    "result_count": ledger.pointer("/summary/result_count").and_then(Value::as_u64),
+                },
+                "managed_chrome_action_card_status": managed_chrome_execution
+                    .pointer("/latest_action_card/status")
+                    .and_then(Value::as_str),
+                "pc_use_proof_card_status": pc_use_status
+                    .pointer("/latest_proof_card/status")
+                    .and_then(Value::as_str),
+            },
+            "manual_checks": manual_checks,
+            "fillable_result_template": {
+                "schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
+                "result_id": "agent_browser_panel_control_result.live_ui_validation",
+                "source": "panel_live_validation_manual_check",
+                "source_event_id": null,
+                "status": "not_run",
+                "action": null,
+                "timestamp_ms": Self::current_epoch_millis(),
+                "message": "Fill this with completed, blocked, failed, or skipped after exercising a visible right-side panel control.",
+                "declared_status_values": ["not_run", "queued", "completed", "blocked", "failed", "skipped"],
+                "result_contract_matched": false,
+                "result_contract": null,
+                "source_summary": {
+                    "validation_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
+                    "copy_action": "copy_agent_browser_panel_live_validation",
+                    "send_action": "send_agent_browser_panel_live_validation_to_agent"
+                },
+                "safety": {
+                    "read_only": true,
+                    "dispatches_input": false,
+                    "launches_browser": false,
+                    "runs_node": false,
+                    "mutates_external_browser_profiles": false
+                }
+            },
+            "next_action": if missing_signal_count == 0 {
+                "Run the in-app panel live UI checklist, import the filled panel result, then run the final Windows just run pass when build headroom allows."
+            } else {
+                "Refresh the panel card deck, panel result ledger, and durable result evidence before starting live UI validation."
+            },
+            "safety": {
+                "read_only": true,
+                "writes_files": false,
+                "copy_send_dispatches_input": false,
+                "import_action_writes_managed_proof_only": true,
+                "launches_browser": false,
+                "runs_node": false,
+                "runs_playwright": false,
+                "mutates_external_browser_profiles": false,
+            },
+        })
+    }
+
+    fn agent_browser_panel_live_validation_json(validation: &Value) -> String {
+        serde_json::to_string_pretty(validation).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_panel_live_validation_agent_blocks(
+        &self,
+        validation: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let mut blocks = Vec::new();
+        if let Some(url) = validation.pointer("/session/url").and_then(Value::as_str)
+            && let Some(url_block) = self.url_attachment_block(url)
+        {
+            blocks.push(url_block);
+            blocks.push(acp::ContentBlock::Text(acp::TextContent::new("\n\n")));
+        }
+        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Agent Browser panel live validation:\n\nSummary:\n```json\n{}\n```\n\nValidation packet:\n```json\n{}\n```",
+            serde_json::to_string_pretty(&Self::agent_browser_panel_live_validation_summary(validation))
+                .unwrap_or_else(|_| "{}".to_string()),
+            Self::agent_browser_panel_live_validation_json(validation)
+        ))));
+        blocks
+    }
+
+    fn copy_agent_browser_panel_live_validation(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let validation = self.agent_browser_panel_live_validation(window);
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_panel_live_validation_json(&validation),
+        ));
+        self.latest_agent_browser_panel_live_validation = Some(validation);
+        self.show_toast("Copied panel live validation packet", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_panel_live_validation_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let validation = self.agent_browser_panel_live_validation(window);
+        let blocks = self.agent_browser_panel_live_validation_agent_blocks(&validation);
+        self.latest_agent_browser_panel_live_validation = Some(validation);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent panel live validation packet to the agent panel", cx);
         cx.notify();
     }
 
@@ -13893,6 +14193,7 @@ impl WebPreviewView {
             self.agent_browser_panel_card_deck(&managed_chrome_execution, &pc_use_status);
         let agent_browser_panel_control_result_ledger =
             self.agent_browser_panel_control_result_ledger(&agent_browser_panel_card_deck);
+        let agent_browser_panel_live_validation = self.agent_browser_panel_live_validation(window);
         let runtime_green_operator_handoff =
             self.agent_plugin_runtime_green_operator_handoff(window);
         let runtime_green_operator_handoff_summary =
@@ -14053,6 +14354,7 @@ impl WebPreviewView {
                     "agent_browser_panel_control_result": self.latest_agent_browser_panel_control_result_summary(),
                     "agent_browser_panel_control_result_import_receipt": self.latest_agent_browser_panel_control_result_import_receipt_summary(),
                     "agent_browser_panel_control_result_durable_evidence": self.agent_browser_panel_control_result_durable_evidence(),
+                    "agent_browser_panel_live_validation": agent_browser_panel_live_validation,
                     "agent_browser_panel_card_deck": agent_browser_panel_card_deck,
                     "agent_browser_panel_control_result_ledger": agent_browser_panel_control_result_ledger,
                     "managed_chrome_execution": managed_chrome_execution,
@@ -18793,6 +19095,7 @@ impl WebPreviewView {
             self.agent_browser_panel_card_deck(&managed_chrome_execution, &pc_use_status);
         let agent_browser_panel_control_result_ledger =
             self.agent_browser_panel_control_result_ledger(&agent_browser_panel_card_deck);
+        let agent_browser_panel_live_validation = self.agent_browser_panel_live_validation(window);
 
         serde_json::json!({
             "schema": "zed.web_preview.agent_browser_actions.v1",
@@ -18985,6 +19288,23 @@ impl WebPreviewView {
                     "read_only": true,
                     "purpose": "Copy or send the normalized panel control result ledger built from imported durable panel results, latest payload import, blocked receipt, and success receipt template."
                 },
+                "browser_panel_live_validation": {
+                    "schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
+                    "copy_action": "copy_agent_browser_panel_live_validation",
+                    "send_action": "send_agent_browser_panel_live_validation_to_agent",
+                    "latest_summary": self.latest_agent_browser_panel_live_validation_summary(),
+                    "current_summary": Self::agent_browser_panel_live_validation_summary(
+                        &agent_browser_panel_live_validation
+                    ),
+                    "required_actions": agent_browser_panel_live_validation
+                        .pointer("/required_actions")
+                        .cloned(),
+                    "manual_checks": agent_browser_panel_live_validation
+                        .pointer("/manual_checks")
+                        .cloned(),
+                    "read_only": true,
+                    "purpose": "Copy or send the right-side panel live validation checklist that must be exercised before the final runtime proof."
+                },
                 "plugin_catalog": {
                     "schema": "zed.agent_plugins.catalog.v1",
                     "summary_schema": AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA,
@@ -19109,6 +19429,7 @@ impl WebPreviewView {
             "agent_browser_panel_control_result_durable_evidence": self.agent_browser_panel_control_result_durable_evidence(),
             "agent_browser_panel_card_deck": agent_browser_panel_card_deck,
             "agent_browser_panel_control_result_ledger": agent_browser_panel_control_result_ledger,
+            "agent_browser_panel_live_validation": agent_browser_panel_live_validation,
             "plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
             "runtime_observability_digest": runtime_observability_digest,
             "runtime_green_operator_handoff": runtime_green_operator_handoff,
@@ -19504,6 +19825,7 @@ impl WebPreviewView {
                                 "panel_control_result_import": "import_agent_browser_panel_control_result_from_clipboard",
                                 "panel_control_result_import_receipt": "copy_agent_browser_panel_control_result_import_receipt",
                                 "panel_control_result_ledger": "copy_agent_browser_panel_control_result_ledger",
+                                "panel_live_validation": "copy_agent_browser_panel_live_validation",
                                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -19602,6 +19924,23 @@ impl WebPreviewView {
                             "read_only": true,
                             "purpose": "Normalize panel control results from imported durable panel results, latest payload import, blocked receipt, and success receipt template without dispatching input."
                         },
+                        "panel_live_validation": {
+                            "schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
+                            "source_deck_schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
+                            "control_result_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
+                            "import_receipt_schema": AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA,
+                            "copy_action": "copy_agent_browser_panel_live_validation",
+                            "send_action": "send_agent_browser_panel_live_validation_to_agent",
+                            "status_packet_field": "packet.latest.agent_browser_panel_live_validation",
+                            "source_fields": [
+                                "session.agent_browser_panel_card_deck",
+                                "session.agent_browser_panel_control_result",
+                                "session.agent_browser_panel_control_result_import_receipt",
+                                "session.agent_browser_panel_control_result_ledger"
+                            ],
+                            "read_only": true,
+                            "purpose": "Provide the live UI checklist for exercising right-side panel controls before final runtime validation."
+                        },
                         "bootstrap_readiness_handoff": {
                             "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
                             "copy_action": "copy_agent_plugin_bootstrap_readiness",
@@ -19632,6 +19971,7 @@ impl WebPreviewView {
                             "final_validation_result_import_receipt_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
                             "panel_control_result_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
                             "panel_control_result_import_receipt_schema": AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA,
+                            "panel_live_validation_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
                             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
                             "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -19836,6 +20176,7 @@ impl WebPreviewView {
                             {"id": "browser.panel_control_result_import", "state": "available_explicit_user_action", "description": "Import a filled panel control result from the clipboard and persist it under managed Browser result roots."},
                             {"id": "browser.panel_control_result_import_receipt", "state": "available_after_import", "description": "Copy or send the latest durable panel control result import receipt with managed proof paths."},
                             {"id": "browser.panel_control_result_ledger", "state": "available", "description": "Copy or send normalized panel control results derived from the latest receipt and import surfaces."},
+                            {"id": "browser.panel_live_validation", "state": "available", "description": "Copy or send the right-side panel live-validation checklist before the final runtime proof."},
                             {"id": "browser.plugin_bootstrap_readiness", "state": "available", "description": "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."},
                             {"id": "browser.runtime_green_claim_readiness", "state": "available", "description": "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."},
                             {"id": "browser.runtime_green_report_gate", "state": "available", "description": "Copy or send the canonical runtime-green ready/blocked report gate."},
@@ -22411,6 +22752,34 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Copy Panel Live Validation")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_panel_live_validation(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Panel Live Validation")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_panel_live_validation_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy No-op Executor Attempt")
                                 .icon(IconName::Warning)
                                 .handler({
@@ -24552,6 +24921,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_final_validation_result_import_receipt: None,
                 latest_agent_browser_panel_control_result: None,
                 latest_agent_browser_panel_control_result_import_receipt: None,
+                latest_agent_browser_panel_live_validation: None,
                 latest_agent_browser_final_proof_audit: None,
                 latest_agent_browser_noop_executor_attempt: None,
                 latest_agent_browser_reload_executor_attempt: None,

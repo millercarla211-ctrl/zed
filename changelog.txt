@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Live Validation
+
+ADDED:
+- WebPreview now exposes `zed.web_preview.agent_browser_panel_live_validation.v1`, a read-only live UI validation packet for right-side panel controls with required actions, ready/missing signal counts, manual checks, and a fillable panel result template.
+- Added Copy/Send Panel Live Validation More-menu actions and advertised the handoff through WebPreview action manifests plus Agent/WebPreview plugin catalogs.
+
+CHANGED:
+- Session snapshots, Agent Browser status packets, final validation bundles, and catalog summaries now surface panel live-validation schema/action metadata and latest/current compact summaries.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 69/100 and the remaining live UI/runtime validation targets.
+
+NOTES:
+- This is a read-only validation-handoff slice. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Control Result Import
 
 ADDED:
