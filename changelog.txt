@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Interaction Validation
+
+ADDED:
+- Agent Browser panel deck render contracts now include `zed.web_preview.agent_browser_panel_card_interaction_validation.v1` with known read-only, interactive, and viewport variant action groups.
+- Panel interaction validation now records affordance action counts, viewport variant action counts, unknown-action diagnostics, and a policy for disabling unknown controls before render.
+
+CHANGED:
+- Agent Browser deck summaries, status packet summaries, action manifests, and Agent/WebPreview plugin catalogs now expose panel interaction validation status and field metadata.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 51/100 and the next remaining proof targets.
+
+NOTES:
+- This is a panel interaction metadata and validation slice. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Card Affordances
 
 ADDED:
