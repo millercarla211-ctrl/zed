@@ -102,6 +102,7 @@ const AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS: &[&str] = &[
     "editor_typing",
     "webpreview_input",
     "git_sync",
+    "just_dry_run",
     "final_runtime_capacity",
     "final_headroom_recovery_sequence",
     "panel_live_validation",
@@ -8744,6 +8745,7 @@ impl WebPreviewView {
                 "Copy or send the final runtime proof capacity and confirm ready_for_just_run=true.",
                 "If manual target/cache cleanup was needed, copy or send the cleanup-result template, fill it with the post-cleanup free space and just --dry-run run result, then check the cleanup-result gate.",
                 "Confirm git sync with git status --short --branch, git rev-parse HEAD, and git rev-parse origin/dev; the tracked tree is clean and the hashes match before the final runtime pass.",
+                "Run just --dry-run run and confirm the guarded recipe resolves before the final just run attempt.",
                 "Start the app once with just run on the current dev branch.",
                 "Verify fast code-editor typing keeps text and caret responsive.",
                 "Verify WebPreview hover, click, right-click, wheel, and keyboard input still work.",
@@ -8763,6 +8765,7 @@ impl WebPreviewView {
                 "Every native action attempt emits a blocked or successful receipt.",
                 "Every external Chrome and PC-use handoff stays under managed roots.",
                 "Local dev HEAD matches origin/dev and the tracked tree is clean before the final runtime proof starts.",
+                "The guarded just run recipe dry-run resolves before the final runtime proof starts.",
                 "Final runtime proof capacity reports ready_for_just_run=true before starting just run.",
                 "The final validation-progress packet reports all evidence groups ready before claiming runtime-green."
             ],
@@ -8799,6 +8802,11 @@ impl WebPreviewView {
                 "git_sync": {
                     "status": "not_run",
                     "evidence": "Run git status --short --branch, git rev-parse HEAD, and git rev-parse origin/dev; tracked files are clean and both hashes match before the final runtime pass.",
+                    "blocker": null
+                },
+                "just_dry_run": {
+                    "status": "not_run",
+                    "evidence": "Run just --dry-run run after git sync and headroom recovery; the guarded recipe resolves without executing Cargo or launching Zed.",
                     "blocker": null
                 },
                 "final_runtime_capacity": {
@@ -8842,6 +8850,7 @@ impl WebPreviewView {
                 "top_level_status": "pass",
                 "required_check_status": "pass",
                 "git_sync": "tracked tree clean and local HEAD matches origin/dev before final runtime proof",
+                "just_dry_run": "just --dry-run run resolves before final runtime proof",
                 "validation_progress_status": "manual_windows_runtime_validation_ready",
                 "final_runtime_proof_capacity": "target_headroom_ready",
                 "final_runtime_headroom_recovery_sequence": "headroom_ready_for_final_runtime_proof with first_blocked_step null",
@@ -8849,7 +8858,7 @@ impl WebPreviewView {
                 "evidence_rule": "Every required check id must have status pass and non-empty evidence.",
                 "blocker_rule": "overall_blocker and every required check blocker must be null."
             },
-            "claim_runtime_green_only_when": "all required checks are pass, blockers are null, git sync proof shows local HEAD matches origin/dev with a clean tracked tree, final runtime proof capacity reports target_headroom_ready, final runtime headroom recovery sequence reports headroom_ready_for_final_runtime_proof with no first blocked step, the panel live-validation result gate reports ready_for_final_runtime=true, and the validation-progress packet reports manual_windows_runtime_validation_ready"
+            "claim_runtime_green_only_when": "all required checks are pass, blockers are null, git sync proof shows local HEAD matches origin/dev with a clean tracked tree, just --dry-run run resolves, final runtime proof capacity reports target_headroom_ready, final runtime headroom recovery sequence reports headroom_ready_for_final_runtime_proof with no first blocked step, the panel live-validation result gate reports ready_for_final_runtime=true, and the validation-progress packet reports manual_windows_runtime_validation_ready"
         })
     }
 
@@ -28297,6 +28306,7 @@ impl WebPreviewView {
                                 "every required manual_evidence_template.checks entry has status == pass",
                                 "manual_evidence_template.overall_blocker == null",
                                 "manual_evidence_template.checks.git_sync.status == pass",
+                                "manual_evidence_template.checks.just_dry_run.status == pass",
                                 "panel_live_validation_result_gate.ready_for_final_runtime == true",
                                 "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status.ready_for_final_runtime == true",
                                 "inspect_agent_plugin_runtime_status.browser_panel_live_proof_readiness_card.status == ready_for_final_runtime",

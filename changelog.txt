@@ -1,3 +1,17 @@
+[2026-05-18] - Final Result Dry Run Proof
+
+ADDED:
+- Final validation result templates now include a required `just_dry_run` check before the final runtime proof can be imported as current.
+- Final validation bundles now include a manual proof-order step and success criterion for `just --dry-run run` before the real `just run` pass.
+- Agent and WebPreview catalog runtime-green requirements now advertise the `just_dry_run` check.
+
+CHANGED:
+- Older final validation result payloads without the dry-run proof now become stale instead of silently satisfying the current runtime-green result contract.
+- `todo.txt` records the dry-run proof slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is source-level validation contract hardening. It does not run Cargo, launch browsers, dispatch input, delete files, or move the target directory.
+
 [2026-05-18] - Final Result Git Sync Proof
 
 ADDED:
