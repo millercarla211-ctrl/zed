@@ -1,3 +1,17 @@
+[2026-05-18] - Stale Final Result Report Surfacing
+
+ADDED:
+- Final validation observability now surfaces stale final-result missing expected required checks from session and durable result evidence.
+- Runtime-green claim readiness, report gates, final report packets, report readiness cards, and Agent/WebPreview catalogs now expose stale final-result blocker fields.
+
+CHANGED:
+- Runtime-green report gates now use `final_validation_result_stale_required_checks` as a first-class blocker and point the next action back to the fresh final validation result template.
+- Final report packets now include a `fresh_final_validation_required_checks` required-evidence row before allowing a runtime-green status claim.
+- `todo.txt` records the stale final-result report surfacing slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only reporting/catalog hardening. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Stale Final Result Required Check Guard
 
 ADDED:

@@ -3367,6 +3367,7 @@ impl WebPreviewView {
     fn agent_browser_final_validation_result_durable_evidence(&self) -> Value {
         let mut entries = Vec::new();
         let mut runtime_green_candidate = false;
+        let mut missing_expected_required_checks = Vec::new();
         for (root_mode, managed_root, latest_path) in
             self.agent_browser_final_validation_result_latest_paths()
         {
@@ -3383,6 +3384,17 @@ impl WebPreviewView {
                         .and_then(|summary| summary.pointer("/runtime_green_candidate"))
                         .and_then(Value::as_bool)
                         .unwrap_or(false);
+                    if let Some(checks) = summary
+                        .as_ref()
+                        .and_then(|summary| summary.pointer("/missing_expected_required_checks"))
+                        .and_then(Value::as_array)
+                    {
+                        for check in checks {
+                            if !missing_expected_required_checks.contains(check) {
+                                missing_expected_required_checks.push(check.clone());
+                            }
+                        }
+                    }
                     serde_json::json!({
                         "root_mode": root_mode,
                         "managed_root": path_string(&managed_root),
@@ -3416,6 +3428,7 @@ impl WebPreviewView {
             };
             entries.push(entry);
         }
+        let missing_expected_required_check_count = missing_expected_required_checks.len();
 
         serde_json::json!({
             "status": if runtime_green_candidate {
@@ -3424,6 +3437,8 @@ impl WebPreviewView {
                 "managed_final_result_missing_or_not_green"
             },
             "runtime_green_candidate": runtime_green_candidate,
+            "missing_expected_required_checks": missing_expected_required_checks,
+            "missing_expected_required_check_count": missing_expected_required_check_count,
             "result_file_name": AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME,
             "archive_prefix": AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX,
             "roots": entries,
@@ -6351,12 +6366,39 @@ impl WebPreviewView {
             .pointer("/runtime_green_candidate")
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let final_result_runtime_green_candidate = durable_runtime_green_candidate
-            || result_summary
-                .as_ref()
-                .and_then(|summary| summary.pointer("/runtime_green_candidate"))
-                .and_then(Value::as_bool)
-                .unwrap_or(false);
+        let session_missing_expected_required_checks = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/missing_expected_required_checks"))
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let durable_missing_expected_required_checks = durable_evidence
+            .pointer("/missing_expected_required_checks")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let final_result_missing_expected_required_checks =
+            if session_missing_expected_required_checks
+                .as_array()
+                .map(|checks| !checks.is_empty())
+                .unwrap_or(false)
+            {
+                session_missing_expected_required_checks
+            } else {
+                durable_missing_expected_required_checks
+            };
+        let final_result_missing_expected_required_check_count =
+            final_result_missing_expected_required_checks
+                .as_array()
+                .map(Vec::len)
+                .unwrap_or(0);
+        let final_result_has_stale_required_checks =
+            final_result_missing_expected_required_check_count > 0;
+        let final_result_runtime_green_candidate = !final_result_has_stale_required_checks
+            && (durable_runtime_green_candidate
+                || result_summary
+                    .as_ref()
+                    .and_then(|summary| summary.pointer("/runtime_green_candidate"))
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false));
         let result_runtime_green_candidate =
             final_result_runtime_green_candidate && panel_live_validation_result_gate_ready;
 
@@ -6370,6 +6412,9 @@ impl WebPreviewView {
         if result_summary.is_none() && !durable_runtime_green_candidate {
             missing.push("final_validation_result");
         }
+        if final_result_has_stale_required_checks {
+            missing.push("final_validation_result_stale_required_checks");
+        }
         if !panel_live_validation_result_gate_ready {
             missing.push("panel_live_validation_result_gate");
         }
@@ -6377,7 +6422,9 @@ impl WebPreviewView {
             missing.push("final_runtime_proof_capacity");
         }
 
-        let status = if result_runtime_green_candidate {
+        let status = if final_result_has_stale_required_checks {
+            "final_validation_result_stale_required_checks"
+        } else if result_runtime_green_candidate {
             "manual_runtime_result_imported_runtime_green_candidate"
         } else if final_result_runtime_green_candidate && !panel_live_validation_result_gate_ready {
             "panel_live_validation_result_gate_blocking_runtime_green"
@@ -6435,6 +6482,8 @@ impl WebPreviewView {
             "panel_live_validation_result_gate": panel_live_validation_result_gate,
             "panel_live_validation_result_gate_ready": panel_live_validation_result_gate_ready,
             "final_result_runtime_green_candidate": final_result_runtime_green_candidate,
+            "final_result_missing_expected_required_checks": final_result_missing_expected_required_checks,
+            "final_result_missing_expected_required_check_count": final_result_missing_expected_required_check_count,
             "runtime_green_candidate": result_runtime_green_candidate,
             "recovery_actions": self.agent_browser_final_validation_observability_actions(
                 status,
@@ -6568,12 +6617,17 @@ impl WebPreviewView {
         if self
             .latest_agent_browser_final_validation_result_template
             .is_none()
+            || status == "final_validation_result_stale_required_checks"
         {
             actions.push(serde_json::json!({
                 "target": "final_validation_result_template",
                 "action": "copy_agent_browser_final_validation_result_template",
                 "alternative_action": "send_agent_browser_final_validation_result_template_to_agent",
-                "reason": "missing",
+                "reason": if status == "final_validation_result_stale_required_checks" {
+                    "stale_required_check_ids"
+                } else {
+                    "missing"
+                },
                 "dispatches_input": false
             }));
         }
@@ -6860,7 +6914,7 @@ impl WebPreviewView {
                         .any(|root| root.get("exists").and_then(Value::as_bool).unwrap_or(false))
                 })
                 .unwrap_or(false);
-        let final_result_runtime_green_candidate = result_summary
+        let raw_final_result_runtime_green_candidate = result_summary
             .as_ref()
             .and_then(|summary| summary.pointer("/runtime_green_candidate"))
             .and_then(Value::as_bool)
@@ -6869,16 +6923,6 @@ impl WebPreviewView {
                 .pointer("/durable_evidence/runtime_green_candidate")
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
-        let runtime_green_candidate =
-            final_result_runtime_green_candidate && panel_live_validation_result_gate_ready;
-        let overall_runtime_green_candidate = report_gate
-            .get("runtime_green_candidate")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        let may_report_runtime_green = report_gate
-            .get("can_report_runtime_green")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
         let missing_required_checks = result_summary
             .as_ref()
             .and_then(|summary| summary.pointer("/missing_required_checks"))
@@ -6888,11 +6932,30 @@ impl WebPreviewView {
             .as_ref()
             .and_then(|summary| summary.pointer("/missing_expected_required_checks"))
             .cloned()
-            .unwrap_or_else(|| serde_json::json!([]));
+            .unwrap_or_else(|| {
+                observability
+                    .pointer("/final_result_missing_expected_required_checks")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([]))
+            });
         let missing_expected_required_check_count = missing_expected_required_checks
             .as_array()
             .map(Vec::len)
             .unwrap_or(0);
+        let final_result_has_stale_required_checks = missing_expected_required_check_count > 0;
+        let final_result_runtime_green_candidate =
+            raw_final_result_runtime_green_candidate && !final_result_has_stale_required_checks;
+        let runtime_green_candidate =
+            final_result_runtime_green_candidate && panel_live_validation_result_gate_ready;
+        let overall_runtime_green_candidate = report_gate
+            .get("runtime_green_candidate")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let may_report_runtime_green = report_gate
+            .get("can_report_runtime_green")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+            && !final_result_has_stale_required_checks;
         let missing_required_evidence = result_summary
             .as_ref()
             .and_then(|summary| summary.pointer("/missing_required_evidence"))
@@ -6908,14 +6971,14 @@ impl WebPreviewView {
             .and_then(|summary| summary.pointer("/overall_blocker"))
             .map(|blocker| !blocker.is_null())
             .unwrap_or(false);
-        let status = if may_report_runtime_green {
+        let status = if final_result_has_stale_required_checks {
+            "final_result_stale_required_checks"
+        } else if may_report_runtime_green {
             "ready_to_report_runtime_green"
         } else if runtime_green_candidate {
             "runtime_green_result_waiting_for_report_gate"
         } else if final_result_runtime_green_candidate && !panel_live_validation_result_gate_ready {
             "panel_live_validation_result_gate_required"
-        } else if missing_expected_required_check_count > 0 {
-            "final_result_stale_required_checks"
         } else if result_summary.is_some() {
             "final_result_needs_evidence_or_blocker_fix"
         } else if template_summary.is_some() && bundle_summary.is_some() {
@@ -6923,7 +6986,9 @@ impl WebPreviewView {
         } else {
             "final_proof_packet_required"
         };
-        let next_action = if may_report_runtime_green {
+        let next_action = if final_result_has_stale_required_checks {
+            "copy_agent_browser_final_validation_result_template"
+        } else if may_report_runtime_green {
             "copy_agent_plugin_runtime_green_final_report_packet"
         } else if bundle_summary.is_none() {
             "copy_agent_browser_final_validation_bundle"
@@ -6931,8 +6996,6 @@ impl WebPreviewView {
             "copy_agent_browser_final_validation_result_template"
         } else if result_summary.is_none() {
             "import_agent_browser_final_validation_result_from_clipboard"
-        } else if missing_expected_required_check_count > 0 {
-            "copy_agent_browser_final_validation_result_template"
         } else if final_result_runtime_green_candidate && !panel_live_validation_result_gate_ready {
             "copy_agent_browser_panel_live_validation_result_gate"
         } else if runtime_green_candidate {
@@ -15778,6 +15841,14 @@ impl WebPreviewView {
                         .any(|root| root.get("exists").and_then(Value::as_bool).unwrap_or(false))
                 })
                 .unwrap_or(false);
+        let browser_missing_expected_required_checks = browser_final_observability
+            .pointer("/final_result_missing_expected_required_checks")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let browser_missing_expected_required_check_count = browser_final_observability
+            .pointer("/final_result_missing_expected_required_check_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
         let bootstrap_ready = bootstrap_readiness.get("status").and_then(Value::as_str)
             == Some("ready_for_managed_chrome_executor");
         let managed_chrome_receipt_completed = managed_chrome_execution
@@ -15787,12 +15858,38 @@ impl WebPreviewView {
         let managed_chrome_ready = bootstrap_ready && managed_chrome_receipt_completed;
         let pc_use_ready =
             pc_use_status.get("status").and_then(Value::as_str) == Some("has_ready_runner_receipt");
+        let browser_primary_actions = if browser_missing_expected_required_check_count > 0 {
+            serde_json::json!([
+                "copy_agent_browser_final_validation_result_template",
+                "import_agent_browser_final_validation_result_from_clipboard",
+                "copy_agent_browser_final_proof_audit"
+            ])
+        } else if browser_final_result_ready && !browser_panel_gate_ready {
+            serde_json::json!([
+                "copy_agent_browser_panel_live_validation_result_gate",
+                "send_agent_browser_final_validation_observability_to_agent"
+            ])
+        } else if browser_result_present {
+            serde_json::json!([
+                "copy_agent_browser_final_validation_result",
+                "copy_agent_browser_final_proof_audit",
+                "copy_agent_browser_final_validation_result_template"
+            ])
+        } else {
+            serde_json::json!([
+                "send_agent_browser_final_validation_bundle_to_agent",
+                "copy_agent_browser_final_validation_result_template",
+                "import_agent_browser_final_validation_result_from_clipboard"
+            ])
+        };
         let lanes = vec![
             serde_json::json!({
                 "lane_id": "browser_webpreview",
                 "label": "Browser/WebPreview",
                 "ready": browser_ready,
-                "status": if browser_ready {
+                "status": if browser_missing_expected_required_check_count > 0 {
+                    "stale_final_validation_result_required_checks"
+                } else if browser_ready {
                     "ready"
                 } else if browser_final_result_ready && !browser_panel_gate_ready {
                     "panel_live_validation_result_gate_not_ready"
@@ -15802,12 +15899,9 @@ impl WebPreviewView {
                     "missing_final_validation_result"
                 },
                 "panel_live_validation_result_gate_status": browser_panel_gate_status,
-                "primary_actions": [
-                    "copy_agent_browser_panel_live_validation_result_gate",
-                    "send_agent_browser_final_validation_observability_to_agent",
-                    "send_agent_browser_final_validation_bundle_to_agent",
-                    "import_agent_browser_final_validation_result_from_clipboard"
-                ],
+                "missing_expected_required_checks": browser_missing_expected_required_checks.clone(),
+                "missing_expected_required_check_count": browser_missing_expected_required_check_count,
+                "primary_actions": browser_primary_actions,
             }),
             serde_json::json!({
                 "lane_id": "managed_chrome",
@@ -15967,6 +16061,8 @@ impl WebPreviewView {
                 "final_validation_observability_status": browser_final_observability.get("status").and_then(Value::as_str),
                 "browser_result_imported": browser_result_present,
                 "browser_final_result_runtime_green_candidate": browser_final_result_ready,
+                "browser_final_result_missing_expected_required_checks": browser_missing_expected_required_checks,
+                "browser_final_result_missing_expected_required_check_count": browser_missing_expected_required_check_count,
                 "browser_panel_live_validation_result_gate_ready": browser_panel_gate_ready,
                 "browser_panel_live_validation_result_gate_status": browser_panel_gate_status,
                 "bootstrap_status": bootstrap_readiness.get("status").and_then(Value::as_str),
@@ -16002,12 +16098,27 @@ impl WebPreviewView {
             .get("runtime_green_candidate")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let final_result_missing_expected_required_checks = final_observability
+            .pointer("/final_result_missing_expected_required_checks")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let final_result_missing_expected_required_check_count =
+            final_result_missing_expected_required_checks
+                .as_array()
+                .map(Vec::len)
+                .unwrap_or(0);
         let runtime_green_candidate = claim_gate
             .get("runtime_green_candidate")
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let can_report_runtime_green = runtime_green_candidate && final_result_runtime_green;
-        let status = if can_report_runtime_green {
+        let final_result_has_stale_required_checks =
+            final_result_present && final_result_missing_expected_required_check_count > 0;
+        let can_report_runtime_green = runtime_green_candidate
+            && final_result_runtime_green
+            && !final_result_has_stale_required_checks;
+        let status = if final_result_has_stale_required_checks {
+            "final_validation_result_stale_required_checks"
+        } else if can_report_runtime_green {
             "ready_to_report_runtime_green"
         } else if !runtime_green_candidate {
             "runtime_evidence_required"
@@ -16026,6 +16137,8 @@ impl WebPreviewView {
             "runtime_green_candidate": runtime_green_candidate,
             "final_result_present": final_result_present,
             "final_result_runtime_green": final_result_runtime_green,
+            "final_result_missing_expected_required_checks": final_result_missing_expected_required_checks,
+            "final_result_missing_expected_required_check_count": final_result_missing_expected_required_check_count,
             "final_manual_command": "just run",
             "claim_gate_status": claim_gate.get("status").and_then(Value::as_str),
             "ready_lane_fraction": claim_gate.get("ready_lane_fraction").and_then(Value::as_str),
@@ -16048,6 +16161,13 @@ impl WebPreviewView {
                 "durable_runtime_green_candidate": final_observability
                     .pointer("/durable_evidence/runtime_green_candidate")
                     .and_then(Value::as_bool),
+                "missing_expected_required_checks": final_observability
+                    .pointer("/final_result_missing_expected_required_checks")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
+                "missing_expected_required_check_count": final_observability
+                    .pointer("/final_result_missing_expected_required_check_count")
+                    .and_then(Value::as_u64),
             },
             "copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
             "send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent",
@@ -16082,7 +16202,7 @@ impl WebPreviewView {
     }
 
     fn agent_plugin_runtime_green_report_gate_from_readiness(readiness: &Value) -> Value {
-        let can_report = readiness
+        let readiness_can_report = readiness
             .get("can_report_runtime_green")
             .and_then(Value::as_bool)
             .unwrap_or(false);
@@ -16098,7 +16218,16 @@ impl WebPreviewView {
             .get("final_result_runtime_green")
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let status = if can_report {
+        let final_result_missing_expected_required_check_count = readiness
+            .get("final_result_missing_expected_required_check_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let final_result_has_stale_required_checks =
+            final_result_present && final_result_missing_expected_required_check_count > 0;
+        let can_report = readiness_can_report && !final_result_has_stale_required_checks;
+        let status = if final_result_has_stale_required_checks {
+            "blocked_by_stale_final_result"
+        } else if can_report {
             "ready_to_report_runtime_green"
         } else if !runtime_green_candidate {
             "blocked_by_runtime_evidence"
@@ -16109,7 +16238,9 @@ impl WebPreviewView {
         } else {
             "blocked_by_manual_review"
         };
-        let blocker = if can_report {
+        let blocker = if final_result_has_stale_required_checks {
+            "final_validation_result_stale_required_checks"
+        } else if can_report {
             "none"
         } else if !runtime_green_candidate {
             "runtime_green_candidate_false"
@@ -16125,10 +16256,15 @@ impl WebPreviewView {
         } else {
             "Runtime-green blocked by proof"
         };
-        let next_action = readiness
-            .get("next_recommended_action")
-            .and_then(Value::as_str)
-            .unwrap_or("copy_agent_plugin_runtime_green_claim_readiness");
+        let next_action =
+            if final_result_present && final_result_missing_expected_required_check_count > 0 {
+                "copy_agent_browser_final_validation_result_template"
+            } else {
+                readiness
+                    .get("next_recommended_action")
+                    .and_then(Value::as_str)
+                    .unwrap_or("copy_agent_plugin_runtime_green_claim_readiness")
+            };
         let badge = Self::agent_plugin_runtime_green_report_badge_from_fields(
             status,
             label,
@@ -16145,6 +16281,11 @@ impl WebPreviewView {
             "can_report_runtime_green": can_report,
             "runtime_green_candidate": runtime_green_candidate,
             "blocker": blocker,
+            "final_result_missing_expected_required_check_count": final_result_missing_expected_required_check_count,
+            "final_result_missing_expected_required_checks": readiness
+                .get("final_result_missing_expected_required_checks")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!([])),
             "next_action": next_action,
             "badge": badge,
             "ready_lane_fraction": readiness.get("ready_lane_fraction").and_then(Value::as_str),
@@ -16229,10 +16370,16 @@ impl WebPreviewView {
             .get("label")
             .and_then(Value::as_str)
             .unwrap_or("Runtime-green report gate");
-        let can_report = report_gate
+        let report_gate_can_report = report_gate
             .get("can_report_runtime_green")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let final_result_missing_expected_required_check_count = report_gate
+            .get("final_result_missing_expected_required_check_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let can_report =
+            report_gate_can_report && final_result_missing_expected_required_check_count == 0;
         let blocker = report_gate
             .get("blocker")
             .and_then(Value::as_str)
@@ -16272,10 +16419,16 @@ impl WebPreviewView {
         root_mode: &str,
     ) -> Value {
         let badge = Self::agent_plugin_runtime_green_report_badge_from_gate(report_gate);
-        let can_report = report_gate
+        let report_gate_can_report = report_gate
             .get("can_report_runtime_green")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let final_result_missing_expected_required_check_count = report_gate
+            .get("final_result_missing_expected_required_check_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let can_report =
+            report_gate_can_report && final_result_missing_expected_required_check_count == 0;
         let blocker = report_gate
             .get("blocker")
             .and_then(Value::as_str)
@@ -16284,6 +16437,7 @@ impl WebPreviewView {
             "ready_to_report_runtime_green"
         } else if blocker == "final_validation_result_missing"
             || blocker == "final_validation_result_not_runtime_green"
+            || blocker == "final_validation_result_stale_required_checks"
         {
             "final_result_required"
         } else {
@@ -16293,6 +16447,7 @@ impl WebPreviewView {
             "copy_agent_plugin_runtime_green_report_gate"
         } else if blocker == "final_validation_result_missing"
             || blocker == "final_validation_result_not_runtime_green"
+            || blocker == "final_validation_result_stale_required_checks"
         {
             "copy_agent_browser_final_validation_result_template"
         } else {
@@ -16422,7 +16577,7 @@ impl WebPreviewView {
         let observability = self.agent_browser_final_validation_observability();
         let import_receipt_summary =
             self.latest_agent_browser_final_validation_result_import_receipt_summary();
-        let can_report = report_gate
+        let report_gate_can_report = report_gate
             .get("can_report_runtime_green")
             .and_then(Value::as_bool)
             .unwrap_or(false);
@@ -16446,20 +16601,36 @@ impl WebPreviewView {
             .pointer("/durable_evidence/runtime_green_candidate")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let missing_expected_required_checks = observability
+            .pointer("/final_result_missing_expected_required_checks")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let missing_expected_required_check_count = observability
+            .pointer("/final_result_missing_expected_required_check_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let final_result_has_stale_required_checks = missing_expected_required_check_count > 0;
+        let can_report = report_gate_can_report && !final_result_has_stale_required_checks;
         let import_receipt_present = import_receipt_summary.is_some();
-        let status = if can_report && import_receipt_present {
+        let status = if final_result_has_stale_required_checks {
+            "blocked_by_stale_final_result"
+        } else if can_report && import_receipt_present {
             "ready_to_report_runtime_green_with_import_receipt"
         } else if can_report {
             "ready_to_report_runtime_green_from_durable_evidence"
         } else {
             "blocked_by_report_gate"
         };
-        let next_action = if can_report {
+        let next_action = if final_result_has_stale_required_checks {
+            "copy_agent_browser_final_validation_result_template"
+        } else if can_report {
             "copy_agent_plugin_runtime_green_report_gate"
         } else {
             next_report_action
         };
-        let blocker = if can_report {
+        let blocker = if final_result_has_stale_required_checks {
+            "final_validation_result_stale_required_checks"
+        } else if can_report {
             "none"
         } else {
             report_gate_blocker
@@ -16483,6 +16654,13 @@ impl WebPreviewView {
                 "status": report_gate_status,
                 "can_report_runtime_green": can_report,
                 "blocker": report_gate_blocker,
+                "final_result_missing_expected_required_check_count": report_gate
+                    .get("final_result_missing_expected_required_check_count")
+                    .and_then(Value::as_u64),
+                "final_result_missing_expected_required_checks": report_gate
+                    .get("final_result_missing_expected_required_checks")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!([])),
                 "label": report_gate.get("label").and_then(Value::as_str),
                 "severity": report_gate.get("severity").and_then(Value::as_str),
                 "next_action": next_report_action,
@@ -16503,6 +16681,8 @@ impl WebPreviewView {
                 "status": observability.get("status").and_then(Value::as_str),
                 "runtime_green_candidate": observability_runtime_green,
                 "durable_runtime_green_candidate": durable_runtime_green,
+                "missing_expected_required_checks": missing_expected_required_checks,
+                "missing_expected_required_check_count": missing_expected_required_check_count,
                 "missing": observability.get("missing").cloned(),
                 "recovery_actions": observability.get("recovery_actions").cloned()
             },
@@ -16525,6 +16705,12 @@ impl WebPreviewView {
                     "id": "manual_final_validation_result",
                     "ready": observability_runtime_green || durable_runtime_green,
                     "source": "final_validation_observability.runtime_green_candidate",
+                    "required_for_final_status_claim": true
+                },
+                {
+                    "id": "fresh_final_validation_required_checks",
+                    "ready": missing_expected_required_check_count == 0,
+                    "source": "final_validation_observability.final_result_missing_expected_required_check_count",
                     "required_for_final_status_claim": true
                 },
                 {
@@ -16582,10 +16768,15 @@ impl WebPreviewView {
             .get("may_report_runtime_green")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let report_gate_missing_expected_required_check_count = report_gate
+            .get("final_result_missing_expected_required_check_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
         let report_gate_can_report = report_gate
             .get("can_report_runtime_green")
             .and_then(Value::as_bool)
-            .unwrap_or(false);
+            .unwrap_or(false)
+            && report_gate_missing_expected_required_check_count == 0;
         let audit_status = final_proof_audit
             .pointer("/audit/status")
             .and_then(Value::as_str)
@@ -16598,7 +16789,9 @@ impl WebPreviewView {
             .pointer("/audit/runtime_green_candidate")
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let status = if may_report_runtime_green && report_gate_can_report {
+        let status = if audit_status == "final_result_stale_required_checks" {
+            "final_runtime_result_template_refresh_required"
+        } else if may_report_runtime_green && report_gate_can_report {
             "ready_to_report_runtime_green"
         } else if audit_status == "awaiting_final_runtime_result_import" {
             "final_runtime_result_import_required"
@@ -16641,6 +16834,9 @@ impl WebPreviewView {
                 "can_report_runtime_green": claim_readiness
                     .get("can_report_runtime_green")
                     .and_then(Value::as_bool),
+                "final_result_missing_expected_required_check_count": claim_readiness
+                    .get("final_result_missing_expected_required_check_count")
+                    .and_then(Value::as_u64),
                 "ready_lane_fraction": claim_readiness
                     .get("ready_lane_fraction")
                     .and_then(Value::as_str),
@@ -16662,6 +16858,9 @@ impl WebPreviewView {
                 "status": report_gate.get("status").and_then(Value::as_str),
                 "can_report_runtime_green": report_gate_can_report,
                 "blocker": report_gate.get("blocker").and_then(Value::as_str),
+                "final_result_missing_expected_required_check_count": report_gate
+                    .get("final_result_missing_expected_required_check_count")
+                    .and_then(Value::as_u64),
                 "severity": report_gate.get("severity").and_then(Value::as_str),
                 "badge": report_gate.get("badge").cloned(),
                 "next_action": report_gate.get("next_action").and_then(Value::as_str),
@@ -16689,6 +16888,10 @@ impl WebPreviewView {
                     .and_then(Value::as_bool),
                 "missing_required_check_count": final_proof_audit
                     .pointer("/audit/missing_required_checks")
+                    .and_then(Value::as_array)
+                    .map(Vec::len),
+                "missing_expected_required_check_count": final_proof_audit
+                    .pointer("/audit/missing_expected_required_checks")
                     .and_then(Value::as_array)
                     .map(Vec::len),
                 "missing_required_evidence_count": final_proof_audit
@@ -27099,6 +27302,8 @@ impl WebPreviewView {
                             "headroom_recovery_sequence_next_action_field": "final_runtime_headroom_recovery_sequence.next_action",
                             "headroom_recovery_sequence_first_blocked_step_field": "final_runtime_headroom_recovery_sequence.first_blocked_step.id",
                             "headroom_recovery_sequence_step_count_field": "final_runtime_headroom_recovery_sequence.step_count",
+                            "stale_final_result_missing_expected_required_checks_field": "final_result_missing_expected_required_checks",
+                            "stale_final_result_missing_expected_required_check_count_field": "final_result_missing_expected_required_check_count",
                             "copy_action": "copy_agent_browser_final_validation_observability",
                             "send_action": "send_agent_browser_final_validation_observability_to_agent",
                             "read_only": true,
@@ -27238,6 +27443,8 @@ impl WebPreviewView {
                         },
                         "runtime_green_claim_readiness_handoff": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
+                            "stale_final_result_missing_expected_required_checks_field": "final_result_missing_expected_required_checks",
+                            "stale_final_result_missing_expected_required_check_count_field": "final_result_missing_expected_required_check_count",
                             "copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
                             "send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent",
                             "read_only": true,
@@ -27247,6 +27454,9 @@ impl WebPreviewView {
                         "runtime_green_report_gate_handoff": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
                             "badge_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
+                            "stale_final_result_blocker": "final_validation_result_stale_required_checks",
+                            "stale_final_result_missing_expected_required_checks_field": "final_result_missing_expected_required_checks",
+                            "stale_final_result_missing_expected_required_check_count_field": "final_result_missing_expected_required_check_count",
                             "copy_action": "copy_agent_plugin_runtime_green_report_gate",
                             "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
                             "read_only": true,
@@ -27275,6 +27485,8 @@ impl WebPreviewView {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
                             "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
                             "runtime_status_summary_field": "runtime_green_final_report_packet_summary",
+                            "stale_final_result_required_evidence_id": "fresh_final_validation_required_checks",
+                            "stale_final_result_missing_expected_required_check_count_field": "final_validation_observability.missing_expected_required_check_count",
                             "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
                             "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
                             "read_only": true,
@@ -27285,6 +27497,7 @@ impl WebPreviewView {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
                             "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
                             "runtime_status_summary_field": "runtime_green_report_readiness_card_summary",
+                            "stale_final_result_missing_expected_required_check_count_field": "final_proof_audit.missing_expected_required_check_count",
                             "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
                             "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
                             "read_only": true,
