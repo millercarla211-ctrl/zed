@@ -779,6 +779,7 @@ pub struct WebPreviewView {
     latest_agent_browser_clear_data_executor_attempt: Option<Value>,
     latest_agent_browser_navigation_executor_attempt: Option<Value>,
     latest_agent_browser_viewport_executor_attempt: Option<Value>,
+    latest_responsive_viewport_change: Option<Value>,
     latest_agent_browser_click_preflight_attempt: Option<Value>,
     latest_agent_browser_type_preflight_attempt: Option<Value>,
     latest_agent_browser_key_preflight_attempt: Option<Value>,
@@ -1002,6 +1003,7 @@ impl WebPreviewView {
             latest_agent_browser_clear_data_executor_attempt: None,
             latest_agent_browser_navigation_executor_attempt: None,
             latest_agent_browser_viewport_executor_attempt: None,
+            latest_responsive_viewport_change: None,
             latest_agent_browser_click_preflight_attempt: None,
             latest_agent_browser_type_preflight_attempt: None,
             latest_agent_browser_key_preflight_attempt: None,
@@ -1477,6 +1479,7 @@ impl WebPreviewView {
             "runtime_events": self.latest_runtime_events_summary(),
             "dom_snapshot": self.latest_dom_snapshot_summary(),
             "action_targets": self.latest_action_targets_summary(),
+            "responsive_viewport_change": self.latest_responsive_viewport_change_summary(),
             "readiness_probe": self.latest_readiness_probe_summary(),
             "wait_contract": self.latest_wait_contract_summary(),
             "interaction_plan": self.latest_interaction_plan_summary(),
@@ -2850,6 +2853,79 @@ impl WebPreviewView {
             "receipt_outcome": attempt.pointer("/attempt/receipt/outcome").and_then(Value::as_str),
             "blocker_count": attempt.pointer("/attempt/blockers").and_then(Value::as_array).map(Vec::len),
         }))
+    }
+
+    fn latest_responsive_viewport_change_summary(&self) -> Option<Value> {
+        let change = self.latest_responsive_viewport_change.as_ref()?;
+        Some(serde_json::json!({
+            "schema": change.get("schema").and_then(Value::as_str),
+            "captured_at_ms": change.get("captured_at_ms").and_then(Value::as_u64),
+            "source": change.get("source").and_then(Value::as_str),
+            "outcome": change.get("outcome").and_then(Value::as_str),
+            "previous_viewport": change.get("previous_viewport").cloned(),
+            "target_viewport": change.get("target_viewport").cloned(),
+            "applied_viewport": change.get("applied_viewport").cloned(),
+            "visible_bounds": change.get("visible_bounds").cloned(),
+            "viewport_bounds_synced": change.get("viewport_bounds_synced").and_then(Value::as_bool),
+            "url": change.get("url").and_then(Value::as_str),
+            "title": change.get("title").and_then(Value::as_str),
+            "backend": change.get("backend").and_then(Value::as_str),
+            "browser_command_dispatched": change.pointer("/safety/browser_command_dispatched").and_then(Value::as_bool),
+            "native_input_dispatched": change.pointer("/safety/native_input_dispatched").and_then(Value::as_bool),
+            "page_script_dispatched": change.pointer("/safety/page_script_dispatched").and_then(Value::as_bool),
+            "blocker_count": change.get("blockers").and_then(Value::as_array).map(Vec::len),
+        }))
+    }
+
+    fn current_visible_bounds_summary(&self) -> Option<Value> {
+        self.host_bounds.borrow().as_ref().copied().map(|bounds| {
+            serde_json::json!({
+                "x": bounds.origin.x.as_f32(),
+                "y": bounds.origin.y.as_f32(),
+                "width": bounds.size.width.as_f32(),
+                "height": bounds.size.height.as_f32(),
+            })
+        })
+    }
+
+    fn responsive_viewport_change_receipt(
+        &self,
+        source: &str,
+        previous_viewport: Option<Value>,
+        target_viewport: Option<Value>,
+        outcome: &str,
+        blockers: Vec<Value>,
+        viewport_bounds_synced: bool,
+        browser_command_dispatched: bool,
+    ) -> Value {
+        let blocker_count = blockers.len();
+        serde_json::json!({
+            "schema": "zed.web_preview.responsive_viewport_change.v1",
+            "captured_at_ms": Self::current_epoch_millis(),
+            "source": source,
+            "session_id": self.session_id.as_ref(),
+            "url": self.active_url.as_ref(),
+            "title": self.current_tab_title().as_ref(),
+            "backend": self.browser_native_backend_name(),
+            "previous_viewport": previous_viewport,
+            "target_viewport": target_viewport,
+            "applied_viewport": self.viewport_mode.snapshot(),
+            "visible_bounds": self.current_visible_bounds_summary(),
+            "viewport_bounds_synced": viewport_bounds_synced,
+            "outcome": outcome,
+            "blocker_count": blocker_count,
+            "blockers": blockers,
+            "permission": {
+                "interactive_unlocked": self.agent_action_permission.interactive_enabled(),
+                "executor_required": source == "permissioned_executor",
+            },
+            "safety": {
+                "browser_command_dispatched": browser_command_dispatched,
+                "native_input_dispatched": false,
+                "page_script_dispatched": false,
+                "mutates_external_browser_profiles": false,
+            },
+        })
     }
 
     fn latest_agent_browser_click_preflight_attempt_summary(&self) -> Option<Value> {
@@ -5026,6 +5102,7 @@ impl WebPreviewView {
                 "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 "inspected_element": self.latest_inspected_element_summary(),
                 "devtools_open_attempt": self.latest_devtools_open_attempt_summary(),
+                "responsive_viewport_change": self.latest_responsive_viewport_change_summary(),
                 "viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
             },
             "surfaces": [
@@ -5100,6 +5177,8 @@ impl WebPreviewView {
                         PreviewViewportMode::LAPTOP.snapshot(),
                     ],
                     "current": self.viewport_mode.snapshot(),
+                    "latest_summary": self.latest_responsive_viewport_change_summary(),
+                    "latest_executor_summary": self.latest_agent_browser_viewport_executor_attempt_summary(),
                     "uses_page_script": false,
                     "dispatches_input": false,
                     "requires_interactive_unlock_for_executor": true,
@@ -10409,6 +10488,7 @@ impl WebPreviewView {
                     "agent_browser_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
                     "agent_browser_navigation_executor_attempt": self.latest_agent_browser_navigation_executor_attempt_summary(),
                     "agent_browser_viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
+                    "responsive_viewport_change": self.latest_responsive_viewport_change_summary(),
                     "agent_browser_click_preflight_attempt": self.latest_agent_browser_click_preflight_attempt_summary(),
                     "agent_browser_type_preflight_attempt": self.latest_agent_browser_type_preflight_attempt_summary(),
                     "agent_browser_key_preflight_attempt": self.latest_agent_browser_key_preflight_attempt_summary(),
@@ -11689,6 +11769,20 @@ impl WebPreviewView {
         let previous_viewport_for_attempt = receipt.pointer("/previous_viewport").cloned();
         let target_viewport_for_attempt = receipt.pointer("/target_viewport").cloned();
         let applied_viewport_for_attempt = receipt.pointer("/applied_viewport").cloned();
+        let viewport_change_blockers = receipt
+            .pointer("/blockers")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let responsive_viewport_change = self.responsive_viewport_change_receipt(
+            "permissioned_executor",
+            previous_viewport_for_attempt.clone(),
+            target_viewport_for_attempt.clone(),
+            outcome,
+            viewport_change_blockers,
+            browser_command_dispatched,
+            browser_command_dispatched,
+        );
 
         let attempt = serde_json::json!({
             "schema": "zed.web_preview.permissioned_viewport_executor_attempt.v1",
@@ -11710,6 +11804,7 @@ impl WebPreviewView {
                 "page_script_dispatched": false,
                 "blockers": receipt_blockers,
                 "receipt": receipt,
+                "responsive_viewport_change": responsive_viewport_change.clone(),
                 "latest_executor_readiness": self.latest_agent_browser_executor_readiness_summary(),
             },
             "notes": [
@@ -11720,6 +11815,7 @@ impl WebPreviewView {
         });
         let blocks = self.permissioned_viewport_executor_agent_blocks(&attempt);
         self.latest_agent_browser_viewport_executor_attempt = Some(attempt.clone());
+        self.latest_responsive_viewport_change = Some(responsive_viewport_change);
 
         if send_to_agent {
             self.append_content_blocks_to_agent_panel(blocks, window, cx);
@@ -14964,6 +15060,7 @@ impl WebPreviewView {
                     "latest_clear_data_executor_attempt": self.latest_agent_browser_clear_data_executor_attempt_summary(),
                     "latest_navigation_executor_attempt": self.latest_agent_browser_navigation_executor_attempt_summary(),
                     "latest_viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
+                    "latest_responsive_viewport_change": self.latest_responsive_viewport_change_summary(),
                     "latest_click_preflight_attempt": self.latest_agent_browser_click_preflight_attempt_summary(),
                     "latest_type_preflight_attempt": self.latest_agent_browser_type_preflight_attempt_summary(),
                     "latest_key_preflight_attempt": self.latest_agent_browser_key_preflight_attempt_summary(),
@@ -16439,12 +16536,40 @@ impl WebPreviewView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.set_viewport_mode_from_source(mode, "viewport_menu", window, cx);
+    }
+
+    fn set_viewport_mode_from_source(
+        &mut self,
+        mode: PreviewViewportMode,
+        source: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let previous_viewport = self.viewport_mode.snapshot();
+        let target_viewport = mode.snapshot();
         self.viewport_mode = mode;
+        let mut blockers = Vec::new();
+        let mut outcome = "applied";
         if let Err(error) = self.sync_current_viewport_bounds(window) {
+            outcome = "sync_failed";
+            blockers.push(serde_json::json!({
+                "code": "viewport_sync_failed",
+                "message": error.to_string(),
+            }));
             self.report_action_error("Viewport change failed", error, cx);
         } else {
             self.show_toast(format!("Viewport: {}", self.viewport_label()), cx);
         }
+        self.latest_responsive_viewport_change = Some(self.responsive_viewport_change_receipt(
+            source,
+            Some(previous_viewport),
+            Some(target_viewport),
+            outcome,
+            blockers,
+            outcome == "applied",
+            outcome == "applied",
+        ));
         cx.notify();
     }
 
@@ -16454,7 +16579,7 @@ impl WebPreviewView {
             return;
         };
 
-        self.set_viewport_mode(rotated, window, cx);
+        self.set_viewport_mode_from_source(rotated, "viewport_rotate_menu", window, cx);
     }
 
     fn open_devtools(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -20564,6 +20689,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_clear_data_executor_attempt: None,
                 latest_agent_browser_navigation_executor_attempt: None,
                 latest_agent_browser_viewport_executor_attempt: None,
+                latest_responsive_viewport_change: None,
                 latest_agent_browser_click_preflight_attempt: None,
                 latest_agent_browser_type_preflight_attempt: None,
                 latest_agent_browser_key_preflight_attempt: None,

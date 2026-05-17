@@ -1,3 +1,17 @@
+[2026-05-17] - Browser Chrome Responsive Viewport Proof Cards
+
+ADDED:
+- WebPreview now records a typed `zed.web_preview.responsive_viewport_change.v1` proof card whenever responsive viewport changes come from menu presets, rotation, or the permissioned viewport executor.
+- The proof card includes previous/target/applied viewport metadata, visible bounds, sync outcome, blockers, backend, URL/title, permission state, and no-input/no-page-script/no-profile-mutation safety flags.
+- WebPreview session snapshots, Agent Browser status packets, QA runbooks, and Browser function-surfaces packets now expose the latest responsive viewport change beside screenshot, inspect-element, DevTools, and executor evidence.
+
+CHANGED:
+- Permissioned viewport executor attempts now embed the shared responsive viewport proof card so right-side panels can render one compact viewport status without parsing the full executor receipt.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 15/100 and the next remaining proof targets.
+
+NOTES:
+- This is an auditability/wiring slice only. It does not launch external Chrome, run Playwright, dispatch page input, mutate browser profiles, or bypass existing WebPreview viewport controls.
+
 [2026-05-17] - Browser Chrome Screenshot Receipt Surface
 
 ADDED:
