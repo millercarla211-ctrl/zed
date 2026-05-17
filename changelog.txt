@@ -1,3 +1,17 @@
+[2026-05-18] - Status Summary Browser Blocker Strip
+
+ADDED:
+- WebPreview status-packet summaries now expose the final proof guide Browser blocker strip, first blocker, recommended action, and missing free GiB as direct compact fields.
+- Final-validation bundle summaries now expose the same final proof guide blocker strip fields for panel renderers that read bundle summaries first.
+- Agent and WebPreview catalog metadata now advertise the direct status-summary fields for the final proof guide blocker strip.
+
+CHANGED:
+- Compact status readers can now route stale-result, panel-gate, or final-headroom recovery from the summary layer without opening the full final proof guide payload.
+- `todo.txt` records the status-summary blocker strip slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is compact status metadata hardening. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Final Proof Guide Browser Blocker Strip
 
 ADDED:

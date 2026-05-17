@@ -2377,6 +2377,12 @@ fn browser_plugin_manifest() -> Value {
             "read_only": true,
             "source": "WebPreview final validation bundle and status packet",
             "browser_final_blocker_strip_field": "runtime_green_final_proof_guide_summary.browser_final_blocker_strip",
+            "status_summary_direct_fields": [
+                "runtime_green_final_proof_guide_browser_final_blocker_strip",
+                "runtime_green_final_proof_guide_first_blocker",
+                "runtime_green_final_proof_guide_recommended_action",
+                "runtime_green_final_proof_guide_missing_free_gib"
+            ],
             "purpose": "Guide agents from report badge and Browser final blocker strip to final result template, manual just run proof, import, and status recheck."
         },
         "runtime_green_final_report_packet_handoff": {
