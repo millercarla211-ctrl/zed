@@ -1002,6 +1002,12 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "final_runtime_headroom_recovery_plan_field": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_field")
                 .and_then(Value::as_str),
+            "final_runtime_headroom_recovery_plan_copy_action": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_copy_action")
+                .and_then(Value::as_str),
+            "final_runtime_headroom_recovery_plan_send_action": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_send_action")
+                .and_then(Value::as_str),
             "final_runtime_proof_capacity_copy_action": plugin
                 .pointer("/final_runtime_proof_capacity/copy_action")
                 .and_then(Value::as_str),
@@ -1414,6 +1420,7 @@ fn browser_plugin_manifest() -> Value {
                 "panel_live_proof_readiness_card": "copy_agent_browser_panel_live_proof_readiness_card",
                 "panel_live_ui_proof_checklist": "copy_agent_browser_panel_live_ui_proof_checklist",
                 "final_runtime_proof_capacity": "copy_agent_browser_final_runtime_proof_capacity",
+                "final_runtime_headroom_recovery_plan": "copy_agent_browser_final_runtime_headroom_recovery_plan",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -1726,6 +1733,8 @@ fn browser_plugin_manifest() -> Value {
             "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
             "headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
             "headroom_recovery_plan_field": "headroom_recovery_plan",
+            "headroom_recovery_plan_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
+            "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
             "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
             "send_action": "send_agent_browser_final_runtime_proof_capacity_to_agent",
             "status_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity",
@@ -1873,7 +1882,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.validation.final_result_import_receipt", "available", "Copy or send the final result import receipt with durable proof paths and the next runtime-status recheck."),
             capability("browser.validation.final_proof_state", "available", "Copy or send compact final proof-state observability and recovery actions without generating larger proof packets."),
             capability("browser.validation.final_runtime_capacity", "available", "Copy or send target-drive headroom before final just run proof."),
-            capability("browser.validation.final_runtime_headroom_recovery", "available", "Read the non-destructive target-drive recovery plan embedded in the final runtime capacity packet."),
+            capability("browser.validation.final_runtime_headroom_recovery", "available", "Copy or send the non-destructive target-drive recovery plan before final just run proof."),
             capability("browser.validation.final_proof_audit", "available", "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."),
             capability("browser.action.click", "available_when_unlocked", "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."),
             capability("browser.action.type", "available_when_unlocked_payload_required", "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."),

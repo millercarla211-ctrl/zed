@@ -1,3 +1,15 @@
+[2026-05-17] - Browser Chrome Headroom Recovery Handoff
+
+ADDED:
+- WebPreview now exposes Copy/Send Headroom Recovery Plan actions for `zed.web_preview.agent_browser_final_runtime_headroom_recovery_plan.v1`.
+- Session/status surfaces, final validation bundles, action manifests, More-menu entries, and Agent/WebPreview catalogs now advertise the first-class headroom recovery handoff and copy/send actions.
+
+CHANGED:
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening still at 99/100 and the remaining live UI/runtime validation target after target-drive headroom is restored.
+
+NOTES:
+- This slice is a read-only recovery handoff. It does not delete files, run `just`, run Cargo, launch browsers, run Node or Playwright, take screenshots, dispatch input, or touch browser profiles.
+
 [2026-05-17] - Browser Chrome Final Runtime Headroom Recovery
 
 ADDED:
