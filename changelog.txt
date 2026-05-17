@@ -1,3 +1,16 @@
+[2026-05-18] - Reclaim Candidate Capacity Fallback Alignment
+
+ADDED:
+- WebPreview status summaries now fall back to `agent_browser_final_runtime_proof_capacity.headroom_reclaim_candidates` for reclaim-candidate status, count, cleanup-result gate source, and cleanup-result readiness when no latest side-channel reclaim packet is present.
+- Agent and WebPreview plugin catalogs now advertise the embedded capacity reclaim-candidates field.
+
+CHANGED:
+- Compact Browser/Chrome panels can render reclaim-candidate cleanup evidence from the final capacity packet without requiring a separate copy/send reclaim-candidates action first.
+- `todo.txt` records the reclaim-candidate capacity fallback slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only status/catalog metadata. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Recovery Artifact Cleanup Evidence Catalog Alignment
 
 ADDED:

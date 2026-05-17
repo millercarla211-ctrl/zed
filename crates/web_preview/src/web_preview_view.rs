@@ -2261,10 +2261,10 @@ impl WebPreviewView {
             "final_runtime_headroom_readiness_gate_copy_action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
             "final_runtime_headroom_readiness_gate_send_action": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
             "final_runtime_headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
-            "final_runtime_headroom_reclaim_candidates_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates/status").and_then(Value::as_str),
-            "final_runtime_headroom_reclaim_candidate_count": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates/candidate_reclaim_zones").and_then(Value::as_array).map(Vec::len),
-            "final_runtime_headroom_reclaim_candidates_cleanup_result_gate_source": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates/cleanup_result_gate/source").and_then(Value::as_str),
-            "final_runtime_headroom_reclaim_candidates_cleanup_result_gate_ready": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates/cleanup_result_gate/ready_for_capacity_recheck").and_then(Value::as_bool),
+            "final_runtime_headroom_reclaim_candidates_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates/status").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_reclaim_candidates/status")).and_then(Value::as_str),
+            "final_runtime_headroom_reclaim_candidate_count": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates/candidate_reclaim_zones").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_reclaim_candidates/candidate_reclaim_zones")).and_then(Value::as_array).map(Vec::len),
+            "final_runtime_headroom_reclaim_candidates_cleanup_result_gate_source": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates/cleanup_result_gate/source").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_reclaim_candidates/cleanup_result_gate/source")).and_then(Value::as_str),
+            "final_runtime_headroom_reclaim_candidates_cleanup_result_gate_ready": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates/cleanup_result_gate/ready_for_capacity_recheck").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_reclaim_candidates/cleanup_result_gate/ready_for_capacity_recheck")).and_then(Value::as_bool),
             "final_runtime_headroom_reclaim_candidates_copy_action": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
             "final_runtime_headroom_reclaim_candidates_send_action": "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent",
             "final_runtime_blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
@@ -7608,6 +7608,7 @@ impl WebPreviewView {
                     "headroom_readiness_gate_copy_action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
                     "headroom_readiness_gate_send_action": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
                     "headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
+                    "headroom_reclaim_candidates_field": "headroom_reclaim_candidates",
                     "headroom_reclaim_candidates_cleanup_result_gate_source_field": "headroom_reclaim_candidates.cleanup_result_gate.source",
                     "headroom_reclaim_candidates_cleanup_result_gate_ready_field": "headroom_reclaim_candidates.cleanup_result_gate.ready_for_capacity_recheck",
                     "headroom_reclaim_candidates_copy_action": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
@@ -8965,6 +8966,9 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "final_runtime_headroom_reclaim_candidates_schema": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_reclaim_candidates_schema")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_reclaim_candidates_field": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_reclaim_candidates_field")
                     .and_then(Value::as_str),
                 "final_runtime_headroom_reclaim_candidates_cleanup_result_gate_source_field": plugin
                     .pointer(
@@ -26252,6 +26256,7 @@ impl WebPreviewView {
                             "headroom_readiness_gate_send_action": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
                             "headroom_readiness_gate_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_readiness_gate",
                             "headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
+                            "headroom_reclaim_candidates_field": "headroom_reclaim_candidates",
                             "headroom_reclaim_candidates_cleanup_result_gate_source_field": "headroom_reclaim_candidates.cleanup_result_gate.source",
                             "headroom_reclaim_candidates_cleanup_result_gate_ready_field": "headroom_reclaim_candidates.cleanup_result_gate.ready_for_capacity_recheck",
                             "headroom_reclaim_candidates_copy_action": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
