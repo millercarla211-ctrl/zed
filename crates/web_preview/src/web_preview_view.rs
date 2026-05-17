@@ -2300,7 +2300,7 @@ impl WebPreviewView {
             "agent_browser_final_runtime_headroom_cleanup_result_template": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_template").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_template")).cloned(),
             "agent_browser_final_runtime_headroom_cleanup_result": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result").cloned(),
             "agent_browser_final_runtime_headroom_cleanup_result_import_receipt": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_import_receipt").cloned(),
-            "agent_browser_final_runtime_headroom_cleanup_result_gate": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_gate").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate")).cloned(),
+            "agent_browser_final_runtime_headroom_cleanup_result_gate": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_gate").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_cleanup_result_gate")).or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate")).cloned(),
             "agent_browser_final_runtime_headroom_readiness_gate": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_readiness_gate").cloned(),
             "agent_browser_final_runtime_headroom_reclaim_candidates": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates").cloned(),
             "agent_browser_final_runtime_blocker_board": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board").cloned(),
@@ -2727,7 +2727,9 @@ impl WebPreviewView {
             "cleanup_result_template_schema": card.pointer("/cleanup_result_template/schema").and_then(Value::as_str),
             "cleanup_result_template_status": card.pointer("/cleanup_result_template/status").and_then(Value::as_str),
             "cleanup_result_gate_schema": card.pointer("/cleanup_result_gate/schema").and_then(Value::as_str),
+            "cleanup_result_gate_source": card.pointer("/cleanup_result_gate/source").and_then(Value::as_str),
             "cleanup_result_gate_status": card.pointer("/cleanup_result_gate/status").and_then(Value::as_str),
+            "cleanup_result_gate_ready": card.pointer("/cleanup_result_gate/ready_for_capacity_recheck").and_then(Value::as_bool),
             "target_drive_policy_schema": card.pointer("/target_drive_policy/schema").and_then(Value::as_str),
             "target_move_allowed_by_default": card.pointer("/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
             "copy_plan_action": card.pointer("/actions/copy_recovery_plan").and_then(Value::as_str),
@@ -2833,7 +2835,9 @@ impl WebPreviewView {
             "cleanup_result_template_schema": candidates.pointer("/cleanup_result_template/schema").and_then(Value::as_str),
             "cleanup_result_template_status": candidates.pointer("/cleanup_result_template/status").and_then(Value::as_str),
             "cleanup_result_gate_schema": candidates.pointer("/cleanup_result_gate/schema").and_then(Value::as_str),
+            "cleanup_result_gate_source": candidates.pointer("/cleanup_result_gate/source").and_then(Value::as_str),
             "cleanup_result_gate_status": candidates.pointer("/cleanup_result_gate/status").and_then(Value::as_str),
+            "cleanup_result_gate_ready": candidates.pointer("/cleanup_result_gate/ready_for_capacity_recheck").and_then(Value::as_bool),
             "recommended_action": candidates.pointer("/recommended_action").and_then(Value::as_str),
             "copy_action": candidates.pointer("/actions/copy_reclaim_candidates").and_then(Value::as_str),
             "send_action": candidates.pointer("/actions/send_reclaim_candidates").and_then(Value::as_str),
@@ -3865,7 +3869,10 @@ impl WebPreviewView {
         })
     }
 
-    fn agent_browser_final_runtime_headroom_recovery_card_from_plan(plan: &Value) -> Value {
+    fn agent_browser_final_runtime_headroom_recovery_card_from_plan_with_cleanup_result_gate(
+        plan: &Value,
+        cleanup_result_gate: &Value,
+    ) -> Value {
         let status = plan.pointer("/status").and_then(Value::as_str);
         let blocked = matches!(
             status,
@@ -3912,10 +3919,12 @@ impl WebPreviewView {
                 "operator_fills_manually": plan.pointer("/cleanup_result_template/operator_fills_manually").and_then(Value::as_bool),
             },
             "cleanup_result_gate": {
-                "schema": plan.pointer("/cleanup_result_gate/schema").and_then(Value::as_str),
-                "status": plan.pointer("/cleanup_result_gate/status").and_then(Value::as_str),
-                "ready_for_capacity_recheck": plan.pointer("/cleanup_result_gate/ready_for_capacity_recheck").and_then(Value::as_bool),
-                "recommended_next_action": plan.pointer("/cleanup_result_gate/recommended_next_action").and_then(Value::as_str),
+                "schema": cleanup_result_gate.pointer("/schema").and_then(Value::as_str),
+                "source": cleanup_result_gate.pointer("/source").and_then(Value::as_str),
+                "status": cleanup_result_gate.pointer("/status").and_then(Value::as_str),
+                "ready_for_capacity_recheck": cleanup_result_gate.pointer("/ready_for_capacity_recheck").and_then(Value::as_bool),
+                "recommended_next_action": cleanup_result_gate.pointer("/recommended_next_action").and_then(Value::as_str),
+                "pending_template_field_count": cleanup_result_gate.pointer("/pending_template_fields").and_then(Value::as_array).map(Vec::len),
             },
             "actions": {
                 "copy_recovery_plan": "copy_agent_browser_final_runtime_headroom_recovery_plan",
@@ -3998,6 +4007,16 @@ impl WebPreviewView {
             .unwrap_or(false);
         let headroom_cleanup_result_durable_evidence =
             self.agent_browser_final_runtime_headroom_cleanup_result_durable_evidence();
+        let headroom_recovery_card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_plan_with_cleanup_result_gate(
+                &headroom_recovery_plan,
+                &headroom_cleanup_result_gate,
+            );
+        let headroom_reclaim_candidates =
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan_with_cleanup_result_gate(
+                &headroom_recovery_plan,
+                &headroom_cleanup_result_gate,
+            );
         let next_action = if ready_for_just_run {
             "Run the final Windows just run proof only after panel live-validation and manual result templates are ready."
         } else if cleanup_result_ready_for_capacity_recheck {
@@ -4036,18 +4055,14 @@ impl WebPreviewView {
             "headroom_recovery_plan": headroom_recovery_plan.clone(),
             "headroom_cleanup_result_gate": headroom_cleanup_result_gate,
             "headroom_cleanup_result_durable_evidence": headroom_cleanup_result_durable_evidence,
-            "headroom_recovery_card": Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(
-                &headroom_recovery_plan
-            ),
-            "headroom_reclaim_candidates": Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(
-                &headroom_recovery_plan
-            ),
+            "headroom_recovery_card": headroom_recovery_card,
+            "headroom_reclaim_candidates": headroom_reclaim_candidates,
             "operator_steps": [
                 "Read this preflight before copying the final validation bundle or running just run.",
                 "If target_headroom_blocked, inspect and free only rebuildable target/cache space on the configured target drive.",
                 "Do not move CARGO_TARGET_DIR or redirect build outputs unless the user explicitly changes the build-output policy.",
                 "After manual cleanup, fill headroom_recovery_plan.cleanup_result_template with the new free space and just --dry-run run result.",
-                "Check headroom_recovery_plan.cleanup_result_gate before regenerating capacity.",
+                "Check headroom_cleanup_result_gate before regenerating capacity; use headroom_recovery_plan.cleanup_result_gate only as the fallback plan gate.",
                 "Run just --dry-run run to confirm the recipe still points at the expected target directory.",
                 "Run just run only after this packet reports ready_for_just_run=true and panel live-validation gate is ready."
             ],
@@ -4719,6 +4734,10 @@ impl WebPreviewView {
     fn agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(
         capacity: &Value,
     ) -> Value {
+        if let Some(gate) = capacity.pointer("/headroom_cleanup_result_gate") {
+            return gate.clone();
+        }
+
         let plan = Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(capacity);
         Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan)
     }
@@ -4840,7 +4859,10 @@ impl WebPreviewView {
         )))]
     }
 
-    fn agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(plan: &Value) -> Value {
+    fn agent_browser_final_runtime_headroom_reclaim_candidates_from_plan_with_cleanup_result_gate(
+        plan: &Value,
+        cleanup_result_gate: &Value,
+    ) -> Value {
         let plan_status = plan.pointer("/status").and_then(Value::as_str);
         let status = match plan_status {
             Some("target_drive_cleanup_required") => "manual_reclaim_candidates_available",
@@ -4880,7 +4902,7 @@ impl WebPreviewView {
             "safe_inspection_commands": plan.pointer("/safe_inspection_commands").cloned().unwrap_or_else(|| serde_json::json!([])),
             "size_inspection": plan.pointer("/size_inspection").cloned().unwrap_or_else(|| serde_json::json!({})),
             "cleanup_result_template": plan.pointer("/cleanup_result_template").cloned().unwrap_or_else(|| serde_json::json!({})),
-            "cleanup_result_gate": plan.pointer("/cleanup_result_gate").cloned().unwrap_or_else(|| serde_json::json!({})),
+            "cleanup_result_gate": cleanup_result_gate,
             "ready_to_cleanup_condition": plan.pointer("/inspection_checklist/ready_to_cleanup_condition").and_then(Value::as_str),
             "ready_condition": plan.pointer("/ready_condition").and_then(Value::as_str),
             "recommended_action": recommended_action,
@@ -4915,7 +4937,12 @@ impl WebPreviewView {
         capacity: &Value,
     ) -> Value {
         let plan = Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(capacity);
-        Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan)
+        let cleanup_result_gate =
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(capacity);
+        Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan_with_cleanup_result_gate(
+            &plan,
+            &cleanup_result_gate,
+        )
     }
 
     fn agent_browser_final_runtime_headroom_reclaim_candidates_json(candidates: &Value) -> String {
@@ -5136,7 +5163,12 @@ impl WebPreviewView {
 
     fn agent_browser_final_runtime_headroom_recovery_card_from_capacity(capacity: &Value) -> Value {
         let plan = Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(capacity);
-        Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan)
+        let cleanup_result_gate =
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(capacity);
+        Self::agent_browser_final_runtime_headroom_recovery_card_from_plan_with_cleanup_result_gate(
+            &plan,
+            &cleanup_result_gate,
+        )
     }
 
     fn agent_browser_final_runtime_headroom_recovery_card_json(card: &Value) -> String {
@@ -5221,17 +5253,18 @@ impl WebPreviewView {
         let capacity = self.agent_browser_final_runtime_proof_capacity();
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
-        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
         let checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(&plan);
         let cleanup_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(&capacity);
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(&capacity);
         cx.write_to_clipboard(ClipboardItem::new_string(
             Self::agent_browser_final_runtime_headroom_recovery_plan_json(&plan),
         ));
@@ -5255,17 +5288,18 @@ impl WebPreviewView {
         let capacity = self.agent_browser_final_runtime_proof_capacity();
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
-        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
         let checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(&plan);
         let cleanup_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(&capacity);
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(&capacity);
         let blocks = Self::agent_browser_final_runtime_headroom_recovery_plan_agent_blocks(&plan);
         self.latest_agent_browser_final_runtime_proof_capacity = Some(capacity);
         self.latest_agent_browser_final_runtime_headroom_recovery_plan = Some(plan);
@@ -5287,17 +5321,18 @@ impl WebPreviewView {
         let capacity = self.agent_browser_final_runtime_proof_capacity();
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
-        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
         let checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(&plan);
         let cleanup_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(&capacity);
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(&capacity);
         cx.write_to_clipboard(ClipboardItem::new_string(
             Self::agent_browser_final_runtime_headroom_recovery_card_json(&card),
         ));
@@ -5321,17 +5356,18 @@ impl WebPreviewView {
         let capacity = self.agent_browser_final_runtime_proof_capacity();
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
-        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
         let checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(&plan);
         let cleanup_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(&capacity);
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(&capacity);
         let blocks = Self::agent_browser_final_runtime_headroom_recovery_card_agent_blocks(&card);
         self.latest_agent_browser_final_runtime_proof_capacity = Some(capacity);
         self.latest_agent_browser_final_runtime_headroom_recovery_plan = Some(plan);
@@ -5356,17 +5392,18 @@ impl WebPreviewView {
         let capacity = self.agent_browser_final_runtime_proof_capacity();
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
-        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
         let checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(&plan);
         let cleanup_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(&capacity);
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(&capacity);
         cx.write_to_clipboard(ClipboardItem::new_string(
             Self::agent_browser_final_runtime_headroom_inspection_checklist_json(&checklist),
         ));
@@ -5390,17 +5427,18 @@ impl WebPreviewView {
         let capacity = self.agent_browser_final_runtime_proof_capacity();
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
-        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
         let checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(&plan);
         let cleanup_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(&capacity);
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(&capacity);
         let blocks = Self::agent_browser_final_runtime_headroom_inspection_checklist_agent_blocks(
             &checklist,
         );
@@ -5427,17 +5465,18 @@ impl WebPreviewView {
         let capacity = self.agent_browser_final_runtime_proof_capacity();
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
-        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
         let checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(&plan);
         let cleanup_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(&capacity);
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(&capacity);
         cx.write_to_clipboard(ClipboardItem::new_string(
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_json(&template),
         ));
@@ -5461,17 +5500,18 @@ impl WebPreviewView {
         let capacity = self.agent_browser_final_runtime_proof_capacity();
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
-        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
         let checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(&plan);
         let cleanup_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(&capacity);
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(&capacity);
         let blocks =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_agent_blocks(
                 &template,
@@ -5664,7 +5704,8 @@ impl WebPreviewView {
         let capacity = self.agent_browser_final_runtime_proof_capacity();
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
-        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
         let checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
@@ -5676,7 +5717,7 @@ impl WebPreviewView {
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(&capacity);
         cx.write_to_clipboard(ClipboardItem::new_string(
             Self::agent_browser_final_runtime_headroom_cleanup_result_gate_json(&cleanup_gate),
         ));
@@ -5700,7 +5741,8 @@ impl WebPreviewView {
         let capacity = self.agent_browser_final_runtime_proof_capacity();
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
-        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
         let checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
@@ -5712,7 +5754,7 @@ impl WebPreviewView {
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(&capacity);
         let blocks = Self::agent_browser_final_runtime_headroom_cleanup_result_gate_agent_blocks(
             &cleanup_gate,
         );
@@ -5736,17 +5778,18 @@ impl WebPreviewView {
         let capacity = self.agent_browser_final_runtime_proof_capacity();
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
-        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
         let checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(&plan);
         let cleanup_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(&capacity);
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(&capacity);
         cx.write_to_clipboard(ClipboardItem::new_string(
             Self::agent_browser_final_runtime_headroom_readiness_gate_json(&gate),
         ));
@@ -5770,17 +5813,18 @@ impl WebPreviewView {
         let capacity = self.agent_browser_final_runtime_proof_capacity();
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
-        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
         let checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(&plan);
         let cleanup_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(&capacity);
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(&capacity);
         let blocks = Self::agent_browser_final_runtime_headroom_readiness_gate_agent_blocks(&gate);
         self.latest_agent_browser_final_runtime_proof_capacity = Some(capacity);
         self.latest_agent_browser_final_runtime_headroom_recovery_plan = Some(plan);
@@ -5805,17 +5849,18 @@ impl WebPreviewView {
         let capacity = self.agent_browser_final_runtime_proof_capacity();
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
-        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
         let checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(&plan);
         let cleanup_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(&capacity);
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(&capacity);
         cx.write_to_clipboard(ClipboardItem::new_string(
             Self::agent_browser_final_runtime_headroom_reclaim_candidates_json(&candidates),
         ));
@@ -5839,17 +5884,18 @@ impl WebPreviewView {
         let capacity = self.agent_browser_final_runtime_proof_capacity();
         let plan =
             Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(&capacity);
-        let card = Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan);
+        let card =
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(&capacity);
         let checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(&plan);
         let cleanup_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(&capacity);
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(&plan);
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(&capacity);
         let blocks =
             Self::agent_browser_final_runtime_headroom_reclaim_candidates_agent_blocks(&candidates);
         self.latest_agent_browser_final_runtime_proof_capacity = Some(capacity);
@@ -7292,8 +7338,8 @@ impl WebPreviewView {
                 &final_runtime_proof_capacity,
             );
         let final_runtime_headroom_recovery_card =
-            Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(
-                &final_runtime_headroom_recovery_plan,
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(
+                &final_runtime_proof_capacity,
             );
         let final_runtime_headroom_inspection_checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(
@@ -7312,8 +7358,8 @@ impl WebPreviewView {
                 &final_runtime_proof_capacity,
             );
         let final_runtime_headroom_reclaim_candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(
-                &final_runtime_headroom_recovery_plan,
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(
+                &final_runtime_proof_capacity,
             );
         let agent_plugin_catalog_current_summary = manifest
             .pointer("/handoffs/plugin_catalog/current_summary")
@@ -7547,6 +7593,8 @@ impl WebPreviewView {
                     "headroom_cleanup_result_import_receipt_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
                     "headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
                     "headroom_cleanup_result_gate_field": "headroom_recovery_plan.cleanup_result_gate",
+                    "headroom_cleanup_result_gate_current_capacity_field": "headroom_cleanup_result_gate",
+                    "headroom_cleanup_result_durable_evidence_field": "headroom_cleanup_result_durable_evidence",
                     "headroom_cleanup_result_gate_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
                     "headroom_cleanup_result_gate_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_gate_to_agent",
                     "headroom_cleanup_result_gate_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_gate",
@@ -19740,8 +19788,8 @@ impl WebPreviewView {
                 &agent_browser_final_runtime_proof_capacity,
             );
         let agent_browser_final_runtime_headroom_recovery_card =
-            Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(
-                &agent_browser_final_runtime_headroom_recovery_plan,
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(
+                &agent_browser_final_runtime_proof_capacity,
             );
         let agent_browser_final_runtime_headroom_inspection_checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(
@@ -19760,8 +19808,8 @@ impl WebPreviewView {
                 &agent_browser_final_runtime_proof_capacity,
             );
         let agent_browser_final_runtime_headroom_reclaim_candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(
-                &agent_browser_final_runtime_headroom_recovery_plan,
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(
+                &agent_browser_final_runtime_proof_capacity,
             );
         let agent_browser_final_runtime_blocker_board =
             Self::agent_browser_final_runtime_blocker_board_from_parts(
@@ -20091,11 +20139,11 @@ impl WebPreviewView {
                     "final_runtime_headroom_cleanup_result_gate": Self::agent_browser_final_runtime_headroom_cleanup_result_gate_summary(
                         &agent_browser_final_runtime_headroom_cleanup_result_gate
                     ),
-                    "final_runtime_headroom_cleanup_result_gate_status": agent_browser_final_runtime_proof_capacity
-                        .pointer("/headroom_recovery_plan/cleanup_result_gate/status")
+                    "final_runtime_headroom_cleanup_result_gate_status": agent_browser_final_runtime_headroom_cleanup_result_gate
+                        .pointer("/status")
                         .and_then(Value::as_str),
-                    "final_runtime_headroom_cleanup_result_gate_ready": agent_browser_final_runtime_proof_capacity
-                        .pointer("/headroom_recovery_plan/cleanup_result_gate/ready_for_capacity_recheck")
+                    "final_runtime_headroom_cleanup_result_gate_ready": agent_browser_final_runtime_headroom_cleanup_result_gate
+                        .pointer("/ready_for_capacity_recheck")
                         .and_then(Value::as_bool),
                     "final_runtime_headroom_readiness_gate_visible": true,
                     "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
@@ -24782,8 +24830,8 @@ impl WebPreviewView {
                 &final_runtime_proof_capacity,
             );
         let final_runtime_headroom_recovery_card =
-            Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(
-                &final_runtime_headroom_recovery_plan,
+            Self::agent_browser_final_runtime_headroom_recovery_card_from_capacity(
+                &final_runtime_proof_capacity,
             );
         let final_runtime_headroom_inspection_checklist =
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(
@@ -24802,8 +24850,8 @@ impl WebPreviewView {
                 &final_runtime_proof_capacity,
             );
         let final_runtime_headroom_reclaim_candidates =
-            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(
-                &final_runtime_headroom_recovery_plan,
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(
+                &final_runtime_proof_capacity,
             );
         let final_runtime_blocker_board =
             Self::agent_browser_final_runtime_blocker_board_from_parts(

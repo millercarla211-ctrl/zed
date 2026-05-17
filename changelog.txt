@@ -1,3 +1,16 @@
+[2026-05-18] - Capacity-Derived Cleanup Evidence Alignment
+
+ADDED:
+- `crates/web_preview/src/web_preview_view.rs` recovery-card and reclaim-candidate summaries now expose cleanup-result gate source and readiness fields.
+
+CHANGED:
+- Capacity-derived recovery cards, reclaim candidates, cached latest cleanup-result gates, status packet fields, and final validation bundles now prefer the current `headroom_cleanup_result_gate` carried by the final runtime capacity packet before falling back to the generated recovery-plan gate.
+- Action manifest metadata now advertises the current capacity cleanup-result gate and durable cleanup-result evidence fields alongside the recovery-plan fallback.
+- `todo.txt` records the capacity-derived cleanup-evidence slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only Browser/WebPreview metadata. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Final Runtime Capacity Cleanup Evidence Alignment
 
 ADDED:
