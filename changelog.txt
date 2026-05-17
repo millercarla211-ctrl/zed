@@ -1,3 +1,18 @@
+[2026-05-17] - Browser Chrome Panel Live Proof Readiness Card
+
+ADDED:
+- `inspect_agent_plugin_runtime_status` now emits `zed.agent_plugins.browser_panel_live_proof_readiness_card.v1`, a compact right-side panel card with durable root counts, imported-result status, first blocker, next action, and safety flags.
+- Browser plugin status now embeds the panel live-proof readiness card beside the durable proof status.
+- Agent and WebPreview plugin catalogs now advertise the readiness-card schema and runtime-status fields so panels can render the live-panel proof gate without parsing the full durable payload.
+
+CHANGED:
+- Runtime-green proof paths now carry the panel live-proof readiness card and include it in the Agent read sequence and WebPreview packet metadata.
+- WebPreview action manifests now point panel live-validation controls at the runtime-status readiness-card field.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 95/100 and the remaining live UI/runtime validation targets.
+
+NOTES:
+- This slice is read-only status/catalog hardening. It does not run `just`, run Cargo, launch browsers, run Node or Playwright, take screenshots, dispatch input, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Durable Panel Live Proof
 
 ADDED:
