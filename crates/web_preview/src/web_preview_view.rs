@@ -2268,9 +2268,9 @@ impl WebPreviewView {
             "final_runtime_headroom_reclaim_candidates_copy_action": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
             "final_runtime_headroom_reclaim_candidates_send_action": "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent",
             "final_runtime_blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
-            "final_runtime_blocker_board_status": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board/status").and_then(Value::as_str),
-            "final_runtime_blocker_board_blocker_count": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board/blocker_count").and_then(Value::as_u64),
-            "final_runtime_blocker_board_first_blocker": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board/first_blocker/id").and_then(Value::as_str),
+            "final_runtime_blocker_board_status": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board/status").or_else(|| packet.pointer("/packet/latest/agent_browser_panel_live_ui_proof_checklist/artifacts/final_runtime_blocker_board/payload/status")).and_then(Value::as_str),
+            "final_runtime_blocker_board_blocker_count": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board/blocker_count").or_else(|| packet.pointer("/packet/latest/agent_browser_panel_live_ui_proof_checklist/artifacts/final_runtime_blocker_board/payload/blocker_count")).and_then(Value::as_u64),
+            "final_runtime_blocker_board_first_blocker": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board/first_blocker/id").or_else(|| packet.pointer("/packet/latest/agent_browser_panel_live_ui_proof_checklist/artifacts/final_runtime_blocker_board/payload/first_blocker/id")).and_then(Value::as_str),
             "final_runtime_blocker_board_copy_action": "copy_agent_browser_final_runtime_blocker_board",
             "final_runtime_blocker_board_send_action": "send_agent_browser_final_runtime_blocker_board_to_agent",
             "panel_control_result_ledger_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/status").and_then(Value::as_str),
@@ -2307,7 +2307,7 @@ impl WebPreviewView {
             "agent_browser_final_runtime_headroom_cleanup_result_gate": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_gate").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_cleanup_result_gate")).or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate")).cloned(),
             "agent_browser_final_runtime_headroom_readiness_gate": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_readiness_gate").cloned(),
             "agent_browser_final_runtime_headroom_reclaim_candidates": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates").cloned(),
-            "agent_browser_final_runtime_blocker_board": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board").cloned(),
+            "agent_browser_final_runtime_blocker_board": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board").or_else(|| packet.pointer("/packet/latest/agent_browser_panel_live_ui_proof_checklist/artifacts/final_runtime_blocker_board/payload")).cloned(),
             "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
             "runtime_green_ready_lane_fraction": packet.pointer("/packet/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
             "runtime_green_first_pending_lane": packet.pointer("/packet/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
@@ -9007,6 +9007,14 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "final_runtime_blocker_board_send_action": plugin
                     .pointer("/final_runtime_proof_capacity/blocker_board_send_action")
+                    .and_then(Value::as_str),
+                "final_runtime_blocker_board_status_packet_field": plugin
+                    .pointer("/final_runtime_proof_capacity/blocker_board_status_packet_field")
+                    .and_then(Value::as_str),
+                "final_runtime_blocker_board_panel_checklist_packet_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/blocker_board_panel_checklist_packet_field",
+                    )
                     .and_then(Value::as_str),
                 "final_runtime_headroom_recovery_plan_field": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_field")
@@ -26280,6 +26288,7 @@ impl WebPreviewView {
                             "blocker_board_copy_action": "copy_agent_browser_final_runtime_blocker_board",
                             "blocker_board_send_action": "send_agent_browser_final_runtime_blocker_board_to_agent",
                             "blocker_board_status_packet_field": "packet.latest.agent_browser_final_runtime_blocker_board",
+                            "blocker_board_panel_checklist_packet_field": "packet.latest.agent_browser_panel_live_ui_proof_checklist.artifacts.final_runtime_blocker_board.payload",
                             "headroom_recovery_plan_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
                             "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
                             "headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,

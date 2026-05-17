@@ -1180,6 +1180,14 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "final_runtime_blocker_board_send_action": plugin
                 .pointer("/final_runtime_proof_capacity/blocker_board_send_action")
                 .and_then(Value::as_str),
+            "final_runtime_blocker_board_status_packet_field": plugin
+                .pointer("/final_runtime_proof_capacity/blocker_board_status_packet_field")
+                .and_then(Value::as_str),
+            "final_runtime_blocker_board_panel_checklist_packet_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/blocker_board_panel_checklist_packet_field",
+                )
+                .and_then(Value::as_str),
             "final_runtime_headroom_recovery_plan_field": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_field")
                 .and_then(Value::as_str),
@@ -2013,6 +2021,7 @@ fn browser_plugin_manifest() -> Value {
             "blocker_board_copy_action": "copy_agent_browser_final_runtime_blocker_board",
             "blocker_board_send_action": "send_agent_browser_final_runtime_blocker_board_to_agent",
             "blocker_board_status_packet_field": "packet.latest.agent_browser_final_runtime_blocker_board",
+            "blocker_board_panel_checklist_packet_field": "packet.latest.agent_browser_panel_live_ui_proof_checklist.artifacts.final_runtime_blocker_board.payload",
             "headroom_recovery_plan_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
             "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
             "headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,

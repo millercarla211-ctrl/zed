@@ -1,3 +1,16 @@
+[2026-05-18] - Blocker Board Checklist Fallback Alignment
+
+ADDED:
+- WebPreview status summaries now fall back to the panel live UI proof checklist's embedded final-runtime blocker-board payload for blocker-board status, blocker count, first blocker, and compact function-surface payloads when no standalone blocker board is present.
+- Agent and WebPreview plugin catalogs now advertise the panel-checklist blocker-board fallback field.
+
+CHANGED:
+- Compact Browser/Chrome panels can discover final-runtime blockers from the bundled proof checklist before an operator copies or sends the standalone blocker-board handoff.
+- `todo.txt` records the blocker-board checklist fallback slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only status/catalog metadata. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Inspection Checklist Capacity Fallback Alignment
 
 ADDED:
