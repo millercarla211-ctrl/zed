@@ -1,3 +1,12 @@
+[2026-05-17] - Browser Chrome Functional Inspect Evidence
+
+ADDED:
+- WebPreview now stores a compact `zed.web_preview.inspected_element.v1` snapshot when Inspect Element completes, including selector, tag/id/classes, text, rect, viewport, backend, and whether a screenshot crop was included.
+- WebPreview session snapshots and Browser function-surfaces packets now expose the latest inspected-element summary beside annotated screenshot and viewport evidence.
+
+NOTES:
+- This is the first slice of the Browser/Chrome Functional Plugin Execution Hardening set. It does not dispatch page input, launch external Chrome, run Playwright, mutate browser profiles, or add dummy UI.
+
 [2026-05-17] - Agent Plugin Runtime Observability Final Proof
 
 FIXED:

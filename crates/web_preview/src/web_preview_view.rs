@@ -102,6 +102,7 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX: &str =
     "agent-browser-final-validation-result-";
 const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
     "zed.web_preview.agent_browser_function_surfaces.v1";
+const INSPECTED_ELEMENT_SCHEMA: &str = "zed.web_preview.inspected_element.v1";
 const AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA: &str = "zed.agent_plugins.catalog_summary.v1";
 const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstrap_readiness.v1";
 const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstrap_manifest.v1";
@@ -799,6 +800,7 @@ pub struct WebPreviewView {
     latest_agent_browser_qa_runbook: Option<Value>,
     latest_agent_plugin_catalog: Option<Value>,
     latest_annotated_screenshot: Option<Value>,
+    latest_inspected_element: Option<Value>,
     event_pump_task: Option<Task<()>>,
     native_mount_task: Option<Task<()>>,
     zoom_factor: f64,
@@ -1019,6 +1021,7 @@ impl WebPreviewView {
             latest_agent_browser_qa_runbook: None,
             latest_agent_plugin_catalog: None,
             latest_annotated_screenshot: None,
+            latest_inspected_element: None,
             event_pump_task: None,
             native_mount_task: None,
             zoom_factor: 1.0,
@@ -1526,6 +1529,7 @@ impl WebPreviewView {
             "managed_chrome_execution": self.managed_chrome_execution_status(),
             "pc_use_status": self.pc_use_status(),
             "annotated_screenshot": self.latest_annotated_screenshot_summary(),
+            "inspected_element": self.latest_inspected_element_summary(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -4850,6 +4854,23 @@ impl WebPreviewView {
         }))
     }
 
+    fn latest_inspected_element_summary(&self) -> Option<Value> {
+        let element = self.latest_inspected_element.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at_ms": element.get("captured_at_ms").and_then(Value::as_u64),
+            "url": element.get("url").and_then(Value::as_str),
+            "title": element.get("title").and_then(Value::as_str),
+            "selector": element.get("selector").and_then(Value::as_str),
+            "tag": element.get("tag").and_then(Value::as_str),
+            "id": element.get("id").and_then(Value::as_str),
+            "class_count": element.get("classes").and_then(Value::as_array).map(|classes| classes.len()),
+            "text_preview": element.get("text").and_then(Value::as_str),
+            "rect": element.get("rect").cloned(),
+            "viewport": element.get("viewport").cloned(),
+            "screenshot_included": element.get("screenshot_included").and_then(Value::as_bool),
+        }))
+    }
+
     fn agent_browser_function_surfaces(&self) -> Value {
         let screenshot_state = if cfg!(target_os = "windows") {
             "available"
@@ -4883,6 +4904,7 @@ impl WebPreviewView {
                 "dom_snapshot": self.latest_dom_snapshot_summary(),
                 "action_targets": self.latest_action_targets_summary(),
                 "annotated_screenshot": self.latest_annotated_screenshot_summary(),
+                "inspected_element": self.latest_inspected_element_summary(),
                 "viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
             },
             "surfaces": [
@@ -4926,6 +4948,7 @@ impl WebPreviewView {
                     "menu_label": "Inspect Element",
                     "overlay_completion_kind": "inspect-element",
                     "output": ["agent_panel_selector", "agent_panel_html", "computed_style_summary", "optional_cropped_screenshot"],
+                    "latest_summary": self.latest_inspected_element_summary(),
                     "uses_page_script": true,
                     "dispatches_input": false,
                     "requires_interactive_unlock": false,
@@ -16630,6 +16653,26 @@ impl WebPreviewView {
                         .ok()
                         .flatten()
                         .and_then(|png_bytes| self.prepare_agent_png_bytes(png_bytes).ok());
+                    self.latest_inspected_element = Some(serde_json::json!({
+                        "schema": INSPECTED_ELEMENT_SCHEMA,
+                        "captured_at_ms": Self::current_epoch_millis(),
+                        "session_id": self.session_id.as_ref(),
+                        "url": payload.get("url").and_then(Value::as_str),
+                        "title": payload.get("title").and_then(Value::as_str),
+                        "selector": payload.get("selector").and_then(Value::as_str),
+                        "tag": payload.get("tag").and_then(Value::as_str),
+                        "id": payload.get("id").and_then(Value::as_str),
+                        "classes": payload.get("classes").cloned(),
+                        "text": payload.get("text").and_then(Value::as_str),
+                        "href": payload.get("href").and_then(Value::as_str),
+                        "src": payload.get("src").and_then(Value::as_str),
+                        "css": payload.get("css").and_then(Value::as_str),
+                        "rect": payload.get("rect").cloned(),
+                        "scale": scale,
+                        "viewport": self.viewport_mode.snapshot(),
+                        "native_backend": self.browser_native_backend_name(),
+                        "screenshot_included": screenshot_png.is_some(),
+                    }));
                     self.append_content_blocks_to_agent_panel(
                         self.inspect_element_agent_blocks(&data, screenshot_png.as_deref()),
                         window,
@@ -20376,6 +20419,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_qa_runbook: None,
                 latest_agent_plugin_catalog: None,
                 latest_annotated_screenshot: None,
+                latest_inspected_element: None,
                 event_pump_task: None,
                 native_mount_task: None,
                 zoom_factor: 1.0,
