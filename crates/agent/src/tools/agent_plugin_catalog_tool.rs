@@ -77,6 +77,8 @@ const AGENT_BROWSER_PANEL_CARD_CONTROL_STATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_control_state.v1";
 const AGENT_BROWSER_PANEL_CARD_CONTROL_EVENT_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_control_event.v1";
+const AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_card_control_result.v1";
 const AGENT_BROWSER_PANEL_CARD_INTERACTION_VALIDATION_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_interaction_validation.v1";
 const AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA: &str =
@@ -867,6 +869,12 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "panel_card_deck_control_event_field": plugin
                 .pointer("/panel_card_deck/control_event_field")
                 .and_then(Value::as_str),
+            "panel_card_deck_control_result_schema": plugin
+                .pointer("/panel_card_deck/control_result_schema")
+                .and_then(Value::as_str),
+            "panel_card_deck_control_result_field": plugin
+                .pointer("/panel_card_deck/control_result_field")
+                .and_then(Value::as_str),
             "panel_card_deck_interaction_validation_schema": plugin
                 .pointer("/panel_card_deck/interaction_validation_schema")
                 .and_then(Value::as_str),
@@ -1298,6 +1306,8 @@ fn browser_plugin_manifest() -> Value {
             "control_state_field": "agent_browser_panel_card_deck.cards[].display.affordances[].control_state",
             "control_event_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_EVENT_SCHEMA,
             "control_event_field": "agent_browser_panel_card_deck.cards[].display.affordances[].event",
+            "control_result_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
+            "control_result_field": "agent_browser_panel_card_deck.cards[].display.affordances[].result_contract",
             "interaction_validation_schema": AGENT_BROWSER_PANEL_CARD_INTERACTION_VALIDATION_SCHEMA,
             "interaction_validation_field": "agent_browser_panel_card_deck.render_contract.interaction_validation",
             "render_contract_schema": AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA,

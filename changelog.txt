@@ -1,3 +1,17 @@
+[2026-05-17] - Browser Chrome Panel Control Results
+
+ADDED:
+- Agent Browser panel card affordances now include `zed.web_preview.agent_browser_panel_card_control_result.v1` result contracts with declared status values, required fields, permission context, receipt expectations, completion policy, and audit policy.
+- Agent Browser panel decks now include a control-result summary with total, missing, permissioned, disabled, and variant result-contract counts.
+
+CHANGED:
+- Panel deck render contracts now require result-contract coverage before reporting render-ready status, and Agent Panel summaries show each affordance result default beside its event kind.
+- Status packet summaries, action manifests, and Agent/WebPreview plugin catalogs now advertise the control-result schema and field for static panel receipt wiring.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 60/100 and the next remaining proof targets.
+
+NOTES:
+- This is a panel result-contract metadata slice. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Control Events
 
 ADDED:
