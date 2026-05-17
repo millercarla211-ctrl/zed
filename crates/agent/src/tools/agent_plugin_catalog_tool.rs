@@ -227,6 +227,21 @@ fn agent_plugin_catalog(
     }
 
     let catalog_summary = agent_plugin_catalog_summary(&plugins);
+    let bootstrap_plan = input.include_bootstrap_plan.then(|| {
+        agent_plugin_catalog_bootstrap_plan(
+            &default_plugin_root,
+            workspace_plugin_root.as_ref(),
+            workspace_tools_root.as_ref(),
+        )
+    });
+    let bootstrap_readiness = input.include_bootstrap_readiness.then(|| {
+        agent_plugin_bootstrap_readiness(
+            project_root.as_ref(),
+            &default_plugin_root,
+            workspace_plugin_root.as_ref(),
+            workspace_tools_root.as_ref(),
+        )
+    });
 
     serde_json::json!({
         "schema": "zed.agent_plugins.catalog.v1",
@@ -238,330 +253,415 @@ fn agent_plugin_catalog(
             "summary_schema": AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA,
             "default_enabled_plugins": ["zed.browser", "zed.chrome", "zed.pc_use"],
             "tool_name": AgentPluginCatalogTool::NAME,
-            "tools": {
-                "discovery": AgentPluginCatalogTool::NAME,
-                "runtime_status": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
-                "compose_browser_action_payload": AGENT_BROWSER_PAYLOAD_TOOL_NAME,
-                "stage_browser_action_payload": AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME,
-                "queue_browser_action_payload": AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME,
-                "inspect_browser_action_payload_queue": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
-                "compose_chrome_action_payload": AGENT_CHROME_PAYLOAD_TOOL_NAME,
-                "queue_chrome_action_payload": AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
-                "inspect_chrome_action_payload_queue": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
-                "request_chrome_payload_run": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
-                "prepare_chrome_playwright_adapter": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
-                "invoke_chrome_playwright_adapter": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
-                "inspect_chrome_playwright_executions": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
-                "inspect_zed_window_context": AGENT_PC_USE_INSPECT_TOOL_NAME,
-                "compose_zed_pc_use_action_payload": AGENT_PC_USE_PAYLOAD_TOOL_NAME,
-                "stage_zed_pc_use_action_payload": AGENT_PC_USE_PAYLOAD_STAGE_TOOL_NAME,
-                "queue_zed_pc_use_action_payload": AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME,
-                "inspect_zed_pc_use_payload_queue": AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
-                "request_zed_pc_use_payload_run": AGENT_PC_USE_RUNNER_GATE_TOOL_NAME,
-                "inspect_zed_pc_use_runner_receipts": AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
-                "inspect_zed_pc_use_targets": AGENT_PC_USE_TARGET_MANIFEST_TOOL_NAME,
-                "inspect_zed_pc_use_target_snapshot": AGENT_PC_USE_TARGET_SNAPSHOT_TOOL_NAME,
-                "inspect_zed_pc_use_ui_snapshot_contract": AGENT_PC_USE_UI_SNAPSHOT_CONTRACT_TOOL_NAME,
-                "inspect_zed_pc_use_ui_snapshot": AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME,
-                "prepare_managed_assets": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
-                "prepare_runtime": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL
-            },
-            "runtime_status": {
-                "tool_name": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
-                "schema": AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA,
-                "runtime_green_blocker_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_BLOCKERS_SCHEMA,
-                "runtime_green_readiness_scorecard_schema": AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA,
-                "runtime_green_operator_handoff_schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
-                "runtime_green_proof_path_schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
-                "runtime_green_claim_gate_schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
-                "runtime_green_claim_readiness_schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
-                "runtime_green_report_gate_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
-                "runtime_green_report_badge_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
-                "runtime_green_final_proof_guide_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
-                "runtime_green_final_proof_guide_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
-                "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
-                "runtime_green_final_report_packet_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
-                "runtime_green_report_readiness_card_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
-                "runtime_green_report_readiness_card_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
-                "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
-                "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
-                "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
-                "runtime_observability_matrix_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA,
-                "pc_use_proof_summary_schema": AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA,
-                "runtime_green_ready_outcomes": {
-                    "browser_final_validation_result": "runtime_green_candidate=true",
-                    "managed_chrome_runner_receipt": "ready_runner_adapter_pending",
-                    "managed_chrome_execution_receipt": "completed",
-                    "pc_use_runner_receipt": "ready_future_executor_pending"
-                },
-                "read_only": true,
-                "payload": {
-                    "root_mode": "workspace",
-                    "include_latest_handoffs": true,
-                    "include_host_checks": true,
-                    "include_next_actions": true,
-                    "include_workflows": true,
-                    "include_validation_matrix": true,
-                    "include_observability_profiles": true,
-                    "include_observability_digest": true,
-                    "include_runtime_green_proof_path": true,
-                    "include_runtime_green_claim_gate": true
-                },
-                "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, plugin matrix, runtime-green proof path, final proof guide summary, final proof audit summary, final proof audit, final report packet summary, final report packet, report readiness card summary, report readiness card, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
-            },
-            "webpreview_handoffs": {
-                "runtime_observability_digest": {
-                    "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
-                    "plugin_matrix_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA,
-                    "copy_action": "copy_agent_plugin_runtime_observability_digest",
-                    "send_action": "send_agent_plugin_runtime_observability_digest_to_agent",
-                    "read_only": true,
-                    "purpose": "Share one compact WebPreview runtime health digest with lane readiness, plugin matrix, proof focus, and the next operator packet."
-                },
-                "runtime_green_operator_handoff": {
-                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
-                    "copy_action": "copy_agent_plugin_runtime_green_handoff",
-                    "send_action": "send_agent_plugin_runtime_green_handoff_to_agent",
-                    "read_only": true,
-                    "purpose": "Share one compact WebPreview runtime-green operator packet with current lane evidence and the Agent runtime-status payload."
-                },
-                "runtime_green_proof_path": {
-                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
-                    "copy_action": "copy_agent_plugin_runtime_green_proof_path",
-                    "send_action": "send_agent_plugin_runtime_green_proof_path_to_agent",
-                    "read_only": true,
-                    "purpose": "Share the canonical WebPreview runtime-green proof path with claim gate, proof sources, current best next lane, and Agent runtime-status read sequence."
-                },
-                "runtime_green_claim_gate": {
-                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
-                    "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
-                    "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
-                    "read_only": true,
-                    "purpose": "Share the compact WebPreview claim gate with ready-lane fraction, first pending evidence, and next operator step."
-                },
-                "runtime_green_claim_readiness": {
-                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
-                    "copy_action": "copy_agent_plugin_runtime_green_claim_readiness",
-                    "send_action": "send_agent_plugin_runtime_green_claim_readiness_to_agent",
-                    "read_only": true,
-                    "purpose": "Share the single compact readiness packet that combines claim gate, final result state, final checklist, and reporting policy."
-                },
-                "runtime_green_report_gate": {
-                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
-                    "badge_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
-                    "copy_action": "copy_agent_plugin_runtime_green_report_gate",
-                    "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
-                    "read_only": true,
-                    "purpose": "Share the canonical ready/blocked badge agents must check before reporting runtime-green."
-                },
-                "runtime_green_report_badge": {
-                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
-                    "source": "runtime_green_report_gate.badge",
-                    "copy_action": "copy_agent_plugin_runtime_green_report_gate",
-                    "send_action": "send_agent_plugin_runtime_green_report_gate_to_agent",
-                    "read_only": true,
-                    "purpose": "Render the compact runtime-green ready/blocked row before showing larger proof packets."
-                },
-                "runtime_green_final_proof_guide": {
-                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
-                    "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
-                    "runtime_status_summary_field": "runtime_green_final_proof_guide_summary",
-                    "source": "runtime_green_report_gate",
-                    "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
-                    "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
-                    "read_only": true,
-                    "purpose": "Guide agents from report badge to final result template, manual just run proof, import, and status recheck."
-                },
-                "runtime_green_final_report_packet": {
-                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
-                    "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
-                    "runtime_status_summary_field": "runtime_green_final_report_packet_summary",
-                    "source": "runtime_green_report_gate + final_validation_result_import_receipt",
-                    "copy_action": "copy_agent_plugin_runtime_green_final_report_packet",
-                    "send_action": "send_agent_plugin_runtime_green_final_report_packet_to_agent",
-                    "read_only": true,
-                    "purpose": "Share the compact final reporting packet agents must read before making the final runtime-green status claim."
-                },
-                "runtime_green_report_readiness_card": {
-                    "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
-                    "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
-                    "runtime_status_summary_field": "runtime_green_report_readiness_card_summary",
-                    "source": "runtime_green_claim_readiness + runtime_green_report_gate + runtime_green_final_report_packet + runtime_green_final_proof_audit",
-                    "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
-                    "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
-                    "read_only": true,
-                    "purpose": "Share one compact status card for right-side panels that combines claim readiness, report gate, final report packet, final proof audit, and regression-watch status."
-                }
-            },
+            "tools": agent_plugin_catalog_tools_manifest(),
+            "runtime_status": agent_plugin_catalog_runtime_status_manifest(),
+            "webpreview_handoffs": agent_plugin_catalog_webpreview_handoffs_manifest(),
             "available_to": [
                 "agent_panel",
                 "subagents",
                 "acp_threads",
                 "web_preview_agent_handoff"
             ],
-            "bootstrap_plan": input.include_bootstrap_plan.then(|| serde_json::json!({
-                "default_download": true,
-                "download_policy": "download_or_update_on_first_use",
-                "prepare_tool": {
-                    "name": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL,
-                    "dry_run_payload": {
-                        "root_mode": "workspace",
-                        "create_managed_roots": false,
-                        "write_bootstrap_manifest": false
-                    },
-                    "workspace_payload": {
-                        "root_mode": "workspace",
-                        "create_managed_roots": true,
-                        "write_bootstrap_manifest": true
-                    },
-                    "zed_data_payload": {
-                        "root_mode": "zed_data",
-                        "create_managed_roots": true,
-                        "write_bootstrap_manifest": true
-                    },
-                    "requires_permission_for_writes": true,
-                    "downloads_or_launches_browser": false
-                },
-                "playwright_adapter_prepare_tool": {
-                    "name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
-                    "dry_run_payload": {
-                        "root_mode": "workspace",
-                        "write_adapter_files": false,
-                        "include_script_preview": false
-                    },
-                    "workspace_payload": {
-                        "root_mode": "workspace",
-                        "write_adapter_files": true,
-                        "include_script_preview": false
-                    },
-                    "zed_data_payload": {
-                        "root_mode": "zed_data",
-                        "write_adapter_files": true,
-                        "include_script_preview": false
-                    },
-                    "requires_permission_for_writes": true,
-                    "installs_packages": false,
-                    "launches_browser": false,
-                    "runs_node": false
-                },
-                "managed_asset_provisioner_tool": {
-                    "name": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
-                    "result_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
-                    "receipt_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
-                    "asset_readiness_summary_schema": AGENT_PLUGIN_ASSET_READINESS_SUMMARY_SCHEMA,
-                    "operator_recipe_schema": AGENT_PLUGIN_MANAGED_ASSET_OPERATOR_RECIPE_SCHEMA,
-                    "dry_run_payload": {
-                        "root_mode": "workspace",
-                        "write_asset_receipt": false,
-                        "copy_dx_chrome_extension": false,
-                        "dx_chrome_extension_source_root": null,
-                        "overwrite_existing_files": false,
-                        "include_file_preview": true
-                    },
-                    "receipt_payload": {
-                        "root_mode": "workspace",
-                        "write_asset_receipt": true,
-                        "copy_dx_chrome_extension": false,
-                        "dx_chrome_extension_source_root": null,
-                        "overwrite_existing_files": false,
-                        "include_file_preview": true
-                    },
-                    "local_extension_copy_payload": {
-                        "root_mode": "workspace",
-                        "write_asset_receipt": true,
-                        "copy_dx_chrome_extension": true,
-                        "dx_chrome_extension_source_root": "<local unpacked extension root>",
-                        "overwrite_existing_files": false,
-                        "include_file_preview": true
-                    },
-                    "requires_permission_for_writes": true,
-                    "downloads_packages": false,
-                    "runs_node": false,
-                    "launches_browser": false,
-                    "touches_real_browser_profiles": false
-                },
-                "playwright_adapter_invoke_tool": {
-                    "name": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
-                    "dry_run_payload": {
-                        "root_mode": "workspace",
-                        "execute_adapter": false,
-                        "timeout_ms": 60000,
-                        "include_process_output": false,
-                        "include_payload_packet": false
-                    },
-                    "execute_payload": {
-                        "root_mode": "workspace",
-                        "execute_adapter": true,
-                        "timeout_ms": 60000,
-                        "include_process_output": false,
-                        "include_payload_packet": false
-                    },
-                    "requires_permission_for_execution": true,
-                    "safe_actions_only": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "runtime_events", "set_viewport", "wait_for_selector"],
-                    "input_actions_blocked": ["click", "type_text", "press_key", "scroll"]
-                },
-                "playwright_execution_inspect_tool": {
-                    "name": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
-                    "payload": {
-                        "root_mode": "workspace",
-                        "max_entries": 8,
-                        "include_requests": false,
-                        "include_receipts": false
-                    },
-                    "read_only": true,
-                    "launches_browser": false,
-                    "runs_node": false
-                },
-                "zed_data_plugin_root": default_plugin_root.display().to_string(),
-                "workspace_plugin_root": workspace_plugin_root.as_ref().map(|path| path.display().to_string()),
-                "workspace_tools_root": workspace_tools_root.as_ref().map(|path| path.display().to_string()),
-                "dx_chrome_extension": {
-                    "install_policy": "download_or_update_on_first_use",
-                    "preferred_root": workspace_plugin_root
-                        .as_ref()
-                        .map(|root| root.join("dx-chrome-extension"))
-                        .unwrap_or_else(|| default_plugin_root.join("dx-chrome-extension"))
-                        .display()
-                        .to_string(),
-                    "load_mode": "unpacked_extension",
-                    "never_write_to_user_browser_profiles": true
-                },
-                "playwright": {
-                    "preferred_root": workspace_tools_root
-                        .as_ref()
-                        .map(|root| root.join("playwright"))
-                        .unwrap_or_else(|| default_plugin_root.join("playwright"))
-                        .display()
-                        .to_string(),
-                    "managed_by": "DX Code Editor",
-                    "install_policy": "download_or_update_on_first_use"
-                }
-            })),
-            "bootstrap_readiness": input.include_bootstrap_readiness.then(|| {
-                agent_plugin_bootstrap_readiness(
-                    project_root.as_ref(),
-                    &default_plugin_root,
-                    workspace_plugin_root.as_ref(),
-                    workspace_tools_root.as_ref(),
-                )
-            }),
-            "bootstrap_readiness_handoff": {
-                "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
-                "copy_action": "copy_agent_plugin_bootstrap_readiness",
-                "send_action": "send_agent_plugin_bootstrap_readiness_to_agent",
-                "read_only": true,
-                "source": "WebPreview More menu",
-                "purpose": "Copy or send the compact bootstrap readiness packet without copying the full plugin catalog or runtime-status output."
-            },
-            "permission_model": {
-                "read_only_discovery_without_prompt": true,
-                "browser_interactions_require_explicit_session_unlock": true,
-                "external_chrome_and_pc_use_require_user_visible_permission": true,
-                "receipts_required_for_every_mutating_action": true,
-                "fresh_preflight_required_before_input": true
-            },
+            "bootstrap_plan": bootstrap_plan,
+            "bootstrap_readiness": bootstrap_readiness,
+            "bootstrap_readiness_handoff": agent_plugin_catalog_bootstrap_readiness_handoff(),
+            "permission_model": agent_plugin_catalog_permission_model(),
             "plugins": plugins,
         }
+    })
+}
+
+fn agent_plugin_catalog_tools_manifest() -> Value {
+    serde_json::json!({
+        "discovery": AgentPluginCatalogTool::NAME,
+        "runtime_status": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+        "compose_browser_action_payload": AGENT_BROWSER_PAYLOAD_TOOL_NAME,
+        "stage_browser_action_payload": AGENT_BROWSER_PAYLOAD_STAGE_TOOL_NAME,
+        "queue_browser_action_payload": AGENT_BROWSER_PAYLOAD_QUEUE_TOOL_NAME,
+        "inspect_browser_action_payload_queue": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+        "compose_chrome_action_payload": AGENT_CHROME_PAYLOAD_TOOL_NAME,
+        "queue_chrome_action_payload": AGENT_CHROME_PAYLOAD_QUEUE_TOOL_NAME,
+        "inspect_chrome_action_payload_queue": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+        "request_chrome_payload_run": AGENT_CHROME_RUNNER_GATE_TOOL_NAME,
+        "prepare_chrome_playwright_adapter": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+        "invoke_chrome_playwright_adapter": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
+        "inspect_chrome_playwright_executions": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
+        "inspect_zed_window_context": AGENT_PC_USE_INSPECT_TOOL_NAME,
+        "compose_zed_pc_use_action_payload": AGENT_PC_USE_PAYLOAD_TOOL_NAME,
+        "stage_zed_pc_use_action_payload": AGENT_PC_USE_PAYLOAD_STAGE_TOOL_NAME,
+        "queue_zed_pc_use_action_payload": AGENT_PC_USE_PAYLOAD_QUEUE_TOOL_NAME,
+        "inspect_zed_pc_use_payload_queue": AGENT_PC_USE_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
+        "request_zed_pc_use_payload_run": AGENT_PC_USE_RUNNER_GATE_TOOL_NAME,
+        "inspect_zed_pc_use_runner_receipts": AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
+        "inspect_zed_pc_use_targets": AGENT_PC_USE_TARGET_MANIFEST_TOOL_NAME,
+        "inspect_zed_pc_use_target_snapshot": AGENT_PC_USE_TARGET_SNAPSHOT_TOOL_NAME,
+        "inspect_zed_pc_use_ui_snapshot_contract": AGENT_PC_USE_UI_SNAPSHOT_CONTRACT_TOOL_NAME,
+        "inspect_zed_pc_use_ui_snapshot": AGENT_PC_USE_UI_SNAPSHOT_TOOL_NAME,
+        "prepare_managed_assets": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
+        "prepare_runtime": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL
+    })
+}
+
+fn agent_plugin_catalog_runtime_status_manifest() -> Value {
+    serde_json::json!({
+        "tool_name": AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+        "schema": AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA,
+        "runtime_green_blocker_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_BLOCKERS_SCHEMA,
+        "runtime_green_readiness_scorecard_schema": AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA,
+        "runtime_green_operator_handoff_schema": AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+        "runtime_green_proof_path_schema": AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
+        "runtime_green_claim_gate_schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
+        "runtime_green_claim_readiness_schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
+        "runtime_green_report_gate_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
+        "runtime_green_report_badge_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
+        "runtime_green_final_proof_guide_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
+        "runtime_green_final_proof_guide_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
+        "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+        "runtime_green_final_report_packet_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
+        "runtime_green_report_readiness_card_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
+        "runtime_green_report_readiness_card_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
+        "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
+        "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
+        "runtime_observability_digest_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+        "runtime_observability_matrix_schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA,
+        "pc_use_proof_summary_schema": AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA,
+        "runtime_green_ready_outcomes": {
+            "browser_final_validation_result": "runtime_green_candidate=true",
+            "managed_chrome_runner_receipt": "ready_runner_adapter_pending",
+            "managed_chrome_execution_receipt": "completed",
+            "pc_use_runner_receipt": "ready_future_executor_pending"
+        },
+        "read_only": true,
+        "payload": {
+            "root_mode": "workspace",
+            "include_latest_handoffs": true,
+            "include_host_checks": true,
+            "include_next_actions": true,
+            "include_workflows": true,
+            "include_validation_matrix": true,
+            "include_observability_profiles": true,
+            "include_observability_digest": true,
+            "include_runtime_green_proof_path": true,
+            "include_runtime_green_claim_gate": true
+        },
+        "purpose": "Summarize Browser, managed Chrome, PC-use readiness, compact observability digest, plugin matrix, runtime-green proof path, final proof guide summary, final proof audit summary, final proof audit, final report packet summary, final report packet, report readiness card summary, report readiness card, proof freshness, and profiles without launching browsers, running Node, screenshots, or input dispatch."
+    })
+}
+
+fn agent_plugin_catalog_webpreview_handoffs_manifest() -> Value {
+    serde_json::json!({
+        "runtime_observability_digest": agent_plugin_catalog_handoff_manifest(
+            AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA,
+            Some(("plugin_matrix_schema", AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA)),
+            "copy_agent_plugin_runtime_observability_digest",
+            "send_agent_plugin_runtime_observability_digest_to_agent",
+            None,
+            "Share one compact WebPreview runtime health digest with lane readiness, plugin matrix, proof focus, and the next operator packet.",
+        ),
+        "runtime_green_operator_handoff": agent_plugin_catalog_handoff_manifest(
+            AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA,
+            None,
+            "copy_agent_plugin_runtime_green_handoff",
+            "send_agent_plugin_runtime_green_handoff_to_agent",
+            None,
+            "Share one compact WebPreview runtime-green operator packet with current lane evidence and the Agent runtime-status payload.",
+        ),
+        "runtime_green_proof_path": agent_plugin_catalog_handoff_manifest(
+            AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA,
+            None,
+            "copy_agent_plugin_runtime_green_proof_path",
+            "send_agent_plugin_runtime_green_proof_path_to_agent",
+            None,
+            "Share the canonical WebPreview runtime-green proof path with claim gate, proof sources, current best next lane, and Agent runtime-status read sequence.",
+        ),
+        "runtime_green_claim_gate": agent_plugin_catalog_handoff_manifest(
+            AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
+            None,
+            "copy_agent_plugin_runtime_green_claim_gate",
+            "send_agent_plugin_runtime_green_claim_gate_to_agent",
+            None,
+            "Share the compact WebPreview claim gate with ready-lane fraction, first pending evidence, and next operator step.",
+        ),
+        "runtime_green_claim_readiness": agent_plugin_catalog_handoff_manifest(
+            AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
+            None,
+            "copy_agent_plugin_runtime_green_claim_readiness",
+            "send_agent_plugin_runtime_green_claim_readiness_to_agent",
+            None,
+            "Share the single compact readiness packet that combines claim gate, final result state, final checklist, and reporting policy.",
+        ),
+        "runtime_green_report_gate": agent_plugin_catalog_handoff_manifest(
+            AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
+            Some(("badge_schema", AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA)),
+            "copy_agent_plugin_runtime_green_report_gate",
+            "send_agent_plugin_runtime_green_report_gate_to_agent",
+            None,
+            "Share the canonical ready/blocked badge agents must check before reporting runtime-green.",
+        ),
+        "runtime_green_report_badge": agent_plugin_catalog_handoff_manifest(
+            AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA,
+            None,
+            "copy_agent_plugin_runtime_green_report_gate",
+            "send_agent_plugin_runtime_green_report_gate_to_agent",
+            Some("runtime_green_report_gate.badge"),
+            "Render the compact runtime-green ready/blocked row before showing larger proof packets.",
+        ),
+        "runtime_green_final_proof_guide": agent_plugin_catalog_summary_handoff_manifest(
+            AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
+            AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
+            "runtime_green_final_proof_guide_summary",
+            "runtime_green_report_gate",
+            "copy_agent_plugin_runtime_green_final_proof_guide",
+            "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
+            "Guide agents from report badge to final result template, manual just run proof, import, and status recheck.",
+        ),
+        "runtime_green_final_report_packet": agent_plugin_catalog_summary_handoff_manifest(
+            AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
+            AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA,
+            "runtime_green_final_report_packet_summary",
+            "runtime_green_report_gate + final_validation_result_import_receipt",
+            "copy_agent_plugin_runtime_green_final_report_packet",
+            "send_agent_plugin_runtime_green_final_report_packet_to_agent",
+            "Share the compact final reporting packet agents must read before making the final runtime-green status claim.",
+        ),
+        "runtime_green_report_readiness_card": agent_plugin_catalog_summary_handoff_manifest(
+            AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
+            AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
+            "runtime_green_report_readiness_card_summary",
+            "runtime_green_claim_readiness + runtime_green_report_gate + runtime_green_final_report_packet + runtime_green_final_proof_audit",
+            "copy_agent_plugin_runtime_green_report_readiness_card",
+            "send_agent_plugin_runtime_green_report_readiness_card_to_agent",
+            "Share one compact status card for right-side panels that combines claim readiness, report gate, final report packet, final proof audit, and regression-watch status.",
+        )
+    })
+}
+
+fn agent_plugin_catalog_handoff_manifest(
+    schema: &str,
+    extra_schema: Option<(&str, &str)>,
+    copy_action: &str,
+    send_action: &str,
+    source: Option<&str>,
+    purpose: &str,
+) -> Value {
+    let mut manifest = serde_json::json!({
+        "schema": schema,
+        "copy_action": copy_action,
+        "send_action": send_action,
+        "read_only": true,
+        "purpose": purpose,
+    });
+    if let Some((key, value)) = extra_schema {
+        manifest[key] = serde_json::json!(value);
+    }
+    if let Some(source) = source {
+        manifest["source"] = serde_json::json!(source);
+    }
+    manifest
+}
+
+fn agent_plugin_catalog_summary_handoff_manifest(
+    schema: &str,
+    summary_schema: &str,
+    runtime_status_summary_field: &str,
+    source: &str,
+    copy_action: &str,
+    send_action: &str,
+    purpose: &str,
+) -> Value {
+    serde_json::json!({
+        "schema": schema,
+        "summary_schema": summary_schema,
+        "runtime_status_summary_field": runtime_status_summary_field,
+        "source": source,
+        "copy_action": copy_action,
+        "send_action": send_action,
+        "read_only": true,
+        "purpose": purpose,
+    })
+}
+
+fn agent_plugin_catalog_bootstrap_plan(
+    default_plugin_root: &Path,
+    workspace_plugin_root: Option<&PathBuf>,
+    workspace_tools_root: Option<&PathBuf>,
+) -> Value {
+    serde_json::json!({
+        "default_download": true,
+        "download_policy": "download_or_update_on_first_use",
+        "prepare_tool": agent_plugin_catalog_prepare_tool_manifest(),
+        "playwright_adapter_prepare_tool": agent_plugin_catalog_playwright_adapter_prepare_manifest(),
+        "managed_asset_provisioner_tool": agent_plugin_catalog_managed_asset_provisioner_manifest(),
+        "playwright_adapter_invoke_tool": agent_plugin_catalog_playwright_adapter_invoke_manifest(),
+        "playwright_execution_inspect_tool": agent_plugin_catalog_playwright_execution_inspect_manifest(),
+        "zed_data_plugin_root": default_plugin_root.display().to_string(),
+        "workspace_plugin_root": workspace_plugin_root.map(|path| path.display().to_string()),
+        "workspace_tools_root": workspace_tools_root.map(|path| path.display().to_string()),
+        "dx_chrome_extension": {
+            "install_policy": "download_or_update_on_first_use",
+            "preferred_root": workspace_plugin_root
+                .map(|root| root.join("dx-chrome-extension"))
+                .unwrap_or_else(|| default_plugin_root.join("dx-chrome-extension"))
+                .display()
+                .to_string(),
+            "load_mode": "unpacked_extension",
+            "never_write_to_user_browser_profiles": true
+        },
+        "playwright": {
+            "preferred_root": workspace_tools_root
+                .map(|root| root.join("playwright"))
+                .unwrap_or_else(|| default_plugin_root.join("playwright"))
+                .display()
+                .to_string(),
+            "managed_by": "DX Code Editor",
+            "install_policy": "download_or_update_on_first_use"
+        }
+    })
+}
+
+fn agent_plugin_catalog_prepare_tool_manifest() -> Value {
+    serde_json::json!({
+        "name": PREPARE_AGENT_PLUGIN_RUNTIME_TOOL,
+        "dry_run_payload": {
+            "root_mode": "workspace",
+            "create_managed_roots": false,
+            "write_bootstrap_manifest": false
+        },
+        "workspace_payload": {
+            "root_mode": "workspace",
+            "create_managed_roots": true,
+            "write_bootstrap_manifest": true
+        },
+        "zed_data_payload": {
+            "root_mode": "zed_data",
+            "create_managed_roots": true,
+            "write_bootstrap_manifest": true
+        },
+        "requires_permission_for_writes": true,
+        "downloads_or_launches_browser": false
+    })
+}
+
+fn agent_plugin_catalog_playwright_adapter_prepare_manifest() -> Value {
+    serde_json::json!({
+        "name": AGENT_CHROME_PLAYWRIGHT_ADAPTER_TOOL_NAME,
+        "dry_run_payload": {
+            "root_mode": "workspace",
+            "write_adapter_files": false,
+            "include_script_preview": false
+        },
+        "workspace_payload": {
+            "root_mode": "workspace",
+            "write_adapter_files": true,
+            "include_script_preview": false
+        },
+        "zed_data_payload": {
+            "root_mode": "zed_data",
+            "write_adapter_files": true,
+            "include_script_preview": false
+        },
+        "requires_permission_for_writes": true,
+        "installs_packages": false,
+        "launches_browser": false,
+        "runs_node": false
+    })
+}
+
+fn agent_plugin_catalog_managed_asset_provisioner_manifest() -> Value {
+    serde_json::json!({
+        "name": AGENT_PLUGIN_ASSET_PROVISIONER_TOOL_NAME,
+        "result_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RESULT_SCHEMA,
+        "receipt_schema": AGENT_PLUGIN_ASSET_PROVISIONING_RECEIPT_SCHEMA,
+        "asset_readiness_summary_schema": AGENT_PLUGIN_ASSET_READINESS_SUMMARY_SCHEMA,
+        "operator_recipe_schema": AGENT_PLUGIN_MANAGED_ASSET_OPERATOR_RECIPE_SCHEMA,
+        "dry_run_payload": {
+            "root_mode": "workspace",
+            "write_asset_receipt": false,
+            "copy_dx_chrome_extension": false,
+            "dx_chrome_extension_source_root": null,
+            "overwrite_existing_files": false,
+            "include_file_preview": true
+        },
+        "receipt_payload": {
+            "root_mode": "workspace",
+            "write_asset_receipt": true,
+            "copy_dx_chrome_extension": false,
+            "dx_chrome_extension_source_root": null,
+            "overwrite_existing_files": false,
+            "include_file_preview": true
+        },
+        "local_extension_copy_payload": {
+            "root_mode": "workspace",
+            "write_asset_receipt": true,
+            "copy_dx_chrome_extension": true,
+            "dx_chrome_extension_source_root": "<local unpacked extension root>",
+            "overwrite_existing_files": false,
+            "include_file_preview": true
+        },
+        "requires_permission_for_writes": true,
+        "downloads_packages": false,
+        "runs_node": false,
+        "launches_browser": false,
+        "touches_real_browser_profiles": false
+    })
+}
+
+fn agent_plugin_catalog_playwright_adapter_invoke_manifest() -> Value {
+    serde_json::json!({
+        "name": AGENT_CHROME_PLAYWRIGHT_INVOKE_TOOL_NAME,
+        "dry_run_payload": {
+            "root_mode": "workspace",
+            "execute_adapter": false,
+            "timeout_ms": 60000,
+            "include_process_output": false,
+            "include_payload_packet": false
+        },
+        "execute_payload": {
+            "root_mode": "workspace",
+            "execute_adapter": true,
+            "timeout_ms": 60000,
+            "include_process_output": false,
+            "include_payload_packet": false
+        },
+        "requires_permission_for_execution": true,
+        "safe_actions_only": ["open_url", "screenshot", "inspect_element", "dom_snapshot", "runtime_events", "set_viewport", "wait_for_selector"],
+        "input_actions_blocked": ["click", "type_text", "press_key", "scroll"]
+    })
+}
+
+fn agent_plugin_catalog_playwright_execution_inspect_manifest() -> Value {
+    serde_json::json!({
+        "name": AGENT_CHROME_PLAYWRIGHT_EXECUTION_INSPECT_TOOL_NAME,
+        "payload": {
+            "root_mode": "workspace",
+            "max_entries": 8,
+            "include_requests": false,
+            "include_receipts": false
+        },
+        "read_only": true,
+        "launches_browser": false,
+        "runs_node": false
+    })
+}
+
+fn agent_plugin_catalog_bootstrap_readiness_handoff() -> Value {
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
+        "copy_action": "copy_agent_plugin_bootstrap_readiness",
+        "send_action": "send_agent_plugin_bootstrap_readiness_to_agent",
+        "read_only": true,
+        "source": "WebPreview More menu",
+        "purpose": "Copy or send the compact bootstrap readiness packet without copying the full plugin catalog or runtime-status output."
+    })
+}
+
+fn agent_plugin_catalog_permission_model() -> Value {
+    serde_json::json!({
+        "read_only_discovery_without_prompt": true,
+        "browser_interactions_require_explicit_session_unlock": true,
+        "external_chrome_and_pc_use_require_user_visible_permission": true,
+        "receipts_required_for_every_mutating_action": true,
+        "fresh_preflight_required_before_input": true
     })
 }
 

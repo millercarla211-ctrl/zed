@@ -1,3 +1,17 @@
+[2026-05-17] - Agent Plugin Runtime Catalog Compile Readiness
+
+FIXED:
+- Split the oversized Agent plugin catalog `serde_json::json!` payload into focused helper manifests for tools, runtime-status metadata, WebPreview handoffs, bootstrap plan, bootstrap-readiness handoff, and permission model.
+- This addresses the final runtime proof compile blocker: `recursion limit reached while expanding $crate::json_internal!` in `crates/agent/src/tools/agent_plugin_catalog_tool.rs`.
+
+CHANGED:
+- The catalog payload shape remains the same. The largest catalog-level manifest is now shallow, and the agent crate has an explicit recursion budget for the remaining nested static JSON manifest builders.
+
+NOTES:
+- Verified with `rustfmt --edition 2024`, `rustfmt --edition 2024 --check`, `git diff --check`, and `just --dry-run run` before the next final runtime proof attempt.
+- A follow-up final proof pass moved past the original catalog-level macro recursion and exposed the same recursion pressure in the Browser manifest. The agent crate recursion budget was added for those remaining nested static manifest builders.
+- A further final proof pass is currently blocked by `just ensure-build-headroom` because `G:` is below the 25 GB target; no extra Cargo run was started after that guard failure.
+
 [2026-05-17] - Agent Plugin Runtime Build Headroom Guard
 
 ADDED:

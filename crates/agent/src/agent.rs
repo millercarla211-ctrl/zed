@@ -1,3 +1,5 @@
+#![recursion_limit = "512"]
+
 mod db;
 mod legacy_thread;
 mod native_agent_server;
@@ -310,7 +312,9 @@ impl NativeAgent {
         let available_count = registry.available_models(cx).count();
         log::debug!("Total available models: {}", available_count);
 
-        let default_model = registry.default_model().map(|default_model| default_model.model);
+        let default_model = registry
+            .default_model()
+            .map(|default_model| default_model.model);
         let thread = cx.new(|cx| {
             Thread::new(
                 project,
