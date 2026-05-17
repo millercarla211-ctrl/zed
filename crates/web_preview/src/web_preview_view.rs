@@ -118,6 +118,8 @@ const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA: &str 
     "zed.web_preview.agent_browser_final_runtime_headroom_cleanup_result_template.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_cleanup_result_gate.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_headroom_cleanup_result_import_receipt.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_readiness_gate.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA: &str =
@@ -131,6 +133,12 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME: &str =
     "latest-agent-browser-final-validation-result.json";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX: &str =
     "agent-browser-final-validation-result-";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_DIR_NAME: &str =
+    "browser-final-runtime-headroom-cleanup-results";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_FILE_NAME: &str =
+    "latest-agent-browser-final-runtime-headroom-cleanup-result.json";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_ARCHIVE_PREFIX: &str =
+    "agent-browser-final-runtime-headroom-cleanup-result-";
 const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
     "zed.web_preview.agent_browser_function_surfaces.v1";
 const AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA: &str =
@@ -468,6 +476,11 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
     "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
     "send_agent_browser_final_runtime_headroom_cleanup_result_template_to_agent",
+    "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+    "copy_agent_browser_final_runtime_headroom_cleanup_result",
+    "send_agent_browser_final_runtime_headroom_cleanup_result_to_agent",
+    "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
+    "send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent",
     "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
     "send_agent_browser_final_runtime_headroom_cleanup_result_gate_to_agent",
     "copy_agent_browser_final_runtime_headroom_readiness_gate",
@@ -889,6 +902,8 @@ pub struct WebPreviewView {
     latest_agent_browser_final_runtime_headroom_recovery_card: Option<Value>,
     latest_agent_browser_final_runtime_headroom_inspection_checklist: Option<Value>,
     latest_agent_browser_final_runtime_headroom_cleanup_result_template: Option<Value>,
+    latest_agent_browser_final_runtime_headroom_cleanup_result: Option<Value>,
+    latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt: Option<Value>,
     latest_agent_browser_final_runtime_headroom_cleanup_result_gate: Option<Value>,
     latest_agent_browser_final_runtime_headroom_readiness_gate: Option<Value>,
     latest_agent_browser_final_runtime_headroom_reclaim_candidates: Option<Value>,
@@ -1130,6 +1145,8 @@ impl WebPreviewView {
             latest_agent_browser_final_runtime_headroom_recovery_card: None,
             latest_agent_browser_final_runtime_headroom_inspection_checklist: None,
             latest_agent_browser_final_runtime_headroom_cleanup_result_template: None,
+            latest_agent_browser_final_runtime_headroom_cleanup_result: None,
+            latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt: None,
             latest_agent_browser_final_runtime_headroom_cleanup_result_gate: None,
             latest_agent_browser_final_runtime_headroom_readiness_gate: None,
             latest_agent_browser_final_runtime_headroom_reclaim_candidates: None,
@@ -1608,6 +1625,12 @@ impl WebPreviewView {
                 || self
                     .latest_durable_agent_browser_panel_control_result()
                     .is_some();
+        let agent_browser_final_runtime_headroom_cleanup_result_available = self
+            .latest_agent_browser_final_runtime_headroom_cleanup_result
+            .is_some()
+            || self
+                .latest_durable_agent_browser_final_runtime_headroom_cleanup_result()
+                .is_some();
 
         serde_json::json!({
             "schema": "zed.web_preview.session.v1",
@@ -1660,6 +1683,9 @@ impl WebPreviewView {
             "agent_browser_final_runtime_headroom_recovery_card": self.latest_agent_browser_final_runtime_headroom_recovery_card_summary(),
             "agent_browser_final_runtime_headroom_inspection_checklist": self.latest_agent_browser_final_runtime_headroom_inspection_checklist_summary(),
             "agent_browser_final_runtime_headroom_cleanup_result_template": self.latest_agent_browser_final_runtime_headroom_cleanup_result_template_summary(),
+            "agent_browser_final_runtime_headroom_cleanup_result": self.latest_agent_browser_final_runtime_headroom_cleanup_result_summary(),
+            "agent_browser_final_runtime_headroom_cleanup_result_import_receipt": self.latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_summary(),
+            "agent_browser_final_runtime_headroom_cleanup_result_durable_evidence": self.agent_browser_final_runtime_headroom_cleanup_result_durable_evidence(),
             "agent_browser_final_runtime_headroom_cleanup_result_gate": self.latest_agent_browser_final_runtime_headroom_cleanup_result_gate_summary(),
             "agent_browser_final_runtime_headroom_readiness_gate": self.latest_agent_browser_final_runtime_headroom_readiness_gate_summary(),
             "agent_browser_final_runtime_headroom_reclaim_candidates": self.latest_agent_browser_final_runtime_headroom_reclaim_candidates_summary(),
@@ -1785,6 +1811,11 @@ impl WebPreviewView {
                 "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent": true,
                 "copy_agent_browser_final_runtime_headroom_cleanup_result_template": true,
                 "send_agent_browser_final_runtime_headroom_cleanup_result_template_to_agent": true,
+                "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard": true,
+                "copy_agent_browser_final_runtime_headroom_cleanup_result": agent_browser_final_runtime_headroom_cleanup_result_available,
+                "send_agent_browser_final_runtime_headroom_cleanup_result_to_agent": agent_browser_final_runtime_headroom_cleanup_result_available,
+                "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt": self.latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt.is_some(),
+                "send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent": self.latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt.is_some(),
                 "copy_agent_browser_final_runtime_headroom_cleanup_result_gate": true,
                 "send_agent_browser_final_runtime_headroom_cleanup_result_gate_to_agent": true,
                 "copy_agent_browser_final_runtime_headroom_readiness_gate": true,
@@ -2204,6 +2235,15 @@ impl WebPreviewView {
             "final_runtime_headroom_cleanup_result_template_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_template/status").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_template/status")).and_then(Value::as_str),
             "final_runtime_headroom_cleanup_result_template_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
             "final_runtime_headroom_cleanup_result_template_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_template_to_agent",
+            "final_runtime_headroom_cleanup_result_import_action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+            "final_runtime_headroom_cleanup_result_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result/status").and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_ready": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_import_receipt/ready_for_capacity_recheck").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_import_receipt/cleanup_result_gate/ready_for_capacity_recheck")).and_then(Value::as_bool),
+            "final_runtime_headroom_cleanup_result_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result",
+            "final_runtime_headroom_cleanup_result_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_to_agent",
+            "final_runtime_headroom_cleanup_result_import_receipt_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
+            "final_runtime_headroom_cleanup_result_import_receipt_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_import_receipt/status").and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_import_receipt_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
+            "final_runtime_headroom_cleanup_result_import_receipt_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent",
             "final_runtime_headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
             "final_runtime_headroom_cleanup_result_gate_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_gate/status").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate/status")).and_then(Value::as_str),
             "final_runtime_headroom_cleanup_result_gate_ready": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_gate/ready_for_capacity_recheck").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate/ready_for_capacity_recheck")).and_then(Value::as_bool),
@@ -2255,6 +2295,8 @@ impl WebPreviewView {
             "agent_browser_final_runtime_headroom_recovery_card": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_recovery_card").cloned(),
             "agent_browser_final_runtime_headroom_inspection_checklist": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_inspection_checklist").cloned(),
             "agent_browser_final_runtime_headroom_cleanup_result_template": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_template").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_template")).cloned(),
+            "agent_browser_final_runtime_headroom_cleanup_result": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result").cloned(),
+            "agent_browser_final_runtime_headroom_cleanup_result_import_receipt": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_import_receipt").cloned(),
             "agent_browser_final_runtime_headroom_cleanup_result_gate": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_gate").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate")).cloned(),
             "agent_browser_final_runtime_headroom_readiness_gate": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_readiness_gate").cloned(),
             "agent_browser_final_runtime_headroom_reclaim_candidates": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates").cloned(),
@@ -2518,6 +2560,32 @@ impl WebPreviewView {
             .latest_agent_browser_final_runtime_headroom_cleanup_result_template
             .as_ref()?;
         Some(Self::agent_browser_final_runtime_headroom_cleanup_result_template_summary(template))
+    }
+
+    fn latest_agent_browser_final_runtime_headroom_cleanup_result_summary(&self) -> Option<Value> {
+        let result = self
+            .latest_agent_browser_final_runtime_headroom_cleanup_result
+            .as_ref()?;
+        Some(Self::agent_browser_final_runtime_headroom_cleanup_result_template_summary(result))
+    }
+
+    fn latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_summary(
+        &self,
+    ) -> Option<Value> {
+        let receipt = self
+            .latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt
+            .as_ref()?;
+        Some(serde_json::json!({
+            "schema": receipt.pointer("/schema").and_then(Value::as_str),
+            "status": receipt.pointer("/status").and_then(Value::as_str),
+            "imported_at_ms": receipt.pointer("/imported_at_ms").and_then(Value::as_u64),
+            "cleanup_result_status": receipt.pointer("/result_summary/status").and_then(Value::as_str),
+            "cleanup_result_gate_status": receipt.pointer("/cleanup_result_gate/status").and_then(Value::as_str),
+            "ready_for_capacity_recheck": receipt.pointer("/cleanup_result_gate/ready_for_capacity_recheck").and_then(Value::as_bool),
+            "pending_template_field_count": receipt.pointer("/cleanup_result_gate/pending_template_fields").and_then(Value::as_array).map(Vec::len),
+            "durable_write_count": receipt.pointer("/durable_write_count").and_then(Value::as_u64),
+            "next_action": receipt.pointer("/post_import/next_action").and_then(Value::as_str),
+        }))
     }
 
     fn latest_agent_browser_final_runtime_headroom_cleanup_result_gate_summary(
@@ -4112,6 +4180,463 @@ impl WebPreviewView {
         )))]
     }
 
+    fn agent_browser_final_runtime_headroom_cleanup_result_from_import_payload(
+        value: Value,
+    ) -> Option<Value> {
+        if value.pointer("/schema").and_then(Value::as_str)
+            == Some(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA)
+        {
+            return Some(value);
+        }
+
+        [
+            "/agent_browser_final_runtime_headroom_cleanup_result",
+            "/agent_browser_final_runtime_headroom_cleanup_result_template",
+            "/cleanup_result",
+            "/cleanup_result_template",
+            "/headroom_recovery_plan/cleanup_result_template",
+            "/final_runtime_headroom_cleanup_result_template/current_template",
+            "/handoff_artifacts/final_runtime_headroom_cleanup_result_template/current_template",
+            "/payload/final_runtime_headroom_cleanup_result_template",
+            "/payload/cleanup_result_template",
+        ]
+        .iter()
+        .find_map(|pointer| {
+            value.pointer(pointer).cloned().filter(|candidate| {
+                candidate.pointer("/schema").and_then(Value::as_str)
+                    == Some(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA)
+            })
+        })
+    }
+
+    fn agent_browser_final_runtime_headroom_cleanup_result_latest_paths(
+        &self,
+    ) -> Vec<(&'static str, PathBuf, PathBuf)> {
+        let mut paths = Vec::new();
+        if let Some(root_path) = self.workspace_context.root_path.as_ref() {
+            let managed_root = root_path.join("tools").join("agent-plugins");
+            let latest_path = managed_root
+                .join(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_DIR_NAME)
+                .join(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_FILE_NAME);
+            paths.push(("workspace", managed_root, latest_path));
+        }
+
+        let managed_root = data_dir().join("agent-plugins");
+        let latest_path = managed_root
+            .join(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_DIR_NAME)
+            .join(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_FILE_NAME);
+        paths.push(("zed_data", managed_root, latest_path));
+        paths
+    }
+
+    fn persist_agent_browser_final_runtime_headroom_cleanup_result(
+        &self,
+        result: &Value,
+    ) -> Result<Vec<Value>> {
+        let result_json =
+            Self::agent_browser_final_runtime_headroom_cleanup_result_template_json(result);
+        let generated_at_ms = Self::current_epoch_millis();
+        let mut writes = Vec::new();
+
+        for (root_mode, managed_root, latest_path) in
+            self.agent_browser_final_runtime_headroom_cleanup_result_latest_paths()
+        {
+            if !latest_path.starts_with(&managed_root) {
+                return Err(anyhow!(
+                    "Refusing to write final runtime headroom cleanup result outside managed root: {}",
+                    latest_path.display()
+                ));
+            }
+            let result_dir = latest_path.parent().ok_or_else(|| {
+                anyhow!("Final runtime headroom cleanup result path has no parent")
+            })?;
+            let archive_path = result_dir.join(format!(
+                "{}{}.json",
+                AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_ARCHIVE_PREFIX, generated_at_ms
+            ));
+
+            fs::create_dir_all(result_dir).with_context(|| {
+                format!(
+                    "failed to prepare final runtime headroom cleanup result directory {}",
+                    result_dir.display()
+                )
+            })?;
+            fs::write(&latest_path, result_json.as_bytes()).with_context(|| {
+                format!(
+                    "failed to write final runtime headroom cleanup result {}",
+                    latest_path.display()
+                )
+            })?;
+            fs::write(&archive_path, result_json.as_bytes()).with_context(|| {
+                format!(
+                    "failed to archive final runtime headroom cleanup result {}",
+                    archive_path.display()
+                )
+            })?;
+
+            writes.push(serde_json::json!({
+                "root_mode": root_mode,
+                "latest_path": path_string(&latest_path),
+                "archive_path": path_string(&archive_path),
+                "byte_len": result_json.len(),
+            }));
+        }
+
+        Ok(writes)
+    }
+
+    fn latest_durable_agent_browser_final_runtime_headroom_cleanup_result(&self) -> Option<Value> {
+        for (_, _, latest_path) in
+            self.agent_browser_final_runtime_headroom_cleanup_result_latest_paths()
+        {
+            let parsed = fs::read(&latest_path)
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+            if parsed
+                .as_ref()
+                .and_then(|value| value.pointer("/schema").and_then(Value::as_str))
+                == Some(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA)
+            {
+                return parsed;
+            }
+        }
+        None
+    }
+
+    fn agent_browser_final_runtime_headroom_cleanup_result_durable_evidence(&self) -> Value {
+        let mut entries = Vec::new();
+        let mut has_result = false;
+        let mut ready_for_capacity_recheck = false;
+
+        for (root_mode, managed_root, latest_path) in
+            self.agent_browser_final_runtime_headroom_cleanup_result_latest_paths()
+        {
+            let entry = match fs::metadata(&latest_path) {
+                Ok(metadata) if metadata.is_file() => {
+                    let parsed = fs::read(&latest_path)
+                        .ok()
+                        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+                    let summary = parsed.as_ref().map(
+                        Self::agent_browser_final_runtime_headroom_cleanup_result_template_summary,
+                    );
+                    let gate = parsed.as_ref().map(
+                        Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_template,
+                    );
+                    has_result |= summary.is_some();
+                    ready_for_capacity_recheck |= gate
+                        .as_ref()
+                        .and_then(|gate| gate.pointer("/ready_for_capacity_recheck"))
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
+                    serde_json::json!({
+                        "root_mode": root_mode,
+                        "managed_root": path_string(&managed_root),
+                        "latest_path": path_string(&latest_path),
+                        "exists": true,
+                        "byte_len": metadata.len(),
+                        "modified_at_ms": metadata.modified().ok().and_then(system_time_ms),
+                        "summary": summary,
+                        "cleanup_result_gate": gate.map(|gate| {
+                            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_summary(&gate)
+                        }),
+                    })
+                }
+                Ok(_) => serde_json::json!({
+                    "root_mode": root_mode,
+                    "managed_root": path_string(&managed_root),
+                    "latest_path": path_string(&latest_path),
+                    "exists": false,
+                    "reason": "not_a_file",
+                }),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => serde_json::json!({
+                    "root_mode": root_mode,
+                    "managed_root": path_string(&managed_root),
+                    "latest_path": path_string(&latest_path),
+                    "exists": false,
+                }),
+                Err(error) => serde_json::json!({
+                    "root_mode": root_mode,
+                    "managed_root": path_string(&managed_root),
+                    "latest_path": path_string(&latest_path),
+                    "exists": false,
+                    "error": error.to_string(),
+                }),
+            };
+            entries.push(entry);
+        }
+
+        serde_json::json!({
+            "status": if ready_for_capacity_recheck {
+                "managed_cleanup_result_ready_for_capacity_recheck"
+            } else if has_result {
+                "managed_cleanup_result_imported_not_ready"
+            } else {
+                "managed_cleanup_result_missing"
+            },
+            "ready_for_capacity_recheck": ready_for_capacity_recheck,
+            "result_file_name": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_FILE_NAME,
+            "archive_prefix": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_ARCHIVE_PREFIX,
+            "roots": entries,
+        })
+    }
+
+    fn agent_browser_final_runtime_headroom_cleanup_result_gate_from_template(
+        template: &Value,
+    ) -> Value {
+        let schema_valid = template.pointer("/schema").and_then(Value::as_str)
+            == Some(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA);
+        let result_status = template.pointer("/status").and_then(Value::as_str);
+        let cleanup_not_required = result_status == Some("cleanup_result_not_required");
+        let cleanup_performed = template
+            .pointer("/operator_fields/cleanup_performed")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let cleanup_summary_present = template
+            .pointer("/operator_fields/cleanup_summary")
+            .and_then(Value::as_str)
+            .map(|summary| !summary.trim().is_empty())
+            .unwrap_or(false);
+        let after_cleanup_free_gib = template
+            .pointer("/operator_fields/after_cleanup_free_gib")
+            .and_then(Value::as_f64);
+        let minimum_required_free_gib = template
+            .pointer("/target/minimum_required_free_gib")
+            .and_then(Value::as_f64)
+            .unwrap_or(Self::gib_from_bytes(
+                AGENT_BROWSER_FINAL_RUNTIME_MIN_FREE_BYTES,
+            ));
+        let free_space_ready = after_cleanup_free_gib
+            .map(|observed| observed >= minimum_required_free_gib)
+            .unwrap_or(false);
+        let dry_run_status = template
+            .pointer("/operator_fields/dry_run_status")
+            .and_then(Value::as_str);
+        let dry_run_passed = dry_run_status
+            .map(|status| {
+                let normalized = status.to_ascii_lowercase();
+                matches!(
+                    normalized.as_str(),
+                    "pass" | "passed" | "success" | "succeeded" | "ok"
+                )
+            })
+            .unwrap_or(false);
+        let dry_run_summary_present = template
+            .pointer("/operator_fields/dry_run_output_summary")
+            .and_then(Value::as_str)
+            .map(|summary| !summary.trim().is_empty())
+            .unwrap_or(false);
+
+        let mut pending_template_fields = Vec::new();
+        if !schema_valid {
+            pending_template_fields.push(serde_json::json!("schema"));
+        }
+        if !cleanup_not_required {
+            if !cleanup_performed {
+                pending_template_fields
+                    .push(serde_json::json!("operator_fields.cleanup_performed"));
+            }
+            if !cleanup_summary_present {
+                pending_template_fields.push(serde_json::json!("operator_fields.cleanup_summary"));
+            }
+            if !free_space_ready {
+                pending_template_fields
+                    .push(serde_json::json!("operator_fields.after_cleanup_free_gib"));
+            }
+            if !dry_run_passed {
+                pending_template_fields.push(serde_json::json!("operator_fields.dry_run_status"));
+            }
+            if !dry_run_summary_present {
+                pending_template_fields
+                    .push(serde_json::json!("operator_fields.dry_run_output_summary"));
+            }
+        }
+
+        let ready_for_capacity_recheck = schema_valid
+            && (cleanup_not_required
+                || (cleanup_performed
+                    && cleanup_summary_present
+                    && free_space_ready
+                    && dry_run_passed
+                    && dry_run_summary_present));
+        let status = if ready_for_capacity_recheck {
+            "cleanup_result_ready_for_capacity_recheck"
+        } else if schema_valid {
+            "blocked_cleanup_result_incomplete"
+        } else {
+            "blocked_wrong_cleanup_result_schema"
+        };
+        let recommended_next_action = if ready_for_capacity_recheck {
+            "copy_agent_browser_final_runtime_proof_capacity"
+        } else {
+            "copy_agent_browser_final_runtime_headroom_cleanup_result_template"
+        };
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+            "source_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
+            "source": "imported_cleanup_result",
+            "status": status,
+            "ready_for_capacity_recheck": ready_for_capacity_recheck,
+            "target_drive_policy": template.pointer("/target_drive_policy").cloned(),
+            "target": template.pointer("/target").cloned(),
+            "validation": {
+                "schema_valid": schema_valid,
+                "cleanup_not_required": cleanup_not_required,
+                "cleanup_performed": cleanup_performed,
+                "cleanup_summary_present": cleanup_summary_present,
+                "after_cleanup_free_gib": after_cleanup_free_gib,
+                "minimum_required_free_gib": minimum_required_free_gib,
+                "free_space_ready": free_space_ready,
+                "dry_run_status": dry_run_status,
+                "dry_run_passed": dry_run_passed,
+                "dry_run_summary_present": dry_run_summary_present,
+                "removed_or_archived_path_count": template
+                    .pointer("/operator_fields/removed_or_archived_paths")
+                    .and_then(Value::as_array)
+                    .map(Vec::len)
+            },
+            "required_template_fields": [
+                "operator_fields.cleanup_performed",
+                "operator_fields.cleanup_summary",
+                "operator_fields.after_cleanup_free_gib",
+                "operator_fields.dry_run_status",
+                "operator_fields.dry_run_output_summary"
+            ],
+            "pending_template_fields": pending_template_fields,
+            "acceptance_conditions": [
+                "cleanup_performed is true only after the operator manually cleaned confirmed rebuildable target/cache artifacts.",
+                "after_cleanup_free_gib is at least the configured minimum target-drive free GiB.",
+                "dry_run_status is pass after running just --dry-run run.",
+                "dry_run_output_summary records the operator-visible dry-run result."
+            ],
+            "recommended_next_action": recommended_next_action,
+            "recheck_action": "copy_agent_browser_final_runtime_proof_capacity",
+            "dry_run_command": template.pointer("/operator_fields/dry_run_command").and_then(Value::as_str).unwrap_or("just --dry-run run"),
+            "read_only": true,
+            "dispatches_input": false,
+            "deletes_files": false,
+            "moves_target_dir": false,
+            "runs_just": false,
+            "runs_cargo": false
+        })
+    }
+
+    fn agent_browser_final_runtime_headroom_cleanup_result_gate_from_current_result_or_plan(
+        &self,
+        plan: &Value,
+    ) -> Value {
+        self.latest_agent_browser_final_runtime_headroom_cleanup_result
+            .as_ref()
+            .or_else(|| {
+                self.latest_agent_browser_final_runtime_headroom_cleanup_result_template
+                    .as_ref()
+            })
+            .filter(|result| {
+                result.pointer("/schema").and_then(Value::as_str)
+                    == Some(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA)
+            })
+            .map(Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_template)
+            .unwrap_or_else(|| {
+                Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(plan)
+            })
+    }
+
+    fn agent_browser_final_runtime_headroom_cleanup_result_import_receipt(
+        &self,
+        result: &Value,
+        result_summary: &Value,
+        cleanup_result_gate: &Value,
+        durable_writes: &[Value],
+    ) -> Value {
+        let gate_summary = Self::agent_browser_final_runtime_headroom_cleanup_result_gate_summary(
+            cleanup_result_gate,
+        );
+        let ready_for_capacity_recheck = cleanup_result_gate
+            .pointer("/ready_for_capacity_recheck")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let next_action = if ready_for_capacity_recheck {
+            "copy_agent_browser_final_runtime_proof_capacity"
+        } else {
+            "copy_agent_browser_final_runtime_headroom_cleanup_result_template"
+        };
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
+            "status": if ready_for_capacity_recheck {
+                "imported_ready_for_capacity_recheck"
+            } else {
+                "imported_cleanup_result_incomplete"
+            },
+            "imported_at_ms": Self::current_epoch_millis(),
+            "result": result,
+            "result_summary": result_summary,
+            "cleanup_result_gate": cleanup_result_gate,
+            "cleanup_result_gate_summary": gate_summary,
+            "durable_write_count": durable_writes.len(),
+            "durable_writes": durable_writes,
+            "post_import": {
+                "next_action": next_action,
+                "capacity_recheck": {
+                    "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
+                    "send_action": "send_agent_browser_final_runtime_proof_capacity_to_agent",
+                    "purpose": "Regenerate the final runtime capacity packet after the imported cleanup result is ready."
+                },
+                "cleanup_result_gate": {
+                    "copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
+                    "send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_gate_to_agent",
+                    "purpose": "Read the session gate derived from the imported cleanup result before rechecking capacity."
+                }
+            },
+            "copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
+            "send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent",
+            "result_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result",
+            "result_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_to_agent",
+            "read_only": true,
+            "import_wrote_managed_files": true,
+            "writes_files": false,
+            "runs_node": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+        })
+    }
+
+    fn agent_browser_final_runtime_headroom_cleanup_result_import_receipt_json(
+        receipt: &Value,
+    ) -> String {
+        serde_json::to_string_pretty(receipt).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_final_runtime_headroom_cleanup_result_agent_blocks(
+        result: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let summary =
+            Self::agent_browser_final_runtime_headroom_cleanup_result_template_summary(result);
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Agent Browser final runtime headroom cleanup result:\n\nSummary:\n```json\n{}\n```\n\nCleanup result:\n```json\n{}\n```",
+            serde_json::to_string_pretty(&summary).unwrap_or_else(|_| "{}".to_string()),
+            Self::agent_browser_final_runtime_headroom_cleanup_result_template_json(result)
+        )))]
+    }
+
+    fn agent_browser_final_runtime_headroom_cleanup_result_import_receipt_agent_blocks(
+        receipt: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let summary = serde_json::json!({
+            "status": receipt.pointer("/status").and_then(Value::as_str),
+            "cleanup_result_status": receipt.pointer("/result_summary/status").and_then(Value::as_str),
+            "ready_for_capacity_recheck": receipt.pointer("/cleanup_result_gate/ready_for_capacity_recheck").and_then(Value::as_bool),
+            "pending_template_field_count": receipt.pointer("/cleanup_result_gate/pending_template_fields").and_then(Value::as_array).map(Vec::len),
+            "durable_write_count": receipt.pointer("/durable_write_count").and_then(Value::as_u64),
+            "next_action": receipt.pointer("/post_import/next_action").and_then(Value::as_str),
+        });
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Agent Browser final runtime headroom cleanup-result import receipt:\n\nSummary:\n```json\n{}\n```\n\nReceipt:\n```json\n{}\n```",
+            serde_json::to_string_pretty(&summary).unwrap_or_else(|_| "{}".to_string()),
+            Self::agent_browser_final_runtime_headroom_cleanup_result_import_receipt_json(receipt)
+        )))]
+    }
+
     fn agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(plan: &Value) -> Value {
         plan.pointer("/cleanup_result_gate")
             .cloned()
@@ -4864,6 +5389,171 @@ impl WebPreviewView {
         cx.notify();
     }
 
+    fn import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(clipboard_text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+            self.show_toast(
+                "No clipboard text available for headroom cleanup-result import",
+                cx,
+            );
+            return;
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&clipboard_text) else {
+            self.show_toast(
+                "Clipboard does not contain valid headroom cleanup-result JSON",
+                cx,
+            );
+            return;
+        };
+        let Some(result) =
+            Self::agent_browser_final_runtime_headroom_cleanup_result_from_import_payload(value)
+        else {
+            self.show_toast(
+                "Clipboard headroom cleanup-result JSON has the wrong schema",
+                cx,
+            );
+            return;
+        };
+        let result_summary =
+            Self::agent_browser_final_runtime_headroom_cleanup_result_template_summary(&result);
+        let cleanup_result_gate =
+            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_template(&result);
+        let durable_writes =
+            match self.persist_agent_browser_final_runtime_headroom_cleanup_result(&result) {
+                Ok(writes) => writes,
+                Err(error) => {
+                    self.report_action_error(
+                        "Final runtime headroom cleanup-result managed proof write failed",
+                        error,
+                        cx,
+                    );
+                    cx.notify();
+                    return;
+                }
+            };
+        let import_receipt = self
+            .agent_browser_final_runtime_headroom_cleanup_result_import_receipt(
+                &result,
+                &result_summary,
+                &cleanup_result_gate,
+                &durable_writes,
+            );
+        let ready_for_capacity_recheck = cleanup_result_gate
+            .pointer("/ready_for_capacity_recheck")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        self.latest_agent_browser_final_runtime_headroom_cleanup_result_template =
+            Some(result.clone());
+        self.latest_agent_browser_final_runtime_headroom_cleanup_result = Some(result);
+        self.latest_agent_browser_final_runtime_headroom_cleanup_result_gate =
+            Some(cleanup_result_gate);
+        self.latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt =
+            Some(import_receipt);
+        self.show_toast(
+            format!(
+                "Imported headroom cleanup result ({}) and wrote {} managed proof file(s)",
+                if ready_for_capacity_recheck {
+                    "ready"
+                } else {
+                    "incomplete"
+                },
+                durable_writes.len()
+            ),
+            cx,
+        );
+        cx.notify();
+    }
+
+    fn copy_agent_browser_final_runtime_headroom_cleanup_result(&mut self, cx: &mut Context<Self>) {
+        let Some(result) = self
+            .latest_agent_browser_final_runtime_headroom_cleanup_result
+            .clone()
+            .or_else(|| self.latest_durable_agent_browser_final_runtime_headroom_cleanup_result())
+        else {
+            self.show_toast("No final runtime headroom cleanup result imported yet", cx);
+            return;
+        };
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_final_runtime_headroom_cleanup_result_template_json(&result),
+        ));
+        self.show_toast("Copied final runtime headroom cleanup result", cx);
+    }
+
+    fn send_agent_browser_final_runtime_headroom_cleanup_result_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(result) = self
+            .latest_agent_browser_final_runtime_headroom_cleanup_result
+            .clone()
+            .or_else(|| self.latest_durable_agent_browser_final_runtime_headroom_cleanup_result())
+        else {
+            self.show_toast("No final runtime headroom cleanup result imported yet", cx);
+            return;
+        };
+        let blocks =
+            Self::agent_browser_final_runtime_headroom_cleanup_result_agent_blocks(&result);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast(
+            "Sent final runtime headroom cleanup result to the agent panel",
+            cx,
+        );
+        cx.notify();
+    }
+
+    fn copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(receipt) = self
+            .latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt
+            .as_ref()
+        else {
+            self.show_toast(
+                "No final runtime headroom cleanup-result import receipt yet",
+                cx,
+            );
+            return;
+        };
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_final_runtime_headroom_cleanup_result_import_receipt_json(receipt),
+        ));
+        self.show_toast(
+            "Copied final runtime headroom cleanup-result import receipt",
+            cx,
+        );
+    }
+
+    fn send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(receipt) = self
+            .latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt
+            .as_ref()
+        else {
+            self.show_toast(
+                "No final runtime headroom cleanup-result import receipt yet",
+                cx,
+            );
+            return;
+        };
+        let blocks =
+            Self::agent_browser_final_runtime_headroom_cleanup_result_import_receipt_agent_blocks(
+                receipt,
+            );
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast(
+            "Sent final runtime headroom cleanup-result import receipt to the agent panel",
+            cx,
+        );
+        cx.notify();
+    }
+
     fn copy_agent_browser_final_runtime_headroom_cleanup_result_gate(
         &mut self,
         cx: &mut Context<Self>,
@@ -4876,8 +5566,10 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(&plan);
-        let cleanup_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan);
+        let cleanup_gate = self
+            .agent_browser_final_runtime_headroom_cleanup_result_gate_from_current_result_or_plan(
+                &plan,
+            );
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
@@ -4910,8 +5602,10 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(&plan);
         let template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(&plan);
-        let cleanup_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(&plan);
+        let cleanup_gate = self
+            .agent_browser_final_runtime_headroom_cleanup_result_gate_from_current_result_or_plan(
+                &plan,
+            );
         let gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(&capacity);
         let candidates =
@@ -5101,6 +5795,10 @@ impl WebPreviewView {
         let result_summary = self.latest_agent_browser_final_validation_result_summary();
         let result_import_receipt_summary =
             self.latest_agent_browser_final_validation_result_import_receipt_summary();
+        let cleanup_result_summary =
+            self.latest_agent_browser_final_runtime_headroom_cleanup_result_summary();
+        let cleanup_result_import_receipt_summary = self
+            .latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_summary();
         let final_runtime_proof_capacity = self.agent_browser_final_runtime_proof_capacity();
         let final_runtime_capacity_ready = final_runtime_proof_capacity
             .pointer("/ready_for_just_run")
@@ -5118,9 +5816,13 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_capacity(
                 &final_runtime_proof_capacity,
             );
-        let final_runtime_headroom_cleanup_result_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(
+        let final_runtime_headroom_recovery_plan =
+            Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(
                 &final_runtime_proof_capacity,
+            );
+        let final_runtime_headroom_cleanup_result_gate = self
+            .agent_browser_final_runtime_headroom_cleanup_result_gate_from_current_result_or_plan(
+                &final_runtime_headroom_recovery_plan,
             );
         let final_runtime_headroom_readiness_gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(
@@ -5201,6 +5903,8 @@ impl WebPreviewView {
                 "final_validation_result_template": result_template_summary,
                 "final_validation_result": result_summary,
                 "final_validation_result_import_receipt": result_import_receipt_summary,
+                "final_runtime_headroom_cleanup_result": cleanup_result_summary,
+                "final_runtime_headroom_cleanup_result_import_receipt": cleanup_result_import_receipt_summary,
                 "final_runtime_proof_capacity": Self::agent_browser_final_runtime_proof_capacity_summary(
                     &final_runtime_proof_capacity
                 ),
@@ -5212,6 +5916,7 @@ impl WebPreviewView {
                 ),
             },
             "durable_evidence": durable_evidence,
+            "headroom_cleanup_result_durable_evidence": self.agent_browser_final_runtime_headroom_cleanup_result_durable_evidence(),
             "final_runtime_proof_capacity": final_runtime_proof_capacity,
             "final_runtime_headroom_recovery_card": final_runtime_headroom_recovery_card,
             "final_runtime_headroom_inspection_checklist": final_runtime_headroom_inspection_checklist,
@@ -5305,6 +6010,13 @@ impl WebPreviewView {
                 "action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
                 "alternative_action": "send_agent_browser_final_runtime_headroom_cleanup_result_template_to_agent",
                 "reason": "manual_cleanup_result_template_required",
+                "dispatches_input": false
+            }));
+            actions.push(serde_json::json!({
+                "target": "final_runtime_headroom_cleanup_result",
+                "action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+                "alternative_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
+                "reason": "manual_cleanup_result_import_required_after_operator_cleanup",
                 "dispatches_input": false
             }));
             actions.push(serde_json::json!({
@@ -6487,8 +7199,8 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(
                 &final_runtime_headroom_recovery_plan,
             );
-        let final_runtime_headroom_cleanup_result_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(
+        let final_runtime_headroom_cleanup_result_gate = self
+            .agent_browser_final_runtime_headroom_cleanup_result_gate_from_current_result_or_plan(
                 &final_runtime_headroom_recovery_plan,
             );
         let final_runtime_headroom_readiness_gate =
@@ -6719,6 +7431,14 @@ impl WebPreviewView {
                     "headroom_cleanup_result_template_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
                     "headroom_cleanup_result_template_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_template_to_agent",
                     "headroom_cleanup_result_template_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_template",
+                    "headroom_cleanup_result_import_action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+                    "headroom_cleanup_result_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result",
+                    "headroom_cleanup_result_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_to_agent",
+                    "headroom_cleanup_result_import_receipt_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
+                    "headroom_cleanup_result_import_receipt_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
+                    "headroom_cleanup_result_import_receipt_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent",
+                    "headroom_cleanup_result_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result",
+                    "headroom_cleanup_result_import_receipt_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
                     "headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
                     "headroom_cleanup_result_gate_field": "headroom_recovery_plan.cleanup_result_gate",
                     "headroom_cleanup_result_gate_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
@@ -6835,6 +7555,7 @@ impl WebPreviewView {
                     "source_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                     "copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
                     "send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_template_to_agent",
+                    "import_action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
                     "latest_summary": self.latest_agent_browser_final_runtime_headroom_cleanup_result_template_summary(),
                     "current_summary": Self::agent_browser_final_runtime_headroom_cleanup_result_template_summary(
                         &final_runtime_headroom_cleanup_result_template
@@ -6842,6 +7563,31 @@ impl WebPreviewView {
                     "current_template": final_runtime_headroom_cleanup_result_template.clone(),
                     "read_only": true,
                     "purpose": "Copy or send the fillable manual cleanup-result template before checking the cleanup-result gate."
+                },
+                "final_runtime_headroom_cleanup_result": {
+                    "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
+                    "import_receipt_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
+                    "import_action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+                    "copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result",
+                    "send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_to_agent",
+                    "managed_result_dir": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_DIR_NAME,
+                    "managed_result_file": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_FILE_NAME,
+                    "managed_result_archive_prefix": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_ARCHIVE_PREFIX,
+                    "latest_summary": self.latest_agent_browser_final_runtime_headroom_cleanup_result_summary(),
+                    "durable_evidence": self.agent_browser_final_runtime_headroom_cleanup_result_durable_evidence(),
+                    "copy_send_read_only": true,
+                    "import_writes_managed_result": true,
+                    "managed_roots_only": true,
+                    "purpose": "Import, persist, copy, or send the filled target-drive cleanup result after operator cleanup and dry-run evidence."
+                },
+                "final_runtime_headroom_cleanup_result_import_receipt": {
+                    "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
+                    "source_action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+                    "copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
+                    "send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent",
+                    "latest_summary": self.latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_summary(),
+                    "read_only": true,
+                    "purpose": "Share the post-import cleanup-result receipt with durable proof paths and the next capacity recheck action."
                 },
                 "final_runtime_headroom_cleanup_result_gate": {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
@@ -7986,6 +8732,30 @@ impl WebPreviewView {
                 "final_runtime_headroom_cleanup_result_template_send_action": plugin
                     .pointer(
                         "/final_runtime_proof_capacity/headroom_cleanup_result_template_send_action",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_cleanup_result_import_action": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_import_action")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_cleanup_result_copy_action": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_copy_action")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_cleanup_result_send_action": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_send_action")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_cleanup_result_import_receipt_schema": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_cleanup_result_import_receipt_schema",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_cleanup_result_import_receipt_copy_action": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_cleanup_result_import_receipt_copy_action",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_cleanup_result_import_receipt_send_action": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_cleanup_result_import_receipt_send_action",
                     )
                     .and_then(Value::as_str),
                 "final_runtime_headroom_cleanup_result_gate_schema": plugin
@@ -18836,8 +19606,8 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(
                 &agent_browser_final_runtime_headroom_recovery_plan,
             );
-        let agent_browser_final_runtime_headroom_cleanup_result_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(
+        let agent_browser_final_runtime_headroom_cleanup_result_gate = self
+            .agent_browser_final_runtime_headroom_cleanup_result_gate_from_current_result_or_plan(
                 &agent_browser_final_runtime_headroom_recovery_plan,
             );
         let agent_browser_final_runtime_headroom_readiness_gate =
@@ -19153,6 +19923,14 @@ impl WebPreviewView {
                     "final_runtime_headroom_cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
                     "final_runtime_headroom_cleanup_result_template_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
                     "final_runtime_headroom_cleanup_result_template_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_template_to_agent",
+                    "final_runtime_headroom_cleanup_result_import_action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+                    "final_runtime_headroom_cleanup_result_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result",
+                    "final_runtime_headroom_cleanup_result_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_to_agent",
+                    "final_runtime_headroom_cleanup_result_import_receipt_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
+                    "final_runtime_headroom_cleanup_result_import_receipt_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
+                    "final_runtime_headroom_cleanup_result_import_receipt_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent",
+                    "final_runtime_headroom_cleanup_result": self.latest_agent_browser_final_runtime_headroom_cleanup_result_summary(),
+                    "final_runtime_headroom_cleanup_result_import_receipt": self.latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_summary(),
                     "final_runtime_headroom_cleanup_result_template": Self::agent_browser_final_runtime_headroom_cleanup_result_template_summary(
                         &agent_browser_final_runtime_headroom_cleanup_result_template
                     ),
@@ -23868,8 +24646,8 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(
                 &final_runtime_headroom_recovery_plan,
             );
-        let final_runtime_headroom_cleanup_result_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(
+        let final_runtime_headroom_cleanup_result_gate = self
+            .agent_browser_final_runtime_headroom_cleanup_result_gate_from_current_result_or_plan(
                 &final_runtime_headroom_recovery_plan,
             );
         let final_runtime_headroom_readiness_gate =
@@ -24036,12 +24814,38 @@ impl WebPreviewView {
                     "source_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                     "copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
                     "send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_template_to_agent",
+                    "import_action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
                     "latest_summary": self.latest_agent_browser_final_runtime_headroom_cleanup_result_template_summary(),
                     "current_summary": Self::agent_browser_final_runtime_headroom_cleanup_result_template_summary(
                         &final_runtime_headroom_cleanup_result_template
                     ),
                     "read_only": true,
                     "purpose": "Copy or send the fillable manual cleanup-result template before checking cleanup-result readiness."
+                },
+                "final_runtime_headroom_cleanup_result": {
+                    "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
+                    "import_receipt_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
+                    "import_action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+                    "copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result",
+                    "send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_to_agent",
+                    "managed_result_dir": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_DIR_NAME,
+                    "managed_result_file": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_FILE_NAME,
+                    "managed_result_archive_prefix": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_ARCHIVE_PREFIX,
+                    "latest_summary": self.latest_agent_browser_final_runtime_headroom_cleanup_result_summary(),
+                    "durable_evidence": self.agent_browser_final_runtime_headroom_cleanup_result_durable_evidence(),
+                    "copy_send_read_only": true,
+                    "import_writes_managed_result": true,
+                    "managed_roots_only": true,
+                    "purpose": "Import, persist, copy, or send the filled target-drive cleanup result after operator cleanup and dry-run evidence."
+                },
+                "final_runtime_headroom_cleanup_result_import_receipt": {
+                    "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
+                    "source_action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+                    "copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
+                    "send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent",
+                    "latest_summary": self.latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_summary(),
+                    "read_only": true,
+                    "purpose": "Share the post-import cleanup-result receipt with durable proof paths and the next capacity recheck action."
                 },
                 "final_runtime_headroom_cleanup_result_gate": {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
@@ -24847,6 +25651,9 @@ impl WebPreviewView {
                                 "final_runtime_headroom_recovery_card": "copy_agent_browser_final_runtime_headroom_recovery_card",
                                 "final_runtime_headroom_inspection_checklist": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                                 "final_runtime_headroom_cleanup_result_template": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
+                                "final_runtime_headroom_cleanup_result_import": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+                                "final_runtime_headroom_cleanup_result": "copy_agent_browser_final_runtime_headroom_cleanup_result",
+                                "final_runtime_headroom_cleanup_result_import_receipt": "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
                                 "final_runtime_headroom_cleanup_result_gate": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
                                 "final_runtime_headroom_readiness_gate": "copy_agent_browser_final_runtime_headroom_readiness_gate",
                                 "final_runtime_headroom_reclaim_candidates": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
@@ -25047,6 +25854,7 @@ impl WebPreviewView {
                             "final_runtime_headroom_size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
                             "final_runtime_headroom_cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
                             "final_runtime_headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
+                            "final_runtime_headroom_cleanup_result_import_receipt_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
                             "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
                             "final_runtime_headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
                             "final_runtime_blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
@@ -25186,6 +25994,14 @@ impl WebPreviewView {
                             "headroom_cleanup_result_template_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
                             "headroom_cleanup_result_template_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_template_to_agent",
                             "headroom_cleanup_result_template_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_template",
+                            "headroom_cleanup_result_import_action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+                            "headroom_cleanup_result_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result",
+                            "headroom_cleanup_result_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_to_agent",
+                            "headroom_cleanup_result_import_receipt_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA,
+                            "headroom_cleanup_result_import_receipt_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
+                            "headroom_cleanup_result_import_receipt_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent",
+                            "headroom_cleanup_result_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result",
+                            "headroom_cleanup_result_import_receipt_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
                             "headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
                             "headroom_cleanup_result_gate_field": "headroom_recovery_plan.cleanup_result_gate",
                             "headroom_cleanup_result_gate_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
@@ -25379,6 +26195,8 @@ impl WebPreviewView {
                             {"id": "browser.validation.final_runtime_headroom_reclaim_candidates", "state": "available", "description": "Copy or send read-only target-drive reclaim candidates with preserve rules before manual cleanup."},
                             {"id": "browser.validation.final_runtime_headroom_size_inspection", "state": "available", "description": "Expose read-only target/cache size inspection commands before manual headroom recovery."},
                             {"id": "browser.validation.final_runtime_headroom_cleanup_result_template", "state": "available", "description": "Expose a manual cleanup-result template for target-drive headroom recovery evidence."},
+                            {"id": "browser.validation.final_runtime_headroom_cleanup_result_import", "state": "available_explicit_user_action", "description": "Import a filled target-drive cleanup result from the clipboard and persist it under managed Browser proof roots."},
+                            {"id": "browser.validation.final_runtime_headroom_cleanup_result_import_receipt", "state": "available_after_import", "description": "Copy or send the latest target-drive cleanup-result import receipt with managed proof paths."},
                             {"id": "browser.validation.final_runtime_headroom_cleanup_result_gate", "state": "available", "description": "Expose a compact gate for manual cleanup-result readiness before capacity recheck."},
                             {"id": "browser.validation.final_runtime_blocker_board", "state": "available", "description": "Copy or send the ordered final-runtime blocker board across panel-result, panel-proof, and target-drive gates."},
                             {"id": "browser.validation.final_proof_audit", "state": "available", "description": "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."},
@@ -27867,6 +28685,70 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_agent_browser_final_runtime_headroom_cleanup_result_template_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Import Headroom Cleanup Result")
+                                .icon(IconName::Download)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Headroom Cleanup Result")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_final_runtime_headroom_cleanup_result(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Headroom Cleanup Result")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_final_runtime_headroom_cleanup_result_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Headroom Cleanup-Result Import Receipt")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Headroom Cleanup-Result Import Receipt")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent(
                                                 window, cx,
                                             );
                                         });
@@ -30464,6 +31346,8 @@ impl Item for WebPreviewView {
                 latest_agent_browser_final_runtime_headroom_recovery_card: None,
                 latest_agent_browser_final_runtime_headroom_inspection_checklist: None,
                 latest_agent_browser_final_runtime_headroom_cleanup_result_template: None,
+                latest_agent_browser_final_runtime_headroom_cleanup_result: None,
+                latest_agent_browser_final_runtime_headroom_cleanup_result_import_receipt: None,
                 latest_agent_browser_final_runtime_headroom_cleanup_result_gate: None,
                 latest_agent_browser_final_runtime_headroom_readiness_gate: None,
                 latest_agent_browser_final_runtime_headroom_reclaim_candidates: None,

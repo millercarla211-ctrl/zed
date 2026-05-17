@@ -1,3 +1,16 @@
+[2026-05-17] - Final Runtime Headroom Cleanup Result Import
+
+ADDED:
+- `crates/web_preview/src/web_preview_view.rs` now imports filled final-runtime headroom cleanup results from the clipboard, persists managed proof files, derives cleanup-result readiness from operator evidence, and exposes cleanup-result result/receipt copy-send actions.
+- WebPreview session/status packets, final validation observability, final validation bundles, action manifests, More-menu entries, and plugin catalogs now advertise cleanup-result import/result/receipt surfaces.
+
+CHANGED:
+- `crates/agent/src/tools/agent_plugin_catalog_tool.rs` now advertises the cleanup-result import action and import-receipt schema/actions alongside the existing cleanup-result template and gate contracts.
+- `todo.txt` now records the cleanup-result import slice while keeping the feature set at 99/100 until live UI exercise and final runtime proof can run with enough G: headroom.
+
+NOTES:
+- This slice only writes explicit managed proof JSON after a user-triggered clipboard import. It does not delete files, move target directories, run Cargo, run `just run`, launch browsers, dispatch input, or mutate browser profiles.
+
 [2026-05-17] - Final Runtime Headroom Cleanup Result Template Handoff
 
 ADDED:
