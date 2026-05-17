@@ -104,6 +104,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_proof_capacity.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_headroom_recovery_plan.v1";
 const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_proof_audit.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
@@ -2106,6 +2108,9 @@ impl WebPreviewView {
             "final_runtime_proof_capacity_status": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/status").and_then(Value::as_str),
             "final_runtime_proof_capacity_ready": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/ready_for_just_run").and_then(Value::as_bool),
             "final_runtime_proof_capacity_observed_free_gib": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/target/observed_free_gib").and_then(Value::as_f64),
+            "final_runtime_headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
+            "final_runtime_headroom_recovery_plan_status": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/status").and_then(Value::as_str),
+            "final_runtime_headroom_recovery_first_action": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/first_action/id").and_then(Value::as_str),
             "panel_control_result_ledger_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/status").and_then(Value::as_str),
             "panel_control_result_ledger_result_count": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/result_count").and_then(Value::as_u64),
             "panel_control_result_ledger_latest_result_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/latest_result_status").and_then(Value::as_str),
@@ -2371,6 +2376,9 @@ impl WebPreviewView {
             "required_free_gib": capacity.pointer("/target/required_free_gib").and_then(Value::as_f64),
             "observed_free_gib": capacity.pointer("/target/observed_free_gib").and_then(Value::as_f64),
             "missing_free_gib": capacity.pointer("/target/missing_free_gib").and_then(Value::as_f64),
+            "headroom_recovery_plan_schema": capacity.pointer("/headroom_recovery_plan/schema").and_then(Value::as_str),
+            "headroom_recovery_plan_status": capacity.pointer("/headroom_recovery_plan/status").and_then(Value::as_str),
+            "headroom_recovery_first_action": capacity.pointer("/headroom_recovery_plan/first_action/id").and_then(Value::as_str),
             "next_action": capacity.pointer("/next_action").and_then(Value::as_str),
         })
     }
@@ -3012,6 +3020,90 @@ impl WebPreviewView {
         None
     }
 
+    fn agent_browser_final_runtime_headroom_recovery_plan(
+        status: &str,
+        absolute_target_dir: &Path,
+        target_root: Option<&Path>,
+        observed_free_bytes: Option<u64>,
+        missing_free_bytes: Option<u64>,
+    ) -> Value {
+        let target_dir = path_string(absolute_target_dir);
+        let target_root = target_root.map(|root| path_string(root));
+        let recovery_status = match status {
+            "target_headroom_ready" => "no_recovery_needed",
+            "target_headroom_blocked" => "target_drive_cleanup_required",
+            _ => "target_drive_unknown",
+        };
+        let first_action = match recovery_status {
+            "no_recovery_needed" => serde_json::json!({
+                "id": "continue_to_manual_panel_and_runtime_proof",
+                "label": "Target-drive headroom is ready; continue to the panel live result gate and final just run proof.",
+                "writes_files": false,
+            }),
+            "target_drive_cleanup_required" => serde_json::json!({
+                "id": "inspect_rebuildable_target_artifacts",
+                "label": "Inspect rebuildable build/cache artifacts under the reported target directory before any manual cleanup.",
+                "writes_files": false,
+            }),
+            _ => serde_json::json!({
+                "id": "resolve_target_drive_detection",
+                "label": "Open a workspace with a resolvable target drive or set CARGO_TARGET_DIR, then regenerate this capacity packet.",
+                "writes_files": false,
+            }),
+        };
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
+            "status": recovery_status,
+            "target": {
+                "target_dir": target_dir,
+                "target_root": target_root,
+                "observed_free_bytes": observed_free_bytes,
+                "observed_free_gib": observed_free_bytes.map(Self::gib_from_bytes),
+                "missing_free_bytes": missing_free_bytes,
+                "missing_free_gib": missing_free_bytes.map(Self::gib_from_bytes),
+            },
+            "first_action": first_action,
+            "safe_inspection_commands": [
+                "Get-PSDrive -Name <target-drive-letter>",
+                "Get-ChildItem -LiteralPath <target-dir> -Force",
+                "Get-ChildItem -LiteralPath <workspace-root> -Directory -Force | Sort-Object LastWriteTime -Descending",
+                "just --dry-run run"
+            ],
+            "candidate_reclaim_zones": [
+                {
+                    "id": "workspace_target_dir",
+                    "path": "target_dir",
+                    "reason": "Rust build artifacts are rebuildable, but only clean them manually after confirming no needed runtime proof is in progress."
+                },
+                {
+                    "id": "stale_run_logs",
+                    "path": ".codex-just-run*.log",
+                    "reason": "Local run logs are usually small and disposable, but inspect first and preserve useful proof logs."
+                },
+                {
+                    "id": "external_build_caches",
+                    "path": "other build output folders on the same target drive",
+                    "reason": "Only remove explicitly rebuildable outputs after checking they are not source, model, inspiration, or user asset folders."
+                }
+            ],
+            "preserve_policy": [
+                "Never delete source trees, user assets, models, inspirations, tools, or unmanaged folders from this packet.",
+                "Do not perform cleanup from the AI panel; this is an inspection-only recovery plan.",
+                "After manual cleanup, rerun the capacity packet and then just --dry-run run before the final just run proof."
+            ],
+            "ready_condition": "final_runtime_proof_capacity.ready_for_just_run == true and panel_live_validation_result_gate.ready_for_final_runtime == true",
+            "safety": {
+                "read_only": true,
+                "mutates_files": false,
+                "dispatches_input": false,
+                "runs_just": false,
+                "runs_cargo": false,
+                "deletes_files": false
+            }
+        })
+    }
+
     fn agent_browser_final_runtime_proof_capacity(&self) -> Value {
         let target_dir = self.agent_browser_final_runtime_target_dir();
         let absolute_target_dir = self.absolute_runtime_target_dir(&target_dir);
@@ -3041,6 +3133,13 @@ impl WebPreviewView {
         } else {
             "Open a Windows WebPreview workspace with a resolvable target drive, then rerun the capacity preflight before just run."
         };
+        let headroom_recovery_plan = Self::agent_browser_final_runtime_headroom_recovery_plan(
+            status,
+            &absolute_target_dir,
+            target_root.as_deref(),
+            observed_free_bytes,
+            missing_free_bytes,
+        );
 
         serde_json::json!({
             "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
@@ -3065,6 +3164,7 @@ impl WebPreviewView {
                 "minimum_target_drive_free_gib": 18.0,
                 "guarded_reason": "Avoid starting the large Zed build/run proof when the target drive cannot satisfy the recipe headroom check."
             },
+            "headroom_recovery_plan": headroom_recovery_plan,
             "operator_steps": [
                 "Read this preflight before copying the final validation bundle or running just run.",
                 "If target_headroom_blocked, free target/cache space or move CARGO_TARGET_DIR to a drive with at least 18 GiB free.",
@@ -4603,6 +4703,8 @@ impl WebPreviewView {
                 },
                 "final_runtime_proof_capacity": {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                    "headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
+                    "headroom_recovery_plan_field": "headroom_recovery_plan",
                     "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
                     "send_action": "send_agent_browser_final_runtime_proof_capacity_to_agent",
                     "latest_summary": self.latest_agent_browser_final_runtime_proof_capacity_summary(),
@@ -5656,6 +5758,12 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "final_runtime_proof_capacity_schema": plugin
                     .pointer("/final_runtime_proof_capacity/schema")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_recovery_plan_schema": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_schema")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_recovery_plan_field": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_field")
                     .and_then(Value::as_str),
                 "final_runtime_proof_capacity_copy_action": plugin
                     .pointer("/final_runtime_proof_capacity/copy_action")
@@ -22254,6 +22362,7 @@ impl WebPreviewView {
                             "browser_panel_live_proof_status_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
                             "browser_panel_live_proof_readiness_card_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_READINESS_CARD_SCHEMA,
                             "final_runtime_proof_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                            "final_runtime_headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
                             "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -22374,6 +22483,8 @@ impl WebPreviewView {
                         },
                         "final_runtime_proof_capacity": {
                             "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                            "headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
+                            "headroom_recovery_plan_field": "headroom_recovery_plan",
                             "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
                             "send_action": "send_agent_browser_final_runtime_proof_capacity_to_agent",
                             "status_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity",
@@ -22534,6 +22645,7 @@ impl WebPreviewView {
                             {"id": "browser.validation.final_result_import_receipt", "state": "available", "description": "Copy or send the final result import receipt with durable proof paths and the next runtime-status recheck."},
                             {"id": "browser.validation.final_proof_state", "state": "available", "description": "Copy or send compact final proof-state observability and recovery actions without generating larger proof packets."},
                             {"id": "browser.validation.final_runtime_capacity", "state": "available", "description": "Copy or send target-drive headroom before final just run proof."},
+                            {"id": "browser.validation.final_runtime_headroom_recovery", "state": "available", "description": "Read the non-destructive target-drive recovery plan embedded in the final runtime capacity packet."},
                             {"id": "browser.validation.final_proof_audit", "state": "available", "description": "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},
                             {"id": "browser.action.type", "state": "available_when_unlocked_payload_required", "description": "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."},

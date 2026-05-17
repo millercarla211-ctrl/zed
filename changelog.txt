@@ -1,3 +1,15 @@
+[2026-05-17] - Browser Chrome Final Runtime Headroom Recovery
+
+ADDED:
+- Final runtime capacity packets now embed `zed.web_preview.agent_browser_final_runtime_headroom_recovery_plan.v1` with safe inspection commands, preserve rules, candidate reclaim zones, first action, and the final ready condition.
+- Status summaries and Agent/WebPreview plugin catalogs now advertise the headroom recovery plan schema and field beside the existing final runtime capacity handoff.
+
+CHANGED:
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening still at 99/100 and the remaining live UI/runtime validation target after target-drive headroom is restored.
+
+NOTES:
+- This slice is a read-only recovery plan. It does not delete files, run `just`, run Cargo, launch browsers, run Node or Playwright, take screenshots, dispatch input, or touch browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Live UI Proof Checklist
 
 ADDED:
