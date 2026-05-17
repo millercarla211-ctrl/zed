@@ -1,3 +1,17 @@
+[2026-05-17] - Browser Chrome Panel Control Events
+
+ADDED:
+- Agent Browser panel card affordances now include `zed.web_preview.agent_browser_panel_card_control_event.v1` with emitted action, action group, event kind, permission gate, variant choices, receipt expectations, update fields, instructions, and audit policy.
+- Agent Browser panel decks now include a control-event summary with total, missing, read-only, interactive, viewport-variant, permissioned, disabled, and unknown event counts.
+
+CHANGED:
+- Panel deck render contracts now require control-event coverage before reporting render-ready status, and Agent Panel summaries show each affordance event kind next to its control state.
+- Status packet summaries, action manifests, and Agent/WebPreview plugin catalogs now advertise the control-event schema and field for static panel event wiring.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 57/100 and the next remaining proof targets.
+
+NOTES:
+- This is a panel event-contract metadata slice. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Control State
 
 ADDED:
