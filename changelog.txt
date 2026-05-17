@@ -1,3 +1,16 @@
+[2026-05-18] - Final Runtime Blocker Board Cleanup Recheck
+
+ADDED:
+- `crates/web_preview/src/web_preview_view.rs` now feeds the current or durable final-runtime cleanup-result gate into final-runtime blocker boards.
+- Final-runtime blocker boards now distinguish `blocked_by_target_drive_capacity_recheck` from ordinary target-drive headroom blockers when imported cleanup evidence is ready to recheck capacity.
+
+CHANGED:
+- Blocker-board summaries now expose cleanup-result gate status/readiness and the board actions include cleanup-result template/import/gate handoffs alongside capacity and reclaim actions.
+- `todo.txt` records the blocker-board cleanup recheck slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Final Runtime Cleanup Result Runtime Status
 
 ADDED:

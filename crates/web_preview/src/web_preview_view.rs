@@ -2829,6 +2829,8 @@ impl WebPreviewView {
             "panel_result_gate_ready": board.pointer("/summaries/panel_live_validation_result_gate/ready_for_final_runtime").and_then(Value::as_bool),
             "panel_proof_card_ready": board.pointer("/summaries/panel_live_proof_readiness_card/ready_for_final_runtime").and_then(Value::as_bool),
             "headroom_ready": board.pointer("/summaries/final_runtime_headroom_readiness_gate/ready_for_just_run").and_then(Value::as_bool),
+            "cleanup_result_gate_status": board.pointer("/summaries/final_runtime_headroom_cleanup_result_gate/status").and_then(Value::as_str),
+            "cleanup_result_ready_for_capacity_recheck": board.pointer("/summaries/final_runtime_headroom_cleanup_result_gate/ready_for_capacity_recheck").and_then(Value::as_bool),
             "copy_action": board.pointer("/actions/copy_blocker_board").and_then(Value::as_str),
             "send_action": board.pointer("/actions/send_blocker_board").and_then(Value::as_str),
             "read_only": board.pointer("/safety/read_only").and_then(Value::as_bool),
@@ -4525,7 +4527,8 @@ impl WebPreviewView {
         &self,
         plan: &Value,
     ) -> Value {
-        self.latest_agent_browser_final_runtime_headroom_cleanup_result
+        if let Some(result) = self
+            .latest_agent_browser_final_runtime_headroom_cleanup_result
             .as_ref()
             .or_else(|| {
                 self.latest_agent_browser_final_runtime_headroom_cleanup_result_template
@@ -4535,10 +4538,25 @@ impl WebPreviewView {
                 result.pointer("/schema").and_then(Value::as_str)
                     == Some(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA)
             })
-            .map(Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_template)
-            .unwrap_or_else(|| {
-                Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(plan)
+        {
+            return Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_template(
+                result,
+            );
+        }
+
+        if let Some(result) = self
+            .latest_durable_agent_browser_final_runtime_headroom_cleanup_result()
+            .filter(|result| {
+                result.pointer("/schema").and_then(Value::as_str)
+                    == Some(AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA)
             })
+        {
+            return Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_template(
+                &result,
+            );
+        }
+
+        Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_plan(plan)
     }
 
     fn agent_browser_final_runtime_headroom_cleanup_result_import_receipt(
@@ -4880,6 +4898,7 @@ impl WebPreviewView {
         panel_result_gate: &Value,
         panel_proof_card: &Value,
         final_runtime_capacity: &Value,
+        cleanup_result_gate: &Value,
     ) -> Value {
         let panel_result_gate_ready = panel_result_gate
             .pointer("/ready_for_final_runtime")
@@ -4891,6 +4910,10 @@ impl WebPreviewView {
             .unwrap_or(false);
         let headroom_ready = final_runtime_capacity
             .pointer("/ready_for_just_run")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let cleanup_result_ready_for_capacity_recheck = cleanup_result_gate
+            .pointer("/ready_for_capacity_recheck")
             .and_then(Value::as_bool)
             .unwrap_or(false);
         let headroom_gate = Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(
@@ -4926,15 +4949,38 @@ impl WebPreviewView {
             }));
         }
         if !headroom_ready {
+            let (id, label, action, alternative_action) =
+                if cleanup_result_ready_for_capacity_recheck {
+                    (
+                        "final_runtime_capacity_recheck_required",
+                        "The imported cleanup result is ready; recheck final runtime capacity before just run.",
+                        "copy_agent_browser_final_runtime_proof_capacity",
+                        "send_agent_browser_final_runtime_proof_capacity_to_agent",
+                    )
+                } else {
+                    (
+                        "final_runtime_headroom",
+                        "The target drive must have at least 18 GiB free before just run.",
+                        "copy_agent_browser_final_runtime_headroom_readiness_gate",
+                        "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
+                    )
+                };
+
             blockers.push(serde_json::json!({
-                "id": "final_runtime_headroom",
-                "label": "The target drive must have at least 18 GiB free before just run.",
+                "id": id,
+                "label": label,
                 "status": final_runtime_capacity.pointer("/status").and_then(Value::as_str),
-                "action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
-                "alternative_action": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
+                "action": action,
+                "alternative_action": alternative_action,
+                "cleanup_result_gate_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
+                "cleanup_result_import_action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+                "cleanup_result_template_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
                 "reclaim_candidates_action": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
                 "ready": false,
-                "summary": Self::agent_browser_final_runtime_headroom_readiness_gate_summary(&headroom_gate),
+                "summary": {
+                    "headroom": Self::agent_browser_final_runtime_headroom_readiness_gate_summary(&headroom_gate),
+                    "cleanup_result_gate": Self::agent_browser_final_runtime_headroom_cleanup_result_gate_summary(cleanup_result_gate),
+                },
             }));
         }
 
@@ -4946,12 +4992,14 @@ impl WebPreviewView {
             panel_result_gate_ready,
             panel_proof_card_ready,
             headroom_ready,
+            cleanup_result_ready_for_capacity_recheck,
             blocker_count,
         ) {
-            (true, _, _, _, _) => "ready_for_final_runtime_proof",
-            (_, false, _, _, 1) => "blocked_by_panel_live_result_gate",
-            (_, _, false, _, 1) => "blocked_by_panel_live_proof_card",
-            (_, _, _, false, 1) => "blocked_by_target_drive_headroom",
+            (true, _, _, _, _, _) => "ready_for_final_runtime_proof",
+            (_, false, _, _, _, 1) => "blocked_by_panel_live_result_gate",
+            (_, _, false, _, _, 1) => "blocked_by_panel_live_proof_card",
+            (_, _, _, false, true, 1) => "blocked_by_target_drive_capacity_recheck",
+            (_, _, _, false, _, 1) => "blocked_by_target_drive_headroom",
             _ => "blocked_by_multiple_final_runtime_gates",
         };
         let recommended_action = first_blocker
@@ -4973,6 +5021,7 @@ impl WebPreviewView {
                 "panel_live_proof_readiness_card": Self::agent_browser_panel_live_proof_readiness_card_summary(panel_proof_card),
                 "final_runtime_proof_capacity": Self::agent_browser_final_runtime_proof_capacity_summary(final_runtime_capacity),
                 "final_runtime_headroom_readiness_gate": Self::agent_browser_final_runtime_headroom_readiness_gate_summary(&headroom_gate),
+                "final_runtime_headroom_cleanup_result_gate": Self::agent_browser_final_runtime_headroom_cleanup_result_gate_summary(cleanup_result_gate),
                 "final_runtime_headroom_reclaim_candidates": Self::agent_browser_final_runtime_headroom_reclaim_candidates_summary(&reclaim_candidates),
             },
             "actions": {
@@ -4986,6 +5035,11 @@ impl WebPreviewView {
                 "send_final_runtime_capacity": "send_agent_browser_final_runtime_proof_capacity_to_agent",
                 "copy_headroom_readiness_gate": "copy_agent_browser_final_runtime_headroom_readiness_gate",
                 "send_headroom_readiness_gate": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
+                "copy_headroom_cleanup_result_template": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
+                "send_headroom_cleanup_result_template": "send_agent_browser_final_runtime_headroom_cleanup_result_template_to_agent",
+                "import_headroom_cleanup_result": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+                "copy_headroom_cleanup_result_gate": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
+                "send_headroom_cleanup_result_gate": "send_agent_browser_final_runtime_headroom_cleanup_result_gate_to_agent",
                 "copy_headroom_reclaim_candidates": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
                 "send_headroom_reclaim_candidates": "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent",
                 "copy_final_validation_bundle": "copy_agent_browser_final_validation_bundle",
@@ -5009,10 +5063,19 @@ impl WebPreviewView {
         let panel_proof_card =
             self.agent_browser_panel_live_proof_readiness_card_from_gate(&panel_result_gate);
         let final_runtime_capacity = self.agent_browser_final_runtime_proof_capacity();
+        let final_runtime_headroom_recovery_plan =
+            Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(
+                &final_runtime_capacity,
+            );
+        let cleanup_result_gate = self
+            .agent_browser_final_runtime_headroom_cleanup_result_gate_from_current_result_or_plan(
+                &final_runtime_headroom_recovery_plan,
+            );
         Self::agent_browser_final_runtime_blocker_board_from_parts(
             &panel_result_gate,
             &panel_proof_card,
             &final_runtime_capacity,
+            &cleanup_result_gate,
         )
     }
 
@@ -5847,6 +5910,7 @@ impl WebPreviewView {
                 &panel_live_validation_result_gate,
                 &panel_live_proof_readiness_card,
                 &final_runtime_proof_capacity,
+                &final_runtime_headroom_cleanup_result_gate,
             );
         let durable_evidence = self.agent_browser_final_validation_result_durable_evidence();
         let durable_runtime_green_candidate = durable_evidence
@@ -7243,6 +7307,7 @@ impl WebPreviewView {
                 &panel_live_validation_result_gate,
                 &panel_live_proof_readiness_card,
                 &final_runtime_proof_capacity,
+                &final_runtime_headroom_cleanup_result_gate,
             );
 
         serde_json::json!({
@@ -19623,6 +19688,7 @@ impl WebPreviewView {
                 &agent_browser_panel_live_validation_result_gate,
                 &agent_browser_panel_live_proof_readiness_card,
                 &agent_browser_final_runtime_proof_capacity,
+                &agent_browser_final_runtime_headroom_cleanup_result_gate,
             );
         let agent_browser_panel_live_ui_proof_checklist =
             Self::agent_browser_panel_live_ui_proof_checklist_from_parts(
@@ -24663,6 +24729,7 @@ impl WebPreviewView {
                 &agent_browser_panel_live_validation_result_gate,
                 &agent_browser_panel_live_proof_readiness_card,
                 &final_runtime_proof_capacity,
+                &final_runtime_headroom_cleanup_result_gate,
             );
         let agent_browser_panel_live_ui_proof_checklist =
             Self::agent_browser_panel_live_ui_proof_checklist_from_parts(
