@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Control Result Ledger
+
+ADDED:
+- WebPreview now builds `zed.web_preview.agent_browser_panel_control_result_ledger.v1` from the latest action-payload import receipt, blocked interaction receipt, and success receipt template.
+- Added Copy/Send Panel Control Result Ledger actions and More-menu entries so Agent panels can consume normalized queued, completed, blocked, failed, and template-only result state without parsing unrelated packets.
+
+CHANGED:
+- Session snapshots, status packets, action manifests, and Agent/WebPreview plugin catalogs now advertise the panel control result ledger schema, copy/send actions, status-packet field, and source receipt fields.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 63/100 and the remaining live UI, durable import, and runtime validation targets.
+
+NOTES:
+- This is a read-only result-ledger slice. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or write durable receipt files.
+
 [2026-05-17] - Browser Chrome Panel Control Results
 
 ADDED:

@@ -79,6 +79,8 @@ const AGENT_BROWSER_PANEL_CARD_CONTROL_EVENT_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_control_event.v1";
 const AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_control_result.v1";
+const AGENT_BROWSER_PANEL_CONTROL_RESULT_LEDGER_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_control_result_ledger.v1";
 const AGENT_BROWSER_PANEL_CARD_INTERACTION_VALIDATION_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_interaction_validation.v1";
 const AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA: &str =
@@ -875,6 +877,15 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "panel_card_deck_control_result_field": plugin
                 .pointer("/panel_card_deck/control_result_field")
                 .and_then(Value::as_str),
+            "panel_control_result_ledger_schema": plugin
+                .pointer("/panel_control_result_ledger/schema")
+                .and_then(Value::as_str),
+            "panel_control_result_ledger_copy_action": plugin
+                .pointer("/panel_control_result_ledger/copy_action")
+                .and_then(Value::as_str),
+            "panel_control_result_ledger_send_action": plugin
+                .pointer("/panel_control_result_ledger/send_action")
+                .and_then(Value::as_str),
             "panel_card_deck_interaction_validation_schema": plugin
                 .pointer("/panel_card_deck/interaction_validation_schema")
                 .and_then(Value::as_str),
@@ -1271,6 +1282,7 @@ fn browser_plugin_manifest() -> Value {
                 "runtime_green_final_report_packet": "copy_agent_plugin_runtime_green_final_report_packet",
                 "runtime_green_report_readiness_card": "copy_agent_plugin_runtime_green_report_readiness_card",
                 "panel_card_deck": "copy_agent_browser_panel_card_deck",
+                "panel_control_result_ledger": "copy_agent_browser_panel_control_result_ledger",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -1336,6 +1348,22 @@ fn browser_plugin_manifest() -> Value {
                 "chrome.managed.latest_action": {"primary_action": "copy_managed_chrome_execution_status", "refresh_action": "copy_managed_chrome_execution_status", "refresh_label": "Refresh Managed Chrome Status", "details_action": "send_managed_chrome_execution_status_to_agent"},
                 "pc_use.latest_proof": {"primary_action": "copy_pc_use_status", "refresh_action": "copy_pc_use_status", "refresh_label": "Refresh PC-use Status", "details_action": "send_pc_use_status_to_agent"}
             }
+        },
+        "panel_control_result_ledger": {
+            "schema": AGENT_BROWSER_PANEL_CONTROL_RESULT_LEDGER_SCHEMA,
+            "control_result_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
+            "source_deck_schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
+            "session_field": "agent_browser_panel_control_result_ledger",
+            "status_packet_field": "packet.latest.agent_browser_panel_control_result_ledger",
+            "copy_action": "copy_agent_browser_panel_control_result_ledger",
+            "send_action": "send_agent_browser_panel_control_result_ledger_to_agent",
+            "source_receipts": [
+                "session.agent_browser_action_payload_import_receipt",
+                "session.blocked_interaction_receipt",
+                "session.successful_interaction_receipt"
+            ],
+            "read_only": true,
+            "purpose": "Normalize panel control results from the latest payload import, blocked receipt, and success receipt template without dispatching input."
         },
         "bootstrap_readiness_handoff": {
             "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
@@ -1567,6 +1595,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.viewport.responsive", "available", "Switch the active WebPreview between full, phone, tablet, laptop, and rotated responsive viewports."),
             capability("browser.function_surfaces", "available", "Copy or send the concrete WebPreview screenshot, inspect, DevTools, and responsive viewport surface map."),
             capability("browser.panel_card_deck", "available", "Copy or send one compact Agent Panel deck for screenshot, annotation, inspect, DevTools, responsive viewport, managed Chrome, and PC-use proof cards."),
+            capability("browser.panel_control_result_ledger", "available", "Copy or send normalized panel control results derived from the latest receipt and import surfaces."),
             capability("browser.plugin_bootstrap_readiness", "available", "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."),
             capability("browser.runtime_green_claim_readiness", "available", "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."),
             capability("browser.runtime_green_report_gate", "available", "Copy or send the canonical runtime-green ready/blocked report gate."),
