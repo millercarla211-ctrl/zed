@@ -16655,6 +16655,38 @@ impl WebPreviewView {
         badge
     }
 
+    fn agent_plugin_runtime_green_report_badge_blocker_strip(badge: &Value) -> Value {
+        serde_json::json!({
+            "stale_final_result_missing_expected_required_check_count": badge
+                .get("stale_final_result_missing_expected_required_check_count")
+                .and_then(Value::as_u64),
+            "browser_panel_live_validation_result_gate_ready": badge
+                .get("browser_panel_live_validation_result_gate_ready")
+                .and_then(Value::as_bool),
+            "browser_panel_live_validation_result_gate_status": badge
+                .get("browser_panel_live_validation_result_gate_status")
+                .and_then(Value::as_str),
+            "browser_final_runtime_capacity_ready": badge
+                .get("browser_final_runtime_capacity_ready")
+                .and_then(Value::as_bool),
+            "browser_final_runtime_capacity_status": badge
+                .get("browser_final_runtime_capacity_status")
+                .and_then(Value::as_str),
+            "browser_final_runtime_missing_free_gib": badge
+                .get("browser_final_runtime_missing_free_gib")
+                .and_then(Value::as_f64),
+            "browser_final_runtime_first_blocker": badge
+                .get("browser_final_runtime_first_blocker")
+                .and_then(Value::as_str),
+            "browser_final_runtime_recommended_action": badge
+                .get("browser_final_runtime_recommended_action")
+                .and_then(Value::as_str),
+            "browser_final_runtime_headroom_required": badge
+                .get("browser_final_runtime_headroom_required")
+                .and_then(Value::as_bool),
+        })
+    }
+
     fn agent_plugin_runtime_green_final_proof_guide_snapshot(&self) -> Value {
         let report_gate = self.agent_plugin_runtime_green_report_gate_snapshot();
         self.agent_plugin_runtime_green_final_proof_guide_from_report_gate(&report_gate)
@@ -16713,12 +16745,15 @@ impl WebPreviewView {
                 .and_then(Value::as_str)
                 .unwrap_or("copy_agent_plugin_runtime_green_report_gate")
         };
+        let browser_final_blocker_strip =
+            Self::agent_plugin_runtime_green_report_badge_blocker_strip(&badge);
 
         serde_json::json!({
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
             "status": status,
             "root_mode": root_mode,
             "badge": badge,
+            "browser_final_blocker_strip": browser_final_blocker_strip,
             "can_report_runtime_green": can_report,
             "blocker": blocker,
             "next_action": next_action,
@@ -19183,13 +19218,54 @@ impl WebPreviewView {
             .get("can_report_runtime_green")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let stale_required_check_count = guide
+            .pointer("/browser_final_blocker_strip/stale_final_result_missing_expected_required_check_count")
+            .or_else(|| guide.pointer("/badge/stale_final_result_missing_expected_required_check_count"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let panel_gate_status = guide
+            .pointer(
+                "/browser_final_blocker_strip/browser_panel_live_validation_result_gate_status",
+            )
+            .or_else(|| guide.pointer("/badge/browser_panel_live_validation_result_gate_status"))
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let final_capacity_status = guide
+            .pointer("/browser_final_blocker_strip/browser_final_runtime_capacity_status")
+            .or_else(|| guide.pointer("/badge/browser_final_runtime_capacity_status"))
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let final_capacity_ready = guide
+            .pointer("/browser_final_blocker_strip/browser_final_runtime_capacity_ready")
+            .or_else(|| guide.pointer("/badge/browser_final_runtime_capacity_ready"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let final_missing_free_gib = guide
+            .pointer("/browser_final_blocker_strip/browser_final_runtime_missing_free_gib")
+            .or_else(|| guide.pointer("/badge/browser_final_runtime_missing_free_gib"))
+            .and_then(Value::as_f64)
+            .map(|value| format!("{value:.2}"))
+            .unwrap_or_else(|| "unknown".to_string());
+        let final_first_blocker = guide
+            .pointer("/browser_final_blocker_strip/browser_final_runtime_first_blocker")
+            .or_else(|| guide.pointer("/badge/browser_final_runtime_first_blocker"))
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
 
         format!(
-            "Runtime-green final proof guide\nStatus: {status}\nCan report runtime-green: {can_report}\nBlocker: {blocker}\nNext action: {next_action}\nOrdered steps: {step_count}"
+            "Runtime-green final proof guide\nStatus: {status}\nCan report runtime-green: {can_report}\nBlocker: {blocker}\nBrowser final blockers: stale checks {stale_required_check_count}, panel gate {panel_gate_status}, final capacity {final_capacity_status} (ready: {final_capacity_ready}, missing GiB: {final_missing_free_gib}), first blocker {final_first_blocker}\nNext action: {next_action}\nOrdered steps: {step_count}"
         )
     }
 
     fn agent_plugin_runtime_green_final_proof_guide_summary(guide: &Value) -> Value {
+        let badge = guide
+            .get("badge")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
+        let browser_final_blocker_strip = guide
+            .get("browser_final_blocker_strip")
+            .cloned()
+            .unwrap_or_else(|| Self::agent_plugin_runtime_green_report_badge_blocker_strip(&badge));
         serde_json::json!({
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
             "source_schema": guide.get("schema").and_then(Value::as_str),
@@ -19201,6 +19277,9 @@ impl WebPreviewView {
             "blocker": guide.get("blocker").and_then(Value::as_str),
             "next_action": guide.get("next_action").and_then(Value::as_str),
             "report_gate_status": guide.get("report_gate_status").and_then(Value::as_str),
+            "report_badge_status": badge.get("status").and_then(Value::as_str),
+            "report_badge_blocker": badge.get("blocker").and_then(Value::as_str),
+            "browser_final_blocker_strip": browser_final_blocker_strip,
             "manual_command": guide.get("manual_command").and_then(Value::as_str),
             "ordered_step_count": guide
                 .get("ordered_steps")
@@ -27215,7 +27294,8 @@ impl WebPreviewView {
                         &runtime_green_final_proof_guide
                     ),
                     "read_only": true,
-                    "purpose": "Guide agents from report badge to final result template, manual just run proof, import, and status recheck without parsing large packets first."
+                    "browser_final_blocker_strip_field": "runtime_green_final_proof_guide_summary.browser_final_blocker_strip",
+                    "purpose": "Guide agents from report badge and Browser final blocker strip to final result template, manual just run proof, import, and status recheck without parsing large packets first."
                 },
                 "runtime_green_final_report_packet": {
                     "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -27482,7 +27562,8 @@ impl WebPreviewView {
                         "copy_action": "copy_agent_plugin_runtime_green_final_proof_guide",
                         "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
                         "read_only": true,
-                        "purpose": "Guide agents from report badge to final result template, manual just run proof, import, and status recheck."
+                        "browser_final_blocker_strip_field": "runtime_green_final_proof_guide_summary.browser_final_blocker_strip",
+                        "purpose": "Guide agents from report badge and Browser final blocker strip to final result template, manual just run proof, import, and status recheck."
                     },
                     "runtime_green_final_report_packet": {
                         "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -28246,7 +28327,8 @@ impl WebPreviewView {
                             "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
                             "read_only": true,
                             "source": "WebPreview final validation bundle and status packet",
-                            "purpose": "Guide agents from report badge to final result template, manual just run proof, import, and status recheck."
+                            "browser_final_blocker_strip_field": "runtime_green_final_proof_guide_summary.browser_final_blocker_strip",
+                            "purpose": "Guide agents from report badge and Browser final blocker strip to final result template, manual just run proof, import, and status recheck."
                         },
                         "runtime_green_final_report_packet_handoff": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -28305,7 +28387,7 @@ impl WebPreviewView {
                             {"id": "browser.runtime_green_claim_readiness", "state": "available", "description": "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."},
                             {"id": "browser.runtime_green_report_gate", "state": "available", "description": "Copy or send the canonical runtime-green ready/blocked report gate."},
                             {"id": "browser.runtime_green_report_badge", "state": "available", "description": "Render the runtime-green ready/blocked status row plus Browser final blockers from the report gate."},
-                            {"id": "browser.runtime_green_final_proof_guide", "state": "available", "description": "Follow the compact final proof guide from report badge through template, manual just run proof, import, and recheck."},
+                            {"id": "browser.runtime_green_final_proof_guide", "state": "available", "description": "Follow the compact final proof guide from report badge and Browser final blockers through template, manual just run proof, import, and recheck."},
                             {"id": "browser.runtime_green_final_report_packet", "state": "available", "description": "Copy or send the final reporting packet that gates the runtime-green status claim on report-gate and final-result evidence."},
                             {"id": "browser.runtime_green_report_readiness_card", "state": "available", "description": "Read the compact runtime-green report readiness card for right-side panel status without parsing every proof packet."},
                             {"id": "browser.action.open_url", "state": "available_when_unlocked", "description": "Open the current URL/search editor text through the permissioned WebPreview executor shell."},

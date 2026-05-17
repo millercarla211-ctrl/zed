@@ -1,3 +1,17 @@
+[2026-05-18] - Final Proof Guide Browser Blocker Strip
+
+ADDED:
+- Runtime-green final proof guides now include a `browser_final_blocker_strip` derived from the report badge.
+- Final proof guide summaries now expose the same compact stale-result, panel-gate, final-capacity, missing-free-space, first-blocker, and recovery-action fields.
+- Agent and WebPreview catalog metadata now advertise the final-proof-guide blocker strip field for compact panel rendering.
+
+CHANGED:
+- Final proof guide agent summaries now include Browser final blocker status before the ordered proof steps.
+- `todo.txt` records the final proof guide blocker strip slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is compact guide metadata hardening. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Report Badge Browser Final Blocker Strip
 
 ADDED:

@@ -484,7 +484,7 @@ fn agent_plugin_catalog_webpreview_handoffs_manifest() -> Value {
             "runtime_green_report_gate",
             "copy_agent_plugin_runtime_green_final_proof_guide",
             "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
-            "Guide agents from report badge to final result template, manual just run proof, import, and status recheck.",
+            "Guide agents from report badge and Browser final blocker strip to final result template, manual just run proof, import, and status recheck.",
         ),
         "runtime_green_final_report_packet": agent_plugin_catalog_summary_handoff_manifest(
             AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -2376,7 +2376,8 @@ fn browser_plugin_manifest() -> Value {
             "send_action": "send_agent_plugin_runtime_green_final_proof_guide_to_agent",
             "read_only": true,
             "source": "WebPreview final validation bundle and status packet",
-            "purpose": "Guide agents from report badge to final result template, manual just run proof, import, and status recheck."
+            "browser_final_blocker_strip_field": "runtime_green_final_proof_guide_summary.browser_final_blocker_strip",
+            "purpose": "Guide agents from report badge and Browser final blocker strip to final result template, manual just run proof, import, and status recheck."
         },
         "runtime_green_final_report_packet_handoff": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -2435,7 +2436,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.runtime_green_claim_readiness", "available", "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."),
             capability("browser.runtime_green_report_gate", "available", "Copy or send the canonical runtime-green ready/blocked report gate."),
             capability("browser.runtime_green_report_badge", "available", "Render the runtime-green ready/blocked status row plus Browser final blockers from the report gate."),
-            capability("browser.runtime_green_final_proof_guide", "available", "Follow the compact final proof guide from report badge through template, manual just run proof, import, and recheck."),
+            capability("browser.runtime_green_final_proof_guide", "available", "Follow the compact final proof guide from report badge and Browser final blockers through template, manual just run proof, import, and recheck."),
             capability("browser.runtime_green_final_report_packet", "available", "Copy or send the final reporting packet that gates the runtime-green status claim on report-gate and final-result evidence."),
             capability("browser.runtime_green_report_readiness_card", "available", "Read the compact runtime-green report readiness card for right-side panel status without parsing every proof packet."),
             capability("browser.action.open_url", "available_when_unlocked", "Open the current URL/search editor text through the permissioned WebPreview executor shell."),
