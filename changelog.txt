@@ -1,3 +1,16 @@
+[2026-05-18] - Recovery Plan And Card Capacity Payload Fallback
+
+ADDED:
+- WebPreview compact function surfaces now fall back to `agent_browser_final_runtime_proof_capacity.headroom_recovery_plan` and `.headroom_recovery_card` when no standalone recovery handoff has been copied or sent.
+- Agent and WebPreview plugin catalogs now advertise the recovery plan and recovery card status-packet fields.
+
+CHANGED:
+- Compact Browser/Chrome panels can render the final-runtime headroom recovery plan/card payloads directly from the capacity packet instead of waiting for separate recovery plan/card handoffs.
+- `todo.txt` records the recovery plan/card capacity payload fallback slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only status/catalog metadata. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Blocker Board Checklist Fallback Alignment
 
 ADDED:
