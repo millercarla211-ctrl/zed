@@ -1139,6 +1139,16 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "final_runtime_headroom_reclaim_candidates_schema": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_reclaim_candidates_schema")
                 .and_then(Value::as_str),
+            "final_runtime_headroom_reclaim_candidates_cleanup_result_gate_source_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_reclaim_candidates_cleanup_result_gate_source_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_reclaim_candidates_cleanup_result_gate_ready_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_reclaim_candidates_cleanup_result_gate_ready_field",
+                )
+                .and_then(Value::as_str),
             "final_runtime_headroom_reclaim_candidates_copy_action": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_reclaim_candidates_copy_action")
                 .and_then(Value::as_str),
@@ -1168,6 +1178,16 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
                 .and_then(Value::as_str),
             "final_runtime_headroom_recovery_card_field": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_recovery_card_field")
+                .and_then(Value::as_str),
+            "final_runtime_headroom_recovery_card_cleanup_result_gate_source_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_recovery_card_cleanup_result_gate_source_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_recovery_card_cleanup_result_gate_ready_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_recovery_card_cleanup_result_gate_ready_field",
+                )
                 .and_then(Value::as_str),
             "final_runtime_headroom_recovery_card_copy_action": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_recovery_card_copy_action")
@@ -1966,6 +1986,8 @@ fn browser_plugin_manifest() -> Value {
             "headroom_readiness_gate_send_action": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
             "headroom_readiness_gate_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_readiness_gate",
             "headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
+            "headroom_reclaim_candidates_cleanup_result_gate_source_field": "headroom_reclaim_candidates.cleanup_result_gate.source",
+            "headroom_reclaim_candidates_cleanup_result_gate_ready_field": "headroom_reclaim_candidates.cleanup_result_gate.ready_for_capacity_recheck",
             "headroom_reclaim_candidates_copy_action": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
             "headroom_reclaim_candidates_send_action": "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent",
             "headroom_reclaim_candidates_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_reclaim_candidates",
@@ -1977,6 +1999,8 @@ fn browser_plugin_manifest() -> Value {
             "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
             "headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
             "headroom_recovery_card_field": "headroom_recovery_card",
+            "headroom_recovery_card_cleanup_result_gate_source_field": "headroom_recovery_card.cleanup_result_gate.source",
+            "headroom_recovery_card_cleanup_result_gate_ready_field": "headroom_recovery_card.cleanup_result_gate.ready_for_capacity_recheck",
             "headroom_recovery_card_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_card",
             "headroom_recovery_card_send_action": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
             "headroom_recovery_card_status_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_recovery_card",
