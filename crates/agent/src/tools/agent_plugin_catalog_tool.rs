@@ -2122,6 +2122,7 @@ fn browser_plugin_manifest() -> Value {
                 "manual_evidence_template.status == pass",
                 "every required manual_evidence_template.checks entry has status == pass",
                 "manual_evidence_template.overall_blocker == null",
+                "manual_evidence_template.checks.git_sync.status == pass",
                 "panel_live_validation_result_gate.ready_for_final_runtime == true",
                 "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status.ready_for_final_runtime == true",
                 "inspect_agent_plugin_runtime_status.browser_panel_live_proof_readiness_card.status == ready_for_final_runtime",
@@ -2141,6 +2142,7 @@ fn browser_plugin_manifest() -> Value {
             "expected_required_check_ids": [
                 "editor_typing",
                 "webpreview_input",
+                "git_sync",
                 "final_runtime_capacity",
                 "final_headroom_recovery_sequence",
                 "panel_live_validation",

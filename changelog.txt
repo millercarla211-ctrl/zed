@@ -1,3 +1,17 @@
+[2026-05-18] - Final Result Git Sync Proof
+
+ADDED:
+- Final validation result templates now include a required `git_sync` check before runtime-green proof can be imported as current.
+- Final validation bundles now include a manual proof-order step and success criterion for confirming local `dev` matches `origin/dev` with a clean tracked tree before `just run`.
+- Agent and WebPreview catalog runtime-green requirements now advertise the `git_sync` check.
+
+CHANGED:
+- Older final validation result payloads without the `git_sync` required check now become stale instead of silently satisfying the current runtime-green result contract.
+- `todo.txt` records the git-sync proof slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is source-level validation contract hardening. It does not run `just`, run Cargo, launch browsers, dispatch input, delete files, or move the target directory.
+
 [2026-05-18] - Final Proof Guide Headroom Runbook
 
 ADDED:
