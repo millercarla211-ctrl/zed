@@ -1055,6 +1055,31 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
                     "/final_runtime_proof_capacity/headroom_size_inspection_capacity_packet_field",
                 )
                 .and_then(Value::as_str),
+            "final_runtime_headroom_size_inspection_first_command_packet_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_size_inspection_first_command_packet_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_size_inspection_read_only_packet_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_size_inspection_read_only_packet_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_size_inspection_dispatches_input_packet_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_size_inspection_dispatches_input_packet_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_size_inspection_deletes_files_packet_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_size_inspection_deletes_files_packet_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_size_inspection_moves_target_dir_packet_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_size_inspection_moves_target_dir_packet_field",
+                )
+                .and_then(Value::as_str),
             "final_runtime_headroom_cleanup_result_template_schema": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_template_schema")
                 .and_then(Value::as_str),
@@ -2081,6 +2106,11 @@ fn browser_plugin_manifest() -> Value {
             "headroom_size_inspection_send_action": "send_agent_browser_final_runtime_headroom_size_inspection_to_agent",
             "headroom_size_inspection_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection",
             "headroom_size_inspection_capacity_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_recovery_plan.size_inspection",
+            "headroom_size_inspection_first_command_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.commands.0.id",
+            "headroom_size_inspection_read_only_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.read_only",
+            "headroom_size_inspection_dispatches_input_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.dispatches_input",
+            "headroom_size_inspection_deletes_files_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.deletes_files",
+            "headroom_size_inspection_moves_target_dir_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.moves_target_dir",
             "headroom_cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
             "headroom_cleanup_result_template_field": "headroom_recovery_plan.cleanup_result_template",
             "headroom_cleanup_result_template_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",

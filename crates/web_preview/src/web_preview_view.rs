@@ -2342,6 +2342,11 @@ impl WebPreviewView {
             "final_runtime_headroom_size_inspection_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_SIZE_INSPECTION_SCHEMA,
             "final_runtime_headroom_size_inspection_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_size_inspection/status").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/size_inspection/status")).and_then(Value::as_str),
             "final_runtime_headroom_size_inspection_command_count": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_size_inspection/commands").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/size_inspection/commands")).and_then(Value::as_array).map(Vec::len),
+            "final_runtime_headroom_size_inspection_first_command": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_size_inspection/commands/0/id").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/size_inspection/commands/0/id")).and_then(Value::as_str),
+            "final_runtime_headroom_size_inspection_read_only": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_size_inspection/read_only").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/size_inspection/read_only")).and_then(Value::as_bool),
+            "final_runtime_headroom_size_inspection_dispatches_input": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_size_inspection/dispatches_input").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/size_inspection/dispatches_input")).and_then(Value::as_bool),
+            "final_runtime_headroom_size_inspection_deletes_files": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_size_inspection/deletes_files").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/size_inspection/deletes_files")).and_then(Value::as_bool),
+            "final_runtime_headroom_size_inspection_moves_target_dir": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_size_inspection/moves_target_dir").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/size_inspection/moves_target_dir")).and_then(Value::as_bool),
             "final_runtime_headroom_size_inspection_copy_action": "copy_agent_browser_final_runtime_headroom_size_inspection",
             "final_runtime_headroom_size_inspection_send_action": "send_agent_browser_final_runtime_headroom_size_inspection_to_agent",
             "final_runtime_headroom_cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
@@ -7900,6 +7905,11 @@ impl WebPreviewView {
                     "headroom_size_inspection_send_action": "send_agent_browser_final_runtime_headroom_size_inspection_to_agent",
                     "headroom_size_inspection_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection",
                     "headroom_size_inspection_capacity_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_recovery_plan.size_inspection",
+                    "headroom_size_inspection_first_command_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.commands.0.id",
+                    "headroom_size_inspection_read_only_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.read_only",
+                    "headroom_size_inspection_dispatches_input_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.dispatches_input",
+                    "headroom_size_inspection_deletes_files_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.deletes_files",
+                    "headroom_size_inspection_moves_target_dir_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.moves_target_dir",
                     "headroom_cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
                     "headroom_cleanup_result_template_field": "headroom_recovery_plan.cleanup_result_template",
                     "headroom_cleanup_result_template_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
@@ -9237,6 +9247,31 @@ impl WebPreviewView {
                 "final_runtime_headroom_size_inspection_capacity_packet_field": plugin
                     .pointer(
                         "/final_runtime_proof_capacity/headroom_size_inspection_capacity_packet_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_size_inspection_first_command_packet_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_size_inspection_first_command_packet_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_size_inspection_read_only_packet_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_size_inspection_read_only_packet_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_size_inspection_dispatches_input_packet_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_size_inspection_dispatches_input_packet_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_size_inspection_deletes_files_packet_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_size_inspection_deletes_files_packet_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_size_inspection_moves_target_dir_packet_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_size_inspection_moves_target_dir_packet_field",
                     )
                     .and_then(Value::as_str),
                 "final_runtime_headroom_cleanup_result_template_schema": plugin
@@ -20640,6 +20675,21 @@ impl WebPreviewView {
                         .pointer("/headroom_recovery_plan/size_inspection/commands")
                         .and_then(Value::as_array)
                         .map(Vec::len),
+                    "final_runtime_headroom_size_inspection_first_command": agent_browser_final_runtime_headroom_size_inspection
+                        .pointer("/commands/0/id")
+                        .and_then(Value::as_str),
+                    "final_runtime_headroom_size_inspection_read_only": agent_browser_final_runtime_headroom_size_inspection
+                        .pointer("/read_only")
+                        .and_then(Value::as_bool),
+                    "final_runtime_headroom_size_inspection_dispatches_input": agent_browser_final_runtime_headroom_size_inspection
+                        .pointer("/dispatches_input")
+                        .and_then(Value::as_bool),
+                    "final_runtime_headroom_size_inspection_deletes_files": agent_browser_final_runtime_headroom_size_inspection
+                        .pointer("/deletes_files")
+                        .and_then(Value::as_bool),
+                    "final_runtime_headroom_size_inspection_moves_target_dir": agent_browser_final_runtime_headroom_size_inspection
+                        .pointer("/moves_target_dir")
+                        .and_then(Value::as_bool),
                     "final_runtime_headroom_cleanup_result_template_visible": true,
                     "final_runtime_headroom_cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
                     "final_runtime_headroom_cleanup_result_template_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
@@ -26736,6 +26786,11 @@ impl WebPreviewView {
                             "headroom_size_inspection_send_action": "send_agent_browser_final_runtime_headroom_size_inspection_to_agent",
                             "headroom_size_inspection_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection",
                             "headroom_size_inspection_capacity_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_recovery_plan.size_inspection",
+                            "headroom_size_inspection_first_command_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.commands.0.id",
+                            "headroom_size_inspection_read_only_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.read_only",
+                            "headroom_size_inspection_dispatches_input_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.dispatches_input",
+                            "headroom_size_inspection_deletes_files_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.deletes_files",
+                            "headroom_size_inspection_moves_target_dir_packet_field": "packet.latest.agent_browser_final_runtime_headroom_size_inspection.moves_target_dir",
                             "headroom_cleanup_result_template_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA,
                             "headroom_cleanup_result_template_field": "headroom_recovery_plan.cleanup_result_template",
                             "headroom_cleanup_result_template_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",

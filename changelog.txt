@@ -1,3 +1,16 @@
+[2026-05-18] - Headroom Size Inspection Safety Catalog
+
+ADDED:
+- WebPreview status packets now expose the final-runtime size-inspection first command plus read-only, no-input, no-delete, and no-target-move flags directly.
+- Panel live UI proof checklists and Agent/WebPreview plugin catalogs now advertise the size-inspection safety fields for compact AI-panel discovery.
+
+CHANGED:
+- Right-side AI panels can verify that the size-inspection handoff is measurement-only without opening the full payload.
+- `todo.txt` records the size-inspection safety catalog slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only status/catalog metadata. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Headroom Size Inspection Handoff
 
 ADDED:
