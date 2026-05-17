@@ -956,6 +956,12 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "panel_live_validation_exercise_plan_send_action": plugin
                 .pointer("/panel_live_validation/exercise_plan_send_action")
                 .and_then(Value::as_str),
+            "panel_live_validation_template_prefills_first_suggested_control": plugin
+                .pointer("/panel_live_validation/result_template_prefills_first_suggested_control")
+                .and_then(Value::as_bool),
+            "panel_live_validation_result_contract_required": plugin
+                .pointer("/panel_live_validation/result_contract_required_for_final_runtime")
+                .and_then(Value::as_bool),
             "panel_live_proof_status_schema": plugin
                 .pointer("/panel_live_validation/runtime_status_proof_schema")
                 .and_then(Value::as_str),
@@ -1501,6 +1507,13 @@ fn browser_plugin_manifest() -> Value {
             "result_gate_copy_action": "copy_agent_browser_panel_live_validation_result_gate",
             "result_gate_send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
             "result_gate_status_packet_field": "packet.latest.agent_browser_panel_live_validation_result_gate",
+            "result_gate_ready_requires": [
+                "panel_live_validation.status == ready_for_live_ui_validation",
+                "panel_control_result.status == completed",
+                "panel_control_result.action is present",
+                "panel_control_result.result_contract_matched == true",
+                "panel_control_result.result_contract is present"
+            ],
             "runtime_status_proof_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
             "runtime_status_proof_field": "browser_panel_live_proof_status",
             "runtime_status_readiness_card_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_READINESS_CARD_SCHEMA,
@@ -1515,6 +1528,8 @@ fn browser_plugin_manifest() -> Value {
             "exercise_plan_copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
             "exercise_plan_send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
             "exercise_plan_status_packet_field": "packet.latest.agent_browser_panel_live_validation_exercise_plan",
+            "result_template_prefills_first_suggested_control": true,
+            "result_contract_required_for_final_runtime": true,
             "status_packet_field": "packet.latest.agent_browser_panel_live_validation",
             "source_fields": [
                 "session.agent_browser_panel_card_deck",

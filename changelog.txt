@@ -1,3 +1,17 @@
+[2026-05-17] - Browser Chrome Panel Live Result Contract Gate
+
+ADDED:
+- WebPreview panel live-validation result templates now pre-fill the first suggested enabled panel control action and result contract.
+- Panel result gates, proof readiness cards, status-packet summaries, and Agent/WebPreview catalog summaries now expose contract-ready result state.
+
+CHANGED:
+- Final-runtime panel proof readiness now requires an imported completed result to keep action, result_contract, and result_contract_matched before the gate reports ready.
+- Panel control-result import receipts now distinguish schema/status-valid results that are not contract-ready with `imported_contract_unmatched`.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 98/100 and the remaining live UI/runtime validation targets.
+
+NOTES:
+- This slice is read-only panel validation hardening. It does not run `just`, run Cargo, launch browsers, run Node or Playwright, take screenshots, dispatch input, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Live Proof Card Actions
 
 ADDED:

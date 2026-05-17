@@ -2075,11 +2075,13 @@ impl WebPreviewView {
             "panel_live_validation_result_gate_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
             "panel_live_validation_result_gate_status": packet.pointer("/packet/latest/agent_browser_panel_live_validation_result_gate/status").and_then(Value::as_str),
             "panel_live_validation_result_gate_result_status": packet.pointer("/packet/latest/agent_browser_panel_live_validation_result_gate/result/status").and_then(Value::as_str),
+            "panel_live_validation_result_gate_contract_ready": packet.pointer("/packet/latest/agent_browser_panel_live_validation_result_gate/result/result_contract_ready").and_then(Value::as_bool),
             "browser_panel_live_proof_status_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
             "browser_panel_live_proof_status_runtime_field": "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status",
             "browser_panel_live_proof_readiness_card_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_READINESS_CARD_SCHEMA,
             "browser_panel_live_proof_readiness_card_status": packet.pointer("/packet/latest/agent_browser_panel_live_proof_readiness_card/status").and_then(Value::as_str),
             "browser_panel_live_proof_readiness_card_ready": packet.pointer("/packet/latest/agent_browser_panel_live_proof_readiness_card/ready_for_final_runtime").and_then(Value::as_bool),
+            "browser_panel_live_proof_readiness_card_contract_ready": packet.pointer("/packet/latest/agent_browser_panel_live_proof_readiness_card/summary/result_contract_ready").and_then(Value::as_bool),
             "browser_panel_live_proof_readiness_card_copy_action": "copy_agent_browser_panel_live_proof_readiness_card",
             "browser_panel_live_proof_readiness_card_send_action": "send_agent_browser_panel_live_proof_readiness_card_to_agent",
             "browser_panel_live_proof_readiness_card_runtime_field": "inspect_agent_plugin_runtime_status.browser_panel_live_proof_readiness_card",
@@ -2430,6 +2432,8 @@ impl WebPreviewView {
             "manual_check_count": validation.pointer("/summary/manual_check_count").and_then(Value::as_u64),
             "ready_signal_count": validation.pointer("/summary/ready_signal_count").and_then(Value::as_u64),
             "missing_signal_count": validation.pointer("/summary/missing_signal_count").and_then(Value::as_u64),
+            "result_template_prefilled": validation.pointer("/summary/result_template_prefilled").and_then(Value::as_bool),
+            "result_contract_required_for_final_runtime": validation.pointer("/summary/result_contract_required_for_final_runtime").and_then(Value::as_bool),
             "panel_deck_status": validation.pointer("/evidence/panel_card_deck/render_status").and_then(Value::as_str),
             "panel_result_ledger_status": validation.pointer("/evidence/panel_control_result_ledger/status").and_then(Value::as_str),
             "panel_result_import_status": validation.pointer("/evidence/panel_control_result/status").and_then(Value::as_str),
@@ -2447,6 +2451,9 @@ impl WebPreviewView {
             "result_present": gate.pointer("/result/present").and_then(Value::as_bool),
             "result_status": gate.pointer("/result/status").and_then(Value::as_str),
             "result_status_valid": gate.pointer("/result/status_valid").and_then(Value::as_bool),
+            "result_action_present": gate.pointer("/result/action_present").and_then(Value::as_bool),
+            "result_contract_matched": gate.pointer("/result/result_contract_matched").and_then(Value::as_bool),
+            "result_contract_ready": gate.pointer("/result/result_contract_ready").and_then(Value::as_bool),
             "result_id": gate.pointer("/result/result_id").and_then(Value::as_str),
             "action": gate.pointer("/result/action").and_then(Value::as_str),
             "ready_for_final_runtime": gate.pointer("/ready_for_final_runtime").and_then(Value::as_bool),
@@ -2480,9 +2487,12 @@ impl WebPreviewView {
             "ready_for_final_runtime": card.pointer("/ready_for_final_runtime").and_then(Value::as_bool),
             "result_present": card.pointer("/summary/result_present").and_then(Value::as_bool),
             "result_status": card.pointer("/summary/result_status").and_then(Value::as_str),
+            "result_contract_ready": card.pointer("/summary/result_contract_ready").and_then(Value::as_bool),
             "durable_root_count": card.pointer("/summary/durable_root_count").and_then(Value::as_u64),
             "root_with_result_count": card.pointer("/summary/root_with_result_count").and_then(Value::as_u64),
+            "contract_ready_root_count": card.pointer("/summary/contract_ready_root_count").and_then(Value::as_u64),
             "completed_root_count": card.pointer("/summary/completed_root_count").and_then(Value::as_u64),
+            "completed_without_contract_count": card.pointer("/summary/completed_without_contract_count").and_then(Value::as_u64),
             "blocked_root_count": card.pointer("/summary/blocked_root_count").and_then(Value::as_u64),
             "first_blocker_id": card.pointer("/first_blocker/id").and_then(Value::as_str),
             "copy_action": card.pointer("/actions/copy_card").and_then(Value::as_str),
@@ -2793,6 +2803,7 @@ impl WebPreviewView {
     fn agent_browser_panel_control_result_durable_evidence(&self) -> Value {
         let mut entries = Vec::new();
         let mut has_valid_result = false;
+        let mut has_contract_ready_result = false;
         let mut latest_status: Option<String> = None;
 
         for (root_mode, managed_root, latest_path) in
@@ -2809,6 +2820,11 @@ impl WebPreviewView {
                     has_valid_result |= summary
                         .as_ref()
                         .and_then(|summary| summary.pointer("/status_valid"))
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
+                    has_contract_ready_result |= summary
+                        .as_ref()
+                        .and_then(|summary| summary.pointer("/result_contract_ready"))
                         .and_then(Value::as_bool)
                         .unwrap_or(false);
                     if latest_status.is_none() {
@@ -2859,6 +2875,7 @@ impl WebPreviewView {
                 "managed_panel_control_result_missing_or_invalid"
             },
             "has_valid_result": has_valid_result,
+            "has_contract_ready_result": has_contract_ready_result,
             "latest_result_status": latest_status,
             "result_file_name": AGENT_BROWSER_PANEL_CONTROL_RESULT_FILE_NAME,
             "archive_prefix": AGENT_BROWSER_PANEL_CONTROL_RESULT_ARCHIVE_PREFIX,
@@ -4440,6 +4457,13 @@ impl WebPreviewView {
                     "result_template_send_action": "send_agent_browser_panel_live_validation_result_template_to_agent",
                     "result_gate_copy_action": "copy_agent_browser_panel_live_validation_result_gate",
                     "result_gate_send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
+                    "result_gate_ready_requires": [
+                        "panel_live_validation.status == ready_for_live_ui_validation",
+                        "panel_control_result.status == completed",
+                        "panel_control_result.action is present",
+                        "panel_control_result.result_contract_matched == true",
+                        "panel_control_result.result_contract is present"
+                    ],
                     "runtime_status_proof_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
                     "runtime_status_proof_field": "browser_panel_live_proof_status",
                     "runtime_status_readiness_card_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_READINESS_CARD_SCHEMA,
@@ -4448,6 +4472,8 @@ impl WebPreviewView {
                     "runtime_status_report_gate_field": "runtime_green_report_gate.browser_panel_live_proof_status",
                     "exercise_plan_copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
                     "exercise_plan_send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
+                    "result_template_prefills_first_suggested_control": true,
+                    "result_contract_required_for_final_runtime": true,
                     "latest_summary": self.latest_agent_browser_panel_live_validation_summary(),
                     "current_summary": Self::agent_browser_panel_live_validation_summary(
                         &panel_live_validation
@@ -5521,6 +5547,12 @@ impl WebPreviewView {
                 "panel_live_validation_exercise_plan_send_action": plugin
                     .pointer("/panel_live_validation/exercise_plan_send_action")
                     .and_then(Value::as_str),
+                "panel_live_validation_template_prefills_first_suggested_control": plugin
+                    .pointer("/panel_live_validation/result_template_prefills_first_suggested_control")
+                    .and_then(Value::as_bool),
+                "panel_live_validation_result_contract_required": plugin
+                    .pointer("/panel_live_validation/result_contract_required_for_final_runtime")
+                    .and_then(Value::as_bool),
                 "panel_live_proof_status_schema": plugin
                     .pointer("/panel_live_validation/runtime_status_proof_schema")
                     .and_then(Value::as_str),
@@ -8503,6 +8535,17 @@ impl WebPreviewView {
             .pointer("/status")
             .and_then(Value::as_str)
             .unwrap_or("not_run");
+        let action_present = result
+            .pointer("/action")
+            .and_then(Value::as_str)
+            .is_some_and(|action| !action.trim().is_empty());
+        let result_contract_matched = result
+            .pointer("/result_contract_matched")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let has_result_contract = result
+            .get("result_contract")
+            .is_some_and(|value| !value.is_null());
         let declared_status_values = result
             .get("declared_status_values")
             .cloned()
@@ -8523,21 +8566,25 @@ impl WebPreviewView {
         let schema_valid = result.pointer("/schema").and_then(Value::as_str)
             == Some(AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA);
         let status_valid = schema_valid && status_allowed;
+        let result_contract_ready =
+            status_valid && action_present && result_contract_matched && has_result_contract;
 
         serde_json::json!({
             "schema": result.pointer("/schema").and_then(Value::as_str),
             "status": status,
             "status_valid": status_valid,
             "status_allowed": status_allowed,
+            "action_present": action_present,
             "result_id": result.pointer("/result_id").and_then(Value::as_str),
             "source": result.pointer("/source").and_then(Value::as_str),
             "source_event_id": result.pointer("/source_event_id").and_then(Value::as_str),
             "action": result.pointer("/action").and_then(Value::as_str),
             "timestamp_ms": result.pointer("/timestamp_ms").and_then(Value::as_u64),
             "message": result.pointer("/message").and_then(Value::as_str),
-            "result_contract_matched": result.pointer("/result_contract_matched").and_then(Value::as_bool),
+            "result_contract_matched": result_contract_matched,
             "declared_status_values": declared_status_values,
-            "has_result_contract": result.get("result_contract").is_some_and(|value| !value.is_null()),
+            "has_result_contract": has_result_contract,
+            "result_contract_ready": result_contract_ready,
             "has_source_summary": result.get("source_summary").is_some_and(|value| !value.is_null()),
             "read_only": result.pointer("/safety/read_only").and_then(Value::as_bool),
             "dispatches_input": result.pointer("/safety/dispatches_input").and_then(Value::as_bool),
@@ -8581,6 +8628,22 @@ impl WebPreviewView {
             }
         }
         None
+    }
+
+    fn agent_browser_panel_live_validation_first_result_contract(
+        deck: &Value,
+    ) -> Option<(String, Value)> {
+        let suggested_controls = Self::agent_browser_panel_live_validation_exercise_controls(deck);
+        let action = suggested_controls
+            .first()
+            .and_then(|control| control.get("action"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|action| !action.is_empty())?
+            .to_string();
+        let result_contract =
+            Self::agent_browser_panel_control_result_contract_for_action(deck, Some(&action))?;
+        Some((action, result_contract))
     }
 
     fn agent_browser_panel_control_result_entry(
@@ -8734,8 +8797,18 @@ impl WebPreviewView {
                 .pointer("/status_valid")
                 .and_then(Value::as_bool)
                 .unwrap_or(false)
+                && result_summary
+                    .pointer("/result_contract_ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
             {
                 "imported"
+            } else if result_summary
+                .pointer("/status_valid")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+            {
+                "imported_contract_unmatched"
             } else {
                 "imported_invalid_status"
             },
@@ -8775,6 +8848,7 @@ impl WebPreviewView {
             "result_id": receipt.pointer("/result_summary/result_id").and_then(Value::as_str),
             "action": receipt.pointer("/result_summary/action").and_then(Value::as_str),
             "status_valid": receipt.pointer("/result_summary/status_valid").and_then(Value::as_bool),
+            "result_contract_ready": receipt.pointer("/result_summary/result_contract_ready").and_then(Value::as_bool),
             "durable_write_count": receipt.pointer("/durable_write_count").and_then(Value::as_u64),
             "ledger_status": receipt.pointer("/post_import/panel_control_result_ledger/summary/status").and_then(Value::as_str),
             "next_action": receipt.pointer("/post_import/next_action").and_then(Value::as_str),
@@ -8995,24 +9069,59 @@ impl WebPreviewView {
         validation_status: &str,
         ready_signal_count: usize,
         missing_signal_count: usize,
+        suggested_action: Option<&str>,
+        result_contract: Option<Value>,
     ) -> Value {
+        let action = suggested_action
+            .map(str::trim)
+            .filter(|action| !action.is_empty())
+            .map(str::to_string);
+        let result_contract_matched = result_contract.is_some();
+        let result_id = result_contract
+            .as_ref()
+            .and_then(|contract| contract.pointer("/result_id"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| "agent_browser_panel_control_result.live_ui_validation".to_string());
+        let source_event_id = result_contract
+            .as_ref()
+            .and_then(|contract| contract.pointer("/source_event_id"))
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let declared_status_values = result_contract
+            .as_ref()
+            .and_then(|contract| contract.get("status_values"))
+            .cloned()
+            .unwrap_or_else(|| {
+                serde_json::json!([
+                    "not_run",
+                    "queued",
+                    "completed",
+                    "blocked",
+                    "failed",
+                    "skipped"
+                ])
+            });
+
         serde_json::json!({
             "schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
-            "result_id": "agent_browser_panel_control_result.live_ui_validation",
+            "result_id": result_id,
             "source": "panel_live_validation_manual_check",
-            "source_event_id": null,
+            "source_event_id": source_event_id,
             "status": "not_run",
-            "action": null,
+            "action": action.clone(),
             "timestamp_ms": Self::current_epoch_millis(),
-            "message": "Fill this with completed, blocked, failed, or skipped after exercising a visible right-side panel control.",
-            "declared_status_values": ["not_run", "queued", "completed", "blocked", "failed", "skipped"],
-            "result_contract_matched": false,
-            "result_contract": null,
+            "message": "Fill this with completed, blocked, failed, or skipped after exercising the suggested visible right-side panel control.",
+            "declared_status_values": declared_status_values,
+            "result_contract_matched": result_contract_matched,
+            "result_contract": result_contract,
             "source_summary": {
                 "validation_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
                 "validation_status": validation_status,
                 "ready_signal_count": ready_signal_count,
                 "missing_signal_count": missing_signal_count,
+                "suggested_action": action,
+                "requires_result_contract_match_for_final_runtime": true,
                 "validation_copy_action": "copy_agent_browser_panel_live_validation",
                 "validation_send_action": "send_agent_browser_panel_live_validation_to_agent",
                 "template_copy_action": "copy_agent_browser_panel_live_validation_result_template",
@@ -9053,6 +9162,8 @@ impl WebPreviewView {
                     validation_status,
                     ready_signal_count,
                     missing_signal_count,
+                    None,
+                    None,
                 )
             })
     }
@@ -9096,6 +9207,26 @@ impl WebPreviewView {
             .and_then(|summary| summary.pointer("/status_valid"))
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let result_action_present = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/action_present"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let result_contract_matched = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/result_contract_matched"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let result_has_contract = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/has_result_contract"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let result_contract_ready = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/result_contract_ready"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let result_id = result_summary
             .as_ref()
             .and_then(|summary| summary.pointer("/result_id"))
@@ -9105,12 +9236,17 @@ impl WebPreviewView {
             .and_then(|summary| summary.pointer("/action"))
             .and_then(Value::as_str);
         let validation_ready = validation_status == "ready_for_live_ui_validation";
-        let result_completed = result_status_valid && result_status == "completed";
+        let result_completed =
+            result_status_valid && result_contract_ready && result_status == "completed";
+        let result_completed_without_contract =
+            result_status_valid && result_status == "completed" && !result_contract_ready;
         let result_blocked = result_status_valid && matches!(result_status, "blocked" | "failed");
         let status = if validation_ready && result_completed {
             "ready_for_final_runtime"
         } else if result_blocked {
             "live_panel_result_blocked"
+        } else if result_completed_without_contract {
+            "live_panel_result_contract_missing"
         } else if result_present {
             "live_panel_result_imported_not_complete"
         } else if validation_ready {
@@ -9124,6 +9260,9 @@ impl WebPreviewView {
             }
             "live_panel_result_blocked" => {
                 "Open the imported panel result and resolve the blocker before final runtime proof."
+            }
+            "live_panel_result_contract_missing" => {
+                "Use the prefilled panel result template for a suggested control so the imported completed result keeps action, result_contract, and result_contract_matched."
             }
             "live_panel_result_imported_not_complete" => {
                 "Fill the panel result template with status completed after exercising a visible panel control, then import it again."
@@ -9149,7 +9288,12 @@ impl WebPreviewView {
                 "present": result_present,
                 "status": result_status,
                 "status_valid": result_status_valid,
+                "action_present": result_action_present,
+                "result_contract_matched": result_contract_matched,
+                "has_result_contract": result_has_contract,
+                "result_contract_ready": result_contract_ready,
                 "completed": result_completed,
+                "completed_without_contract": result_completed_without_contract,
                 "blocked": result_blocked,
                 "result_id": result_id,
                 "action": result_action,
@@ -9277,7 +9421,32 @@ impl WebPreviewView {
                 root.pointer("/summary/status_valid")
                     .and_then(Value::as_bool)
                     .unwrap_or(false)
+                    && root
+                        .pointer("/summary/result_contract_ready")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false)
                     && root.pointer("/summary/status").and_then(Value::as_str) == Some("completed")
+            })
+            .count();
+        let completed_without_contract_count = durable_roots
+            .iter()
+            .filter(|root| {
+                root.pointer("/summary/status_valid")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+                    && !root
+                        .pointer("/summary/result_contract_ready")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false)
+                    && root.pointer("/summary/status").and_then(Value::as_str) == Some("completed")
+            })
+            .count();
+        let contract_ready_root_count = durable_roots
+            .iter()
+            .filter(|root| {
+                root.pointer("/summary/result_contract_ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
             })
             .count();
         let blocked_root_count = durable_roots
@@ -9302,6 +9471,23 @@ impl WebPreviewView {
                 root.pointer("/summary/status_valid")
                     .and_then(Value::as_bool)
                     .unwrap_or(false)
+                    && root
+                        .pointer("/summary/result_contract_ready")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false)
+                    && root.pointer("/summary/status").and_then(Value::as_str) == Some("completed")
+            })
+            .cloned();
+        let first_contract_missing_root = durable_roots
+            .iter()
+            .find(|root| {
+                root.pointer("/summary/status_valid")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+                    && !root
+                        .pointer("/summary/result_contract_ready")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false)
                     && root.pointer("/summary/status").and_then(Value::as_str) == Some("completed")
             })
             .cloned();
@@ -9329,6 +9515,10 @@ impl WebPreviewView {
             .pointer("/result/status")
             .and_then(Value::as_str)
             .unwrap_or("not_run");
+        let result_contract_ready = gate
+            .pointer("/result/result_contract_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let source_status = gate
             .pointer("/status")
             .and_then(Value::as_str)
@@ -9337,6 +9527,10 @@ impl WebPreviewView {
             "ready_for_final_runtime"
         } else if blocked_root_count > 0 || source_status == "live_panel_result_blocked" {
             "blocked_by_imported_panel_result"
+        } else if source_status == "live_panel_result_contract_missing"
+            || completed_without_contract_count > 0
+        {
+            "imported_panel_result_contract_missing"
         } else if result_present {
             "imported_panel_result_needs_completion"
         } else {
@@ -9349,6 +9543,18 @@ impl WebPreviewView {
                 "id": "imported_panel_result_blocked",
                 "label": "Imported panel result is blocked or failed",
                 "root": first_blocked_root
+                    .as_ref()
+                    .and_then(|root| root.get("root_mode"))
+                    .and_then(Value::as_str),
+                "action": "copy_agent_browser_panel_live_validation_result_template",
+            })
+        } else if source_status == "live_panel_result_contract_missing"
+            || completed_without_contract_count > 0
+        {
+            serde_json::json!({
+                "id": "imported_panel_result_contract_missing",
+                "label": "Imported panel result is completed but is not tied to a matched panel result contract",
+                "root": first_contract_missing_root
                     .as_ref()
                     .and_then(|root| root.get("root_mode"))
                     .and_then(Value::as_str),
@@ -9378,6 +9584,9 @@ impl WebPreviewView {
             "blocked_by_imported_panel_result" => {
                 "Resolve the imported panel-result blocker, exercise the right-side panel control again, and import a completed result."
             }
+            "imported_panel_result_contract_missing" => {
+                "Use the prefilled panel result template for a suggested control so the imported result keeps action, result_contract, and result_contract_matched."
+            }
             "imported_panel_result_needs_completion" => {
                 "Update the imported panel result to status completed after exercising a visible right-side panel control, then import it again."
             }
@@ -9396,13 +9605,17 @@ impl WebPreviewView {
             "summary": {
                 "result_present": result_present,
                 "result_status": result_status,
+                "result_contract_ready": result_contract_ready,
                 "durable_root_count": root_count,
                 "root_with_result_count": root_with_result_count,
+                "contract_ready_root_count": contract_ready_root_count,
                 "completed_root_count": completed_root_count,
+                "completed_without_contract_count": completed_without_contract_count,
                 "blocked_root_count": blocked_root_count,
             },
             "first_blocker": first_blocker,
             "first_completed_root": first_completed_root,
+            "first_contract_missing_root": first_contract_missing_root,
             "first_missing_root": first_missing_root,
             "result_gate": Self::agent_browser_panel_live_validation_result_gate_summary(gate),
             "durable_evidence": durable_evidence,
@@ -9614,7 +9827,7 @@ impl WebPreviewView {
                 {
                     "id": "fill_result",
                     "action": "manual_template_edit",
-                    "expected": "Set status to completed, action to the exercised control action, message to the observed result, and timestamp_ms to the exercise time."
+                    "expected": "Keep the prefilled action and result_contract for the exercised suggested control, set status to completed, add the observed message, and update timestamp_ms to the exercise time."
                 },
                 {
                     "id": "import_result",
@@ -9624,7 +9837,7 @@ impl WebPreviewView {
                 {
                     "id": "copy_gate",
                     "action": "copy_agent_browser_panel_live_validation_result_gate",
-                    "expected": "Gate status is ready_for_final_runtime before the final Windows just run proof."
+                    "expected": "Gate status is ready_for_final_runtime only after the imported result is completed and result_contract_matched is true."
                 }
             ],
             "actions": {
@@ -9712,10 +9925,18 @@ impl WebPreviewView {
         } else {
             "live_ui_validation_evidence_incomplete"
         };
+        let suggested_result_contract =
+            Self::agent_browser_panel_live_validation_first_result_contract(&deck);
+        let (suggested_action, result_contract) = suggested_result_contract
+            .as_ref()
+            .map(|(action, contract)| (Some(action.as_str()), Some(contract.clone())))
+            .unwrap_or((None, None));
         let result_template = Self::agent_browser_panel_live_validation_result_template_payload(
             validation_status,
             ready_signal_count,
             missing_signal_count,
+            suggested_action,
+            result_contract,
         );
         let result_gate = self.agent_browser_panel_live_validation_result_gate_from_status(
             validation_status,
@@ -9760,7 +9981,7 @@ impl WebPreviewView {
                     "copy_agent_browser_panel_live_validation_result_gate",
                     "send_agent_browser_panel_control_result_ledger_to_agent"
                 ],
-                "expected": "Ledger latest_result.status mirrors the imported result unless a newer non-skipped receipt exists, and the result gate reports ready_for_final_runtime only for a completed imported result."
+                "expected": "Ledger latest_result.status mirrors the imported result unless a newer non-skipped receipt exists, and the result gate reports ready_for_final_runtime only for a completed imported result with a matched panel result contract."
             },
             {
                 "id": "agent_panel_handoff",
@@ -9806,6 +10027,8 @@ impl WebPreviewView {
                 "missing_signal_count": missing_signal_count,
                 "requires_final_runtime_pass": true,
                 "final_runtime_command": "just run",
+                "result_template_prefilled": suggested_action.is_some(),
+                "result_contract_required_for_final_runtime": true,
             },
             "required_actions": required_actions,
             "evidence": {
@@ -20817,6 +21040,13 @@ impl WebPreviewView {
                     "result_template_send_action": "send_agent_browser_panel_live_validation_result_template_to_agent",
                     "result_gate_copy_action": "copy_agent_browser_panel_live_validation_result_gate",
                     "result_gate_send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
+                    "result_gate_ready_requires": [
+                        "panel_live_validation.status == ready_for_live_ui_validation",
+                        "panel_control_result.status == completed",
+                        "panel_control_result.action is present",
+                        "panel_control_result.result_contract_matched == true",
+                        "panel_control_result.result_contract is present"
+                    ],
                     "runtime_status_proof_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
                     "runtime_status_proof_field": "browser_panel_live_proof_status",
                     "runtime_status_readiness_card_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_READINESS_CARD_SCHEMA,
@@ -20826,6 +21056,8 @@ impl WebPreviewView {
                     "proof_readiness_card_send_action": "send_agent_browser_panel_live_proof_readiness_card_to_agent",
                     "exercise_plan_copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
                     "exercise_plan_send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
+                    "result_template_prefills_first_suggested_control": true,
+                    "result_contract_required_for_final_runtime": true,
                     "latest_summary": self.latest_agent_browser_panel_live_validation_summary(),
                     "current_summary": Self::agent_browser_panel_live_validation_summary(
                         &agent_browser_panel_live_validation
@@ -21533,6 +21765,13 @@ impl WebPreviewView {
                             "result_gate_copy_action": "copy_agent_browser_panel_live_validation_result_gate",
                             "result_gate_send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
                             "result_gate_status_packet_field": "packet.latest.agent_browser_panel_live_validation_result_gate",
+                            "result_gate_ready_requires": [
+                                "panel_live_validation.status == ready_for_live_ui_validation",
+                                "panel_control_result.status == completed",
+                                "panel_control_result.action is present",
+                                "panel_control_result.result_contract_matched == true",
+                                "panel_control_result.result_contract is present"
+                            ],
                             "runtime_status_proof_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
                             "runtime_status_proof_field": "browser_panel_live_proof_status",
                             "runtime_status_readiness_card_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_READINESS_CARD_SCHEMA,
@@ -21547,6 +21786,8 @@ impl WebPreviewView {
                             "exercise_plan_copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
                             "exercise_plan_send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
                             "exercise_plan_status_packet_field": "packet.latest.agent_browser_panel_live_validation_exercise_plan",
+                            "result_template_prefills_first_suggested_control": true,
+                            "result_contract_required_for_final_runtime": true,
                             "status_packet_field": "packet.latest.agent_browser_panel_live_validation",
                             "source_fields": [
                                 "session.agent_browser_panel_card_deck",
