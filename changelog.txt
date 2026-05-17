@@ -1,3 +1,18 @@
+[2026-05-18] - Final Proof Guide Headroom Runbook
+
+ADDED:
+- Runtime-green final proof guides now include a compact safe Browser final headroom recovery mini-runbook when target-drive headroom blocks the final runtime proof.
+- Final proof guide summaries expose direct headroom-required, missing-free-GiB, recommended-action, recovery-steps, and recovery-step-count fields.
+- Final validation bundle handoff artifacts and action manifests now expose the current final proof guide headroom runbook fields.
+- Agent and WebPreview catalog metadata advertise the final proof guide headroom recovery fields.
+
+CHANGED:
+- Compact panels can now route the final `G:` free-space blocker from the final proof guide itself instead of expanding the blocker board, readiness gate, size inspection, cleanup template, cleanup gate, and capacity packet separately.
+- `todo.txt` records the final-proof-guide headroom runbook slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice adds handoff/runbook metadata only. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory; the included cleanup-result import step still requires explicit user action.
+
 [2026-05-18] - Handoff Current Browser Blocker Strip
 
 ADDED:

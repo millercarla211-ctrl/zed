@@ -8689,6 +8689,10 @@ impl WebPreviewView {
                     "current_first_blocker": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_first_blocker").and_then(Value::as_str),
                     "current_recommended_action": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_recommended_action").and_then(Value::as_str),
                     "current_missing_free_gib": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_missing_free_gib").and_then(Value::as_f64),
+                    "current_headroom_required": runtime_green_final_proof_guide.pointer("/browser_final_headroom_required").and_then(Value::as_bool),
+                    "current_headroom_recommended_action": runtime_green_final_proof_guide.pointer("/browser_final_headroom_recommended_action").and_then(Value::as_str),
+                    "current_headroom_recovery_steps": runtime_green_final_proof_guide.pointer("/browser_final_headroom_recovery_steps").cloned(),
+                    "current_headroom_recovery_step_count": runtime_green_final_proof_guide.pointer("/browser_final_headroom_recovery_step_count").and_then(Value::as_u64),
                     "current_summary": Self::agent_plugin_runtime_green_final_proof_guide_summary(&runtime_green_final_proof_guide),
                     "current_guide": runtime_green_final_proof_guide.clone(),
                     "read_only": true
@@ -16787,6 +16791,90 @@ impl WebPreviewView {
         };
         let browser_final_blocker_strip =
             Self::agent_plugin_runtime_green_report_badge_blocker_strip(&badge);
+        let browser_final_headroom_required = browser_final_blocker_strip
+            .get("browser_final_runtime_headroom_required")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let browser_final_headroom_recommended_action = browser_final_blocker_strip
+            .get("browser_final_runtime_recommended_action")
+            .and_then(Value::as_str)
+            .unwrap_or("copy_agent_browser_final_runtime_headroom_readiness_gate")
+            .to_owned();
+        let browser_final_headroom_recovery_steps = if browser_final_headroom_required {
+            serde_json::json!([
+                {
+                    "id": "read_final_runtime_blocker_board",
+                    "label": "Read final runtime blocker board",
+                    "action": "copy_agent_browser_final_runtime_blocker_board",
+                    "purpose": "Start from the ordered blocker board so the first headroom blocker and next action stay explicit.",
+                    "writes_files": false,
+                    "dispatches_input": false
+                },
+                {
+                    "id": "copy_headroom_readiness_gate",
+                    "label": "Copy headroom readiness gate",
+                    "action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
+                    "purpose": "Confirm target-drive readiness, required free GiB, and the remaining free-space deficit before any runtime proof.",
+                    "writes_files": false,
+                    "dispatches_input": false
+                },
+                {
+                    "id": "copy_headroom_size_inspection",
+                    "label": "Copy read-only size inspection",
+                    "action": "copy_agent_browser_final_runtime_headroom_size_inspection",
+                    "purpose": "Use read-only measurement commands for target/cache zones before deciding what the operator should clean up.",
+                    "writes_files": false,
+                    "dispatches_input": false
+                },
+                {
+                    "id": "copy_cleanup_result_template",
+                    "label": "Copy cleanup-result template",
+                    "action": "copy_agent_browser_final_runtime_headroom_cleanup_result_template",
+                    "purpose": "Prepare the operator-owned post-cleanup evidence template with post-cleanup free space and dry-run result fields.",
+                    "writes_files": false,
+                    "dispatches_input": false
+                },
+                {
+                    "id": "import_cleanup_result",
+                    "label": "Import filled cleanup result",
+                    "action": "import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+                    "purpose": "Persist the filled operator cleanup result under managed Browser proof roots after explicit user action.",
+                    "writes_files": true,
+                    "managed_proof_write": true,
+                    "dispatches_input": false
+                },
+                {
+                    "id": "copy_cleanup_result_gate",
+                    "label": "Copy cleanup-result gate",
+                    "action": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
+                    "purpose": "Verify the imported cleanup evidence is ready for a capacity recheck.",
+                    "writes_files": false,
+                    "dispatches_input": false
+                },
+                {
+                    "id": "recheck_final_runtime_capacity",
+                    "label": "Recheck final runtime capacity",
+                    "action": "copy_agent_browser_final_runtime_proof_capacity",
+                    "purpose": "Refresh target-drive capacity before the guarded final runtime proof.",
+                    "writes_files": false,
+                    "dispatches_input": false
+                },
+                {
+                    "id": "manual_dry_run_after_cleanup",
+                    "label": "Run guarded dry-run after cleanup",
+                    "manual_command": "just --dry-run run",
+                    "purpose": "Confirm the guarded recipe resolves before the operator runs the final runtime proof.",
+                    "writes_files": "manual_runtime_only",
+                    "dispatches_input": "manual_validation_only"
+                }
+            ])
+        } else {
+            serde_json::json!([])
+        };
+        let browser_final_headroom_recovery_step_count = browser_final_headroom_recovery_steps
+            .as_array()
+            .map(Vec::len)
+            .unwrap_or(0);
 
         serde_json::json!({
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
@@ -16794,6 +16882,10 @@ impl WebPreviewView {
             "root_mode": root_mode,
             "badge": badge,
             "browser_final_blocker_strip": browser_final_blocker_strip,
+            "browser_final_headroom_required": browser_final_headroom_required,
+            "browser_final_headroom_recommended_action": browser_final_headroom_recommended_action,
+            "browser_final_headroom_recovery_steps": browser_final_headroom_recovery_steps,
+            "browser_final_headroom_recovery_step_count": browser_final_headroom_recovery_step_count,
             "can_report_runtime_green": can_report,
             "blocker": blocker,
             "next_action": next_action,
@@ -19306,6 +19398,18 @@ impl WebPreviewView {
             .get("browser_final_blocker_strip")
             .cloned()
             .unwrap_or_else(|| Self::agent_plugin_runtime_green_report_badge_blocker_strip(&badge));
+        let browser_final_headroom_recovery_steps = guide
+            .get("browser_final_headroom_recovery_steps")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let browser_final_headroom_recovery_step_count = guide
+            .get("browser_final_headroom_recovery_step_count")
+            .and_then(Value::as_u64)
+            .or_else(|| {
+                browser_final_headroom_recovery_steps
+                    .as_array()
+                    .map(|steps| steps.len() as u64)
+            });
         serde_json::json!({
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
             "source_schema": guide.get("schema").and_then(Value::as_str),
@@ -19319,7 +19423,28 @@ impl WebPreviewView {
             "report_gate_status": guide.get("report_gate_status").and_then(Value::as_str),
             "report_badge_status": badge.get("status").and_then(Value::as_str),
             "report_badge_blocker": badge.get("blocker").and_then(Value::as_str),
-            "browser_final_blocker_strip": browser_final_blocker_strip,
+            "browser_final_blocker_strip": browser_final_blocker_strip.clone(),
+            "browser_final_headroom_required": guide
+                .get("browser_final_headroom_required")
+                .and_then(Value::as_bool)
+                .or_else(|| {
+                    browser_final_blocker_strip
+                        .get("browser_final_runtime_headroom_required")
+                        .and_then(Value::as_bool)
+                }),
+            "browser_final_headroom_missing_free_gib": browser_final_blocker_strip
+                .get("browser_final_runtime_missing_free_gib")
+                .and_then(Value::as_f64),
+            "browser_final_headroom_recommended_action": guide
+                .get("browser_final_headroom_recommended_action")
+                .and_then(Value::as_str)
+                .or_else(|| {
+                    browser_final_blocker_strip
+                        .get("browser_final_runtime_recommended_action")
+                        .and_then(Value::as_str)
+                }),
+            "browser_final_headroom_recovery_steps": browser_final_headroom_recovery_steps,
+            "browser_final_headroom_recovery_step_count": browser_final_headroom_recovery_step_count,
             "manual_command": guide.get("manual_command").and_then(Value::as_str),
             "ordered_step_count": guide
                 .get("ordered_steps")
@@ -27337,6 +27462,10 @@ impl WebPreviewView {
                     "current_first_blocker": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_first_blocker").and_then(Value::as_str),
                     "current_recommended_action": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_recommended_action").and_then(Value::as_str),
                     "current_missing_free_gib": runtime_green_final_proof_guide.pointer("/browser_final_blocker_strip/browser_final_runtime_missing_free_gib").and_then(Value::as_f64),
+                    "current_headroom_required": runtime_green_final_proof_guide.pointer("/browser_final_headroom_required").and_then(Value::as_bool),
+                    "current_headroom_recommended_action": runtime_green_final_proof_guide.pointer("/browser_final_headroom_recommended_action").and_then(Value::as_str),
+                    "current_headroom_recovery_steps": runtime_green_final_proof_guide.pointer("/browser_final_headroom_recovery_steps").cloned(),
+                    "current_headroom_recovery_step_count": runtime_green_final_proof_guide.pointer("/browser_final_headroom_recovery_step_count").and_then(Value::as_u64),
                     "read_only": true,
                     "browser_final_blocker_strip_field": "runtime_green_final_proof_guide_summary.browser_final_blocker_strip",
                     "status_summary_direct_fields": [
@@ -27349,7 +27478,18 @@ impl WebPreviewView {
                         "handoff_artifacts.runtime_green_final_proof_guide.current_browser_final_blocker_strip",
                         "handoff_artifacts.runtime_green_final_proof_guide.current_first_blocker",
                         "handoff_artifacts.runtime_green_final_proof_guide.current_recommended_action",
-                        "handoff_artifacts.runtime_green_final_proof_guide.current_missing_free_gib"
+                        "handoff_artifacts.runtime_green_final_proof_guide.current_missing_free_gib",
+                        "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_required",
+                        "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_recommended_action",
+                        "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_recovery_steps",
+                        "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_recovery_step_count"
+                    ],
+                    "headroom_recovery_fields": [
+                        "runtime_green_final_proof_guide_summary.browser_final_headroom_required",
+                        "runtime_green_final_proof_guide_summary.browser_final_headroom_missing_free_gib",
+                        "runtime_green_final_proof_guide_summary.browser_final_headroom_recommended_action",
+                        "runtime_green_final_proof_guide_summary.browser_final_headroom_recovery_steps",
+                        "runtime_green_final_proof_guide_summary.browser_final_headroom_recovery_step_count"
                     ],
                     "purpose": "Guide agents from report badge and Browser final blocker strip to final result template, manual just run proof, import, and status recheck without parsing large packets first."
                 },
@@ -27629,7 +27769,18 @@ impl WebPreviewView {
                             "handoff_artifacts.runtime_green_final_proof_guide.current_browser_final_blocker_strip",
                             "handoff_artifacts.runtime_green_final_proof_guide.current_first_blocker",
                             "handoff_artifacts.runtime_green_final_proof_guide.current_recommended_action",
-                            "handoff_artifacts.runtime_green_final_proof_guide.current_missing_free_gib"
+                            "handoff_artifacts.runtime_green_final_proof_guide.current_missing_free_gib",
+                            "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_required",
+                            "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_recommended_action",
+                            "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_recovery_steps",
+                            "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_recovery_step_count"
+                        ],
+                        "headroom_recovery_fields": [
+                            "runtime_green_final_proof_guide_summary.browser_final_headroom_required",
+                            "runtime_green_final_proof_guide_summary.browser_final_headroom_missing_free_gib",
+                            "runtime_green_final_proof_guide_summary.browser_final_headroom_recommended_action",
+                            "runtime_green_final_proof_guide_summary.browser_final_headroom_recovery_steps",
+                            "runtime_green_final_proof_guide_summary.browser_final_headroom_recovery_step_count"
                         ],
                         "purpose": "Guide agents from report badge and Browser final blocker strip to final result template, manual just run proof, import, and status recheck."
                     },
@@ -28406,7 +28557,18 @@ impl WebPreviewView {
                                 "handoff_artifacts.runtime_green_final_proof_guide.current_browser_final_blocker_strip",
                                 "handoff_artifacts.runtime_green_final_proof_guide.current_first_blocker",
                                 "handoff_artifacts.runtime_green_final_proof_guide.current_recommended_action",
-                                "handoff_artifacts.runtime_green_final_proof_guide.current_missing_free_gib"
+                                "handoff_artifacts.runtime_green_final_proof_guide.current_missing_free_gib",
+                                "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_required",
+                                "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_recommended_action",
+                                "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_recovery_steps",
+                                "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_recovery_step_count"
+                            ],
+                            "headroom_recovery_fields": [
+                                "runtime_green_final_proof_guide_summary.browser_final_headroom_required",
+                                "runtime_green_final_proof_guide_summary.browser_final_headroom_missing_free_gib",
+                                "runtime_green_final_proof_guide_summary.browser_final_headroom_recommended_action",
+                                "runtime_green_final_proof_guide_summary.browser_final_headroom_recovery_steps",
+                                "runtime_green_final_proof_guide_summary.browser_final_headroom_recovery_step_count"
                             ],
                             "purpose": "Guide agents from report badge and Browser final blocker strip to final result template, manual just run proof, import, and status recheck."
                         },

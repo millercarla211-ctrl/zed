@@ -2387,7 +2387,18 @@ fn browser_plugin_manifest() -> Value {
                 "handoff_artifacts.runtime_green_final_proof_guide.current_browser_final_blocker_strip",
                 "handoff_artifacts.runtime_green_final_proof_guide.current_first_blocker",
                 "handoff_artifacts.runtime_green_final_proof_guide.current_recommended_action",
-                "handoff_artifacts.runtime_green_final_proof_guide.current_missing_free_gib"
+                "handoff_artifacts.runtime_green_final_proof_guide.current_missing_free_gib",
+                "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_required",
+                "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_recommended_action",
+                "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_recovery_steps",
+                "handoff_artifacts.runtime_green_final_proof_guide.current_headroom_recovery_step_count"
+            ],
+            "headroom_recovery_fields": [
+                "runtime_green_final_proof_guide_summary.browser_final_headroom_required",
+                "runtime_green_final_proof_guide_summary.browser_final_headroom_missing_free_gib",
+                "runtime_green_final_proof_guide_summary.browser_final_headroom_recommended_action",
+                "runtime_green_final_proof_guide_summary.browser_final_headroom_recovery_steps",
+                "runtime_green_final_proof_guide_summary.browser_final_headroom_recovery_step_count"
             ],
             "purpose": "Guide agents from report badge and Browser final blocker strip to final result template, manual just run proof, import, and status recheck."
         },
