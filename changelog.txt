@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Control Result Import
+
+ADDED:
+- WebPreview now imports filled `zed.web_preview.agent_browser_panel_card_control_result.v1` panel control results from the clipboard and writes latest/archive proof files under managed workspace and Zed-data agent-plugin roots.
+- Added `zed.web_preview.agent_browser_panel_control_result_import_receipt.v1` plus Copy/Send Panel Control Result and Copy/Send Panel Control Result Import Receipt More-menu actions.
+
+CHANGED:
+- Session snapshots, Agent Browser status packets, action manifests, panel result ledgers, and Agent/WebPreview plugin catalogs now expose imported panel results, durable evidence, import receipt fields, managed proof paths, and import/copy/send action metadata.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 66/100 and the remaining live UI/runtime validation targets.
+
+NOTES:
+- This slice writes only explicit imported proof JSON under managed agent-plugin roots. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Control Result Ledger
 
 ADDED:

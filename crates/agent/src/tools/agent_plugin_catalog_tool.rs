@@ -81,6 +81,13 @@ const AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_control_result.v1";
 const AGENT_BROWSER_PANEL_CONTROL_RESULT_LEDGER_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_control_result_ledger.v1";
+const AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_control_result_import_receipt.v1";
+const AGENT_BROWSER_PANEL_CONTROL_RESULT_DIR_NAME: &str = "browser-panel-control-results";
+const AGENT_BROWSER_PANEL_CONTROL_RESULT_FILE_NAME: &str =
+    "latest-agent-browser-panel-control-result.json";
+const AGENT_BROWSER_PANEL_CONTROL_RESULT_ARCHIVE_PREFIX: &str =
+    "agent-browser-panel-control-result-";
 const AGENT_BROWSER_PANEL_CARD_INTERACTION_VALIDATION_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_interaction_validation.v1";
 const AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA: &str =
@@ -880,6 +887,24 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "panel_control_result_ledger_schema": plugin
                 .pointer("/panel_control_result_ledger/schema")
                 .and_then(Value::as_str),
+            "panel_control_result_import_receipt_schema": plugin
+                .pointer("/panel_control_result_ledger/import_receipt_schema")
+                .and_then(Value::as_str),
+            "panel_control_result_import_action": plugin
+                .pointer("/panel_control_result_ledger/import_action")
+                .and_then(Value::as_str),
+            "panel_control_result_copy_action": plugin
+                .pointer("/panel_control_result_ledger/result_copy_action")
+                .and_then(Value::as_str),
+            "panel_control_result_send_action": plugin
+                .pointer("/panel_control_result_ledger/result_send_action")
+                .and_then(Value::as_str),
+            "panel_control_result_import_receipt_copy_action": plugin
+                .pointer("/panel_control_result_ledger/import_receipt_copy_action")
+                .and_then(Value::as_str),
+            "panel_control_result_import_receipt_send_action": plugin
+                .pointer("/panel_control_result_ledger/import_receipt_send_action")
+                .and_then(Value::as_str),
             "panel_control_result_ledger_copy_action": plugin
                 .pointer("/panel_control_result_ledger/copy_action")
                 .and_then(Value::as_str),
@@ -1282,6 +1307,8 @@ fn browser_plugin_manifest() -> Value {
                 "runtime_green_final_report_packet": "copy_agent_plugin_runtime_green_final_report_packet",
                 "runtime_green_report_readiness_card": "copy_agent_plugin_runtime_green_report_readiness_card",
                 "panel_card_deck": "copy_agent_browser_panel_card_deck",
+                "panel_control_result_import": "import_agent_browser_panel_control_result_from_clipboard",
+                "panel_control_result_import_receipt": "copy_agent_browser_panel_control_result_import_receipt",
                 "panel_control_result_ledger": "copy_agent_browser_panel_control_result_ledger",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
@@ -1352,18 +1379,33 @@ fn browser_plugin_manifest() -> Value {
         "panel_control_result_ledger": {
             "schema": AGENT_BROWSER_PANEL_CONTROL_RESULT_LEDGER_SCHEMA,
             "control_result_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
+            "import_receipt_schema": AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA,
             "source_deck_schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
             "session_field": "agent_browser_panel_control_result_ledger",
             "status_packet_field": "packet.latest.agent_browser_panel_control_result_ledger",
+            "result_session_field": "agent_browser_panel_control_result",
+            "result_import_receipt_session_field": "agent_browser_panel_control_result_import_receipt",
+            "durable_evidence_session_field": "agent_browser_panel_control_result_durable_evidence",
+            "import_action": "import_agent_browser_panel_control_result_from_clipboard",
+            "result_copy_action": "copy_agent_browser_panel_control_result",
+            "result_send_action": "send_agent_browser_panel_control_result_to_agent",
+            "import_receipt_copy_action": "copy_agent_browser_panel_control_result_import_receipt",
+            "import_receipt_send_action": "send_agent_browser_panel_control_result_import_receipt_to_agent",
             "copy_action": "copy_agent_browser_panel_control_result_ledger",
             "send_action": "send_agent_browser_panel_control_result_ledger_to_agent",
             "source_receipts": [
+                "session.agent_browser_panel_control_result",
+                "session.agent_browser_panel_control_result_import_receipt",
+                "session.agent_browser_panel_control_result_durable_evidence",
                 "session.agent_browser_action_payload_import_receipt",
                 "session.blocked_interaction_receipt",
                 "session.successful_interaction_receipt"
             ],
+            "managed_result_dir": AGENT_BROWSER_PANEL_CONTROL_RESULT_DIR_NAME,
+            "managed_result_file": AGENT_BROWSER_PANEL_CONTROL_RESULT_FILE_NAME,
+            "managed_result_archive_prefix": AGENT_BROWSER_PANEL_CONTROL_RESULT_ARCHIVE_PREFIX,
             "read_only": true,
-            "purpose": "Normalize panel control results from the latest payload import, blocked receipt, and success receipt template without dispatching input."
+            "purpose": "Normalize panel control results from imported durable panel results, latest payload import, blocked receipt, and success receipt template without dispatching input."
         },
         "bootstrap_readiness_handoff": {
             "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
@@ -1393,6 +1435,8 @@ fn browser_plugin_manifest() -> Value {
             "final_validation_bundle_schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
             "final_validation_result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
             "final_validation_result_import_receipt_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
+            "panel_control_result_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
+            "panel_control_result_import_receipt_schema": AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA,
             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_green_final_proof_guide_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
@@ -1595,6 +1639,8 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.viewport.responsive", "available", "Switch the active WebPreview between full, phone, tablet, laptop, and rotated responsive viewports."),
             capability("browser.function_surfaces", "available", "Copy or send the concrete WebPreview screenshot, inspect, DevTools, and responsive viewport surface map."),
             capability("browser.panel_card_deck", "available", "Copy or send one compact Agent Panel deck for screenshot, annotation, inspect, DevTools, responsive viewport, managed Chrome, and PC-use proof cards."),
+            capability("browser.panel_control_result_import", "available_explicit_user_action", "Import a filled panel control result from the clipboard and persist it under managed Browser result roots."),
+            capability("browser.panel_control_result_import_receipt", "available_after_import", "Copy or send the latest durable panel control result import receipt with managed proof paths."),
             capability("browser.panel_control_result_ledger", "available", "Copy or send normalized panel control results derived from the latest receipt and import surfaces."),
             capability("browser.plugin_bootstrap_readiness", "available", "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."),
             capability("browser.runtime_green_claim_readiness", "available", "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."),
