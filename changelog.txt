@@ -1,3 +1,16 @@
+[2026-05-17] - Headroom Reclaim Candidates Handoff
+
+ADDED:
+- `crates/web_preview/src/web_preview_view.rs` now derives `agent_browser_final_runtime_headroom_reclaim_candidates` from the final runtime recovery plan, with candidate reclaim zones, preserve roots, forbidden actions, safe inspection commands, copy/send actions, and explicit read-only safety metadata.
+
+CHANGED:
+- `crates/web_preview/src/web_preview_view.rs` now surfaces the reclaim-candidates handoff through session snapshots, status packets, final validation observability, final validation bundles, action manifests, panel live UI proof checklists, More-menu entries, and the WebPreview plugin catalog.
+- `crates/agent/src/tools/agent_plugin_catalog_tool.rs` now advertises the reclaim-candidates schema, copy/send actions, action-map entry, and Browser capability so AI panels can discover the safe headroom packet without guessing.
+- `todo.txt` now records the reclaim-candidates slice while keeping the feature set at 99/100 until the live UI exercise and final `just run` proof can run with enough G: headroom.
+
+NOTES:
+- This slice is inspection-only. It does not delete files, mutate browser profiles, run Cargo, run `just run`, or dispatch browser/OS input.
+
 [2026-05-17] - Browser Chrome Headroom Readiness Gate
 
 ADDED:
