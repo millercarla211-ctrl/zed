@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Card Follow Ups
+
+ADDED:
+- Agent Browser panel deck cards now include direct `handoff` metadata with primary action, detail action, source field, status-packet field, refresh action, kind, and safety flags.
+- Agent Panel deck summaries now show the next recommended follow-up action for every browser, managed Chrome, and PC-use card.
+
+CHANGED:
+- Agent and WebPreview plugin catalogs now mirror the panel deck card handoff action map so static catalog consumers can render card-level controls without waiting for a live deck snapshot.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 36/100 and the next remaining proof targets.
+
+NOTES:
+- This is a read-only handoff/control-metadata slice. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Deck Handoff
 
 ADDED:

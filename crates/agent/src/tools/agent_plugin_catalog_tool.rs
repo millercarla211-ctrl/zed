@@ -831,6 +831,9 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "panel_card_deck_send_action": plugin
                 .pointer("/panel_card_deck/send_action")
                 .and_then(Value::as_str),
+            "panel_card_deck_handoff_actions": plugin
+                .pointer("/panel_card_deck/card_handoff_actions")
+                .cloned(),
             "bootstrap_schema": plugin
                 .get("bootstrap_readiness_schema")
                 .and_then(Value::as_str),
@@ -1257,7 +1260,16 @@ fn browser_plugin_manifest() -> Value {
                 "session.responsive_viewport_change",
                 "session.managed_chrome_execution.latest_action_card",
                 "session.pc_use_status.latest_proof_card"
-            ]
+            ],
+            "card_handoff_actions": {
+                "browser.screenshot.capture": {"primary_action": "take_screenshot", "details_action": "send_agent_browser_status_packet_to_agent"},
+                "browser.screenshot.annotate": {"primary_action": "annotate_screenshot", "details_action": "send_agent_browser_status_packet_to_agent"},
+                "browser.element.inspect": {"primary_action": "inspect_element", "details_action": "send_agent_browser_status_packet_to_agent"},
+                "browser.devtools.open": {"primary_action": "open_devtools", "details_action": "send_agent_browser_status_packet_to_agent"},
+                "browser.viewport.responsive": {"primary_action": "set_responsive_viewport", "details_action": "send_agent_browser_status_packet_to_agent"},
+                "chrome.managed.latest_action": {"primary_action": "copy_managed_chrome_execution_status", "details_action": "send_managed_chrome_execution_status_to_agent"},
+                "pc_use.latest_proof": {"primary_action": "copy_pc_use_status", "details_action": "send_pc_use_status_to_agent"}
+            }
         },
         "bootstrap_readiness_handoff": {
             "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,

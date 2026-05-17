@@ -4510,6 +4510,9 @@ impl WebPreviewView {
                 "panel_card_deck_send_action": plugin
                     .pointer("/panel_card_deck/send_action")
                     .and_then(Value::as_str),
+                "panel_card_deck_handoff_actions": plugin
+                    .pointer("/panel_card_deck/card_handoff_actions")
+                    .cloned(),
                 "bootstrap_schema": plugin
                     .get("bootstrap_readiness_schema")
                     .and_then(Value::as_str),
@@ -5056,6 +5059,10 @@ impl WebPreviewView {
                     .unwrap_or(false)
             })
             .count();
+        let cards_with_primary_handoff_count = cards
+            .iter()
+            .filter(|card| card.pointer("/handoff/primary_action").is_some())
+            .count();
 
         serde_json::json!({
             "schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
@@ -5070,10 +5077,12 @@ impl WebPreviewView {
                 "card_count": card_count,
                 "ready_card_count": ready_card_count,
                 "empty_or_pending_card_count": card_count.saturating_sub(ready_card_count),
+                "cards_with_primary_handoff_count": cards_with_primary_handoff_count,
             },
             "cards": cards,
             "panel_guidance": [
                 "Render cards by ascending priority.",
+                "Use each card handoff.primary_action as the compact follow-up control before opening larger packets.",
                 "Open the full source packet only when the compact card detail is insufficient.",
                 "Treat this deck as read-only evidence; browser input still requires the existing permission, preflight, and receipt gates."
             ],
@@ -5122,6 +5131,7 @@ impl WebPreviewView {
             .as_ref()
             .is_some_and(Self::agent_browser_panel_card_is_ready);
         let card_present = card.is_some();
+        let handoff = Self::agent_browser_panel_card_handoff(id, source_field);
 
         serde_json::json!({
             "id": id,
@@ -5137,8 +5147,105 @@ impl WebPreviewView {
                 "ready": ready,
                 "card_present": card_present,
             },
+            "handoff": handoff,
             "card": card,
         })
+    }
+
+    fn agent_browser_panel_card_handoff(id: &str, source_field: &str) -> Value {
+        let common = serde_json::json!({
+            "source_field": source_field,
+            "deck_copy_action": "copy_agent_browser_panel_card_deck",
+            "deck_send_action": "send_agent_browser_panel_card_deck_to_agent",
+            "requires_interactive_unlock": false,
+            "dispatches_input": false,
+            "mutates_external_browser_profiles": false,
+        });
+
+        match id {
+            "browser.screenshot.capture" => serde_json::json!({
+                "primary_action": "take_screenshot",
+                "primary_label": "Take Screenshot",
+                "status_packet_field": "packet.latest.screenshot_capture",
+                "session_field": source_field,
+                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "details_action": "send_agent_browser_status_packet_to_agent",
+                "kind": "webpreview_capture",
+                "safety": common,
+            }),
+            "browser.screenshot.annotate" => serde_json::json!({
+                "primary_action": "annotate_screenshot",
+                "primary_label": "Annotate Screenshot",
+                "status_packet_field": "packet.latest.annotated_screenshot",
+                "session_field": source_field,
+                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "details_action": "send_agent_browser_status_packet_to_agent",
+                "kind": "webpreview_annotation",
+                "safety": common,
+            }),
+            "browser.element.inspect" => serde_json::json!({
+                "primary_action": "inspect_element",
+                "primary_label": "Inspect Element",
+                "status_packet_field": "packet.latest.inspected_element_evidence_card",
+                "session_field": source_field,
+                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "details_action": "send_agent_browser_status_packet_to_agent",
+                "kind": "webpreview_inspection",
+                "safety": common,
+            }),
+            "browser.devtools.open" => serde_json::json!({
+                "primary_action": "open_devtools",
+                "primary_label": "Open DevTools",
+                "status_packet_field": "packet.latest.devtools_evidence_card",
+                "session_field": source_field,
+                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "details_action": "send_agent_browser_status_packet_to_agent",
+                "kind": "webpreview_devtools",
+                "safety": common,
+            }),
+            "browser.viewport.responsive" => serde_json::json!({
+                "primary_action": "set_responsive_viewport",
+                "primary_label": "Set Responsive Viewport",
+                "status_packet_field": "packet.latest.responsive_viewport_change",
+                "session_field": source_field,
+                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "details_action": "send_agent_browser_status_packet_to_agent",
+                "kind": "webpreview_viewport",
+                "safety": common,
+            }),
+            "chrome.managed.latest_action" => serde_json::json!({
+                "primary_action": "copy_managed_chrome_execution_status",
+                "primary_label": "Copy Managed Chrome Status",
+                "secondary_action": "send_managed_chrome_execution_status_to_agent",
+                "status_packet_field": "packet.latest.managed_chrome_execution.latest_action_card",
+                "session_field": source_field,
+                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "details_action": "send_managed_chrome_execution_status_to_agent",
+                "kind": "managed_chrome_receipt",
+                "safety": common,
+            }),
+            "pc_use.latest_proof" => serde_json::json!({
+                "primary_action": "copy_pc_use_status",
+                "primary_label": "Copy PC-use Status",
+                "secondary_action": "send_pc_use_status_to_agent",
+                "status_packet_field": "packet.latest.pc_use_status.latest_proof_card",
+                "session_field": source_field,
+                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "details_action": "send_pc_use_status_to_agent",
+                "kind": "pc_use_receipt",
+                "safety": common,
+            }),
+            _ => serde_json::json!({
+                "primary_action": "copy_agent_browser_panel_card_deck",
+                "primary_label": "Copy Panel Card Deck",
+                "status_packet_field": null,
+                "session_field": source_field,
+                "refresh_action": "copy_agent_browser_panel_card_deck",
+                "details_action": "send_agent_browser_status_packet_to_agent",
+                "kind": "generic_panel_card",
+                "safety": common,
+            }),
+        }
     }
 
     fn agent_browser_panel_card_is_ready(card: &Value) -> bool {
@@ -5225,8 +5332,16 @@ impl WebPreviewView {
                     .get("source_field")
                     .and_then(Value::as_str)
                     .unwrap_or("unknown");
+                let primary_action = card
+                    .pointer("/handoff/primary_action")
+                    .and_then(Value::as_str)
+                    .unwrap_or("copy_agent_browser_panel_card_deck");
+                let primary_label = card
+                    .pointer("/handoff/primary_label")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Copy Panel Card Deck");
                 lines.push(format!(
-                    "- {lane} | {label} | {readiness} | {state} | {title} | source: {source}"
+                    "- {lane} | {label} | {readiness} | {state} | {title} | next: {primary_label} ({primary_action}) | source: {source}"
                 ));
             }
         }
@@ -16433,7 +16548,16 @@ impl WebPreviewView {
                                 "session.responsive_viewport_change",
                                 "session.managed_chrome_execution.latest_action_card",
                                 "session.pc_use_status.latest_proof_card"
-                            ]
+                            ],
+                            "card_handoff_actions": {
+                                "browser.screenshot.capture": {"primary_action": "take_screenshot", "details_action": "send_agent_browser_status_packet_to_agent"},
+                                "browser.screenshot.annotate": {"primary_action": "annotate_screenshot", "details_action": "send_agent_browser_status_packet_to_agent"},
+                                "browser.element.inspect": {"primary_action": "inspect_element", "details_action": "send_agent_browser_status_packet_to_agent"},
+                                "browser.devtools.open": {"primary_action": "open_devtools", "details_action": "send_agent_browser_status_packet_to_agent"},
+                                "browser.viewport.responsive": {"primary_action": "set_responsive_viewport", "details_action": "send_agent_browser_status_packet_to_agent"},
+                                "chrome.managed.latest_action": {"primary_action": "copy_managed_chrome_execution_status", "details_action": "send_managed_chrome_execution_status_to_agent"},
+                                "pc_use.latest_proof": {"primary_action": "copy_pc_use_status", "details_action": "send_pc_use_status_to_agent"}
+                            }
                         },
                         "bootstrap_readiness_handoff": {
                             "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
