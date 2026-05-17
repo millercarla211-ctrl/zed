@@ -1,3 +1,17 @@
+[2026-05-17] - Browser Chrome Panel Control State
+
+ADDED:
+- Agent Browser panel card affordances now include `zed.web_preview.agent_browser_panel_card_control_state.v1` with enabled/disabled render state, action group, permission gate, variant-menu metadata, and disabled reasons.
+- Agent Browser panel decks now include a control-state summary with enabled, disabled, permissioned, missing-state, unknown-control, and variant-menu counts.
+
+CHANGED:
+- Panel deck render contracts now require control-state readiness before reporting render-ready status, and Agent Panel summaries show each affordance control state.
+- Status packet summaries, action manifests, and Agent/WebPreview plugin catalogs now advertise the control-state schema and field for static panel rendering.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 54/100 and the next remaining proof targets.
+
+NOTES:
+- This is a panel control-state metadata slice. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Interaction Validation
 
 ADDED:

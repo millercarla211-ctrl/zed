@@ -112,6 +112,8 @@ const AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_display.v1";
 const AGENT_BROWSER_PANEL_CARD_AFFORDANCE_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_affordance.v1";
+const AGENT_BROWSER_PANEL_CARD_CONTROL_STATE_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_card_control_state.v1";
 const AGENT_BROWSER_PANEL_CARD_INTERACTION_VALIDATION_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_interaction_validation.v1";
 const AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA: &str =
@@ -1941,6 +1943,11 @@ impl WebPreviewView {
             "pc_use_latest_proof_card": packet.pointer("/packet/latest/pc_use_status/latest_proof_card").cloned(),
             "panel_card_deck_schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
             "panel_card_deck_affordance_schema": AGENT_BROWSER_PANEL_CARD_AFFORDANCE_SCHEMA,
+            "panel_card_deck_control_state_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_STATE_SCHEMA,
+            "panel_card_deck_control_state_status": packet.pointer("/packet/latest/agent_browser_panel_card_deck/summary/control_state_status").and_then(Value::as_str),
+            "panel_card_deck_enabled_control_count": packet.pointer("/packet/latest/agent_browser_panel_card_deck/summary/enabled_control_count").and_then(Value::as_u64),
+            "panel_card_deck_disabled_control_count": packet.pointer("/packet/latest/agent_browser_panel_card_deck/summary/disabled_control_count").and_then(Value::as_u64),
+            "panel_card_deck_permissioned_control_count": packet.pointer("/packet/latest/agent_browser_panel_card_deck/summary/permissioned_control_count").and_then(Value::as_u64),
             "panel_card_deck_render_contract_schema": AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA,
             "panel_card_deck_render_status": packet.pointer("/packet/latest/agent_browser_panel_card_deck/render_contract/status").and_then(Value::as_str),
             "panel_card_deck_interaction_validation_schema": AGENT_BROWSER_PANEL_CARD_INTERACTION_VALIDATION_SCHEMA,
@@ -4540,6 +4547,12 @@ impl WebPreviewView {
                 "panel_card_deck_affordance_field": plugin
                     .pointer("/panel_card_deck/card_affordance_field")
                     .and_then(Value::as_str),
+                "panel_card_deck_control_state_schema": plugin
+                    .pointer("/panel_card_deck/control_state_schema")
+                    .and_then(Value::as_str),
+                "panel_card_deck_control_state_field": plugin
+                    .pointer("/panel_card_deck/control_state_field")
+                    .and_then(Value::as_str),
                 "panel_card_deck_interaction_validation_schema": plugin
                     .pointer("/panel_card_deck/interaction_validation_schema")
                     .and_then(Value::as_str),
@@ -5126,6 +5139,24 @@ impl WebPreviewView {
                     .is_some()
             })
             .count();
+        let control_state_summary = Self::agent_browser_panel_card_control_state_summary(&cards);
+        let control_state_status = control_state_summary
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_string();
+        let enabled_control_count = control_state_summary
+            .pointer("/counts/enabled_control_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let disabled_control_count = control_state_summary
+            .pointer("/counts/disabled_control_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let permissioned_control_count = control_state_summary
+            .pointer("/counts/permissioned_control_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
         let render_contract = Self::agent_browser_panel_card_deck_render_contract(&cards);
         let render_status = render_contract
             .get("status")
@@ -5162,8 +5193,13 @@ impl WebPreviewView {
                 "render_status": render_status,
                 "interaction_status": interaction_status,
                 "unknown_interaction_action_count": unknown_interaction_action_count,
+                "control_state_status": control_state_status,
+                "enabled_control_count": enabled_control_count,
+                "disabled_control_count": disabled_control_count,
+                "permissioned_control_count": permissioned_control_count,
             },
             "render_contract": render_contract,
+            "control_state_summary": control_state_summary,
             "cards": cards,
             "panel_guidance": [
                 "Render cards by ascending priority.",
@@ -5273,11 +5309,15 @@ impl WebPreviewView {
         let interaction_validation = Self::agent_browser_panel_card_interaction_validation(cards);
         let interaction_ready =
             interaction_validation.get("status").and_then(Value::as_str) == Some("ready");
+        let control_state_summary = Self::agent_browser_panel_card_control_state_summary(cards);
+        let control_state_ready =
+            control_state_summary.get("status").and_then(Value::as_str) == Some("ready");
         let render_ready = missing_display_cards.is_empty()
             && missing_affordance_cards.is_empty()
             && missing_refresh_cards.is_empty()
             && missing_primary_action_cards.is_empty()
-            && interaction_ready;
+            && interaction_ready
+            && control_state_ready;
         let missing_display_card_count = missing_display_cards.len();
         let missing_affordance_card_count = missing_affordance_cards.len();
         let missing_refresh_card_count = missing_refresh_cards.len();
@@ -5291,6 +5331,7 @@ impl WebPreviewView {
             "schema": AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA,
             "status": if render_ready { "ready" } else { "needs_panel_metadata" },
             "card_display_schema": AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA,
+            "card_control_state_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_STATE_SCHEMA,
             "card_count": card_count,
             "counts": {
                 "cards_with_display": display_cards.len(),
@@ -5313,9 +5354,11 @@ impl WebPreviewView {
                 "primary_action_cards": missing_primary_action_cards,
             },
             "interaction_validation": interaction_validation,
+            "control_state_summary": control_state_summary,
             "render_instructions": [
                 "Read /cards/*/display for compact card rendering before opening /cards/*/card.",
                 "Render /cards/*/display/affordances in order for panel controls.",
+                "Read /cards/*/display/affordances/*/control_state before enabling a panel button or menu.",
                 "Disable or hide affordances listed under interaction_validation.unknown_actions.",
                 "Use /cards/*/display/actions/primary for the default card button.",
                 "Use /cards/*/display/actions/refresh for one-card proof refresh affordances.",
@@ -5342,6 +5385,99 @@ impl WebPreviewView {
                 .pointer("/display/title")
                 .or_else(|| card.get("title"))
                 .and_then(Value::as_str),
+        })
+    }
+
+    fn agent_browser_panel_card_control_state_summary(cards: &[Value]) -> Value {
+        let mut total_control_count = 0usize;
+        let mut controls_with_state_count = 0usize;
+        let mut enabled_control_count = 0usize;
+        let mut disabled_control_count = 0usize;
+        let mut unknown_control_count = 0usize;
+        let mut permissioned_control_count = 0usize;
+        let mut variant_menu_count = 0usize;
+        let mut missing_control_state_controls = Vec::new();
+
+        for card in cards {
+            let Some(affordances) = card
+                .pointer("/display/affordances")
+                .and_then(Value::as_array)
+            else {
+                continue;
+            };
+
+            for affordance in affordances {
+                total_control_count += 1;
+                let Some(control_state) = affordance.get("control_state") else {
+                    missing_control_state_controls.push(
+                        Self::agent_browser_panel_card_interaction_issue(
+                            card,
+                            affordance,
+                            affordance.get("action").and_then(Value::as_str),
+                            "display.affordances[].control_state",
+                            "missing_control_state",
+                        ),
+                    );
+                    continue;
+                };
+
+                controls_with_state_count += 1;
+                if control_state
+                    .get("enabled")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+                {
+                    enabled_control_count += 1;
+                } else {
+                    disabled_control_count += 1;
+                }
+                if !control_state
+                    .get("known_action")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+                {
+                    unknown_control_count += 1;
+                }
+                if control_state
+                    .pointer("/permission/required")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+                {
+                    permissioned_control_count += 1;
+                }
+                if control_state
+                    .pointer("/render/kind")
+                    .and_then(Value::as_str)
+                    == Some("menu")
+                {
+                    variant_menu_count += 1;
+                }
+            }
+        }
+
+        let missing_control_state_count = missing_control_state_controls.len();
+        let control_state_ready = missing_control_state_count == 0 && unknown_control_count == 0;
+
+        serde_json::json!({
+            "schema": "zed.web_preview.agent_browser_panel_card_control_state_summary.v1",
+            "status": if control_state_ready { "ready" } else { "needs_control_state" },
+            "control_state_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_STATE_SCHEMA,
+            "counts": {
+                "total_control_count": total_control_count,
+                "controls_with_state_count": controls_with_state_count,
+                "missing_control_state_count": missing_control_state_count,
+                "enabled_control_count": enabled_control_count,
+                "disabled_control_count": disabled_control_count,
+                "unknown_control_count": unknown_control_count,
+                "permissioned_control_count": permissioned_control_count,
+                "variant_menu_count": variant_menu_count,
+            },
+            "missing_control_state_controls": missing_control_state_controls,
+            "policy": {
+                "panels_must_read_control_state_before_enabling_controls": true,
+                "unknown_controls_disabled_by_default": true,
+                "permissioned_controls_require_existing_agent_action_permission": true,
+            },
         })
     }
 
@@ -5497,6 +5633,120 @@ impl WebPreviewView {
             "viewport_laptop",
             "viewport_rotate",
         ]
+    }
+
+    fn agent_browser_panel_card_action_group(action: &str) -> &'static str {
+        if READ_ONLY_AGENT_BROWSER_ACTIONS.contains(&action) {
+            "read_only"
+        } else if INTERACTIVE_AGENT_BROWSER_ACTIONS.contains(&action) {
+            "interactive"
+        } else if Self::agent_browser_panel_card_viewport_variant_actions().contains(&action) {
+            "viewport_variant"
+        } else {
+            "unknown"
+        }
+    }
+
+    fn agent_browser_panel_card_control_state(
+        action: &str,
+        requested_enabled: bool,
+        requires_variant_selection: bool,
+        variant_action_count: usize,
+        safety: &Value,
+    ) -> Value {
+        let action_group = Self::agent_browser_panel_card_action_group(action);
+        let known_action = action_group != "unknown";
+        let requires_permission = action_group == "interactive"
+            || safety
+                .get("requires_interactive_unlock")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+        let missing_variant_actions = requires_variant_selection && variant_action_count == 0;
+        let enabled = requested_enabled && known_action && !missing_variant_actions;
+        let mut disabled_reasons = Vec::new();
+        if !requested_enabled {
+            disabled_reasons.push("affordance_disabled");
+        }
+        if !known_action {
+            disabled_reasons.push("unknown_action");
+        }
+        if missing_variant_actions {
+            disabled_reasons.push("missing_variant_actions");
+        }
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_PANEL_CARD_CONTROL_STATE_SCHEMA,
+            "status": if enabled { "enabled" } else { "disabled" },
+            "enabled": enabled,
+            "requested_enabled": requested_enabled,
+            "known_action": known_action,
+            "action_group": action_group,
+            "disabled_reasons": disabled_reasons,
+            "permission": {
+                "required": requires_permission,
+                "gate": if requires_permission {
+                    Some("interactive_agent_actions")
+                } else {
+                    None
+                },
+                "dispatch_policy": if requires_permission {
+                    "permissioned"
+                } else {
+                    "read_only_or_panel_handoff"
+                },
+            },
+            "variant": {
+                "requires_selection": requires_variant_selection,
+                "variant_action_count": variant_action_count,
+            },
+            "render": {
+                "kind": if requires_variant_selection { "menu" } else { "button" },
+                "disable_when_unknown": true,
+                "show_permission_gate": requires_permission,
+            },
+            "safety": safety,
+        })
+    }
+
+    fn agent_browser_panel_card_affordances_with_control_state(
+        mut affordances: Vec<Value>,
+    ) -> Vec<Value> {
+        for affordance in &mut affordances {
+            let action = affordance
+                .get("action")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            let requested_enabled = affordance
+                .get("enabled")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let requires_variant_selection = affordance
+                .get("requires_variant_selection")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let variant_action_count = affordance
+                .get("variant_actions")
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len);
+            let safety = affordance
+                .get("safety")
+                .cloned()
+                .unwrap_or_else(Self::agent_browser_panel_card_default_safety);
+            let control_state = Self::agent_browser_panel_card_control_state(
+                &action,
+                requested_enabled,
+                requires_variant_selection,
+                variant_action_count,
+                &safety,
+            );
+            if let Some(object) = affordance.as_object_mut() {
+                object.insert("control_state".to_string(), control_state);
+            }
+        }
+
+        affordances
     }
 
     fn agent_browser_panel_card(
@@ -5832,7 +6082,7 @@ impl WebPreviewView {
             }
         }
 
-        affordances
+        Self::agent_browser_panel_card_affordances_with_control_state(affordances)
     }
 
     fn agent_browser_panel_card_default_safety() -> Value {
@@ -6405,6 +6655,22 @@ impl WebPreviewView {
             .pointer("/render_contract/interaction_validation/counts/unknown_action_count")
             .and_then(Value::as_u64)
             .unwrap_or(0);
+        let control_state_status = deck
+            .pointer("/summary/control_state_status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let enabled_control_count = deck
+            .pointer("/summary/enabled_control_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let disabled_control_count = deck
+            .pointer("/summary/disabled_control_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let permissioned_control_count = deck
+            .pointer("/summary/permissioned_control_count")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
         let title = deck
             .pointer("/page/title")
             .and_then(Value::as_str)
@@ -6424,6 +6690,9 @@ impl WebPreviewView {
             ),
             format!(
                 "Panel actions: {interaction_status}; unknown controls {unknown_interaction_action_count}"
+            ),
+            format!(
+                "Control state: {control_state_status}; enabled {enabled_control_count}; disabled {disabled_control_count}; permissioned {permissioned_control_count}"
             ),
             format!("Page: {title} ({url})"),
         ];
@@ -6512,7 +6781,11 @@ impl WebPreviewView {
                                 let role = affordance.get("role").and_then(Value::as_str)?;
                                 let label = affordance.get("label").and_then(Value::as_str)?;
                                 let action = affordance.get("action").and_then(Value::as_str)?;
-                                Some(format!("{role}: {label} ({action})"))
+                                let control_state = affordance
+                                    .pointer("/control_state/status")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("unknown");
+                                Some(format!("{role}: {label} ({action}, {control_state})"))
                             })
                             .collect::<Vec<_>>()
                             .join("; ")
@@ -17167,6 +17440,8 @@ impl WebPreviewView {
                     "schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
                     "card_display_schema": AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA,
                     "card_affordance_schema": AGENT_BROWSER_PANEL_CARD_AFFORDANCE_SCHEMA,
+                    "control_state_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_STATE_SCHEMA,
+                    "control_state_field": "agent_browser_panel_card_deck.cards[].display.affordances[].control_state",
                     "interaction_validation_schema": AGENT_BROWSER_PANEL_CARD_INTERACTION_VALIDATION_SCHEMA,
                     "render_contract_schema": AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA,
                     "copy_action": "copy_agent_browser_panel_card_deck",
@@ -17179,6 +17454,15 @@ impl WebPreviewView {
                         .and_then(Value::as_str),
                     "unknown_interaction_action_count": agent_browser_panel_card_deck
                         .pointer("/render_contract/interaction_validation/counts/unknown_action_count")
+                        .and_then(Value::as_u64),
+                    "control_state_status": agent_browser_panel_card_deck
+                        .pointer("/summary/control_state_status")
+                        .and_then(Value::as_str),
+                    "enabled_control_count": agent_browser_panel_card_deck
+                        .pointer("/summary/enabled_control_count")
+                        .and_then(Value::as_u64),
+                    "disabled_control_count": agent_browser_panel_card_deck
+                        .pointer("/summary/disabled_control_count")
                         .and_then(Value::as_u64),
                     "affordance_card_count": agent_browser_panel_card_deck
                         .pointer("/summary/cards_with_affordance_count")
@@ -17731,6 +18015,8 @@ impl WebPreviewView {
                             "card_display_schema": AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA,
                             "card_affordance_schema": AGENT_BROWSER_PANEL_CARD_AFFORDANCE_SCHEMA,
                             "card_affordance_field": "agent_browser_panel_card_deck.cards[].display.affordances",
+                            "control_state_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_STATE_SCHEMA,
+                            "control_state_field": "agent_browser_panel_card_deck.cards[].display.affordances[].control_state",
                             "interaction_validation_schema": AGENT_BROWSER_PANEL_CARD_INTERACTION_VALIDATION_SCHEMA,
                             "interaction_validation_field": "agent_browser_panel_card_deck.render_contract.interaction_validation",
                             "render_contract_schema": AGENT_BROWSER_PANEL_CARD_RENDER_CONTRACT_SCHEMA,
