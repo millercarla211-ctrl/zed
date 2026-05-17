@@ -2099,6 +2099,17 @@ fn browser_plugin_manifest() -> Value {
         },
         "final_validation_result_template_handoff": {
             "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+            "expected_required_check_ids": [
+                "editor_typing",
+                "webpreview_input",
+                "final_runtime_capacity",
+                "final_headroom_recovery_sequence",
+                "panel_live_validation",
+                "native_executor_receipts",
+                "payload_bridge",
+                "managed_chrome",
+                "pc_use"
+            ],
             "headroom_recovery_sequence_required_check_id": "final_headroom_recovery_sequence",
             "headroom_recovery_sequence_bundle_field": "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_sequence",
             "copy_action": "copy_agent_browser_final_validation_result_template",
@@ -2116,6 +2127,7 @@ fn browser_plugin_manifest() -> Value {
             "managed_result_file": AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME,
             "managed_result_archive_prefix": AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX,
             "runtime_status_field": "runtime_green_blocker_summary.latest_evidence.browser_final_validation_result",
+            "stale_required_check_blocker_field": "missing_expected_required_checks",
             "copy_send_read_only": true,
             "import_writes_managed_result": true,
             "managed_roots_only": true,

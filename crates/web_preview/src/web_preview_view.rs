@@ -98,6 +98,17 @@ const AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SUMMARY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_bundle_summary.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS: &[&str] = &[
+    "editor_typing",
+    "webpreview_input",
+    "final_runtime_capacity",
+    "final_headroom_recovery_sequence",
+    "panel_live_validation",
+    "native_executor_receipts",
+    "payload_bridge",
+    "managed_chrome",
+    "pc_use",
+];
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result_import_receipt.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
@@ -3233,6 +3244,13 @@ impl WebPreviewView {
             "missing_required_checks": audit.pointer("/audit/missing_required_checks").cloned(),
             "missing_required_check_count": audit
                 .pointer("/audit/missing_required_checks")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            "missing_expected_required_checks": audit
+                .pointer("/audit/missing_expected_required_checks")
+                .cloned(),
+            "missing_expected_required_check_count": audit
+                .pointer("/audit/missing_expected_required_checks")
                 .and_then(Value::as_array)
                 .map(Vec::len),
             "missing_required_evidence": audit.pointer("/audit/missing_required_evidence").cloned(),
@@ -6866,6 +6884,15 @@ impl WebPreviewView {
             .and_then(|summary| summary.pointer("/missing_required_checks"))
             .cloned()
             .unwrap_or_else(|| serde_json::json!([]));
+        let missing_expected_required_checks = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/missing_expected_required_checks"))
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let missing_expected_required_check_count = missing_expected_required_checks
+            .as_array()
+            .map(Vec::len)
+            .unwrap_or(0);
         let missing_required_evidence = result_summary
             .as_ref()
             .and_then(|summary| summary.pointer("/missing_required_evidence"))
@@ -6887,6 +6914,8 @@ impl WebPreviewView {
             "runtime_green_result_waiting_for_report_gate"
         } else if final_result_runtime_green_candidate && !panel_live_validation_result_gate_ready {
             "panel_live_validation_result_gate_required"
+        } else if missing_expected_required_check_count > 0 {
+            "final_result_stale_required_checks"
         } else if result_summary.is_some() {
             "final_result_needs_evidence_or_blocker_fix"
         } else if template_summary.is_some() && bundle_summary.is_some() {
@@ -6902,6 +6931,8 @@ impl WebPreviewView {
             "copy_agent_browser_final_validation_result_template"
         } else if result_summary.is_none() {
             "import_agent_browser_final_validation_result_from_clipboard"
+        } else if missing_expected_required_check_count > 0 {
+            "copy_agent_browser_final_validation_result_template"
         } else if final_result_runtime_green_candidate && !panel_live_validation_result_gate_ready {
             "copy_agent_browser_panel_live_validation_result_gate"
         } else if runtime_green_candidate {
@@ -6923,6 +6954,8 @@ impl WebPreviewView {
                 "may_report_runtime_green": may_report_runtime_green,
                 "next_action": next_action,
                 "missing_required_checks": missing_required_checks,
+                "missing_expected_required_checks": missing_expected_required_checks,
+                "missing_expected_required_check_count": missing_expected_required_check_count,
                 "missing_required_evidence": missing_required_evidence,
                 "required_check_blocker_count": required_check_blocker_count,
                 "overall_blocker": result_summary
@@ -7023,6 +7056,12 @@ impl WebPreviewView {
             .and_then(Value::as_array)
             .map(Vec::len)
             .unwrap_or(0);
+        let missing_expected_required_check_count = audit
+            .pointer("/audit/missing_expected_required_checks")
+            .or_else(|| audit.get("missing_expected_required_checks"))
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or(0);
         let missing_required_evidence_count = audit
             .pointer("/audit/missing_required_evidence")
             .or_else(|| audit.get("missing_required_evidence"))
@@ -7071,7 +7110,7 @@ impl WebPreviewView {
             .unwrap_or("unknown");
 
         format!(
-            "Web preview final proof audit\nStatus: {status}\nRuntime-green candidate: {runtime_green_candidate}\nMay report runtime-green: {may_report_runtime_green}\nPanel result gate: {panel_result_gate_status} (ready: {panel_result_gate_ready})\nMissing required checks: {missing_required_check_count}\nMissing required evidence: {missing_required_evidence_count}\nRequired check blockers: {required_check_blocker_count}\nOverall blocker present: {has_overall_blocker}\nReport gate: {report_gate_status} (blocker: {report_gate_blocker})\nRegression watch: {regression_watch_status}\nNext action: {next_action}"
+            "Web preview final proof audit\nStatus: {status}\nRuntime-green candidate: {runtime_green_candidate}\nMay report runtime-green: {may_report_runtime_green}\nPanel result gate: {panel_result_gate_status} (ready: {panel_result_gate_ready})\nMissing required checks: {missing_required_check_count}\nMissing expected required checks: {missing_expected_required_check_count}\nMissing required evidence: {missing_required_evidence_count}\nRequired check blockers: {required_check_blocker_count}\nOverall blocker present: {has_overall_blocker}\nReport gate: {report_gate_status} (blocker: {report_gate_blocker})\nRegression watch: {regression_watch_status}\nNext action: {next_action}"
         )
     }
 
@@ -8570,17 +8609,7 @@ impl WebPreviewView {
             "status": "not_run",
             "runtime_command": "just run",
             "allowed_status_values": ["not_run", "pass", "fail", "blocked", "skipped"],
-            "required_check_ids": [
-                "editor_typing",
-                "webpreview_input",
-                "final_runtime_capacity",
-                "final_headroom_recovery_sequence",
-                "panel_live_validation",
-                "native_executor_receipts",
-                "payload_bridge",
-                "managed_chrome",
-                "pc_use"
-            ],
+            "required_check_ids": AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS,
             "branch": "dev",
             "commit": "fill with git rev-parse --short HEAD before runtime pass",
             "started_at": null,
@@ -8666,47 +8695,57 @@ impl WebPreviewView {
 
     fn agent_browser_final_validation_result_summary(result: &Value) -> Value {
         let checks = result.pointer("/checks").and_then(Value::as_object);
-        let required_check_ids = result
+        let declared_required_check_ids = result
             .pointer("/required_check_ids")
             .and_then(Value::as_array)
             .cloned()
             .unwrap_or_default();
-        let required_check_count = required_check_ids.len();
-        let pass_required_check_count = required_check_ids
+        let expected_required_check_ids = AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS;
+        let declared_required_check_count = declared_required_check_ids.len();
+        let expected_required_check_count = expected_required_check_ids.len();
+        let missing_expected_required_checks = expected_required_check_ids
             .iter()
-            .filter_map(Value::as_str)
+            .filter(|check_id| {
+                !declared_required_check_ids
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .any(|declared_check_id| declared_check_id == **check_id)
+            })
+            .copied()
+            .collect::<Vec<_>>();
+        let pass_required_check_count = expected_required_check_ids
+            .iter()
             .filter(|check_id| {
                 checks
-                    .and_then(|checks| checks.get(*check_id))
+                    .and_then(|checks| checks.get(**check_id))
                     .and_then(|check| check.pointer("/status"))
                     .and_then(Value::as_str)
                     == Some("pass")
             })
             .count();
-        let missing_required_checks = required_check_ids
+        let missing_required_checks = expected_required_check_ids
             .iter()
-            .filter_map(Value::as_str)
-            .filter(|check_id| checks.and_then(|checks| checks.get(*check_id)).is_none())
+            .filter(|check_id| checks.and_then(|checks| checks.get(**check_id)).is_none())
+            .copied()
             .collect::<Vec<_>>();
-        let missing_required_evidence = required_check_ids
+        let missing_required_evidence = expected_required_check_ids
             .iter()
-            .filter_map(Value::as_str)
             .filter(|check_id| {
                 checks
-                    .and_then(|checks| checks.get(*check_id))
+                    .and_then(|checks| checks.get(**check_id))
                     .and_then(|check| check.pointer("/evidence"))
                     .and_then(Value::as_str)
                     .map(str::trim)
                     .filter(|evidence| !evidence.is_empty())
                     .is_none()
             })
+            .copied()
             .collect::<Vec<_>>();
-        let required_check_blocker_count = required_check_ids
+        let required_check_blocker_count = expected_required_check_ids
             .iter()
-            .filter_map(Value::as_str)
             .filter(|check_id| {
                 checks
-                    .and_then(|checks| checks.get(*check_id))
+                    .and_then(|checks| checks.get(**check_id))
                     .and_then(|check| check.pointer("/blocker"))
                     .map(|blocker| !blocker.is_null())
                     .unwrap_or(false)
@@ -8715,15 +8754,16 @@ impl WebPreviewView {
         let runtime_green_candidate = result.pointer("/schema").and_then(Value::as_str)
             == Some(AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA)
             && result.pointer("/status").and_then(Value::as_str) == Some("pass")
-            && required_check_count > 0
-            && pass_required_check_count == required_check_count
+            && expected_required_check_count > 0
+            && pass_required_check_count == expected_required_check_count
             && missing_required_evidence.is_empty()
             && result
                 .pointer("/overall_blocker")
                 .map(Value::is_null)
                 .unwrap_or(true)
             && required_check_blocker_count == 0
-            && missing_required_checks.is_empty();
+            && missing_required_checks.is_empty()
+            && missing_expected_required_checks.is_empty();
 
         serde_json::json!({
             "schema": result.pointer("/schema").and_then(Value::as_str),
@@ -8733,10 +8773,15 @@ impl WebPreviewView {
             "commit": result.pointer("/commit").and_then(Value::as_str),
             "started_at": result.pointer("/started_at").cloned(),
             "completed_at": result.pointer("/completed_at").cloned(),
-            "required_check_count": required_check_count,
+            "required_check_count": expected_required_check_count,
+            "declared_required_check_count": declared_required_check_count,
+            "expected_required_check_count": expected_required_check_count,
+            "declared_required_check_ids": declared_required_check_ids,
+            "expected_required_check_ids": expected_required_check_ids,
             "pass_required_check_count": pass_required_check_count,
             "required_check_blocker_count": required_check_blocker_count,
             "missing_required_checks": missing_required_checks,
+            "missing_expected_required_checks": missing_expected_required_checks,
             "missing_required_evidence": missing_required_evidence,
             "runtime_green_candidate": runtime_green_candidate,
             "overall_blocker": result.pointer("/overall_blocker").cloned(),
@@ -27011,6 +27056,7 @@ impl WebPreviewView {
                         },
                         "final_validation_result_template_handoff": {
                             "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+                            "expected_required_check_ids": AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS,
                             "headroom_recovery_sequence_required_check_id": "final_headroom_recovery_sequence",
                             "headroom_recovery_sequence_bundle_field": "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_sequence",
                             "copy_action": "copy_agent_browser_final_validation_result_template",
@@ -27028,6 +27074,7 @@ impl WebPreviewView {
                             "managed_result_file": AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME,
                             "managed_result_archive_prefix": AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX,
                             "runtime_status_field": "runtime_green_blocker_summary.latest_evidence.browser_final_validation_result",
+                            "stale_required_check_blocker_field": "missing_expected_required_checks",
                             "copy_send_read_only": true,
                             "import_writes_managed_result": true,
                             "managed_roots_only": true,

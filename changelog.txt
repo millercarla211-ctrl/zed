@@ -1,3 +1,17 @@
+[2026-05-18] - Stale Final Result Required Check Guard
+
+ADDED:
+- Final validation result summaries now compare imported result payloads against the canonical required check list and expose `missing_expected_required_checks`.
+- Final proof audit summaries now surface missing expected required check counts so stale final-result payloads are visible in compact handoffs.
+
+CHANGED:
+- Runtime-green candidate evaluation now uses the canonical expected checks, so pre-recovery-sequence final results cannot bypass the new `final_headroom_recovery_sequence` requirement by carrying an older `required_check_ids` list.
+- Agent and WebPreview catalogs now advertise the expected final-result checks and the stale-required-check blocker field.
+- `todo.txt` records the stale final-result guard slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only validation/catalog hardening. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Final Result Recovery Sequence Gate
 
 ADDED:
