@@ -108,6 +108,8 @@ const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_recovery_plan.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_recovery_card.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_headroom_inspection_checklist.v1";
 const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_proof_audit.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
@@ -2419,6 +2421,8 @@ impl WebPreviewView {
             "headroom_recovery_card_schema": capacity.pointer("/headroom_recovery_card/schema").and_then(Value::as_str),
             "headroom_recovery_card_status": capacity.pointer("/headroom_recovery_card/status").and_then(Value::as_str),
             "headroom_recovery_card_blocked": capacity.pointer("/headroom_recovery_card/blocked").and_then(Value::as_bool),
+            "headroom_inspection_checklist_schema": capacity.pointer("/headroom_recovery_plan/inspection_checklist/schema").and_then(Value::as_str),
+            "headroom_inspection_checklist_status": capacity.pointer("/headroom_recovery_plan/inspection_checklist/status").and_then(Value::as_str),
             "next_action": capacity.pointer("/next_action").and_then(Value::as_str),
         })
     }
@@ -2432,6 +2436,9 @@ impl WebPreviewView {
             "observed_free_gib": plan.pointer("/target/observed_free_gib").and_then(Value::as_f64),
             "missing_free_gib": plan.pointer("/target/missing_free_gib").and_then(Value::as_f64),
             "first_action": plan.pointer("/first_action/id").and_then(Value::as_str),
+            "inspection_checklist_schema": plan.pointer("/inspection_checklist/schema").and_then(Value::as_str),
+            "inspection_checklist_status": plan.pointer("/inspection_checklist/status").and_then(Value::as_str),
+            "inspection_step_count": plan.pointer("/inspection_checklist/steps").and_then(Value::as_array).map(Vec::len),
             "candidate_reclaim_zone_count": plan.pointer("/candidate_reclaim_zones").and_then(Value::as_array).map(Vec::len),
             "preserve_policy_count": plan.pointer("/preserve_policy").and_then(Value::as_array).map(Vec::len),
             "ready_condition": plan.pointer("/ready_condition").and_then(Value::as_str),
@@ -2448,6 +2455,8 @@ impl WebPreviewView {
             "observed_free_gib": card.pointer("/target/observed_free_gib").and_then(Value::as_f64),
             "missing_free_gib": card.pointer("/target/missing_free_gib").and_then(Value::as_f64),
             "first_action": card.pointer("/first_action/id").and_then(Value::as_str),
+            "inspection_checklist_status": card.pointer("/inspection_checklist/status").and_then(Value::as_str),
+            "inspection_step_count": card.pointer("/inspection_checklist/step_count").and_then(Value::as_u64),
             "copy_plan_action": card.pointer("/actions/copy_recovery_plan").and_then(Value::as_str),
             "copy_capacity_action": card.pointer("/actions/copy_final_runtime_capacity").and_then(Value::as_str),
         })
@@ -3121,6 +3130,11 @@ impl WebPreviewView {
                 "writes_files": false,
             }),
         };
+        let inspection_status = match recovery_status {
+            "target_drive_cleanup_required" => "manual_inspection_required",
+            "no_recovery_needed" => "inspection_not_required",
+            _ => "target_drive_detection_required",
+        };
 
         serde_json::json!({
             "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
@@ -3134,6 +3148,55 @@ impl WebPreviewView {
                 "missing_free_gib": missing_free_bytes.map(Self::gib_from_bytes),
             },
             "first_action": first_action,
+            "inspection_checklist": {
+                "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                "status": inspection_status,
+                "steps": [
+                    {
+                        "id": "confirm_target_drive",
+                        "label": "Confirm the target drive, required free space, observed free space, and missing GiB before considering cleanup.",
+                        "command": "Get-PSDrive -Name <target-drive-letter>",
+                        "writes_files": false
+                    },
+                    {
+                        "id": "inspect_target_directory",
+                        "label": "Inspect the configured build target directory and identify only rebuildable artifacts.",
+                        "command": "Get-ChildItem -LiteralPath <target-dir> -Force",
+                        "writes_files": false
+                    },
+                    {
+                        "id": "rank_rebuildable_children",
+                        "label": "Rank large target/cache children manually before deleting anything outside the editor.",
+                        "command": "Get-ChildItem -LiteralPath <target-dir> -Directory -Force | Sort-Object LastWriteTime -Descending",
+                        "writes_files": false
+                    },
+                    {
+                        "id": "dry_run_recipe_after_cleanup",
+                        "label": "After manual cleanup, confirm the recipe and target path before the final runtime proof.",
+                        "command": "just --dry-run run",
+                        "writes_files": false
+                    }
+                ],
+                "preserve_roots": [
+                    "crates/",
+                    "models/",
+                    "tools/",
+                    "inspirations/",
+                    "assets/",
+                    "docs/",
+                    "Cargo.lock",
+                    "todo.txt",
+                    "changelog.txt"
+                ],
+                "forbidden_actions": [
+                    "Do not run Remove-Item from this panel packet.",
+                    "Do not delete source trees, models, inspirations, tools, assets, or unmanaged user folders.",
+                    "Do not clean browser profiles, cookies, cache, or extension data while proving Browser/Chrome behavior.",
+                    "Do not run just run until the capacity packet reports ready_for_just_run=true."
+                ],
+                "ready_to_cleanup_condition": "Operator has manually identified explicitly rebuildable target/cache artifacts outside preserve_roots.",
+                "read_only": true
+            },
             "safe_inspection_commands": [
                 "Get-PSDrive -Name <target-drive-letter>",
                 "Get-ChildItem -LiteralPath <target-dir> -Force",
@@ -3195,6 +3258,15 @@ impl WebPreviewView {
                 "missing_free_gib": plan.pointer("/target/missing_free_gib").and_then(Value::as_f64),
             },
             "first_action": plan.pointer("/first_action").cloned(),
+            "inspection_checklist": {
+                "schema": plan.pointer("/inspection_checklist/schema").and_then(Value::as_str),
+                "status": plan.pointer("/inspection_checklist/status").and_then(Value::as_str),
+                "step_count": plan.pointer("/inspection_checklist/steps").and_then(Value::as_array).map(Vec::len),
+                "first_step": plan.pointer("/inspection_checklist/steps/0/id").and_then(Value::as_str),
+                "preserve_root_count": plan.pointer("/inspection_checklist/preserve_roots").and_then(Value::as_array).map(Vec::len),
+                "forbidden_action_count": plan.pointer("/inspection_checklist/forbidden_actions").and_then(Value::as_array).map(Vec::len),
+                "ready_to_cleanup_condition": plan.pointer("/inspection_checklist/ready_to_cleanup_condition").and_then(Value::as_str),
+            },
             "actions": {
                 "copy_recovery_plan": "copy_agent_browser_final_runtime_headroom_recovery_plan",
                 "send_recovery_plan": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
@@ -4992,6 +5064,7 @@ impl WebPreviewView {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
                     "headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                     "headroom_recovery_plan_field": "headroom_recovery_plan",
+                    "headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                     "headroom_recovery_plan_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
                     "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
                     "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
@@ -5008,6 +5081,7 @@ impl WebPreviewView {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                     "source_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
                     "recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
+                    "inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                     "recovery_card_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_card",
                     "recovery_card_send_action": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
                     "copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
@@ -5023,6 +5097,7 @@ impl WebPreviewView {
                 "final_runtime_headroom_recovery_card": {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
                     "source_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
+                    "inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                     "copy_action": "copy_agent_browser_final_runtime_headroom_recovery_card",
                     "send_action": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
                     "latest_summary": self.latest_agent_browser_final_runtime_headroom_recovery_card_summary(),
@@ -6079,6 +6154,9 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "final_runtime_headroom_recovery_plan_schema": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_schema")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_inspection_checklist_schema": plugin
+                    .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_schema")
                     .and_then(Value::as_str),
                 "final_runtime_headroom_recovery_plan_field": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_field")
@@ -22775,6 +22853,7 @@ impl WebPreviewView {
                             "final_runtime_proof_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
                             "final_runtime_headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                             "final_runtime_headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
+                            "final_runtime_headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
                             "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -22897,6 +22976,8 @@ impl WebPreviewView {
                             "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
                             "headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
                             "headroom_recovery_plan_field": "headroom_recovery_plan",
+                            "headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+                            "headroom_inspection_checklist_field": "headroom_recovery_plan.inspection_checklist",
                             "headroom_recovery_plan_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
                             "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
                             "headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,

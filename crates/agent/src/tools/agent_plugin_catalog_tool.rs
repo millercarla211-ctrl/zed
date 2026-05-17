@@ -64,6 +64,8 @@ const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_recovery_plan.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_recovery_card.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_headroom_inspection_checklist.v1";
 const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_proof_audit.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
@@ -1001,6 +1003,9 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "final_runtime_headroom_recovery_plan_schema": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_schema")
                 .and_then(Value::as_str),
+            "final_runtime_headroom_inspection_checklist_schema": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_schema")
+                .and_then(Value::as_str),
             "final_runtime_headroom_recovery_plan_field": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_field")
                 .and_then(Value::as_str),
@@ -1626,6 +1631,7 @@ fn browser_plugin_manifest() -> Value {
             "final_runtime_proof_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
             "final_runtime_headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
             "final_runtime_headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
+            "final_runtime_headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_green_final_proof_guide_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
@@ -1749,6 +1755,8 @@ fn browser_plugin_manifest() -> Value {
             "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
             "headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
             "headroom_recovery_plan_field": "headroom_recovery_plan",
+            "headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
+            "headroom_inspection_checklist_field": "headroom_recovery_plan.inspection_checklist",
             "headroom_recovery_plan_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
             "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
             "headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,

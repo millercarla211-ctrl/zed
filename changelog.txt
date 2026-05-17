@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Headroom Inspection Checklist
+
+ADDED:
+- Final runtime headroom recovery plans now embed `zed.web_preview.agent_browser_final_runtime_headroom_inspection_checklist.v1` with read-only inspection steps, preserve roots, forbidden cleanup actions, and a ready-to-cleanup condition.
+- Recovery cards now summarize the inspection checklist so AI panels can show the first safe disk-recovery step without parsing the full plan.
+- Agent and WebPreview plugin catalogs now advertise the headroom inspection checklist schema beside the capacity, recovery-plan, and recovery-card metadata.
+
+CHANGED:
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening still at 99/100 and the remaining live UI/runtime validation target after target-drive headroom is restored.
+
+NOTES:
+- This slice is a read-only manual inspection checklist. It does not delete files, run `just`, run Cargo, launch browsers, run Node or Playwright, take screenshots, dispatch input, or touch browser profiles.
+
 [2026-05-17] - Browser Chrome Headroom Recovery Card
 
 ADDED:
