@@ -69,6 +69,8 @@ const MANAGED_CHROME_RUN_REQUEST_SCHEMA: &str =
 const MANAGED_CHROME_EXECUTION_RECEIPT_SCHEMA: &str =
     "zed.agent_plugins.managed_chrome_playwright_execution_receipt.v1";
 const MANAGED_CHROME_ACTION_CARD_SCHEMA: &str = "zed.web_preview.managed_chrome_action_card.v1";
+const MANAGED_CHROME_ACTION_CARD_DISPLAY_SCHEMA: &str =
+    "zed.web_preview.managed_chrome_action_card_display.v1";
 const PC_USE_PAYLOAD_QUEUE_FILE_NAME: &str = "latest-zed-pc-use-payload.json";
 const PC_USE_RUNNER_RECEIPT_FILE_NAME: &str = "latest-zed-pc-use-runner-receipt.json";
 const PC_USE_RUNNER_RECEIPT_PREFIX: &str = "zed-pc-use-runner-receipt-";
@@ -4488,6 +4490,12 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "proof_card_field": plugin
                     .pointer("/runtime/webpreview_pc_use_proof_card_field")
+                    .and_then(Value::as_str),
+                "action_card_display_schema": plugin
+                    .pointer("/action_payload_contract/webpreview_execution_action_card_display_schema")
+                    .and_then(Value::as_str),
+                "action_card_display_field": plugin
+                    .pointer("/action_payload_contract/webpreview_execution_action_card_display_field")
                     .and_then(Value::as_str),
                 "runtime_status_proof_summary_field": observability
                     .and_then(|profile| profile.pointer("/proof_handoffs/runtime_status_proof_summary_field"))
@@ -16418,6 +16426,8 @@ impl WebPreviewView {
                             "webpreview_execution_status_schema": "zed.web_preview.managed_chrome_execution_status.v1",
                             "webpreview_execution_action_card_schema": MANAGED_CHROME_ACTION_CARD_SCHEMA,
                             "webpreview_execution_action_card_field": "latest_action_card",
+                            "webpreview_execution_action_card_display_schema": MANAGED_CHROME_ACTION_CARD_DISPLAY_SCHEMA,
+                            "webpreview_execution_action_card_display_field": "latest_action_card.display",
                             "playwright_run_request_schema": "zed.agent_plugins.managed_chrome_playwright_run_request.v1",
                             "playwright_invocation_result_schema": "zed.agent_plugins.managed_chrome_playwright_invocation_result.v1",
                             "playwright_adapter_manifest_schema": "zed.agent_plugins.managed_chrome_playwright_adapter_manifest.v1",
@@ -21452,6 +21462,7 @@ fn managed_chrome_execution_action_card(
     let receipt_read = latest_receipt.and_then(|receipt| receipt.get("read"));
     let source_read = receipt_read.or(request_read);
     let outcome = receipt_read.and_then(|read| read.get("outcome").and_then(Value::as_str));
+    let action = source_read.and_then(|read| read.get("action").and_then(Value::as_str));
     let state = if latest_receipt.is_some() && outcome == Some("completed") {
         "completed_receipt"
     } else if latest_receipt.is_some() {
@@ -21463,12 +21474,14 @@ fn managed_chrome_execution_action_card(
     };
     let primary_proof = managed_chrome_primary_action_proof(receipt_read);
     let next_action = managed_chrome_action_card_next_action(status, outcome);
+    let display =
+        managed_chrome_action_card_display(action, state, outcome, primary_proof, source_read);
 
     serde_json::json!({
         "schema": MANAGED_CHROME_ACTION_CARD_SCHEMA,
         "state": state,
         "status": status,
-        "action": source_read.and_then(|read| read.get("action").and_then(Value::as_str)),
+        "action": action,
         "outcome": outcome,
         "url": source_read.and_then(|read| read.get("url").and_then(Value::as_str)),
         "title": source_read.and_then(|read| read.get("title").and_then(Value::as_str)),
@@ -21479,6 +21492,7 @@ fn managed_chrome_execution_action_card(
         "receipt_file": managed_chrome_action_card_file(latest_receipt),
         "primary_proof": primary_proof,
         "proofs": managed_chrome_action_card_proofs(receipt_read),
+        "display": display,
         "next_action": next_action,
         "safety": {
             "read_only": true,
@@ -21502,6 +21516,218 @@ fn managed_chrome_action_card_file(file: Option<&Value>) -> Option<Value> {
         "read_ok": file.pointer("/read/ok").and_then(Value::as_bool),
         "schema_ok": file.pointer("/read/schema_ok").and_then(Value::as_bool),
     }))
+}
+
+fn managed_chrome_action_card_display(
+    action: Option<&str>,
+    state: &str,
+    outcome: Option<&str>,
+    primary_proof: Option<&str>,
+    read: Option<&Value>,
+) -> Value {
+    serde_json::json!({
+        "schema": MANAGED_CHROME_ACTION_CARD_DISPLAY_SCHEMA,
+        "title": managed_chrome_action_card_title(action),
+        "subtitle": managed_chrome_action_card_subtitle(state, outcome),
+        "tone": managed_chrome_action_card_tone(state, outcome),
+        "action_label": action.map(managed_chrome_action_card_action_label),
+        "primary_proof": primary_proof,
+        "primary_proof_label": primary_proof.map(managed_chrome_action_card_proof_label),
+        "primary_detail": managed_chrome_action_card_primary_detail(primary_proof, read),
+        "detail_rows": managed_chrome_action_card_detail_rows(action, outcome, primary_proof, read),
+        "empty_state": state == "no_action",
+        "panel_variant": "managed_chrome_action_receipt",
+        "read_only": true,
+        "dispatches_input": false,
+    })
+}
+
+fn managed_chrome_action_card_title(action: Option<&str>) -> &'static str {
+    match action {
+        Some("open_url") => "Managed Chrome navigation",
+        Some("screenshot") => "Managed Chrome screenshot",
+        Some("set_viewport") => "Managed Chrome viewport",
+        Some("wait_for_selector") => "Managed Chrome selector wait",
+        Some("inspect_element") => "Managed Chrome element inspection",
+        Some("dom_snapshot") => "Managed Chrome DOM snapshot",
+        Some("runtime_events") => "Managed Chrome runtime events",
+        Some(_) => "Managed Chrome action",
+        None => "Managed Chrome action",
+    }
+}
+
+fn managed_chrome_action_card_action_label(action: &str) -> &'static str {
+    match action {
+        "open_url" => "Open URL",
+        "screenshot" => "Screenshot",
+        "set_viewport" => "Set viewport",
+        "wait_for_selector" => "Wait for selector",
+        "inspect_element" => "Inspect element",
+        "dom_snapshot" => "DOM snapshot",
+        "runtime_events" => "Runtime events",
+        _ => "Managed Chrome action",
+    }
+}
+
+fn managed_chrome_action_card_subtitle(state: &str, outcome: Option<&str>) -> &'static str {
+    match (state, outcome) {
+        ("completed_receipt", Some("completed")) => "Completed with receipt proof",
+        ("receipt_not_completed", Some("error")) => "Receipt reported an error",
+        ("receipt_not_completed", _) => "Receipt needs review",
+        ("request_waiting_for_receipt", _) => "Request is waiting for a runner receipt",
+        _ => "No managed Chrome request or receipt is available",
+    }
+}
+
+fn managed_chrome_action_card_tone(state: &str, outcome: Option<&str>) -> &'static str {
+    match (state, outcome) {
+        ("completed_receipt", Some("completed")) => "success",
+        ("receipt_not_completed", Some("error")) => "danger",
+        ("receipt_not_completed", _) | ("request_waiting_for_receipt", _) => "warning",
+        _ => "neutral",
+    }
+}
+
+fn managed_chrome_action_card_proof_label(proof: &str) -> &'static str {
+    match proof {
+        "navigation" => "Navigation",
+        "screenshot_capture" => "Screenshot",
+        "viewport_change" => "Viewport",
+        "selector_wait" => "Selector wait",
+        "inspect_element" => "Element inspection",
+        "dom_snapshot" => "DOM snapshot",
+        "runtime_events" => "Runtime events",
+        _ => "Proof",
+    }
+}
+
+fn managed_chrome_action_card_primary_detail(
+    primary_proof: Option<&str>,
+    read: Option<&Value>,
+) -> Option<Value> {
+    let read = read?;
+    match primary_proof {
+        Some("navigation") => read.get("navigation").map(|navigation| {
+            serde_json::json!({
+                "kind": "navigation",
+                "requested_url": navigation.get("requested_url").and_then(Value::as_str),
+                "final_url": navigation.get("final_url").and_then(Value::as_str),
+                "title": navigation.get("title").and_then(Value::as_str),
+                "response": navigation.get("response").cloned(),
+            })
+        }),
+        Some("screenshot_capture") => read.get("screenshot_capture").map(|screenshot| {
+            serde_json::json!({
+                "kind": "screenshot",
+                "path": screenshot.get("path").and_then(Value::as_str),
+                "capture_target": screenshot.get("capture_target").and_then(Value::as_str),
+                "selector": screenshot.get("selector").and_then(Value::as_str),
+                "dimensions": screenshot.get("dimensions").cloned(),
+            })
+        }),
+        Some("viewport_change") => read.get("viewport_change").map(|viewport| {
+            serde_json::json!({
+                "kind": "viewport",
+                "requested": viewport.get("requested").cloned(),
+                "applied": viewport.get("applied").cloned(),
+            })
+        }),
+        Some("selector_wait") => read.get("selector_wait").map(|wait| {
+            serde_json::json!({
+                "kind": "selector_wait",
+                "selector": wait.get("selector").and_then(Value::as_str),
+                "state": wait.get("state").and_then(Value::as_str),
+                "matched": wait.get("matched").and_then(Value::as_bool),
+                "bounds": wait.get("bounds").cloned(),
+            })
+        }),
+        Some("inspect_element") => read.get("inspect_element").map(|inspection| {
+            serde_json::json!({
+                "kind": "inspect_element",
+                "selector": inspection.get("selector").and_then(Value::as_str),
+                "tag_name": inspection.get("tag_name").and_then(Value::as_str),
+                "visible": inspection.get("visible").and_then(Value::as_bool),
+                "bounds": inspection.get("bounds").cloned(),
+            })
+        }),
+        Some("dom_snapshot") => read.get("dom_snapshot").map(|snapshot| {
+            serde_json::json!({
+                "kind": "dom_snapshot",
+                "ready_state": snapshot.get("ready_state").and_then(Value::as_str),
+                "counts": snapshot.get("counts").cloned(),
+                "heading_count": snapshot.get("heading_count").and_then(Value::as_u64),
+                "link_count": snapshot.get("link_count").and_then(Value::as_u64),
+                "form_count": snapshot.get("form_count").and_then(Value::as_u64),
+            })
+        }),
+        Some("runtime_events") => read.get("runtime_events").map(|events| {
+            serde_json::json!({
+                "kind": "runtime_events",
+                "console_count": events.get("console_count").and_then(Value::as_u64),
+                "page_error_count": events.get("page_error_count").and_then(Value::as_u64),
+                "request_failure_count": events.get("request_failure_count").and_then(Value::as_u64),
+                "response_error_count": events.get("response_error_count").and_then(Value::as_u64),
+                "resource_summary": events.get("resource_summary").cloned(),
+            })
+        }),
+        _ => Some(serde_json::json!({
+            "kind": "request_or_empty",
+            "action": read.get("action").and_then(Value::as_str),
+            "url": read.get("url").and_then(Value::as_str),
+            "title": read.get("title").and_then(Value::as_str),
+            "error": read.get("error").and_then(Value::as_str),
+        })),
+    }
+}
+
+fn managed_chrome_action_card_detail_rows(
+    action: Option<&str>,
+    outcome: Option<&str>,
+    primary_proof: Option<&str>,
+    read: Option<&Value>,
+) -> Vec<Value> {
+    let mut rows = Vec::new();
+    if let Some(action) = action {
+        rows.push(serde_json::json!({
+            "label": "Action",
+            "value": managed_chrome_action_card_action_label(action),
+            "raw": action,
+        }));
+    }
+    if let Some(outcome) = outcome {
+        rows.push(serde_json::json!({
+            "label": "Outcome",
+            "value": outcome,
+        }));
+    }
+    if let Some(primary_proof) = primary_proof {
+        rows.push(serde_json::json!({
+            "label": "Primary proof",
+            "value": managed_chrome_action_card_proof_label(primary_proof),
+            "raw": primary_proof,
+        }));
+    }
+    if let Some(read) = read {
+        if let Some(title) = read.get("title").and_then(Value::as_str) {
+            rows.push(serde_json::json!({
+                "label": "Title",
+                "value": title,
+            }));
+        }
+        if let Some(url) = read.get("url").and_then(Value::as_str) {
+            rows.push(serde_json::json!({
+                "label": "URL",
+                "value": url,
+            }));
+        }
+        if let Some(error) = read.get("error").and_then(Value::as_str) {
+            rows.push(serde_json::json!({
+                "label": "Error",
+                "value": error,
+            }));
+        }
+    }
+    rows
 }
 
 fn managed_chrome_action_card_proofs(read: Option<&Value>) -> Value {

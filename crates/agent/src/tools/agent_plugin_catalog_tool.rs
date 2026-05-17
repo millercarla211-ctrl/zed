@@ -70,6 +70,8 @@ const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
 const INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA: &str =
     "zed.web_preview.inspected_element_evidence_card.v1";
 const DEVTOOLS_EVIDENCE_CARD_SCHEMA: &str = "zed.web_preview.devtools_evidence_card.v1";
+const WEBPREVIEW_MANAGED_CHROME_ACTION_CARD_DISPLAY_SCHEMA: &str =
+    "zed.web_preview.managed_chrome_action_card_display.v1";
 const AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA: &str = "zed.agent_plugins.catalog_summary.v1";
 const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstrap_readiness.v1";
 const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstrap_manifest.v1";
@@ -824,6 +826,12 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
                 .and_then(Value::as_str),
             "proof_card_field": plugin
                 .pointer("/runtime/webpreview_pc_use_proof_card_field")
+                .and_then(Value::as_str),
+            "action_card_display_schema": plugin
+                .pointer("/action_payload_contract/webpreview_execution_action_card_display_schema")
+                .and_then(Value::as_str),
+            "action_card_display_field": plugin
+                .pointer("/action_payload_contract/webpreview_execution_action_card_display_field")
                 .and_then(Value::as_str),
             "runtime_status_proof_summary_field": observability
                 .and_then(|profile| profile.pointer("/proof_handoffs/runtime_status_proof_summary_field"))
@@ -1608,6 +1616,8 @@ fn chrome_plugin_manifest(
             "webpreview_execution_status_schema": "zed.web_preview.managed_chrome_execution_status.v1",
             "webpreview_execution_action_card_schema": "zed.web_preview.managed_chrome_action_card.v1",
             "webpreview_execution_action_card_field": "latest_action_card",
+            "webpreview_execution_action_card_display_schema": WEBPREVIEW_MANAGED_CHROME_ACTION_CARD_DISPLAY_SCHEMA,
+            "webpreview_execution_action_card_display_field": "latest_action_card.display",
             "playwright_run_request_schema": AGENT_CHROME_PLAYWRIGHT_RUN_REQUEST_SCHEMA,
             "playwright_invocation_result_schema": AGENT_CHROME_PLAYWRIGHT_INVOCATION_RESULT_SCHEMA,
             "playwright_adapter_manifest_schema": AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA,

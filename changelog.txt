@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Managed Action Display Cards
+
+ADDED:
+- Managed Chrome latest action cards now include `zed.web_preview.managed_chrome_action_card_display.v1`, a panel-oriented display packet with action-specific title, subtitle, tone, primary proof label/detail, detail rows, and read-only rendering metadata.
+- The display packet handles navigation, screenshot, viewport, selector wait, inspect-element, DOM snapshot, runtime-event, request-waiting, and empty managed Chrome states without requiring panels to infer layout from nested receipt proofs.
+
+CHANGED:
+- Agent and WebPreview plugin catalogs now advertise the managed Chrome action-card display schema and `latest_action_card.display` field beside the existing action-card handoff.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 27/100 and the next remaining proof targets.
+
+NOTES:
+- This is an auditability/UI-data slice only. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome PC Use Proof Cards
 
 ADDED:
