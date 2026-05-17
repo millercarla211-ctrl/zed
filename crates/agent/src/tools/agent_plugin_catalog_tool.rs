@@ -2316,11 +2316,15 @@ fn browser_plugin_manifest() -> Value {
             "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
             "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_status_summary_field": "runtime_green_final_proof_audit_summary",
+            "non_pass_required_check_count_field": "runtime_green_final_proof_audit_summary.non_pass_required_check_count",
+            "missing_required_status_count_field": "runtime_green_final_proof_audit_summary.missing_required_status_count",
+            "invalid_required_check_status_count_field": "runtime_green_final_proof_audit_summary.invalid_required_check_status_count",
+            "has_final_result_status_diagnostics_field": "runtime_green_final_proof_audit_summary.has_final_result_status_diagnostics",
             "copy_action": "copy_agent_browser_final_proof_audit",
             "send_action": "send_agent_browser_final_proof_audit_to_agent",
             "read_only": true,
             "source": "WebPreview More menu",
-            "purpose": "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."
+            "purpose": "Copy or send the compact final proof audit with missing checks, status diagnostics, missing evidence, blockers, import receipt state, and report-gate status."
         },
         "runtime_green_claim_gate_handoff": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
@@ -2433,6 +2437,10 @@ fn browser_plugin_manifest() -> Value {
             "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
             "runtime_status_summary_field": "runtime_green_report_readiness_card_summary",
             "stale_final_result_missing_expected_required_check_count_field": "final_proof_audit.missing_expected_required_check_count",
+            "final_result_status_diagnostics_field": "final_proof_audit.has_final_result_status_diagnostics",
+            "non_pass_required_check_count_field": "final_proof_audit.non_pass_required_check_count",
+            "missing_required_status_count_field": "final_proof_audit.missing_required_status_count",
+            "invalid_required_check_status_count_field": "final_proof_audit.invalid_required_check_status_count",
             "final_runtime_headroom_field": "final_runtime_headroom",
             "final_runtime_headroom_ready_field": "final_proof_audit.final_runtime_capacity_ready",
             "final_runtime_headroom_missing_free_field": "final_proof_audit.final_runtime_missing_free_gib",

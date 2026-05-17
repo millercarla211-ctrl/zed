@@ -1,3 +1,18 @@
+[2026-05-18] - Agent Final Result Diagnostics Parity
+
+ADDED:
+- Agent runtime status now evaluates durable final validation results against the canonical Browser final required-check list.
+- Final proof audits and report-readiness cards now expose non-pass required checks, missing required statuses, invalid required statuses, and the final-result status-diagnostics flag.
+- Agent and WebPreview handoff metadata now advertise the compact final-result status-diagnostics fields.
+
+CHANGED:
+- Agent-side durable final result parsing no longer trusts stale imported `required_check_ids` to decide runtime-green candidacy.
+- WebPreview final proof audits now distinguish required-check status diagnostics from generic evidence/blocker failures.
+- `todo.txt` records the Agent final-result diagnostics parity slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is source-level validation contract hardening. It does not run `just`, run Cargo, launch browsers, dispatch input, delete files, or move the target directory.
+
 [2026-05-18] - Final Result Status Diagnostics
 
 ADDED:

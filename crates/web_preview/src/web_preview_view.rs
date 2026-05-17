@@ -3322,6 +3322,21 @@ impl WebPreviewView {
                 .pointer("/audit/missing_expected_required_checks")
                 .and_then(Value::as_array)
                 .map(Vec::len),
+            "non_pass_required_check_count": audit
+                .pointer("/audit/non_pass_required_checks")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            "missing_required_status_count": audit
+                .pointer("/audit/missing_required_statuses")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            "invalid_required_check_status_count": audit
+                .pointer("/audit/invalid_required_check_statuses")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            "has_final_result_status_diagnostics": audit
+                .pointer("/audit/has_final_result_status_diagnostics")
+                .and_then(Value::as_bool),
             "missing_required_evidence": audit.pointer("/audit/missing_required_evidence").cloned(),
             "missing_required_evidence_count": audit
                 .pointer("/audit/missing_required_evidence")
@@ -7026,8 +7041,36 @@ impl WebPreviewView {
             .map(Vec::len)
             .unwrap_or(0);
         let final_result_has_stale_required_checks = missing_expected_required_check_count > 0;
-        let final_result_runtime_green_candidate =
-            raw_final_result_runtime_green_candidate && !final_result_has_stale_required_checks;
+        let non_pass_required_checks = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/non_pass_required_checks"))
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let missing_required_statuses = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/missing_required_statuses"))
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let invalid_required_check_statuses = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/invalid_required_check_statuses"))
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let has_final_result_status_diagnostics = non_pass_required_checks
+            .as_array()
+            .map(|checks| !checks.is_empty())
+            .unwrap_or(false)
+            || missing_required_statuses
+                .as_array()
+                .map(|statuses| !statuses.is_empty())
+                .unwrap_or(false)
+            || invalid_required_check_statuses
+                .as_array()
+                .map(|statuses| !statuses.is_empty())
+                .unwrap_or(false);
+        let final_result_runtime_green_candidate = raw_final_result_runtime_green_candidate
+            && !final_result_has_stale_required_checks
+            && !has_final_result_status_diagnostics;
         let runtime_green_candidate = final_result_runtime_green_candidate
             && panel_live_validation_result_gate_ready
             && final_runtime_capacity_ready;
@@ -7058,6 +7101,8 @@ impl WebPreviewView {
             .unwrap_or(false);
         let status = if final_result_has_stale_required_checks {
             "final_result_stale_required_checks"
+        } else if has_final_result_status_diagnostics {
+            "final_result_status_diagnostics_required"
         } else if may_report_runtime_green {
             "ready_to_report_runtime_green"
         } else if runtime_green_candidate {
@@ -7116,6 +7161,10 @@ impl WebPreviewView {
                 "missing_required_checks": missing_required_checks,
                 "missing_expected_required_checks": missing_expected_required_checks,
                 "missing_expected_required_check_count": missing_expected_required_check_count,
+                "non_pass_required_checks": non_pass_required_checks,
+                "missing_required_statuses": missing_required_statuses,
+                "invalid_required_check_statuses": invalid_required_check_statuses,
+                "has_final_result_status_diagnostics": has_final_result_status_diagnostics,
                 "missing_required_evidence": missing_required_evidence,
                 "required_check_blocker_count": required_check_blocker_count,
                 "overall_blocker": result_summary
@@ -8600,6 +8649,10 @@ impl WebPreviewView {
                     "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                     "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
                     "runtime_status_summary_field": "runtime_green_final_proof_audit_summary",
+                    "non_pass_required_check_count_field": "runtime_green_final_proof_audit_summary.non_pass_required_check_count",
+                    "missing_required_status_count_field": "runtime_green_final_proof_audit_summary.missing_required_status_count",
+                    "invalid_required_check_status_count_field": "runtime_green_final_proof_audit_summary.invalid_required_check_status_count",
+                    "has_final_result_status_diagnostics_field": "runtime_green_final_proof_audit_summary.has_final_result_status_diagnostics",
                     "copy_action": "copy_agent_browser_final_proof_audit",
                     "send_action": "send_agent_browser_final_proof_audit_to_agent",
                     "latest_summary": self.latest_agent_browser_final_proof_audit_summary(),
@@ -28553,11 +28606,15 @@ impl WebPreviewView {
                             "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                             "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
                             "runtime_status_summary_field": "runtime_green_final_proof_audit_summary",
+                            "non_pass_required_check_count_field": "runtime_green_final_proof_audit_summary.non_pass_required_check_count",
+                            "missing_required_status_count_field": "runtime_green_final_proof_audit_summary.missing_required_status_count",
+                            "invalid_required_check_status_count_field": "runtime_green_final_proof_audit_summary.invalid_required_check_status_count",
+                            "has_final_result_status_diagnostics_field": "runtime_green_final_proof_audit_summary.has_final_result_status_diagnostics",
                             "copy_action": "copy_agent_browser_final_proof_audit",
                             "send_action": "send_agent_browser_final_proof_audit_to_agent",
                             "read_only": true,
                             "source": "WebPreview More menu",
-                            "purpose": "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."
+                            "purpose": "Copy or send the compact final proof audit with missing checks, status diagnostics, missing evidence, blockers, import receipt state, and report-gate status."
                         },
                         "runtime_green_claim_gate_handoff": {
                             "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA,
@@ -28670,6 +28727,10 @@ impl WebPreviewView {
                             "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
                             "runtime_status_summary_field": "runtime_green_report_readiness_card_summary",
                             "stale_final_result_missing_expected_required_check_count_field": "final_proof_audit.missing_expected_required_check_count",
+                            "final_result_status_diagnostics_field": "final_proof_audit.has_final_result_status_diagnostics",
+                            "non_pass_required_check_count_field": "final_proof_audit.non_pass_required_check_count",
+                            "missing_required_status_count_field": "final_proof_audit.missing_required_status_count",
+                            "invalid_required_check_status_count_field": "final_proof_audit.invalid_required_check_status_count",
                             "final_runtime_headroom_field": "final_runtime_headroom",
                             "final_runtime_headroom_ready_field": "final_proof_audit.final_runtime_capacity_ready",
                             "final_runtime_headroom_missing_free_field": "final_proof_audit.final_runtime_missing_free_gib",

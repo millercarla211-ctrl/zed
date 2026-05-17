@@ -128,6 +128,21 @@ const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_WATCH_ROLLUP_SCHEMA: &str =
 const AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA: &str = "zed.agent_plugins.pc_use.proof_summary.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result.v1";
+const AGENT_BROWSER_FINAL_VALIDATION_ALLOWED_STATUS_VALUES: &[&str] =
+    &["not_run", "pass", "fail", "blocked", "skipped"];
+const AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS: &[&str] = &[
+    "editor_typing",
+    "webpreview_input",
+    "git_sync",
+    "just_dry_run",
+    "final_runtime_capacity",
+    "final_headroom_recovery_sequence",
+    "panel_live_validation",
+    "native_executor_receipts",
+    "payload_bridge",
+    "managed_chrome",
+    "pc_use",
+];
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result_import_receipt.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA: &str =
@@ -4383,6 +4398,12 @@ fn runtime_green_proof_path(
             },
             "runtime_green_final_proof_audit": {
                 "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
+                "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
+                "runtime_status_summary_field": "runtime_green_final_proof_audit_summary",
+                "non_pass_required_check_count_field": "runtime_green_final_proof_audit_summary.non_pass_required_check_count",
+                "missing_required_status_count_field": "runtime_green_final_proof_audit_summary.missing_required_status_count",
+                "invalid_required_check_status_count_field": "runtime_green_final_proof_audit_summary.invalid_required_check_status_count",
+                "has_final_result_status_diagnostics_field": "runtime_green_final_proof_audit_summary.has_final_result_status_diagnostics",
                 "source": "runtime_green_claim_readiness + runtime_green_report_gate",
                 "copy_action": "copy_agent_browser_final_proof_audit",
                 "send_action": "send_agent_browser_final_proof_audit_to_agent"
@@ -4399,6 +4420,10 @@ fn runtime_green_proof_path(
                 "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
                 "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA,
                 "runtime_status_summary_field": "runtime_green_report_readiness_card_summary",
+                "final_result_status_diagnostics_field": "runtime_green_report_readiness_card_summary.has_final_result_status_diagnostics",
+                "non_pass_required_check_count_field": "runtime_green_report_readiness_card_summary.non_pass_required_check_count",
+                "missing_required_status_count_field": "runtime_green_report_readiness_card_summary.missing_required_status_count",
+                "invalid_required_check_status_count_field": "runtime_green_report_readiness_card_summary.invalid_required_check_status_count",
                 "source": "runtime_green_claim_readiness + runtime_green_report_gate + runtime_green_final_report_packet + runtime_green_final_proof_audit",
                 "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
                 "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent"
@@ -5690,6 +5715,25 @@ fn runtime_green_report_readiness_card(
                 .pointer("/audit/missing_required_evidence")
                 .and_then(Value::as_array)
                 .map(Vec::len),
+            "missing_expected_required_check_count": final_proof_audit
+                .pointer("/audit/missing_expected_required_checks")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            "non_pass_required_check_count": final_proof_audit
+                .pointer("/audit/non_pass_required_checks")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            "missing_required_status_count": final_proof_audit
+                .pointer("/audit/missing_required_statuses")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            "invalid_required_check_status_count": final_proof_audit
+                .pointer("/audit/invalid_required_check_statuses")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            "has_final_result_status_diagnostics": final_proof_audit
+                .pointer("/audit/has_final_result_status_diagnostics")
+                .and_then(Value::as_bool),
             "required_check_blocker_count": final_proof_audit
                 .pointer("/audit/required_check_blocker_count")
                 .and_then(Value::as_u64),
@@ -5807,6 +5851,21 @@ fn runtime_green_report_readiness_card_summary(card: &Value) -> Value {
         "missing_required_evidence_count": card
             .pointer("/final_proof_audit/missing_required_evidence_count")
             .and_then(Value::as_u64),
+        "missing_expected_required_check_count": card
+            .pointer("/final_proof_audit/missing_expected_required_check_count")
+            .and_then(Value::as_u64),
+        "non_pass_required_check_count": card
+            .pointer("/final_proof_audit/non_pass_required_check_count")
+            .and_then(Value::as_u64),
+        "missing_required_status_count": card
+            .pointer("/final_proof_audit/missing_required_status_count")
+            .and_then(Value::as_u64),
+        "invalid_required_check_status_count": card
+            .pointer("/final_proof_audit/invalid_required_check_status_count")
+            .and_then(Value::as_u64),
+        "has_final_result_status_diagnostics": card
+            .pointer("/final_proof_audit/has_final_result_status_diagnostics")
+            .and_then(Value::as_bool),
         "regression_watch_status": card
             .pointer("/regression_watch/status")
             .and_then(Value::as_str),
@@ -5867,6 +5926,42 @@ fn runtime_green_final_proof_audit(
         .get("missing_required_evidence")
         .cloned()
         .unwrap_or_else(|| serde_json::json!([]));
+    let missing_expected_required_checks = final_result_summary
+        .get("missing_expected_required_checks")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
+    let non_pass_required_checks = final_result_summary
+        .get("non_pass_required_checks")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
+    let missing_required_statuses = final_result_summary
+        .get("missing_required_statuses")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
+    let invalid_required_check_statuses = final_result_summary
+        .get("invalid_required_check_statuses")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
+    let missing_expected_required_check_count = missing_expected_required_checks
+        .as_array()
+        .map(Vec::len)
+        .unwrap_or(0);
+    let non_pass_required_check_count = non_pass_required_checks
+        .as_array()
+        .map(Vec::len)
+        .unwrap_or(0);
+    let missing_required_status_count = missing_required_statuses
+        .as_array()
+        .map(Vec::len)
+        .unwrap_or(0);
+    let invalid_required_check_status_count = invalid_required_check_statuses
+        .as_array()
+        .map(Vec::len)
+        .unwrap_or(0);
+    let has_final_result_status_diagnostics = missing_expected_required_check_count > 0
+        || non_pass_required_check_count > 0
+        || missing_required_status_count > 0
+        || invalid_required_check_status_count > 0;
     let required_check_blocker_count = final_result_summary
         .get("required_check_blocker_count")
         .and_then(Value::as_u64)
@@ -5882,6 +5977,10 @@ fn runtime_green_final_proof_audit(
         "awaiting_final_runtime_result_import"
     } else if final_result_runtime_green || runtime_green_candidate {
         "runtime_green_result_waiting_for_report_gate"
+    } else if missing_expected_required_check_count > 0 {
+        "final_result_stale_required_checks"
+    } else if has_final_result_status_diagnostics {
+        "final_result_status_diagnostics_required"
     } else {
         "final_result_needs_evidence_or_blocker_fix"
     };
@@ -5907,7 +6006,12 @@ fn runtime_green_final_proof_audit(
             "may_report_runtime_green": may_report_runtime_green,
             "next_action": next_action,
             "missing_required_checks": missing_required_checks,
+            "missing_expected_required_checks": missing_expected_required_checks,
             "missing_required_evidence": missing_required_evidence,
+            "non_pass_required_checks": non_pass_required_checks,
+            "missing_required_statuses": missing_required_statuses,
+            "invalid_required_check_statuses": invalid_required_check_statuses,
+            "has_final_result_status_diagnostics": has_final_result_status_diagnostics,
             "required_check_blocker_count": required_check_blocker_count,
             "overall_blocker": overall_blocker,
             "has_overall_blocker": has_overall_blocker,
@@ -5957,6 +6061,8 @@ fn runtime_green_final_proof_audit(
         "required_before_runtime_green_claim": [
             "final_validation_result.status == pass",
             "all required checks have status pass",
+            "imported required_check_ids matches the current canonical required check list",
+            "all required check statuses are present and from allowed status values",
             "all required checks include non-empty evidence",
             "overall_blocker is null",
             "every required check blocker is null",
@@ -6002,6 +6108,25 @@ fn runtime_green_final_proof_audit_summary(audit: &Value) -> Value {
             .pointer("/audit/missing_required_evidence")
             .and_then(Value::as_array)
             .map(Vec::len),
+        "missing_expected_required_check_count": audit
+            .pointer("/audit/missing_expected_required_checks")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        "non_pass_required_check_count": audit
+            .pointer("/audit/non_pass_required_checks")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        "missing_required_status_count": audit
+            .pointer("/audit/missing_required_statuses")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        "invalid_required_check_status_count": audit
+            .pointer("/audit/invalid_required_check_statuses")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        "has_final_result_status_diagnostics": audit
+            .pointer("/audit/has_final_result_status_diagnostics")
+            .and_then(Value::as_bool),
         "required_check_blocker_count": audit
             .pointer("/audit/required_check_blocker_count")
             .and_then(Value::as_u64),
@@ -7460,47 +7585,102 @@ fn browser_final_validation_result_probe(path: &Path, generated_at_ms: u64) -> V
 
 fn browser_final_validation_result_summary(result: &Value) -> Value {
     let checks = result.pointer("/checks").and_then(Value::as_object);
-    let required_check_ids = result
+    let declared_required_check_ids = result
         .pointer("/required_check_ids")
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
-    let required_check_count = required_check_ids.len();
-    let pass_required_check_count = required_check_ids
+    let expected_required_check_ids = AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS;
+    let declared_required_check_count = declared_required_check_ids.len();
+    let expected_required_check_count = expected_required_check_ids.len();
+    let allowed_status_values = AGENT_BROWSER_FINAL_VALIDATION_ALLOWED_STATUS_VALUES;
+    let missing_expected_required_checks = expected_required_check_ids
         .iter()
-        .filter_map(Value::as_str)
+        .filter(|check_id| {
+            !declared_required_check_ids
+                .iter()
+                .filter_map(Value::as_str)
+                .any(|declared_check_id| declared_check_id == **check_id)
+        })
+        .copied()
+        .collect::<Vec<_>>();
+    let pass_required_check_count = expected_required_check_ids
+        .iter()
         .filter(|check_id| {
             checks
-                .and_then(|checks| checks.get(*check_id))
+                .and_then(|checks| checks.get(**check_id))
                 .and_then(|check| check.pointer("/status"))
                 .and_then(Value::as_str)
                 == Some("pass")
         })
         .count();
-    let missing_required_checks = required_check_ids
+    let missing_required_checks = expected_required_check_ids
         .iter()
-        .filter_map(Value::as_str)
-        .filter(|check_id| checks.and_then(|checks| checks.get(*check_id)).is_none())
+        .filter(|check_id| checks.and_then(|checks| checks.get(**check_id)).is_none())
+        .copied()
         .collect::<Vec<_>>();
-    let missing_required_evidence = required_check_ids
+    let missing_required_evidence = expected_required_check_ids
         .iter()
-        .filter_map(Value::as_str)
         .filter(|check_id| {
             checks
-                .and_then(|checks| checks.get(*check_id))
+                .and_then(|checks| checks.get(**check_id))
                 .and_then(|check| check.pointer("/evidence"))
                 .and_then(Value::as_str)
                 .map(str::trim)
                 .filter(|evidence| !evidence.is_empty())
                 .is_none()
         })
+        .copied()
         .collect::<Vec<_>>();
-    let required_check_blocker_count = required_check_ids
+    let non_pass_required_checks = expected_required_check_ids
         .iter()
-        .filter_map(Value::as_str)
         .filter(|check_id| {
             checks
+                .and_then(|checks| checks.get(**check_id))
+                .and_then(|check| check.pointer("/status"))
+                .and_then(Value::as_str)
+                .is_some_and(|status| status != "pass")
+        })
+        .copied()
+        .collect::<Vec<_>>();
+    let missing_required_statuses = expected_required_check_ids
+        .iter()
+        .filter(|check_id| {
+            checks
+                .and_then(|checks| checks.get(**check_id))
+                .is_some_and(|check| {
+                    check
+                        .pointer("/status")
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .filter(|status| !status.is_empty())
+                        .is_none()
+                })
+        })
+        .copied()
+        .collect::<Vec<_>>();
+    let invalid_required_check_statuses = expected_required_check_ids
+        .iter()
+        .filter_map(|check_id| {
+            let status = checks
                 .and_then(|checks| checks.get(*check_id))
+                .and_then(|check| check.pointer("/status"))
+                .and_then(Value::as_str)?;
+            if allowed_status_values.contains(&status) {
+                None
+            } else {
+                Some(serde_json::json!({
+                    "check_id": *check_id,
+                    "status": status,
+                }))
+            }
+        })
+        .collect::<Vec<_>>();
+    let required_check_blocker_count = expected_required_check_ids
+        .iter()
+        .filter(|check_id| {
+            checks
+                .and_then(|checks| checks.get(**check_id))
                 .and_then(|check| check.pointer("/blocker"))
                 .map(|blocker| !blocker.is_null())
                 .unwrap_or(false)
@@ -7509,15 +7689,18 @@ fn browser_final_validation_result_summary(result: &Value) -> Value {
     let runtime_green_candidate = result.pointer("/schema").and_then(Value::as_str)
         == Some(AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA)
         && result.pointer("/status").and_then(Value::as_str) == Some("pass")
-        && required_check_count > 0
-        && pass_required_check_count == required_check_count
+        && expected_required_check_count > 0
+        && pass_required_check_count == expected_required_check_count
         && result
             .pointer("/overall_blocker")
             .map(Value::is_null)
             .unwrap_or(true)
         && required_check_blocker_count == 0
         && missing_required_checks.is_empty()
-        && missing_required_evidence.is_empty();
+        && missing_required_evidence.is_empty()
+        && missing_required_statuses.is_empty()
+        && invalid_required_check_statuses.is_empty()
+        && missing_expected_required_checks.is_empty();
 
     serde_json::json!({
         "state": "parsed_result",
@@ -7528,10 +7711,19 @@ fn browser_final_validation_result_summary(result: &Value) -> Value {
         "commit": result.pointer("/commit").and_then(Value::as_str),
         "started_at": result.pointer("/started_at").cloned(),
         "completed_at": result.pointer("/completed_at").cloned(),
-        "required_check_count": required_check_count,
+        "required_check_count": expected_required_check_count,
+        "declared_required_check_count": declared_required_check_count,
+        "expected_required_check_count": expected_required_check_count,
+        "declared_required_check_ids": declared_required_check_ids,
+        "expected_required_check_ids": expected_required_check_ids,
+        "allowed_status_values": allowed_status_values,
         "pass_required_check_count": pass_required_check_count,
+        "non_pass_required_checks": non_pass_required_checks,
+        "missing_required_statuses": missing_required_statuses,
+        "invalid_required_check_statuses": invalid_required_check_statuses,
         "required_check_blocker_count": required_check_blocker_count,
         "missing_required_checks": missing_required_checks,
+        "missing_expected_required_checks": missing_expected_required_checks,
         "missing_required_evidence": missing_required_evidence,
         "runtime_green_candidate": runtime_green_candidate,
         "overall_blocker": result.pointer("/overall_blocker").cloned(),
