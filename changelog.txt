@@ -1,3 +1,16 @@
+[2026-05-18] - Panel Checklist Cleanup Catalog Alignment
+
+ADDED:
+- `crates/web_preview/src/web_preview_view.rs` status summaries now expose panel live UI proof checklist cleanup-result gate status, capacity-recheck readiness, and embedded blocker-board status.
+- `crates/agent/src/tools/agent_plugin_catalog_tool.rs` and WebPreview plugin catalogs now advertise the checklist cleanup-result summary fields and `final_runtime_capacity_recheck_required` status.
+
+CHANGED:
+- Panel live UI proof checklist capability descriptions now make the cleanup-result recheck state discoverable from compact Agent/WebPreview catalog surfaces.
+- `todo.txt` records the checklist cleanup catalog slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is catalog/status metadata only. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Panel Checklist Cleanup Recheck Alignment
 
 ADDED:
