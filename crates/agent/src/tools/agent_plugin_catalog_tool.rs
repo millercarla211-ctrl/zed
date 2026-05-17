@@ -1587,6 +1587,8 @@ fn chrome_plugin_manifest(
             "webpreview_execution_status_copy_action": "copy_managed_chrome_execution_status",
             "webpreview_execution_status_agent_action": "send_managed_chrome_execution_status_to_agent",
             "webpreview_execution_status_schema": "zed.web_preview.managed_chrome_execution_status.v1",
+            "webpreview_execution_action_card_schema": "zed.web_preview.managed_chrome_action_card.v1",
+            "webpreview_execution_action_card_field": "latest_action_card",
             "playwright_run_request_schema": AGENT_CHROME_PLAYWRIGHT_RUN_REQUEST_SCHEMA,
             "playwright_invocation_result_schema": AGENT_CHROME_PLAYWRIGHT_INVOCATION_RESULT_SCHEMA,
             "playwright_adapter_manifest_schema": AGENT_CHROME_PLAYWRIGHT_ADAPTER_MANIFEST_SCHEMA,

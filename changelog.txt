@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Managed Action Cards
+
+ADDED:
+- WebPreview managed Chrome execution status now includes `zed.web_preview.managed_chrome_action_card.v1`, a compact latest-action card with request/receipt presence, action, outcome, URL/title, request and receipt file summaries, primary proof, compact proof summaries, next action, and read-only safety flags.
+- Agent Browser status-packet summaries now carry the managed Chrome latest action card so right-side panels can show the newest Chrome action result without parsing full receipt payloads.
+
+CHANGED:
+- WebPreview and Agent plugin catalogs now advertise the managed Chrome `latest_action_card` field and schema beside the existing execution status copy/send actions.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 18/100 and the next remaining proof targets.
+
+NOTES:
+- This is an auditability/wiring slice only. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Responsive Viewport Proof Cards
 
 ADDED:

@@ -68,6 +68,7 @@ const MANAGED_CHROME_RUN_REQUEST_SCHEMA: &str =
     "zed.agent_plugins.managed_chrome_playwright_run_request.v1";
 const MANAGED_CHROME_EXECUTION_RECEIPT_SCHEMA: &str =
     "zed.agent_plugins.managed_chrome_playwright_execution_receipt.v1";
+const MANAGED_CHROME_ACTION_CARD_SCHEMA: &str = "zed.web_preview.managed_chrome_action_card.v1";
 const PC_USE_PAYLOAD_QUEUE_FILE_NAME: &str = "latest-zed-pc-use-payload.json";
 const PC_USE_RUNNER_RECEIPT_FILE_NAME: &str = "latest-zed-pc-use-runner-receipt.json";
 const PC_USE_RUNNER_RECEIPT_PREFIX: &str = "zed-pc-use-runner-receipt-";
@@ -1903,6 +1904,7 @@ impl WebPreviewView {
             "interactive_unlocked": packet.pointer("/packet/readiness/interactive_unlocked").and_then(Value::as_bool),
             "managed_chrome_execution_status": packet.pointer("/packet/latest/managed_chrome_execution/status").and_then(Value::as_str),
             "managed_chrome_latest_outcome": packet.pointer("/packet/latest/managed_chrome_execution/latest_receipt/read/outcome").and_then(Value::as_str),
+            "managed_chrome_latest_action_card": packet.pointer("/packet/latest/managed_chrome_execution/latest_action_card").cloned(),
             "pc_use_status": packet.pointer("/packet/latest/pc_use_status/status").and_then(Value::as_str),
             "pc_use_latest_outcome": packet.pointer("/packet/latest/pc_use_status/latest_receipt/read/outcome").and_then(Value::as_str),
             "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
@@ -4713,6 +4715,11 @@ impl WebPreviewView {
         } else {
             "empty"
         };
+        let latest_action_card = managed_chrome_execution_action_card(
+            status,
+            latest_request.as_ref(),
+            latest_receipt.as_ref(),
+        );
         let root_values = roots
             .iter()
             .map(|(kind, path)| {
@@ -4731,6 +4738,7 @@ impl WebPreviewView {
             "roots": root_values,
             "latest_receipt": latest_receipt,
             "latest_request": latest_request,
+            "latest_action_card": latest_action_card,
             "next_actions": managed_chrome_execution_next_actions(status),
             "safety": {
                 "read_only": true,
@@ -16221,6 +16229,8 @@ impl WebPreviewView {
                             "webpreview_execution_status_copy_action": "copy_managed_chrome_execution_status",
                             "webpreview_execution_status_agent_action": "send_managed_chrome_execution_status_to_agent",
                             "webpreview_execution_status_schema": "zed.web_preview.managed_chrome_execution_status.v1",
+                            "webpreview_execution_action_card_schema": MANAGED_CHROME_ACTION_CARD_SCHEMA,
+                            "webpreview_execution_action_card_field": "latest_action_card",
                             "playwright_run_request_schema": "zed.agent_plugins.managed_chrome_playwright_run_request.v1",
                             "playwright_invocation_result_schema": "zed.agent_plugins.managed_chrome_playwright_invocation_result.v1",
                             "playwright_adapter_manifest_schema": "zed.agent_plugins.managed_chrome_playwright_adapter_manifest.v1",
@@ -21241,6 +21251,114 @@ fn latest_managed_chrome_execution_file(
     }
 
     latest.map(|(_, _, summary)| summary)
+}
+
+fn managed_chrome_execution_action_card(
+    status: &str,
+    latest_request: Option<&Value>,
+    latest_receipt: Option<&Value>,
+) -> Value {
+    let request_read = latest_request.and_then(|request| request.get("read"));
+    let receipt_read = latest_receipt.and_then(|receipt| receipt.get("read"));
+    let source_read = receipt_read.or(request_read);
+    let outcome = receipt_read.and_then(|read| read.get("outcome").and_then(Value::as_str));
+    let state = if latest_receipt.is_some() && outcome == Some("completed") {
+        "completed_receipt"
+    } else if latest_receipt.is_some() {
+        "receipt_not_completed"
+    } else if latest_request.is_some() {
+        "request_waiting_for_receipt"
+    } else {
+        "no_action"
+    };
+    let primary_proof = managed_chrome_primary_action_proof(receipt_read);
+    let next_action = managed_chrome_action_card_next_action(status, outcome);
+
+    serde_json::json!({
+        "schema": MANAGED_CHROME_ACTION_CARD_SCHEMA,
+        "state": state,
+        "status": status,
+        "action": source_read.and_then(|read| read.get("action").and_then(Value::as_str)),
+        "outcome": outcome,
+        "url": source_read.and_then(|read| read.get("url").and_then(Value::as_str)),
+        "title": source_read.and_then(|read| read.get("title").and_then(Value::as_str)),
+        "generated_at_ms": source_read.and_then(|read| read.get("generated_at_ms").cloned()),
+        "request_present": latest_request.is_some(),
+        "receipt_present": latest_receipt.is_some(),
+        "request_file": managed_chrome_action_card_file(latest_request),
+        "receipt_file": managed_chrome_action_card_file(latest_receipt),
+        "primary_proof": primary_proof,
+        "proofs": managed_chrome_action_card_proofs(receipt_read),
+        "next_action": next_action,
+        "safety": {
+            "read_only": true,
+            "launches_browser": false,
+            "runs_node": false,
+            "dispatches_input": false,
+            "managed_roots_only": true,
+            "real_browser_profiles_touched": false,
+        },
+    })
+}
+
+fn managed_chrome_action_card_file(file: Option<&Value>) -> Option<Value> {
+    let file = file?;
+    Some(serde_json::json!({
+        "root_kind": file.get("root_kind").and_then(Value::as_str),
+        "path": file.get("path").and_then(Value::as_str),
+        "file_name": file.get("file_name").and_then(Value::as_str),
+        "modified_at_ms": file.get("modified_at_ms").and_then(Value::as_u64),
+        "bytes": file.get("bytes").and_then(Value::as_u64),
+        "read_ok": file.pointer("/read/ok").and_then(Value::as_bool),
+        "schema_ok": file.pointer("/read/schema_ok").and_then(Value::as_bool),
+    }))
+}
+
+fn managed_chrome_action_card_proofs(read: Option<&Value>) -> Value {
+    serde_json::json!({
+        "navigation": read.and_then(|read| read.get("navigation").cloned()),
+        "screenshot_capture": read.and_then(|read| read.get("screenshot_capture").cloned()),
+        "viewport_change": read.and_then(|read| read.get("viewport_change").cloned()),
+        "selector_wait": read.and_then(|read| read.get("selector_wait").cloned()),
+        "inspect_element": read.and_then(|read| read.get("inspect_element").cloned()),
+        "dom_snapshot": read.and_then(|read| read.get("dom_snapshot").cloned()),
+        "runtime_events": read.and_then(|read| read.get("runtime_events").cloned()),
+    })
+}
+
+fn managed_chrome_primary_action_proof(read: Option<&Value>) -> Option<&'static str> {
+    let read = read?;
+    [
+        ("navigation", "navigation"),
+        ("screenshot_capture", "screenshot_capture"),
+        ("viewport_change", "viewport_change"),
+        ("selector_wait", "selector_wait"),
+        ("inspect_element", "inspect_element"),
+        ("dom_snapshot", "dom_snapshot"),
+        ("runtime_events", "runtime_events"),
+    ]
+    .iter()
+    .find_map(|(field, label)| {
+        read.get(*field)
+            .and_then(|value| (!value.is_null()).then_some(*label))
+    })
+}
+
+fn managed_chrome_action_card_next_action(status: &str, outcome: Option<&str>) -> &'static str {
+    match (status, outcome) {
+        ("has_recent_execution_receipt", Some("completed")) => {
+            "Use this compact action card in the right-side panel, then inspect full receipts only when deeper debugging is needed."
+        }
+        ("has_recent_execution_receipt", _) => {
+            "Inspect the receipt error and proof summaries before queueing another managed Chrome action."
+        }
+        ("has_request_without_receipt", _) => {
+            "Invoke the prepared Playwright adapter after runner-gate readiness passes, or inspect why no receipt was written."
+        }
+        _ => {
+            "Queue a managed Chrome action, request the runner gate, prepare the adapter, then invoke an allowlisted safe action."
+        }
+    }
 }
 
 fn managed_chrome_execution_file_read_summary(path: &Path, expected_schema: &str) -> Value {
