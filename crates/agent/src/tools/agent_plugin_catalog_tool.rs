@@ -1212,6 +1212,34 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
                     "/final_runtime_proof_capacity/blocker_board_panel_checklist_packet_field",
                 )
                 .and_then(Value::as_str),
+            "final_runtime_blocker_board_derived_panel_result_gate_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/blocker_board_derived_panel_result_gate_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_blocker_board_derived_panel_proof_card_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/blocker_board_derived_panel_proof_card_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_blocker_board_derived_capacity_field": plugin
+                .pointer("/final_runtime_proof_capacity/blocker_board_derived_capacity_field")
+                .and_then(Value::as_str),
+            "final_runtime_blocker_board_derived_cleanup_result_gate_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/blocker_board_derived_cleanup_result_gate_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_blocker_board_derived_capacity_cleanup_result_gate_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/blocker_board_derived_capacity_cleanup_result_gate_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_blocker_board_derived_recovery_cleanup_result_gate_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/blocker_board_derived_recovery_cleanup_result_gate_field",
+                )
+                .and_then(Value::as_str),
             "final_runtime_headroom_recovery_plan_field": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_field")
                 .and_then(Value::as_str),
@@ -2060,6 +2088,12 @@ fn browser_plugin_manifest() -> Value {
             "blocker_board_send_action": "send_agent_browser_final_runtime_blocker_board_to_agent",
             "blocker_board_status_packet_field": "packet.latest.agent_browser_final_runtime_blocker_board",
             "blocker_board_panel_checklist_packet_field": "packet.latest.agent_browser_panel_live_ui_proof_checklist.artifacts.final_runtime_blocker_board.payload",
+            "blocker_board_derived_panel_result_gate_field": "packet.latest.agent_browser_panel_live_validation_result_gate",
+            "blocker_board_derived_panel_proof_card_field": "packet.latest.agent_browser_panel_live_proof_readiness_card",
+            "blocker_board_derived_capacity_field": "packet.latest.agent_browser_final_runtime_proof_capacity",
+            "blocker_board_derived_cleanup_result_gate_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_gate",
+            "blocker_board_derived_capacity_cleanup_result_gate_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_cleanup_result_gate",
+            "blocker_board_derived_recovery_cleanup_result_gate_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_recovery_plan.cleanup_result_gate",
             "headroom_recovery_plan_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
             "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
             "headroom_recovery_plan_status_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_recovery_plan",

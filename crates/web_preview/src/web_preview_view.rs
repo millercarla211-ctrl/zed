@@ -2205,6 +2205,42 @@ impl WebPreviewView {
                     .pointer("/packet/latest/agent_browser_final_runtime_proof_capacity")
                     .map(Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity)
             });
+        let final_runtime_blocker_board_payload = packet
+            .pointer("/packet/latest/agent_browser_final_runtime_blocker_board")
+            .cloned()
+            .or_else(|| {
+                packet
+                    .pointer(
+                        "/packet/latest/agent_browser_panel_live_ui_proof_checklist/artifacts/final_runtime_blocker_board/payload",
+                    )
+                    .cloned()
+            })
+            .or_else(|| {
+                let panel_result_gate = packet
+                    .pointer("/packet/latest/agent_browser_panel_live_validation_result_gate")?;
+                let panel_proof_card = packet
+                    .pointer("/packet/latest/agent_browser_panel_live_proof_readiness_card")?;
+                let final_runtime_capacity = packet
+                    .pointer("/packet/latest/agent_browser_final_runtime_proof_capacity")?;
+                let cleanup_result_gate = packet
+                    .pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_gate")
+                    .or_else(|| {
+                        packet.pointer(
+                            "/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_cleanup_result_gate",
+                        )
+                    })
+                    .or_else(|| {
+                        packet.pointer(
+                            "/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate",
+                        )
+                    })?;
+                Some(Self::agent_browser_final_runtime_blocker_board_from_parts(
+                    panel_result_gate,
+                    panel_proof_card,
+                    final_runtime_capacity,
+                    cleanup_result_gate,
+                ))
+            });
         Some(serde_json::json!({
             "schema": AGENT_BROWSER_STATUS_PACKET_SUMMARY_SCHEMA,
             "source_schema": packet.get("schema").and_then(Value::as_str),
@@ -2370,7 +2406,7 @@ impl WebPreviewView {
             "agent_browser_final_runtime_headroom_cleanup_result_gate": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_gate").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_cleanup_result_gate")).or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate")).cloned(),
             "agent_browser_final_runtime_headroom_readiness_gate": final_runtime_headroom_readiness_gate_payload,
             "agent_browser_final_runtime_headroom_reclaim_candidates": final_runtime_headroom_reclaim_candidates_payload,
-            "agent_browser_final_runtime_blocker_board": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board").or_else(|| packet.pointer("/packet/latest/agent_browser_panel_live_ui_proof_checklist/artifacts/final_runtime_blocker_board/payload")).cloned(),
+            "agent_browser_final_runtime_blocker_board": final_runtime_blocker_board_payload,
             "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
             "runtime_green_ready_lane_fraction": packet.pointer("/packet/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
             "runtime_green_first_pending_lane": packet.pointer("/packet/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
@@ -9101,6 +9137,36 @@ impl WebPreviewView {
                 "final_runtime_blocker_board_panel_checklist_packet_field": plugin
                     .pointer(
                         "/final_runtime_proof_capacity/blocker_board_panel_checklist_packet_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_blocker_board_derived_panel_result_gate_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/blocker_board_derived_panel_result_gate_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_blocker_board_derived_panel_proof_card_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/blocker_board_derived_panel_proof_card_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_blocker_board_derived_capacity_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/blocker_board_derived_capacity_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_blocker_board_derived_cleanup_result_gate_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/blocker_board_derived_cleanup_result_gate_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_blocker_board_derived_capacity_cleanup_result_gate_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/blocker_board_derived_capacity_cleanup_result_gate_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_blocker_board_derived_recovery_cleanup_result_gate_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/blocker_board_derived_recovery_cleanup_result_gate_field",
                     )
                     .and_then(Value::as_str),
                 "final_runtime_headroom_recovery_plan_field": plugin
@@ -26390,6 +26456,12 @@ impl WebPreviewView {
                             "blocker_board_send_action": "send_agent_browser_final_runtime_blocker_board_to_agent",
                             "blocker_board_status_packet_field": "packet.latest.agent_browser_final_runtime_blocker_board",
                             "blocker_board_panel_checklist_packet_field": "packet.latest.agent_browser_panel_live_ui_proof_checklist.artifacts.final_runtime_blocker_board.payload",
+                            "blocker_board_derived_panel_result_gate_field": "packet.latest.agent_browser_panel_live_validation_result_gate",
+                            "blocker_board_derived_panel_proof_card_field": "packet.latest.agent_browser_panel_live_proof_readiness_card",
+                            "blocker_board_derived_capacity_field": "packet.latest.agent_browser_final_runtime_proof_capacity",
+                            "blocker_board_derived_cleanup_result_gate_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_gate",
+                            "blocker_board_derived_capacity_cleanup_result_gate_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_cleanup_result_gate",
+                            "blocker_board_derived_recovery_cleanup_result_gate_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_recovery_plan.cleanup_result_gate",
                             "headroom_recovery_plan_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
                             "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
                             "headroom_recovery_plan_status_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_recovery_plan",

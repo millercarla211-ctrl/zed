@@ -1,3 +1,16 @@
+[2026-05-18] - Blocker Board Derived Payload Fallback
+
+ADDED:
+- WebPreview compact function surfaces now read `agent_browser_final_runtime_blocker_board` from standalone handoffs, panel checklist payloads, or packet-local derived blocker-board inputs.
+- Agent and WebPreview plugin catalogs now advertise the panel result gate, panel proof card, final capacity, and cleanup-result gate fields used to derive a blocker board payload.
+
+CHANGED:
+- Compact Browser/Chrome panels can render the ordered final-runtime blocker board before an operator copies or sends the standalone blocker-board handoff, as long as the latest packet has the required source gates.
+- `todo.txt` records the blocker-board derived payload fallback slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only status/catalog metadata. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Reclaim Candidate Capacity Payload Fallback
 
 ADDED:
