@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome DevTools Inspect Evidence Cards
+
+ADDED:
+- WebPreview now exposes `zed.web_preview.inspected_element_evidence_card.v1` and `zed.web_preview.devtools_evidence_card.v1` cards with empty, captured, opened, and blocked states for right-side panel rendering.
+- Agent Browser status-packet summaries, session snapshots, and Browser function surfaces now include compact Inspect Element and DevTools evidence cards beside the existing summaries.
+
+CHANGED:
+- Agent and WebPreview plugin catalogs now advertise the DevTools and Inspect evidence card schemas through Browser function surfaces so static discovery and live WebPreview packets stay aligned.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 21/100 and the next remaining proof targets.
+
+NOTES:
+- This is an auditability/wiring slice only. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Managed Action Cards
 
 ADDED:

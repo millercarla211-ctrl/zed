@@ -104,6 +104,9 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX: &str =
 const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
     "zed.web_preview.agent_browser_function_surfaces.v1";
 const INSPECTED_ELEMENT_SCHEMA: &str = "zed.web_preview.inspected_element.v1";
+const INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA: &str =
+    "zed.web_preview.inspected_element_evidence_card.v1";
+const DEVTOOLS_EVIDENCE_CARD_SCHEMA: &str = "zed.web_preview.devtools_evidence_card.v1";
 const AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA: &str = "zed.agent_plugins.catalog_summary.v1";
 const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstrap_readiness.v1";
 const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstrap_manifest.v1";
@@ -1539,7 +1542,9 @@ impl WebPreviewView {
             "screenshot_capture": self.latest_screenshot_capture_summary(),
             "annotated_screenshot": self.latest_annotated_screenshot_summary(),
             "inspected_element": self.latest_inspected_element_summary(),
+            "inspected_element_evidence_card": self.latest_inspected_element_evidence_card(),
             "devtools_open_attempt": self.latest_devtools_open_attempt_summary(),
+            "devtools_evidence_card": self.latest_devtools_evidence_card(),
             "native_preview": {
                 "backend": native_backend,
                 "mounted": native_preview_mounted,
@@ -1905,6 +1910,8 @@ impl WebPreviewView {
             "managed_chrome_execution_status": packet.pointer("/packet/latest/managed_chrome_execution/status").and_then(Value::as_str),
             "managed_chrome_latest_outcome": packet.pointer("/packet/latest/managed_chrome_execution/latest_receipt/read/outcome").and_then(Value::as_str),
             "managed_chrome_latest_action_card": packet.pointer("/packet/latest/managed_chrome_execution/latest_action_card").cloned(),
+            "inspected_element_evidence_card": packet.pointer("/packet/latest/inspected_element_evidence_card").cloned(),
+            "devtools_evidence_card": packet.pointer("/packet/latest/devtools_evidence_card").cloned(),
             "pc_use_status": packet.pointer("/packet/latest/pc_use_status/status").and_then(Value::as_str),
             "pc_use_latest_outcome": packet.pointer("/packet/latest/pc_use_status/latest_receipt/read/outcome").and_then(Value::as_str),
             "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
@@ -4458,6 +4465,9 @@ impl WebPreviewView {
                 "function_surfaces_schema": plugin
                     .get("function_surfaces_schema")
                     .and_then(Value::as_str),
+                "function_surfaces_evidence_card_schemas": plugin
+                    .pointer("/function_surfaces/evidence_card_schemas")
+                    .cloned(),
                 "function_surfaces_copy_action": plugin
                     .pointer("/function_surfaces_handoff/copy_action")
                     .and_then(Value::as_str),
@@ -5033,6 +5043,85 @@ impl WebPreviewView {
         }))
     }
 
+    fn latest_inspected_element_evidence_card(&self) -> Value {
+        let Some(element) = self.latest_inspected_element.as_ref() else {
+            return serde_json::json!({
+                "schema": INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA,
+                "source_schema": INSPECTED_ELEMENT_SCHEMA,
+                "state": "no_inspection",
+                "generated_at_ms": Self::current_epoch_millis(),
+                "url": self.active_url.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "load_state": self.load_state_name(),
+                "next_action": if self.load_state_name() == "ready" {
+                    "Use Inspect Element to capture selector, HTML, computed-style, rect, and optional screenshot evidence for the panel."
+                } else {
+                    "Wait for the page to reach ready, then use Inspect Element to capture panel evidence."
+                },
+                "safety": {
+                    "read_only": true,
+                    "uses_page_script": true,
+                    "dispatches_input": false,
+                    "mutates_external_browser_profiles": false,
+                    "requires_interactive_unlock": false,
+                },
+            });
+        };
+
+        serde_json::json!({
+            "schema": INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA,
+            "source_schema": element.get("schema").and_then(Value::as_str),
+            "state": "captured",
+            "generated_at_ms": Self::current_epoch_millis(),
+            "captured_at_ms": element.get("captured_at_ms").and_then(Value::as_u64),
+            "url": element.get("url").and_then(Value::as_str),
+            "title": element.get("title").and_then(Value::as_str),
+            "selector": element.get("selector").and_then(Value::as_str),
+            "tag": element.get("tag").and_then(Value::as_str),
+            "id": element.get("id").and_then(Value::as_str),
+            "class_count": element
+                .get("classes")
+                .and_then(Value::as_array)
+                .map(|classes| classes.len()),
+            "text_preview": element.get("text").and_then(Value::as_str),
+            "href": element.get("href").and_then(Value::as_str),
+            "src": element.get("src").and_then(Value::as_str),
+            "rect": element.get("rect").cloned(),
+            "viewport": element.get("viewport").cloned(),
+            "backend": element.get("native_backend").and_then(Value::as_str),
+            "evidence": {
+                "selector_included": element.get("selector").and_then(Value::as_str).is_some(),
+                "html_included": element
+                    .get("html")
+                    .and_then(Value::as_str)
+                    .map_or(false, |html| !html.is_empty()),
+                "computed_style_included": element
+                    .get("css")
+                    .and_then(Value::as_str)
+                    .map_or(false, |css| !css.is_empty()),
+                "rect_included": element.get("rect").is_some(),
+                "screenshot_included": element
+                    .get("screenshot_included")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+            },
+            "outputs": [
+                "agent_panel_selector",
+                "agent_panel_html",
+                "computed_style_summary",
+                "optional_cropped_screenshot"
+            ],
+            "next_action": "Render this card in the right-side panel; open the full inspected-element payload only when HTML, CSS, or screenshot context needs deeper review.",
+            "safety": {
+                "read_only": true,
+                "uses_page_script": true,
+                "dispatches_input": false,
+                "mutates_external_browser_profiles": false,
+                "requires_interactive_unlock": false,
+            },
+        })
+    }
+
     fn latest_devtools_open_attempt_summary(&self) -> Option<Value> {
         let attempt = self.latest_devtools_open_attempt.as_ref()?;
         Some(serde_json::json!({
@@ -5046,6 +5135,74 @@ impl WebPreviewView {
             "title": attempt.get("title").and_then(Value::as_str),
             "viewport": attempt.get("viewport").cloned(),
         }))
+    }
+
+    fn latest_devtools_evidence_card(&self) -> Value {
+        let Some(attempt) = self.latest_devtools_open_attempt.as_ref() else {
+            return serde_json::json!({
+                "schema": DEVTOOLS_EVIDENCE_CARD_SCHEMA,
+                "source_schema": "zed.web_preview.devtools_open_attempt.v1",
+                "state": "no_attempt",
+                "generated_at_ms": Self::current_epoch_millis(),
+                "backend": self.browser_native_backend_name(),
+                "platform_supported": cfg!(any(target_os = "windows", target_os = "macos")),
+                "url": self.active_url.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "viewport": self.viewport_mode.snapshot(),
+                "next_action": if cfg!(any(target_os = "windows", target_os = "macos")) {
+                    "Use Open DevTools when native debugging evidence is needed; the card will record opened or blocked state."
+                } else {
+                    "Native DevTools is unavailable on this platform; use diagnostics, DOM snapshot, runtime events, and screenshots instead."
+                },
+                "safety": {
+                    "read_only": true,
+                    "uses_page_script": false,
+                    "dispatches_input": false,
+                    "mutates_external_browser_profiles": false,
+                    "requires_interactive_unlock": false,
+                },
+            });
+        };
+
+        let state = attempt
+            .get("state")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let opened = attempt
+            .get("opened")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let next_action = if opened {
+            "Continue manual debugging in the native DevTools window; keep Agent actions gated by WebPreview receipts."
+        } else if state == "blocked" {
+            "Read the blocked reason, then use WebPreview diagnostics, DOM snapshot, runtime events, screenshots, or remount the native preview before trying again."
+        } else {
+            "Inspect the DevTools attempt payload before requesting another native DevTools open."
+        };
+
+        serde_json::json!({
+            "schema": DEVTOOLS_EVIDENCE_CARD_SCHEMA,
+            "source_schema": attempt.get("schema").and_then(Value::as_str),
+            "state": state,
+            "generated_at_ms": Self::current_epoch_millis(),
+            "attempted_at_ms": attempt.get("attempted_at_ms").and_then(Value::as_u64),
+            "opened": opened,
+            "blocked_reason": attempt.get("blocked_reason").and_then(Value::as_str),
+            "backend": attempt.get("backend").and_then(Value::as_str),
+            "platform_supported": attempt.get("platform_supported").and_then(Value::as_bool),
+            "url": attempt.get("url").and_then(Value::as_str),
+            "title": attempt.get("title").and_then(Value::as_str),
+            "viewport": attempt.get("viewport").cloned(),
+            "output": attempt.get("output").cloned(),
+            "next_action": next_action,
+            "safety": attempt.get("safety").cloned().unwrap_or_else(|| serde_json::json!({
+                "read_only": true,
+                "uses_page_script": false,
+                "dispatches_input": false,
+                "mutates_external_browser_profiles": false,
+                "requires_interactive_unlock": false,
+            })),
+        })
     }
 
     fn devtools_open_attempt(&self, opened: bool, blocked_reason: Option<&str>) -> Value {
@@ -5102,6 +5259,10 @@ impl WebPreviewView {
                 "load_state": self.load_state_name(),
             },
             "current_viewport": self.viewport_mode.snapshot(),
+            "evidence_card_schemas": {
+                "inspected_element": INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA,
+                "devtools": DEVTOOLS_EVIDENCE_CARD_SCHEMA,
+            },
             "latest_evidence": {
                 "page_diagnostics": self.latest_page_diagnostics_summary(),
                 "dom_snapshot": self.latest_dom_snapshot_summary(),
@@ -5109,7 +5270,9 @@ impl WebPreviewView {
                 "screenshot_capture": self.latest_screenshot_capture_summary(),
                 "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                 "inspected_element": self.latest_inspected_element_summary(),
+                "inspected_element_evidence_card": self.latest_inspected_element_evidence_card(),
                 "devtools_open_attempt": self.latest_devtools_open_attempt_summary(),
+                "devtools_evidence_card": self.latest_devtools_evidence_card(),
                 "responsive_viewport_change": self.latest_responsive_viewport_change_summary(),
                 "viewport_executor_attempt": self.latest_agent_browser_viewport_executor_attempt_summary(),
             },
@@ -5158,6 +5321,8 @@ impl WebPreviewView {
                     "overlay_completion_kind": "inspect-element",
                     "output": ["agent_panel_selector", "agent_panel_html", "computed_style_summary", "optional_cropped_screenshot"],
                     "latest_summary": self.latest_inspected_element_summary(),
+                    "latest_card_schema": INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA,
+                    "latest_card": self.latest_inspected_element_evidence_card(),
                     "uses_page_script": true,
                     "dispatches_input": false,
                     "requires_interactive_unlock": false,
@@ -5169,6 +5334,8 @@ impl WebPreviewView {
                     "menu_label": "Open DevTools",
                     "output": ["native_devtools_window"],
                     "latest_summary": self.latest_devtools_open_attempt_summary(),
+                    "latest_card_schema": DEVTOOLS_EVIDENCE_CARD_SCHEMA,
+                    "latest_card": self.latest_devtools_evidence_card(),
                     "uses_page_script": false,
                     "dispatches_input": false,
                     "requires_interactive_unlock": false,
@@ -10529,6 +10696,7 @@ impl WebPreviewView {
                     "managed_chrome_execution": managed_chrome_execution,
                     "pc_use_status": pc_use_status,
                     "devtools_open_attempt": self.latest_devtools_open_attempt_summary(),
+                    "devtools_evidence_card": self.latest_devtools_evidence_card(),
                     "runtime_observability_digest": runtime_observability_digest_summary,
                     "runtime_green_operator_handoff": runtime_green_operator_handoff_summary,
                     "runtime_green_proof_path": runtime_green_proof_path_summary,
@@ -10548,6 +10716,7 @@ impl WebPreviewView {
                     "screenshot_capture": self.latest_screenshot_capture_summary(),
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
                     "inspected_element": self.latest_inspected_element_summary(),
+                    "inspected_element_evidence_card": self.latest_inspected_element_evidence_card(),
                 },
                 "handoff": {
                     "read_only_only": !interactive_unlocked,
@@ -10555,6 +10724,8 @@ impl WebPreviewView {
                     "requires_receipt_after_every_input": true,
                     "managed_chrome_receipts_visible": true,
                     "pc_use_receipts_visible": true,
+                    "inspected_element_evidence_card_schema": INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA,
+                    "devtools_evidence_card_schema": DEVTOOLS_EVIDENCE_CARD_SCHEMA,
                     "agent_plugin_catalog_visible": true,
                     "agent_plugin_catalog_schema": "zed.agent_plugins.catalog.v1",
                     "agent_plugin_catalog_summary_schema": AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA,

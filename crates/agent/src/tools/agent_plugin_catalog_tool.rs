@@ -67,6 +67,9 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX: &str =
     "agent-browser-final-validation-result-";
 const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
     "zed.web_preview.agent_browser_function_surfaces.v1";
+const INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA: &str =
+    "zed.web_preview.inspected_element_evidence_card.v1";
+const DEVTOOLS_EVIDENCE_CARD_SCHEMA: &str = "zed.web_preview.devtools_evidence_card.v1";
 const AGENT_PLUGIN_CATALOG_SUMMARY_SCHEMA: &str = "zed.agent_plugins.catalog_summary.v1";
 const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstrap_readiness.v1";
 const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstrap_manifest.v1";
@@ -799,6 +802,9 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "function_surfaces_schema": plugin
                 .get("function_surfaces_schema")
                 .and_then(Value::as_str),
+            "function_surfaces_evidence_card_schemas": plugin
+                .pointer("/function_surfaces/evidence_card_schemas")
+                .cloned(),
             "function_surfaces_copy_action": plugin
                 .pointer("/function_surfaces_handoff/copy_action")
                 .and_then(Value::as_str),
@@ -1053,6 +1059,10 @@ fn browser_function_surfaces_manifest() -> Value {
         "schema": AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA,
         "source": "WebPreview More menu and active WebPreview session snapshot",
         "backend": "web_preview",
+        "evidence_card_schemas": {
+            "inspected_element": INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA,
+            "devtools": DEVTOOLS_EVIDENCE_CARD_SCHEMA,
+        },
         "surfaces": [
             {
                 "id": "browser.screenshot.capture",
@@ -1093,6 +1103,7 @@ fn browser_function_surfaces_manifest() -> Value {
                 "menu_label": "Inspect Element",
                 "overlay_completion_kind": "inspect-element",
                 "output": ["agent_panel_selector", "agent_panel_html", "computed_style_summary", "optional_cropped_screenshot"],
+                "latest_card_schema": INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA,
                 "uses_page_script": true,
                 "dispatches_input": false,
                 "requires_interactive_unlock": false,
@@ -1103,6 +1114,7 @@ fn browser_function_surfaces_manifest() -> Value {
                 "menu_action": "open_devtools",
                 "menu_label": "Open DevTools",
                 "output": ["native_devtools_window"],
+                "latest_card_schema": DEVTOOLS_EVIDENCE_CARD_SCHEMA,
                 "uses_page_script": false,
                 "dispatches_input": false,
                 "requires_interactive_unlock": false,
