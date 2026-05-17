@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome PC Use Proof Cards
+
+ADDED:
+- WebPreview PC-use status now includes `zed.web_preview.pc_use_proof_card.v1`, a compact latest proof card with payload readiness, runner receipt readiness, action, surface, target snapshot, file summaries, blocker counts, next action, and strict no-input safety flags.
+- Agent Browser status-packet summaries can now surface the latest PC-use proof card without requiring panels to parse the full PC-use status payload.
+
+CHANGED:
+- Agent and WebPreview plugin catalogs now advertise the PC-use proof card schema and `latest_proof_card` status field beside the existing proof summary handoff.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 24/100 and the next remaining proof targets.
+
+NOTES:
+- This is an auditability/wiring slice only. It does not take screenshots, focus Zed, dispatch mouse or keyboard input, launch processes, or enable OS-wide desktop control.
+
 [2026-05-17] - Browser Chrome DevTools Inspect Evidence Cards
 
 ADDED:

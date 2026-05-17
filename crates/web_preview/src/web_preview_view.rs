@@ -77,6 +77,7 @@ const PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA: &str =
 const PC_USE_PAYLOAD_SCHEMA: &str = "zed.agent_plugins.pc_use.action_payload.v1";
 const PC_USE_RUNNER_RECEIPT_SCHEMA: &str = "zed.agent_plugins.pc_use.runner_receipt.v1";
 const PC_USE_PROOF_SUMMARY_SCHEMA: &str = "zed.web_preview.pc_use_proof_summary.v1";
+const PC_USE_PROOF_CARD_SCHEMA: &str = "zed.web_preview.pc_use_proof_card.v1";
 const AGENT_BROWSER_EXECUTOR_VALIDATION_PROGRESS_SCHEMA: &str =
     "zed.web_preview.agent_browser_executor_validation_progress.v1";
 const AGENT_BROWSER_NATIVE_DISPATCH_RECEIPT_MATRIX_SCHEMA: &str =
@@ -1914,6 +1915,7 @@ impl WebPreviewView {
             "devtools_evidence_card": packet.pointer("/packet/latest/devtools_evidence_card").cloned(),
             "pc_use_status": packet.pointer("/packet/latest/pc_use_status/status").and_then(Value::as_str),
             "pc_use_latest_outcome": packet.pointer("/packet/latest/pc_use_status/latest_receipt/read/outcome").and_then(Value::as_str),
+            "pc_use_latest_proof_card": packet.pointer("/packet/latest/pc_use_status/latest_proof_card").cloned(),
             "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
             "runtime_green_ready_lane_fraction": packet.pointer("/packet/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
             "runtime_green_first_pending_lane": packet.pointer("/packet/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
@@ -4481,6 +4483,12 @@ impl WebPreviewView {
                     .get("proof_summary_schema")
                     .or_else(|| plugin.pointer("/runtime/pc_use_proof_summary_schema"))
                     .and_then(Value::as_str),
+                "proof_card_schema": plugin
+                    .pointer("/runtime/webpreview_pc_use_proof_card_schema")
+                    .and_then(Value::as_str),
+                "proof_card_field": plugin
+                    .pointer("/runtime/webpreview_pc_use_proof_card_field")
+                    .and_then(Value::as_str),
                 "runtime_status_proof_summary_field": observability
                     .and_then(|profile| profile.pointer("/proof_handoffs/runtime_status_proof_summary_field"))
                     .and_then(Value::as_str),
@@ -4879,6 +4887,13 @@ impl WebPreviewView {
             latest_queue.as_ref(),
             latest_receipt.as_ref(),
         );
+        let latest_proof_card = pc_use_status_proof_card(
+            status,
+            latest_outcome,
+            latest_queue.as_ref(),
+            latest_receipt.as_ref(),
+            &proof_summary,
+        );
 
         serde_json::json!({
             "schema": "zed.web_preview.pc_use_status.v1",
@@ -4889,6 +4904,7 @@ impl WebPreviewView {
             "latest_receipt": latest_receipt,
             "latest_queue": latest_queue,
             "proof_summary": proof_summary,
+            "latest_proof_card": latest_proof_card,
             "next_actions": pc_use_status_next_actions(status, latest_outcome),
             "safety": {
                 "read_only": true,
@@ -16531,6 +16547,8 @@ impl WebPreviewView {
                             "webpreview_pc_use_status_schema": "zed.web_preview.pc_use_status.v1",
                             "pc_use_proof_summary_schema": "zed.agent_plugins.pc_use.proof_summary.v1",
                             "webpreview_pc_use_proof_summary_schema": PC_USE_PROOF_SUMMARY_SCHEMA,
+                            "webpreview_pc_use_proof_card_schema": PC_USE_PROOF_CARD_SCHEMA,
+                            "webpreview_pc_use_proof_card_field": "latest_proof_card",
                             "payload_schema": "zed.agent_plugins.pc_use.action_payload.v1",
                             "payload_queue_item_schema": "zed.agent_plugins.pc_use.action_payload_queue_item.v1",
                             "payload_queue_inspection_schema": "zed.agent_plugins.pc_use.action_payload_queue_inspection.v1",
@@ -16553,6 +16571,7 @@ impl WebPreviewView {
                                 "runner_receipts_tool": "inspect_zed_pc_use_runner_receipts",
                                 "runtime_status_proof_summary_field": "plugins.pc_use.proof_summary",
                                 "runtime_green_evidence_proof_summary_field": "runtime_green_blocker_summary.latest_evidence.pc_use_proof_summary",
+                                "webpreview_status_proof_card_field": "pc_use_status.latest_proof_card",
                                 "webpreview_status_copy": "copy_pc_use_status",
                                 "webpreview_status_send": "send_pc_use_status_to_agent"
                             },
@@ -21926,6 +21945,126 @@ fn pc_use_status_proof_summary(
             "os_wide_desktop_control": false,
         },
     })
+}
+
+fn pc_use_status_proof_card(
+    status: &str,
+    latest_outcome: &str,
+    latest_queue: Option<&Value>,
+    latest_receipt: Option<&Value>,
+    proof_summary: &Value,
+) -> Value {
+    let proof_status = proof_summary
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let ready = proof_summary
+        .get("ready")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let payload_ready = proof_summary
+        .get("payload_ready")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let runner_receipt_ready = proof_summary
+        .get("runner_receipt_ready")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let source = latest_receipt
+        .and_then(|receipt| receipt.get("read"))
+        .or_else(|| latest_queue.and_then(|queue| queue.get("read")));
+    let state = match (status, proof_status) {
+        ("has_ready_runner_receipt", _) => "runner_receipt_ready",
+        ("has_blocked_runner_receipt", _) => "runner_receipt_blocked",
+        ("has_queue_without_receipt", "payload_ready_runner_receipt_missing") => {
+            "payload_ready_runner_receipt_missing"
+        }
+        ("has_queue_without_receipt", _) => "payload_not_ready",
+        _ => "empty",
+    };
+
+    serde_json::json!({
+        "schema": PC_USE_PROOF_CARD_SCHEMA,
+        "source_schema": PC_USE_PROOF_SUMMARY_SCHEMA,
+        "state": state,
+        "status": status,
+        "proof_status": proof_status,
+        "latest_outcome": latest_outcome,
+        "ready": ready,
+        "payload_ready": payload_ready,
+        "runner_receipt_ready": runner_receipt_ready,
+        "action": source.and_then(|read| read.get("action")).and_then(Value::as_str),
+        "surface": source.and_then(|read| read.get("surface")).and_then(Value::as_str),
+        "target": {
+            "target_id_present": source.and_then(|read| read.get("target_id_present")).and_then(Value::as_bool),
+            "target_snapshot_id": source.and_then(|read| read.get("target_snapshot_id")).and_then(Value::as_str),
+            "target_snapshot_id_present": source.and_then(|read| read.get("target_snapshot_id_present")).and_then(Value::as_bool),
+            "target_reference": source.and_then(|read| read.get("target_reference")).cloned(),
+        },
+        "payload_file": pc_use_status_proof_card_file(latest_queue),
+        "runner_receipt_file": pc_use_status_proof_card_file(latest_receipt),
+        "blockers": {
+            "queue_blocker_count": proof_summary
+                .pointer("/runner_receipt/queue_blocker_count")
+                .and_then(Value::as_u64)
+                .or_else(|| source.and_then(|read| read.get("queue_blocker_count")).and_then(Value::as_u64)),
+            "executor_pending_count": proof_summary
+                .pointer("/runner_receipt/executor_pending_count")
+                .and_then(Value::as_u64)
+                .or_else(|| source.and_then(|read| read.get("executor_pending_count")).and_then(Value::as_u64)),
+        },
+        "next_action": pc_use_status_proof_card_next_action(status, latest_outcome),
+        "summary": {
+            "payload": proof_summary.get("payload").cloned(),
+            "runner_receipt": proof_summary.get("runner_receipt").cloned(),
+        },
+        "safety": {
+            "read_only": true,
+            "writes_files": false,
+            "takes_screenshot": false,
+            "focuses_zed": false,
+            "dispatches_mouse": false,
+            "dispatches_keyboard": false,
+            "dispatches_input": false,
+            "launches_process": false,
+            "os_wide_desktop_control": false,
+            "managed_roots_only": true,
+            "future_executor_required_before_input": true,
+        },
+    })
+}
+
+fn pc_use_status_proof_card_file(file: Option<&Value>) -> Option<Value> {
+    let file = file?;
+    Some(serde_json::json!({
+        "root_kind": file.get("root_kind").and_then(Value::as_str),
+        "path": file.get("path").and_then(Value::as_str),
+        "file_name": file.get("file_name").and_then(Value::as_str),
+        "modified_at_ms": file.get("modified_at_ms").and_then(Value::as_u64),
+        "bytes": file.get("bytes").and_then(Value::as_u64),
+        "read_ok": file.pointer("/read/ok").and_then(Value::as_bool),
+        "schema_ok": file.pointer("/read/schema_ok").and_then(Value::as_bool),
+    }))
+}
+
+fn pc_use_status_proof_card_next_action(status: &str, latest_outcome: &str) -> &'static str {
+    match status {
+        "has_ready_runner_receipt" => {
+            "Render this PC-use proof card in the right-side panel, then keep any future executor blocked until it consumes the receipt and writes its own proof."
+        }
+        "has_blocked_runner_receipt" if latest_outcome == "blocked_missing_queue" => {
+            "Queue a PC-use payload, request the runner gate again, and keep OS-wide desktop automation blocked."
+        }
+        "has_blocked_runner_receipt" => {
+            "Inspect the blocked runner receipt, regenerate the payload if needed, and do not hand it to a future executor."
+        }
+        "has_queue_without_receipt" => {
+            "Request the PC-use runner gate so the queued payload has an auditable receipt before any future executor work."
+        }
+        _ => {
+            "Compose and queue a Zed PC-use payload, then request the runner gate before any future executor work."
+        }
+    }
 }
 
 fn pc_use_status_next_actions(status: &str, latest_outcome: &str) -> Vec<&'static str> {

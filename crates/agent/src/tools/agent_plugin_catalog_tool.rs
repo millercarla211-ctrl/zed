@@ -113,6 +113,7 @@ const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA: &str =
     "zed.agent_plugins.runtime_observability_plugin_matrix.v1";
 const AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA: &str = "zed.agent_plugins.pc_use.proof_summary.v1";
+const WEBPREVIEW_PC_USE_PROOF_CARD_SCHEMA: &str = "zed.web_preview.pc_use_proof_card.v1";
 
 /// Lists the built-in DX/Zed agent plugin catalog for browser, Chrome, and PC-use workflows.
 ///
@@ -817,6 +818,12 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "proof_summary_schema": plugin
                 .get("proof_summary_schema")
                 .or_else(|| plugin.pointer("/runtime/pc_use_proof_summary_schema"))
+                .and_then(Value::as_str),
+            "proof_card_schema": plugin
+                .pointer("/runtime/webpreview_pc_use_proof_card_schema")
+                .and_then(Value::as_str),
+            "proof_card_field": plugin
+                .pointer("/runtime/webpreview_pc_use_proof_card_field")
                 .and_then(Value::as_str),
             "runtime_status_proof_summary_field": observability
                 .and_then(|profile| profile.pointer("/proof_handoffs/runtime_status_proof_summary_field"))
@@ -1811,6 +1818,8 @@ fn pc_use_plugin_manifest(
             "webpreview_pc_use_status_schema": "zed.web_preview.pc_use_status.v1",
             "pc_use_proof_summary_schema": AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA,
             "webpreview_pc_use_proof_summary_schema": "zed.web_preview.pc_use_proof_summary.v1",
+            "webpreview_pc_use_proof_card_schema": WEBPREVIEW_PC_USE_PROOF_CARD_SCHEMA,
+            "webpreview_pc_use_proof_card_field": "latest_proof_card",
             "payload_schema": AGENT_PC_USE_PAYLOAD_SCHEMA,
             "payload_queue_item_schema": AGENT_PC_USE_PAYLOAD_QUEUE_ITEM_SCHEMA,
             "payload_queue_inspection_schema": AGENT_PC_USE_PAYLOAD_QUEUE_INSPECTION_SCHEMA,
@@ -1839,6 +1848,7 @@ fn pc_use_plugin_manifest(
                 "runner_receipts_tool": AGENT_PC_USE_RUNNER_RECEIPT_INSPECT_TOOL_NAME,
                 "runtime_status_proof_summary_field": "plugins.pc_use.proof_summary",
                 "runtime_green_evidence_proof_summary_field": "runtime_green_blocker_summary.latest_evidence.pc_use_proof_summary",
+                "webpreview_status_proof_card_field": "pc_use_status.latest_proof_card",
                 "webpreview_status_copy": "copy_pc_use_status",
                 "webpreview_status_send": "send_pc_use_status_to_agent"
             },
