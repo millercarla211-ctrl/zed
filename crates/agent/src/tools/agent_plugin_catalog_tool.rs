@@ -1047,6 +1047,12 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "final_runtime_headroom_cleanup_result_gate_field": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_gate_field")
                 .and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_gate_copy_action": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_gate_copy_action")
+                .and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_gate_send_action": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_gate_send_action")
+                .and_then(Value::as_str),
             "final_runtime_headroom_inspection_checklist_copy_action": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_inspection_checklist_copy_action")
                 .and_then(Value::as_str),
@@ -1516,6 +1522,7 @@ fn browser_plugin_manifest() -> Value {
                 "final_runtime_headroom_recovery_plan": "copy_agent_browser_final_runtime_headroom_recovery_plan",
                 "final_runtime_headroom_recovery_card": "copy_agent_browser_final_runtime_headroom_recovery_card",
                 "final_runtime_headroom_inspection_checklist": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
+                "final_runtime_headroom_cleanup_result_gate": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
                 "final_runtime_headroom_readiness_gate": "copy_agent_browser_final_runtime_headroom_readiness_gate",
                 "final_runtime_headroom_reclaim_candidates": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
                 "final_runtime_blocker_board": "copy_agent_browser_final_runtime_blocker_board",
@@ -1853,6 +1860,9 @@ fn browser_plugin_manifest() -> Value {
             "headroom_cleanup_result_template_field": "headroom_recovery_plan.cleanup_result_template",
             "headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
             "headroom_cleanup_result_gate_field": "headroom_recovery_plan.cleanup_result_gate",
+            "headroom_cleanup_result_gate_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
+            "headroom_cleanup_result_gate_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_gate_to_agent",
+            "headroom_cleanup_result_gate_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_gate",
             "headroom_inspection_checklist_copy_action": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
             "headroom_inspection_checklist_send_action": "send_agent_browser_final_runtime_headroom_inspection_checklist_to_agent",
             "headroom_inspection_checklist_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_inspection_checklist",
