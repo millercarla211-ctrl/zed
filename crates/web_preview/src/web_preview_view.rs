@@ -2248,8 +2248,8 @@ impl WebPreviewView {
             "final_runtime_headroom_cleanup_result_import_receipt_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
             "final_runtime_headroom_cleanup_result_import_receipt_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_import_receipt_to_agent",
             "final_runtime_headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
-            "final_runtime_headroom_cleanup_result_gate_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_gate/status").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate/status")).and_then(Value::as_str),
-            "final_runtime_headroom_cleanup_result_gate_ready": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_gate/ready_for_capacity_recheck").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate/ready_for_capacity_recheck")).and_then(Value::as_bool),
+            "final_runtime_headroom_cleanup_result_gate_status": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_gate/status").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_cleanup_result_gate/status")).or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate/status")).and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_gate_ready": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_cleanup_result_gate/ready_for_capacity_recheck").or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_cleanup_result_gate/ready_for_capacity_recheck")).or_else(|| packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/headroom_recovery_plan/cleanup_result_gate/ready_for_capacity_recheck")).and_then(Value::as_bool),
             "final_runtime_headroom_cleanup_result_gate_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
             "final_runtime_headroom_cleanup_result_gate_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_gate_to_agent",
             "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
@@ -2626,6 +2626,23 @@ impl WebPreviewView {
     }
 
     fn agent_browser_final_runtime_proof_capacity_summary(capacity: &Value) -> Value {
+        let headroom_cleanup_result_gate_schema = capacity
+            .pointer("/headroom_cleanup_result_gate/schema")
+            .or_else(|| capacity.pointer("/headroom_recovery_plan/cleanup_result_gate/schema"))
+            .and_then(Value::as_str);
+        let headroom_cleanup_result_gate_status = capacity
+            .pointer("/headroom_cleanup_result_gate/status")
+            .or_else(|| capacity.pointer("/headroom_recovery_plan/cleanup_result_gate/status"))
+            .and_then(Value::as_str);
+        let headroom_cleanup_result_gate_ready = capacity
+            .pointer("/headroom_cleanup_result_gate/ready_for_capacity_recheck")
+            .or_else(|| {
+                capacity.pointer(
+                    "/headroom_recovery_plan/cleanup_result_gate/ready_for_capacity_recheck",
+                )
+            })
+            .and_then(Value::as_bool);
+
         serde_json::json!({
             "schema": capacity.pointer("/schema").and_then(Value::as_str),
             "status": capacity.pointer("/status").and_then(Value::as_str),
@@ -2652,9 +2669,12 @@ impl WebPreviewView {
             "headroom_size_inspection_status": capacity.pointer("/headroom_recovery_plan/size_inspection/status").and_then(Value::as_str),
             "headroom_cleanup_result_template_schema": capacity.pointer("/headroom_recovery_plan/cleanup_result_template/schema").and_then(Value::as_str),
             "headroom_cleanup_result_template_status": capacity.pointer("/headroom_recovery_plan/cleanup_result_template/status").and_then(Value::as_str),
-            "headroom_cleanup_result_gate_schema": capacity.pointer("/headroom_recovery_plan/cleanup_result_gate/schema").and_then(Value::as_str),
-            "headroom_cleanup_result_gate_status": capacity.pointer("/headroom_recovery_plan/cleanup_result_gate/status").and_then(Value::as_str),
-            "headroom_cleanup_result_gate_ready": capacity.pointer("/headroom_recovery_plan/cleanup_result_gate/ready_for_capacity_recheck").and_then(Value::as_bool),
+            "headroom_cleanup_result_gate_schema": headroom_cleanup_result_gate_schema,
+            "headroom_cleanup_result_gate_status": headroom_cleanup_result_gate_status,
+            "headroom_cleanup_result_gate_ready": headroom_cleanup_result_gate_ready,
+            "headroom_cleanup_result_gate_source": capacity.pointer("/headroom_cleanup_result_gate/source").and_then(Value::as_str),
+            "headroom_cleanup_result_durable_status": capacity.pointer("/headroom_cleanup_result_durable_evidence/status").and_then(Value::as_str),
+            "headroom_cleanup_result_durable_ready": capacity.pointer("/headroom_cleanup_result_durable_evidence/ready_for_capacity_recheck").and_then(Value::as_bool),
             "headroom_reclaim_candidates_schema": capacity.pointer("/headroom_reclaim_candidates/schema").and_then(Value::as_str),
             "headroom_reclaim_candidates_status": capacity.pointer("/headroom_reclaim_candidates/status").and_then(Value::as_str),
             "headroom_reclaim_candidate_count": capacity.pointer("/headroom_reclaim_candidates/candidate_reclaim_zones").and_then(Value::as_array).map(Vec::len),
@@ -3957,13 +3977,6 @@ impl WebPreviewView {
         } else {
             "target_headroom_unknown"
         };
-        let next_action = if ready_for_just_run {
-            "Run the final Windows just run proof only after panel live-validation and manual result templates are ready."
-        } else if observed_free_bytes.is_some() {
-            "Free rebuildable target/cache space on the configured target drive until it has at least 18 GiB free, then rerun the capacity preflight before just run."
-        } else {
-            "Open a Windows WebPreview workspace with a resolvable target drive, then rerun the capacity preflight before just run."
-        };
         let target_drive_policy = Self::agent_browser_final_runtime_target_drive_policy(
             &absolute_target_dir,
             target_root.as_deref(),
@@ -3975,6 +3988,25 @@ impl WebPreviewView {
             observed_free_bytes,
             missing_free_bytes,
         );
+        let headroom_cleanup_result_gate = self
+            .agent_browser_final_runtime_headroom_cleanup_result_gate_from_current_result_or_plan(
+                &headroom_recovery_plan,
+            );
+        let cleanup_result_ready_for_capacity_recheck = headroom_cleanup_result_gate
+            .pointer("/ready_for_capacity_recheck")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let headroom_cleanup_result_durable_evidence =
+            self.agent_browser_final_runtime_headroom_cleanup_result_durable_evidence();
+        let next_action = if ready_for_just_run {
+            "Run the final Windows just run proof only after panel live-validation and manual result templates are ready."
+        } else if cleanup_result_ready_for_capacity_recheck {
+            "Capacity preflight has current cleanup-result evidence ready; verify the target drive now reports at least 18 GiB free, then copy capacity again before just run."
+        } else if observed_free_bytes.is_some() {
+            "Free rebuildable target/cache space on the configured target drive until it has at least 18 GiB free, then rerun the capacity preflight before just run."
+        } else {
+            "Open a Windows WebPreview workspace with a resolvable target drive, then rerun the capacity preflight before just run."
+        };
 
         serde_json::json!({
             "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
@@ -4001,7 +4033,9 @@ impl WebPreviewView {
                 "guarded_reason": "Avoid starting the large Zed build/run proof when the configured target drive cannot satisfy the recipe headroom check.",
                 "target_move_allowed_by_default": false
             },
-            "headroom_recovery_plan": headroom_recovery_plan,
+            "headroom_recovery_plan": headroom_recovery_plan.clone(),
+            "headroom_cleanup_result_gate": headroom_cleanup_result_gate,
+            "headroom_cleanup_result_durable_evidence": headroom_cleanup_result_durable_evidence,
             "headroom_recovery_card": Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(
                 &headroom_recovery_plan
             ),
@@ -8835,6 +8869,16 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "final_runtime_headroom_cleanup_result_gate_field": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_gate_field")
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_cleanup_result_gate_current_capacity_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_cleanup_result_gate_current_capacity_field",
+                    )
+                    .and_then(Value::as_str),
+                "final_runtime_headroom_cleanup_result_durable_evidence_field": plugin
+                    .pointer(
+                        "/final_runtime_proof_capacity/headroom_cleanup_result_durable_evidence_field",
+                    )
                     .and_then(Value::as_str),
                 "final_runtime_headroom_cleanup_result_gate_copy_action": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_gate_copy_action")
@@ -26113,6 +26157,8 @@ impl WebPreviewView {
                             "headroom_cleanup_result_import_receipt_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
                             "headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
                             "headroom_cleanup_result_gate_field": "headroom_recovery_plan.cleanup_result_gate",
+                            "headroom_cleanup_result_gate_current_capacity_field": "headroom_cleanup_result_gate",
+                            "headroom_cleanup_result_durable_evidence_field": "headroom_cleanup_result_durable_evidence",
                             "headroom_cleanup_result_gate_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
                             "headroom_cleanup_result_gate_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_gate_to_agent",
                             "headroom_cleanup_result_gate_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_gate",

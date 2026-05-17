@@ -1,3 +1,16 @@
+[2026-05-18] - Final Runtime Capacity Cleanup Evidence Alignment
+
+ADDED:
+- `crates/web_preview/src/web_preview_view.rs` final runtime capacity packets now include the current/durable cleanup-result gate and durable cleanup-result evidence beside the generated recovery plan.
+- Agent and WebPreview plugin catalog summaries now advertise the current-capacity cleanup-result gate field and durable cleanup-result evidence field.
+
+CHANGED:
+- Final runtime capacity summaries now prefer the current cleanup-result gate before falling back to the generated recovery-plan gate.
+- `todo.txt` records the capacity cleanup-evidence slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only capacity metadata. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Panel Checklist Cleanup Catalog Alignment
 
 ADDED:

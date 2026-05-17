@@ -1105,6 +1105,16 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "final_runtime_headroom_cleanup_result_gate_field": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_gate_field")
                 .and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_gate_current_capacity_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_cleanup_result_gate_current_capacity_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_cleanup_result_durable_evidence_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_cleanup_result_durable_evidence_field",
+                )
+                .and_then(Value::as_str),
             "final_runtime_headroom_cleanup_result_gate_copy_action": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_cleanup_result_gate_copy_action")
                 .and_then(Value::as_str),
@@ -1943,6 +1953,8 @@ fn browser_plugin_manifest() -> Value {
             "headroom_cleanup_result_import_receipt_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_import_receipt",
             "headroom_cleanup_result_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
             "headroom_cleanup_result_gate_field": "headroom_recovery_plan.cleanup_result_gate",
+            "headroom_cleanup_result_gate_current_capacity_field": "headroom_cleanup_result_gate",
+            "headroom_cleanup_result_durable_evidence_field": "headroom_cleanup_result_durable_evidence",
             "headroom_cleanup_result_gate_copy_action": "copy_agent_browser_final_runtime_headroom_cleanup_result_gate",
             "headroom_cleanup_result_gate_send_action": "send_agent_browser_final_runtime_headroom_cleanup_result_gate_to_agent",
             "headroom_cleanup_result_gate_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_cleanup_result_gate",
