@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Card Display
+
+ADDED:
+- Agent Browser panel deck cards now include `zed.web_preview.agent_browser_panel_card_display.v1` display payloads with title, subtitle, tone, badge, primary detail, detail rows, action controls, source metadata, and read-only safety flags.
+- Agent and WebPreview plugin catalogs now advertise the panel card display schema through the existing panel-card deck handoff metadata.
+
+CHANGED:
+- Agent Browser panel deck cards can now be rendered by right-side panels from a stable `display` object instead of requiring panels to infer layout from nested screenshot, inspect, DevTools, managed Chrome, or PC-use proof payloads.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 39/100 and the next remaining proof targets.
+
+NOTES:
+- This is a rendering metadata slice only. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Card Follow Ups
 
 ADDED:

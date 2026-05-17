@@ -108,6 +108,8 @@ const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
     "zed.web_preview.agent_browser_function_surfaces.v1";
 const AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_card_deck.v1";
+const AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_card_display.v1";
 const INSPECTED_ELEMENT_SCHEMA: &str = "zed.web_preview.inspected_element.v1";
 const INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA: &str =
     "zed.web_preview.inspected_element_evidence_card.v1";
@@ -4513,6 +4515,9 @@ impl WebPreviewView {
                 "panel_card_deck_handoff_actions": plugin
                     .pointer("/panel_card_deck/card_handoff_actions")
                     .cloned(),
+                "panel_card_deck_display_schema": plugin
+                    .pointer("/panel_card_deck/card_display_schema")
+                    .and_then(Value::as_str),
                 "bootstrap_schema": plugin
                     .get("bootstrap_readiness_schema")
                     .and_then(Value::as_str),
@@ -5132,6 +5137,19 @@ impl WebPreviewView {
             .is_some_and(Self::agent_browser_panel_card_is_ready);
         let card_present = card.is_some();
         let handoff = Self::agent_browser_panel_card_handoff(id, source_field);
+        let display = Self::agent_browser_panel_card_display(
+            id,
+            lane,
+            label,
+            &title,
+            &state,
+            &tone,
+            ready,
+            source_field,
+            schema.as_deref(),
+            card.as_ref(),
+            &handoff,
+        );
 
         serde_json::json!({
             "id": id,
@@ -5148,8 +5166,338 @@ impl WebPreviewView {
                 "card_present": card_present,
             },
             "handoff": handoff,
+            "display": display,
             "card": card,
         })
+    }
+
+    fn agent_browser_panel_card_display(
+        id: &str,
+        lane: &str,
+        label: &str,
+        title: &str,
+        state: &str,
+        tone: &str,
+        ready: bool,
+        source_field: &str,
+        source_schema: Option<&str>,
+        card: Option<&Value>,
+        handoff: &Value,
+    ) -> Value {
+        let primary_detail = Self::agent_browser_panel_card_primary_detail(id, card)
+            .unwrap_or_else(|| {
+                if ready {
+                    "Proof is ready for panel review".to_string()
+                } else {
+                    "Waiting for fresh proof".to_string()
+                }
+            });
+        let subtitle =
+            Self::agent_browser_panel_card_subtitle(id, card, state).unwrap_or_else(|| {
+                if ready {
+                    "Ready evidence is available".to_string()
+                } else {
+                    "Run or refresh the card action to collect evidence".to_string()
+                }
+            });
+        let detail_rows =
+            Self::agent_browser_panel_card_detail_rows(id, card, source_field, source_schema);
+        let primary_action = handoff
+            .get("primary_action")
+            .and_then(Value::as_str)
+            .unwrap_or("copy_agent_browser_panel_card_deck");
+        let primary_label = handoff
+            .get("primary_label")
+            .and_then(Value::as_str)
+            .unwrap_or("Copy Panel Card Deck");
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA,
+            "panel_variant": "agent_browser_evidence_card",
+            "density": "compact",
+            "lane": lane,
+            "label": label,
+            "title": title,
+            "subtitle": subtitle,
+            "tone": tone,
+            "primary_detail": primary_detail,
+            "badge": {
+                "label": if ready { "Ready" } else { "Pending" },
+                "state": state,
+                "tone": tone,
+            },
+            "detail_rows": detail_rows,
+            "actions": {
+                "primary": {
+                    "label": primary_label,
+                    "action": primary_action,
+                    "enabled": true,
+                    "requires_interactive_unlock": handoff
+                        .pointer("/safety/requires_interactive_unlock")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
+                },
+                "secondary": handoff.get("secondary_action").and_then(Value::as_str).map(|action| {
+                    serde_json::json!({
+                        "label": "Send Details",
+                        "action": action,
+                        "enabled": true,
+                    })
+                }),
+                "details": handoff.get("details_action").and_then(Value::as_str),
+                "refresh": handoff.get("refresh_action").and_then(Value::as_str),
+            },
+            "source": {
+                "field": source_field,
+                "schema": source_schema,
+                "card_id": id,
+            },
+            "read_only": true,
+            "dispatches_input": false,
+        })
+    }
+
+    fn agent_browser_panel_card_subtitle(
+        id: &str,
+        card: Option<&Value>,
+        state: &str,
+    ) -> Option<String> {
+        if let Some(subtitle) =
+            Self::agent_browser_panel_card_first_string(card, &["/display/subtitle", "/subtitle"])
+        {
+            return Some(subtitle);
+        }
+
+        match id {
+            "browser.screenshot.capture" => Some(
+                match state {
+                    "captured" => "Latest WebPreview screenshot is available",
+                    _ => "Capture the visible WebPreview to populate this card",
+                }
+                .to_string(),
+            ),
+            "browser.screenshot.annotate" => Some(
+                match state {
+                    "captured" => "Latest annotated screenshot is available",
+                    _ => "Annotate a screenshot to populate this card",
+                }
+                .to_string(),
+            ),
+            "browser.element.inspect" => Some(
+                match state {
+                    "captured" => "Element inspection evidence is available",
+                    _ => "Inspect an element to populate selector and style evidence",
+                }
+                .to_string(),
+            ),
+            "browser.devtools.open" => Some(
+                match state {
+                    "opened" => "Native DevTools was opened for this WebPreview",
+                    "blocked" => "DevTools opening was blocked or unavailable",
+                    _ => "Open DevTools to record native debugging state",
+                }
+                .to_string(),
+            ),
+            "browser.viewport.responsive" => Some(
+                match state {
+                    "applied" | "captured" => "Responsive viewport proof is available",
+                    _ => "Switch or refresh a responsive viewport to populate this card",
+                }
+                .to_string(),
+            ),
+            "chrome.managed.latest_action" => Some(
+                match state {
+                    "completed_receipt" => "Managed Chrome receipt proof is available",
+                    "request_waiting_for_receipt" => {
+                        "Managed Chrome request is waiting for a receipt"
+                    }
+                    _ => "Queue and inspect a managed Chrome action to populate this card",
+                }
+                .to_string(),
+            ),
+            "pc_use.latest_proof" => Some(
+                match state {
+                    "runner_receipt_ready" => "PC-use runner receipt proof is available",
+                    "runner_receipt_blocked" => "PC-use runner receipt needs review",
+                    _ => "Prepare a PC-use payload and runner receipt to populate this card",
+                }
+                .to_string(),
+            ),
+            _ => None,
+        }
+    }
+
+    fn agent_browser_panel_card_primary_detail(id: &str, card: Option<&Value>) -> Option<String> {
+        if let Some(detail) = Self::agent_browser_panel_card_first_string(
+            card,
+            &[
+                "/display/primary_detail",
+                "/primary_detail",
+                "/next_action",
+                "/path",
+                "/selector",
+            ],
+        ) {
+            return Some(detail);
+        }
+
+        match id {
+            "browser.screenshot.capture" | "browser.screenshot.annotate" => {
+                Self::agent_browser_panel_card_first_string(
+                    card,
+                    &["/capture_kind", "/annotation_count", "/file_size_bytes"],
+                )
+            }
+            "browser.element.inspect" => Self::agent_browser_panel_card_first_string(
+                card,
+                &["/selector", "/tag", "/text_preview"],
+            ),
+            "browser.devtools.open" => Self::agent_browser_panel_card_first_string(
+                card,
+                &["/blocked_reason", "/backend", "/opened"],
+            ),
+            "browser.viewport.responsive" => Self::agent_browser_panel_card_first_string(
+                card,
+                &["/target/mode", "/applied/mode", "/viewport/mode"],
+            ),
+            "chrome.managed.latest_action" => Self::agent_browser_panel_card_first_string(
+                card,
+                &["/action", "/outcome", "/primary_proof"],
+            ),
+            "pc_use.latest_proof" => Self::agent_browser_panel_card_first_string(
+                card,
+                &["/action", "/surface", "/latest_outcome", "/proof_status"],
+            ),
+            _ => None,
+        }
+    }
+
+    fn agent_browser_panel_card_detail_rows(
+        id: &str,
+        card: Option<&Value>,
+        source_field: &str,
+        source_schema: Option<&str>,
+    ) -> Vec<Value> {
+        let mut rows = Vec::new();
+
+        if let Some(existing_rows) = card
+            .and_then(|card| card.pointer("/display/detail_rows"))
+            .and_then(Value::as_array)
+        {
+            rows.extend(existing_rows.iter().take(3).cloned());
+        }
+
+        for (label, paths) in Self::agent_browser_panel_card_detail_candidates(id) {
+            Self::push_agent_browser_panel_card_detail_row(
+                &mut rows,
+                label,
+                Self::agent_browser_panel_card_first_string(card, paths),
+            );
+        }
+
+        Self::push_agent_browser_panel_card_detail_row(
+            &mut rows,
+            "Source",
+            Some(source_field.to_string()),
+        );
+        Self::push_agent_browser_panel_card_detail_row(
+            &mut rows,
+            "Schema",
+            source_schema.map(str::to_string),
+        );
+
+        rows.truncate(6);
+        rows
+    }
+
+    fn agent_browser_panel_card_detail_candidates(
+        id: &str,
+    ) -> Vec<(&'static str, &'static [&'static str])> {
+        match id {
+            "browser.screenshot.capture" => vec![
+                ("Kind", &["/capture_kind"]),
+                ("Path", &["/path"]),
+                ("Size", &["/file_size_bytes"]),
+                ("Backend", &["/backend"]),
+            ],
+            "browser.screenshot.annotate" => vec![
+                (
+                    "Annotations",
+                    &["/annotation_count", "/annotation_counts/annotations"],
+                ),
+                ("URL", &["/url"]),
+                ("Title", &["/title"]),
+            ],
+            "browser.element.inspect" => vec![
+                ("Selector", &["/selector"]),
+                ("Tag", &["/tag"]),
+                ("Text", &["/text_preview"]),
+                ("Backend", &["/backend"]),
+            ],
+            "browser.devtools.open" => vec![
+                ("Opened", &["/opened"]),
+                ("Blocked", &["/blocked_reason"]),
+                ("Backend", &["/backend"]),
+                ("Platform", &["/platform_supported"]),
+            ],
+            "browser.viewport.responsive" => vec![
+                ("Mode", &["/target/mode", "/applied/mode", "/viewport/mode"]),
+                ("Width", &["/target/width", "/applied/width"]),
+                ("Height", &["/target/height", "/applied/height"]),
+            ],
+            "chrome.managed.latest_action" => vec![
+                ("Action", &["/action"]),
+                ("Outcome", &["/outcome"]),
+                ("Proof", &["/primary_proof"]),
+                ("URL", &["/url"]),
+            ],
+            "pc_use.latest_proof" => vec![
+                ("Action", &["/action"]),
+                ("Surface", &["/surface"]),
+                ("Outcome", &["/latest_outcome"]),
+                ("Proof", &["/proof_status"]),
+            ],
+            _ => vec![("State", &["/state", "/status"])],
+        }
+    }
+
+    fn push_agent_browser_panel_card_detail_row(
+        rows: &mut Vec<Value>,
+        label: &str,
+        value: Option<String>,
+    ) {
+        let Some(value) = value else {
+            return;
+        };
+        if value.trim().is_empty() {
+            return;
+        }
+        rows.push(serde_json::json!({
+            "label": label,
+            "value": value,
+        }));
+    }
+
+    fn agent_browser_panel_card_first_string(
+        card: Option<&Value>,
+        paths: &[&str],
+    ) -> Option<String> {
+        let card = card?;
+        paths.iter().find_map(|path| {
+            card.pointer(path)
+                .and_then(Self::agent_browser_panel_card_value_string)
+        })
+    }
+
+    fn agent_browser_panel_card_value_string(value: &Value) -> Option<String> {
+        match value {
+            Value::Null => None,
+            Value::String(value) if value.trim().is_empty() => None,
+            Value::String(value) => Some(value.clone()),
+            Value::Bool(value) => Some(value.to_string()),
+            Value::Number(value) => Some(value.to_string()),
+            Value::Array(_) | Value::Object(_) => Some(value.to_string()),
+        }
     }
 
     fn agent_browser_panel_card_handoff(id: &str, source_field: &str) -> Value {
@@ -16534,6 +16882,7 @@ impl WebPreviewView {
                         },
                         "panel_card_deck": {
                             "schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
+                            "card_display_schema": AGENT_BROWSER_PANEL_CARD_DISPLAY_SCHEMA,
                             "session_field": "agent_browser_panel_card_deck",
                             "status_packet_field": "packet.latest.agent_browser_panel_card_deck",
                             "copy_action": "copy_agent_browser_panel_card_deck",
