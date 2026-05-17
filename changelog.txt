@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Final Runtime Capacity
+
+ADDED:
+- WebPreview now exposes Copy/Send Final Runtime Capacity actions that produce a read-only `zed.web_preview.agent_browser_final_runtime_proof_capacity.v1` packet with target directory, target root, required free space, observed free space, missing space, and next action.
+- Agent Browser status packets, executor validation progress, final validation observability, final validation bundles, action manifests, More-menu actions, and Agent/WebPreview plugin catalogs now advertise the final runtime capacity gate.
+
+CHANGED:
+- Final runtime proof readiness now requires the target drive to report at least 18 GiB free before `just run` can be treated as ready.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 84/100 and the remaining live UI/runtime validation targets.
+
+NOTES:
+- This slice is a read-only preflight. It does not run `just`, launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Live Exercise Plan
 
 ADDED:

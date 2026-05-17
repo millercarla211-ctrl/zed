@@ -58,6 +58,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result_import_receipt.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_proof_capacity.v1";
 const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_proof_audit.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
@@ -950,6 +952,15 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "panel_live_validation_exercise_plan_send_action": plugin
                 .pointer("/panel_live_validation/exercise_plan_send_action")
                 .and_then(Value::as_str),
+            "final_runtime_proof_capacity_schema": plugin
+                .pointer("/final_runtime_proof_capacity/schema")
+                .and_then(Value::as_str),
+            "final_runtime_proof_capacity_copy_action": plugin
+                .pointer("/final_runtime_proof_capacity/copy_action")
+                .and_then(Value::as_str),
+            "final_runtime_proof_capacity_send_action": plugin
+                .pointer("/final_runtime_proof_capacity/send_action")
+                .and_then(Value::as_str),
             "panel_card_deck_interaction_validation_schema": plugin
                 .pointer("/panel_card_deck/interaction_validation_schema")
                 .and_then(Value::as_str),
@@ -1353,6 +1364,7 @@ fn browser_plugin_manifest() -> Value {
                 "panel_live_validation_result_template": "copy_agent_browser_panel_live_validation_result_template",
                 "panel_live_validation_result_gate": "copy_agent_browser_panel_live_validation_result_gate",
                 "panel_live_validation_exercise_plan": "copy_agent_browser_panel_live_validation_exercise_plan",
+                "final_runtime_proof_capacity": "copy_agent_browser_final_runtime_proof_capacity",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -1514,6 +1526,7 @@ fn browser_plugin_manifest() -> Value {
             "panel_live_validation_result_template_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
             "panel_live_validation_result_gate_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
             "panel_live_validation_exercise_plan_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
+            "final_runtime_proof_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_green_final_proof_guide_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
@@ -1581,6 +1594,7 @@ fn browser_plugin_manifest() -> Value {
                 "every required manual_evidence_template.checks entry has status == pass",
                 "manual_evidence_template.overall_blocker == null",
                 "panel_live_validation_result_gate.ready_for_final_runtime == true",
+                "agent_browser_final_runtime_proof_capacity.ready_for_just_run == true",
                 "executor_validation_progress.status == manual_windows_runtime_validation_ready"
             ],
             "copy_action": "copy_agent_browser_final_validation_bundle",
@@ -1629,6 +1643,17 @@ fn browser_plugin_manifest() -> Value {
             "read_only": true,
             "source": "WebPreview More menu",
             "purpose": "Copy or send the compact final proof-state and recovery-action summary without requiring the larger session or action manifest."
+        },
+        "final_runtime_proof_capacity": {
+            "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+            "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
+            "send_action": "send_agent_browser_final_runtime_proof_capacity_to_agent",
+            "status_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity",
+            "minimum_target_drive_free_gib": 18.0,
+            "manual_command": "just run",
+            "read_only": true,
+            "source": "WebPreview More menu",
+            "purpose": "Check target-drive headroom before the final just run proof."
         },
         "final_proof_audit_handoff": {
             "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
@@ -1764,6 +1789,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.validation.final_result", "available", "Import, copy, or send the filled final Windows validation result after manual runtime proof."),
             capability("browser.validation.final_result_import_receipt", "available", "Copy or send the final result import receipt with durable proof paths and the next runtime-status recheck."),
             capability("browser.validation.final_proof_state", "available", "Copy or send compact final proof-state observability and recovery actions without generating larger proof packets."),
+            capability("browser.validation.final_runtime_capacity", "available", "Copy or send target-drive headroom before final just run proof."),
             capability("browser.validation.final_proof_audit", "available", "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."),
             capability("browser.action.click", "available_when_unlocked", "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."),
             capability("browser.action.type", "available_when_unlocked_payload_required", "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."),

@@ -14,6 +14,8 @@ use menu::Confirm;
 use paths::data_dir;
 use project::{Project, ProjectEntryId, ProjectPath};
 use serde_json::Value;
+#[cfg(target_os = "windows")]
+use std::os::windows::ffi::OsStrExt;
 use std::{
     cell::{Cell, RefCell},
     env, fs, io,
@@ -56,7 +58,10 @@ use windows::Win32::{
         CreateCompatibleBitmap, CreateCompatibleDC, DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC,
         GetDIBits, HBITMAP, HGDIOBJ, ReleaseDC, SRCCOPY, SelectObject,
     },
+    Storage::FileSystem::GetDiskFreeSpaceExW,
 };
+#[cfg(target_os = "windows")]
+use windows::core::PCWSTR;
 const DEFAULT_WEB_PREVIEW_URL: &str = "https://www.google.com/";
 const GOOGLE_SEARCH_URL: &str = "https://www.google.com/search";
 const BOOKMARKS_FILE_NAME: &str = "bookmarks.json";
@@ -97,6 +102,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_result_import_receipt.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_validation_observability.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_proof_capacity.v1";
 const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_proof_audit.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
@@ -201,6 +208,7 @@ const PREPARE_AGENT_PLUGIN_RUNTIME_TOOL: &str = "prepare_agent_plugin_runtime";
 const PREPARE_AGENT_PLUGIN_MANAGED_ASSETS_TOOL: &str = "prepare_agent_plugin_managed_assets";
 const PREPARE_MANAGED_CHROME_PLAYWRIGHT_ADAPTER_TOOL: &str =
     "prepare_managed_chrome_playwright_adapter";
+const AGENT_BROWSER_FINAL_RUNTIME_MIN_FREE_BYTES: u64 = 18 * 1024 * 1024 * 1024;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
@@ -424,6 +432,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_final_validation_result_to_agent",
     "copy_agent_browser_final_validation_observability",
     "send_agent_browser_final_validation_observability_to_agent",
+    "copy_agent_browser_final_runtime_proof_capacity",
+    "send_agent_browser_final_runtime_proof_capacity_to_agent",
     "copy_agent_browser_final_proof_audit",
     "send_agent_browser_final_proof_audit_to_agent",
     "copy_agent_browser_function_surfaces",
@@ -828,6 +838,7 @@ pub struct WebPreviewView {
     latest_agent_browser_final_validation_result_template: Option<Value>,
     latest_agent_browser_final_validation_result: Option<Value>,
     latest_agent_browser_final_validation_result_import_receipt: Option<Value>,
+    latest_agent_browser_final_runtime_proof_capacity: Option<Value>,
     latest_agent_browser_panel_control_result: Option<Value>,
     latest_agent_browser_panel_control_result_import_receipt: Option<Value>,
     latest_agent_browser_panel_live_validation: Option<Value>,
@@ -1058,6 +1069,7 @@ impl WebPreviewView {
             latest_agent_browser_final_validation_result_template: None,
             latest_agent_browser_final_validation_result: None,
             latest_agent_browser_final_validation_result_import_receipt: None,
+            latest_agent_browser_final_runtime_proof_capacity: None,
             latest_agent_browser_panel_control_result: None,
             latest_agent_browser_panel_control_result_import_receipt: None,
             latest_agent_browser_panel_live_validation: None,
@@ -1577,6 +1589,7 @@ impl WebPreviewView {
             "agent_browser_final_validation_result": self.latest_agent_browser_final_validation_result_summary(),
             "agent_browser_final_validation_result_import_receipt": self.latest_agent_browser_final_validation_result_import_receipt_summary(),
             "agent_browser_final_validation_observability": self.agent_browser_final_validation_observability(),
+            "agent_browser_final_runtime_proof_capacity": self.latest_agent_browser_final_runtime_proof_capacity_summary(),
             "agent_browser_final_proof_audit": self.latest_agent_browser_final_proof_audit_summary(),
             "agent_browser_function_surfaces": self.agent_browser_function_surfaces(),
             "agent_browser_panel_control_result": self.latest_agent_browser_panel_control_result_summary(),
@@ -1686,6 +1699,8 @@ impl WebPreviewView {
                 "send_agent_browser_final_validation_result_to_agent": self.latest_agent_browser_final_validation_result.is_some(),
                 "copy_agent_browser_final_validation_observability": true,
                 "send_agent_browser_final_validation_observability_to_agent": true,
+                "copy_agent_browser_final_runtime_proof_capacity": true,
+                "send_agent_browser_final_runtime_proof_capacity_to_agent": true,
                 "copy_agent_browser_final_proof_audit": true,
                 "send_agent_browser_final_proof_audit_to_agent": true,
                 "agent_browser_function_surfaces": true,
@@ -2052,6 +2067,10 @@ impl WebPreviewView {
             "panel_live_validation_exercise_plan_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
             "panel_live_validation_exercise_plan_status": packet.pointer("/packet/latest/agent_browser_panel_live_validation_exercise_plan/status").and_then(Value::as_str),
             "panel_live_validation_exercise_plan_suggested_control_count": packet.pointer("/packet/latest/agent_browser_panel_live_validation_exercise_plan/summary/suggested_control_count").and_then(Value::as_u64),
+            "final_runtime_proof_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+            "final_runtime_proof_capacity_status": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/status").and_then(Value::as_str),
+            "final_runtime_proof_capacity_ready": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/ready_for_just_run").and_then(Value::as_bool),
+            "final_runtime_proof_capacity_observed_free_gib": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/target/observed_free_gib").and_then(Value::as_f64),
             "panel_control_result_ledger_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/status").and_then(Value::as_str),
             "panel_control_result_ledger_result_count": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/result_count").and_then(Value::as_u64),
             "panel_control_result_ledger_latest_result_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/latest_result_status").and_then(Value::as_str),
@@ -2074,6 +2093,7 @@ impl WebPreviewView {
             "agent_browser_panel_live_validation_result_template": packet.pointer("/packet/latest/agent_browser_panel_live_validation_result_template").cloned(),
             "agent_browser_panel_live_validation_result_gate": packet.pointer("/packet/latest/agent_browser_panel_live_validation_result_gate").cloned(),
             "agent_browser_panel_live_validation_exercise_plan": packet.pointer("/packet/latest/agent_browser_panel_live_validation_exercise_plan").cloned(),
+            "agent_browser_final_runtime_proof_capacity": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity").cloned(),
             "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
             "runtime_green_ready_lane_fraction": packet.pointer("/packet/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
             "runtime_green_first_pending_lane": packet.pointer("/packet/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
@@ -2292,6 +2312,30 @@ impl WebPreviewView {
             "report_gate_blocker": receipt.pointer("/post_import/runtime_green_report_gate/blocker").and_then(Value::as_str),
             "next_action": receipt.pointer("/post_import/next_action").and_then(Value::as_str),
         }))
+    }
+
+    fn latest_agent_browser_final_runtime_proof_capacity_summary(&self) -> Option<Value> {
+        let capacity = self
+            .latest_agent_browser_final_runtime_proof_capacity
+            .as_ref()?;
+        Some(Self::agent_browser_final_runtime_proof_capacity_summary(
+            capacity,
+        ))
+    }
+
+    fn agent_browser_final_runtime_proof_capacity_summary(capacity: &Value) -> Value {
+        serde_json::json!({
+            "schema": capacity.pointer("/schema").and_then(Value::as_str),
+            "status": capacity.pointer("/status").and_then(Value::as_str),
+            "captured_at_ms": capacity.pointer("/captured_at_ms").and_then(Value::as_u64),
+            "ready_for_just_run": capacity.pointer("/ready_for_just_run").and_then(Value::as_bool),
+            "target_dir": capacity.pointer("/target/target_dir").and_then(Value::as_str),
+            "target_root": capacity.pointer("/target/target_root").and_then(Value::as_str),
+            "required_free_gib": capacity.pointer("/target/required_free_gib").and_then(Value::as_f64),
+            "observed_free_gib": capacity.pointer("/target/observed_free_gib").and_then(Value::as_f64),
+            "missing_free_gib": capacity.pointer("/target/missing_free_gib").and_then(Value::as_f64),
+            "next_action": capacity.pointer("/next_action").and_then(Value::as_str),
+        })
     }
 
     fn latest_agent_browser_panel_control_result_summary(&self) -> Option<Value> {
@@ -2772,6 +2816,198 @@ impl WebPreviewView {
         })
     }
 
+    fn gib_from_bytes(bytes: u64) -> f64 {
+        ((bytes as f64 / 1024.0 / 1024.0 / 1024.0) * 100.0).round() / 100.0
+    }
+
+    fn agent_browser_final_runtime_target_dir(&self) -> PathBuf {
+        if let Some(target_dir) = env::var_os("CARGO_TARGET_DIR") {
+            return PathBuf::from(target_dir);
+        }
+
+        self.workspace_context
+            .root_path
+            .as_ref()
+            .map(|root| root.join("target"))
+            .unwrap_or_else(|| PathBuf::from("target"))
+    }
+
+    fn absolute_runtime_target_dir(&self, target_dir: &Path) -> PathBuf {
+        if target_dir.is_absolute() {
+            return target_dir.to_path_buf();
+        }
+
+        self.workspace_context
+            .root_path
+            .as_ref()
+            .map(|root| root.join(target_dir))
+            .unwrap_or_else(|| target_dir.to_path_buf())
+    }
+
+    #[cfg(target_os = "windows")]
+    fn runtime_target_root_for_path(&self, target_dir: &Path) -> Option<PathBuf> {
+        let absolute = self.absolute_runtime_target_dir(target_dir);
+        for component in absolute.components() {
+            let std::path::Component::Prefix(prefix) = component else {
+                continue;
+            };
+
+            return match prefix.kind() {
+                std::path::Prefix::Disk(drive) | std::path::Prefix::VerbatimDisk(drive) => {
+                    Some(PathBuf::from(format!("{}:\\", drive as char)))
+                }
+                std::path::Prefix::UNC(server, share)
+                | std::path::Prefix::VerbatimUNC(server, share) => Some(PathBuf::from(format!(
+                    "\\\\{}\\{}\\",
+                    server.to_string_lossy(),
+                    share.to_string_lossy()
+                ))),
+                _ => None,
+            };
+        }
+        None
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn runtime_target_root_for_path(&self, _target_dir: &Path) -> Option<PathBuf> {
+        None
+    }
+
+    #[cfg(target_os = "windows")]
+    fn final_runtime_target_space(root: &Path) -> Option<(u64, u64)> {
+        let mut free_to_caller = 0_u64;
+        let mut total_bytes = 0_u64;
+        let mut total_free_bytes = 0_u64;
+        let mut wide = root.as_os_str().encode_wide().collect::<Vec<u16>>();
+        wide.push(0);
+
+        unsafe {
+            GetDiskFreeSpaceExW(
+                PCWSTR::from_raw(wide.as_ptr()),
+                Some(&mut free_to_caller as *mut u64),
+                Some(&mut total_bytes as *mut u64),
+                Some(&mut total_free_bytes as *mut u64),
+            )
+            .ok()?;
+        }
+
+        Some((free_to_caller, total_bytes))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn final_runtime_target_space(_root: &Path) -> Option<(u64, u64)> {
+        None
+    }
+
+    fn agent_browser_final_runtime_proof_capacity(&self) -> Value {
+        let target_dir = self.agent_browser_final_runtime_target_dir();
+        let absolute_target_dir = self.absolute_runtime_target_dir(&target_dir);
+        let target_root = self.runtime_target_root_for_path(&target_dir);
+        let disk_space = target_root
+            .as_ref()
+            .and_then(|root| Self::final_runtime_target_space(root));
+        let observed_free_bytes = disk_space.map(|(free_bytes, _)| free_bytes);
+        let total_bytes = disk_space.map(|(_, total_bytes)| total_bytes);
+        let missing_free_bytes = observed_free_bytes.map(|free_bytes| {
+            AGENT_BROWSER_FINAL_RUNTIME_MIN_FREE_BYTES.saturating_sub(free_bytes)
+        });
+        let ready_for_just_run = observed_free_bytes
+            .map(|free_bytes| free_bytes >= AGENT_BROWSER_FINAL_RUNTIME_MIN_FREE_BYTES)
+            .unwrap_or(false);
+        let status = if ready_for_just_run {
+            "target_headroom_ready"
+        } else if observed_free_bytes.is_some() {
+            "target_headroom_blocked"
+        } else {
+            "target_headroom_unknown"
+        };
+        let next_action = if ready_for_just_run {
+            "Run the final Windows just run proof only after panel live-validation and manual result templates are ready."
+        } else if observed_free_bytes.is_some() {
+            "Free target-drive space or move CARGO_TARGET_DIR until the target drive has at least 18 GiB free, then rerun the capacity preflight before just run."
+        } else {
+            "Open a Windows WebPreview workspace with a resolvable target drive, then rerun the capacity preflight before just run."
+        };
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+            "status": status,
+            "captured_at_ms": Self::current_epoch_millis(),
+            "manual_command": "just run",
+            "ready_for_just_run": ready_for_just_run,
+            "target": {
+                "target_dir": path_string(&absolute_target_dir),
+                "target_root": target_root.as_ref().map(|root| path_string(root)),
+                "required_free_bytes": AGENT_BROWSER_FINAL_RUNTIME_MIN_FREE_BYTES,
+                "required_free_gib": Self::gib_from_bytes(AGENT_BROWSER_FINAL_RUNTIME_MIN_FREE_BYTES),
+                "observed_free_bytes": observed_free_bytes,
+                "observed_free_gib": observed_free_bytes.map(Self::gib_from_bytes),
+                "missing_free_bytes": missing_free_bytes,
+                "missing_free_gib": missing_free_bytes.map(Self::gib_from_bytes),
+                "total_bytes": total_bytes,
+                "total_gib": total_bytes.map(Self::gib_from_bytes),
+            },
+            "recipe_guard": {
+                "source": "just run dry-run recipe",
+                "minimum_target_drive_free_gib": 18.0,
+                "guarded_reason": "Avoid starting the large Zed build/run proof when the target drive cannot satisfy the recipe headroom check."
+            },
+            "operator_steps": [
+                "Read this preflight before copying the final validation bundle or running just run.",
+                "If target_headroom_blocked, free target/cache space or move CARGO_TARGET_DIR to a drive with at least 18 GiB free.",
+                "Run just --dry-run run to confirm the recipe still points at the expected target directory.",
+                "Run just run only after this packet reports ready_for_just_run=true and panel live-validation gate is ready."
+            ],
+            "next_action": next_action,
+            "safety": {
+                "read_only": true,
+                "dispatches_input": false,
+                "launches_browser": false,
+                "runs_just": false,
+                "runs_cargo": false,
+                "mutates_files": false
+            }
+        })
+    }
+
+    fn agent_browser_final_runtime_proof_capacity_json(capacity: &Value) -> String {
+        serde_json::to_string_pretty(capacity).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_final_runtime_proof_capacity_agent_blocks(
+        capacity: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let summary = Self::agent_browser_final_runtime_proof_capacity_summary(capacity);
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Agent Browser final runtime proof capacity:\n\nSummary:\n```json\n{}\n```\n\nCapacity:\n```json\n{}\n```",
+            serde_json::to_string_pretty(&summary).unwrap_or_else(|_| "{}".to_string()),
+            Self::agent_browser_final_runtime_proof_capacity_json(capacity)
+        )))]
+    }
+
+    fn copy_agent_browser_final_runtime_proof_capacity(&mut self, cx: &mut Context<Self>) {
+        let capacity = self.agent_browser_final_runtime_proof_capacity();
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_final_runtime_proof_capacity_json(&capacity),
+        ));
+        self.latest_agent_browser_final_runtime_proof_capacity = Some(capacity);
+        self.show_toast("Copied final runtime proof capacity", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_final_runtime_proof_capacity_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let capacity = self.agent_browser_final_runtime_proof_capacity();
+        let blocks = Self::agent_browser_final_runtime_proof_capacity_agent_blocks(&capacity);
+        self.latest_agent_browser_final_runtime_proof_capacity = Some(capacity);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent final runtime proof capacity to the agent panel", cx);
+        cx.notify();
+    }
+
     fn agent_browser_final_validation_observability(&self) -> Value {
         let bundle_summary = self.latest_agent_browser_final_validation_bundle_summary();
         let result_template_summary =
@@ -2779,6 +3015,11 @@ impl WebPreviewView {
         let result_summary = self.latest_agent_browser_final_validation_result_summary();
         let result_import_receipt_summary =
             self.latest_agent_browser_final_validation_result_import_receipt_summary();
+        let final_runtime_proof_capacity = self.agent_browser_final_runtime_proof_capacity();
+        let final_runtime_capacity_ready = final_runtime_proof_capacity
+            .pointer("/ready_for_just_run")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let panel_live_validation_result_gate =
             self.agent_browser_panel_live_validation_result_gate_snapshot();
         let panel_live_validation_result_gate_ready =
@@ -2812,11 +3053,16 @@ impl WebPreviewView {
         if !panel_live_validation_result_gate_ready {
             missing.push("panel_live_validation_result_gate");
         }
+        if !final_runtime_capacity_ready {
+            missing.push("final_runtime_proof_capacity");
+        }
 
         let status = if result_runtime_green_candidate {
             "manual_runtime_result_imported_runtime_green_candidate"
         } else if final_result_runtime_green_candidate && !panel_live_validation_result_gate_ready {
             "panel_live_validation_result_gate_blocking_runtime_green"
+        } else if !final_runtime_capacity_ready {
+            "final_runtime_proof_capacity_blocked"
         } else if result_summary.is_some() {
             "manual_runtime_result_imported_not_green"
         } else if bundle_summary.is_some() && result_template_summary.is_some() {
@@ -2835,11 +3081,16 @@ impl WebPreviewView {
                 "final_validation_result_template": result_template_summary,
                 "final_validation_result": result_summary,
                 "final_validation_result_import_receipt": result_import_receipt_summary,
+                "final_runtime_proof_capacity": Self::agent_browser_final_runtime_proof_capacity_summary(
+                    &final_runtime_proof_capacity
+                ),
                 "panel_live_validation_result_gate": Self::agent_browser_panel_live_validation_result_gate_summary(
                     &panel_live_validation_result_gate
                 ),
             },
             "durable_evidence": durable_evidence,
+            "final_runtime_proof_capacity": final_runtime_proof_capacity,
+            "final_runtime_capacity_ready": final_runtime_capacity_ready,
             "panel_live_validation_result_gate": panel_live_validation_result_gate,
             "panel_live_validation_result_gate_ready": panel_live_validation_result_gate_ready,
             "final_result_runtime_green_candidate": final_result_runtime_green_candidate,
@@ -2849,9 +3100,11 @@ impl WebPreviewView {
                 result_runtime_green_candidate,
                 final_result_runtime_green_candidate,
                 panel_live_validation_result_gate_ready,
+                final_runtime_capacity_ready,
             ),
             "required_final_state": [
                 "Copy or send the final validation bundle before the runtime pass.",
+                "Copy or send the final runtime proof capacity and confirm ready_for_just_run=true.",
                 "Copy or send the panel live-validation result gate and confirm it reports ready_for_final_runtime=true.",
                 "Copy or send the final validation result template before the runtime pass.",
                 "Run one final Windows just run pass when validation is intended.",
@@ -2869,8 +3122,18 @@ impl WebPreviewView {
         result_runtime_green_candidate: bool,
         final_result_runtime_green_candidate: bool,
         panel_live_validation_result_gate_ready: bool,
+        final_runtime_capacity_ready: bool,
     ) -> Value {
         let mut actions = Vec::new();
+        if !final_runtime_capacity_ready {
+            actions.push(serde_json::json!({
+                "target": "final_runtime_proof_capacity",
+                "action": "copy_agent_browser_final_runtime_proof_capacity",
+                "alternative_action": "send_agent_browser_final_runtime_proof_capacity_to_agent",
+                "reason": "target_drive_headroom_not_ready",
+                "dispatches_input": false
+            }));
+        }
         if !panel_live_validation_result_gate_ready {
             actions.push(serde_json::json!({
                 "target": "panel_live_validation_result_gate",
@@ -3645,6 +3908,11 @@ impl WebPreviewView {
             || self
                 .latest_durable_agent_browser_panel_control_result()
                 .is_some();
+        let final_runtime_proof_capacity = self.agent_browser_final_runtime_proof_capacity();
+        let final_runtime_capacity_ready = final_runtime_proof_capacity
+            .pointer("/ready_for_just_run")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let groups = vec![
             Self::agent_browser_validation_group(
                 "read_only_context",
@@ -3846,6 +4114,11 @@ impl WebPreviewView {
                 ],
             ),
             Self::agent_browser_validation_group(
+                "final_runtime_capacity",
+                "The final Windows runtime proof target drive has enough free space before just run starts.",
+                &[("target_drive_headroom", final_runtime_capacity_ready)],
+            ),
+            Self::agent_browser_validation_group(
                 "external_handoffs",
                 "Managed Chrome, PC-use, and plugin catalog handoff status is visible.",
                 &[
@@ -3899,6 +4172,7 @@ impl WebPreviewView {
             "total_group_count": groups.len(),
             "groups": groups,
             "panel_live_validation_result_gate": panel_live_validation_result_gate,
+            "final_runtime_proof_capacity": final_runtime_proof_capacity,
             "runtime_green_claim_gate": runtime_green_claim_gate,
             "final_runtime_command": "just run",
             "manual_regression_checks": [
@@ -3911,6 +4185,8 @@ impl WebPreviewView {
             ],
             "next_step": if all_groups_ready {
                 "Run one final Windows just run pass and capture manual regression notes before claiming runtime-green."
+            } else if !final_runtime_capacity_ready {
+                "Free target-drive space or move CARGO_TARGET_DIR, then copy the final runtime proof capacity again before just run."
             } else {
                 "Collect the missing evidence groups from the WebPreview More menu before the final Windows just run pass."
             },
@@ -4013,6 +4289,7 @@ impl WebPreviewView {
                 &runtime_green_final_report_packet,
                 &final_proof_audit,
             );
+        let final_runtime_proof_capacity = self.agent_browser_final_runtime_proof_capacity();
         let agent_plugin_catalog_current_summary = manifest
             .pointer("/handoffs/plugin_catalog/current_summary")
             .cloned();
@@ -4060,6 +4337,8 @@ impl WebPreviewView {
                 "runtime_green_final_report_may_report": runtime_green_final_report_packet.pointer("/may_report_runtime_green").and_then(Value::as_bool),
                 "runtime_green_report_readiness_card_status": runtime_green_report_readiness_card.pointer("/status").and_then(Value::as_str),
                 "runtime_green_report_readiness_card_next_action": runtime_green_report_readiness_card.pointer("/next_action").and_then(Value::as_str),
+                "final_runtime_proof_capacity_status": final_runtime_proof_capacity.pointer("/status").and_then(Value::as_str),
+                "final_runtime_proof_capacity_ready": final_runtime_proof_capacity.pointer("/ready_for_just_run").and_then(Value::as_bool),
             },
             "handoff_artifacts": {
                 "status_packet": {
@@ -4165,6 +4444,18 @@ impl WebPreviewView {
                     "send_action": "send_agent_browser_final_validation_result_import_receipt_to_agent",
                     "latest_summary": self.latest_agent_browser_final_validation_result_import_receipt_summary(),
                     "read_only": true
+                },
+                "final_runtime_proof_capacity": {
+                    "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                    "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
+                    "send_action": "send_agent_browser_final_runtime_proof_capacity_to_agent",
+                    "latest_summary": self.latest_agent_browser_final_runtime_proof_capacity_summary(),
+                    "current_summary": Self::agent_browser_final_runtime_proof_capacity_summary(
+                        &final_runtime_proof_capacity
+                    ),
+                    "current_capacity": final_runtime_proof_capacity.clone(),
+                    "read_only": true,
+                    "purpose": "Check the target-drive headroom required by just run before the final Windows runtime proof."
                 },
                 "final_proof_audit": {
                     "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
@@ -4305,6 +4596,7 @@ impl WebPreviewView {
                 }
             },
             "manual_windows_proof_order": [
+                "Copy or send the final runtime proof capacity and confirm ready_for_just_run=true.",
                 "Start the app once with just run on the current dev branch.",
                 "Verify fast code-editor typing keeps text and caret responsive.",
                 "Verify WebPreview hover, click, right-click, wheel, and keyboard input still work.",
@@ -4323,6 +4615,7 @@ impl WebPreviewView {
                 "The right-side panel live-validation result gate reports ready_for_final_runtime=true after an imported completed panel result.",
                 "Every native action attempt emits a blocked or successful receipt.",
                 "Every external Chrome and PC-use handoff stays under managed roots.",
+                "Final runtime proof capacity reports ready_for_just_run=true before starting just run.",
                 "The final validation-progress packet reports all evidence groups ready before claiming runtime-green."
             ],
             "non_goals": [
@@ -4342,6 +4635,7 @@ impl WebPreviewView {
             "required_check_ids": [
                 "editor_typing",
                 "webpreview_input",
+                "final_runtime_capacity",
                 "panel_live_validation",
                 "native_executor_receipts",
                 "payload_bridge",
@@ -4361,6 +4655,11 @@ impl WebPreviewView {
                 "webpreview_input": {
                     "status": "not_run",
                     "evidence": "Hover, click, right-click, wheel, URL edit, page typing, reload, and focus switching all work.",
+                    "blocker": null
+                },
+                "final_runtime_capacity": {
+                    "status": "not_run",
+                    "evidence": "Copy or send the final runtime proof capacity; ready_for_just_run is true before starting just run.",
                     "blocker": null
                 },
                 "panel_live_validation": {
@@ -4394,11 +4693,12 @@ impl WebPreviewView {
                 "top_level_status": "pass",
                 "required_check_status": "pass",
                 "validation_progress_status": "manual_windows_runtime_validation_ready",
+                "final_runtime_proof_capacity": "target_headroom_ready",
                 "panel_live_validation_result_gate": "ready_for_final_runtime",
                 "evidence_rule": "Every required check id must have status pass and non-empty evidence.",
                 "blocker_rule": "overall_blocker and every required check blocker must be null."
             },
-            "claim_runtime_green_only_when": "all required checks are pass, blockers are null, the panel live-validation result gate reports ready_for_final_runtime=true, and the validation-progress packet reports manual_windows_runtime_validation_ready"
+            "claim_runtime_green_only_when": "all required checks are pass, blockers are null, final runtime proof capacity reports target_headroom_ready, the panel live-validation result gate reports ready_for_final_runtime=true, and the validation-progress packet reports manual_windows_runtime_validation_ready"
         })
     }
 
@@ -5164,6 +5464,15 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "panel_live_validation_exercise_plan_send_action": plugin
                     .pointer("/panel_live_validation/exercise_plan_send_action")
+                    .and_then(Value::as_str),
+                "final_runtime_proof_capacity_schema": plugin
+                    .pointer("/final_runtime_proof_capacity/schema")
+                    .and_then(Value::as_str),
+                "final_runtime_proof_capacity_copy_action": plugin
+                    .pointer("/final_runtime_proof_capacity/copy_action")
+                    .and_then(Value::as_str),
+                "final_runtime_proof_capacity_send_action": plugin
+                    .pointer("/final_runtime_proof_capacity/send_action")
                     .and_then(Value::as_str),
                 "panel_control_result_ledger_copy_action": plugin
                     .pointer("/panel_control_result_ledger/copy_action")
@@ -15100,6 +15409,8 @@ impl WebPreviewView {
                 &runtime_green_final_report_packet,
                 &final_proof_audit,
             );
+        let agent_browser_final_runtime_proof_capacity =
+            self.agent_browser_final_runtime_proof_capacity();
         let agent_plugin_catalog_current_summary =
             self.current_agent_plugin_catalog_summary(window);
         let context_ready =
@@ -15221,6 +15532,7 @@ impl WebPreviewView {
                     "agent_browser_panel_live_validation_result_template": agent_browser_panel_live_validation_result_template,
                     "agent_browser_panel_live_validation_result_gate": agent_browser_panel_live_validation_result_gate,
                     "agent_browser_panel_live_validation_exercise_plan": agent_browser_panel_live_validation_exercise_plan,
+                    "agent_browser_final_runtime_proof_capacity": agent_browser_final_runtime_proof_capacity.clone(),
                     "agent_browser_panel_card_deck": agent_browser_panel_card_deck,
                     "agent_browser_panel_control_result_ledger": agent_browser_panel_control_result_ledger,
                     "managed_chrome_execution": managed_chrome_execution,
@@ -15242,6 +15554,9 @@ impl WebPreviewView {
                     ),
                     "runtime_green_report_readiness_card": Self::agent_plugin_runtime_green_report_readiness_card_summary(
                         &runtime_green_report_readiness_card
+                    ),
+                    "final_runtime_proof_capacity": Self::agent_browser_final_runtime_proof_capacity_summary(
+                        &agent_browser_final_runtime_proof_capacity
                     ),
                     "screenshot_capture": self.latest_screenshot_capture_summary(),
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
@@ -15318,6 +15633,13 @@ impl WebPreviewView {
                     "final_validation_result_import_receipt_copy_action": "copy_agent_browser_final_validation_result_import_receipt",
                     "final_validation_result_import_receipt_send_action": "send_agent_browser_final_validation_result_import_receipt_to_agent",
                     "final_validation_result_import_receipt": self.latest_agent_browser_final_validation_result_import_receipt_summary(),
+                    "final_runtime_proof_capacity_visible": true,
+                    "final_runtime_proof_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                    "final_runtime_proof_capacity_copy_action": "copy_agent_browser_final_runtime_proof_capacity",
+                    "final_runtime_proof_capacity_send_action": "send_agent_browser_final_runtime_proof_capacity_to_agent",
+                    "final_runtime_proof_capacity": Self::agent_browser_final_runtime_proof_capacity_summary(
+                        &agent_browser_final_runtime_proof_capacity
+                    ),
                     "executor_wired": true,
                     "safe_to_send_to_agent_panel": true,
                 },
@@ -20407,6 +20729,7 @@ impl WebPreviewView {
             .as_ref()
             .map(|root| root.join("agent-plugins"));
         let zed_plugin_root = data_dir().join("agent-plugins");
+        let final_runtime_proof_capacity = self.agent_browser_final_runtime_proof_capacity();
 
         let mut catalog = serde_json::json!({
             "schema": "zed.agent_plugins.catalog.v1",
@@ -20752,6 +21075,7 @@ impl WebPreviewView {
                                 "panel_live_validation_result_template": "copy_agent_browser_panel_live_validation_result_template",
                                 "panel_live_validation_result_gate": "copy_agent_browser_panel_live_validation_result_gate",
                                 "panel_live_validation_exercise_plan": "copy_agent_browser_panel_live_validation_exercise_plan",
+                                "final_runtime_proof_capacity": "copy_agent_browser_final_runtime_proof_capacity",
                                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -20914,6 +21238,7 @@ impl WebPreviewView {
                             "panel_live_validation_result_template_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
                             "panel_live_validation_result_gate_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
                             "panel_live_validation_exercise_plan_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
+                            "final_runtime_proof_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
                             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
                             "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -20979,9 +21304,10 @@ impl WebPreviewView {
                                 "manual_evidence_template.status == pass",
                                 "every required manual_evidence_template.checks entry has status == pass",
                                 "manual_evidence_template.overall_blocker == null",
-                                "panel_live_validation_result_gate.ready_for_final_runtime == true",
-                                "executor_validation_progress.status == manual_windows_runtime_validation_ready"
-                            ],
+                            "panel_live_validation_result_gate.ready_for_final_runtime == true",
+                            "agent_browser_final_runtime_proof_capacity.ready_for_just_run == true",
+                            "executor_validation_progress.status == manual_windows_runtime_validation_ready"
+                        ],
                             "copy_action": "copy_agent_browser_final_validation_bundle",
                             "send_action": "send_agent_browser_final_validation_bundle_to_agent",
                             "read_only": true,
@@ -21028,6 +21354,21 @@ impl WebPreviewView {
                             "read_only": true,
                             "source": "WebPreview More menu",
                             "purpose": "Copy or send the compact final proof-state and recovery-action summary without requiring the larger session or action manifest."
+                        },
+                        "final_runtime_proof_capacity": {
+                            "schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
+                            "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
+                            "send_action": "send_agent_browser_final_runtime_proof_capacity_to_agent",
+                            "status_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity",
+                            "minimum_target_drive_free_gib": 18.0,
+                            "manual_command": "just run",
+                            "current_summary": Self::agent_browser_final_runtime_proof_capacity_summary(
+                                &final_runtime_proof_capacity
+                            ),
+                            "current_capacity": final_runtime_proof_capacity.clone(),
+                            "read_only": true,
+                            "source": "WebPreview More menu",
+                            "purpose": "Check target-drive headroom before the final just run proof."
                         },
                         "final_proof_audit_handoff": {
                             "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
@@ -21163,6 +21504,7 @@ impl WebPreviewView {
                             {"id": "browser.validation.final_result", "state": "available", "description": "Import, copy, or send the filled final Windows validation result after manual runtime proof."},
                             {"id": "browser.validation.final_result_import_receipt", "state": "available", "description": "Copy or send the final result import receipt with durable proof paths and the next runtime-status recheck."},
                             {"id": "browser.validation.final_proof_state", "state": "available", "description": "Copy or send compact final proof-state observability and recovery actions without generating larger proof packets."},
+                            {"id": "browser.validation.final_runtime_capacity", "state": "available", "description": "Copy or send target-drive headroom before final just run proof."},
                             {"id": "browser.validation.final_proof_audit", "state": "available", "description": "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},
                             {"id": "browser.action.type", "state": "available_when_unlocked_payload_required", "description": "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."},
@@ -23517,6 +23859,34 @@ impl WebPreviewView {
                                     move |window, cx| {
                                         let _ = entity.update(cx, |this, cx| {
                                             this.send_agent_browser_final_validation_observability_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Copy Final Runtime Capacity")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_final_runtime_proof_capacity(
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Final Runtime Capacity")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_final_runtime_proof_capacity_to_agent(
                                                 window, cx,
                                             );
                                         });
@@ -25949,6 +26319,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_final_validation_result_template: None,
                 latest_agent_browser_final_validation_result: None,
                 latest_agent_browser_final_validation_result_import_receipt: None,
+                latest_agent_browser_final_runtime_proof_capacity: None,
                 latest_agent_browser_panel_control_result: None,
                 latest_agent_browser_panel_control_result_import_receipt: None,
                 latest_agent_browser_panel_live_validation: None,
