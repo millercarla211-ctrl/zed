@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Headroom Recovery Card
+
+ADDED:
+- WebPreview now exposes Copy/Send Headroom Recovery Card actions for `zed.web_preview.agent_browser_final_runtime_headroom_recovery_card.v1`.
+- Session/status surfaces, final validation bundles, action manifests, panel UI proof checklists, More-menu entries, and Agent/WebPreview catalogs now advertise the compact headroom recovery card beside the full recovery plan.
+
+CHANGED:
+- Final-runtime capacity copies now refresh the latest recovery plan and recovery card summaries together so right-side panels can render the current target-drive blocker from either capacity or card handoffs.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening still at 99/100 and the remaining live UI/runtime validation target after target-drive headroom is restored.
+
+NOTES:
+- This slice is a read-only blocker card. It does not delete files, run `just`, run Cargo, launch browsers, run Node or Playwright, take screenshots, dispatch input, or touch browser profiles.
+
 [2026-05-17] - Browser Chrome Headroom Recovery Handoff
 
 ADDED:

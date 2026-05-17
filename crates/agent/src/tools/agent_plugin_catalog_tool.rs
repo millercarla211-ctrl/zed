@@ -62,6 +62,8 @@ const AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_proof_capacity.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_recovery_plan.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_headroom_recovery_card.v1";
 const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_proof_audit.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
@@ -1008,6 +1010,18 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "final_runtime_headroom_recovery_plan_send_action": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_send_action")
                 .and_then(Value::as_str),
+            "final_runtime_headroom_recovery_card_schema": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_recovery_card_schema")
+                .and_then(Value::as_str),
+            "final_runtime_headroom_recovery_card_field": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_recovery_card_field")
+                .and_then(Value::as_str),
+            "final_runtime_headroom_recovery_card_copy_action": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_recovery_card_copy_action")
+                .and_then(Value::as_str),
+            "final_runtime_headroom_recovery_card_send_action": plugin
+                .pointer("/final_runtime_proof_capacity/headroom_recovery_card_send_action")
+                .and_then(Value::as_str),
             "final_runtime_proof_capacity_copy_action": plugin
                 .pointer("/final_runtime_proof_capacity/copy_action")
                 .and_then(Value::as_str),
@@ -1421,6 +1435,7 @@ fn browser_plugin_manifest() -> Value {
                 "panel_live_ui_proof_checklist": "copy_agent_browser_panel_live_ui_proof_checklist",
                 "final_runtime_proof_capacity": "copy_agent_browser_final_runtime_proof_capacity",
                 "final_runtime_headroom_recovery_plan": "copy_agent_browser_final_runtime_headroom_recovery_plan",
+                "final_runtime_headroom_recovery_card": "copy_agent_browser_final_runtime_headroom_recovery_card",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -1610,6 +1625,7 @@ fn browser_plugin_manifest() -> Value {
             "browser_panel_live_proof_readiness_card_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_READINESS_CARD_SCHEMA,
             "final_runtime_proof_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
             "final_runtime_headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
+            "final_runtime_headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_green_final_proof_guide_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
@@ -1735,6 +1751,11 @@ fn browser_plugin_manifest() -> Value {
             "headroom_recovery_plan_field": "headroom_recovery_plan",
             "headroom_recovery_plan_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
             "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
+            "headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
+            "headroom_recovery_card_field": "headroom_recovery_card",
+            "headroom_recovery_card_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_card",
+            "headroom_recovery_card_send_action": "send_agent_browser_final_runtime_headroom_recovery_card_to_agent",
+            "headroom_recovery_card_status_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_recovery_card",
             "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
             "send_action": "send_agent_browser_final_runtime_proof_capacity_to_agent",
             "status_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity",
