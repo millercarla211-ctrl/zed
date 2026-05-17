@@ -1,3 +1,17 @@
+[2026-05-17] - Browser Chrome Headroom Readiness Gate
+
+ADDED:
+- WebPreview now derives `zed.web_preview.agent_browser_final_runtime_headroom_readiness_gate.v1` from the final runtime capacity packet.
+- Copy/Send Headroom Readiness Gate actions now expose a compact ready/blocked/unknown target-drive gate for AI panels.
+- Session snapshots, status packets, final validation bundles, action manifests, panel proof checklists, final observability recovery actions, More-menu entries, and Agent/WebPreview catalogs now surface the headroom readiness gate.
+
+CHANGED:
+- Final runtime capacity, recovery-plan, recovery-card, and inspection-checklist handoffs now refresh the latest readiness gate summary together.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening still at 99/100 and the remaining live UI/runtime validation target after target-drive headroom is restored.
+
+NOTES:
+- This slice is a read-only readiness gate. It does not delete files, run `just`, run Cargo, launch browsers, run Node or Playwright, take screenshots, dispatch input, or touch browser profiles.
+
 [2026-05-17] - Browser Chrome Headroom Inspection Checklist Handoff
 
 ADDED:
