@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Card Deck
+
+ADDED:
+- WebPreview session snapshots and Agent Browser status packets now expose `zed.web_preview.agent_browser_panel_card_deck.v1`, a compact read-only deck for screenshot, annotated screenshot, inspect-element, DevTools, responsive viewport, managed Chrome action, and PC-use proof cards.
+- Agent Browser status-packet summaries now include deck schema, total card count, ready card count, and the latest deck payload so right-side panels can render current browser/plugin evidence without parsing every nested packet.
+
+CHANGED:
+- Agent and WebPreview plugin catalogs now advertise the panel-card deck schema and its session/status packet fields beside the existing function-surface handoff.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 30/100 and the next remaining proof targets.
+
+NOTES:
+- This is an auditability/panel-data slice only. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Managed Action Display Cards
 
 ADDED:

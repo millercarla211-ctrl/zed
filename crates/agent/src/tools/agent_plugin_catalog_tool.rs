@@ -67,6 +67,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX: &str =
     "agent-browser-final-validation-result-";
 const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
     "zed.web_preview.agent_browser_function_surfaces.v1";
+const AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_card_deck.v1";
 const INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA: &str =
     "zed.web_preview.inspected_element_evidence_card.v1";
 const DEVTOOLS_EVIDENCE_CARD_SCHEMA: &str = "zed.web_preview.devtools_evidence_card.v1";
@@ -814,6 +816,15 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "function_surfaces_send_action": plugin
                 .pointer("/function_surfaces_handoff/send_action")
                 .and_then(Value::as_str),
+            "panel_card_deck_schema": plugin
+                .pointer("/panel_card_deck/schema")
+                .and_then(Value::as_str),
+            "panel_card_deck_session_field": plugin
+                .pointer("/panel_card_deck/session_field")
+                .and_then(Value::as_str),
+            "panel_card_deck_status_packet_field": plugin
+                .pointer("/panel_card_deck/status_packet_field")
+                .and_then(Value::as_str),
             "bootstrap_schema": plugin
                 .get("bootstrap_readiness_schema")
                 .and_then(Value::as_str),
@@ -1222,6 +1233,22 @@ fn browser_plugin_manifest() -> Value {
             "read_only": true,
             "source": "WebPreview More menu",
             "purpose": "Copy or send the concrete screenshot, inspect, DevTools, and responsive viewport surface map without requiring the larger session or catalog."
+        },
+        "panel_card_deck": {
+            "schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
+            "session_field": "agent_browser_panel_card_deck",
+            "status_packet_field": "packet.latest.agent_browser_panel_card_deck",
+            "read_only": true,
+            "purpose": "Render one compact Agent Panel deck for screenshot, annotation, inspect, DevTools, responsive viewport, managed Chrome, and PC-use proof cards.",
+            "card_sources": [
+                "session.screenshot_capture",
+                "session.annotated_screenshot",
+                "session.inspected_element_evidence_card",
+                "session.devtools_evidence_card",
+                "session.responsive_viewport_change",
+                "session.managed_chrome_execution.latest_action_card",
+                "session.pc_use_status.latest_proof_card"
+            ]
         },
         "bootstrap_readiness_handoff": {
             "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,

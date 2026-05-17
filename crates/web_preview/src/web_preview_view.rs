@@ -106,6 +106,8 @@ const AGENT_BROWSER_FINAL_VALIDATION_RESULT_ARCHIVE_PREFIX: &str =
     "agent-browser-final-validation-result-";
 const AGENT_BROWSER_FUNCTION_SURFACES_SCHEMA: &str =
     "zed.web_preview.agent_browser_function_surfaces.v1";
+const AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_card_deck.v1";
 const INSPECTED_ELEMENT_SCHEMA: &str = "zed.web_preview.inspected_element.v1";
 const INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA: &str =
     "zed.web_preview.inspected_element_evidence_card.v1";
@@ -1459,6 +1461,11 @@ impl WebPreviewView {
         #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
         let native_backend = "unavailable";
 
+        let managed_chrome_execution = self.managed_chrome_execution_status();
+        let pc_use_status = self.pc_use_status();
+        let agent_browser_panel_card_deck =
+            self.agent_browser_panel_card_deck(&managed_chrome_execution, &pc_use_status);
+
         serde_json::json!({
             "schema": "zed.web_preview.session.v1",
             "session_id": self.session_id.as_ref(),
@@ -1507,6 +1514,7 @@ impl WebPreviewView {
             "agent_browser_final_validation_observability": self.agent_browser_final_validation_observability(),
             "agent_browser_final_proof_audit": self.latest_agent_browser_final_proof_audit_summary(),
             "agent_browser_function_surfaces": self.agent_browser_function_surfaces(),
+            "agent_browser_panel_card_deck": agent_browser_panel_card_deck,
             "agent_plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
             "agent_plugin_runtime_green_claim_gate": self.agent_plugin_runtime_green_claim_gate_snapshot(),
             "agent_plugin_runtime_green_claim_readiness": self.agent_plugin_runtime_green_claim_readiness_snapshot(),
@@ -1540,8 +1548,8 @@ impl WebPreviewView {
             "agent_browser_native_dispatch_receipt_matrix": self.latest_agent_browser_native_dispatch_receipt_matrix_summary(),
             "agent_browser_qa_runbook": self.latest_agent_browser_qa_runbook_summary(),
             "agent_plugin_catalog": self.latest_agent_plugin_catalog_summary(),
-            "managed_chrome_execution": self.managed_chrome_execution_status(),
-            "pc_use_status": self.pc_use_status(),
+            "managed_chrome_execution": managed_chrome_execution,
+            "pc_use_status": pc_use_status,
             "screenshot_capture": self.latest_screenshot_capture_summary(),
             "annotated_screenshot": self.latest_annotated_screenshot_summary(),
             "inspected_element": self.latest_inspected_element_summary(),
@@ -1918,6 +1926,10 @@ impl WebPreviewView {
             "pc_use_status": packet.pointer("/packet/latest/pc_use_status/status").and_then(Value::as_str),
             "pc_use_latest_outcome": packet.pointer("/packet/latest/pc_use_status/latest_receipt/read/outcome").and_then(Value::as_str),
             "pc_use_latest_proof_card": packet.pointer("/packet/latest/pc_use_status/latest_proof_card").cloned(),
+            "panel_card_deck_schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
+            "panel_card_deck_card_count": packet.pointer("/packet/latest/agent_browser_panel_card_deck/summary/card_count").and_then(Value::as_u64),
+            "panel_card_deck_ready_card_count": packet.pointer("/packet/latest/agent_browser_panel_card_deck/summary/ready_card_count").and_then(Value::as_u64),
+            "agent_browser_panel_card_deck": packet.pointer("/packet/latest/agent_browser_panel_card_deck").cloned(),
             "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
             "runtime_green_ready_lane_fraction": packet.pointer("/packet/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
             "runtime_green_first_pending_lane": packet.pointer("/packet/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
@@ -4478,6 +4490,15 @@ impl WebPreviewView {
                 "function_surfaces_send_action": plugin
                     .pointer("/function_surfaces_handoff/send_action")
                     .and_then(Value::as_str),
+                "panel_card_deck_schema": plugin
+                    .pointer("/panel_card_deck/schema")
+                    .and_then(Value::as_str),
+                "panel_card_deck_session_field": plugin
+                    .pointer("/panel_card_deck/session_field")
+                    .and_then(Value::as_str),
+                "panel_card_deck_status_packet_field": plugin
+                    .pointer("/panel_card_deck/status_packet_field")
+                    .and_then(Value::as_str),
                 "bootstrap_schema": plugin
                     .get("bootstrap_readiness_schema")
                     .and_then(Value::as_str),
@@ -4950,6 +4971,186 @@ impl WebPreviewView {
             "Zed PC-use status:\n\n```json\n{}\n```",
             Self::pc_use_status_json(status)
         )))]
+    }
+
+    fn agent_browser_panel_card_deck(
+        &self,
+        managed_chrome_execution: &Value,
+        pc_use_status: &Value,
+    ) -> Value {
+        let cards = vec![
+            Self::agent_browser_panel_card(
+                "browser.screenshot.capture",
+                "browser",
+                "Latest screenshot",
+                "session.screenshot_capture",
+                10,
+                self.latest_screenshot_capture_summary(),
+            ),
+            Self::agent_browser_panel_card(
+                "browser.screenshot.annotate",
+                "browser",
+                "Latest annotated screenshot",
+                "session.annotated_screenshot",
+                20,
+                self.latest_annotated_screenshot_summary(),
+            ),
+            Self::agent_browser_panel_card(
+                "browser.element.inspect",
+                "browser",
+                "Inspect element evidence",
+                "session.inspected_element_evidence_card",
+                30,
+                Some(self.latest_inspected_element_evidence_card()),
+            ),
+            Self::agent_browser_panel_card(
+                "browser.devtools.open",
+                "browser",
+                "DevTools evidence",
+                "session.devtools_evidence_card",
+                40,
+                Some(self.latest_devtools_evidence_card()),
+            ),
+            Self::agent_browser_panel_card(
+                "browser.viewport.responsive",
+                "browser",
+                "Responsive viewport proof",
+                "session.responsive_viewport_change",
+                50,
+                self.latest_responsive_viewport_change_summary(),
+            ),
+            Self::agent_browser_panel_card(
+                "chrome.managed.latest_action",
+                "managed_chrome",
+                "Managed Chrome action",
+                "session.managed_chrome_execution.latest_action_card",
+                60,
+                managed_chrome_execution.get("latest_action_card").cloned(),
+            ),
+            Self::agent_browser_panel_card(
+                "pc_use.latest_proof",
+                "pc_use",
+                "PC-use proof",
+                "session.pc_use_status.latest_proof_card",
+                70,
+                pc_use_status.get("latest_proof_card").cloned(),
+            ),
+        ];
+        let card_count = cards.len();
+        let ready_card_count = cards
+            .iter()
+            .filter(|card| {
+                card.pointer("/card_state/ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+            })
+            .count();
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
+            "generated_at_ms": Self::current_epoch_millis(),
+            "session_id": self.session_id.as_ref(),
+            "page": {
+                "url": self.active_url.as_ref(),
+                "title": self.current_tab_title().as_ref(),
+                "load_state": self.load_state_name(),
+            },
+            "summary": {
+                "card_count": card_count,
+                "ready_card_count": ready_card_count,
+                "empty_or_pending_card_count": card_count.saturating_sub(ready_card_count),
+            },
+            "cards": cards,
+            "panel_guidance": [
+                "Render cards by ascending priority.",
+                "Open the full source packet only when the compact card detail is insufficient.",
+                "Treat this deck as read-only evidence; browser input still requires the existing permission, preflight, and receipt gates."
+            ],
+            "safety": {
+                "read_only": true,
+                "dispatches_input": false,
+                "launches_browser": false,
+                "runs_node": false,
+                "mutates_external_browser_profiles": false,
+            },
+        })
+    }
+
+    fn agent_browser_panel_card(
+        id: &str,
+        lane: &str,
+        label: &str,
+        source_field: &str,
+        priority: u64,
+        card: Option<Value>,
+    ) -> Value {
+        let schema = card
+            .as_ref()
+            .and_then(|card| card.get("schema"))
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let state = card
+            .as_ref()
+            .and_then(|card| card.get("state").or_else(|| card.get("status")))
+            .and_then(Value::as_str)
+            .unwrap_or("empty")
+            .to_string();
+        let title = card
+            .as_ref()
+            .and_then(|card| card.pointer("/display/title").or_else(|| card.get("title")))
+            .and_then(Value::as_str)
+            .unwrap_or(label)
+            .to_string();
+        let tone = card
+            .as_ref()
+            .and_then(|card| card.pointer("/display/tone").or_else(|| card.get("tone")))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| Self::agent_browser_panel_card_tone(&state).to_string());
+        let ready = card
+            .as_ref()
+            .is_some_and(Self::agent_browser_panel_card_is_ready);
+        let card_present = card.is_some();
+
+        serde_json::json!({
+            "id": id,
+            "lane": lane,
+            "label": label,
+            "priority": priority,
+            "source_field": source_field,
+            "schema": schema,
+            "title": title,
+            "tone": tone,
+            "card_state": {
+                "state": state,
+                "ready": ready,
+                "card_present": card_present,
+            },
+            "card": card,
+        })
+    }
+
+    fn agent_browser_panel_card_is_ready(card: &Value) -> bool {
+        let state = card
+            .get("state")
+            .or_else(|| card.get("status"))
+            .and_then(Value::as_str)
+            .unwrap_or("empty");
+        !matches!(
+            state,
+            "empty" | "no_action" | "no_inspection" | "no_attempt" | "payload_missing"
+        )
+    }
+
+    fn agent_browser_panel_card_tone(state: &str) -> &'static str {
+        match state {
+            "completed_receipt" | "runner_receipt_ready" | "captured" | "opened" => "success",
+            "receipt_not_completed" | "runner_receipt_blocked" | "blocked" => "danger",
+            "request_waiting_for_receipt"
+            | "payload_ready_runner_receipt_missing"
+            | "payload_not_ready" => "warning",
+            _ => "neutral",
+        }
     }
 
     fn copy_pc_use_status(&mut self, cx: &mut Context<Self>) {
@@ -10560,6 +10761,8 @@ impl WebPreviewView {
         let success_receipt_ready = self.latest_successful_interaction_receipt.is_some();
         let managed_chrome_execution = self.managed_chrome_execution_status();
         let pc_use_status = self.pc_use_status();
+        let agent_browser_panel_card_deck =
+            self.agent_browser_panel_card_deck(&managed_chrome_execution, &pc_use_status);
         let runtime_green_operator_handoff =
             self.agent_plugin_runtime_green_operator_handoff(window);
         let runtime_green_operator_handoff_summary =
@@ -10717,6 +10920,7 @@ impl WebPreviewView {
                         "latest_summary": self.latest_agent_plugin_catalog_summary(),
                         "current_summary": agent_plugin_catalog_current_summary.clone(),
                     },
+                    "agent_browser_panel_card_deck": agent_browser_panel_card_deck,
                     "managed_chrome_execution": managed_chrome_execution,
                     "pc_use_status": pc_use_status,
                     "devtools_open_attempt": self.latest_devtools_open_attempt_summary(),
@@ -10748,6 +10952,10 @@ impl WebPreviewView {
                     "requires_receipt_after_every_input": true,
                     "managed_chrome_receipts_visible": true,
                     "pc_use_receipts_visible": true,
+                    "agent_browser_panel_card_deck_visible": true,
+                    "agent_browser_panel_card_deck_schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
+                    "agent_browser_panel_card_deck_status_packet_field": "packet.latest.agent_browser_panel_card_deck",
+                    "agent_browser_panel_card_deck_session_field": "agent_browser_panel_card_deck",
                     "inspected_element_evidence_card_schema": INSPECTED_ELEMENT_EVIDENCE_CARD_SCHEMA,
                     "devtools_evidence_card_schema": DEVTOOLS_EVIDENCE_CARD_SCHEMA,
                     "agent_plugin_catalog_visible": true,
@@ -16072,6 +16280,22 @@ impl WebPreviewView {
                             "read_only": true,
                             "source": "WebPreview More menu",
                             "purpose": "Copy or send the concrete screenshot, inspect, DevTools, and responsive viewport surface map without requiring the larger session or catalog."
+                        },
+                        "panel_card_deck": {
+                            "schema": AGENT_BROWSER_PANEL_CARD_DECK_SCHEMA,
+                            "session_field": "agent_browser_panel_card_deck",
+                            "status_packet_field": "packet.latest.agent_browser_panel_card_deck",
+                            "read_only": true,
+                            "purpose": "Render one compact Agent Panel deck for screenshot, annotation, inspect, DevTools, responsive viewport, managed Chrome, and PC-use proof cards.",
+                            "card_sources": [
+                                "session.screenshot_capture",
+                                "session.annotated_screenshot",
+                                "session.inspected_element_evidence_card",
+                                "session.devtools_evidence_card",
+                                "session.responsive_viewport_change",
+                                "session.managed_chrome_execution.latest_action_card",
+                                "session.pc_use_status.latest_proof_card"
+                            ]
                         },
                         "bootstrap_readiness_handoff": {
                             "schema": AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA,
