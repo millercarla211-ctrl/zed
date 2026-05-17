@@ -968,6 +968,12 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "panel_live_proof_readiness_card_field": plugin
                 .pointer("/panel_live_validation/runtime_status_readiness_card_field")
                 .and_then(Value::as_str),
+            "panel_live_proof_readiness_card_copy_action": plugin
+                .pointer("/panel_live_validation/proof_readiness_card_copy_action")
+                .and_then(Value::as_str),
+            "panel_live_proof_readiness_card_send_action": plugin
+                .pointer("/panel_live_validation/proof_readiness_card_send_action")
+                .and_then(Value::as_str),
             "final_runtime_proof_capacity_schema": plugin
                 .pointer("/final_runtime_proof_capacity/schema")
                 .and_then(Value::as_str),
@@ -1380,7 +1386,7 @@ fn browser_plugin_manifest() -> Value {
                 "panel_live_validation_result_template": "copy_agent_browser_panel_live_validation_result_template",
                 "panel_live_validation_result_gate": "copy_agent_browser_panel_live_validation_result_gate",
                 "panel_live_validation_exercise_plan": "copy_agent_browser_panel_live_validation_exercise_plan",
-                "panel_live_proof_readiness_card": "inspect_agent_plugin_runtime_status.browser_panel_live_proof_readiness_card",
+                "panel_live_proof_readiness_card": "copy_agent_browser_panel_live_proof_readiness_card",
                 "final_runtime_proof_capacity": "copy_agent_browser_final_runtime_proof_capacity",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
@@ -1500,6 +1506,9 @@ fn browser_plugin_manifest() -> Value {
             "runtime_status_readiness_card_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_READINESS_CARD_SCHEMA,
             "runtime_status_readiness_card_field": "browser_panel_live_proof_readiness_card",
             "runtime_status_plugin_readiness_card_field": "plugins.browser.panel_live_proof_readiness_card",
+            "proof_readiness_card_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_READINESS_CARD_SCHEMA,
+            "proof_readiness_card_copy_action": "copy_agent_browser_panel_live_proof_readiness_card",
+            "proof_readiness_card_send_action": "send_agent_browser_panel_live_proof_readiness_card_to_agent",
             "runtime_status_claim_field": "runtime_green_claim_readiness.browser_panel_live_proof_status",
             "runtime_status_report_gate_field": "runtime_green_report_gate.browser_panel_live_proof_status",
             "exercise_plan_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
@@ -1778,7 +1787,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.panel_live_validation_result_gate", "available", "Copy or send the live panel result gate before final runtime proof."),
             capability("browser.panel_live_validation_exercise_plan", "available", "Copy or send the ordered right-side panel exercise, result import, and gate-check plan."),
             capability("browser.panel_live_proof_status", "available_in_runtime_status", "Read durable panel live-validation proof status from inspect_agent_plugin_runtime_status before final runtime proof."),
-            capability("browser.panel_live_proof_readiness_card", "available_in_runtime_status", "Read the compact panel live proof readiness card from inspect_agent_plugin_runtime_status before final runtime proof."),
+            capability("browser.panel_live_proof_readiness_card", "available", "Copy or send the compact panel live proof readiness card before final runtime proof."),
             capability("browser.plugin_bootstrap_readiness", "available", "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."),
             capability("browser.runtime_green_claim_readiness", "available", "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."),
             capability("browser.runtime_green_report_gate", "available", "Copy or send the canonical runtime-green ready/blocked report gate."),

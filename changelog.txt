@@ -1,3 +1,17 @@
+[2026-05-17] - Browser Chrome Panel Live Proof Card Actions
+
+ADDED:
+- WebPreview now exposes Copy/Send Panel Proof Card actions for `zed.agent_plugins.browser_panel_live_proof_readiness_card.v1`.
+- Agent Browser status packets and action manifests now include the current panel live-proof readiness card and compact copy/send metadata.
+- The WebPreview More menu now has direct Copy Panel Proof Card and Send Panel Proof Card entries.
+
+CHANGED:
+- Agent and WebPreview plugin catalogs now point the panel live-proof readiness-card handoff at the WebPreview copy action instead of only the runtime-status field.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 97/100 and the remaining live UI/runtime validation targets.
+
+NOTES:
+- This slice is a read-only panel handoff. It does not run `just`, run Cargo, launch browsers, run Node or Playwright, take screenshots, dispatch input, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Live Proof Readiness Card
 
 ADDED:
