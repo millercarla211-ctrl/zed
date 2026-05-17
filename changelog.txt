@@ -1,3 +1,17 @@
+[2026-05-17] - Final Runtime Blocker Board Handoff
+
+ADDED:
+- `crates/web_preview/src/web_preview_view.rs` now derives `agent_browser_final_runtime_blocker_board` from the panel live-result gate, panel live-proof readiness card, and final runtime target-drive headroom gate.
+- Copy/Send Final Runtime Blocker Board actions now expose the ordered final-runtime blockers, first blocker, and next recommended action for AI panels.
+
+CHANGED:
+- `crates/web_preview/src/web_preview_view.rs` now surfaces the blocker board through session snapshots, status packets, panel proof checklists, final validation observability, final validation bundles, action manifests, More-menu entries, and the WebPreview plugin catalog.
+- `crates/agent/src/tools/agent_plugin_catalog_tool.rs` now advertises the blocker-board schema, copy/send actions, action-map entry, status packet field, and Browser capability.
+- `todo.txt` now records the blocker-board slice while keeping the feature set at 99/100 until the live UI exercise and final `just run` proof can run with enough G: headroom.
+
+NOTES:
+- This slice is read-only. It does not delete files, run Cargo, run `just run`, launch browsers, take screenshots, dispatch browser/OS input, or mutate browser profiles.
+
 [2026-05-17] - Headroom Reclaim Candidates Handoff
 
 ADDED:

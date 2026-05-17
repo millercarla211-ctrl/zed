@@ -114,6 +114,8 @@ const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_readiness_gate.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_reclaim_candidates.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_blocker_board.v1";
 const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_proof_audit.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
@@ -460,6 +462,8 @@ const READ_ONLY_AGENT_BROWSER_ACTIONS: &[&str] = &[
     "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
     "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
     "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent",
+    "copy_agent_browser_final_runtime_blocker_board",
+    "send_agent_browser_final_runtime_blocker_board_to_agent",
     "copy_agent_browser_final_proof_audit",
     "send_agent_browser_final_proof_audit_to_agent",
     "copy_agent_browser_function_surfaces",
@@ -874,6 +878,7 @@ pub struct WebPreviewView {
     latest_agent_browser_final_runtime_headroom_inspection_checklist: Option<Value>,
     latest_agent_browser_final_runtime_headroom_readiness_gate: Option<Value>,
     latest_agent_browser_final_runtime_headroom_reclaim_candidates: Option<Value>,
+    latest_agent_browser_final_runtime_blocker_board: Option<Value>,
     latest_agent_browser_panel_control_result: Option<Value>,
     latest_agent_browser_panel_control_result_import_receipt: Option<Value>,
     latest_agent_browser_panel_live_validation: Option<Value>,
@@ -1112,6 +1117,7 @@ impl WebPreviewView {
             latest_agent_browser_final_runtime_headroom_inspection_checklist: None,
             latest_agent_browser_final_runtime_headroom_readiness_gate: None,
             latest_agent_browser_final_runtime_headroom_reclaim_candidates: None,
+            latest_agent_browser_final_runtime_blocker_board: None,
             latest_agent_browser_panel_control_result: None,
             latest_agent_browser_panel_control_result_import_receipt: None,
             latest_agent_browser_panel_live_validation: None,
@@ -1639,6 +1645,7 @@ impl WebPreviewView {
             "agent_browser_final_runtime_headroom_inspection_checklist": self.latest_agent_browser_final_runtime_headroom_inspection_checklist_summary(),
             "agent_browser_final_runtime_headroom_readiness_gate": self.latest_agent_browser_final_runtime_headroom_readiness_gate_summary(),
             "agent_browser_final_runtime_headroom_reclaim_candidates": self.latest_agent_browser_final_runtime_headroom_reclaim_candidates_summary(),
+            "agent_browser_final_runtime_blocker_board": self.latest_agent_browser_final_runtime_blocker_board_summary(),
             "agent_browser_final_proof_audit": self.latest_agent_browser_final_proof_audit_summary(),
             "agent_browser_function_surfaces": self.agent_browser_function_surfaces(),
             "agent_browser_panel_control_result": self.latest_agent_browser_panel_control_result_summary(),
@@ -1762,6 +1769,8 @@ impl WebPreviewView {
                 "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent": true,
                 "copy_agent_browser_final_runtime_headroom_reclaim_candidates": true,
                 "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent": true,
+                "copy_agent_browser_final_runtime_blocker_board": true,
+                "send_agent_browser_final_runtime_blocker_board_to_agent": true,
                 "copy_agent_browser_final_proof_audit": true,
                 "send_agent_browser_final_proof_audit_to_agent": true,
                 "agent_browser_function_surfaces": true,
@@ -2175,6 +2184,12 @@ impl WebPreviewView {
             "final_runtime_headroom_reclaim_candidate_count": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates/candidate_reclaim_zones").and_then(Value::as_array).map(Vec::len),
             "final_runtime_headroom_reclaim_candidates_copy_action": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
             "final_runtime_headroom_reclaim_candidates_send_action": "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent",
+            "final_runtime_blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
+            "final_runtime_blocker_board_status": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board/status").and_then(Value::as_str),
+            "final_runtime_blocker_board_blocker_count": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board/blocker_count").and_then(Value::as_u64),
+            "final_runtime_blocker_board_first_blocker": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board/first_blocker/id").and_then(Value::as_str),
+            "final_runtime_blocker_board_copy_action": "copy_agent_browser_final_runtime_blocker_board",
+            "final_runtime_blocker_board_send_action": "send_agent_browser_final_runtime_blocker_board_to_agent",
             "panel_control_result_ledger_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/status").and_then(Value::as_str),
             "panel_control_result_ledger_result_count": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/result_count").and_then(Value::as_u64),
             "panel_control_result_ledger_latest_result_status": packet.pointer("/packet/latest/agent_browser_panel_control_result_ledger/summary/latest_result_status").and_then(Value::as_str),
@@ -2205,6 +2220,7 @@ impl WebPreviewView {
             "agent_browser_final_runtime_headroom_inspection_checklist": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_inspection_checklist").cloned(),
             "agent_browser_final_runtime_headroom_readiness_gate": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_readiness_gate").cloned(),
             "agent_browser_final_runtime_headroom_reclaim_candidates": packet.pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates").cloned(),
+            "agent_browser_final_runtime_blocker_board": packet.pointer("/packet/latest/agent_browser_final_runtime_blocker_board").cloned(),
             "runtime_green_claim_gate_status": packet.pointer("/packet/runtime_green_claim_gate/status").and_then(Value::as_str),
             "runtime_green_ready_lane_fraction": packet.pointer("/packet/runtime_green_claim_gate/ready_lane_fraction").and_then(Value::as_str),
             "runtime_green_first_pending_lane": packet.pointer("/packet/runtime_green_claim_gate/first_pending_lane_label").and_then(Value::as_str),
@@ -2473,6 +2489,15 @@ impl WebPreviewView {
         Some(Self::agent_browser_final_runtime_headroom_reclaim_candidates_summary(candidates))
     }
 
+    fn latest_agent_browser_final_runtime_blocker_board_summary(&self) -> Option<Value> {
+        let board = self
+            .latest_agent_browser_final_runtime_blocker_board
+            .as_ref()?;
+        Some(Self::agent_browser_final_runtime_blocker_board_summary(
+            board,
+        ))
+    }
+
     fn agent_browser_final_runtime_proof_capacity_summary(capacity: &Value) -> Value {
         serde_json::json!({
             "schema": capacity.pointer("/schema").and_then(Value::as_str),
@@ -2587,6 +2612,23 @@ impl WebPreviewView {
             "copy_action": candidates.pointer("/actions/copy_reclaim_candidates").and_then(Value::as_str),
             "send_action": candidates.pointer("/actions/send_reclaim_candidates").and_then(Value::as_str),
             "read_only": candidates.pointer("/safety/read_only").and_then(Value::as_bool),
+        })
+    }
+
+    fn agent_browser_final_runtime_blocker_board_summary(board: &Value) -> Value {
+        serde_json::json!({
+            "schema": board.pointer("/schema").and_then(Value::as_str),
+            "status": board.pointer("/status").and_then(Value::as_str),
+            "ready_for_final_runtime_proof": board.pointer("/ready_for_final_runtime_proof").and_then(Value::as_bool),
+            "blocker_count": board.pointer("/blocker_count").and_then(Value::as_u64),
+            "first_blocker": board.pointer("/first_blocker/id").and_then(Value::as_str),
+            "recommended_action": board.pointer("/recommended_action").and_then(Value::as_str),
+            "panel_result_gate_ready": board.pointer("/summaries/panel_live_validation_result_gate/ready_for_final_runtime").and_then(Value::as_bool),
+            "panel_proof_card_ready": board.pointer("/summaries/panel_live_proof_readiness_card/ready_for_final_runtime").and_then(Value::as_bool),
+            "headroom_ready": board.pointer("/summaries/final_runtime_headroom_readiness_gate/ready_for_just_run").and_then(Value::as_bool),
+            "copy_action": board.pointer("/actions/copy_blocker_board").and_then(Value::as_str),
+            "send_action": board.pointer("/actions/send_blocker_board").and_then(Value::as_str),
+            "read_only": board.pointer("/safety/read_only").and_then(Value::as_bool),
         })
     }
 
@@ -3810,6 +3852,161 @@ impl WebPreviewView {
         )))]
     }
 
+    fn agent_browser_final_runtime_blocker_board_from_parts(
+        panel_result_gate: &Value,
+        panel_proof_card: &Value,
+        final_runtime_capacity: &Value,
+    ) -> Value {
+        let panel_result_gate_ready = panel_result_gate
+            .pointer("/ready_for_final_runtime")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let panel_proof_card_ready = panel_proof_card
+            .pointer("/ready_for_final_runtime")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let headroom_ready = final_runtime_capacity
+            .pointer("/ready_for_just_run")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let headroom_gate = Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(
+            final_runtime_capacity,
+        );
+        let reclaim_candidates =
+            Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(
+                final_runtime_capacity,
+            );
+        let mut blockers = Vec::new();
+
+        if !panel_result_gate_ready {
+            blockers.push(serde_json::json!({
+                "id": "panel_live_validation_result_gate",
+                "label": "A completed right-side panel result with a matched result contract is required before final runtime proof.",
+                "status": panel_result_gate.pointer("/status").and_then(Value::as_str),
+                "action": "copy_agent_browser_panel_live_validation_result_gate",
+                "alternative_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
+                "import_action": "import_agent_browser_panel_control_result_from_clipboard",
+                "ready": false,
+                "summary": Self::agent_browser_panel_live_validation_result_gate_summary(panel_result_gate),
+            }));
+        }
+        if !panel_proof_card_ready {
+            blockers.push(serde_json::json!({
+                "id": "panel_live_proof_readiness_card",
+                "label": "The panel live-proof readiness card must be ready for final runtime.",
+                "status": panel_proof_card.pointer("/status").and_then(Value::as_str),
+                "action": "copy_agent_browser_panel_live_proof_readiness_card",
+                "alternative_action": "send_agent_browser_panel_live_proof_readiness_card_to_agent",
+                "ready": false,
+                "summary": Self::agent_browser_panel_live_proof_readiness_card_summary(panel_proof_card),
+            }));
+        }
+        if !headroom_ready {
+            blockers.push(serde_json::json!({
+                "id": "final_runtime_headroom",
+                "label": "The target drive must have at least 18 GiB free before just run.",
+                "status": final_runtime_capacity.pointer("/status").and_then(Value::as_str),
+                "action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
+                "alternative_action": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
+                "reclaim_candidates_action": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
+                "ready": false,
+                "summary": Self::agent_browser_final_runtime_headroom_readiness_gate_summary(&headroom_gate),
+            }));
+        }
+
+        let blocker_count = blockers.len() as u64;
+        let ready_for_final_runtime_proof = blocker_count == 0;
+        let first_blocker = blockers.first().cloned().unwrap_or(Value::Null);
+        let status = match (
+            ready_for_final_runtime_proof,
+            panel_result_gate_ready,
+            panel_proof_card_ready,
+            headroom_ready,
+            blocker_count,
+        ) {
+            (true, _, _, _, _) => "ready_for_final_runtime_proof",
+            (_, false, _, _, 1) => "blocked_by_panel_live_result_gate",
+            (_, _, false, _, 1) => "blocked_by_panel_live_proof_card",
+            (_, _, _, false, 1) => "blocked_by_target_drive_headroom",
+            _ => "blocked_by_multiple_final_runtime_gates",
+        };
+        let recommended_action = first_blocker
+            .get("action")
+            .and_then(Value::as_str)
+            .unwrap_or("copy_agent_browser_final_validation_bundle");
+
+        serde_json::json!({
+            "schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
+            "status": status,
+            "captured_at_ms": Self::current_epoch_millis(),
+            "ready_for_final_runtime_proof": ready_for_final_runtime_proof,
+            "blocker_count": blocker_count,
+            "first_blocker": first_blocker,
+            "recommended_action": recommended_action,
+            "ordered_blockers": blockers,
+            "summaries": {
+                "panel_live_validation_result_gate": Self::agent_browser_panel_live_validation_result_gate_summary(panel_result_gate),
+                "panel_live_proof_readiness_card": Self::agent_browser_panel_live_proof_readiness_card_summary(panel_proof_card),
+                "final_runtime_proof_capacity": Self::agent_browser_final_runtime_proof_capacity_summary(final_runtime_capacity),
+                "final_runtime_headroom_readiness_gate": Self::agent_browser_final_runtime_headroom_readiness_gate_summary(&headroom_gate),
+                "final_runtime_headroom_reclaim_candidates": Self::agent_browser_final_runtime_headroom_reclaim_candidates_summary(&reclaim_candidates),
+            },
+            "actions": {
+                "copy_blocker_board": "copy_agent_browser_final_runtime_blocker_board",
+                "send_blocker_board": "send_agent_browser_final_runtime_blocker_board_to_agent",
+                "copy_panel_result_gate": "copy_agent_browser_panel_live_validation_result_gate",
+                "send_panel_result_gate": "send_agent_browser_panel_live_validation_result_gate_to_agent",
+                "copy_panel_proof_card": "copy_agent_browser_panel_live_proof_readiness_card",
+                "send_panel_proof_card": "send_agent_browser_panel_live_proof_readiness_card_to_agent",
+                "copy_final_runtime_capacity": "copy_agent_browser_final_runtime_proof_capacity",
+                "send_final_runtime_capacity": "send_agent_browser_final_runtime_proof_capacity_to_agent",
+                "copy_headroom_readiness_gate": "copy_agent_browser_final_runtime_headroom_readiness_gate",
+                "send_headroom_readiness_gate": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
+                "copy_headroom_reclaim_candidates": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
+                "send_headroom_reclaim_candidates": "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent",
+                "copy_final_validation_bundle": "copy_agent_browser_final_validation_bundle",
+                "send_final_validation_bundle": "send_agent_browser_final_validation_bundle_to_agent",
+                "final_manual_command": "just run"
+            },
+            "safety": {
+                "read_only": true,
+                "mutates_files": false,
+                "deletes_files": false,
+                "dispatches_input": false,
+                "runs_just": false,
+                "runs_cargo": false,
+                "launches_browser": false
+            }
+        })
+    }
+
+    fn agent_browser_final_runtime_blocker_board(&self) -> Value {
+        let panel_result_gate = self.agent_browser_panel_live_validation_result_gate_snapshot();
+        let panel_proof_card =
+            self.agent_browser_panel_live_proof_readiness_card_from_gate(&panel_result_gate);
+        let final_runtime_capacity = self.agent_browser_final_runtime_proof_capacity();
+        Self::agent_browser_final_runtime_blocker_board_from_parts(
+            &panel_result_gate,
+            &panel_proof_card,
+            &final_runtime_capacity,
+        )
+    }
+
+    fn agent_browser_final_runtime_blocker_board_json(board: &Value) -> String {
+        serde_json::to_string_pretty(board).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    fn agent_browser_final_runtime_blocker_board_agent_blocks(
+        board: &Value,
+    ) -> Vec<acp::ContentBlock> {
+        let summary = Self::agent_browser_final_runtime_blocker_board_summary(board);
+        vec![acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "Agent Browser final runtime blocker board:\n\nSummary:\n```json\n{}\n```\n\nBlocker board:\n```json\n{}\n```",
+            serde_json::to_string_pretty(&summary).unwrap_or_else(|_| "{}".to_string()),
+            Self::agent_browser_final_runtime_blocker_board_json(board)
+        )))]
+    }
+
     fn agent_browser_final_runtime_headroom_recovery_card_from_capacity(capacity: &Value) -> Value {
         let plan = Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(capacity);
         Self::agent_browser_final_runtime_headroom_recovery_card_from_plan(&plan)
@@ -4166,6 +4363,29 @@ impl WebPreviewView {
         cx.notify();
     }
 
+    fn copy_agent_browser_final_runtime_blocker_board(&mut self, cx: &mut Context<Self>) {
+        let board = self.agent_browser_final_runtime_blocker_board();
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            Self::agent_browser_final_runtime_blocker_board_json(&board),
+        ));
+        self.latest_agent_browser_final_runtime_blocker_board = Some(board);
+        self.show_toast("Copied final runtime blocker board", cx);
+        cx.notify();
+    }
+
+    fn send_agent_browser_final_runtime_blocker_board_to_agent(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let board = self.agent_browser_final_runtime_blocker_board();
+        let blocks = Self::agent_browser_final_runtime_blocker_board_agent_blocks(&board);
+        self.latest_agent_browser_final_runtime_blocker_board = Some(board);
+        self.append_content_blocks_to_agent_panel(blocks, window, cx);
+        self.show_toast("Sent final runtime blocker board to the agent panel", cx);
+        cx.notify();
+    }
+
     fn agent_browser_final_validation_observability(&self) -> Value {
         let bundle_summary = self.latest_agent_browser_final_validation_bundle_summary();
         let result_template_summary =
@@ -4199,6 +4419,16 @@ impl WebPreviewView {
         let panel_live_validation_result_gate_ready =
             Self::agent_browser_panel_live_validation_result_gate_ready(
                 &panel_live_validation_result_gate,
+            );
+        let panel_live_proof_readiness_card = self
+            .agent_browser_panel_live_proof_readiness_card_from_gate(
+                &panel_live_validation_result_gate,
+            );
+        let final_runtime_blocker_board =
+            Self::agent_browser_final_runtime_blocker_board_from_parts(
+                &panel_live_validation_result_gate,
+                &panel_live_proof_readiness_card,
+                &final_runtime_proof_capacity,
             );
         let durable_evidence = self.agent_browser_final_validation_result_durable_evidence();
         let durable_runtime_green_candidate = durable_evidence
@@ -4261,6 +4491,9 @@ impl WebPreviewView {
                 "panel_live_validation_result_gate": Self::agent_browser_panel_live_validation_result_gate_summary(
                     &panel_live_validation_result_gate
                 ),
+                "final_runtime_blocker_board": Self::agent_browser_final_runtime_blocker_board_summary(
+                    &final_runtime_blocker_board
+                ),
             },
             "durable_evidence": durable_evidence,
             "final_runtime_proof_capacity": final_runtime_proof_capacity,
@@ -4268,6 +4501,7 @@ impl WebPreviewView {
             "final_runtime_headroom_inspection_checklist": final_runtime_headroom_inspection_checklist,
             "final_runtime_headroom_readiness_gate": final_runtime_headroom_readiness_gate,
             "final_runtime_headroom_reclaim_candidates": final_runtime_headroom_reclaim_candidates,
+            "final_runtime_blocker_board": final_runtime_blocker_board,
             "final_runtime_capacity_ready": final_runtime_capacity_ready,
             "panel_live_validation_result_gate": panel_live_validation_result_gate,
             "panel_live_validation_result_gate_ready": panel_live_validation_result_gate_ready,
@@ -4303,6 +4537,15 @@ impl WebPreviewView {
         final_runtime_capacity_ready: bool,
     ) -> Value {
         let mut actions = Vec::new();
+        if !panel_live_validation_result_gate_ready || !final_runtime_capacity_ready {
+            actions.push(serde_json::json!({
+                "target": "final_runtime_blocker_board",
+                "action": "copy_agent_browser_final_runtime_blocker_board",
+                "alternative_action": "send_agent_browser_final_runtime_blocker_board_to_agent",
+                "reason": "show_ordered_final_runtime_blockers",
+                "dispatches_input": false
+            }));
+        }
         if !final_runtime_capacity_ready {
             actions.push(serde_json::json!({
                 "target": "final_runtime_headroom_readiness_gate",
@@ -5516,6 +5759,12 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(
                 &final_runtime_headroom_recovery_plan,
             );
+        let final_runtime_blocker_board =
+            Self::agent_browser_final_runtime_blocker_board_from_parts(
+                result_gate,
+                proof_card,
+                final_runtime_capacity,
+            );
         let agent_plugin_catalog_current_summary = manifest
             .pointer("/handoffs/plugin_catalog/current_summary")
             .cloned();
@@ -5541,6 +5790,12 @@ impl WebPreviewView {
                 &panel_live_validation_result_gate,
                 &panel_live_proof_readiness_card,
                 &panel_live_validation_exercise_plan,
+                &final_runtime_proof_capacity,
+            );
+        let final_runtime_blocker_board =
+            Self::agent_browser_final_runtime_blocker_board_from_parts(
+                &panel_live_validation_result_gate,
+                &panel_live_proof_readiness_card,
                 &final_runtime_proof_capacity,
             );
 
@@ -5806,6 +6061,18 @@ impl WebPreviewView {
                     "current_candidates": final_runtime_headroom_reclaim_candidates.clone(),
                     "read_only": true,
                     "purpose": "Render read-only target-drive reclaim candidates and preserve rules before any manual cleanup decision."
+                },
+                "final_runtime_blocker_board": {
+                    "schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
+                    "copy_action": "copy_agent_browser_final_runtime_blocker_board",
+                    "send_action": "send_agent_browser_final_runtime_blocker_board_to_agent",
+                    "latest_summary": self.latest_agent_browser_final_runtime_blocker_board_summary(),
+                    "current_summary": Self::agent_browser_final_runtime_blocker_board_summary(
+                        &final_runtime_blocker_board
+                    ),
+                    "current_board": final_runtime_blocker_board.clone(),
+                    "read_only": true,
+                    "purpose": "Show one ordered final-runtime blocker board across panel-result, panel-proof, and target-drive headroom gates."
                 },
                 "final_runtime_headroom_readiness_gate": {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
@@ -6893,6 +7160,15 @@ impl WebPreviewView {
                     .and_then(Value::as_str),
                 "final_runtime_headroom_reclaim_candidates_send_action": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_reclaim_candidates_send_action")
+                    .and_then(Value::as_str),
+                "final_runtime_blocker_board_schema": plugin
+                    .pointer("/final_runtime_proof_capacity/blocker_board_schema")
+                    .and_then(Value::as_str),
+                "final_runtime_blocker_board_copy_action": plugin
+                    .pointer("/final_runtime_proof_capacity/blocker_board_copy_action")
+                    .and_then(Value::as_str),
+                "final_runtime_blocker_board_send_action": plugin
+                    .pointer("/final_runtime_proof_capacity/blocker_board_send_action")
                     .and_then(Value::as_str),
                 "final_runtime_headroom_recovery_plan_field": plugin
                     .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_field")
@@ -11262,6 +11538,13 @@ impl WebPreviewView {
                         &final_runtime_headroom_reclaim_candidates
                     ),
                     "payload": final_runtime_headroom_reclaim_candidates,
+                },
+                "final_runtime_blocker_board": {
+                    "schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
+                    "summary": Self::agent_browser_final_runtime_blocker_board_summary(
+                        &final_runtime_blocker_board
+                    ),
+                    "payload": final_runtime_blocker_board,
                 }
             },
             "actions": {
@@ -11288,6 +11571,8 @@ impl WebPreviewView {
                 "send_headroom_readiness_gate": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
                 "copy_headroom_reclaim_candidates": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
                 "send_headroom_reclaim_candidates": "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent",
+                "copy_final_runtime_blocker_board": "copy_agent_browser_final_runtime_blocker_board",
+                "send_final_runtime_blocker_board": "send_agent_browser_final_runtime_blocker_board_to_agent",
                 "final_manual_command": "just run",
             },
             "next_action": next_action,
@@ -17656,6 +17941,12 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(
                 &agent_browser_final_runtime_headroom_recovery_plan,
             );
+        let agent_browser_final_runtime_blocker_board =
+            Self::agent_browser_final_runtime_blocker_board_from_parts(
+                &agent_browser_panel_live_validation_result_gate,
+                &agent_browser_panel_live_proof_readiness_card,
+                &agent_browser_final_runtime_proof_capacity,
+            );
         let agent_browser_panel_live_ui_proof_checklist =
             Self::agent_browser_panel_live_ui_proof_checklist_from_parts(
                 &agent_browser_panel_live_validation,
@@ -17794,6 +18085,7 @@ impl WebPreviewView {
                     "agent_browser_final_runtime_headroom_inspection_checklist": agent_browser_final_runtime_headroom_inspection_checklist.clone(),
                     "agent_browser_final_runtime_headroom_readiness_gate": agent_browser_final_runtime_headroom_readiness_gate.clone(),
                     "agent_browser_final_runtime_headroom_reclaim_candidates": agent_browser_final_runtime_headroom_reclaim_candidates.clone(),
+                    "agent_browser_final_runtime_blocker_board": agent_browser_final_runtime_blocker_board.clone(),
                     "agent_browser_panel_card_deck": agent_browser_panel_card_deck,
                     "agent_browser_panel_control_result_ledger": agent_browser_panel_control_result_ledger,
                     "managed_chrome_execution": managed_chrome_execution,
@@ -17833,6 +18125,9 @@ impl WebPreviewView {
                     ),
                     "final_runtime_headroom_reclaim_candidates": Self::agent_browser_final_runtime_headroom_reclaim_candidates_summary(
                         &agent_browser_final_runtime_headroom_reclaim_candidates
+                    ),
+                    "final_runtime_blocker_board": Self::agent_browser_final_runtime_blocker_board_summary(
+                        &agent_browser_final_runtime_blocker_board
                     ),
                     "screenshot_capture": self.latest_screenshot_capture_summary(),
                     "annotated_screenshot": self.latest_annotated_screenshot_summary(),
@@ -17943,6 +18238,13 @@ impl WebPreviewView {
                     "final_runtime_headroom_reclaim_candidates_send_action": "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent",
                     "final_runtime_headroom_reclaim_candidates": Self::agent_browser_final_runtime_headroom_reclaim_candidates_summary(
                         &agent_browser_final_runtime_headroom_reclaim_candidates
+                    ),
+                    "final_runtime_blocker_board_visible": true,
+                    "final_runtime_blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
+                    "final_runtime_blocker_board_copy_action": "copy_agent_browser_final_runtime_blocker_board",
+                    "final_runtime_blocker_board_send_action": "send_agent_browser_final_runtime_blocker_board_to_agent",
+                    "final_runtime_blocker_board": Self::agent_browser_final_runtime_blocker_board_summary(
+                        &agent_browser_final_runtime_blocker_board
                     ),
                     "executor_wired": true,
                     "safe_to_send_to_agent_panel": true,
@@ -22623,6 +22925,12 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_plan(
                 &final_runtime_headroom_recovery_plan,
             );
+        let final_runtime_blocker_board =
+            Self::agent_browser_final_runtime_blocker_board_from_parts(
+                &agent_browser_panel_live_validation_result_gate,
+                &agent_browser_panel_live_proof_readiness_card,
+                &final_runtime_proof_capacity,
+            );
         let agent_browser_panel_live_ui_proof_checklist =
             Self::agent_browser_panel_live_ui_proof_checklist_from_parts(
                 &agent_browser_panel_live_validation,
@@ -22780,6 +23088,17 @@ impl WebPreviewView {
                     ),
                     "read_only": true,
                     "purpose": "Expose read-only target-drive reclaim candidates plus preserve rules before manual cleanup."
+                },
+                "final_runtime_blocker_board": {
+                    "schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
+                    "copy_action": "copy_agent_browser_final_runtime_blocker_board",
+                    "send_action": "send_agent_browser_final_runtime_blocker_board_to_agent",
+                    "latest_summary": self.latest_agent_browser_final_runtime_blocker_board_summary(),
+                    "current_summary": Self::agent_browser_final_runtime_blocker_board_summary(
+                        &final_runtime_blocker_board
+                    ),
+                    "read_only": true,
+                    "purpose": "Expose one ordered final-runtime blocker board across panel-result, panel-proof, and target-drive headroom gates."
                 },
                 "final_runtime_headroom_readiness_gate": {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
@@ -23140,6 +23459,7 @@ impl WebPreviewView {
             "final_runtime_headroom_recovery_card": final_runtime_headroom_recovery_card,
             "final_runtime_headroom_readiness_gate": final_runtime_headroom_readiness_gate,
             "final_runtime_headroom_reclaim_candidates": final_runtime_headroom_reclaim_candidates,
+            "final_runtime_blocker_board": final_runtime_blocker_board,
             "plugin_bootstrap_readiness": self.agent_plugin_bootstrap_readiness(),
             "runtime_observability_digest": runtime_observability_digest,
             "runtime_green_operator_handoff": runtime_green_operator_handoff,
@@ -23548,6 +23868,7 @@ impl WebPreviewView {
                                 "final_runtime_headroom_inspection_checklist": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                                 "final_runtime_headroom_readiness_gate": "copy_agent_browser_final_runtime_headroom_readiness_gate",
                                 "final_runtime_headroom_reclaim_candidates": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
+                                "final_runtime_blocker_board": "copy_agent_browser_final_runtime_blocker_board",
                                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -23742,6 +24063,7 @@ impl WebPreviewView {
                             "final_runtime_headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
                             "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
                             "final_runtime_headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
+                            "final_runtime_blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
                             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
                             "runtime_green_final_report_packet_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -23877,6 +24199,10 @@ impl WebPreviewView {
                             "headroom_reclaim_candidates_copy_action": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
                             "headroom_reclaim_candidates_send_action": "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent",
                             "headroom_reclaim_candidates_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_reclaim_candidates",
+                            "blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
+                            "blocker_board_copy_action": "copy_agent_browser_final_runtime_blocker_board",
+                            "blocker_board_send_action": "send_agent_browser_final_runtime_blocker_board_to_agent",
+                            "blocker_board_status_packet_field": "packet.latest.agent_browser_final_runtime_blocker_board",
                             "headroom_recovery_plan_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
                             "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
                             "headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
@@ -24047,6 +24373,7 @@ impl WebPreviewView {
                             {"id": "browser.validation.final_runtime_headroom_recovery", "state": "available", "description": "Copy or send the non-destructive target-drive recovery plan before final just run proof."},
                             {"id": "browser.validation.final_runtime_headroom_readiness_gate", "state": "available", "description": "Copy or send the compact target-drive headroom gate before final just run proof."},
                             {"id": "browser.validation.final_runtime_headroom_reclaim_candidates", "state": "available", "description": "Copy or send read-only target-drive reclaim candidates with preserve rules before manual cleanup."},
+                            {"id": "browser.validation.final_runtime_blocker_board", "state": "available", "description": "Copy or send the ordered final-runtime blocker board across panel-result, panel-proof, and target-drive gates."},
                             {"id": "browser.validation.final_proof_audit", "state": "available", "description": "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."},
                             {"id": "browser.action.click", "state": "available_when_unlocked", "description": "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."},
                             {"id": "browser.action.type", "state": "available_when_unlocked_payload_required", "description": "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."},
@@ -26566,6 +26893,32 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Copy Final Runtime Blocker Board")
+                                .icon(IconName::Info)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.copy_agent_browser_final_runtime_blocker_board(cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Send Final Runtime Blocker Board")
+                                .icon(IconName::AiZed)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.send_agent_browser_final_runtime_blocker_board_to_agent(
+                                                window, cx,
+                                            );
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Copy Final Proof Audit")
                                 .icon(IconName::Info)
                                 .handler({
@@ -29053,6 +29406,7 @@ impl Item for WebPreviewView {
                 latest_agent_browser_final_runtime_headroom_inspection_checklist: None,
                 latest_agent_browser_final_runtime_headroom_readiness_gate: None,
                 latest_agent_browser_final_runtime_headroom_reclaim_candidates: None,
+                latest_agent_browser_final_runtime_blocker_board: None,
                 latest_agent_browser_panel_control_result: None,
                 latest_agent_browser_panel_control_result_import_receipt: None,
                 latest_agent_browser_panel_live_validation: None,

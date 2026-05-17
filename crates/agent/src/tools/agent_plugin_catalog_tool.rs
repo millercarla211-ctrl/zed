@@ -70,6 +70,8 @@ const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_readiness_gate.v1";
 const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_runtime_headroom_reclaim_candidates.v1";
+const AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA: &str =
+    "zed.web_preview.agent_browser_final_runtime_blocker_board.v1";
 const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_proof_audit.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
@@ -1034,6 +1036,15 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "final_runtime_headroom_reclaim_candidates_send_action": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_reclaim_candidates_send_action")
                 .and_then(Value::as_str),
+            "final_runtime_blocker_board_schema": plugin
+                .pointer("/final_runtime_proof_capacity/blocker_board_schema")
+                .and_then(Value::as_str),
+            "final_runtime_blocker_board_copy_action": plugin
+                .pointer("/final_runtime_proof_capacity/blocker_board_copy_action")
+                .and_then(Value::as_str),
+            "final_runtime_blocker_board_send_action": plugin
+                .pointer("/final_runtime_proof_capacity/blocker_board_send_action")
+                .and_then(Value::as_str),
             "final_runtime_headroom_recovery_plan_field": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_recovery_plan_field")
                 .and_then(Value::as_str),
@@ -1472,6 +1483,7 @@ fn browser_plugin_manifest() -> Value {
                 "final_runtime_headroom_inspection_checklist": "copy_agent_browser_final_runtime_headroom_inspection_checklist",
                 "final_runtime_headroom_readiness_gate": "copy_agent_browser_final_runtime_headroom_readiness_gate",
                 "final_runtime_headroom_reclaim_candidates": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
+                "final_runtime_blocker_board": "copy_agent_browser_final_runtime_blocker_board",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
                 "final_result_import": "import_agent_browser_final_validation_result_from_clipboard",
@@ -1665,6 +1677,7 @@ fn browser_plugin_manifest() -> Value {
             "final_runtime_headroom_inspection_checklist_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_INSPECTION_CHECKLIST_SCHEMA,
             "final_runtime_headroom_readiness_gate_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
             "final_runtime_headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
+            "final_runtime_blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
             "runtime_green_final_proof_guide_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
@@ -1801,6 +1814,10 @@ fn browser_plugin_manifest() -> Value {
             "headroom_reclaim_candidates_copy_action": "copy_agent_browser_final_runtime_headroom_reclaim_candidates",
             "headroom_reclaim_candidates_send_action": "send_agent_browser_final_runtime_headroom_reclaim_candidates_to_agent",
             "headroom_reclaim_candidates_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_reclaim_candidates",
+            "blocker_board_schema": AGENT_BROWSER_FINAL_RUNTIME_BLOCKER_BOARD_SCHEMA,
+            "blocker_board_copy_action": "copy_agent_browser_final_runtime_blocker_board",
+            "blocker_board_send_action": "send_agent_browser_final_runtime_blocker_board_to_agent",
+            "blocker_board_status_packet_field": "packet.latest.agent_browser_final_runtime_blocker_board",
             "headroom_recovery_plan_copy_action": "copy_agent_browser_final_runtime_headroom_recovery_plan",
             "headroom_recovery_plan_send_action": "send_agent_browser_final_runtime_headroom_recovery_plan_to_agent",
             "headroom_recovery_card_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_CARD_SCHEMA,
@@ -1958,6 +1975,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.validation.final_runtime_headroom_recovery", "available", "Copy or send the non-destructive target-drive recovery plan before final just run proof."),
             capability("browser.validation.final_runtime_headroom_readiness_gate", "available", "Copy or send the compact target-drive headroom gate before final just run proof."),
             capability("browser.validation.final_runtime_headroom_reclaim_candidates", "available", "Copy or send read-only target-drive reclaim candidates with preserve rules before manual cleanup."),
+            capability("browser.validation.final_runtime_blocker_board", "available", "Copy or send the ordered final-runtime blocker board across panel-result, panel-proof, and target-drive gates."),
             capability("browser.validation.final_proof_audit", "available", "Copy or send the compact final proof audit with missing checks, missing evidence, blockers, import receipt state, and report-gate status."),
             capability("browser.action.click", "available_when_unlocked", "Click visible page targets through the Windows native WebView executor after unlock, fresh preflight, QA checklist, and receipt logging."),
             capability("browser.action.type", "available_when_unlocked_payload_required", "Insert explicit payload text through the WebView2 DevTools Protocol executor after unlock, fresh type preflight, focused-target check, keyboard-focus gate, QA checklist, and receipt logging."),
