@@ -3000,6 +3000,9 @@ impl WebPreviewView {
             "proof_card_ready": checklist.pointer("/summary/proof_card_ready").and_then(Value::as_bool),
             "capacity_status": checklist.pointer("/summary/capacity_status").and_then(Value::as_str),
             "capacity_ready": checklist.pointer("/summary/capacity_ready").and_then(Value::as_bool),
+            "cleanup_result_gate_status": checklist.pointer("/summary/cleanup_result_gate_status").and_then(Value::as_str),
+            "cleanup_result_ready_for_capacity_recheck": checklist.pointer("/summary/cleanup_result_ready_for_capacity_recheck").and_then(Value::as_bool),
+            "final_runtime_blocker_board_status": checklist.pointer("/artifacts/final_runtime_blocker_board/payload/status").and_then(Value::as_str),
             "suggested_action": checklist.pointer("/summary/suggested_action").and_then(Value::as_str),
             "manual_step_count": checklist.pointer("/summary/manual_step_count").and_then(Value::as_u64),
             "first_blocker_id": checklist.pointer("/first_blocker/id").and_then(Value::as_str),
@@ -7301,6 +7304,7 @@ impl WebPreviewView {
                 &panel_live_proof_readiness_card,
                 &panel_live_validation_exercise_plan,
                 &final_runtime_proof_capacity,
+                &final_runtime_headroom_cleanup_result_gate,
             );
         let final_runtime_blocker_board =
             Self::agent_browser_final_runtime_blocker_board_from_parts(
@@ -13001,6 +13005,7 @@ impl WebPreviewView {
         proof_card: &Value,
         exercise_plan: &Value,
         final_runtime_capacity: &Value,
+        final_runtime_headroom_cleanup_result_gate: &Value,
     ) -> Value {
         let validation_status = validation
             .pointer("/status")
@@ -13042,10 +13047,6 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_capacity(
                 final_runtime_capacity,
             );
-        let final_runtime_headroom_cleanup_result_gate =
-            Self::agent_browser_final_runtime_headroom_cleanup_result_gate_from_capacity(
-                final_runtime_capacity,
-            );
         let final_runtime_headroom_readiness_gate =
             Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity(
                 final_runtime_capacity,
@@ -13062,6 +13063,10 @@ impl WebPreviewView {
                     .pointer("/suggested_controls/0/action")
                     .and_then(Value::as_str)
             });
+        let cleanup_result_ready_for_capacity_recheck = final_runtime_headroom_cleanup_result_gate
+            .pointer("/ready_for_capacity_recheck")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let status = if !validation_ready {
             "panel_live_validation_evidence_incomplete"
         } else if !result_template_prefilled {
@@ -13070,6 +13075,8 @@ impl WebPreviewView {
             "awaiting_completed_panel_result_import"
         } else if !proof_card_ready {
             "panel_proof_card_not_ready"
+        } else if !capacity_ready && cleanup_result_ready_for_capacity_recheck {
+            "final_runtime_capacity_recheck_required"
         } else if !capacity_ready {
             "final_runtime_capacity_blocked"
         } else {
@@ -13097,6 +13104,11 @@ impl WebPreviewView {
                 "label": "Panel proof readiness card has not cleared final-runtime readiness",
                 "action": "copy_agent_browser_panel_live_proof_readiness_card",
             }),
+            "final_runtime_capacity_recheck_required" => serde_json::json!({
+                "id": "final_runtime_capacity_recheck_required",
+                "label": "Imported cleanup result is ready; recheck final runtime capacity before just run",
+                "action": "copy_agent_browser_final_runtime_proof_capacity",
+            }),
             _ => serde_json::json!({
                 "id": "final_runtime_capacity_blocked",
                 "label": "Target drive does not have the 18 GiB free-space headroom required for just run",
@@ -13118,6 +13130,9 @@ impl WebPreviewView {
             }
             "panel_proof_card_not_ready" => {
                 "Copy the panel proof card and resolve its first blocker before final runtime proof."
+            }
+            "final_runtime_capacity_recheck_required" => {
+                "Recheck final runtime capacity now that cleanup-result evidence is ready, then run just run only if the target-drive gate clears."
             }
             _ => {
                 "Free rebuildable target/cache space on the configured target drive, then rerun final runtime capacity before just run."
@@ -13176,6 +13191,13 @@ impl WebPreviewView {
             }
         ]);
         let manual_step_count = manual_steps.as_array().map(Vec::len).unwrap_or(0);
+        let final_runtime_blocker_board =
+            Self::agent_browser_final_runtime_blocker_board_from_parts(
+                result_gate,
+                proof_card,
+                final_runtime_capacity,
+                final_runtime_headroom_cleanup_result_gate,
+            );
 
         serde_json::json!({
             "schema": AGENT_BROWSER_PANEL_LIVE_UI_PROOF_CHECKLIST_SCHEMA,
@@ -13191,6 +13213,8 @@ impl WebPreviewView {
                 "proof_card_ready": proof_card_ready,
                 "capacity_status": final_runtime_capacity.pointer("/status").and_then(Value::as_str),
                 "capacity_ready": capacity_ready,
+                "cleanup_result_gate_status": final_runtime_headroom_cleanup_result_gate.pointer("/status").and_then(Value::as_str),
+                "cleanup_result_ready_for_capacity_recheck": cleanup_result_ready_for_capacity_recheck,
                 "suggested_action": suggested_action,
                 "manual_step_count": manual_step_count,
             },
@@ -13251,9 +13275,9 @@ impl WebPreviewView {
                 "final_runtime_headroom_cleanup_result_gate": {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA,
                     "summary": Self::agent_browser_final_runtime_headroom_cleanup_result_gate_summary(
-                        &final_runtime_headroom_cleanup_result_gate
+                        final_runtime_headroom_cleanup_result_gate
                     ),
-                    "payload": final_runtime_headroom_cleanup_result_gate,
+                    "payload": final_runtime_headroom_cleanup_result_gate.clone(),
                 },
                 "final_runtime_headroom_readiness_gate": {
                     "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_READINESS_GATE_SCHEMA,
@@ -13332,6 +13356,14 @@ impl WebPreviewView {
         let proof_card = self.agent_browser_panel_live_proof_readiness_card_from_gate(&result_gate);
         let exercise_plan = self.agent_browser_panel_live_validation_exercise_plan(window);
         let final_runtime_capacity = self.agent_browser_final_runtime_proof_capacity();
+        let final_runtime_headroom_recovery_plan =
+            Self::agent_browser_final_runtime_headroom_recovery_plan_from_capacity(
+                &final_runtime_capacity,
+            );
+        let final_runtime_headroom_cleanup_result_gate = self
+            .agent_browser_final_runtime_headroom_cleanup_result_gate_from_current_result_or_plan(
+                &final_runtime_headroom_recovery_plan,
+            );
 
         Self::agent_browser_panel_live_ui_proof_checklist_from_parts(
             &validation,
@@ -13340,6 +13372,7 @@ impl WebPreviewView {
             &proof_card,
             &exercise_plan,
             &final_runtime_capacity,
+            &final_runtime_headroom_cleanup_result_gate,
         )
     }
 
@@ -19698,6 +19731,7 @@ impl WebPreviewView {
                 &agent_browser_panel_live_proof_readiness_card,
                 &agent_browser_panel_live_validation_exercise_plan,
                 &agent_browser_final_runtime_proof_capacity,
+                &agent_browser_final_runtime_headroom_cleanup_result_gate,
             );
         let agent_plugin_catalog_current_summary =
             self.current_agent_plugin_catalog_summary(window);
@@ -24739,6 +24773,7 @@ impl WebPreviewView {
                 &agent_browser_panel_live_proof_readiness_card,
                 &agent_browser_panel_live_validation_exercise_plan,
                 &final_runtime_proof_capacity,
+                &final_runtime_headroom_cleanup_result_gate,
             );
 
         serde_json::json!({
