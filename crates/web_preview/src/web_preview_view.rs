@@ -2573,6 +2573,19 @@ impl WebPreviewView {
             "runtime_green_report_readiness_card_summary": bundle
                 .pointer("/handoff_artifacts/runtime_green_report_readiness_card/current_summary")
                 .cloned(),
+            "final_runtime_headroom_recovery_sequence_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_SEQUENCE_SCHEMA,
+            "final_runtime_headroom_recovery_sequence_summary": bundle
+                .pointer("/handoff_artifacts/final_runtime_headroom_recovery_sequence/current_summary")
+                .cloned(),
+            "final_runtime_headroom_recovery_sequence_status": bundle
+                .pointer("/handoff_artifacts/final_runtime_headroom_recovery_sequence/current_summary/status")
+                .and_then(Value::as_str),
+            "final_runtime_headroom_recovery_sequence_next_action": bundle
+                .pointer("/handoff_artifacts/final_runtime_headroom_recovery_sequence/current_summary/next_action")
+                .and_then(Value::as_str),
+            "final_runtime_headroom_recovery_sequence_first_blocked_step": bundle
+                .pointer("/handoff_artifacts/final_runtime_headroom_recovery_sequence/current_summary/first_blocked_step")
+                .and_then(Value::as_str),
             "read_only": true,
             "dispatches_input": false,
         }))
@@ -7875,6 +7888,13 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_reclaim_candidates_from_capacity(
                 &final_runtime_proof_capacity,
             );
+        let final_runtime_headroom_recovery_sequence =
+            Self::agent_browser_final_runtime_headroom_recovery_sequence(
+                &final_runtime_proof_capacity,
+                &final_runtime_headroom_size_inspection,
+                &final_runtime_headroom_cleanup_result_gate,
+                &final_runtime_headroom_readiness_gate,
+            );
         let agent_plugin_catalog_current_summary = manifest
             .pointer("/handoffs/plugin_catalog/current_summary")
             .cloned();
@@ -7945,6 +7965,9 @@ impl WebPreviewView {
                 "runtime_green_report_readiness_card_next_action": runtime_green_report_readiness_card.pointer("/next_action").and_then(Value::as_str),
                 "final_runtime_proof_capacity_status": final_runtime_proof_capacity.pointer("/status").and_then(Value::as_str),
                 "final_runtime_proof_capacity_ready": final_runtime_proof_capacity.pointer("/ready_for_just_run").and_then(Value::as_bool),
+                "final_runtime_headroom_recovery_sequence_status": final_runtime_headroom_recovery_sequence.pointer("/status").and_then(Value::as_str),
+                "final_runtime_headroom_recovery_sequence_next_action": final_runtime_headroom_recovery_sequence.pointer("/next_action").and_then(Value::as_str),
+                "final_runtime_headroom_recovery_sequence_first_blocked_step": final_runtime_headroom_recovery_sequence.pointer("/first_blocked_step/id").and_then(Value::as_str),
             },
             "handoff_artifacts": {
                 "status_packet": {
@@ -8358,6 +8381,18 @@ impl WebPreviewView {
                     "read_only": true,
                     "purpose": "Report the current target-drive headroom gate before panel live UI exercise and final just run proof."
                 },
+                "final_runtime_headroom_recovery_sequence": {
+                    "schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_SEQUENCE_SCHEMA,
+                    "source_observability_schema": AGENT_BROWSER_FINAL_VALIDATION_OBSERVABILITY_SCHEMA,
+                    "copy_action": "copy_agent_browser_final_validation_observability",
+                    "send_action": "send_agent_browser_final_validation_observability_to_agent",
+                    "current_summary": Self::agent_browser_final_runtime_headroom_recovery_sequence_summary(
+                        &final_runtime_headroom_recovery_sequence
+                    ),
+                    "current_sequence": final_runtime_headroom_recovery_sequence.clone(),
+                    "read_only": true,
+                    "purpose": "Expose the ordered target-drive headroom recovery path inside the final bundle without requiring a separate observability packet."
+                },
                 "final_proof_audit": {
                     "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                     "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
@@ -8497,6 +8532,7 @@ impl WebPreviewView {
                 }
             },
             "manual_windows_proof_order": [
+                "If capacity is blocked, read handoff_artifacts.final_runtime_headroom_recovery_sequence.current_sequence.first_blocked_step before any final proof attempt.",
                 "Copy or send the final runtime proof capacity and confirm ready_for_just_run=true.",
                 "If manual target/cache cleanup was needed, copy or send the cleanup-result template, fill it with the post-cleanup free space and just --dry-run run result, then check the cleanup-result gate.",
                 "Start the app once with just run on the current dev branch.",
@@ -26942,6 +26978,10 @@ impl WebPreviewView {
                         },
                         "final_validation_bundle_handoff": {
                             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
+                            "headroom_recovery_sequence_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_SEQUENCE_SCHEMA,
+                            "headroom_recovery_sequence_field": "handoff_artifacts.final_runtime_headroom_recovery_sequence",
+                            "headroom_recovery_sequence_summary_field": "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_summary",
+                            "headroom_recovery_sequence_first_blocked_step_field": "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_summary.first_blocked_step",
                             "result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
                             "result_status_values": ["not_run", "pass", "fail", "blocked", "skipped"],
                             "runtime_green_requires": [

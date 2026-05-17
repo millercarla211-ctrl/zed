@@ -2073,6 +2073,10 @@ fn browser_plugin_manifest() -> Value {
         },
         "final_validation_bundle_handoff": {
             "schema": AGENT_BROWSER_FINAL_VALIDATION_BUNDLE_SCHEMA,
+            "headroom_recovery_sequence_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_SEQUENCE_SCHEMA,
+            "headroom_recovery_sequence_field": "handoff_artifacts.final_runtime_headroom_recovery_sequence",
+            "headroom_recovery_sequence_summary_field": "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_summary",
+            "headroom_recovery_sequence_first_blocked_step_field": "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_summary.first_blocked_step",
             "result_schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
             "result_status_values": ["not_run", "pass", "fail", "blocked", "skipped"],
             "runtime_green_requires": [

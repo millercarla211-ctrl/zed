@@ -1,3 +1,16 @@
+[2026-05-18] - Final Bundle Recovery Sequence Alignment
+
+ADDED:
+- Final validation bundles now include the current final-runtime headroom recovery-sequence summary and payload.
+- Final bundle summaries and Agent/WebPreview catalogs now advertise recovery-sequence status, next-action, first-blocked-step, and bundle field locations.
+
+CHANGED:
+- Right-side AI panels can use the final validation bundle as the canonical one-packet proof handoff even when target-drive headroom is blocking the final `just run`.
+- `todo.txt` records the final bundle recovery sequence slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only status/catalog metadata. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Headroom Recovery Sequence Observability
 
 ADDED:
