@@ -3515,11 +3515,29 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
         .get("runtime_green_candidate")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let can_report_runtime_green = runtime_green_candidate && final_result_runtime_green;
+    let final_runtime_capacity = claim_gate
+        .get("final_runtime_proof_capacity")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let final_runtime_capacity_ready = final_runtime_capacity
+        .get("ready_for_just_run")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let checklist = claim_gate
+        .get("final_operator_checklist")
+        .unwrap_or(&Value::Null);
+    let can_run_final_manual_command = checklist
+        .get("can_run_final_manual_command")
+        .and_then(Value::as_bool)
+        .unwrap_or(runtime_green_candidate && final_runtime_capacity_ready);
+    let can_report_runtime_green =
+        runtime_green_candidate && final_result_runtime_green && final_runtime_capacity_ready;
     let status = if can_report_runtime_green {
         "ready_to_report_runtime_green"
     } else if !runtime_green_candidate {
         "runtime_evidence_required"
+    } else if !final_runtime_capacity_ready {
+        "final_runtime_capacity_required"
     } else if !final_result_present {
         "final_validation_result_missing"
     } else if !final_result_runtime_green {
@@ -3527,9 +3545,6 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
     } else {
         "manual_review_required"
     };
-    let checklist = claim_gate
-        .get("final_operator_checklist")
-        .unwrap_or(&Value::Null);
     let regression_watch_rollup = claim_gate
         .get("regression_watch")
         .cloned()
@@ -3654,43 +3669,99 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
         .get("ready_for_just_run")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let fallback_next_action = readiness
+        .get("next_recommended_action")
+        .and_then(Value::as_str)
+        .unwrap_or("copy_agent_plugin_runtime_green_claim_readiness");
+    let mut blockers = Vec::new();
+    if !runtime_green_candidate {
+        blockers.push(serde_json::json!({
+            "id": "runtime_green_candidate_false",
+            "label": "Runtime evidence is not yet ready.",
+            "severity": "blocked",
+            "required_field": "runtime_green_claim_readiness.runtime_green_candidate == true",
+            "recommended_action": fallback_next_action,
+            "read_only": true
+        }));
+    }
+    if !final_runtime_capacity_ready {
+        blockers.push(serde_json::json!({
+            "id": "final_runtime_capacity_not_ready",
+            "label": "The final runtime target drive does not have enough free space for just run.",
+            "severity": "blocked",
+            "required_field": "runtime_green_claim_readiness.final_runtime_capacity.ready_for_just_run == true",
+            "recommended_action": "copy_agent_browser_final_runtime_proof_capacity",
+            "read_only": true
+        }));
+    }
+    if !final_result_present {
+        blockers.push(serde_json::json!({
+            "id": "final_validation_result_missing",
+            "label": "The final manual Windows validation result has not been imported.",
+            "severity": "blocked",
+            "required_field": "runtime_green_claim_readiness.final_result_present == true",
+            "recommended_action": "copy_agent_browser_final_validation_result_template",
+            "read_only": true
+        }));
+    } else if !final_result_runtime_green {
+        blockers.push(serde_json::json!({
+            "id": "final_validation_result_not_runtime_green",
+            "label": "The imported final validation result is present but does not prove runtime green.",
+            "severity": "blocked",
+            "required_field": "runtime_green_claim_readiness.final_result_runtime_green == true",
+            "recommended_action": "copy_agent_browser_final_validation_result_template",
+            "read_only": true
+        }));
+    }
+    if !can_report && blockers.is_empty() {
+        blockers.push(serde_json::json!({
+            "id": "manual_review_required",
+            "label": "Manual review is required before reporting runtime green.",
+            "severity": "blocked",
+            "required_field": "runtime_green_report_gate.can_report_runtime_green == true",
+            "recommended_action": "copy_agent_plugin_runtime_green_claim_readiness",
+            "read_only": true
+        }));
+    }
+    let blocker = if can_report {
+        "none".to_string()
+    } else {
+        blockers
+            .first()
+            .and_then(|blocker| blocker.get("id"))
+            .and_then(Value::as_str)
+            .unwrap_or("manual_review_required")
+            .to_string()
+    };
     let status = if can_report {
         "ready_to_report_runtime_green"
-    } else if !runtime_green_candidate {
-        "blocked_by_runtime_evidence"
-    } else if !final_result_present && !final_runtime_capacity_ready {
-        "blocked_by_final_runtime_capacity"
-    } else if !final_result_present {
-        "blocked_by_missing_final_result"
-    } else if !final_result_runtime_green {
-        "blocked_by_final_result"
     } else {
-        "blocked_by_manual_review"
-    };
-    let blocker = if can_report {
-        "none"
-    } else if !runtime_green_candidate {
-        "runtime_green_candidate_false"
-    } else if !final_result_present && !final_runtime_capacity_ready {
-        "final_runtime_capacity_not_ready"
-    } else if !final_result_present {
-        "final_validation_result_missing"
-    } else if !final_result_runtime_green {
-        "final_validation_result_not_runtime_green"
-    } else {
-        "manual_review_required"
+        match blocker.as_str() {
+            "runtime_green_candidate_false" => "blocked_by_runtime_evidence",
+            "final_runtime_capacity_not_ready" => "blocked_by_final_runtime_capacity",
+            "final_validation_result_missing" => "blocked_by_missing_final_result",
+            "final_validation_result_not_runtime_green" => "blocked_by_final_result",
+            _ => "blocked_by_manual_review",
+        }
     };
     let label = if can_report {
         "Runtime-green ready to report"
     } else {
         "Runtime-green blocked by proof"
     };
-    let next_action = readiness
-        .get("next_recommended_action")
-        .and_then(Value::as_str)
-        .unwrap_or("copy_agent_plugin_runtime_green_claim_readiness");
+    let next_action = if can_report {
+        "copy_agent_plugin_runtime_green_report_gate".to_string()
+    } else {
+        blockers
+            .first()
+            .and_then(|blocker| blocker.get("recommended_action"))
+            .and_then(Value::as_str)
+            .unwrap_or(fallback_next_action)
+            .to_string()
+    };
     let badge =
-        runtime_green_report_badge_from_fields(status, label, can_report, blocker, next_action);
+        runtime_green_report_badge_from_fields(status, label, can_report, &blocker, &next_action);
+    let blocker_count = if can_report { 0 } else { blockers.len() };
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
@@ -3698,7 +3769,10 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
         "label": label,
         "severity": if can_report { "success" } else { "blocked" },
         "can_report_runtime_green": can_report,
-        "blocker": blocker,
+        "blocker": blocker.clone(),
+        "primary_blocker": blocker,
+        "blockers": blockers,
+        "blocker_count": blocker_count,
         "next_action": next_action,
         "badge": badge,
         "ready_lane_fraction": readiness.get("ready_lane_fraction").and_then(Value::as_str),
@@ -3806,6 +3880,15 @@ fn runtime_green_final_proof_guide(report_gate: &Value, root_mode: &str) -> Valu
         .get("blocker")
         .and_then(Value::as_str)
         .unwrap_or("unknown");
+    let blockers = report_gate
+        .get("blockers")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
+    let blocker_count = report_gate
+        .get("blocker_count")
+        .and_then(Value::as_u64)
+        .or_else(|| blockers.as_array().map(|blockers| blockers.len() as u64))
+        .unwrap_or(0);
     let status = if can_report {
         "ready_to_report_runtime_green"
     } else if blocker == "final_runtime_capacity_not_ready" {
@@ -3839,6 +3922,8 @@ fn runtime_green_final_proof_guide(report_gate: &Value, root_mode: &str) -> Valu
         "badge": badge,
         "can_report_runtime_green": can_report,
         "blocker": blocker,
+        "blockers": blockers,
+        "blocker_count": blocker_count,
         "next_action": next_action,
         "report_gate_status": report_gate.get("status").and_then(Value::as_str),
         "final_runtime_capacity": report_gate.get("final_runtime_capacity").cloned(),
@@ -3943,6 +4028,10 @@ fn runtime_green_final_proof_guide_summary(guide: &Value) -> Value {
             .get("can_report_runtime_green")
             .and_then(Value::as_bool),
         "blocker": guide.get("blocker").and_then(Value::as_str),
+        "blocker_count": guide.get("blocker_count").and_then(Value::as_u64),
+        "first_blocker_label": guide
+            .pointer("/blockers/0/label")
+            .and_then(Value::as_str),
         "next_action": guide.get("next_action").and_then(Value::as_str),
         "report_gate_status": guide
             .get("report_gate_status")
@@ -4019,6 +4108,19 @@ fn runtime_green_final_report_packet(
         .get("final_runtime_capacity")
         .cloned()
         .unwrap_or_else(|| serde_json::json!({}));
+    let report_gate_blockers = report_gate
+        .get("blockers")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
+    let report_gate_blocker_count = report_gate
+        .get("blocker_count")
+        .and_then(Value::as_u64)
+        .or_else(|| {
+            report_gate_blockers
+                .as_array()
+                .map(|blockers| blockers.len() as u64)
+        })
+        .unwrap_or(0);
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -4026,6 +4128,8 @@ fn runtime_green_final_report_packet(
         "root_mode": root_mode,
         "may_report_runtime_green": can_report,
         "blocker": if can_report { "none" } else { report_gate_blocker },
+        "blockers": report_gate_blockers.clone(),
+        "blocker_count": report_gate_blocker_count,
         "next_action": next_action,
         "final_manual_command": "just run",
         "final_runtime_capacity": final_runtime_capacity.clone(),
@@ -4035,6 +4139,8 @@ fn runtime_green_final_report_packet(
             "status": report_gate_status,
             "can_report_runtime_green": can_report,
             "blocker": report_gate_blocker,
+            "blockers": report_gate_blockers,
+            "blocker_count": report_gate_blocker_count,
             "label": report_gate.get("label").and_then(Value::as_str),
             "severity": report_gate.get("severity").and_then(Value::as_str),
             "next_action": next_report_action,
@@ -4119,6 +4225,10 @@ fn runtime_green_final_report_packet_summary(packet: &Value) -> Value {
             .get("may_report_runtime_green")
             .and_then(Value::as_bool),
         "blocker": packet.get("blocker").and_then(Value::as_str),
+        "blocker_count": packet.get("blocker_count").and_then(Value::as_u64),
+        "first_blocker_label": packet
+            .pointer("/blockers/0/label")
+            .and_then(Value::as_str),
         "next_action": packet.get("next_action").and_then(Value::as_str),
         "final_manual_command": packet
             .get("final_manual_command")
@@ -4188,8 +4298,32 @@ fn runtime_green_report_readiness_card(
         .pointer("/audit/status")
         .and_then(Value::as_str)
         .unwrap_or("unknown");
+    let final_runtime_capacity = final_report_packet
+        .get("final_runtime_capacity")
+        .or_else(|| report_gate.get("final_runtime_capacity"))
+        .unwrap_or(&Value::Null);
+    let final_runtime_capacity_ready = final_runtime_capacity
+        .get("ready_for_just_run")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let report_gate_blockers = final_report_packet
+        .get("blockers")
+        .or_else(|| report_gate.get("blockers"))
+        .unwrap_or(&Value::Null);
+    let blocker_count = final_report_packet
+        .get("blocker_count")
+        .and_then(Value::as_u64)
+        .or_else(|| report_gate.get("blocker_count").and_then(Value::as_u64))
+        .or_else(|| {
+            report_gate_blockers
+                .as_array()
+                .map(|blockers| blockers.len() as u64)
+        })
+        .unwrap_or(0);
     let status = if may_report_runtime_green && report_gate_can_report {
         "ready_to_report_runtime_green"
+    } else if !final_runtime_capacity_ready {
+        "final_runtime_capacity_required"
     } else if audit_status == "awaiting_final_runtime_result_import" {
         "final_runtime_result_import_required"
     } else if audit_status == "final_result_needs_evidence_or_blocker_fix" {
@@ -4216,16 +4350,14 @@ fn runtime_green_report_readiness_card(
         .get("regression_watch")
         .or_else(|| report_gate.get("regression_watch"))
         .unwrap_or(&Value::Null);
-    let final_runtime_capacity = final_report_packet
-        .get("final_runtime_capacity")
-        .or_else(|| report_gate.get("final_runtime_capacity"))
-        .unwrap_or(&Value::Null);
 
     serde_json::json!({
         "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA,
         "status": status,
         "may_report_runtime_green": may_report_runtime_green,
         "blocker": blocker,
+        "blockers": report_gate_blockers,
+        "blocker_count": blocker_count,
         "next_action": next_action,
         "final_manual_command": "just run",
         "final_runtime_capacity": final_runtime_capacity,
@@ -4259,6 +4391,10 @@ fn runtime_green_report_readiness_card(
             "status": report_gate.get("status").and_then(Value::as_str),
             "can_report_runtime_green": report_gate_can_report,
             "blocker": report_gate.get("blocker").and_then(Value::as_str),
+            "blocker_count": report_gate.get("blocker_count").and_then(Value::as_u64),
+            "first_blocker_label": report_gate
+                .pointer("/blockers/0/label")
+                .and_then(Value::as_str),
             "severity": report_gate.get("severity").and_then(Value::as_str),
             "badge": report_gate.get("badge").cloned(),
             "next_action": report_gate.get("next_action").and_then(Value::as_str),
@@ -4271,6 +4407,10 @@ fn runtime_green_report_readiness_card(
             "status": final_report_packet.get("status").and_then(Value::as_str),
             "may_report_runtime_green": may_report_runtime_green,
             "blocker": final_report_packet.get("blocker").and_then(Value::as_str),
+            "blocker_count": final_report_packet.get("blocker_count").and_then(Value::as_u64),
+            "first_blocker_label": final_report_packet
+                .pointer("/blockers/0/label")
+                .and_then(Value::as_str),
             "next_action": final_report_packet.get("next_action").and_then(Value::as_str),
         },
         "final_proof_audit": {
@@ -4348,6 +4488,10 @@ fn runtime_green_report_readiness_card_summary(card: &Value) -> Value {
             .get("may_report_runtime_green")
             .and_then(Value::as_bool),
         "blocker": card.get("blocker").and_then(Value::as_str),
+        "blocker_count": card.get("blocker_count").and_then(Value::as_u64),
+        "first_blocker_label": card
+            .pointer("/blockers/0/label")
+            .and_then(Value::as_str),
         "next_action": card.get("next_action").and_then(Value::as_str),
         "final_manual_command": card
             .get("final_manual_command")

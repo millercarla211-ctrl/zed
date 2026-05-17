@@ -1,3 +1,19 @@
+[2026-05-17] - Browser Chrome Runtime Report Blockers
+
+ADDED:
+- Runtime-green report gates now expose ordered blocker arrays with ids, labels, required fields, recommended actions, and read-only safety flags so AI panels can show all active blockers at once.
+- Final proof guides, final report packets, and report-readiness cards now carry blocker counts and first-blocker labels in compact summaries for right-side panel rendering.
+
+CHANGED:
+- Runtime-green claim readiness now binds final runtime capacity directly and requires `final_runtime_capacity.ready_for_just_run == true` before reportability can become true.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 90/100 and the remaining live UI/runtime validation targets.
+
+FIXED:
+- Fixed the claim-readiness capacity path so the final runtime capacity values are available inside the reportability calculation instead of only later packet consumers.
+
+NOTES:
+- This slice is read-only runtime-status hardening. It does not run `just`, run Cargo, launch browsers, run Node or Playwright, take screenshots, dispatch input, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Runtime Status Capacity
 
 ADDED:
