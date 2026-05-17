@@ -1260,9 +1260,29 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "final_runtime_headroom_readiness_gate_capacity_ready_field": plugin
                 .pointer("/final_runtime_proof_capacity/headroom_readiness_gate_capacity_ready_field")
                 .and_then(Value::as_str),
+            "final_runtime_headroom_readiness_gate_capacity_required_free_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_readiness_gate_capacity_required_free_field",
+                )
+                .and_then(Value::as_str),
             "final_runtime_headroom_readiness_gate_capacity_observed_free_field": plugin
                 .pointer(
                     "/final_runtime_proof_capacity/headroom_readiness_gate_capacity_observed_free_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_readiness_gate_capacity_missing_free_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_readiness_gate_capacity_missing_free_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_readiness_gate_status_summary_required_free_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_readiness_gate_status_summary_required_free_field",
+                )
+                .and_then(Value::as_str),
+            "final_runtime_headroom_readiness_gate_status_summary_missing_free_field": plugin
+                .pointer(
+                    "/final_runtime_proof_capacity/headroom_readiness_gate_status_summary_missing_free_field",
                 )
                 .and_then(Value::as_str),
             "final_runtime_headroom_reclaim_candidates_schema": plugin
@@ -2219,7 +2239,11 @@ fn browser_plugin_manifest() -> Value {
             "headroom_readiness_gate_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_readiness_gate",
             "headroom_readiness_gate_capacity_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity",
             "headroom_readiness_gate_capacity_ready_field": "ready_for_just_run",
+            "headroom_readiness_gate_capacity_required_free_field": "target.required_free_gib",
             "headroom_readiness_gate_capacity_observed_free_field": "target.observed_free_gib",
+            "headroom_readiness_gate_capacity_missing_free_field": "target.missing_free_gib",
+            "headroom_readiness_gate_status_summary_required_free_field": "final_runtime_headroom_readiness_gate_required_free_gib",
+            "headroom_readiness_gate_status_summary_missing_free_field": "final_runtime_headroom_readiness_gate_missing_free_gib",
             "headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
             "headroom_reclaim_candidates_field": "headroom_reclaim_candidates",
             "headroom_reclaim_candidates_capacity_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_reclaim_candidates",

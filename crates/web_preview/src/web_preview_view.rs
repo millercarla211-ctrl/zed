@@ -2165,11 +2165,26 @@ impl WebPreviewView {
         let final_runtime_headroom_capacity_ready = packet
             .pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/ready_for_just_run")
             .and_then(Value::as_bool);
+        let final_runtime_headroom_capacity_required_free_gib = packet
+            .pointer(
+                "/packet/latest/agent_browser_final_runtime_proof_capacity/target/required_free_gib",
+            )
+            .and_then(Value::as_f64);
         let final_runtime_headroom_capacity_observed_free_gib = packet
             .pointer(
                 "/packet/latest/agent_browser_final_runtime_proof_capacity/target/observed_free_gib",
             )
             .and_then(Value::as_f64);
+        let final_runtime_headroom_capacity_missing_free_gib = packet
+            .pointer(
+                "/packet/latest/agent_browser_final_runtime_proof_capacity/target/missing_free_gib",
+            )
+            .and_then(Value::as_f64);
+        let final_runtime_headroom_capacity_missing_free_bytes = packet
+            .pointer(
+                "/packet/latest/agent_browser_final_runtime_proof_capacity/target/missing_free_bytes",
+            )
+            .and_then(Value::as_u64);
         let final_runtime_headroom_readiness_gate_status = packet
             .pointer("/packet/latest/agent_browser_final_runtime_headroom_readiness_gate/status")
             .and_then(Value::as_str)
@@ -2210,6 +2225,18 @@ impl WebPreviewView {
                     .pointer("/packet/latest/agent_browser_final_runtime_proof_capacity")
                     .map(Self::agent_browser_final_runtime_headroom_readiness_gate_from_capacity)
             });
+        let final_runtime_headroom_readiness_gate_required_free_gib =
+            final_runtime_headroom_readiness_gate_payload
+                .as_ref()
+                .and_then(|gate| gate.pointer("/target/required_free_gib"))
+                .and_then(Value::as_f64)
+                .or(final_runtime_headroom_capacity_required_free_gib);
+        let final_runtime_headroom_readiness_gate_missing_free_gib =
+            final_runtime_headroom_readiness_gate_payload
+                .as_ref()
+                .and_then(|gate| gate.pointer("/target/missing_free_gib"))
+                .and_then(Value::as_f64)
+                .or(final_runtime_headroom_capacity_missing_free_gib);
         let final_runtime_headroom_reclaim_candidates_payload = packet
             .pointer("/packet/latest/agent_browser_final_runtime_headroom_reclaim_candidates")
             .cloned()
@@ -2334,7 +2361,11 @@ impl WebPreviewView {
             "final_runtime_proof_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
             "final_runtime_proof_capacity_status": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/status").and_then(Value::as_str),
             "final_runtime_proof_capacity_ready": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/ready_for_just_run").and_then(Value::as_bool),
+            "final_runtime_proof_capacity_target_root": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/target/target_root").and_then(Value::as_str),
+            "final_runtime_proof_capacity_required_free_gib": final_runtime_headroom_capacity_required_free_gib,
             "final_runtime_proof_capacity_observed_free_gib": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/target/observed_free_gib").and_then(Value::as_f64),
+            "final_runtime_proof_capacity_missing_free_gib": final_runtime_headroom_capacity_missing_free_gib,
+            "final_runtime_proof_capacity_missing_free_bytes": final_runtime_headroom_capacity_missing_free_bytes,
             "final_runtime_target_drive_policy_schema": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/target_drive_policy/schema").and_then(Value::as_str),
             "final_runtime_target_move_allowed_by_default": packet.pointer("/packet/latest/agent_browser_final_runtime_proof_capacity/target_drive_policy/target_move_allowed_by_default").and_then(Value::as_bool),
             "final_runtime_headroom_recovery_plan_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECOVERY_PLAN_SCHEMA,
@@ -2387,6 +2418,8 @@ impl WebPreviewView {
             "final_runtime_headroom_readiness_gate_status": final_runtime_headroom_readiness_gate_status,
             "final_runtime_headroom_readiness_gate_ready": final_runtime_headroom_readiness_gate_ready,
             "final_runtime_headroom_readiness_gate_blocker": final_runtime_headroom_readiness_gate_blocker,
+            "final_runtime_headroom_readiness_gate_required_free_gib": final_runtime_headroom_readiness_gate_required_free_gib,
+            "final_runtime_headroom_readiness_gate_missing_free_gib": final_runtime_headroom_readiness_gate_missing_free_gib,
             "final_runtime_headroom_readiness_gate_copy_action": "copy_agent_browser_final_runtime_headroom_readiness_gate",
             "final_runtime_headroom_readiness_gate_send_action": "send_agent_browser_final_runtime_headroom_readiness_gate_to_agent",
             "final_runtime_headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
@@ -27365,7 +27398,11 @@ impl WebPreviewView {
                             "headroom_readiness_gate_status_packet_field": "packet.latest.agent_browser_final_runtime_headroom_readiness_gate",
                             "headroom_readiness_gate_capacity_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity",
                             "headroom_readiness_gate_capacity_ready_field": "ready_for_just_run",
+                            "headroom_readiness_gate_capacity_required_free_field": "target.required_free_gib",
                             "headroom_readiness_gate_capacity_observed_free_field": "target.observed_free_gib",
+                            "headroom_readiness_gate_capacity_missing_free_field": "target.missing_free_gib",
+                            "headroom_readiness_gate_status_summary_required_free_field": "final_runtime_headroom_readiness_gate_required_free_gib",
+                            "headroom_readiness_gate_status_summary_missing_free_field": "final_runtime_headroom_readiness_gate_missing_free_gib",
                             "headroom_reclaim_candidates_schema": AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_RECLAIM_CANDIDATES_SCHEMA,
                             "headroom_reclaim_candidates_field": "headroom_reclaim_candidates",
                             "headroom_reclaim_candidates_capacity_packet_field": "packet.latest.agent_browser_final_runtime_proof_capacity.headroom_reclaim_candidates",

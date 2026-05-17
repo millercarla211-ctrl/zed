@@ -1,3 +1,16 @@
+[2026-05-18] - Headroom Deficit Summary Surfacing
+
+ADDED:
+- Status packet summaries now expose final-runtime target root, required free GiB, missing free GiB, and missing free bytes from the capacity preflight.
+- Headroom readiness gate summaries now surface required and missing free GiB using the copied gate or the capacity-derived fallback.
+- Agent and WebPreview catalogs now advertise the capacity and status-summary fields panels need to show the exact target-drive deficit before `just run`.
+
+CHANGED:
+- `todo.txt` records the headroom deficit summary slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is compact reporting/catalog hardening. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Stale Final Result Report Surfacing
 
 ADDED:
