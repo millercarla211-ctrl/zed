@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Card Affordances
+
+ADDED:
+- Agent Browser panel card displays now include ordered `zed.web_preview.agent_browser_panel_card_affordance.v1` controls for primary, refresh, details, and secondary status actions.
+- Card affordances carry role, label, action, kind, status/session fields, variant actions, updated proof fields, instructions, enabled state, and safety metadata for panel rendering.
+
+CHANGED:
+- Panel deck render contracts now validate affordance coverage, Agent Panel deck summaries list available controls, and Agent/WebPreview catalogs advertise the card affordance schema and field.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 48/100 and the next remaining proof targets.
+
+NOTES:
+- This is a panel affordance metadata slice. It does not launch Chrome, run Node or Playwright, dispatch browser input, mutate managed profiles, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Card Render Contract
 
 ADDED:
