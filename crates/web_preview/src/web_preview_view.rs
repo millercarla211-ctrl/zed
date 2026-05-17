@@ -184,6 +184,8 @@ const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_report_readiness_card_summary.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_proof_audit_summary.v1";
+const AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA: &str =
+    "zed.agent_plugins.browser_panel_live_proof_status.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_proof_path.v1";
 const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
@@ -2064,6 +2066,8 @@ impl WebPreviewView {
             "panel_live_validation_result_gate_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
             "panel_live_validation_result_gate_status": packet.pointer("/packet/latest/agent_browser_panel_live_validation_result_gate/status").and_then(Value::as_str),
             "panel_live_validation_result_gate_result_status": packet.pointer("/packet/latest/agent_browser_panel_live_validation_result_gate/result/status").and_then(Value::as_str),
+            "browser_panel_live_proof_status_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
+            "browser_panel_live_proof_status_runtime_field": "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status",
             "panel_live_validation_exercise_plan_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
             "panel_live_validation_exercise_plan_status": packet.pointer("/packet/latest/agent_browser_panel_live_validation_exercise_plan/status").and_then(Value::as_str),
             "panel_live_validation_exercise_plan_suggested_control_count": packet.pointer("/packet/latest/agent_browser_panel_live_validation_exercise_plan/summary/suggested_control_count").and_then(Value::as_u64),
@@ -4390,6 +4394,10 @@ impl WebPreviewView {
                     "result_template_send_action": "send_agent_browser_panel_live_validation_result_template_to_agent",
                     "result_gate_copy_action": "copy_agent_browser_panel_live_validation_result_gate",
                     "result_gate_send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
+                    "runtime_status_proof_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
+                    "runtime_status_proof_field": "browser_panel_live_proof_status",
+                    "runtime_status_claim_field": "runtime_green_claim_readiness.browser_panel_live_proof_status",
+                    "runtime_status_report_gate_field": "runtime_green_report_gate.browser_panel_live_proof_status",
                     "exercise_plan_copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
                     "exercise_plan_send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
                     "latest_summary": self.latest_agent_browser_panel_live_validation_summary(),
@@ -20335,6 +20343,7 @@ impl WebPreviewView {
                         "every required manual_evidence_template.checks entry has status == pass",
                         "manual_evidence_template.overall_blocker == null",
                         "panel_live_validation_result_gate.ready_for_final_runtime == true",
+                        "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status.ready_for_final_runtime == true",
                         "executor_validation_progress.status == manual_windows_runtime_validation_ready"
                     ],
                     "copy_action": "copy_agent_browser_final_validation_bundle",
@@ -21190,6 +21199,10 @@ impl WebPreviewView {
                             "result_gate_copy_action": "copy_agent_browser_panel_live_validation_result_gate",
                             "result_gate_send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
                             "result_gate_status_packet_field": "packet.latest.agent_browser_panel_live_validation_result_gate",
+                            "runtime_status_proof_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
+                            "runtime_status_proof_field": "browser_panel_live_proof_status",
+                            "runtime_status_claim_field": "runtime_green_claim_readiness.browser_panel_live_proof_status",
+                            "runtime_status_report_gate_field": "runtime_green_report_gate.browser_panel_live_proof_status",
                             "exercise_plan_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
                             "exercise_plan_copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
                             "exercise_plan_send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
@@ -21238,6 +21251,7 @@ impl WebPreviewView {
                             "panel_live_validation_result_template_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
                             "panel_live_validation_result_gate_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
                             "panel_live_validation_exercise_plan_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
+                            "browser_panel_live_proof_status_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
                             "final_runtime_proof_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
                             "final_proof_audit_schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
                             "final_proof_audit_summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
@@ -21305,6 +21319,7 @@ impl WebPreviewView {
                                 "every required manual_evidence_template.checks entry has status == pass",
                                 "manual_evidence_template.overall_blocker == null",
                             "panel_live_validation_result_gate.ready_for_final_runtime == true",
+                            "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status.ready_for_final_runtime == true",
                             "agent_browser_final_runtime_proof_capacity.ready_for_just_run == true",
                             "executor_validation_progress.status == manual_windows_runtime_validation_ready"
                         ],
@@ -21464,6 +21479,7 @@ impl WebPreviewView {
                             {"id": "browser.panel_live_validation_result_template", "state": "available", "description": "Copy or send the fillable panel control-result template for the live panel validation exercise."},
                             {"id": "browser.panel_live_validation_result_gate", "state": "available", "description": "Copy or send the live panel result gate before final runtime proof."},
                             {"id": "browser.panel_live_validation_exercise_plan", "state": "available", "description": "Copy or send the ordered right-side panel exercise, result import, and gate-check plan."},
+                            {"id": "browser.panel_live_proof_status", "state": "available_in_runtime_status", "description": "Read durable panel live-validation proof status from inspect_agent_plugin_runtime_status before final runtime proof."},
                             {"id": "browser.plugin_bootstrap_readiness", "state": "available", "description": "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."},
                             {"id": "browser.runtime_green_claim_readiness", "state": "available", "description": "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."},
                             {"id": "browser.runtime_green_report_gate", "state": "available", "description": "Copy or send the canonical runtime-green ready/blocked report gate."},

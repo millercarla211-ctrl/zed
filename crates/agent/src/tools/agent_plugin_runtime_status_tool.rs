@@ -136,9 +136,26 @@ const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
     "zed.web_preview.agent_browser_final_proof_audit.v1";
 const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA: &str =
     "zed.agent_plugins.runtime_green_final_proof_audit_summary.v1";
+const AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA: &str =
+    "zed.agent_plugins.browser_panel_live_proof_status.v1";
 const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
 const AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME: &str =
     "latest-agent-browser-final-validation-result.json";
+const AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_card_control_result.v1";
+const AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_control_result_import_receipt.v1";
+const AGENT_BROWSER_PANEL_CONTROL_RESULT_DIR_NAME: &str = "browser-panel-control-results";
+const AGENT_BROWSER_PANEL_CONTROL_RESULT_FILE_NAME: &str =
+    "latest-agent-browser-panel-control-result.json";
+const AGENT_BROWSER_PANEL_CONTROL_RESULT_ARCHIVE_PREFIX: &str =
+    "agent-browser-panel-control-result-";
+const AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_live_validation.v1";
+const AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_live_validation_result_gate.v1";
+const AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_live_validation_exercise_plan.v1";
 const MANAGED_CHROME_EXECUTION_RECEIPT_PREFIX: &str = "managed-chrome-execution-receipt-";
 const MANAGED_CHROME_RUNNER_READY_OUTCOME: &str = "ready_runner_adapter_pending";
 const MANAGED_CHROME_EXECUTION_READY_OUTCOME: &str = "completed";
@@ -278,6 +295,8 @@ struct AgentPluginRuntimeRoots {
     browser_latest_payload: PathBuf,
     browser_final_validation_dir: PathBuf,
     browser_final_validation_latest_result: PathBuf,
+    browser_panel_control_result_dir: PathBuf,
+    browser_panel_control_result_latest_result: PathBuf,
     chrome_queue_dir: PathBuf,
     chrome_latest_payload: PathBuf,
     chrome_receipt_dir: PathBuf,
@@ -330,6 +349,10 @@ impl AgentPluginRuntimeRoots {
             plugin_root.join(AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME);
         let browser_final_validation_latest_result =
             browser_final_validation_dir.join(AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME);
+        let browser_panel_control_result_dir =
+            plugin_root.join(AGENT_BROWSER_PANEL_CONTROL_RESULT_DIR_NAME);
+        let browser_panel_control_result_latest_result =
+            browser_panel_control_result_dir.join(AGENT_BROWSER_PANEL_CONTROL_RESULT_FILE_NAME);
         let chrome_queue_dir = plugin_root.join("chrome-payloads");
         let chrome_latest_payload = chrome_queue_dir.join(AGENT_CHROME_PAYLOAD_QUEUE_FILE_NAME);
         let chrome_receipt_dir = plugin_root.join("chrome-receipts");
@@ -361,6 +384,8 @@ impl AgentPluginRuntimeRoots {
             browser_latest_payload,
             browser_final_validation_dir,
             browser_final_validation_latest_result,
+            browser_panel_control_result_dir,
+            browser_panel_control_result_latest_result,
             chrome_queue_dir,
             chrome_latest_payload,
             chrome_receipt_dir,
@@ -403,6 +428,8 @@ impl AgentPluginRuntimeRoots {
             &self.browser_latest_payload,
             &self.browser_final_validation_dir,
             &self.browser_final_validation_latest_result,
+            &self.browser_panel_control_result_dir,
+            &self.browser_panel_control_result_latest_result,
             &self.chrome_queue_dir,
             &self.chrome_latest_payload,
             &self.chrome_receipt_dir,
@@ -419,6 +446,24 @@ impl AgentPluginRuntimeRoots {
         ]
         .into_iter()
         .all(|path| self.managed_path_valid(path))
+    }
+
+    fn browser_panel_control_result_latest_paths(&self) -> Vec<(&'static str, PathBuf, PathBuf)> {
+        let mut paths = Vec::new();
+        if let Some(root_path) = self.active_project_root.as_ref() {
+            let managed_root = root_path.join("tools").join("agent-plugins");
+            let latest_path = managed_root
+                .join(AGENT_BROWSER_PANEL_CONTROL_RESULT_DIR_NAME)
+                .join(AGENT_BROWSER_PANEL_CONTROL_RESULT_FILE_NAME);
+            paths.push(("workspace", managed_root, latest_path));
+        }
+
+        let managed_root = data_dir().join("agent-plugins");
+        let latest_path = managed_root
+            .join(AGENT_BROWSER_PANEL_CONTROL_RESULT_DIR_NAME)
+            .join(AGENT_BROWSER_PANEL_CONTROL_RESULT_FILE_NAME);
+        paths.push(("zed_data", managed_root, latest_path));
+        paths
     }
 }
 
@@ -441,6 +486,8 @@ fn inspect_runtime_status(
     let bootstrap_readiness = input
         .include_host_checks
         .then(|| bootstrap_readiness(roots, host_checks.as_ref()));
+    let browser_panel_live_proof_status_value =
+        browser_panel_live_proof_status(roots, current_epoch_millis());
     let browser = browser_status(roots, input.include_latest_handoffs);
     let chrome = chrome_status(roots, input.include_latest_handoffs, host_checks.as_ref());
     let pc_use = pc_use_status(roots, input.include_latest_handoffs);
@@ -545,6 +592,7 @@ fn inspect_runtime_status(
             "chrome": chrome,
             "pc_use": pc_use,
         },
+        "browser_panel_live_proof_status": browser_panel_live_proof_status_value,
         "host": host_checks,
         "bootstrap_readiness": bootstrap_readiness,
         "runtime_green_blocker_summary": runtime_green_blocker_summary,
@@ -604,9 +652,16 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
             "payload_queue_inspection": AGENT_BROWSER_PAYLOAD_QUEUE_INSPECTION_SCHEMA,
             "final_validation_result": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
             "final_validation_result_import_receipt": AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA,
+            "panel_control_result": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
+            "panel_control_result_import_receipt": AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA,
+            "panel_live_validation": AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA,
+            "panel_live_validation_result_gate": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
+            "panel_live_validation_exercise_plan": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
+            "panel_live_proof_status": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
             "final_runtime_proof_capacity": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
             "final_proof_audit": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
             "final_proof_audit_summary": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA,
+            "browser_panel_live_proof_status": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
             "runtime_green_final_proof_guide": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
             "runtime_green_final_proof_guide_summary": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
             "runtime_green_final_report_packet": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -629,7 +684,18 @@ fn browser_status(roots: &AgentPluginRuntimeRoots, include_latest_handoff: bool)
                 None,
                 include_latest_handoff,
             ),
+            "panel_control_result_dir": dir_probe(&roots.browser_panel_control_result_dir),
+            "latest_panel_control_result": file_probe(
+                &roots.browser_panel_control_result_latest_result,
+                Some(AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA),
+                None,
+                include_latest_handoff,
+            ),
         },
+        "panel_live_proof_status": browser_panel_live_proof_status(
+            roots,
+            current_epoch_millis(),
+        ),
         "requirements_before_input": [
             "active WebPreview session",
             "interactive browser action unlock",
@@ -1258,6 +1324,8 @@ fn roots_value(roots: &AgentPluginRuntimeRoots) -> Value {
         "browser_queue_dir": path_string(&roots.browser_queue_dir),
         "browser_final_validation_dir": path_string(&roots.browser_final_validation_dir),
         "browser_final_validation_latest_result": path_string(&roots.browser_final_validation_latest_result),
+        "browser_panel_control_result_dir": path_string(&roots.browser_panel_control_result_dir),
+        "browser_panel_control_result_latest_result": path_string(&roots.browser_panel_control_result_latest_result),
         "chrome_queue_dir": path_string(&roots.chrome_queue_dir),
         "chrome_receipt_dir": path_string(&roots.chrome_receipt_dir),
         "chrome_execution_dir": path_string(&roots.chrome_execution_dir),
@@ -1450,6 +1518,250 @@ fn final_runtime_proof_capacity_summary(capacity: &Value) -> Value {
         "copy_action": capacity.pointer("/webpreview_handoff/copy_action").and_then(Value::as_str),
         "next_action": capacity.get("next_action").and_then(Value::as_str),
         "read_only": capacity.pointer("/safety/read_only").and_then(Value::as_bool),
+    })
+}
+
+fn browser_panel_live_proof_status(roots: &AgentPluginRuntimeRoots, generated_at_ms: u64) -> Value {
+    let durable_evidence = browser_panel_control_result_durable_evidence(roots, generated_at_ms);
+    let durable_roots = durable_evidence
+        .get("roots")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let latest_result_summary = durable_roots
+        .iter()
+        .filter_map(|root| root.get("summary"))
+        .find(|summary| {
+            summary
+                .get("status_valid")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        })
+        .cloned()
+        .or_else(|| {
+            durable_roots
+                .iter()
+                .find_map(|root| root.get("summary").cloned())
+        });
+    let result_status = latest_result_summary
+        .as_ref()
+        .and_then(|summary| summary.get("status"))
+        .and_then(Value::as_str)
+        .unwrap_or("not_run");
+    let valid_result_present = durable_evidence
+        .get("has_valid_result")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let result_completed = durable_roots.iter().any(|root| {
+        root.pointer("/summary/status_valid")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+            && root.pointer("/summary/status").and_then(Value::as_str) == Some("completed")
+    });
+    let result_blocked = durable_roots.iter().any(|root| {
+        root.pointer("/summary/status_valid")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+            && matches!(
+                root.pointer("/summary/status").and_then(Value::as_str),
+                Some("blocked" | "failed")
+            )
+    });
+    let status = if result_completed {
+        "ready_for_final_runtime"
+    } else if result_blocked {
+        "live_panel_result_blocked"
+    } else if valid_result_present {
+        "live_panel_result_imported_not_complete"
+    } else {
+        "awaiting_live_panel_result_import"
+    };
+    let next_action = match status {
+        "ready_for_final_runtime" => {
+            "Continue to the final runtime capacity gate and final Windows just run proof."
+        }
+        "live_panel_result_blocked" => {
+            "Review the imported panel result blocker, resolve it in the right-side panel, and import a completed result."
+        }
+        "live_panel_result_imported_not_complete" => {
+            "Fill the panel live-validation result template with status completed after exercising a visible panel control, then import it again."
+        }
+        _ => {
+            "Copy the panel exercise plan and result template, exercise one visible right-side panel control, then import the completed panel result from the clipboard."
+        }
+    };
+
+    serde_json::json!({
+        "schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
+        "status": status,
+        "generated_at_ms": generated_at_ms,
+        "ready_for_final_runtime": result_completed,
+        "result": {
+            "present": valid_result_present,
+            "status": result_status,
+            "completed": result_completed,
+            "blocked": result_blocked,
+            "summary": latest_result_summary,
+        },
+        "durable_evidence": durable_evidence,
+        "result_gate_projection": {
+            "schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
+            "ready_for_final_runtime": result_completed,
+            "requires_live_validation_packet": true,
+            "requires_completed_imported_result": true,
+            "source": "durable panel control-result JSON written by WebPreview import action",
+        },
+        "required_order": [
+            "copy_agent_browser_panel_live_validation",
+            "copy_agent_browser_panel_live_validation_exercise_plan",
+            "copy_agent_browser_panel_live_validation_result_template",
+            "import_agent_browser_panel_control_result_from_clipboard",
+            "copy_agent_browser_panel_live_validation_result_gate",
+            AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME,
+            "just run"
+        ],
+        "webpreview_handoff": {
+            "validation_copy_action": "copy_agent_browser_panel_live_validation",
+            "validation_send_action": "send_agent_browser_panel_live_validation_to_agent",
+            "exercise_plan_copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
+            "exercise_plan_send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
+            "result_template_copy_action": "copy_agent_browser_panel_live_validation_result_template",
+            "result_template_send_action": "send_agent_browser_panel_live_validation_result_template_to_agent",
+            "result_import_action": "import_agent_browser_panel_control_result_from_clipboard",
+            "result_copy_action": "copy_agent_browser_panel_control_result",
+            "result_send_action": "send_agent_browser_panel_control_result_to_agent",
+            "result_gate_copy_action": "copy_agent_browser_panel_live_validation_result_gate",
+            "result_gate_send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
+            "status_packet_field": "packet.latest.agent_browser_panel_live_validation_result_gate",
+        },
+        "next_action": next_action,
+        "safety": {
+            "read_only": true,
+            "writes_files": false,
+            "runs_just": false,
+            "runs_cargo": false,
+            "runs_node": false,
+            "runs_playwright": false,
+            "launches_browser": false,
+            "dispatches_input": false,
+            "touches_real_browser_profiles": false,
+            "import_action_writes_managed_proof_only": true,
+        }
+    })
+}
+
+fn browser_panel_control_result_durable_evidence(
+    roots: &AgentPluginRuntimeRoots,
+    generated_at_ms: u64,
+) -> Value {
+    let mut entries = Vec::new();
+    let mut has_valid_result = false;
+    let mut latest_status: Option<String> = None;
+
+    for (root_mode, managed_root, latest_path) in roots.browser_panel_control_result_latest_paths()
+    {
+        let mut probe = proof_file_probe(
+            &latest_path,
+            Some(AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA),
+            None,
+            generated_at_ms,
+        );
+        let summary = match read_compact_json_file(&latest_path) {
+            Ok(result) => browser_panel_control_result_summary(&result),
+            Err(error) => serde_json::json!({
+                "state": error.get("state").and_then(Value::as_str).unwrap_or("read_error"),
+                "status": "not_run",
+                "status_valid": false,
+                "error": error,
+            }),
+        };
+        has_valid_result |= summary
+            .get("status_valid")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if latest_status.is_none() {
+            latest_status = summary
+                .get("status")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+        }
+        probe["summary"] = summary.clone();
+        let exists = probe
+            .get("exists")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        entries.push(serde_json::json!({
+            "root_mode": root_mode,
+            "managed_root": path_string(&managed_root),
+            "latest_path": path_string(&latest_path),
+            "probe": probe,
+            "exists": exists,
+            "summary": summary,
+        }));
+    }
+
+    serde_json::json!({
+        "status": if has_valid_result {
+            "managed_panel_control_result_available"
+        } else {
+            "managed_panel_control_result_missing_or_invalid"
+        },
+        "has_valid_result": has_valid_result,
+        "latest_result_status": latest_status,
+        "result_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
+        "result_file_name": AGENT_BROWSER_PANEL_CONTROL_RESULT_FILE_NAME,
+        "archive_prefix": AGENT_BROWSER_PANEL_CONTROL_RESULT_ARCHIVE_PREFIX,
+        "roots": entries,
+        "read_only": true,
+    })
+}
+
+fn browser_panel_control_result_summary(result: &Value) -> Value {
+    let status = result
+        .pointer("/status")
+        .and_then(Value::as_str)
+        .unwrap_or("not_run");
+    let declared_status_values = result
+        .get("declared_status_values")
+        .cloned()
+        .or_else(|| result.pointer("/result_contract/status_values").cloned())
+        .unwrap_or_else(|| {
+            serde_json::json!([
+                "not_run",
+                "queued",
+                "completed",
+                "blocked",
+                "failed",
+                "skipped"
+            ])
+        });
+    let status_allowed = declared_status_values
+        .as_array()
+        .is_some_and(|values| values.iter().any(|value| value.as_str() == Some(status)));
+    let schema_valid = result.pointer("/schema").and_then(Value::as_str)
+        == Some(AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA);
+    let status_valid = schema_valid && status_allowed;
+
+    serde_json::json!({
+        "state": "parsed_result",
+        "schema": result.pointer("/schema").and_then(Value::as_str),
+        "status": status,
+        "status_valid": status_valid,
+        "status_allowed": status_allowed,
+        "result_id": result.pointer("/result_id").and_then(Value::as_str),
+        "source": result.pointer("/source").and_then(Value::as_str),
+        "source_event_id": result.pointer("/source_event_id").and_then(Value::as_str),
+        "action": result.pointer("/action").and_then(Value::as_str),
+        "timestamp_ms": result.pointer("/timestamp_ms").and_then(Value::as_u64),
+        "message": result.pointer("/message").and_then(Value::as_str),
+        "result_contract_matched": result.pointer("/result_contract_matched").and_then(Value::as_bool),
+        "declared_status_values": declared_status_values,
+        "has_result_contract": result.get("result_contract").is_some_and(|value| !value.is_null()),
+        "has_source_summary": result.get("source_summary").is_some_and(|value| !value.is_null()),
+        "read_only": result.pointer("/safety/read_only").and_then(Value::as_bool),
+        "dispatches_input": result.pointer("/safety/dispatches_input").and_then(Value::as_bool),
+        "launches_browser": result.pointer("/safety/launches_browser").and_then(Value::as_bool),
+        "runs_node": result.pointer("/safety/runs_node").and_then(Value::as_bool),
     })
 }
 
@@ -1659,8 +1971,13 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
         &roots.browser_final_validation_latest_result,
         generated_at_ms,
     );
+    let browser_panel_live_proof_status = browser_panel_live_proof_status(roots, generated_at_ms);
     let final_result_runtime_green_candidate = browser_final_validation_result
         .pointer("/summary/runtime_green_candidate")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let browser_panel_live_result_ready = browser_panel_live_proof_status
+        .get("ready_for_final_runtime")
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let chrome_runner_receipt = outcome_receipt_probe(
@@ -1720,6 +2037,27 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
                 "import_agent_browser_final_validation_result_from_clipboard",
                 "copy_agent_browser_final_validation_result_import_receipt",
                 "send_agent_browser_final_validation_result_to_agent",
+                AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME
+            ]
+        }));
+    }
+
+    if !browser_panel_live_result_ready {
+        blockers.push(serde_json::json!({
+            "area": "browser_webpreview",
+            "id": "panel_live_result_not_ready",
+            "severity": "manual_required",
+            "reason": "No completed imported right-side panel live-validation result is present in the managed proof roots.",
+            "latest_result": browser_panel_live_proof_status
+                .pointer("/result/summary")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({})),
+            "next_actions": [
+                "copy_agent_browser_panel_live_validation",
+                "copy_agent_browser_panel_live_validation_exercise_plan",
+                "copy_agent_browser_panel_live_validation_result_template",
+                "import_agent_browser_panel_control_result_from_clipboard",
+                "copy_agent_browser_panel_live_validation_result_gate",
                 AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME
             ]
         }));
@@ -1899,10 +2237,15 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
                 })
         })
         .count();
+    let runtime_green_candidate = runtime_evidence_blockers == 0
+        && final_result_runtime_green_candidate
+        && browser_panel_live_result_ready;
     let status = if runtime_evidence_blockers > 0 {
         "blocked_missing_runtime_evidence"
-    } else if final_result_runtime_green_candidate {
+    } else if runtime_green_candidate {
         "runtime_green_candidate"
+    } else if !browser_panel_live_result_ready {
+        "panel_live_validation_result_required"
     } else {
         "manual_webpreview_final_result_required"
     };
@@ -1912,13 +2255,14 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
         "generated_at_ms": generated_at_ms,
         "status": status,
         "runtime_status": runtime_status,
-        "runtime_green_candidate": runtime_evidence_blockers == 0 && final_result_runtime_green_candidate,
+        "runtime_green_candidate": runtime_green_candidate,
         "blocker_count": blockers.len(),
         "runtime_evidence_blocker_count": runtime_evidence_blockers,
         "manual_blocker_count": blockers.len().saturating_sub(runtime_evidence_blockers),
         "blockers": blockers,
         "latest_evidence": {
             "browser_final_validation_result": browser_final_validation_result,
+            "browser_panel_live_proof_status": browser_panel_live_proof_status,
             "asset_readiness_summary": asset_summary,
             "managed_chrome_execution_receipt": latest_chrome_execution_receipt,
             "managed_chrome_runner_receipt": chrome_runner_receipt,
@@ -1958,6 +2302,7 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
         "runtime_green_requires": [
             "no critical or runtime_evidence_missing blockers",
             "managed WebPreview final validation result file reports runtime_green_candidate=true",
+            "right-side panel live-validation result gate has a completed imported panel result",
             "managed Chrome runner receipt outcome == ready_runner_adapter_pending",
             "managed Chrome execution receipt outcome == completed",
             "PC-use runner receipt outcome == ready_future_executor_pending",
@@ -1992,6 +2337,10 @@ fn runtime_green_readiness_scorecard(runtime_status: &str, blocker_summary: &Val
     let browser_payload_ready = scorecard_bool_at(
         blocker_summary,
         "/latest_evidence/browser_latest_payload/exists",
+    );
+    let browser_panel_live_result_ready = scorecard_bool_at(
+        blocker_summary,
+        "/latest_evidence/browser_panel_live_proof_status/ready_for_final_runtime",
     );
     let chrome_assets_ready = scorecard_bool_at(
         blocker_summary,
@@ -2030,6 +2379,7 @@ fn runtime_green_readiness_scorecard(runtime_status: &str, blocker_summary: &Val
     let browser_ready = roots_ready
         && browser_final_result_ready
         && browser_payload_ready
+        && browser_panel_live_result_ready
         && browser_blockers.is_empty();
     let chrome_ready = roots_ready
         && chrome_assets_ready
@@ -2052,9 +2402,10 @@ fn runtime_green_readiness_scorecard(runtime_status: &str, blocker_summary: &Val
             serde_json::json!({
                 "latest_browser_payload_present": browser_payload_ready,
                 "final_validation_result_runtime_green": browser_final_result_ready,
+                "panel_live_result_ready": browser_panel_live_result_ready,
             }),
             &browser_blockers,
-            "Managed Browser payload plus imported WebPreview final validation result.",
+            "Managed Browser payload, completed panel live-validation result, and imported WebPreview final validation result.",
         ),
         runtime_green_scorecard_lane(
             "managed_chrome",
@@ -2837,6 +3188,8 @@ fn runtime_observability_plugin_handoff(lane_id: &str) -> Value {
             "send_action": "send_agent_browser_executor_validation_progress_to_agent",
             "final_bundle_action": "copy_agent_browser_final_validation_bundle",
             "final_result_template_action": "copy_agent_browser_final_validation_result_template",
+            "panel_live_validation_action": "copy_agent_browser_panel_live_validation",
+            "panel_live_result_gate_action": "copy_agent_browser_panel_live_validation_result_gate",
         }),
         "managed_chrome" => serde_json::json!({
             "queue_inspection_tool": AGENT_CHROME_PAYLOAD_QUEUE_INSPECT_TOOL_NAME,
@@ -2865,16 +3218,19 @@ fn runtime_observability_plugin_regression_watch(lane_id: &str) -> Value {
                 "Editor typing remains responsive before and after WebPreview Browser actions.",
                 "WebPreview focus returns to the expected surface after navigation, reload, tab switch, and URL edit.",
                 "Native click, type, key, scroll, history, and cache receipts remain fresh before any final runtime-green claim.",
+                "Panel live-validation result gate remains completed before final just run.",
                 "Final validation result import keeps durable evidence non-empty for every required manual check."
             ],
             "must_not_regress": [
                 "No browser action should route keyboard input to the editor or stale WebPreview item unexpectedly.",
                 "No read-only handoff should dispatch click, type, key, scroll, screenshot, or process-launch behavior.",
+                "No final runtime proof should skip the panel live-validation result import.",
                 "No runtime-green report should be possible without the imported final validation result."
             ],
             "proof_sources": [
                 "agent_browser_executor_validation_progress",
                 "agent_browser_native_dispatch_receipt_matrix",
+                "agent_browser_panel_live_validation_result_gate",
                 "agent_browser_final_validation_result_import_receipt",
                 "runtime_green_claim_gate"
             ],
@@ -2944,6 +3300,7 @@ fn runtime_observability_plugin_watch_surfaces(lane_id: &str) -> Vec<&'static st
         "browser_webpreview" => vec![
             "editor caret and typing latency",
             "WebPreview focus after navigation or reload",
+            "right-side panel live-validation result import and gate",
             "native click/type/key/scroll/history/cache receipts",
             "manual final validation result evidence",
         ],
@@ -3009,6 +3366,10 @@ fn runtime_green_proof_path(
         .pointer("/latest_evidence/browser_final_validation_result/summary/runtime_green_candidate")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let browser_panel_live_result_ready = blocker_summary
+        .pointer("/latest_evidence/browser_panel_live_proof_status/ready_for_final_runtime")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let current_best_next = operator_handoff
         .get("current_best_next")
         .cloned()
@@ -3036,7 +3397,10 @@ fn runtime_green_proof_path(
         "runtime_evidence_required"
     } else if stale_required_file_count > 0 {
         "fresh_runtime_evidence_required"
-    } else if !browser_final_validation_candidate || manual_blocker_count > 0 {
+    } else if !browser_final_validation_candidate
+        || !browser_panel_live_result_ready
+        || manual_blocker_count > 0
+    {
         "manual_final_result_required"
     } else if lane_count > 0 && ready_lane_count == lane_count {
         "ready_for_final_runtime_validation"
@@ -3049,7 +3413,10 @@ fn runtime_green_proof_path(
         "runtime_evidence_required"
     } else if stale_required_file_count > 0 {
         "fresh_runtime_evidence_required"
-    } else if !browser_final_validation_candidate || manual_blocker_count > 0 {
+    } else if !browser_final_validation_candidate
+        || !browser_panel_live_result_ready
+        || manual_blocker_count > 0
+    {
         "manual_final_result_required"
     } else if lane_count > 0 && ready_lane_count < lane_count {
         "pending_runtime_lane"
@@ -3077,6 +3444,10 @@ fn runtime_green_proof_path(
                 .pointer("/latest_evidence/browser_final_validation_result/summary")
                 .cloned()
                 .unwrap_or_else(|| serde_json::json!({})),
+            "browser_panel_live_proof_status": blocker_summary
+                .pointer("/latest_evidence/browser_panel_live_proof_status")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({})),
         },
         "claim_gate": {
             "ready": runtime_green_candidate,
@@ -3087,6 +3458,7 @@ fn runtime_green_proof_path(
             "missing_required_file_count": missing_required_file_count,
             "stale_required_file_count": stale_required_file_count,
             "browser_final_validation_runtime_green": browser_final_validation_candidate,
+            "browser_panel_live_result_ready": browser_panel_live_result_ready,
             "requires_final_windows_just_run": true,
             "requires_final_runtime_proof_capacity": true,
             "final_runtime_proof_capacity_ready": final_runtime_proof_capacity
@@ -3100,6 +3472,7 @@ fn runtime_green_proof_path(
                 "missing_required_file_count == 0",
                 "stale_required_file_count == 0",
                 "final_runtime_proof_capacity.ready_for_just_run == true before manual just run",
+                "browser_panel_live_result_ready == true",
                 "browser_final_validation_runtime_green == true"
             ]
         },
@@ -3121,6 +3494,7 @@ fn runtime_green_proof_path(
             "first_pending_lane_label": current_best_next_label,
             "first_pending_lane_status": current_best_next_status,
             "browser_final_validation_runtime_green": browser_final_validation_candidate,
+            "browser_panel_live_result_ready": browser_panel_live_result_ready,
             "can_claim_runtime_green": runtime_green_candidate,
             "next_operator_step": if runtime_green_candidate {
                 "Run the final manual Windows runtime proof before reporting runtime-green."
@@ -3130,6 +3504,7 @@ fn runtime_green_proof_path(
         },
         "proof_files": {
             "browser_final_validation_result": path_string(&roots.browser_final_validation_latest_result),
+            "browser_panel_control_result": path_string(&roots.browser_panel_control_result_latest_result),
             "browser_latest_payload": path_string(&roots.browser_latest_payload),
             "managed_chrome_latest_payload": path_string(&roots.chrome_latest_payload),
             "managed_chrome_runner_receipt": path_string(&roots.chrome_latest_runner_receipt),
@@ -3148,6 +3523,7 @@ fn runtime_green_proof_path(
                     "runtime_observability_digest.plugin_matrix",
                     "runtime_observability_digest.plugin_matrix.regression_watch_rollup",
                     "runtime_green_operator_handoff",
+                    "browser_panel_live_proof_status",
                     "final_runtime_proof_capacity",
                     "final_runtime_proof_capacity_summary",
                     "runtime_green_report_gate",
@@ -3176,6 +3552,20 @@ fn runtime_green_proof_path(
                 "field": "runtime_green_operator_handoff.current_best_next",
                 "purpose": "Choose the next Browser/WebPreview, managed Chrome, PC-use, or final validation action.",
                 "writes_files": "only when a permissioned tool explicitly writes managed receipts",
+                "dispatches_input": false
+            },
+            {
+                "step": "verify_panel_live_result",
+                "field": "browser_panel_live_proof_status",
+                "purpose": "Confirm a completed imported right-side panel control result exists before the final Windows runtime proof.",
+                "webpreview_actions": [
+                    "copy_agent_browser_panel_live_validation",
+                    "copy_agent_browser_panel_live_validation_exercise_plan",
+                    "copy_agent_browser_panel_live_validation_result_template",
+                    "import_agent_browser_panel_control_result_from_clipboard",
+                    "copy_agent_browser_panel_live_validation_result_gate"
+                ],
+                "writes_files": "only when the explicit WebPreview import action writes managed panel-result proof",
                 "dispatches_input": false
             },
             {
@@ -3225,6 +3615,14 @@ fn runtime_green_proof_path(
                 "copy_action": "copy_agent_browser_final_runtime_proof_capacity",
                 "send_action": "send_agent_browser_final_runtime_proof_capacity_to_agent"
             },
+            "browser_panel_live_proof_status": {
+                "schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
+                "source": "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status",
+                "result_gate_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
+                "copy_action": "copy_agent_browser_panel_live_validation_result_gate",
+                "send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
+                "result_import_action": "import_agent_browser_panel_control_result_from_clipboard"
+            },
             "runtime_green_final_proof_guide": {
                 "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA,
                 "summary_schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA,
@@ -3271,6 +3669,7 @@ fn runtime_green_proof_path(
         "reads_from": [
             "runtime_observability_digest",
             "runtime_green_operator_handoff",
+            "browser_panel_live_proof_status",
             "runtime_green_blocker_summary",
             "runtime_green_readiness_scorecard",
             "final_runtime_proof_capacity",
@@ -3338,6 +3737,14 @@ fn runtime_green_claim_gate(proof_path: &Value, final_runtime_proof_capacity: &V
         .get("ready_for_just_run")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let browser_panel_live_proof_status = proof_path
+        .pointer("/current/browser_panel_live_proof_status")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let browser_panel_live_result_ready = browser_panel_live_proof_status
+        .get("ready_for_final_runtime")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let regression_watch_rollup = proof_path
         .pointer("/current/regression_watch_rollup")
         .cloned()
@@ -3364,6 +3771,8 @@ fn runtime_green_claim_gate(proof_path: &Value, final_runtime_proof_capacity: &V
         "first_pending_lane_label": operator_summary.get("first_pending_lane_label").and_then(Value::as_str),
         "first_pending_lane_status": operator_summary.get("first_pending_lane_status").and_then(Value::as_str),
         "browser_final_validation_runtime_green": operator_summary.get("browser_final_validation_runtime_green").and_then(Value::as_bool),
+        "browser_panel_live_result_ready": browser_panel_live_result_ready,
+        "browser_panel_live_proof_status": browser_panel_live_proof_status,
         "can_claim_runtime_green": operator_summary.get("can_claim_runtime_green").and_then(Value::as_bool),
         "claim_only_when": claim_gate
             .get("claim_only_when")
@@ -3412,14 +3821,6 @@ fn runtime_green_claim_gate_summary(claim_gate: &Value) -> Value {
     let checklist = claim_gate
         .get("final_operator_checklist")
         .unwrap_or(&Value::Null);
-    let final_runtime_capacity = claim_gate
-        .get("final_runtime_proof_capacity")
-        .cloned()
-        .unwrap_or_else(|| serde_json::json!({}));
-    let final_runtime_capacity_ready = final_runtime_capacity
-        .get("ready_for_just_run")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
     let can_run_final_manual_command = checklist
         .get("can_run_final_manual_command")
         .and_then(Value::as_bool)
@@ -3450,6 +3851,12 @@ fn runtime_green_claim_gate_summary(claim_gate: &Value) -> Value {
             .and_then(Value::as_bool),
         "final_runtime_capacity_status": claim_gate
             .pointer("/final_runtime_proof_capacity/status")
+            .and_then(Value::as_str),
+        "browser_panel_live_result_ready": claim_gate
+            .get("browser_panel_live_result_ready")
+            .and_then(Value::as_bool),
+        "browser_panel_live_status": claim_gate
+            .pointer("/browser_panel_live_proof_status/status")
             .and_then(Value::as_str),
         "regression_watch_status": claim_gate.pointer("/regression_watch/status").and_then(Value::as_str),
         "regression_watch_lane_count": claim_gate
@@ -3523,6 +3930,14 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
         .get("ready_for_just_run")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let browser_panel_live_proof_status = claim_gate
+        .get("browser_panel_live_proof_status")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let browser_panel_live_result_ready = browser_panel_live_proof_status
+        .get("ready_for_final_runtime")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let checklist = claim_gate
         .get("final_operator_checklist")
         .unwrap_or(&Value::Null);
@@ -3530,14 +3945,18 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
         .get("can_run_final_manual_command")
         .and_then(Value::as_bool)
         .unwrap_or(runtime_green_candidate && final_runtime_capacity_ready);
-    let can_report_runtime_green =
-        runtime_green_candidate && final_result_runtime_green && final_runtime_capacity_ready;
+    let can_report_runtime_green = runtime_green_candidate
+        && final_result_runtime_green
+        && browser_panel_live_result_ready
+        && final_runtime_capacity_ready;
     let status = if can_report_runtime_green {
         "ready_to_report_runtime_green"
     } else if !runtime_green_candidate {
         "runtime_evidence_required"
     } else if !final_runtime_capacity_ready {
         "final_runtime_capacity_required"
+    } else if !browser_panel_live_result_ready {
+        "panel_live_validation_result_required"
     } else if !final_result_present {
         "final_validation_result_missing"
     } else if !final_result_runtime_green {
@@ -3585,6 +4004,8 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
             .pointer("/next_required_proof/recommended_tool")
             .and_then(Value::as_str),
         "final_runtime_capacity": final_runtime_capacity,
+        "browser_panel_live_proof_status": browser_panel_live_proof_status,
+        "browser_panel_live_result_ready": browser_panel_live_result_ready,
         "regression_watch": {
             "schema": AGENT_PLUGIN_RUNTIME_OBSERVABILITY_WATCH_ROLLUP_SCHEMA,
             "status": regression_watch_rollup.get("status").and_then(Value::as_str),
@@ -3631,6 +4052,7 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
             "may_report_runtime_green": can_report_runtime_green,
             "requires_runtime_green_candidate": true,
             "requires_imported_final_result": true,
+            "requires_panel_live_result_ready": true,
             "requires_final_manual_command": "just run",
             "requires_final_runtime_capacity_ready": true,
             "can_run_final_manual_command": can_run_final_manual_command,
@@ -3669,6 +4091,14 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
         .get("ready_for_just_run")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let browser_panel_live_proof_status = readiness
+        .get("browser_panel_live_proof_status")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let browser_panel_live_result_ready = browser_panel_live_proof_status
+        .get("ready_for_final_runtime")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let fallback_next_action = readiness
         .get("next_recommended_action")
         .and_then(Value::as_str)
@@ -3691,6 +4121,16 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
             "severity": "blocked",
             "required_field": "runtime_green_claim_readiness.final_runtime_capacity.ready_for_just_run == true",
             "recommended_action": "copy_agent_browser_final_runtime_proof_capacity",
+            "read_only": true
+        }));
+    }
+    if !browser_panel_live_result_ready {
+        blockers.push(serde_json::json!({
+            "id": "panel_live_validation_result_not_ready",
+            "label": "The right-side panel live-validation result has not been completed and imported.",
+            "severity": "blocked",
+            "required_field": "runtime_green_claim_readiness.browser_panel_live_proof_status.ready_for_final_runtime == true",
+            "recommended_action": "copy_agent_browser_panel_live_validation_result_template",
             "read_only": true
         }));
     }
@@ -3739,6 +4179,7 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
         match blocker.as_str() {
             "runtime_green_candidate_false" => "blocked_by_runtime_evidence",
             "final_runtime_capacity_not_ready" => "blocked_by_final_runtime_capacity",
+            "panel_live_validation_result_not_ready" => "blocked_by_panel_live_validation",
             "final_validation_result_missing" => "blocked_by_missing_final_result",
             "final_validation_result_not_runtime_green" => "blocked_by_final_result",
             _ => "blocked_by_manual_review",
@@ -3781,6 +4222,8 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
         "next_required_proof_id": readiness.get("next_required_proof_id").and_then(Value::as_str),
         "regression_watch": readiness.get("regression_watch").cloned(),
         "final_runtime_capacity": final_runtime_capacity,
+        "browser_panel_live_proof_status": browser_panel_live_proof_status,
+        "browser_panel_live_result_ready": browser_panel_live_result_ready,
         "final_result_present": final_result_present,
         "final_result_runtime_green": final_result_runtime_green,
         "final_manual_command": "just run",
@@ -3793,6 +4236,7 @@ fn runtime_green_report_gate(readiness: &Value) -> Value {
             "may_report_runtime_green": can_report,
             "requires_runtime_green_candidate": true,
             "requires_imported_final_result": true,
+            "requires_panel_live_result_ready": true,
             "requires_final_runtime_capacity_before_manual_run": true,
             "requires_final_manual_command": "just run",
             "requires_regression_watch_review_before_manual_claim": true
@@ -3893,6 +4337,8 @@ fn runtime_green_final_proof_guide(report_gate: &Value, root_mode: &str) -> Valu
         "ready_to_report_runtime_green"
     } else if blocker == "final_runtime_capacity_not_ready" {
         "final_runtime_capacity_required"
+    } else if blocker == "panel_live_validation_result_not_ready" {
+        "panel_live_validation_result_required"
     } else if blocker == "final_validation_result_missing"
         || blocker == "final_validation_result_not_runtime_green"
     {
@@ -3904,6 +4350,8 @@ fn runtime_green_final_proof_guide(report_gate: &Value, root_mode: &str) -> Valu
         "copy_agent_plugin_runtime_green_report_gate"
     } else if blocker == "final_runtime_capacity_not_ready" {
         "copy_agent_browser_final_runtime_proof_capacity"
+    } else if blocker == "panel_live_validation_result_not_ready" {
+        "copy_agent_browser_panel_live_validation_result_template"
     } else if blocker == "final_validation_result_missing"
         || blocker == "final_validation_result_not_runtime_green"
     {
@@ -3927,12 +4375,20 @@ fn runtime_green_final_proof_guide(report_gate: &Value, root_mode: &str) -> Valu
         "next_action": next_action,
         "report_gate_status": report_gate.get("status").and_then(Value::as_str),
         "final_runtime_capacity": report_gate.get("final_runtime_capacity").cloned(),
+        "browser_panel_live_proof_status": report_gate.get("browser_panel_live_proof_status").cloned(),
         "manual_command": "just run",
         "ordered_steps": [
             {
                 "id": "read_report_badge",
                 "action": "copy_agent_plugin_runtime_green_report_gate",
                 "purpose": "Start from the compact ready/blocked status row before opening larger proof packets.",
+                "writes_files": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "copy_panel_live_result_gate",
+                "action": "copy_agent_browser_panel_live_validation_result_gate",
+                "purpose": "Confirm the right-side panel live-validation result is imported and completed before final runtime proof.",
                 "writes_files": false,
                 "dispatches_input": false
             },
@@ -4036,6 +4492,12 @@ fn runtime_green_final_proof_guide_summary(guide: &Value) -> Value {
         "report_gate_status": guide
             .get("report_gate_status")
             .and_then(Value::as_str),
+        "browser_panel_live_status": guide
+            .pointer("/browser_panel_live_proof_status/status")
+            .and_then(Value::as_str),
+        "browser_panel_live_result_ready": guide
+            .pointer("/browser_panel_live_proof_status/ready_for_final_runtime")
+            .and_then(Value::as_bool),
         "manual_command": guide.get("manual_command").and_then(Value::as_str),
         "ordered_step_count": guide
             .get("ordered_steps")
@@ -4108,6 +4570,10 @@ fn runtime_green_final_report_packet(
         .get("final_runtime_capacity")
         .cloned()
         .unwrap_or_else(|| serde_json::json!({}));
+    let browser_panel_live_proof_status = report_gate
+        .get("browser_panel_live_proof_status")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
     let report_gate_blockers = report_gate
         .get("blockers")
         .cloned()
@@ -4133,6 +4599,7 @@ fn runtime_green_final_report_packet(
         "next_action": next_action,
         "final_manual_command": "just run",
         "final_runtime_capacity": final_runtime_capacity.clone(),
+        "browser_panel_live_proof_status": browser_panel_live_proof_status.clone(),
         "regression_watch": regression_watch,
         "report_gate": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
@@ -4171,6 +4638,15 @@ fn runtime_green_final_report_packet(
                 "required_for_final_status_claim": true
             },
             {
+                "id": "browser_panel_live_result_ready",
+                "ready": browser_panel_live_proof_status
+                    .get("ready_for_final_runtime")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                "source": "runtime_green_report_gate.browser_panel_live_proof_status.ready_for_final_runtime",
+                "required_before_manual_command": "just run"
+            },
+            {
                 "id": "final_runtime_capacity_before_manual_run",
                 "ready": final_runtime_capacity
                     .get("ready_for_just_run")
@@ -4199,6 +4675,7 @@ fn runtime_green_final_report_packet(
         "reporting_policy": {
             "may_report_runtime_green": can_report,
             "source_of_truth": "runtime_green_report_gate",
+            "requires_panel_live_result_ready": true,
             "requires_final_runtime_capacity_before_manual_run": true,
             "requires_final_manual_command": "just run",
             "requires_imported_final_result": true,
@@ -4242,6 +4719,12 @@ fn runtime_green_final_report_packet_summary(packet: &Value) -> Value {
         "report_gate_next_action": packet
             .pointer("/report_gate/next_action")
             .and_then(Value::as_str),
+        "browser_panel_live_status": packet
+            .pointer("/browser_panel_live_proof_status/status")
+            .and_then(Value::as_str),
+        "browser_panel_live_result_ready": packet
+            .pointer("/browser_panel_live_proof_status/ready_for_final_runtime")
+            .and_then(Value::as_bool),
         "final_proof_guide_status": packet
             .pointer("/final_proof_guide/status")
             .and_then(Value::as_str),
@@ -4306,6 +4789,14 @@ fn runtime_green_report_readiness_card(
         .get("ready_for_just_run")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let browser_panel_live_proof_status = final_report_packet
+        .get("browser_panel_live_proof_status")
+        .or_else(|| report_gate.get("browser_panel_live_proof_status"))
+        .unwrap_or(&Value::Null);
+    let browser_panel_live_result_ready = browser_panel_live_proof_status
+        .get("ready_for_final_runtime")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let report_gate_blockers = final_report_packet
         .get("blockers")
         .or_else(|| report_gate.get("blockers"))
@@ -4324,6 +4815,8 @@ fn runtime_green_report_readiness_card(
         "ready_to_report_runtime_green"
     } else if !final_runtime_capacity_ready {
         "final_runtime_capacity_required"
+    } else if !browser_panel_live_result_ready {
+        "panel_live_validation_result_required"
     } else if audit_status == "awaiting_final_runtime_result_import" {
         "final_runtime_result_import_required"
     } else if audit_status == "final_result_needs_evidence_or_blocker_fix" {
@@ -4361,6 +4854,7 @@ fn runtime_green_report_readiness_card(
         "next_action": next_action,
         "final_manual_command": "just run",
         "final_runtime_capacity": final_runtime_capacity,
+        "browser_panel_live_proof_status": browser_panel_live_proof_status,
         "claim_readiness": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
             "status": claim_readiness.get("status").and_then(Value::as_str),
@@ -4385,6 +4879,9 @@ fn runtime_green_report_readiness_card(
             "final_runtime_capacity_ready": claim_readiness
                 .pointer("/final_runtime_capacity/ready_for_just_run")
                 .and_then(Value::as_bool),
+            "browser_panel_live_result_ready": claim_readiness
+                .get("browser_panel_live_result_ready")
+                .and_then(Value::as_bool),
         },
         "report_gate": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA,
@@ -4401,6 +4898,9 @@ fn runtime_green_report_readiness_card(
             "final_runtime_capacity_ready": report_gate
                 .pointer("/final_runtime_capacity/ready_for_just_run")
                 .and_then(Value::as_bool),
+            "browser_panel_live_result_ready": report_gate
+                .get("browser_panel_live_result_ready")
+                .and_then(Value::as_bool),
         },
         "final_report_packet": {
             "schema": AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA,
@@ -4412,6 +4912,9 @@ fn runtime_green_report_readiness_card(
                 .pointer("/blockers/0/label")
                 .and_then(Value::as_str),
             "next_action": final_report_packet.get("next_action").and_then(Value::as_str),
+            "browser_panel_live_result_ready": final_report_packet
+                .pointer("/browser_panel_live_proof_status/ready_for_final_runtime")
+                .and_then(Value::as_bool),
         },
         "final_proof_audit": {
             "schema": AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA,
@@ -4532,6 +5035,12 @@ fn runtime_green_report_readiness_card_summary(card: &Value) -> Value {
         "final_runtime_capacity_observed_free_gib": card
             .pointer("/final_runtime_capacity/target/observed_free_gib")
             .and_then(Value::as_f64),
+        "browser_panel_live_status": card
+            .pointer("/browser_panel_live_proof_status/status")
+            .and_then(Value::as_str),
+        "browser_panel_live_result_ready": card
+            .pointer("/browser_panel_live_proof_status/ready_for_final_runtime")
+            .and_then(Value::as_bool),
         "final_proof_audit_status": card
             .pointer("/final_proof_audit/status")
             .and_then(Value::as_str),
@@ -4671,6 +5180,9 @@ fn runtime_green_final_proof_audit(
             }
         },
         "latest": {
+            "browser_panel_live_proof_status": report_gate
+                .get("browser_panel_live_proof_status")
+                .cloned(),
             "final_validation_result": final_result_summary,
             "claim_readiness": {
                 "schema": AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA,
@@ -4754,6 +5266,12 @@ fn runtime_green_final_proof_audit_summary(audit: &Value) -> Value {
         "report_gate_can_report_runtime_green": audit
             .pointer("/audit/report_gate/can_report_runtime_green")
             .and_then(Value::as_bool),
+        "browser_panel_live_status": audit
+            .pointer("/latest/browser_panel_live_proof_status/status")
+            .and_then(Value::as_str),
+        "browser_panel_live_result_ready": audit
+            .pointer("/latest/browser_panel_live_proof_status/ready_for_final_runtime")
+            .and_then(Value::as_bool),
         "report_gate_next_action": audit
             .pointer("/audit/report_gate/next_action")
             .and_then(Value::as_str),
@@ -4829,6 +5347,11 @@ fn runtime_green_next_required_proof(
             "primary_next_actions": primary_next_actions,
             "operator_steps": operator_steps,
             "recommended_sequence": [
+                "copy_agent_browser_panel_live_validation",
+                "copy_agent_browser_panel_live_validation_exercise_plan",
+                "copy_agent_browser_panel_live_validation_result_template",
+                "import_agent_browser_panel_control_result_from_clipboard",
+                "copy_agent_browser_panel_live_validation_result_gate",
                 "copy_agent_browser_final_validation_bundle",
                 "copy_agent_browser_final_validation_result_template",
                 "run just run manually when ready for final runtime proof",
@@ -5123,6 +5646,7 @@ fn runtime_green_operator_handoff(
         "reads_from": [
             "runtime_green_blocker_summary",
             "runtime_green_readiness_scorecard",
+            "browser_panel_live_proof_status",
             "final_runtime_proof_capacity"
         ],
         "safety": {
@@ -5185,6 +5709,20 @@ fn runtime_green_lane_operator_steps(root_mode: &str, lane_id: &str) -> Value {
                     "include_payload_packet": false
                 },
                 "writes_files": false,
+                "dispatches_input": false
+            },
+            {
+                "id": "webpreview_panel_live_result",
+                "webpreview_actions": [
+                    "copy_agent_browser_panel_live_validation",
+                    "copy_agent_browser_panel_live_validation_exercise_plan",
+                    "copy_agent_browser_panel_live_validation_result_template",
+                    "import_agent_browser_panel_control_result_from_clipboard",
+                    "copy_agent_browser_panel_live_validation_result_gate"
+                ],
+                "purpose": "Persist a completed right-side panel control result before the final runtime proof.",
+                "writes_files": false,
+                "managed_proof_write": "only after explicit WebPreview panel-result import action",
                 "dispatches_input": false
             },
             {
@@ -5458,6 +5996,7 @@ fn observability_profiles(runtime_status: &str, roots: &AgentPluginRuntimeRoots)
         "final_proof_order": [
             "run just run once for final Windows runtime validation",
             "prove normal editor typing and caret behavior",
+            "prove right-side Agent Browser panel controls and import a completed panel result",
             "prove WebPreview keyboard, pointer, wheel, navigation, and receipt handoffs",
             "prove managed Chrome safe adapter receipts without real-profile writes",
             "prove PC-use context, target, queue, and runner receipt chain stays non-dispatching",
@@ -5474,6 +6013,13 @@ fn observability_proof_freshness(roots: &AgentPluginRuntimeRoots) -> Value {
     track_required_proof_file(
         "browser.latest_payload",
         &roots.browser_latest_payload,
+        generated_at_ms,
+        &mut missing,
+        &mut stale,
+    );
+    track_required_proof_file(
+        "browser.panel_live_result",
+        &roots.browser_panel_control_result_latest_result,
         generated_at_ms,
         &mut missing,
         &mut stale,
@@ -5548,6 +6094,10 @@ fn observability_proof_freshness(roots: &AgentPluginRuntimeRoots) -> Value {
                 &roots.browser_final_validation_latest_result,
                 generated_at_ms,
             ),
+            "browser_panel_live_proof_status": browser_panel_live_proof_status(
+                roots,
+                generated_at_ms,
+            ),
             "chrome_latest_payload": proof_file_probe(
                 &roots.chrome_latest_payload,
                 Some(AGENT_CHROME_PAYLOAD_QUEUE_ITEM_SCHEMA),
@@ -5617,6 +6167,7 @@ fn observability_proof_freshness(roots: &AgentPluginRuntimeRoots) -> Value {
         },
         "manual_session_state_required": [
             "WebPreview final validation bundle copy/send state",
+            "WebPreview panel live-validation result template/import/gate state",
             "WebPreview final result template copy/send state",
             "WebPreview imported final result state",
             "Managed WebPreview final validation result file"
@@ -5668,6 +6219,20 @@ fn observability_recovery_action(label: &str, reason: &str) -> Value {
                 "import_agent_browser_action_payload_from_managed_queue"
             ],
             "dispatches_input": false
+        }),
+        "browser.panel_live_result" => serde_json::json!({
+            "target": label,
+            "reason": reason,
+            "steps": [
+                "copy_agent_browser_panel_live_validation",
+                "copy_agent_browser_panel_live_validation_exercise_plan",
+                "copy_agent_browser_panel_live_validation_result_template",
+                "import_agent_browser_panel_control_result_from_clipboard",
+                "copy_agent_browser_panel_live_validation_result_gate",
+                AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME
+            ],
+            "dispatches_input": false,
+            "managed_proof_write": "only after explicit WebPreview panel-result import action"
         }),
         "chrome.latest_payload" => serde_json::json!({
             "target": label,

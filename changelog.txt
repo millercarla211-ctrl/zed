@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Durable Panel Live Proof
+
+ADDED:
+- `inspect_agent_plugin_runtime_status` now emits `zed.agent_plugins.browser_panel_live_proof_status.v1` with durable panel-control result roots, result summaries, ready/blocked state, WebPreview handoff actions, and read-only safety flags.
+- Agent and WebPreview catalogs now advertise the runtime-status panel live-proof schema/field beside the existing panel live-validation result gate and exercise-plan actions.
+
+CHANGED:
+- Runtime-green blocker summaries, scorecards, proof paths, claim readiness, report gates, final proof guides, final report packets, report-readiness cards, proof freshness, and operator handoffs now require a completed imported panel live-validation result before final runtime proof/report readiness.
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 93/100 and the remaining live UI/runtime validation targets.
+
+NOTES:
+- This slice is read-only status/catalog hardening. It does not run `just`, run Cargo, launch browsers, run Node or Playwright, take screenshots, dispatch input, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Runtime Report Blockers
 
 ADDED:
