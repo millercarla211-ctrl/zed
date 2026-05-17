@@ -1,3 +1,16 @@
+[2026-05-17] - Browser Chrome Panel Live UI Proof Checklist
+
+ADDED:
+- WebPreview now exposes Copy/Send Panel UI Proof Checklist actions for `zed.web_preview.agent_browser_panel_live_ui_proof_checklist.v1`.
+- The checklist bundles panel live validation, the prefilled result template, result gate, panel proof readiness card, exercise plan, and final runtime capacity into one read-only operator packet.
+- Status packets, final validation bundles, action manifests, More-menu actions, and Agent/WebPreview catalogs now advertise the bundled checklist handoff.
+
+CHANGED:
+- Updated `todo.txt` with Browser/Chrome Functional Plugin Execution Hardening progress at 99/100 and the remaining live UI/runtime validation targets.
+
+NOTES:
+- This slice is a read-only panel proof handoff. It does not run `just`, run Cargo, launch browsers, run Node or Playwright, take screenshots, dispatch input, or touch real browser profiles.
+
 [2026-05-17] - Browser Chrome Panel Live Result Contract Gate
 
 ADDED:

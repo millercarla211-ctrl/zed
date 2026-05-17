@@ -89,6 +89,8 @@ const AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_live_validation_result_gate.v1";
 const AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_live_validation_exercise_plan.v1";
+const AGENT_BROWSER_PANEL_LIVE_UI_PROOF_CHECKLIST_SCHEMA: &str =
+    "zed.web_preview.agent_browser_panel_live_ui_proof_checklist.v1";
 const AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
     "zed.web_preview.agent_browser_panel_control_result_import_receipt.v1";
 const AGENT_BROWSER_PANEL_CONTROL_RESULT_DIR_NAME: &str = "browser-panel-control-results";
@@ -962,6 +964,15 @@ fn agent_plugin_catalog_plugin_summary(plugin: &Value) -> Value {
             "panel_live_validation_result_contract_required": plugin
                 .pointer("/panel_live_validation/result_contract_required_for_final_runtime")
                 .and_then(Value::as_bool),
+            "panel_live_ui_proof_checklist_schema": plugin
+                .pointer("/panel_live_validation/ui_proof_checklist_schema")
+                .and_then(Value::as_str),
+            "panel_live_ui_proof_checklist_copy_action": plugin
+                .pointer("/panel_live_validation/ui_proof_checklist_copy_action")
+                .and_then(Value::as_str),
+            "panel_live_ui_proof_checklist_send_action": plugin
+                .pointer("/panel_live_validation/ui_proof_checklist_send_action")
+                .and_then(Value::as_str),
             "panel_live_proof_status_schema": plugin
                 .pointer("/panel_live_validation/runtime_status_proof_schema")
                 .and_then(Value::as_str),
@@ -1393,6 +1404,7 @@ fn browser_plugin_manifest() -> Value {
                 "panel_live_validation_result_gate": "copy_agent_browser_panel_live_validation_result_gate",
                 "panel_live_validation_exercise_plan": "copy_agent_browser_panel_live_validation_exercise_plan",
                 "panel_live_proof_readiness_card": "copy_agent_browser_panel_live_proof_readiness_card",
+                "panel_live_ui_proof_checklist": "copy_agent_browser_panel_live_ui_proof_checklist",
                 "final_runtime_proof_capacity": "copy_agent_browser_final_runtime_proof_capacity",
                 "final_bundle": "copy_agent_browser_final_validation_bundle",
                 "final_result_template": "copy_agent_browser_final_validation_result_template",
@@ -1528,6 +1540,10 @@ fn browser_plugin_manifest() -> Value {
             "exercise_plan_copy_action": "copy_agent_browser_panel_live_validation_exercise_plan",
             "exercise_plan_send_action": "send_agent_browser_panel_live_validation_exercise_plan_to_agent",
             "exercise_plan_status_packet_field": "packet.latest.agent_browser_panel_live_validation_exercise_plan",
+            "ui_proof_checklist_schema": AGENT_BROWSER_PANEL_LIVE_UI_PROOF_CHECKLIST_SCHEMA,
+            "ui_proof_checklist_copy_action": "copy_agent_browser_panel_live_ui_proof_checklist",
+            "ui_proof_checklist_send_action": "send_agent_browser_panel_live_ui_proof_checklist_to_agent",
+            "ui_proof_checklist_status_packet_field": "packet.latest.agent_browser_panel_live_ui_proof_checklist",
             "result_template_prefills_first_suggested_control": true,
             "result_contract_required_for_final_runtime": true,
             "status_packet_field": "packet.latest.agent_browser_panel_live_validation",
@@ -1574,6 +1590,7 @@ fn browser_plugin_manifest() -> Value {
             "panel_live_validation_result_template_schema": AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA,
             "panel_live_validation_result_gate_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
             "panel_live_validation_exercise_plan_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA,
+            "panel_live_ui_proof_checklist_schema": AGENT_BROWSER_PANEL_LIVE_UI_PROOF_CHECKLIST_SCHEMA,
             "browser_panel_live_proof_status_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
             "browser_panel_live_proof_readiness_card_schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_READINESS_CARD_SCHEMA,
             "final_runtime_proof_capacity_schema": AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA,
@@ -1803,6 +1820,7 @@ fn browser_plugin_manifest() -> Value {
             capability("browser.panel_live_validation_exercise_plan", "available", "Copy or send the ordered right-side panel exercise, result import, and gate-check plan."),
             capability("browser.panel_live_proof_status", "available_in_runtime_status", "Read durable panel live-validation proof status from inspect_agent_plugin_runtime_status before final runtime proof."),
             capability("browser.panel_live_proof_readiness_card", "available", "Copy or send the compact panel live proof readiness card before final runtime proof."),
+            capability("browser.panel_live_ui_proof_checklist", "available", "Copy or send the bundled live UI panel proof checklist before the final runtime proof."),
             capability("browser.plugin_bootstrap_readiness", "available", "Copy or send compact Agent Plugin Runtime host, managed-root, and managed-asset readiness from WebPreview."),
             capability("browser.runtime_green_claim_readiness", "available", "Copy or send compact runtime-green claim readiness with claim gate, final result state, and reporting policy."),
             capability("browser.runtime_green_report_gate", "available", "Copy or send the canonical runtime-green ready/blocked report gate."),
