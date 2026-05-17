@@ -1,3 +1,16 @@
+[2026-05-18] - Final Result Recovery Sequence Gate
+
+ADDED:
+- Final validation result templates now require `final_headroom_recovery_sequence` as a manual proof check before runtime-green reporting.
+- Agent and WebPreview catalogs now declare the final bundle recovery-sequence fields and runtime-green requirements for status and first-blocked-step validation.
+
+CHANGED:
+- Manual runtime-green evidence must now confirm the final-runtime headroom recovery sequence is `headroom_ready_for_final_runtime_proof` with no first blocked step, not just that the capacity packet was copied.
+- `todo.txt` records the final result recovery-sequence gate slice while keeping the feature set at 99/100 pending live UI and final runtime proof.
+
+NOTES:
+- This slice is read-only template/catalog hardening. It does not run `just`, run Cargo, delete files, launch browsers, dispatch input, mutate browser profiles, or move the target directory.
+
 [2026-05-18] - Final Bundle Recovery Sequence Alignment
 
 ADDED:

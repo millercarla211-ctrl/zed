@@ -2087,6 +2087,8 @@ fn browser_plugin_manifest() -> Value {
                 "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status.ready_for_final_runtime == true",
                 "inspect_agent_plugin_runtime_status.browser_panel_live_proof_readiness_card.status == ready_for_final_runtime",
                 "agent_browser_final_runtime_proof_capacity.ready_for_just_run == true",
+                "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_summary.status == headroom_ready_for_final_runtime_proof",
+                "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_summary.first_blocked_step == null",
                 "executor_validation_progress.status == manual_windows_runtime_validation_ready"
             ],
             "copy_action": "copy_agent_browser_final_validation_bundle",
@@ -2097,6 +2099,8 @@ fn browser_plugin_manifest() -> Value {
         },
         "final_validation_result_template_handoff": {
             "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+            "headroom_recovery_sequence_required_check_id": "final_headroom_recovery_sequence",
+            "headroom_recovery_sequence_bundle_field": "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_sequence",
             "copy_action": "copy_agent_browser_final_validation_result_template",
             "send_action": "send_agent_browser_final_validation_result_template_to_agent",
             "read_only": true,

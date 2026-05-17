@@ -8574,6 +8574,7 @@ impl WebPreviewView {
                 "editor_typing",
                 "webpreview_input",
                 "final_runtime_capacity",
+                "final_headroom_recovery_sequence",
                 "panel_live_validation",
                 "native_executor_receipts",
                 "payload_bridge",
@@ -8598,6 +8599,11 @@ impl WebPreviewView {
                 "final_runtime_capacity": {
                     "status": "not_run",
                     "evidence": "Copy or send the final runtime proof capacity; ready_for_just_run is true before starting just run.",
+                    "blocker": null
+                },
+                "final_headroom_recovery_sequence": {
+                    "status": "not_run",
+                    "evidence": "Read handoff_artifacts.final_runtime_headroom_recovery_sequence.current_sequence from the final validation bundle; status is headroom_ready_for_final_runtime_proof and first_blocked_step is null before starting just run.",
                     "blocker": null
                 },
                 "panel_live_validation": {
@@ -8632,11 +8638,12 @@ impl WebPreviewView {
                 "required_check_status": "pass",
                 "validation_progress_status": "manual_windows_runtime_validation_ready",
                 "final_runtime_proof_capacity": "target_headroom_ready",
+                "final_runtime_headroom_recovery_sequence": "headroom_ready_for_final_runtime_proof with first_blocked_step null",
                 "panel_live_validation_result_gate": "ready_for_final_runtime",
                 "evidence_rule": "Every required check id must have status pass and non-empty evidence.",
                 "blocker_rule": "overall_blocker and every required check blocker must be null."
             },
-            "claim_runtime_green_only_when": "all required checks are pass, blockers are null, final runtime proof capacity reports target_headroom_ready, the panel live-validation result gate reports ready_for_final_runtime=true, and the validation-progress packet reports manual_windows_runtime_validation_ready"
+            "claim_runtime_green_only_when": "all required checks are pass, blockers are null, final runtime proof capacity reports target_headroom_ready, final runtime headroom recovery sequence reports headroom_ready_for_final_runtime_proof with no first blocked step, the panel live-validation result gate reports ready_for_final_runtime=true, and the validation-progress packet reports manual_windows_runtime_validation_ready"
         })
     }
 
@@ -26992,6 +26999,8 @@ impl WebPreviewView {
                                 "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status.ready_for_final_runtime == true",
                                 "inspect_agent_plugin_runtime_status.browser_panel_live_proof_readiness_card.status == ready_for_final_runtime",
                                 "agent_browser_final_runtime_proof_capacity.ready_for_just_run == true",
+                                "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_summary.status == headroom_ready_for_final_runtime_proof",
+                                "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_summary.first_blocked_step == null",
                                 "executor_validation_progress.status == manual_windows_runtime_validation_ready"
                             ],
                             "copy_action": "copy_agent_browser_final_validation_bundle",
@@ -27002,6 +27011,8 @@ impl WebPreviewView {
                         },
                         "final_validation_result_template_handoff": {
                             "schema": AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA,
+                            "headroom_recovery_sequence_required_check_id": "final_headroom_recovery_sequence",
+                            "headroom_recovery_sequence_bundle_field": "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_sequence",
                             "copy_action": "copy_agent_browser_final_validation_result_template",
                             "send_action": "send_agent_browser_final_validation_result_template_to_agent",
                             "read_only": true,
