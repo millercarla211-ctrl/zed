@@ -1,3 +1,19 @@
+[2026-05-18] - WebPreview Contract Structure and Locked Run Proof
+
+ADDED:
+- `crates/web_preview/src/agent_browser_contracts.rs` now owns the Agent Browser/WebPreview schema names, handoff file names, proof directories, and final-runtime headroom constants used by the Windows WebPreview implementation.
+
+CHANGED:
+- `crates/web_preview/src/web_preview_view.rs` now imports Agent Browser contract constants from the dedicated module instead of carrying the whole contract surface inline in the large view file.
+- `crates/web_preview/src/web_preview.rs` now registers the contract module for Windows builds.
+- `justfile` now runs the `zed` and `cli` build steps with `--locked`, keeping `just run` tied to the committed lockfile after upstream syncs.
+- `todo.txt` records this structural hardening slice before the remaining live UI proof/imported-result validation gate.
+
+NOTES:
+- Ran `rustfmt` on the touched WebPreview Rust files.
+- Ran `rustfmt --check`, `git diff --check`, `just --dry-run run`, `just ensure-build-headroom`, and `just run`.
+- `just run` built `zed` in 20m 51s, built `cli` in 51.97s, and launched `F:\Zed\target\debug\zed.exe`; the live run log had no warning/error matches.
+
 [2026-05-18] - Explicit Live Proof Candidate Gate
 
 ADDED:

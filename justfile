@@ -17,9 +17,9 @@ ensure-build-headroom:
 run: ensure-build-headroom
     @echo "Running Zed with balanced F-drive build settings..."
     @echo "Building the zed binary plus the development CLI companion"
-    @echo "Using Cargo config: 1 job, F:/Zed/target, rust-lld linker, no debug info, incremental cache disabled"
-    $env:CARGO_INCREMENTAL = "0"; cargo build -p zed --bin zed
-    $env:CARGO_INCREMENTAL = "0"; cargo build -p cli --bin cli
+    @echo "Using Cargo config: locked Cargo.lock, 1 job, F:/Zed/target, rust-lld linker, no debug info, incremental cache disabled"
+    $env:CARGO_INCREMENTAL = "0"; cargo build --locked -p zed --bin zed
+    $env:CARGO_INCREMENTAL = "0"; cargo build --locked -p cli --bin cli
     @echo "Build complete! Launching Zed once..."
     ./target/debug/zed.exe
 
@@ -27,24 +27,24 @@ run: ensure-build-headroom
 run-cranelift: ensure-build-headroom
     @echo "Building with Cranelift backend (nightly required)..."
     @echo "Cranelift can reduce linker pressure on very large Rust builds"
-    $env:CARGO_INCREMENTAL = "0"; cargo +nightly build -p zed --bin zed -Z codegen-backend
-    $env:CARGO_INCREMENTAL = "0"; cargo +nightly build -p cli --bin cli -Z codegen-backend
+    $env:CARGO_INCREMENTAL = "0"; cargo +nightly build --locked -p zed --bin zed -Z codegen-backend
+    $env:CARGO_INCREMENTAL = "0"; cargo +nightly build --locked -p cli --bin cli -Z codegen-backend
     @echo "Build complete! Running Zed..."
     ./target/debug/zed.exe
 
 # Continue interrupted build
 continue: ensure-build-headroom
     @echo "Continuing interrupted build..."
-    $env:CARGO_INCREMENTAL = "0"; cargo build -p zed --bin zed
-    $env:CARGO_INCREMENTAL = "0"; cargo build -p cli --bin cli
+    $env:CARGO_INCREMENTAL = "0"; cargo build --locked -p zed --bin zed
+    $env:CARGO_INCREMENTAL = "0"; cargo build --locked -p cli --bin cli
     @echo "Build complete! Running Zed..."
     ./target/debug/zed.exe
 
 # Build only (no run)
 build: ensure-build-headroom
     @echo "Building Zed with balanced F-drive settings..."
-    $env:CARGO_INCREMENTAL = "0"; cargo build -p zed --bin zed
-    $env:CARGO_INCREMENTAL = "0"; cargo build -p cli --bin cli
+    $env:CARGO_INCREMENTAL = "0"; cargo build --locked -p zed --bin zed
+    $env:CARGO_INCREMENTAL = "0"; cargo build --locked -p cli --bin cli
 
 # Check code without building
 check:
