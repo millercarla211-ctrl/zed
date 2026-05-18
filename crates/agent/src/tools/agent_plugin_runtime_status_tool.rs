@@ -4511,6 +4511,11 @@ fn runtime_green_proof_path(
                 "missing_required_status_count_field": "runtime_green_final_proof_audit_summary.missing_required_status_count",
                 "invalid_required_check_status_count_field": "runtime_green_final_proof_audit_summary.invalid_required_check_status_count",
                 "has_final_result_status_diagnostics_field": "runtime_green_final_proof_audit_summary.has_final_result_status_diagnostics",
+                "panel_live_validation_check_status_field": "runtime_green_final_proof_audit_summary.panel_live_validation_check_status",
+                "agent_runtime_panel_live_contract_ready_field": "runtime_green_final_proof_audit_summary.agent_runtime_panel_live_contract_ready",
+                "agent_runtime_panel_live_contract_check_status_field": "runtime_green_final_proof_audit_summary.agent_runtime_panel_live_contract_check_status",
+                "agent_runtime_panel_live_contract_check_has_evidence_field": "runtime_green_final_proof_audit_summary.agent_runtime_panel_live_contract_check_has_evidence",
+                "agent_runtime_panel_live_contract_check_blocker_present_field": "runtime_green_final_proof_audit_summary.agent_runtime_panel_live_contract_check_blocker_present",
                 "source": "runtime_green_claim_readiness + runtime_green_report_gate",
                 "copy_action": "copy_agent_browser_final_proof_audit",
                 "send_action": "send_agent_browser_final_proof_audit_to_agent"
@@ -4531,6 +4536,11 @@ fn runtime_green_proof_path(
                 "non_pass_required_check_count_field": "runtime_green_report_readiness_card_summary.non_pass_required_check_count",
                 "missing_required_status_count_field": "runtime_green_report_readiness_card_summary.missing_required_status_count",
                 "invalid_required_check_status_count_field": "runtime_green_report_readiness_card_summary.invalid_required_check_status_count",
+                "panel_live_validation_check_status_field": "runtime_green_report_readiness_card_summary.panel_live_validation_check_status",
+                "agent_runtime_panel_live_contract_ready_field": "runtime_green_report_readiness_card_summary.agent_runtime_panel_live_contract_ready",
+                "agent_runtime_panel_live_contract_check_status_field": "runtime_green_report_readiness_card_summary.agent_runtime_panel_live_contract_check_status",
+                "agent_runtime_panel_live_contract_check_has_evidence_field": "runtime_green_report_readiness_card_summary.agent_runtime_panel_live_contract_check_has_evidence",
+                "agent_runtime_panel_live_contract_check_blocker_present_field": "runtime_green_report_readiness_card_summary.agent_runtime_panel_live_contract_check_blocker_present",
                 "source": "runtime_green_claim_readiness + runtime_green_report_gate + runtime_green_final_report_packet + runtime_green_final_proof_audit",
                 "copy_action": "copy_agent_plugin_runtime_green_report_readiness_card",
                 "send_action": "send_agent_plugin_runtime_green_report_readiness_card_to_agent"
@@ -5837,6 +5847,27 @@ fn runtime_green_report_readiness_card(
             "has_final_result_status_diagnostics": final_proof_audit
                 .pointer("/audit/has_final_result_status_diagnostics")
                 .and_then(Value::as_bool),
+            "panel_live_validation_check_status": final_proof_audit
+                .pointer("/audit/panel_live_validation_check_status")
+                .and_then(Value::as_str),
+            "panel_live_validation_check_has_evidence": final_proof_audit
+                .pointer("/audit/panel_live_validation_check_has_evidence")
+                .and_then(Value::as_bool),
+            "panel_live_validation_check_blocker_present": final_proof_audit
+                .pointer("/audit/panel_live_validation_check_blocker_present")
+                .and_then(Value::as_bool),
+            "agent_runtime_panel_live_contract_check_status": final_proof_audit
+                .pointer("/audit/agent_runtime_panel_live_contract_check_status")
+                .and_then(Value::as_str),
+            "agent_runtime_panel_live_contract_check_has_evidence": final_proof_audit
+                .pointer("/audit/agent_runtime_panel_live_contract_check_has_evidence")
+                .and_then(Value::as_bool),
+            "agent_runtime_panel_live_contract_check_blocker_present": final_proof_audit
+                .pointer("/audit/agent_runtime_panel_live_contract_check_blocker_present")
+                .and_then(Value::as_bool),
+            "agent_runtime_panel_live_contract_ready": final_proof_audit
+                .pointer("/audit/agent_runtime_panel_live_contract_ready")
+                .and_then(Value::as_bool),
             "required_check_blocker_count": final_proof_audit
                 .pointer("/audit/required_check_blocker_count")
                 .and_then(Value::as_u64),
@@ -5969,6 +6000,27 @@ fn runtime_green_report_readiness_card_summary(card: &Value) -> Value {
         "has_final_result_status_diagnostics": card
             .pointer("/final_proof_audit/has_final_result_status_diagnostics")
             .and_then(Value::as_bool),
+        "panel_live_validation_check_status": card
+            .pointer("/final_proof_audit/panel_live_validation_check_status")
+            .and_then(Value::as_str),
+        "panel_live_validation_check_has_evidence": card
+            .pointer("/final_proof_audit/panel_live_validation_check_has_evidence")
+            .and_then(Value::as_bool),
+        "panel_live_validation_check_blocker_present": card
+            .pointer("/final_proof_audit/panel_live_validation_check_blocker_present")
+            .and_then(Value::as_bool),
+        "agent_runtime_panel_live_contract_check_status": card
+            .pointer("/final_proof_audit/agent_runtime_panel_live_contract_check_status")
+            .and_then(Value::as_str),
+        "agent_runtime_panel_live_contract_check_has_evidence": card
+            .pointer("/final_proof_audit/agent_runtime_panel_live_contract_check_has_evidence")
+            .and_then(Value::as_bool),
+        "agent_runtime_panel_live_contract_check_blocker_present": card
+            .pointer("/final_proof_audit/agent_runtime_panel_live_contract_check_blocker_present")
+            .and_then(Value::as_bool),
+        "agent_runtime_panel_live_contract_ready": card
+            .pointer("/final_proof_audit/agent_runtime_panel_live_contract_ready")
+            .and_then(Value::as_bool),
         "regression_watch_status": card
             .pointer("/regression_watch/status")
             .and_then(Value::as_str),
@@ -6074,6 +6126,32 @@ fn runtime_green_final_proof_audit(
         .as_ref()
         .map(|blocker| !blocker.is_null())
         .unwrap_or(false);
+    let panel_live_validation_check_status = final_result_summary
+        .get("panel_live_validation_check_status")
+        .cloned();
+    let panel_live_validation_check_has_evidence = final_result_summary
+        .get("panel_live_validation_check_has_evidence")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let panel_live_validation_check_blocker_present = final_result_summary
+        .get("panel_live_validation_check_blocker_present")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let agent_runtime_panel_live_contract_check_status = final_result_summary
+        .get("agent_runtime_panel_live_contract_check_status")
+        .cloned();
+    let agent_runtime_panel_live_contract_check_has_evidence = final_result_summary
+        .get("agent_runtime_panel_live_contract_check_has_evidence")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let agent_runtime_panel_live_contract_check_blocker_present = final_result_summary
+        .get("agent_runtime_panel_live_contract_check_blocker_present")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let agent_runtime_panel_live_contract_ready = final_result_summary
+        .get("agent_runtime_panel_live_contract_ready")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let status = if may_report_runtime_green {
         "ready_to_report_runtime_green"
     } else if !final_result_present {
@@ -6115,6 +6193,13 @@ fn runtime_green_final_proof_audit(
             "missing_required_statuses": missing_required_statuses,
             "invalid_required_check_statuses": invalid_required_check_statuses,
             "has_final_result_status_diagnostics": has_final_result_status_diagnostics,
+            "panel_live_validation_check_status": panel_live_validation_check_status,
+            "panel_live_validation_check_has_evidence": panel_live_validation_check_has_evidence,
+            "panel_live_validation_check_blocker_present": panel_live_validation_check_blocker_present,
+            "agent_runtime_panel_live_contract_check_status": agent_runtime_panel_live_contract_check_status,
+            "agent_runtime_panel_live_contract_check_has_evidence": agent_runtime_panel_live_contract_check_has_evidence,
+            "agent_runtime_panel_live_contract_check_blocker_present": agent_runtime_panel_live_contract_check_blocker_present,
+            "agent_runtime_panel_live_contract_ready": agent_runtime_panel_live_contract_ready,
             "required_check_blocker_count": required_check_blocker_count,
             "overall_blocker": overall_blocker,
             "has_overall_blocker": has_overall_blocker,
@@ -6251,6 +6336,27 @@ fn runtime_green_final_proof_audit_summary(audit: &Value) -> Value {
             .and_then(Value::as_str),
         "browser_panel_live_result_ready": audit
             .pointer("/latest/browser_panel_live_proof_status/ready_for_final_runtime")
+            .and_then(Value::as_bool),
+        "panel_live_validation_check_status": audit
+            .pointer("/audit/panel_live_validation_check_status")
+            .and_then(Value::as_str),
+        "panel_live_validation_check_has_evidence": audit
+            .pointer("/audit/panel_live_validation_check_has_evidence")
+            .and_then(Value::as_bool),
+        "panel_live_validation_check_blocker_present": audit
+            .pointer("/audit/panel_live_validation_check_blocker_present")
+            .and_then(Value::as_bool),
+        "agent_runtime_panel_live_contract_check_status": audit
+            .pointer("/audit/agent_runtime_panel_live_contract_check_status")
+            .and_then(Value::as_str),
+        "agent_runtime_panel_live_contract_check_has_evidence": audit
+            .pointer("/audit/agent_runtime_panel_live_contract_check_has_evidence")
+            .and_then(Value::as_bool),
+        "agent_runtime_panel_live_contract_check_blocker_present": audit
+            .pointer("/audit/agent_runtime_panel_live_contract_check_blocker_present")
+            .and_then(Value::as_bool),
+        "agent_runtime_panel_live_contract_ready": audit
+            .pointer("/audit/agent_runtime_panel_live_contract_ready")
             .and_then(Value::as_bool),
         "report_gate_next_action": audit
             .pointer("/audit/report_gate/next_action")

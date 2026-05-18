@@ -1,3 +1,16 @@
+[2026-05-18] - Final Proof Agent Contract Visibility
+
+ADDED:
+- WebPreview final proof audits now lift the panel-live validation check status and Agent runtime panel-live contract readiness fields from imported final validation results.
+- WebPreview and Agent runtime report-readiness card summaries now expose Agent contract status, evidence, blocker, and ready fields directly.
+- Agent and WebPreview plugin catalog handoffs now advertise the new final-proof and report-readiness Agent contract fields.
+
+CHANGED:
+- `todo.txt` now records the Browser/Chrome hardening set at 99.95/100 while keeping the actual live UI exercise/imported result validation as the only remaining proof gate.
+
+NOTES:
+- This slice is compact final-proof/reporting diagnostics hardening only. It does not run `just`, run Cargo, launch browsers, dispatch input, mutate profiles, or create manual validation evidence.
+
 [2026-05-18] - Final Result Agent Contract Diagnostics
 
 ADDED:
