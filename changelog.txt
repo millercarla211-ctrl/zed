@@ -1,3 +1,16 @@
+[2026-05-18] - Current HEAD Runtime Launch Proof
+
+ADDED:
+- Verified current `dev`/`origin/dev` HEAD `53c5ffca18` through the guarded F-drive `just run` launch path.
+- Confirmed `F:\Zed\target\debug\zed.exe` is running from the F-drive checkout with the visible window title `empty project`.
+
+CHANGED:
+- `todo.txt` now records the current-HEAD runtime launch proof at 99.995/100 while keeping the live right-side panel exercise/imported final validation result as the remaining proof gate.
+
+NOTES:
+- Lightweight preflights passed first: `just --dry-run run` resolved and `just ensure-build-headroom` reported 46.53 GB free on F:.
+- The full `just run` command remains attached while the launched Zed process is open; this is runtime launch proof, not the final imported panel-validation result.
+
 [2026-05-18] - WebPreview Final Manual Proof Gate Parity
 
 FIXED:
