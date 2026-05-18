@@ -9047,6 +9047,45 @@ impl WebPreviewView {
                     .unwrap_or(false)
             })
             .count();
+        let panel_live_validation_check =
+            checks.and_then(|checks| checks.get("panel_live_validation"));
+        let panel_live_validation_check_status = panel_live_validation_check
+            .and_then(|check| check.pointer("/status"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let panel_live_validation_check_has_evidence = panel_live_validation_check
+            .and_then(|check| check.pointer("/evidence"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|evidence| !evidence.is_empty())
+            .is_some();
+        let panel_live_validation_check_blocker_present = panel_live_validation_check
+            .and_then(|check| check.pointer("/blocker"))
+            .map(|blocker| !blocker.is_null())
+            .unwrap_or(false);
+        let agent_runtime_panel_live_contract_check =
+            checks.and_then(|checks| checks.get("agent_runtime_panel_live_contract"));
+        let agent_runtime_panel_live_contract_check_status =
+            agent_runtime_panel_live_contract_check
+                .and_then(|check| check.pointer("/status"))
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+        let agent_runtime_panel_live_contract_check_has_evidence =
+            agent_runtime_panel_live_contract_check
+                .and_then(|check| check.pointer("/evidence"))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|evidence| !evidence.is_empty())
+                .is_some();
+        let agent_runtime_panel_live_contract_check_blocker_present =
+            agent_runtime_panel_live_contract_check
+                .and_then(|check| check.pointer("/blocker"))
+                .map(|blocker| !blocker.is_null())
+                .unwrap_or(false);
+        let agent_runtime_panel_live_contract_ready =
+            agent_runtime_panel_live_contract_check_status.as_deref() == Some("pass")
+                && agent_runtime_panel_live_contract_check_has_evidence
+                && !agent_runtime_panel_live_contract_check_blocker_present;
         let runtime_green_candidate = result.pointer("/schema").and_then(Value::as_str)
             == Some(AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA)
             && result.pointer("/status").and_then(Value::as_str) == Some("pass")
@@ -9085,6 +9124,13 @@ impl WebPreviewView {
             "missing_required_checks": missing_required_checks,
             "missing_expected_required_checks": missing_expected_required_checks,
             "missing_required_evidence": missing_required_evidence,
+            "panel_live_validation_check_status": panel_live_validation_check_status,
+            "panel_live_validation_check_has_evidence": panel_live_validation_check_has_evidence,
+            "panel_live_validation_check_blocker_present": panel_live_validation_check_blocker_present,
+            "agent_runtime_panel_live_contract_check_status": agent_runtime_panel_live_contract_check_status,
+            "agent_runtime_panel_live_contract_check_has_evidence": agent_runtime_panel_live_contract_check_has_evidence,
+            "agent_runtime_panel_live_contract_check_blocker_present": agent_runtime_panel_live_contract_check_blocker_present,
+            "agent_runtime_panel_live_contract_ready": agent_runtime_panel_live_contract_ready,
             "runtime_green_candidate": runtime_green_candidate,
             "overall_blocker": result.pointer("/overall_blocker").cloned(),
         })
@@ -28477,6 +28523,10 @@ impl WebPreviewView {
                             "missing_required_statuses_field": "missing_required_statuses",
                             "invalid_required_check_statuses_field": "invalid_required_check_statuses",
                             "stale_required_check_blocker_field": "missing_expected_required_checks",
+                            "panel_live_validation_check_status_field": "panel_live_validation_check_status",
+                            "agent_runtime_panel_live_contract_ready_field": "agent_runtime_panel_live_contract_ready",
+                            "agent_runtime_panel_live_contract_check_status_field": "agent_runtime_panel_live_contract_check_status",
+                            "agent_runtime_panel_live_contract_check_has_evidence_field": "agent_runtime_panel_live_contract_check_has_evidence",
                             "copy_send_read_only": true,
                             "import_writes_managed_result": true,
                             "managed_roots_only": true,

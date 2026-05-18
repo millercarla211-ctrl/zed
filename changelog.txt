@@ -1,3 +1,16 @@
+[2026-05-18] - Final Result Agent Contract Diagnostics
+
+ADDED:
+- WebPreview final validation result summaries now expose panel-live and Agent runtime panel-live check status, evidence, blocker, and readiness fields directly.
+- Agent runtime status final-result summaries now emit the same compact Agent runtime panel-live contract diagnostics.
+- Agent plugin catalog metadata now advertises the Agent runtime panel-live contract required check, runtime-status source fields, and compact final-result diagnostic fields.
+
+CHANGED:
+- `todo.txt` now records the Browser/Chrome hardening set at 99.9/100 while leaving only the live UI exercise/imported result validation as the remaining runtime proof.
+
+NOTES:
+- This slice is source-level final-result diagnostics hardening. It does not run `just`, run Cargo, launch browsers, dispatch input, mutate profiles, or create manual validation evidence.
+
 [2026-05-18] - Final Result Agent Panel Contract Check
 
 ADDED:
