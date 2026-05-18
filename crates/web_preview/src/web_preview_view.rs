@@ -3347,6 +3347,9 @@ impl WebPreviewView {
             "panel_live_validation_check_blocker_present": audit
                 .pointer("/audit/panel_live_validation_check_blocker_present")
                 .and_then(Value::as_bool),
+            "panel_live_validation_check_ready": audit
+                .pointer("/audit/panel_live_validation_check_ready")
+                .and_then(Value::as_bool),
             "agent_runtime_panel_live_contract_check_status": audit
                 .pointer("/audit/agent_runtime_panel_live_contract_check_status")
                 .and_then(Value::as_str),
@@ -7105,6 +7108,11 @@ impl WebPreviewView {
             .and_then(|summary| summary.pointer("/panel_live_validation_check_blocker_present"))
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let panel_live_validation_check_ready = result_summary
+            .as_ref()
+            .and_then(|summary| summary.pointer("/panel_live_validation_check_ready"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let agent_runtime_panel_live_contract_check_status = result_summary
             .as_ref()
             .and_then(|summary| {
@@ -7230,6 +7238,7 @@ impl WebPreviewView {
                 "panel_live_validation_check_status": panel_live_validation_check_status,
                 "panel_live_validation_check_has_evidence": panel_live_validation_check_has_evidence,
                 "panel_live_validation_check_blocker_present": panel_live_validation_check_blocker_present,
+                "panel_live_validation_check_ready": panel_live_validation_check_ready,
                 "agent_runtime_panel_live_contract_check_status": agent_runtime_panel_live_contract_check_status,
                 "agent_runtime_panel_live_contract_check_has_evidence": agent_runtime_panel_live_contract_check_has_evidence,
                 "agent_runtime_panel_live_contract_check_blocker_present": agent_runtime_panel_live_contract_check_blocker_present,
@@ -8734,6 +8743,7 @@ impl WebPreviewView {
                     "invalid_required_check_status_count_field": "runtime_green_final_proof_audit_summary.invalid_required_check_status_count",
                     "has_final_result_status_diagnostics_field": "runtime_green_final_proof_audit_summary.has_final_result_status_diagnostics",
                     "panel_live_validation_check_status_field": "runtime_green_final_proof_audit_summary.panel_live_validation_check_status",
+                    "panel_live_validation_check_ready_field": "runtime_green_final_proof_audit_summary.panel_live_validation_check_ready",
                     "agent_runtime_panel_live_contract_ready_field": "runtime_green_final_proof_audit_summary.agent_runtime_panel_live_contract_ready",
                     "agent_runtime_panel_live_contract_check_status_field": "runtime_green_final_proof_audit_summary.agent_runtime_panel_live_contract_check_status",
                     "agent_runtime_panel_live_contract_check_has_evidence_field": "runtime_green_final_proof_audit_summary.agent_runtime_panel_live_contract_check_has_evidence",
@@ -9146,6 +9156,10 @@ impl WebPreviewView {
             .and_then(|check| check.pointer("/blocker"))
             .map(|blocker| !blocker.is_null())
             .unwrap_or(false);
+        let panel_live_validation_check_ready =
+            panel_live_validation_check_status.as_deref() == Some("pass")
+                && panel_live_validation_check_has_evidence
+                && !panel_live_validation_check_blocker_present;
         let agent_runtime_panel_live_contract_check =
             checks.and_then(|checks| checks.get("agent_runtime_panel_live_contract"));
         let agent_runtime_panel_live_contract_check_status =
@@ -9174,6 +9188,8 @@ impl WebPreviewView {
             && result.pointer("/status").and_then(Value::as_str) == Some("pass")
             && expected_required_check_count > 0
             && pass_required_check_count == expected_required_check_count
+            && panel_live_validation_check_ready
+            && agent_runtime_panel_live_contract_ready
             && missing_required_evidence.is_empty()
             && result
                 .pointer("/overall_blocker")
@@ -9210,6 +9226,7 @@ impl WebPreviewView {
             "panel_live_validation_check_status": panel_live_validation_check_status,
             "panel_live_validation_check_has_evidence": panel_live_validation_check_has_evidence,
             "panel_live_validation_check_blocker_present": panel_live_validation_check_blocker_present,
+            "panel_live_validation_check_ready": panel_live_validation_check_ready,
             "agent_runtime_panel_live_contract_check_status": agent_runtime_panel_live_contract_check_status,
             "agent_runtime_panel_live_contract_check_has_evidence": agent_runtime_panel_live_contract_check_has_evidence,
             "agent_runtime_panel_live_contract_check_blocker_present": agent_runtime_panel_live_contract_check_blocker_present,
@@ -17719,6 +17736,9 @@ impl WebPreviewView {
                 "panel_live_validation_check_blocker_present": final_proof_audit
                     .pointer("/audit/panel_live_validation_check_blocker_present")
                     .and_then(Value::as_bool),
+                "panel_live_validation_check_ready": final_proof_audit
+                    .pointer("/audit/panel_live_validation_check_ready")
+                    .and_then(Value::as_bool),
                 "agent_runtime_panel_live_contract_check_status": final_proof_audit
                     .pointer("/audit/agent_runtime_panel_live_contract_check_status")
                     .and_then(Value::as_str),
@@ -19949,6 +19969,9 @@ impl WebPreviewView {
                 .and_then(Value::as_bool),
             "panel_live_validation_check_blocker_present": card
                 .pointer("/final_proof_audit/panel_live_validation_check_blocker_present")
+                .and_then(Value::as_bool),
+            "panel_live_validation_check_ready": card
+                .pointer("/final_proof_audit/panel_live_validation_check_ready")
                 .and_then(Value::as_bool),
             "agent_runtime_panel_live_contract_check_status": card
                 .pointer("/final_proof_audit/agent_runtime_panel_live_contract_check_status")
@@ -28649,6 +28672,7 @@ impl WebPreviewView {
                             "invalid_required_check_statuses_field": "invalid_required_check_statuses",
                             "stale_required_check_blocker_field": "missing_expected_required_checks",
                             "panel_live_validation_check_status_field": "panel_live_validation_check_status",
+                            "panel_live_validation_check_ready_field": "panel_live_validation_check_ready",
                             "agent_runtime_panel_live_contract_ready_field": "agent_runtime_panel_live_contract_ready",
                             "agent_runtime_panel_live_contract_check_status_field": "agent_runtime_panel_live_contract_check_status",
                             "agent_runtime_panel_live_contract_check_has_evidence_field": "agent_runtime_panel_live_contract_check_has_evidence",
@@ -28810,6 +28834,7 @@ impl WebPreviewView {
                             "invalid_required_check_status_count_field": "runtime_green_final_proof_audit_summary.invalid_required_check_status_count",
                             "has_final_result_status_diagnostics_field": "runtime_green_final_proof_audit_summary.has_final_result_status_diagnostics",
                             "panel_live_validation_check_status_field": "runtime_green_final_proof_audit_summary.panel_live_validation_check_status",
+                            "panel_live_validation_check_ready_field": "runtime_green_final_proof_audit_summary.panel_live_validation_check_ready",
                             "agent_runtime_panel_live_contract_ready_field": "runtime_green_final_proof_audit_summary.agent_runtime_panel_live_contract_ready",
                             "agent_runtime_panel_live_contract_check_status_field": "runtime_green_final_proof_audit_summary.agent_runtime_panel_live_contract_check_status",
                             "agent_runtime_panel_live_contract_check_has_evidence_field": "runtime_green_final_proof_audit_summary.agent_runtime_panel_live_contract_check_has_evidence",
@@ -28936,6 +28961,7 @@ impl WebPreviewView {
                             "missing_required_status_count_field": "final_proof_audit.missing_required_status_count",
                             "invalid_required_check_status_count_field": "final_proof_audit.invalid_required_check_status_count",
                             "panel_live_validation_check_status_field": "final_proof_audit.panel_live_validation_check_status",
+                            "panel_live_validation_check_ready_field": "final_proof_audit.panel_live_validation_check_ready",
                             "agent_runtime_panel_live_contract_ready_field": "final_proof_audit.agent_runtime_panel_live_contract_ready",
                             "agent_runtime_panel_live_contract_check_status_field": "final_proof_audit.agent_runtime_panel_live_contract_check_status",
                             "agent_runtime_panel_live_contract_check_has_evidence_field": "final_proof_audit.agent_runtime_panel_live_contract_check_has_evidence",

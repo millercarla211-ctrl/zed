@@ -1,3 +1,16 @@
+[2026-05-18] - Explicit Live Proof Candidate Gate
+
+ADDED:
+- WebPreview final validation result summaries now expose `panel_live_validation_check_ready` and require it before a final result can become a runtime-green candidate.
+- Agent runtime status final validation result summaries now mirror the same explicit panel-live and Agent runtime panel-live contract readiness gates.
+- Agent and WebPreview plugin catalogs now advertise the direct panel-live required-check readiness field beside the Agent contract readiness fields.
+
+CHANGED:
+- `todo.txt` now records the Browser/Chrome hardening set at 99.97/100 while leaving real live UI exercise/imported result validation as the final proof gate.
+
+NOTES:
+- This slice hardens imported final-result evaluation only. It does not run `just`, run Cargo, launch browsers, dispatch input, mutate profiles, or create manual validation evidence.
+
 [2026-05-18] - Final Proof Agent Contract Visibility
 
 ADDED:
