@@ -59,6 +59,7 @@ use super::{
     },
     agent_plugin_bootstrap_tool::AgentPluginBootstrapTool,
     agent_plugin_catalog_tool::AgentPluginCatalogTool,
+    agent_plugin_contracts::*,
 };
 use crate::{AgentTool, ToolCallEventStream, ToolInput};
 use agent_client_protocol::schema as acp;
@@ -84,110 +85,6 @@ use windows::core::PCWSTR;
 
 pub const AGENT_PLUGIN_RUNTIME_STATUS_TOOL_NAME: &str = "inspect_agent_plugin_runtime_status";
 pub const AGENT_PLUGIN_RUNTIME_STATUS_SCHEMA: &str = "zed.agent_plugins.runtime_status.v1";
-const AGENT_PLUGIN_BOOTSTRAP_READINESS_SCHEMA: &str = "zed.agent_plugins.bootstrap_readiness.v1";
-const AGENT_PLUGIN_BOOTSTRAP_MANIFEST_SCHEMA: &str = "zed.agent_plugins.bootstrap_manifest.v1";
-const AGENT_PLUGIN_BOOTSTRAP_PREPARE_REQUEST_SCHEMA: &str =
-    "zed.agent_plugins.bootstrap_prepare_request.v1";
-const AGENT_PLUGIN_BOOTSTRAP_ASSET_PLAN_SCHEMA: &str = "zed.agent_plugins.bootstrap_asset_plan.v1";
-const AGENT_PLUGIN_MANAGED_ASSET_OPERATOR_RECIPE_SCHEMA: &str =
-    "zed.agent_plugins.managed_asset_operator_recipe.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_BLOCKERS_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_blocker_summary.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_SCORECARD_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_readiness_scorecard.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_OPERATOR_HANDOFF_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_operator_handoff.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_PROOF_PATH_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_proof_path.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_GATE_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_claim_gate.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_CLAIM_READINESS_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_claim_readiness.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_GATE_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_report_gate.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_BADGE_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_report_badge.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_final_proof_guide.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_GUIDE_SUMMARY_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_final_proof_guide_summary.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_final_report_packet.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_REPORT_PACKET_SUMMARY_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_final_report_packet_summary.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_report_readiness_card.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_REPORT_READINESS_CARD_SUMMARY_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_report_readiness_card_summary.v1";
-const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_DIGEST_SCHEMA: &str =
-    "zed.agent_plugins.runtime_observability_digest.v1";
-const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_MATRIX_SCHEMA: &str =
-    "zed.agent_plugins.runtime_observability_plugin_matrix.v1";
-const AGENT_PLUGIN_RUNTIME_OBSERVABILITY_WATCH_ROLLUP_SCHEMA: &str =
-    "zed.agent_plugins.runtime_observability_regression_watch_rollup.v1";
-const AGENT_PLUGIN_PC_USE_PROOF_SUMMARY_SCHEMA: &str = "zed.agent_plugins.pc_use.proof_summary.v1";
-const AGENT_BROWSER_FINAL_VALIDATION_RESULT_SCHEMA: &str =
-    "zed.web_preview.agent_browser_final_validation_result.v1";
-const AGENT_BROWSER_FINAL_VALIDATION_ALLOWED_STATUS_VALUES: &[&str] =
-    &["not_run", "pass", "fail", "blocked", "skipped"];
-const AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS: &[&str] = &[
-    "editor_typing",
-    "webpreview_input",
-    "git_sync",
-    "just_dry_run",
-    "final_runtime_capacity",
-    "final_headroom_recovery_sequence",
-    "panel_live_validation",
-    "agent_runtime_panel_live_contract",
-    "native_executor_receipts",
-    "payload_bridge",
-    "managed_chrome",
-    "pc_use",
-];
-const AGENT_BROWSER_FINAL_VALIDATION_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
-    "zed.web_preview.agent_browser_final_validation_result_import_receipt.v1";
-const AGENT_BROWSER_FINAL_RUNTIME_PROOF_CAPACITY_SCHEMA: &str =
-    "zed.web_preview.agent_browser_final_runtime_proof_capacity.v1";
-const AGENT_PLUGIN_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_STATUS_SCHEMA: &str =
-    "zed.agent_plugins.final_runtime_headroom_cleanup_result_status.v1";
-const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_TEMPLATE_SCHEMA: &str =
-    "zed.web_preview.agent_browser_final_runtime_headroom_cleanup_result_template.v1";
-const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_GATE_SCHEMA: &str =
-    "zed.web_preview.agent_browser_final_runtime_headroom_cleanup_result_gate.v1";
-const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
-    "zed.web_preview.agent_browser_final_runtime_headroom_cleanup_result_import_receipt.v1";
-const AGENT_BROWSER_FINAL_PROOF_AUDIT_SCHEMA: &str =
-    "zed.web_preview.agent_browser_final_proof_audit.v1";
-const AGENT_PLUGIN_RUNTIME_GREEN_FINAL_PROOF_AUDIT_SUMMARY_SCHEMA: &str =
-    "zed.agent_plugins.runtime_green_final_proof_audit_summary.v1";
-const AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA: &str =
-    "zed.agent_plugins.browser_panel_live_proof_status.v1";
-const AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_READINESS_CARD_SCHEMA: &str =
-    "zed.agent_plugins.browser_panel_live_proof_readiness_card.v1";
-const AGENT_BROWSER_FINAL_VALIDATION_DIR_NAME: &str = "browser-final-validation";
-const AGENT_BROWSER_FINAL_VALIDATION_RESULT_FILE_NAME: &str =
-    "latest-agent-browser-final-validation-result.json";
-const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_DIR_NAME: &str =
-    "browser-final-runtime-headroom-cleanup-results";
-const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_FILE_NAME: &str =
-    "latest-agent-browser-final-runtime-headroom-cleanup-result.json";
-const AGENT_BROWSER_FINAL_RUNTIME_HEADROOM_CLEANUP_RESULT_ARCHIVE_PREFIX: &str =
-    "agent-browser-final-runtime-headroom-cleanup-result-";
-const AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA: &str =
-    "zed.web_preview.agent_browser_panel_card_control_result.v1";
-const AGENT_BROWSER_PANEL_CONTROL_RESULT_IMPORT_RECEIPT_SCHEMA: &str =
-    "zed.web_preview.agent_browser_panel_control_result_import_receipt.v1";
-const AGENT_BROWSER_PANEL_CONTROL_RESULT_DIR_NAME: &str = "browser-panel-control-results";
-const AGENT_BROWSER_PANEL_CONTROL_RESULT_FILE_NAME: &str =
-    "latest-agent-browser-panel-control-result.json";
-const AGENT_BROWSER_PANEL_CONTROL_RESULT_ARCHIVE_PREFIX: &str =
-    "agent-browser-panel-control-result-";
-const AGENT_BROWSER_PANEL_LIVE_VALIDATION_SCHEMA: &str =
-    "zed.web_preview.agent_browser_panel_live_validation.v1";
-const AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA: &str =
-    "zed.web_preview.agent_browser_panel_live_validation_result_gate.v1";
-const AGENT_BROWSER_PANEL_LIVE_VALIDATION_EXERCISE_PLAN_SCHEMA: &str =
-    "zed.web_preview.agent_browser_panel_live_validation_exercise_plan.v1";
 const MANAGED_CHROME_EXECUTION_RECEIPT_PREFIX: &str = "managed-chrome-execution-receipt-";
 const MANAGED_CHROME_RUNNER_READY_OUTCOME: &str = "ready_runner_adapter_pending";
 const MANAGED_CHROME_EXECUTION_READY_OUTCOME: &str = "completed";
@@ -195,7 +92,6 @@ const PC_USE_RUNNER_READY_OUTCOME: &str = "ready_future_executor_pending";
 
 const MAX_HANDOFF_PREVIEW_BYTES: u64 = 1_048_576;
 const OBSERVABILITY_FRESHNESS_WINDOW_MS: u64 = 24 * 60 * 60 * 1000;
-const AGENT_BROWSER_FINAL_RUNTIME_MIN_FREE_BYTES: u64 = 18 * 1024 * 1024 * 1024;
 
 /// Summarizes Browser, managed Chrome, and PC-use plugin readiness without executing anything.
 ///
@@ -7912,8 +7808,7 @@ fn browser_final_validation_result_summary(result: &Value) -> Value {
                 .unwrap_or(false)
         })
         .count();
-    let panel_live_validation_check =
-        checks.and_then(|checks| checks.get("panel_live_validation"));
+    let panel_live_validation_check = checks.and_then(|checks| checks.get("panel_live_validation"));
     let panel_live_validation_check_status = panel_live_validation_check
         .and_then(|check| check.pointer("/status"))
         .and_then(Value::as_str)
@@ -7928,17 +7823,16 @@ fn browser_final_validation_result_summary(result: &Value) -> Value {
         .and_then(|check| check.pointer("/blocker"))
         .map(|blocker| !blocker.is_null())
         .unwrap_or(false);
-    let panel_live_validation_check_ready =
-        panel_live_validation_check_status.as_deref() == Some("pass")
-            && panel_live_validation_check_has_evidence
-            && !panel_live_validation_check_blocker_present;
+    let panel_live_validation_check_ready = panel_live_validation_check_status.as_deref()
+        == Some("pass")
+        && panel_live_validation_check_has_evidence
+        && !panel_live_validation_check_blocker_present;
     let agent_runtime_panel_live_contract_check =
         checks.and_then(|checks| checks.get("agent_runtime_panel_live_contract"));
-    let agent_runtime_panel_live_contract_check_status =
-        agent_runtime_panel_live_contract_check
-            .and_then(|check| check.pointer("/status"))
-            .and_then(Value::as_str)
-            .map(str::to_owned);
+    let agent_runtime_panel_live_contract_check_status = agent_runtime_panel_live_contract_check
+        .and_then(|check| check.pointer("/status"))
+        .and_then(Value::as_str)
+        .map(str::to_owned);
     let agent_runtime_panel_live_contract_check_has_evidence =
         agent_runtime_panel_live_contract_check
             .and_then(|check| check.pointer("/evidence"))

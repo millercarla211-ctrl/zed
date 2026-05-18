@@ -18,6 +18,7 @@ mod agent_pc_use_ui_snapshot_tool;
 mod agent_plugin_asset_provisioner_tool;
 mod agent_plugin_bootstrap_tool;
 mod agent_plugin_catalog_tool;
+mod agent_plugin_contracts;
 mod agent_plugin_runtime_status_tool;
 mod apply_code_action_tool;
 mod context_server_registry;

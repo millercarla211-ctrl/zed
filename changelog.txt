@@ -1,3 +1,17 @@
+[2026-05-18] - Agent Plugin Contract Module
+
+ADDED:
+- `crates/agent/src/tools/agent_plugin_contracts.rs` now owns shared Agent plugin/WebPreview schema names, proof directory names, result file names, and final-runtime headroom constants for the Agent catalog and runtime-status tools.
+
+CHANGED:
+- `crates/agent/src/tools.rs` now registers the shared Agent plugin contract module.
+- `crates/agent/src/tools/agent_plugin_catalog_tool.rs` now imports Browser/Chrome/PC-use contract constants from the shared module instead of carrying a private duplicate block.
+- `crates/agent/src/tools/agent_plugin_runtime_status_tool.rs` now imports the same shared contract constants, keeping runtime-status proof gates aligned with the catalog.
+- `todo.txt` now records this contract de-duplication slice at 99.98/100 while leaving the live UI exercise/imported final validation result as the remaining proof gate.
+
+NOTES:
+- This slice is structural hardening only. It does not run Cargo, launch browsers, dispatch input, mutate profiles, or create manual validation evidence.
+
 [2026-05-18] - WebPreview Contract Structure and Locked Run Proof
 
 ADDED:
