@@ -1,3 +1,13 @@
+[2026-05-18] - Target Drive Final Proof Wording
+
+CHANGED:
+- Replaced stale G-drive final-proof wording in the WebPreview panel live-validation result gate with configured build-target guidance.
+- WebPreview file-preview staging no longer falls back to `G:/Zed` if the process current directory cannot be resolved; it now uses a temporary Zed staging root.
+- `todo.txt` now records the relocated F-drive target as the active final-proof path and marks the current Browser/Chrome hardening set at 99.7/100.
+
+NOTES:
+- This slice removes stale operator guidance only. It does not run `just`, dispatch browser input, launch browsers, mutate profiles, or create manual validation evidence.
+
 [2026-05-18] - Agent Panel Live Contract Parity
 
 CHANGED:

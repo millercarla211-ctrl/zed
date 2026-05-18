@@ -13810,7 +13810,7 @@ impl WebPreviewView {
         };
         let next_action = match status {
             "ready_for_final_runtime" => {
-                "Run the final Windows just run proof when G: build headroom is at least 18 GB."
+                "Run the final Windows just run proof when the configured build target has at least 18 GB free."
             }
             "live_panel_result_blocked" => {
                 "Open the imported panel result and resolve the blocker before final runtime proof."
@@ -35941,7 +35941,7 @@ fn system_time_ms(time: SystemTime) -> Option<u64> {
 fn web_preview_file_url(path: &Path, title: &str, kind: PreviewFileKind) -> Option<String> {
     let source_url = url::Url::from_file_path(path).ok()?.to_string();
     let preview_dir = std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("G:/Zed"))
+        .unwrap_or_else(|_| std::env::temp_dir().join("zed"))
         .join("target")
         .join("web-preview-files");
     fs::create_dir_all(&preview_dir).ok()?;
