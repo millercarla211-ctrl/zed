@@ -1,3 +1,16 @@
+[2026-05-18] - Agent Panel Live Contract Parity
+
+CHANGED:
+- Agent runtime status now mirrors the WebPreview panel live-validation result gate before marking Browser panel-live proof ready for final runtime.
+- Completed imported panel results must now retain a non-empty action, a result contract, and `result_contract_matched` before `browser_panel_live_proof_status.ready_for_final_runtime` can become true.
+- Runtime-green read-sequence and WebPreview packet metadata now advertise the contract-ready fields and contract-missing statuses for panel-live proof repair.
+
+FIXED:
+- Prevented a weaker durable panel result with only `status: completed` from unblocking final runtime validation on the Agent side.
+
+NOTES:
+- This is source-level proof hardening only. It does not run `just`, dispatch browser input, launch browsers, mutate profiles, or create manual validation evidence.
+
 [2026-05-18] - F Drive Runtime Proof And Compile Fixes
 
 ADDED:

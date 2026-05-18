@@ -1643,11 +1643,24 @@ fn browser_panel_live_proof_status(roots: &AgentPluginRuntimeRoots, generated_at
         .filter_map(|root| root.get("summary"))
         .find(|summary| {
             summary
-                .get("status_valid")
+                .get("result_contract_ready")
                 .and_then(Value::as_bool)
                 .unwrap_or(false)
+                && summary.get("status").and_then(Value::as_str) == Some("completed")
         })
         .cloned()
+        .or_else(|| {
+            durable_roots
+                .iter()
+                .filter_map(|root| root.get("summary"))
+                .find(|summary| {
+                    summary
+                        .get("status_valid")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false)
+                })
+                .cloned()
+        })
         .or_else(|| {
             durable_roots
                 .iter()
@@ -1666,7 +1679,21 @@ fn browser_panel_live_proof_status(roots: &AgentPluginRuntimeRoots, generated_at
         root.pointer("/summary/status_valid")
             .and_then(Value::as_bool)
             .unwrap_or(false)
+            && root
+                .pointer("/summary/result_contract_ready")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
             && root.pointer("/summary/status").and_then(Value::as_str) == Some("completed")
+    });
+    let result_completed_without_contract = durable_roots.iter().any(|root| {
+        root.pointer("/summary/status_valid")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+            && root.pointer("/summary/status").and_then(Value::as_str) == Some("completed")
+            && !root
+                .pointer("/summary/result_contract_ready")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
     });
     let result_blocked = durable_roots.iter().any(|root| {
         root.pointer("/summary/status_valid")
@@ -1681,6 +1708,8 @@ fn browser_panel_live_proof_status(roots: &AgentPluginRuntimeRoots, generated_at
         "ready_for_final_runtime"
     } else if result_blocked {
         "live_panel_result_blocked"
+    } else if result_completed_without_contract {
+        "live_panel_result_contract_missing"
     } else if valid_result_present {
         "live_panel_result_imported_not_complete"
     } else {
@@ -1692,6 +1721,9 @@ fn browser_panel_live_proof_status(roots: &AgentPluginRuntimeRoots, generated_at
         }
         "live_panel_result_blocked" => {
             "Review the imported panel result blocker, resolve it in the right-side panel, and import a completed result."
+        }
+        "live_panel_result_contract_missing" => {
+            "Use the prefilled panel result template for a suggested control so the imported completed result keeps action, result_contract, and result_contract_matched."
         }
         "live_panel_result_imported_not_complete" => {
             "Fill the panel live-validation result template with status completed after exercising a visible panel control, then import it again."
@@ -1710,6 +1742,7 @@ fn browser_panel_live_proof_status(roots: &AgentPluginRuntimeRoots, generated_at
             "present": valid_result_present,
             "status": result_status,
             "completed": result_completed,
+            "completed_without_contract": result_completed_without_contract,
             "blocked": result_blocked,
             "summary": latest_result_summary,
         },
@@ -1719,6 +1752,7 @@ fn browser_panel_live_proof_status(roots: &AgentPluginRuntimeRoots, generated_at
             "ready_for_final_runtime": result_completed,
             "requires_live_validation_packet": true,
             "requires_completed_imported_result": true,
+            "requires_result_contract_ready": true,
             "source": "durable panel control-result JSON written by WebPreview import action",
         },
         "required_order": [
@@ -1793,7 +1827,24 @@ fn browser_panel_live_proof_readiness_card(proof_status: &Value) -> Value {
             root.pointer("/summary/status_valid")
                 .and_then(Value::as_bool)
                 .unwrap_or(false)
+                && root
+                    .pointer("/summary/result_contract_ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
                 && root.pointer("/summary/status").and_then(Value::as_str) == Some("completed")
+        })
+        .count();
+    let completed_without_contract_root_count = durable_roots
+        .iter()
+        .filter(|root| {
+            root.pointer("/summary/status_valid")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+                && root.pointer("/summary/status").and_then(Value::as_str) == Some("completed")
+                && !root
+                    .pointer("/summary/result_contract_ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
         })
         .count();
     let blocked_root_count = durable_roots
@@ -1818,7 +1869,24 @@ fn browser_panel_live_proof_readiness_card(proof_status: &Value) -> Value {
             root.pointer("/summary/status_valid")
                 .and_then(Value::as_bool)
                 .unwrap_or(false)
+                && root
+                    .pointer("/summary/result_contract_ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
                 && root.pointer("/summary/status").and_then(Value::as_str) == Some("completed")
+        })
+        .cloned();
+    let first_completed_without_contract_root = durable_roots
+        .iter()
+        .find(|root| {
+            root.pointer("/summary/status_valid")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+                && root.pointer("/summary/status").and_then(Value::as_str) == Some("completed")
+                && !root
+                    .pointer("/summary/result_contract_ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
         })
         .cloned();
     let first_blocked_root = durable_roots
@@ -1837,6 +1905,8 @@ fn browser_panel_live_proof_readiness_card(proof_status: &Value) -> Value {
         "ready_for_final_runtime"
     } else if blocked_root_count > 0 {
         "blocked_by_imported_panel_result"
+    } else if completed_without_contract_root_count > 0 {
+        "imported_panel_result_contract_missing"
     } else if result_present {
         "imported_panel_result_needs_completion"
     } else {
@@ -1849,6 +1919,16 @@ fn browser_panel_live_proof_readiness_card(proof_status: &Value) -> Value {
             "id": "imported_panel_result_blocked",
             "label": "Imported panel result is blocked or failed",
             "root": first_blocked_root
+                .as_ref()
+                .and_then(|root| root.get("root_mode"))
+                .and_then(Value::as_str),
+            "action": "copy_agent_browser_panel_live_validation_result_template",
+        })
+    } else if completed_without_contract_root_count > 0 {
+        serde_json::json!({
+            "id": "imported_panel_result_contract_missing",
+            "label": "Imported panel result is completed but missing the live validation result contract",
+            "root": first_completed_without_contract_root
                 .as_ref()
                 .and_then(|root| root.get("root_mode"))
                 .and_then(Value::as_str),
@@ -1878,6 +1958,9 @@ fn browser_panel_live_proof_readiness_card(proof_status: &Value) -> Value {
         "blocked_by_imported_panel_result" => {
             "Resolve the imported panel-result blocker, exercise the right-side panel control again, and import a completed result."
         }
+        "imported_panel_result_contract_missing" => {
+            "Use the prefilled panel result template so the imported completed result keeps action, result_contract, and result_contract_matched."
+        }
         "imported_panel_result_needs_completion" => {
             "Update the imported panel result to status completed after exercising a visible right-side panel control, then import it again."
         }
@@ -1899,6 +1982,7 @@ fn browser_panel_live_proof_readiness_card(proof_status: &Value) -> Value {
             "durable_root_count": root_count,
             "root_with_result_count": root_with_result_count,
             "completed_root_count": completed_root_count,
+            "completed_without_contract_root_count": completed_without_contract_root_count,
             "blocked_root_count": blocked_root_count,
         },
         "first_blocker": first_blocker,
@@ -2010,6 +2094,17 @@ fn browser_panel_control_result_summary(result: &Value) -> Value {
         .pointer("/status")
         .and_then(Value::as_str)
         .unwrap_or("not_run");
+    let action_present = result
+        .pointer("/action")
+        .and_then(Value::as_str)
+        .is_some_and(|action| !action.trim().is_empty());
+    let result_contract_matched = result
+        .pointer("/result_contract_matched")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let has_result_contract = result
+        .get("result_contract")
+        .is_some_and(|value| !value.is_null());
     let declared_status_values = result
         .get("declared_status_values")
         .cloned()
@@ -2030,6 +2125,8 @@ fn browser_panel_control_result_summary(result: &Value) -> Value {
     let schema_valid = result.pointer("/schema").and_then(Value::as_str)
         == Some(AGENT_BROWSER_PANEL_CARD_CONTROL_RESULT_SCHEMA);
     let status_valid = schema_valid && status_allowed;
+    let result_contract_ready =
+        status_valid && action_present && result_contract_matched && has_result_contract;
 
     serde_json::json!({
         "state": "parsed_result",
@@ -2037,15 +2134,17 @@ fn browser_panel_control_result_summary(result: &Value) -> Value {
         "status": status,
         "status_valid": status_valid,
         "status_allowed": status_allowed,
+        "action_present": action_present,
         "result_id": result.pointer("/result_id").and_then(Value::as_str),
         "source": result.pointer("/source").and_then(Value::as_str),
         "source_event_id": result.pointer("/source_event_id").and_then(Value::as_str),
         "action": result.pointer("/action").and_then(Value::as_str),
         "timestamp_ms": result.pointer("/timestamp_ms").and_then(Value::as_u64),
         "message": result.pointer("/message").and_then(Value::as_str),
-        "result_contract_matched": result.pointer("/result_contract_matched").and_then(Value::as_bool),
+        "result_contract_matched": result_contract_matched,
         "declared_status_values": declared_status_values,
-        "has_result_contract": result.get("result_contract").is_some_and(|value| !value.is_null()),
+        "has_result_contract": has_result_contract,
+        "result_contract_ready": result_contract_ready,
         "has_source_summary": result.get("source_summary").is_some_and(|value| !value.is_null()),
         "read_only": result.pointer("/safety/read_only").and_then(Value::as_bool),
         "dispatches_input": result.pointer("/safety/dispatches_input").and_then(Value::as_bool),
@@ -4313,7 +4412,7 @@ fn runtime_green_proof_path(
             {
                 "step": "verify_panel_live_result",
                 "field": "browser_panel_live_proof_status",
-                "purpose": "Confirm a completed imported right-side panel control result exists before the final Windows runtime proof.",
+                "purpose": "Confirm a completed imported right-side panel control result keeps the live-validation action and result contract before the final Windows runtime proof.",
                 "webpreview_actions": [
                     "copy_agent_browser_panel_live_validation",
                     "copy_agent_browser_panel_live_validation_exercise_plan",
@@ -4375,6 +4474,9 @@ fn runtime_green_proof_path(
                 "schema": AGENT_PLUGIN_BROWSER_PANEL_LIVE_PROOF_STATUS_SCHEMA,
                 "source": "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status",
                 "result_gate_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
+                "ready_field": "browser_panel_live_proof_status.ready_for_final_runtime",
+                "contract_ready_field": "browser_panel_live_proof_status.result.summary.result_contract_ready",
+                "contract_missing_status": "live_panel_result_contract_missing",
                 "copy_action": "copy_agent_browser_panel_live_validation_result_gate",
                 "send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
                 "result_import_action": "import_agent_browser_panel_control_result_from_clipboard"
@@ -4384,6 +4486,9 @@ fn runtime_green_proof_path(
                 "source": "inspect_agent_plugin_runtime_status.browser_panel_live_proof_readiness_card",
                 "status_source": "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status",
                 "result_gate_schema": AGENT_BROWSER_PANEL_LIVE_VALIDATION_RESULT_GATE_SCHEMA,
+                "ready_field": "browser_panel_live_proof_readiness_card.ready_for_final_runtime",
+                "contract_missing_status": "imported_panel_result_contract_missing",
+                "contract_missing_count_field": "browser_panel_live_proof_readiness_card.summary.completed_without_contract_root_count",
                 "copy_action": "copy_agent_browser_panel_live_validation_result_gate",
                 "send_action": "send_agent_browser_panel_live_validation_result_gate_to_agent",
                 "result_import_action": "import_agent_browser_panel_control_result_from_clipboard"
