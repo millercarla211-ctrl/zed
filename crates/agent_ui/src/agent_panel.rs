@@ -4994,7 +4994,7 @@ impl AgentPanel {
                 auto_submit: false,
             }),
             true,
-            "agent_panel",
+            AgentThreadSource::AgentPanel,
             window,
             cx,
         );

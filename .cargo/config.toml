@@ -3,8 +3,8 @@
 rustflags = ["-C", "symbol-mangling-version=v0", "--cfg", "tokio_unstable"]
 # Keep Zed build artifacts on the F: drive for this relocated checkout.
 target-dir = "F:/Zed/target"
-# Ryzen 5 5600G: 12 logical CPUs, 24GB RAM. Use a balanced worker count for Zed-sized builds.
-jobs = 6
+# Ryzen 5 5600G: 12 logical CPUs, 24GB RAM. Use single-job cold builds to limit peak virtual memory.
+jobs = 1
 
 [alias]
 xtask = "run --package xtask --"

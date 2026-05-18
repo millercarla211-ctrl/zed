@@ -27002,6 +27002,10 @@ impl WebPreviewView {
             Self::agent_browser_final_runtime_headroom_inspection_checklist_from_plan(
                 &final_runtime_headroom_recovery_plan,
             );
+        let final_runtime_headroom_size_inspection =
+            Self::agent_browser_final_runtime_headroom_size_inspection_from_capacity(
+                &final_runtime_proof_capacity,
+            );
         let final_runtime_headroom_cleanup_result_template =
             Self::agent_browser_final_runtime_headroom_cleanup_result_template_from_plan(
                 &final_runtime_headroom_recovery_plan,
@@ -29268,20 +29272,24 @@ impl WebPreviewView {
     }
 
     fn open_devtools(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        let mut opened = false;
         let mut blocked_reason = None;
 
         #[cfg(any(target_os = "windows", target_os = "macos"))]
+        let opened = {
+            let borrow = self.native_preview.borrow();
+            if let Some(preview) = borrow.as_ref() {
+                preview.open_devtools();
+                true
+            } else {
+                false
+            }
+        };
+
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        let opened = false;
+
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
-            opened = {
-                let borrow = self.native_preview.borrow();
-                if let Some(preview) = borrow.as_ref() {
-                    preview.open_devtools();
-                    true
-                } else {
-                    false
-                }
-            };
             if !opened {
                 blocked_reason = Some("native_preview_not_mounted");
             }

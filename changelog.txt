@@ -1,3 +1,24 @@
+[2026-05-18] - F Drive Runtime Proof And Compile Fixes
+
+ADDED:
+- Proved the relocated `F:\Zed` checkout can build and launch from the F-drive target directory.
+- Recorded the F-drive runtime proof in `todo.txt` with the current 99.5/100 status.
+
+CHANGED:
+- Reduced the local Cargo job cap for this checkout to one job so `just run` can make progress on the current low-memory Windows machine.
+- Updated runnable-build guidance to describe the single-job F-drive path.
+- Synced `Cargo.lock` with the existing Windows dependency declared by the agent crate.
+
+FIXED:
+- Corrected the Agent panel thread-source call to use the typed `AgentThreadSource::AgentPanel` value.
+- Restored the missing WebPreview final-runtime headroom size-inspection binding used by the action manifest.
+- Removed an unused Agent runtime-status local from the final manual-command gate summary.
+- Made WebPreview DevTools opening state portable across cfg branches without unused assignment warnings.
+
+NOTES:
+- Verification so far: `git diff --check`, `just --dry-run run`, `just ensure-build-headroom`, and `just run` from `F:\Zed`.
+- `just run` built both `zed` and `cli`, then launched `F:\Zed\target\debug\zed.exe`; the app is intentionally left running, so the wrapper command has not written a final exit marker yet.
+
 [2026-05-18] - F Drive Checkout Relocation
 
 ADDED:

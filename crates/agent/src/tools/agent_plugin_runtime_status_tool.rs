@@ -4597,10 +4597,6 @@ fn runtime_green_claim_gate_summary(claim_gate: &Value) -> Value {
     let checklist = claim_gate
         .get("final_operator_checklist")
         .unwrap_or(&Value::Null);
-    let can_run_final_manual_command = checklist
-        .get("can_run_final_manual_command")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
 
     serde_json::json!({
         "status": claim_gate.get("status").and_then(Value::as_str),

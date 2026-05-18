@@ -217,6 +217,7 @@ dependencies = [
  "uuid",
  "watch",
  "web_search",
+ "windows 0.61.3",
  "zed_env_vars",
  "zlog",
  "zstd",

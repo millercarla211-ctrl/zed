@@ -17,7 +17,7 @@ ensure-build-headroom:
 run: ensure-build-headroom
     @echo "Running Zed with balanced F-drive build settings..."
     @echo "Building the zed binary plus the development CLI companion"
-    @echo "Using Cargo config: 6 jobs, F:/Zed/target, rust-lld linker, no debug info, incremental cache disabled"
+    @echo "Using Cargo config: 1 job, F:/Zed/target, rust-lld linker, no debug info, incremental cache disabled"
     $env:CARGO_INCREMENTAL = "0"; cargo build -p zed --bin zed
     $env:CARGO_INCREMENTAL = "0"; cargo build -p cli --bin cli
     @echo "Build complete! Launching Zed once..."
@@ -89,7 +89,7 @@ show-memory-guide:
     @echo "  CPU: Ryzen 5 5600G, 6 cores / 12 logical processors"
     @echo "  RAM: 24 GB installed"
     @echo "  Build output: F:/Zed/target"
-    @echo "  Cargo workers: 6"
+    @echo "  Cargo workers: 1"
     @echo "  Runnable build preflight: at least 18 GB free on F:"
     @echo "  Runnable build mode: CARGO_INCREMENTAL=0 to avoid query-cache disk spikes"
     @echo ""
