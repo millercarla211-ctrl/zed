@@ -1,3 +1,17 @@
+[2026-05-18] - Final Manual Proof Gate Fix
+
+FIXED:
+- `crates/agent/src/tools/agent_plugin_runtime_status_tool.rs` no longer requires `runtime_green_candidate=true` before the final operator checklist can mark `just run` as runnable.
+- Runtime claim readiness now reports `ready_for_final_runtime_proof` when runtime evidence, panel live validation, and target-drive headroom are ready but the post-run final validation result has not been imported yet.
+
+CHANGED:
+- `runtime_green_claim_gate` now exposes `can_run_final_manual_command` from pre-run evidence gates instead of the post-run final result gate.
+- `runtime_green_claim_readiness` now separates missing/stale runtime evidence, final target-drive capacity, panel live validation, ready-for-final-proof, and imported-result repair states.
+- `todo.txt` now records this final-proof sequencing fix at 99.99/100 while leaving the real live UI exercise/imported result validation as the remaining proof gate.
+
+NOTES:
+- This slice is a source-level readiness-state fix. It does not run Cargo, launch browsers, dispatch input, mutate profiles, or create manual validation evidence.
+
 [2026-05-18] - Agent Plugin Contract Module
 
 ADDED:

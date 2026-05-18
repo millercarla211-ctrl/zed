@@ -4516,14 +4516,6 @@ fn runtime_green_claim_gate(proof_path: &Value, final_runtime_proof_capacity: &V
         .pointer("/current/current_best_next")
         .cloned()
         .unwrap_or_else(|| serde_json::json!({}));
-    let next_required_proof =
-        runtime_green_next_required_proof(&current_best_next, runtime_green_candidate);
-    let final_operator_checklist = runtime_green_final_operator_checklist(
-        &next_required_proof,
-        runtime_green_candidate,
-        root_mode,
-        final_runtime_proof_capacity,
-    );
     let final_runtime_capacity_ready = final_runtime_proof_capacity
         .get("ready_for_just_run")
         .and_then(Value::as_bool)
@@ -4536,6 +4528,32 @@ fn runtime_green_claim_gate(proof_path: &Value, final_runtime_proof_capacity: &V
         .get("ready_for_final_runtime")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let runtime_evidence_blocker_count = operator_summary
+        .get("runtime_evidence_blocker_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let missing_required_file_count = operator_summary
+        .get("missing_required_file_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let stale_required_file_count = operator_summary
+        .get("stale_required_file_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let can_run_final_manual_command = runtime_evidence_blocker_count == 0
+        && missing_required_file_count == 0
+        && stale_required_file_count == 0
+        && browser_panel_live_result_ready
+        && final_runtime_capacity_ready;
+    let next_required_proof =
+        runtime_green_next_required_proof(&current_best_next, runtime_green_candidate);
+    let final_operator_checklist = runtime_green_final_operator_checklist(
+        &next_required_proof,
+        runtime_green_candidate,
+        can_run_final_manual_command,
+        root_mode,
+        final_runtime_proof_capacity,
+    );
     let regression_watch_rollup = proof_path
         .pointer("/current/regression_watch_rollup")
         .cloned()
@@ -4554,10 +4572,10 @@ fn runtime_green_claim_gate(proof_path: &Value, final_runtime_proof_capacity: &V
             .and_then(Value::as_str)
             .map(|fraction| fraction.to_string())
             .unwrap_or_else(|| format!("{ready_lane_count}/{lane_count}")),
-        "runtime_evidence_blocker_count": operator_summary.get("runtime_evidence_blocker_count").and_then(Value::as_u64),
+        "runtime_evidence_blocker_count": runtime_evidence_blocker_count,
         "manual_blocker_count": operator_summary.get("manual_blocker_count").and_then(Value::as_u64),
-        "missing_required_file_count": operator_summary.get("missing_required_file_count").and_then(Value::as_u64),
-        "stale_required_file_count": operator_summary.get("stale_required_file_count").and_then(Value::as_u64),
+        "missing_required_file_count": missing_required_file_count,
+        "stale_required_file_count": stale_required_file_count,
         "first_pending_lane_id": operator_summary.get("first_pending_lane_id").and_then(Value::as_str),
         "first_pending_lane_label": operator_summary.get("first_pending_lane_label").and_then(Value::as_str),
         "first_pending_lane_status": operator_summary.get("first_pending_lane_status").and_then(Value::as_str),
@@ -4573,6 +4591,7 @@ fn runtime_green_claim_gate(proof_path: &Value, final_runtime_proof_capacity: &V
         "requires_final_runtime_proof_capacity": true,
         "final_runtime_proof_capacity": final_runtime_proof_capacity_summary(final_runtime_proof_capacity),
         "final_runtime_capacity_ready": final_runtime_capacity_ready,
+        "can_run_final_manual_command": can_run_final_manual_command,
         "final_manual_command": "just run",
         "next_operator_step": operator_summary.get("next_operator_step").and_then(Value::as_str),
         "next_required_proof": next_required_proof,
@@ -4725,6 +4744,18 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
         .get("ready_for_final_runtime")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let runtime_evidence_blocker_count = claim_gate
+        .get("runtime_evidence_blocker_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let missing_required_file_count = claim_gate
+        .get("missing_required_file_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let stale_required_file_count = claim_gate
+        .get("stale_required_file_count")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
     let checklist = claim_gate
         .get("final_operator_checklist")
         .unwrap_or(&Value::Null);
@@ -4738,14 +4769,16 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
         && final_runtime_capacity_ready;
     let status = if can_report_runtime_green {
         "ready_to_report_runtime_green"
-    } else if !runtime_green_candidate {
+    } else if runtime_evidence_blocker_count > 0 || missing_required_file_count > 0 {
         "runtime_evidence_required"
+    } else if stale_required_file_count > 0 {
+        "fresh_runtime_evidence_required"
     } else if !final_runtime_capacity_ready {
         "final_runtime_capacity_required"
     } else if !browser_panel_live_result_ready {
         "panel_live_validation_result_required"
     } else if !final_result_present {
-        "final_validation_result_missing"
+        "ready_for_final_runtime_proof"
     } else if !final_result_runtime_green {
         "final_validation_result_not_runtime_green"
     } else {
@@ -4772,6 +4805,9 @@ fn runtime_green_claim_readiness(proof_path: &Value, claim_gate: &Value) -> Valu
         "final_manual_command": "just run",
         "claim_gate_status": claim_gate.get("status").and_then(Value::as_str),
         "ready_lane_fraction": claim_gate.get("ready_lane_fraction").and_then(Value::as_str),
+        "runtime_evidence_blocker_count": runtime_evidence_blocker_count,
+        "missing_required_file_count": missing_required_file_count,
+        "stale_required_file_count": stale_required_file_count,
         "first_pending_lane_id": claim_gate
             .get("first_pending_lane_id")
             .and_then(Value::as_str),
@@ -6443,6 +6479,7 @@ fn runtime_green_next_required_proof(
 fn runtime_green_final_operator_checklist(
     next_required_proof: &Value,
     runtime_green_candidate: bool,
+    can_run_final_manual_command: bool,
     root_mode: &str,
     final_runtime_proof_capacity: &Value,
 ) -> Value {
@@ -6470,10 +6507,11 @@ fn runtime_green_final_operator_checklist(
         .get("status")
         .and_then(Value::as_str)
         .unwrap_or("target_headroom_unknown");
-    let can_run_final_manual_command = runtime_green_candidate && final_runtime_capacity_ready;
     let status = if can_run_final_manual_command {
         "ready_for_final_windows_runtime_proof"
     } else if runtime_green_candidate {
+        "blocked_by_final_runtime_capacity"
+    } else if !final_runtime_capacity_ready {
         "blocked_by_final_runtime_capacity"
     } else {
         "blocked_by_required_proof"
@@ -6503,7 +6541,11 @@ fn runtime_green_final_operator_checklist(
             {
                 "id": "resolve_first_required_proof",
                 "label": "Resolve the first missing runtime proof before the final manual pass.",
-                "status": if runtime_green_candidate { "ready" } else { "required" },
+                "status": if can_run_final_manual_command || runtime_green_candidate {
+                    "ready"
+                } else {
+                    "required"
+                },
                 "required_proof_id": required_proof_id,
                 "recommended_action": recommended_action,
                 "recommended_tool": recommended_tool,
