@@ -16040,6 +16040,11 @@ impl WebPreviewView {
                         .any(|root| root.get("exists").and_then(Value::as_bool).unwrap_or(false))
                 })
                 .unwrap_or(false);
+        let final_validation_bundle_ready =
+            self.latest_agent_browser_final_validation_bundle.is_some();
+        let final_validation_result_template_ready = self
+            .latest_agent_browser_final_validation_result_template
+            .is_some();
         let browser_missing_expected_required_checks = browser_final_observability
             .pointer("/final_result_missing_expected_required_checks")
             .cloned()
@@ -16179,6 +16184,12 @@ impl WebPreviewView {
             .count();
         let pending_lane_count = lane_count.saturating_sub(ready_lane_count);
         let runtime_green_candidate = browser_ready && managed_chrome_ready && pc_use_ready;
+        let can_run_final_manual_command = final_validation_bundle_ready
+            && final_validation_result_template_ready
+            && browser_panel_gate_ready
+            && browser_final_runtime_capacity_ready
+            && managed_chrome_ready
+            && pc_use_ready;
         let current_best_next = lanes
             .iter()
             .find(|lane| {
@@ -16222,8 +16233,12 @@ impl WebPreviewView {
         let final_operator_checklist = Self::agent_plugin_runtime_green_final_operator_checklist(
             &next_required_proof,
             runtime_green_candidate,
+            can_run_final_manual_command,
+            browser_final_runtime_capacity_ready,
         );
         let claim_gate_status = if runtime_green_candidate {
+            "runtime_green_candidate"
+        } else if can_run_final_manual_command {
             "ready_for_final_manual_runtime_proof"
         } else if !browser_ready {
             "browser_webpreview_evidence_required"
@@ -16247,6 +16262,7 @@ impl WebPreviewView {
             "first_pending_lane_label": first_pending_lane_label,
             "first_pending_lane_status": first_pending_lane_status,
             "can_claim_runtime_green_from_webpreview": runtime_green_candidate,
+            "can_run_final_manual_command": can_run_final_manual_command,
             "final_manual_command": "just run",
             "copy_action": "copy_agent_plugin_runtime_green_claim_gate",
             "send_action": "send_agent_plugin_runtime_green_claim_gate_to_agent",
@@ -16279,6 +16295,8 @@ impl WebPreviewView {
                 "browser_final_result_runtime_green_candidate": browser_final_result_ready,
                 "browser_final_result_missing_expected_required_checks": browser_missing_expected_required_checks,
                 "browser_final_result_missing_expected_required_check_count": browser_missing_expected_required_check_count,
+                "final_validation_bundle_ready": final_validation_bundle_ready,
+                "final_validation_result_template_ready": final_validation_result_template_ready,
                 "browser_panel_live_validation_result_gate_ready": browser_panel_gate_ready,
                 "browser_panel_live_validation_result_gate_status": browser_panel_gate_status,
                 "browser_final_runtime_capacity_ready": browser_final_runtime_capacity_ready,
@@ -16288,7 +16306,7 @@ impl WebPreviewView {
                 "managed_chrome_execution_status": managed_chrome_execution.get("status").and_then(Value::as_str),
                 "pc_use_status": pc_use_status.get("status").and_then(Value::as_str),
             },
-            "next_operator_step": if runtime_green_candidate {
+            "next_operator_step": if can_run_final_manual_command {
                 "Run the final manual Windows runtime proof, then import the filled result before reporting runtime-green."
             } else {
                 "Resolve the first pending evidence lane, then re-read the runtime-green claim gate."
@@ -16359,6 +16377,13 @@ impl WebPreviewView {
             .get("runtime_green_candidate")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let can_run_final_manual_command = claim_gate
+            .get("can_run_final_manual_command")
+            .or_else(|| {
+                claim_gate.pointer("/final_operator_checklist/can_run_final_manual_command")
+            })
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let final_result_has_stale_required_checks =
             final_result_present && final_result_missing_expected_required_check_count > 0;
         let final_runtime_headroom_required = final_result_runtime_green_candidate
@@ -16374,12 +16399,18 @@ impl WebPreviewView {
             "final_runtime_headroom_required"
         } else if can_report_runtime_green {
             "ready_to_report_runtime_green"
-        } else if !runtime_green_candidate {
-            "runtime_evidence_required"
+        } else if final_result_present && !final_result_runtime_green {
+            "final_validation_result_not_runtime_green"
         } else if !final_result_present {
-            "final_validation_result_missing"
+            if can_run_final_manual_command {
+                "ready_for_final_runtime_proof"
+            } else {
+                "final_validation_result_missing"
+            }
         } else if !final_result_runtime_green {
             "final_validation_result_not_runtime_green"
+        } else if !runtime_green_candidate {
+            "runtime_evidence_required"
         } else {
             "manual_review_required"
         };
@@ -16389,6 +16420,7 @@ impl WebPreviewView {
             "status": status,
             "can_report_runtime_green": can_report_runtime_green,
             "runtime_green_candidate": runtime_green_candidate,
+            "can_run_final_manual_command": can_run_final_manual_command,
             "final_result_present": final_result_present,
             "final_result_runtime_green": final_result_runtime_green,
             "final_result_runtime_green_candidate": final_result_runtime_green_candidate,
@@ -16458,6 +16490,8 @@ impl WebPreviewView {
                 "requires_runtime_green_candidate": true,
                 "requires_imported_final_result": true,
                 "requires_final_manual_command": "just run",
+                "can_run_final_manual_command": can_run_final_manual_command,
+                "requires_final_runtime_capacity_ready": true,
                 "requires_regression_watch_review_before_manual_claim": true
             },
             "read_only": true,
@@ -16533,6 +16567,11 @@ impl WebPreviewView {
             || (final_result_runtime_green_candidate
                 && panel_live_validation_result_gate_ready
                 && !final_runtime_capacity_ready);
+        let can_run_final_manual_command = readiness
+            .get("can_run_final_manual_command")
+            .or_else(|| readiness.pointer("/final_operator_checklist/can_run_final_manual_command"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let can_report = readiness_can_report
             && !final_result_has_stale_required_checks
             && !final_runtime_headroom_required;
@@ -16542,12 +16581,18 @@ impl WebPreviewView {
             "blocked_by_final_runtime_headroom"
         } else if can_report {
             "ready_to_report_runtime_green"
-        } else if !runtime_green_candidate {
-            "blocked_by_runtime_evidence"
+        } else if final_result_present && !final_result_runtime_green {
+            "blocked_by_final_result"
         } else if !final_result_present {
-            "blocked_by_missing_final_result"
+            if can_run_final_manual_command {
+                "blocked_by_missing_final_result"
+            } else {
+                "blocked_by_runtime_evidence"
+            }
         } else if !final_result_runtime_green {
             "blocked_by_final_result"
+        } else if !runtime_green_candidate {
+            "blocked_by_runtime_evidence"
         } else {
             "blocked_by_manual_review"
         };
@@ -16557,12 +16602,18 @@ impl WebPreviewView {
             "final_runtime_proof_capacity"
         } else if can_report {
             "none"
-        } else if !runtime_green_candidate {
-            "runtime_green_candidate_false"
+        } else if final_result_present && !final_result_runtime_green {
+            "final_validation_result_not_runtime_green"
         } else if !final_result_present {
-            "final_validation_result_missing"
+            if can_run_final_manual_command {
+                "final_validation_result_missing"
+            } else {
+                "runtime_green_candidate_false"
+            }
         } else if !final_result_runtime_green {
             "final_validation_result_not_runtime_green"
+        } else if !runtime_green_candidate {
+            "runtime_green_candidate_false"
         } else {
             "manual_review_required"
         };
@@ -16591,6 +16642,7 @@ impl WebPreviewView {
             "severity": if can_report { "success" } else { "blocked" },
             "can_report_runtime_green": can_report,
             "runtime_green_candidate": runtime_green_candidate,
+            "can_run_final_manual_command": can_run_final_manual_command,
             "blocker": blocker,
             "final_result_missing_expected_required_check_count": final_result_missing_expected_required_check_count,
             "final_result_missing_expected_required_checks": readiness
@@ -16626,6 +16678,8 @@ impl WebPreviewView {
                 "requires_runtime_green_candidate": true,
                 "requires_imported_final_result": true,
                 "requires_final_manual_command": "just run",
+                "can_run_final_manual_command": can_run_final_manual_command,
+                "requires_final_runtime_capacity_ready": true,
                 "requires_regression_watch_review_before_manual_claim": true
             },
             "read_only": true,
@@ -17715,6 +17769,8 @@ impl WebPreviewView {
     fn agent_plugin_runtime_green_final_operator_checklist(
         next_required_proof: &Value,
         runtime_green_candidate: bool,
+        can_run_final_manual_command: bool,
+        final_runtime_capacity_ready: bool,
     ) -> Value {
         let required_proof_id = next_required_proof
             .get("required_proof_id")
@@ -17728,15 +17784,17 @@ impl WebPreviewView {
             .get("recommended_sequence")
             .cloned()
             .unwrap_or_else(|| serde_json::json!([]));
-        let status = if runtime_green_candidate {
+        let status = if can_run_final_manual_command {
             "ready_for_final_windows_runtime_proof"
+        } else if !final_runtime_capacity_ready {
+            "blocked_by_final_runtime_capacity"
         } else {
             "blocked_by_required_proof"
         };
 
         serde_json::json!({
             "status": status,
-            "can_run_final_manual_command": runtime_green_candidate,
+            "can_run_final_manual_command": can_run_final_manual_command,
             "final_manual_command": "just run",
             "first_required_proof_id": required_proof_id,
             "first_recommended_action": recommended_action,
@@ -17753,7 +17811,7 @@ impl WebPreviewView {
                 {
                     "id": "resolve_first_required_proof",
                     "label": "Resolve the first missing runtime proof before the final manual pass.",
-                    "status": if runtime_green_candidate { "ready" } else { "required" },
+                    "status": if can_run_final_manual_command || runtime_green_candidate { "ready" } else { "required" },
                     "required_proof_id": required_proof_id,
                     "recommended_action": recommended_action,
                     "writes_files": next_required_proof
@@ -17766,9 +17824,17 @@ impl WebPreviewView {
                         .unwrap_or(false)
                 },
                 {
+                    "id": "check_final_runtime_capacity",
+                    "label": "Confirm the target drive has enough free space before the final manual proof.",
+                    "status": if final_runtime_capacity_ready { "ready" } else { "blocked" },
+                    "action": "copy_agent_browser_final_runtime_proof_capacity",
+                    "writes_files": false,
+                    "dispatches_input": false
+                },
+                {
                     "id": "run_final_windows_runtime_proof",
                     "label": "Run the final manual Windows runtime proof only after required proof is available.",
-                    "status": if runtime_green_candidate { "required" } else { "blocked" },
+                    "status": if can_run_final_manual_command { "required" } else { "blocked" },
                     "command": "just run",
                     "writes_files": false,
                     "dispatches_input": false
@@ -17776,7 +17842,7 @@ impl WebPreviewView {
                 {
                     "id": "import_final_result",
                     "label": "Import the filled final validation result after the manual proof.",
-                    "status": if runtime_green_candidate { "pending_manual_result" } else { "blocked" },
+                    "status": if can_run_final_manual_command { "pending_manual_result" } else { "blocked" },
                     "action": "import_agent_browser_final_validation_result_from_clipboard",
                     "managed_proof_write": "writes managed final-proof JSON only after explicit WebPreview import",
                     "dispatches_input": false

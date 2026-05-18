@@ -1,3 +1,16 @@
+[2026-05-18] - WebPreview Final Manual Proof Gate Parity
+
+FIXED:
+- `crates/web_preview/src/web_preview_view.rs` no longer marks the final manual `just run` command runnable only when `runtime_green_candidate=true`.
+- WebPreview claim readiness now reports `ready_for_final_runtime_proof` when the pre-run proof bundle/template, panel live-result gate, target-drive headroom, managed Chrome receipt, and PC-use runner receipt are ready but the post-run final result has not been imported.
+
+CHANGED:
+- WebPreview runtime-green claim gates, report gates, and final operator checklists now expose `can_run_final_manual_command` as a pre-run readiness field.
+- `todo.txt` now records the WebPreview parity slice while keeping the actual live UI exercise/imported result validation as the remaining 100-point blocker.
+
+NOTES:
+- This slice is source-level readiness-state hardening. It does not run Cargo, launch browsers, dispatch input, mutate profiles, or create manual validation evidence.
+
 [2026-05-18] - Final Manual Proof Gate Fix
 
 FIXED:
