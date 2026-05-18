@@ -2426,7 +2426,7 @@ impl AgentSessionList for NativeAgentSessionList {
         Task::ready(Ok(AgentSessionListResponse::new(sessions)))
     }
 
-    fn supports_delete(&self) -> bool {
+    fn supports_delete(&self, _cx: &App) -> bool {
         true
     }
 
