@@ -108,6 +108,7 @@ const AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS: &[&str] = &[
     "final_runtime_capacity",
     "final_headroom_recovery_sequence",
     "panel_live_validation",
+    "agent_runtime_panel_live_contract",
     "native_executor_receipts",
     "payload_bridge",
     "managed_chrome",
@@ -6585,7 +6586,8 @@ impl WebPreviewView {
             "required_final_state": [
                 "Copy or send the final validation bundle before the runtime pass.",
                 "Copy or send the final runtime proof capacity and confirm ready_for_just_run=true.",
-                "Copy or send the panel live-validation result gate and confirm it reports ready_for_final_runtime=true.",
+                "Copy or send the panel live-validation result gate and confirm it reports ready_for_final_runtime=true and result_contract_ready=true.",
+                "Run inspect_agent_plugin_runtime_status and confirm the Browser panel live-proof status plus readiness card are both ready for final runtime.",
                 "Copy or send the final validation result template before the runtime pass.",
                 "Run one final Windows just run pass when validation is intended.",
                 "Fill the result template with pass/fail evidence.",
@@ -8808,7 +8810,8 @@ impl WebPreviewView {
                 "Run native traces and native executor attempts for click, type, key, scroll, back, forward, and cache-only reset.",
                 "Import one managed Browser payload and confirm the payload-import receipt redacts text while preserving schema/action metadata.",
                 "Inspect managed Chrome and PC-use queue/receipt/status handoffs without touching real browser profiles or OS-wide input.",
-                "Copy or send the panel live-validation result gate and confirm ready_for_final_runtime is true.",
+                "Copy or send the panel live-validation result gate and confirm ready_for_final_runtime and result.result_contract_ready are true.",
+                "Run inspect_agent_plugin_runtime_status and confirm browser_panel_live_proof_status.ready_for_final_runtime, browser_panel_live_proof_status.result_contract_ready, and browser_panel_live_proof_readiness_card.status == ready_for_final_runtime.",
                 "Copy or send the runtime-green proof path and confirm its claim gate still points at the first pending evidence lane.",
                 "Copy or send this final validation bundle with the resulting summaries."
             ],
@@ -8822,6 +8825,7 @@ impl WebPreviewView {
                 "Local dev HEAD matches origin/dev and the tracked tree is clean before the final runtime proof starts.",
                 "The guarded just run recipe dry-run resolves before the final runtime proof starts.",
                 "Final runtime proof capacity reports ready_for_just_run=true before starting just run.",
+                "Agent runtime status reports the panel live proof is contract-ready before the final validation result is imported.",
                 "The final validation-progress packet reports all evidence groups ready before claiming runtime-green."
             ],
             "non_goals": [
@@ -8876,7 +8880,12 @@ impl WebPreviewView {
                 },
                 "panel_live_validation": {
                     "status": "not_run",
-                    "evidence": "Copy or send the panel live-validation result gate after importing a completed panel control result; ready_for_final_runtime is true.",
+                    "evidence": "Copy or send the panel live-validation result gate after importing a completed panel control result; ready_for_final_runtime is true and result.result_contract_ready is true.",
+                    "blocker": null
+                },
+                "agent_runtime_panel_live_contract": {
+                    "status": "not_run",
+                    "evidence": "Run inspect_agent_plugin_runtime_status after the panel result import; browser_panel_live_proof_status.ready_for_final_runtime is true, browser_panel_live_proof_status.result_contract_ready is true, and browser_panel_live_proof_readiness_card.status is ready_for_final_runtime.",
                     "blocker": null
                 },
                 "native_executor_receipts": {
@@ -8909,11 +8918,12 @@ impl WebPreviewView {
                 "validation_progress_status": "manual_windows_runtime_validation_ready",
                 "final_runtime_proof_capacity": "target_headroom_ready",
                 "final_runtime_headroom_recovery_sequence": "headroom_ready_for_final_runtime_proof with first_blocked_step null",
-                "panel_live_validation_result_gate": "ready_for_final_runtime",
+                "panel_live_validation_result_gate": "ready_for_final_runtime with result.result_contract_ready true",
+                "agent_runtime_panel_live_contract": "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status.ready_for_final_runtime true and result_contract_ready true",
                 "evidence_rule": "Every required check id must have status pass and non-empty evidence.",
                 "blocker_rule": "overall_blocker and every required check blocker must be null."
             },
-            "claim_runtime_green_only_when": "all required checks are pass, blockers are null, git sync proof shows local HEAD matches origin/dev with a clean tracked tree, just --dry-run run resolves, final runtime proof capacity reports target_headroom_ready, final runtime headroom recovery sequence reports headroom_ready_for_final_runtime_proof with no first blocked step, the panel live-validation result gate reports ready_for_final_runtime=true, and the validation-progress packet reports manual_windows_runtime_validation_ready"
+            "claim_runtime_green_only_when": "all required checks are pass, blockers are null, git sync proof shows local HEAD matches origin/dev with a clean tracked tree, just --dry-run run resolves, final runtime proof capacity reports target_headroom_ready, final runtime headroom recovery sequence reports headroom_ready_for_final_runtime_proof with no first blocked step, the panel live-validation result gate reports ready_for_final_runtime=true with result_contract_ready=true, inspect_agent_plugin_runtime_status reports browser_panel_live_proof_status.ready_for_final_runtime=true, browser_panel_live_proof_status.result_contract_ready=true, and browser_panel_live_proof_readiness_card.status=ready_for_final_runtime, and the validation-progress packet reports manual_windows_runtime_validation_ready"
         })
     }
 
@@ -27081,7 +27091,9 @@ impl WebPreviewView {
                         "manual_evidence_template.overall_blocker == null",
                         "panel_live_validation_result_gate.ready_for_final_runtime == true",
                         "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status.ready_for_final_runtime == true",
+                        "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status.result_contract_ready == true",
                         "inspect_agent_plugin_runtime_status.browser_panel_live_proof_readiness_card.status == ready_for_final_runtime",
+                        "manual_evidence_template.checks.agent_runtime_panel_live_contract.status == pass",
                         "executor_validation_progress.status == manual_windows_runtime_validation_ready"
                     ],
                     "copy_action": "copy_agent_browser_final_validation_bundle",
@@ -28419,7 +28431,9 @@ impl WebPreviewView {
                                 "manual_evidence_template.checks.just_dry_run.status == pass",
                                 "panel_live_validation_result_gate.ready_for_final_runtime == true",
                                 "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status.ready_for_final_runtime == true",
+                                "inspect_agent_plugin_runtime_status.browser_panel_live_proof_status.result_contract_ready == true",
                                 "inspect_agent_plugin_runtime_status.browser_panel_live_proof_readiness_card.status == ready_for_final_runtime",
+                                "manual_evidence_template.checks.agent_runtime_panel_live_contract.status == pass",
                                 "agent_browser_final_runtime_proof_capacity.ready_for_just_run == true",
                                 "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_summary.status == headroom_ready_for_final_runtime_proof",
                                 "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_summary.first_blocked_step == null",
@@ -28437,6 +28451,12 @@ impl WebPreviewView {
                             "expected_required_check_ids": AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS,
                             "headroom_recovery_sequence_required_check_id": "final_headroom_recovery_sequence",
                             "headroom_recovery_sequence_bundle_field": "handoff_artifacts.final_runtime_headroom_recovery_sequence.current_sequence",
+                            "agent_runtime_panel_live_contract_required_check_id": "agent_runtime_panel_live_contract",
+                            "agent_runtime_panel_live_contract_runtime_status_fields": [
+                                "browser_panel_live_proof_status.ready_for_final_runtime",
+                                "browser_panel_live_proof_status.result_contract_ready",
+                                "browser_panel_live_proof_readiness_card.status"
+                            ],
                             "copy_action": "copy_agent_browser_final_validation_result_template",
                             "send_action": "send_agent_browser_final_validation_result_template_to_agent",
                             "read_only": true,

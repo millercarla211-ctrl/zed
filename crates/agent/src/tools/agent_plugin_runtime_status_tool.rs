@@ -138,6 +138,7 @@ const AGENT_BROWSER_FINAL_VALIDATION_REQUIRED_CHECK_IDS: &[&str] = &[
     "final_runtime_capacity",
     "final_headroom_recovery_sequence",
     "panel_live_validation",
+    "agent_runtime_panel_live_contract",
     "native_executor_receipts",
     "payload_bridge",
     "managed_chrome",
@@ -3135,7 +3136,8 @@ fn runtime_green_blocker_summary(runtime_status: &str, roots: &AgentPluginRuntim
         "runtime_green_requires": [
             "no critical or runtime_evidence_missing blockers",
             "managed WebPreview final validation result file reports runtime_green_candidate=true",
-            "right-side panel live-validation result gate has a completed imported panel result",
+            "right-side panel live-validation result gate has a completed imported panel result with action and matched result_contract evidence",
+            "managed WebPreview final validation result includes a passing agent_runtime_panel_live_contract check",
             "managed Chrome runner receipt outcome == ready_runner_adapter_pending",
             "managed Chrome execution receipt outcome == completed",
             "PC-use runner receipt outcome == ready_future_executor_pending",
@@ -6165,6 +6167,7 @@ fn runtime_green_final_proof_audit(
             "imported required_check_ids matches the current canonical required check list",
             "all required check statuses are present and from allowed status values",
             "all required checks include non-empty evidence",
+            "agent_runtime_panel_live_contract required check proves browser_panel_live_proof_status.ready_for_final_runtime and result_contract_ready",
             "overall_blocker is null",
             "every required check blocker is null",
             "runtime_green_report_gate.can_report_runtime_green == true"

@@ -1,3 +1,16 @@
+[2026-05-18] - Final Result Agent Panel Contract Check
+
+ADDED:
+- Added `agent_runtime_panel_live_contract` to the canonical final validation required-check list in both WebPreview and Agent runtime status.
+- Final validation result templates now require evidence that Agent runtime status reports `browser_panel_live_proof_status.ready_for_final_runtime`, `browser_panel_live_proof_status.result_contract_ready`, and a ready Browser panel live-proof readiness card.
+
+CHANGED:
+- Final validation bundle/action-manifest requirements and final proof observability now describe the Agent-side panel contract proof beside the WebPreview panel result gate.
+- `todo.txt` now records the Browser/Chrome hardening set at 99.8/100 while leaving the live UI exercise/imported result validation as the remaining runtime proof.
+
+NOTES:
+- This slice is source-level final-result contract hardening. It does not run `just`, run Cargo, launch browsers, dispatch input, mutate profiles, or create manual validation evidence.
+
 [2026-05-18] - Target Drive Final Proof Wording
 
 CHANGED:
