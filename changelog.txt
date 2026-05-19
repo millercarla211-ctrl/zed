@@ -1,3 +1,15 @@
+[2026-05-19] - Upstream Main Sync into Dev
+
+CHANGED:
+- Fast-forwarded local `main` to upstream/main `b8dce970fa` and pushed the synced `main` to `origin/main`.
+- Merged synced `main` into `dev`, bringing in the latest upstream Agent, sidebar, node runtime, extension CLI, and workflow updates.
+- Resolved the `crates/sidebar/src/sidebar.rs` merge conflict by preserving local active-space sidebar scoping and combining it with upstream terminal notification metadata plus stale linked-worktree thread recovery.
+- `todo.txt` now records the upstream sync slice while keeping the final live panel exercise as the remaining 100-point Browser/Chrome proof gate.
+
+NOTES:
+- Lightweight merge checks so far: conflict marker search, `rustfmt` on `crates/sidebar/src/sidebar.rs`, `git diff --check`, and staged diff validation.
+- The requested final `just run` remains the post-merge runtime verification step.
+
 [2026-05-19] - Local Runtime Stop and Git Sync Hygiene
 
 CHANGED:
