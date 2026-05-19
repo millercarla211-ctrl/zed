@@ -55,3 +55,11 @@ crates/docs_preprocessor/actions.json
 # Local documentation audit files
 /december-2025-releases.md
 /docs/december-2025-documentation-gaps.md
+
+# Local Codex/runtime artifacts and reference caches
+/.codex-*
+/inspirations/21st-magic-mcp/
+/inspirations/magicui/
+/inspirations/shadcn-ui/
+/models/
+/tools/

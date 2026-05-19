@@ -1,3 +1,14 @@
+[2026-05-19] - Local Runtime Stop and Git Sync Hygiene
+
+CHANGED:
+- `.gitignore` now ignores local Codex run artifacts plus untracked reference/model/tool cache roots that should not be committed as product source.
+- `todo.txt` now records the git-sync hygiene slice while preserving the live right-side panel proof as the remaining Browser/Chrome hardening gate.
+
+NOTES:
+- Stopped or confirmed absent local `F:\Zed` `just run`, Zed, Cargo, and Rust compiler processes before syncing.
+- Fetched `origin` and `upstream`; local `dev` remains aligned with `origin/dev`.
+- The ignored local roots were verified as untracked and approximately 6.39 GB, so they were intentionally not staged.
+
 [2026-05-18] - Current HEAD Runtime Launch Proof
 
 ADDED:
