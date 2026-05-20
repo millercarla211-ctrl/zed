@@ -51,9 +51,10 @@ impl AgentTool for DxCatalogProviderSettingsTool {
         event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|error| error.to_string())?;
-            let mut preview = dx_catalog_agent_bridge::provider_settings_registration_preview();
+            let mut preview =
+                cx.update(|cx| dx_catalog_agent_bridge::provider_settings_registration_preview(cx));
 
             if !input.include_providers {
                 if let Some(object) = preview.as_object_mut() {

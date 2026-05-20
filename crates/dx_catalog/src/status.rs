@@ -26,7 +26,7 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 80,
+        overall_implementation_status: 83,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
         dx_catalog_status: 100,
@@ -51,9 +51,9 @@ pub fn current_launch_status() -> DxLaunchStatus {
             ),
             feature(
                 "Universal provider routing",
-                64,
-                "One router picks local, free, premium, and remote providers from dx_catalog; approved provider settings registration can write catalog specs into native Zed language-model settings, and the Agent can inspect a read-only provider registration preview before settings writes.",
-                "Add live credential/runtime validation before exposing catalog-only routes as fully executable.",
+                70,
+                "One router picks local, free, premium, and remote providers from dx_catalog; approved provider settings registration can write catalog specs into native Zed language-model settings, and the Agent preview now validates native settings, runtime registry registration, credential/auth state, and matching model exposure before route exposure.",
+                "Add the user-facing approval command/UI surface, then start the Metasearch AI tool lane.",
             ),
             feature(
                 "Metasearch AI tool",

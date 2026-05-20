@@ -9,9 +9,11 @@ use dx_catalog::{
     build_catalog_execution_plan, build_catalog_provider_registration_specs, read_catalog_artifact,
 };
 use fs::Fs;
+use language_model::{LanguageModelProviderId, LanguageModelRegistry};
+use language_models::AllLanguageModelSettings;
 use settings::{
     OpenAiCompatibleAvailableModel, OpenAiCompatibleModelCapabilities,
-    OpenAiCompatibleSettingsContent, OpenRouterAvailableModel, update_settings_file,
+    OpenAiCompatibleSettingsContent, OpenRouterAvailableModel, Settings as _, update_settings_file,
 };
 use std::{
     env,
@@ -33,7 +35,7 @@ const DX_CATALOG_REGISTER_PROVIDERS_DRY_RUN_ENV: &str = "DX_CATALOG_REGISTER_PRO
 const DX_CATALOG_ARTIFACT_FILE_NAME: &str = "catalog.dxcat";
 const DEFAULT_CATALOG_MODEL_MAX_TOKENS: u64 = 200_000;
 pub(crate) const DX_CATALOG_PROVIDER_SETTINGS_PREVIEW_SCHEMA: &str =
-    "zed.dx_catalog.provider_settings.registration_preview.v1";
+    "zed.dx_catalog.provider_settings.registration_preview.v2";
 
 #[derive(Clone, Debug, Default)]
 pub struct DxCatalogAgentBridge {
@@ -295,6 +297,56 @@ impl CatalogProviderSettingsRegistrationReport {
     }
 }
 
+#[derive(Debug, Default)]
+struct CatalogProviderSettingsLiveValidationReport {
+    settings_registered_provider_count: usize,
+    registry_registered_provider_count: usize,
+    authenticated_provider_count: usize,
+    settings_model_match_count: usize,
+    registry_model_match_count: usize,
+    executable_now_provider_count: usize,
+    blocked_provider_count: usize,
+}
+
+impl CatalogProviderSettingsLiveValidationReport {
+    fn record(&mut self, validation: &CatalogProviderSettingsLiveValidation) {
+        if validation.settings_registered {
+            self.settings_registered_provider_count += 1;
+        }
+        if validation.registry_provider_registered {
+            self.registry_registered_provider_count += 1;
+        }
+        if validation.provider_authenticated {
+            self.authenticated_provider_count += 1;
+        }
+        self.settings_model_match_count += validation.settings_model_match_count;
+        self.registry_model_match_count += validation.registry_model_match_count;
+        if validation.executable_now {
+            self.executable_now_provider_count += 1;
+        } else {
+            self.blocked_provider_count += 1;
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct CatalogProviderSettingsLiveValidation {
+    settings_registered: bool,
+    settings_api_url: Option<String>,
+    settings_api_url_matches_catalog: bool,
+    settings_model_match_count: usize,
+    registry_provider_registered: bool,
+    provider_authenticated: bool,
+    registry_model_match_count: usize,
+    credential_ready: bool,
+    runtime_ready: bool,
+    executable_now: bool,
+    remaining_execution_blockers: Vec<String>,
+    blockers: Vec<String>,
+    status: &'static str,
+    next_action: String,
+}
+
 pub fn apply_provider_settings_if_approved(fs: Arc<dyn Fs>, cx: &gpui::App) {
     if !provider_settings_registration_approved() {
         return;
@@ -348,7 +400,7 @@ pub fn apply_provider_settings_if_approved(fs: Arc<dyn Fs>, cx: &gpui::App) {
     );
 }
 
-pub(crate) fn provider_settings_registration_preview() -> serde_json::Value {
+pub(crate) fn provider_settings_registration_preview(cx: &gpui::App) -> serde_json::Value {
     let approval_enabled = provider_settings_registration_approved();
     let dry_run_enabled = env_flag_enabled(DX_CATALOG_REGISTER_PROVIDERS_DRY_RUN_ENV);
     let generation_enabled = catalog_generation_approved();
@@ -377,6 +429,13 @@ pub(crate) fn provider_settings_registration_preview() -> serde_json::Value {
                 "ready_for_execution_provider_count": 0,
                 "requires_user_approval_provider_count": 0,
                 "needs_auth_provider_count": 0,
+                "settings_registered_provider_count": 0,
+                "registry_registered_provider_count": 0,
+                "authenticated_provider_count": 0,
+                "settings_model_match_count": 0,
+                "registry_model_match_count": 0,
+                "executable_now_provider_count": 0,
+                "blocked_live_validation_provider_count": 0,
             },
             "providers": [],
             "next_action": "Generate or point DX_CATALOG_ARTIFACT/DX_CATALOG_PATH at a validated catalog.dxcat before previewing provider registration.",
@@ -394,9 +453,14 @@ pub(crate) fn provider_settings_registration_preview() -> serde_json::Value {
         .filter(|spec| spec.user_approval_required)
         .count();
     let needs_auth_provider_count = specs.iter().filter(|spec| !spec.auth_configured).count();
+    let mut live_report = CatalogProviderSettingsLiveValidationReport::default();
     let providers = specs
         .iter()
-        .map(provider_settings_registration_preview_provider)
+        .map(|spec| {
+            let live_validation = provider_settings_live_validation(spec, cx);
+            live_report.record(&live_validation);
+            provider_settings_registration_preview_provider(spec, &live_validation)
+        })
         .collect::<Vec<_>>();
 
     serde_json::json!({
@@ -420,10 +484,18 @@ pub(crate) fn provider_settings_registration_preview() -> serde_json::Value {
             "ready_for_execution_provider_count": ready_for_execution_provider_count,
             "requires_user_approval_provider_count": requires_user_approval_provider_count,
             "needs_auth_provider_count": needs_auth_provider_count,
+            "settings_registered_provider_count": live_report.settings_registered_provider_count,
+            "registry_registered_provider_count": live_report.registry_registered_provider_count,
+            "authenticated_provider_count": live_report.authenticated_provider_count,
+            "settings_model_match_count": live_report.settings_model_match_count,
+            "registry_model_match_count": live_report.registry_model_match_count,
+            "executable_now_provider_count": live_report.executable_now_provider_count,
+            "blocked_live_validation_provider_count": live_report.blocked_provider_count,
         },
         "providers": providers,
         "next_action": provider_settings_registration_preview_next_action(
             &report,
+            &live_report,
             approval_enabled,
             dry_run_enabled,
         ),
@@ -537,8 +609,268 @@ fn catalog_artifact_candidate_preview() -> Vec<serde_json::Value> {
         .collect()
 }
 
+fn provider_settings_live_validation(
+    spec: &CatalogProviderAdapterRegistrationSpec,
+    cx: &gpui::App,
+) -> CatalogProviderSettingsLiveValidation {
+    let settings = AllLanguageModelSettings::get_global(cx);
+    let registry = LanguageModelRegistry::read_global(cx);
+    let registry_provider_id = registry_provider_id_for_catalog_spec(spec);
+    let registry_provider = registry.provider(&registry_provider_id);
+    let registry_provider_registered = registry_provider.is_some();
+    let provider_authenticated = registry_provider
+        .as_ref()
+        .is_some_and(|provider| provider.is_authenticated(cx));
+    let registry_model_match_count = registry_provider
+        .as_ref()
+        .map(|provider| {
+            let catalog_model_ids = spec
+                .models
+                .iter()
+                .map(|model| model.model_id.as_str())
+                .collect::<HashSet<_>>();
+            provider
+                .provided_models(cx)
+                .into_iter()
+                .filter(|model| catalog_model_ids.contains(model.id().0.as_ref()))
+                .count()
+        })
+        .unwrap_or_default();
+    let (
+        settings_registered,
+        settings_api_url,
+        settings_api_url_matches_catalog,
+        settings_model_match_count,
+    ) = provider_settings_native_state(spec, settings);
+    let credential_ready = provider_settings_credentials_ready(spec, provider_authenticated);
+    let remaining_execution_blockers =
+        remaining_execution_blockers_after_live_validation(spec, credential_ready);
+    let runtime_ready = settings_registered && registry_provider_registered;
+    let executable_now = can_write_provider_settings(spec)
+        && runtime_ready
+        && credential_ready
+        && settings_api_url_matches_catalog
+        && settings_model_match_count > 0
+        && registry_model_match_count > 0
+        && remaining_execution_blockers.is_empty();
+    let mut blockers = remaining_execution_blockers.clone();
+
+    if !can_write_provider_settings(spec) {
+        blockers
+            .push("Provider is not eligible for the native provider-settings writer.".to_string());
+    }
+    if can_write_provider_settings(spec) && !settings_registered {
+        blockers.push(
+            "Provider settings are not registered in native language-model settings.".to_string(),
+        );
+    }
+    if can_write_provider_settings(spec) && settings_registered && settings_model_match_count == 0 {
+        blockers.push(
+            "Native language-model settings do not include matching catalog models.".to_string(),
+        );
+    }
+    if settings_registered && !settings_api_url_matches_catalog {
+        blockers.push("Native provider API URL does not match the catalog base URL.".to_string());
+    }
+    if settings_registered && !registry_provider_registered {
+        blockers.push(
+            "Native language-model provider is not registered in the runtime registry yet."
+                .to_string(),
+        );
+    }
+    if registry_provider_registered && !credential_ready {
+        blockers.push(
+            "Provider credentials are not configured or loaded in the runtime registry."
+                .to_string(),
+        );
+    }
+    if registry_provider_registered && credential_ready && registry_model_match_count == 0 {
+        blockers.push("Runtime provider exposes no matching catalog models yet.".to_string());
+    }
+    blockers.sort();
+    blockers.dedup();
+
+    let status = if executable_now {
+        "executable_now"
+    } else if can_write_provider_settings(spec) && !settings_registered {
+        "ready_for_settings_registration"
+    } else if settings_registered && !registry_provider_registered {
+        "registered_needs_runtime_provider"
+    } else if registry_provider_registered && !credential_ready {
+        "registered_needs_credentials"
+    } else if registry_provider_registered && registry_model_match_count == 0 {
+        "registered_needs_model_refresh"
+    } else {
+        "blocked"
+    };
+
+    let next_action = provider_settings_live_validation_next_action(status, spec, &blockers);
+
+    CatalogProviderSettingsLiveValidation {
+        settings_registered,
+        settings_api_url,
+        settings_api_url_matches_catalog,
+        settings_model_match_count,
+        registry_provider_registered,
+        provider_authenticated,
+        registry_model_match_count,
+        credential_ready,
+        runtime_ready,
+        executable_now,
+        remaining_execution_blockers,
+        blockers,
+        status,
+        next_action,
+    }
+}
+
+fn registry_provider_id_for_catalog_spec(
+    spec: &CatalogProviderAdapterRegistrationSpec,
+) -> LanguageModelProviderId {
+    match spec.adapter_kind {
+        CatalogExecutionAdapterKind::OpenRouterHttp => LanguageModelProviderId::new("openrouter"),
+        _ => LanguageModelProviderId::from(spec.provider_id.clone()),
+    }
+}
+
+fn provider_settings_native_state(
+    spec: &CatalogProviderAdapterRegistrationSpec,
+    settings: &AllLanguageModelSettings,
+) -> (bool, Option<String>, bool, usize) {
+    let catalog_model_ids = spec
+        .models
+        .iter()
+        .map(|model| model.model_id.as_str())
+        .collect::<HashSet<_>>();
+
+    match spec.adapter_kind {
+        CatalogExecutionAdapterKind::OpenRouterHttp => {
+            let api_url = settings.open_router.api_url.clone();
+            let model_match_count = settings
+                .open_router
+                .available_models
+                .iter()
+                .filter(|model| catalog_model_ids.contains(model.name.as_str()))
+                .count();
+            (
+                !api_url.trim().is_empty(),
+                Some(api_url.clone()),
+                catalog_base_url_matches_settings(spec.base_url.as_deref(), Some(api_url.as_str())),
+                model_match_count,
+            )
+        }
+        CatalogExecutionAdapterKind::OpenAiCompatibleHttp
+        | CatalogExecutionAdapterKind::OllamaCompatibleHttp
+        | CatalogExecutionAdapterKind::LiteLlmProxy => {
+            let Some(provider_settings) = settings.openai_compatible.get(spec.provider_id.as_str())
+            else {
+                return (false, None, false, 0);
+            };
+            let model_match_count = provider_settings
+                .available_models
+                .iter()
+                .filter(|model| catalog_model_ids.contains(model.name.as_str()))
+                .count();
+            (
+                true,
+                Some(provider_settings.api_url.clone()),
+                catalog_base_url_matches_settings(
+                    spec.base_url.as_deref(),
+                    Some(provider_settings.api_url.as_str()),
+                ),
+                model_match_count,
+            )
+        }
+        _ => (false, None, false, 0),
+    }
+}
+
+fn catalog_base_url_matches_settings(
+    catalog_url: Option<&str>,
+    settings_url: Option<&str>,
+) -> bool {
+    let Some(catalog_url) = catalog_url else {
+        return true;
+    };
+    let Some(settings_url) = settings_url else {
+        return false;
+    };
+    normalized_url(catalog_url) == normalized_url(settings_url)
+}
+
+fn normalized_url(url: &str) -> String {
+    url.trim().trim_end_matches('/').to_ascii_lowercase()
+}
+
+fn provider_settings_credentials_ready(
+    spec: &CatalogProviderAdapterRegistrationSpec,
+    provider_authenticated: bool,
+) -> bool {
+    match spec.permission {
+        CatalogExecutionPermission::None | CatalogExecutionPermission::LocalRuntime => true,
+        CatalogExecutionPermission::ApiKey
+        | CatalogExecutionPermission::OAuth
+        | CatalogExecutionPermission::BrowserSession
+        | CatalogExecutionPermission::NativeAccount => {
+            spec.auth_configured || provider_authenticated
+        }
+        CatalogExecutionPermission::Custom => spec.auth_configured,
+    }
+}
+
+fn remaining_execution_blockers_after_live_validation(
+    spec: &CatalogProviderAdapterRegistrationSpec,
+    credential_ready: bool,
+) -> Vec<String> {
+    spec.execution_blockers
+        .iter()
+        .filter(|blocker| {
+            !(credential_ready
+                && blocker.contains("requires")
+                && blocker.contains("configuration before execution"))
+        })
+        .cloned()
+        .collect()
+}
+
+fn provider_settings_live_validation_next_action(
+    status: &str,
+    spec: &CatalogProviderAdapterRegistrationSpec,
+    blockers: &[String],
+) -> String {
+    match status {
+        "executable_now" => format!(
+            "Provider `{}` is registered, authenticated, exposes matching models, and is ready for catalog route exposure.",
+            spec.provider_id
+        ),
+        "ready_for_settings_registration" => format!(
+            "Enable `DX_CATALOG_REGISTER_PROVIDER_SETTINGS=1` to write `{}` into native language-model settings.",
+            spec.provider_id
+        ),
+        "registered_needs_runtime_provider" => format!(
+            "Restart or reload language-model providers so `{}` is registered in the runtime registry.",
+            spec.provider_id
+        ),
+        "registered_needs_credentials" => format!(
+            "Configure credentials for `{}` in the provider settings UI or supported environment variable.",
+            spec.provider_id
+        ),
+        "registered_needs_model_refresh" => format!(
+            "Refresh provider models for `{}` after settings and credentials are loaded.",
+            spec.provider_id
+        ),
+        _ => blockers.first().cloned().unwrap_or_else(|| {
+            format!(
+                "Resolve live validation blockers before exposing `{}` as executable.",
+                spec.provider_id
+            )
+        }),
+    }
+}
+
 fn provider_settings_registration_preview_provider(
     spec: &CatalogProviderAdapterRegistrationSpec,
+    live_validation: &CatalogProviderSettingsLiveValidation,
 ) -> serde_json::Value {
     let settings_writable = can_write_provider_settings(spec);
     let mut registration_blockers = spec.registration_blockers.clone();
@@ -595,7 +927,29 @@ fn provider_settings_registration_preview_provider(
         "truncated_model_count": spec.models.len().saturating_sub(12),
         "registration_blockers": registration_blockers,
         "execution_blockers": &spec.execution_blockers,
+        "live_validation": provider_settings_live_validation_json(live_validation),
         "next_action": spec.next_action.as_str(),
+    })
+}
+
+fn provider_settings_live_validation_json(
+    validation: &CatalogProviderSettingsLiveValidation,
+) -> serde_json::Value {
+    serde_json::json!({
+        "status": validation.status,
+        "settings_registered": validation.settings_registered,
+        "settings_api_url": validation.settings_api_url.as_deref(),
+        "settings_api_url_matches_catalog": validation.settings_api_url_matches_catalog,
+        "settings_model_match_count": validation.settings_model_match_count,
+        "registry_provider_registered": validation.registry_provider_registered,
+        "provider_authenticated": validation.provider_authenticated,
+        "registry_model_match_count": validation.registry_model_match_count,
+        "credential_ready": validation.credential_ready,
+        "runtime_ready": validation.runtime_ready,
+        "executable_now": validation.executable_now,
+        "remaining_execution_blockers": &validation.remaining_execution_blockers,
+        "blockers": &validation.blockers,
+        "next_action": validation.next_action.as_str(),
     })
 }
 
@@ -619,6 +973,7 @@ fn provider_settings_registration_preview_model(
 
 fn provider_settings_registration_preview_next_action(
     report: &CatalogProviderSettingsRegistrationReport,
+    live_report: &CatalogProviderSettingsLiveValidationReport,
     approval_enabled: bool,
     dry_run_enabled: bool,
 ) -> String {
@@ -638,6 +993,13 @@ fn provider_settings_registration_preview_next_action(
         return format!(
             "Dry run is enabled. Unset DX_CATALOG_REGISTER_PROVIDERS_DRY_RUN to write {} eligible provider(s) into native settings.",
             report.eligible_provider_count
+        );
+    }
+
+    if live_report.executable_now_provider_count > 0 {
+        return format!(
+            "{} provider(s) are live-valid and executable now; keep resolving blockers for {} remaining provider(s) before broad catalog route exposure.",
+            live_report.executable_now_provider_count, live_report.blocked_provider_count
         );
     }
 

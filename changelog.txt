@@ -1,3 +1,17 @@
+[2026-05-20] - DX Catalog Live Provider Settings Validation
+
+ADDED:
+- Added live native-settings and runtime-registry validation to `inspect_dx_catalog_provider_settings`.
+- The preview now reports provider settings registration, API URL/catalog match, matching native settings models, runtime provider registration, runtime credential/auth state, matching runtime models, executable-now status, and remaining blockers.
+
+CHANGED:
+- Upgraded the provider-settings preview schema to `zed.dx_catalog.provider_settings.registration_preview.v2`.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move Universal Provider Routing to 70/100 and the overall feature set to 83/100.
+
+NOTES:
+- Validation is read-only and local: it does not call provider APIs, write settings, read secret values, download models, or start runtimes.
+- No `just run`, Cargo build/check/test/clippy, downloads, model loading, cleanup, browser automation, or provider network validation was run for this source-level slice.
+
 [2026-05-20] - DX Catalog Provider Settings Preview Tool
 
 ADDED:
