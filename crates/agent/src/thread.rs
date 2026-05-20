@@ -15,11 +15,12 @@ use crate::{
     DxForgeRestoreExecutorTool, DxForgeSafetyPolicyTool, DxMediaToolPlanTool,
     DxMediaToolRunnerGateTool, DxMediaToolRunnerTool, DxMetasearchContextAdapterTool,
     DxMetasearchSourceExtractTool, DxMetasearchStatusTool, DxMetasearchTool,
-    DxSerializerRlmExecutionPlanTool, DxSourceAttachmentTool, EditFileTool, FetchTool,
-    FindPathTool, FindReferencesTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool,
-    ListDirectoryTool, MovePathTool, ProjectSnapshot, ReadFileTool, RenameTool, SpawnAgentTool,
-    SystemPromptTemplate, Template, Templates, TerminalTool, ToolPermissionDecision,
-    UpdatePlanTool, UserAgentsMd, WebSearchTool, WriteFileTool, decide_permission_from_settings,
+    DxSerializerRlmExecutionPlanTool, DxSerializerRlmReducedContextTool,
+    DxSerializerRlmRunnerGateTool, DxSourceAttachmentTool, EditFileTool, FetchTool, FindPathTool,
+    FindReferencesTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool, ListDirectoryTool,
+    MovePathTool, ProjectSnapshot, ReadFileTool, RenameTool, SpawnAgentTool, SystemPromptTemplate,
+    Template, Templates, TerminalTool, ToolPermissionDecision, UpdatePlanTool, UserAgentsMd,
+    WebSearchTool, WriteFileTool, decide_permission_from_settings,
 };
 use acp_thread::{MentionUri, UserMessageId};
 use action_log::ActionLog;
@@ -1702,6 +1703,7 @@ impl Thread {
         self.add_tool(DxMetasearchContextAdapterTool::new(self.project.clone()));
         self.add_tool(DxSerializerRlmExecutionPlanTool::new(self.project.clone()));
         self.add_tool(DxSerializerRlmRunnerGateTool::new(self.project.clone()));
+        self.add_tool(DxSerializerRlmReducedContextTool::new(self.project.clone()));
         self.add_tool(DxSourceAttachmentTool::new(self.project.clone()));
         self.add_tool(DxMetasearchStatusTool::new(
             self.project.read(cx).client().http_client(),

@@ -258,7 +258,7 @@ fn build_launch_demo_recipes(
             writes_files: false,
             mutates_sources: false,
         },
-        next_action: "Run the primary recipe from the Agent tab, then pin the produced source/context receipts in the Sources rail for the demo."
+        next_action: "Run the primary recipe from the Agent tab, then pin the produced source/context/reduced-context receipts in the Sources rail for the demo."
             .to_string(),
     }
 }
@@ -269,7 +269,7 @@ fn metasearch_to_context_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDem
         title: "Metasearch Sources To Serializer/RLM Context",
         priority: "primary",
         status: recipe_status(workspace_root),
-        intent: "Search DX metasearch, persist a cited source pack, attach the source pack through the Sources rail contract, compact it for serializer/RLM context, and produce an approved dry-run execution receipt.",
+        intent: "Search DX metasearch, persist a cited source pack, attach the source pack through the Sources rail contract, compact it for serializer/RLM context, and produce approved execution, runner-gate, and reduced-context receipts.",
         required_tools: vec![
             "inspect_dx_metasearch",
             "search_dx_metasearch",
@@ -277,6 +277,7 @@ fn metasearch_to_context_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDem
             "prepare_dx_metasearch_context",
             "plan_dx_serializer_rlm_execution",
             "gate_dx_serializer_rlm_runner",
+            "write_dx_serializer_rlm_reduced_context",
         ],
         receipt_contracts: vec![
             "zed.dx.metasearch.source_pack_receipt.v1",
@@ -284,6 +285,7 @@ fn metasearch_to_context_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDem
             "zed.dx.serializer_rlm.context_receipt.v1",
             "zed.dx.serializer_rlm.execution_receipt.v1",
             "zed.dx.serializer_rlm.runner_gate_receipt.v1",
+            "zed.dx.serializer_rlm.reduced_context_receipt.v1",
         ],
         steps: vec![
             step(
@@ -334,6 +336,14 @@ fn metasearch_to_context_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDem
                 true,
                 "Does not run serializer/RLM code, cargo, external processes, or model calls.",
             ),
+            step(
+                7,
+                "write_dx_serializer_rlm_reduced_context",
+                "Write a deterministic reduced-context receipt from the ready runner gate and context receipt.",
+                Some("zed.dx.serializer_rlm.reduced_context_receipt.v1"),
+                true,
+                "Truncates existing context only; does not run serializer/RLM code, cargo, external processes, or model calls.",
+            ),
         ],
         proof_gates: vec![
             "Metasearch status is healthy or the missing-service state is reported.",
@@ -342,9 +352,10 @@ fn metasearch_to_context_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDem
             "Latest context receipt includes at least one cited item.",
             "Serializer/RLM execution plan remains dry-run unless explicitly approved.",
             "Runner gate receipt is ready only after explicit runner and model-call approvals.",
+            "Reduced-context receipt includes cited source summaries and no external execution evidence.",
         ],
         blockers: recipe_blockers(workspace_root),
-        next_action: "Use this as the flagship demo path before adding the reduced-context receipt writer.",
+        next_action: "Use this as the flagship demo path before wiring the optional external serializer/RLM runner.",
     }
 }
 
@@ -515,6 +526,12 @@ fn receipt_roots(workspace_root: Option<&Path>) -> Vec<DxLaunchDemoReceiptRoot> 
             root.join("tools")
                 .join("dx-serializer-rlm")
                 .join("runner-gates"),
+        ),
+        (
+            "serializer/RLM reduced context",
+            root.join("tools")
+                .join("dx-serializer-rlm")
+                .join("reduced-context"),
         ),
         (
             "media executions",

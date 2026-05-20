@@ -1,3 +1,18 @@
+[2026-05-21] - DX Serializer/RLM Reduced Context Receipts
+
+ADDED:
+- Added `write_dx_serializer_rlm_reduced_context`, a permissioned Agent tool that consumes `zed.dx.serializer_rlm.runner_gate.v1` objects or runner-gate receipts plus `zed.dx.serializer_rlm.context_bundle.v1` objects or context receipts.
+- Added `zed.dx.serializer_rlm.reduced_context.v1` and `zed.dx.serializer_rlm.reduced_context_receipt.v1` contracts with deterministic context truncation, source summaries, runner-gate validation, and managed latest/archive receipt paths.
+
+CHANGED:
+- Registered the reduced-context writer with Agent threads and the built-in tool schema list beside the serializer/RLM execution planner and runner gate.
+- Updated the primary launch demo recipe to include the reduced-context receipt step and added the reduced-context receipt root to demo recipe status.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 70/100 and move the next target to launch-rail and guided-panel surfaces for reduced-context receipts.
+
+NOTES:
+- The reduced-context writer performs deterministic truncation of existing context only; it does not run external serializer/RLM crates, Cargo, network requests, browser input, or model calls.
+- No local server, `just run`, Cargo build/check/test/clippy, npm build, browser automation, or runtime visual proof was started.
+
 [2026-05-21] - DX Serializer/RLM Runner Gate
 
 ADDED:
