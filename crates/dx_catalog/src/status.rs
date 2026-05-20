@@ -26,7 +26,7 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 94,
+        overall_implementation_status: 95,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
         dx_catalog_status: 100,
@@ -57,15 +57,15 @@ pub fn current_launch_status() -> DxLaunchStatus {
             ),
             feature(
                 "Metasearch AI tool",
-                72,
-                "Agent panel can call cancellable multi-engine cited search through permissioned DX metasearch tools, inspect service/engine readiness, emit compact citations, return token-aware cited source packs, persist managed source-pack receipts, fetch bounded readable extracts, and prepare compact context bundles.",
-                "Connect context bundles into panel surfaces and external reductions.",
+                74,
+                "Agent panel can call cancellable multi-engine cited search through permissioned DX metasearch tools, inspect service/engine readiness, emit compact citations, return token-aware cited source packs, persist managed source-pack receipts, fetch bounded readable extracts, prepare compact context bundles, and create approved serializer/RLM execution-plan receipts.",
+                "Connect context bundles and execution-plan receipts into panel surfaces.",
             ),
             feature(
                 "Serializer/RLM context pipeline",
-                34,
-                "Metasearch source packs and deep extracts can be compacted into a citation-preserving context bundle receipt with serializer/RLM root discovery and token-budget metadata.",
-                "Add explicit approved external serializer/RLM execution after adapter review.",
+                44,
+                "Metasearch source packs and deep extracts can be compacted into citation-preserving context bundles, discover serializer/RLM roots, and produce execution-plan approval receipts without running external reducers.",
+                "Add the actual approved external reducer runner after safety review.",
             ),
             feature(
                 "Forge safety and backup policy",

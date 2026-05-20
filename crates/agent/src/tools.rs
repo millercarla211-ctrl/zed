@@ -32,6 +32,7 @@ mod dx_metasearch_context_adapter_tool;
 mod dx_metasearch_source_extract_tool;
 mod dx_metasearch_status_tool;
 mod dx_metasearch_tool;
+mod dx_serializer_rlm_execution_plan_tool;
 mod edit_file_tool;
 mod edit_session;
 #[cfg(all(test, feature = "unit-eval"))]
@@ -118,6 +119,7 @@ pub use dx_metasearch_context_adapter_tool::*;
 pub use dx_metasearch_source_extract_tool::*;
 pub use dx_metasearch_status_tool::*;
 pub use dx_metasearch_tool::*;
+pub use dx_serializer_rlm_execution_plan_tool::*;
 pub use edit_file_tool::*;
 pub use fetch_tool::*;
 pub use find_path_tool::*;
@@ -242,6 +244,7 @@ tools! {
     DxMetasearchSourceExtractTool,
     DxMetasearchStatusTool,
     DxMetasearchTool,
+    DxSerializerRlmExecutionPlanTool,
     DxCatalogProviderSettingsRegistrationTool,
     DxCatalogProviderSettingsTool,
     EditFileTool,

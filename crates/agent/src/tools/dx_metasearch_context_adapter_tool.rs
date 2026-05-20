@@ -237,7 +237,7 @@ impl DxMetasearchContextReceiptTarget {
                 "starts_metasearch_server": false,
                 "dispatches_browser_input": false,
             },
-            "next_action": "Use this compact context receipt for the next Agent turn, then enable external serializer/RLM execution after reviewing the adapter contract."
+            "next_action": "Use this compact context receipt for the next Agent turn, then call plan_dx_serializer_rlm_execution after reviewing the adapter contract."
         });
         let receipt_json = serde_json::to_vec_pretty(&receipt)
             .map_err(|error| format!("Failed to serialize context receipt: {error}"))?;
@@ -272,7 +272,7 @@ impl DxMetasearchContextReceiptTarget {
             context_bundle_schema: response.schema,
             item_count: response.summary.included_source_count,
             estimated_tokens: response.summary.estimated_tokens,
-            next_action: "Use the latest context receipt for Agent context; wire external serializer/RLM execution after the adapter contract is reviewed.".to_string(),
+            next_action: "Use the latest context receipt for Agent context; call plan_dx_serializer_rlm_execution when external reduction needs an approved handoff.".to_string(),
         })
     }
 

@@ -196,9 +196,9 @@ pub(crate) fn build_metasearch_context_bundle(
     }
 
     let next_action = if budget_exceeded {
-        "Use this compact context receipt for the next Agent call, then run the real serializer/RLM adapter when a larger source set must be reduced further.".to_string()
+        "Use this compact context receipt for the next Agent call, then call plan_dx_serializer_rlm_execution when a larger source set must be reduced further.".to_string()
     } else {
-        "Use context_text directly for cited Agent context, or hand this bundle to the serializer/RLM adapter once external execution is enabled.".to_string()
+        "Use context_text directly for cited Agent context, or call plan_dx_serializer_rlm_execution to create the approved external reducer handoff.".to_string()
     };
 
     Ok(DxMetasearchContextBundle {

@@ -1,3 +1,17 @@
+[2026-05-20] - DX Serializer/RLM Execution Plan Hook
+
+ADDED:
+- Added `plan_dx_serializer_rlm_execution`, a permissioned Agent tool that validates `zed.dx.serializer_rlm.context_bundle.v1` payloads, checks the G-drive serializer/RLM roots, and records reducer approval state.
+- Added `zed.dx.serializer_rlm.execution_plan.v1` and managed execution receipt support for safe future external reducer wiring.
+
+CHANGED:
+- Updated serializer/RLM context next actions so compact context receipts route into explicit execution-plan receipts before any external runner exists.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move the Metasearch AI tool lane to 74/100, the Serializer/RLM prep lane to 44/100, and the overall feature set to 95/100.
+
+NOTES:
+- This slice creates the approval hook only; it does not run external serializer/RLM crates, run Cargo, perform model calls, fetch network pages, start metasearch, or dispatch browser input.
+- No `just run`, Cargo build/check/test/clippy, downloads, cleanup, browser automation, or live external serializer/RLM execution was used for this source-level slice.
+
 [2026-05-20] - DX Serializer/RLM Context Adapter
 
 ADDED:

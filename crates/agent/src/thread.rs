@@ -12,11 +12,11 @@ use crate::{
     CopyPathTool, CreateDirectoryTool, DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool,
     DxCatalogProviderSettingsRegistrationTool, DxCatalogProviderSettingsTool,
     DxMetasearchContextAdapterTool, DxMetasearchSourceExtractTool, DxMetasearchStatusTool,
-    DxMetasearchTool, EditFileTool, FetchTool, FindPathTool, FindReferencesTool,
-    GetCodeActionsTool, GoToDefinitionTool, GrepTool, ListDirectoryTool, MovePathTool,
-    ProjectSnapshot, ReadFileTool, RenameTool, SpawnAgentTool, SystemPromptTemplate, Template,
-    Templates, TerminalTool, ToolPermissionDecision, UpdatePlanTool, UserAgentsMd, WebSearchTool,
-    WriteFileTool, decide_permission_from_settings,
+    DxMetasearchTool, DxSerializerRlmExecutionPlanTool, EditFileTool, FetchTool, FindPathTool,
+    FindReferencesTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool, ListDirectoryTool,
+    MovePathTool, ProjectSnapshot, ReadFileTool, RenameTool, SpawnAgentTool, SystemPromptTemplate,
+    Template, Templates, TerminalTool, ToolPermissionDecision, UpdatePlanTool, UserAgentsMd,
+    WebSearchTool, WriteFileTool, decide_permission_from_settings,
 };
 use acp_thread::{MentionUri, UserMessageId};
 use action_log::ActionLog;
@@ -1697,6 +1697,7 @@ impl Thread {
             self.project.read(cx).client().http_client(),
         ));
         self.add_tool(DxMetasearchContextAdapterTool::new(self.project.clone()));
+        self.add_tool(DxSerializerRlmExecutionPlanTool::new(self.project.clone()));
         self.add_tool(DxMetasearchStatusTool::new(
             self.project.read(cx).client().http_client(),
         ));
