@@ -1,9 +1,253 @@
 # DX/Zed Launch Plan
 
-Date: 2026-05-20
-Launch target: 2026-05-28
-Primary repo: `F:\Zed`
-Supporting DX tools: `G:\Dx`, `G:\Flow`, `G:\Workspaces\flow`
+Date: 2026-05-21
+Launch target: 2026-05-22
+Primary repo: `G:\Zed`
+Canonical DX hub: `G:\Dx`
+Supporting DX tools: `G:\Dx\www`, `G:\Dx\cli`, `G:\Dx\dx-agents`, `G:\WWW`, `G:\Workspaces\flow`
+
+## May 22 Launch Sprint Orchestration
+
+Tomorrow's launch goal is to make DX feel like one coherent product: a native Zed-based code editor, DX-WWW and Forge for fast app creation, DX Agents for automation and social workflows, and token-efficient local/remote AI tooling that feels faster and more responsible than the current Electron-heavy editor market.
+
+The sprint should be split across parallel Codex Desktop GPT-5.5 Extra High chats. Each worker should write real code first, inspect the obvious integration errors by reading, and only run lightweight checks at coherent milestones. Repeated full builds are not allowed during the sprint because the product needs more implementation time than rebuild time.
+
+### Canonical Folder Strategy
+
+`G:\Dx` is the launch hub. For today, the safest structure is to gather every launch repo under that hub using stable links and a workspace manifest, not by physically moving active repos during launch crunch.
+
+Physical moves are risky today because:
+
+- `G:\WWW\www\target\debug\dx-www.exe` is currently running a dev server.
+- `G:\Zed` is the active editor checkout and already has target/cache paths configured for the G drive.
+- `G:\Workspaces\flow` has an untracked `tools/` folder that should be preserved before any relocation.
+
+The launch hub should therefore expose these paths:
+
+- `G:\Dx\zed` -> `G:\Zed`
+- `G:\Dx\www-inspirations` -> `G:\WWW`
+- `G:\Dx\flow` -> `G:\Workspaces\flow`
+- `G:\Dx\token` -> `G:\Dx\inspirations\agent-archive\cursed\token`
+
+After launch, if the product needs a real physical monorepo layout, move repos in a dedicated migration window with clean git status, stopped processes, backups, and one repo at a time.
+
+### Launch Work Split
+
+#### Chat A: WWW + Forge React Ecosystem
+
+Build Forge-native package slices from the cloned React ecosystem mirrors in `G:\WWW\inspirations`.
+
+Priority package families:
+
+- State: `zustand`, `tanstack-store`
+- Query: `tanstack-query`
+- Auth: `better-auth`
+- Database/backend: `supabase`, `drizzle-orm`, `tanstack-db`, `trpc`
+- Framework/router: `nextjs`, `tanstack-router`, `react-router`, `next-safe-action`, `hono`, `honox`
+- UI/components: `shadcn-ui`, `radix-primitives`, `react-aria`, `lucide`
+- i18n: `next-intl`
+- Forms/validation: `react-hook-form`, `zod`
+- Animation: `motion` and its `framer-motion` package
+- Content/docs: `react-markdown`, `mdx`, `fumadocs`
+- 3D/media: `three.js`, `react-three-fiber`, `drei`, `xr`, `react-three-rapier`
+- Payments: `stripe-js`, `stripe-react-stripe-js`
+- AI: `vercel-ai`
+- WebAssembly bridge: `wasm-bindgen`
+
+The goal is not fake mini wrappers. The goal is small, source-owned, front-facing Forge packages that expose real APIs and can be used by DX-WWW templates.
+
+#### Chat B: Token / RLM / Serializer
+
+Use the token sources already found on G drive:
+
+- Primary: `G:\Dx\inspirations\agent-archive\cursed\token`
+- Secondary comparison copy: `G:\Workspaces\flow\trash\token`
+- Optional inspiration: `G:\Dx\inspirations\openclaw\extensions\tokenjuice`
+
+Extract useful token-budget and live-prune ideas into DX token tooling. The Zed-facing output should be simple receipt data first: prompt tokens, output tokens, tool tokens, RLM savings estimate, serializer savings estimate, and source-pack bytes. Use `rkyv`/`memmap2` where it is already isolated and fast to wire, but do not rewrite broad Zed JSON parsing before launch.
+
+#### Chat C: DX Agents + Zed GPUI Bridge
+
+Keep the ZeroClaw-derived `dx-agents` runtime CLI-first, but connect it to Zed GPUI.
+
+The launch UI should add an `Agent` action next to the existing AI modes such as `Write` and `Ask`. It should expose QR/connect UI, social account status, automation entrypoints, and background agent task receipts. Zed should call CLI JSON commands and render their status; it should not store social passwords or provider secrets.
+
+#### Chat D: Zed AI Panel Full-Width UI
+
+Upgrade the Zed AI panel into the DX launch surface:
+
+- left rail: Sources, like NotebookLM,
+- center: full-width chat/task/agent workspace by default,
+- right rail: Progress, Git, and Background Tasks,
+- sidebar actions: New Chat, Search, Plugins, Automations,
+- workspace chat groups: Pinned and All Chats.
+
+This must preserve current AI behavior. The work should add small focused GPUI modules instead of replacing the existing panel or creating dummy UI.
+
+#### Chat E: Launch Verification + Status
+
+Create or update a 100-point DX launch status file that tracks WWW+Forge, token/RLM/serializer, agents, Zed AI panel, sidebar, sources rail, right rail, web preview, provider catalog, metasearch, Check, Drive/Forge, and Deploy.
+
+The integrator should use `git status`, `git diff --check`, conflict-marker search, and targeted checks. Only run `just run` when the assembled launch candidate needs runtime validation.
+
+### Copy-Paste Worker Prompts
+
+#### Chat A Prompt: WWW + Forge React Ecosystem
+
+```text
+You are Codex GPT-5.5 Extra High working as one launch worker for DX. Work mainly in G:\WWW, G:\Dx\www, and G:\Dx\cli. Do not waste time on repeated full builds. Write real code first, inspect by reading, and only run lightweight checks after coherent milestones.
+
+Goal: create Forge-native, DX-WWW-ready versions of the most valuable React ecosystem packages from existing mirrors in G:\WWW\inspirations. These must not be fake toy wrappers. They should be small, source-owned package slices that expose real useful APIs for DX-WWW templates.
+
+Priority packages:
+State: zustand, tanstack-store
+Query: tanstack-query
+Auth: better-auth
+Forms/validation: react-hook-form, zod
+i18n: next-intl
+UI: shadcn-ui, radix-primitives, react-aria, lucide
+Animation: motion / framer-motion
+Content: react-markdown, mdx, fumadocs
+Payments: stripe-js, stripe-react-stripe-js
+AI: vercel-ai
+Routing/backend: tanstack-router, react-router, hono, honox, trpc, next-safe-action
+3D/media demo: three.js, react-three-fiber, drei, xr, react-three-rapier
+
+Implementation:
+1. Inspect existing DX-WWW package/template structure.
+2. Create a Forge package layout for these ecosystem slices.
+3. Start with a launch template that proves auth, state, query, form, i18n, markdown, payment placeholder, AI action, and UI components can coexist.
+4. Add CLI/template metadata so Zed can later list and create these templates.
+5. Keep files small and professional. No giant generated blobs. No dummy APIs.
+6. Update TODO/status/changelog docs if the repo already has them.
+
+Checks:
+- Use git diff --check.
+- Use targeted cargo check or package-specific checks only when a milestone is coherent.
+- Do not run expensive full builds repeatedly.
+- Commit coherent completed changes with a professional message.
+```
+
+#### Chat B Prompt: Token / RLM / Serializer
+
+```text
+You are Codex GPT-5.5 Extra High working as the DX token-efficiency worker. Work in G:\Dx, G:\Workspaces\flow, and G:\Zed only where needed. Do not mutate unrelated source. Write real code first, then run lightweight checks at milestones.
+
+Important source paths:
+Primary token source: G:\Dx\inspirations\agent-archive\cursed\token
+Secondary comparison copy: G:\Workspaces\flow\trash\token
+Optional inspiration: G:\Dx\inspirations\openclaw\extensions\tokenjuice
+Serializer/RLM roots: G:\Workspaces\flow\serializer and G:\Workspaces\flow\rlm
+
+Goal: make a launch-ready DX token system that can feed Zed's AI panel meters. It should support token budgeting, live token pruning, serializer/RLM savings estimates, and receipt files that Zed can read quickly.
+
+Implementation:
+1. Inspect the primary token source and compare it with the Flow trash copy. Do not blindly copy trash code.
+2. Extract only useful token-budget/live-prune concepts into a clean DX token module or CLI contract.
+3. Add receipt output under G:\Dx\.dx\receipts\tokens with JSON first if fastest, and rkyv/memmap2 where already easy and isolated.
+4. Define simple CLI surfaces such as dx token estimate --json, dx token budget --json, and dx token prune --json if the DX CLI structure supports it.
+5. Prepare Zed-facing fields: prompt_tokens, output_tokens, tool_tokens, saved_by_rlm_estimate, saved_by_serializer_estimate, source_pack_bytes.
+6. Keep this practical for tomorrow's demo. Do not rewrite all Zed JSON parsing.
+
+Checks:
+- git diff --check.
+- Targeted cargo check for touched crates only.
+- No repeated full builds.
+- Commit coherent completed changes.
+```
+
+#### Chat C Prompt: DX Agents + Zed GPUI Bridge
+
+```text
+You are Codex GPT-5.5 Extra High working as the DX Agents integration worker. Work in G:\Dx\dx-agents, G:\Dx\cli, and G:\Zed. Write real code first. Use lightweight checks only after coherent changes.
+
+Goal: connect the ZeroClaw-derived dx-agents runtime to Zed's GPUI. The agent stays CLI-first, but Zed gets a professional GUI bridge.
+
+Required Zed UX:
+- Add an Agent entry next to existing AI modes like Write and Ask.
+- Show QR/connect UI for agent/social connection.
+- Show social account connection status.
+- Show Automations entrypoint.
+- Show background agent task status/receipts.
+- Preserve all current Zed AI behavior.
+
+Required CLI bridge:
+- Provide or wire JSON commands Zed can call:
+  dx agents status --json
+  dx agents social list --json
+  dx agents automate list --json
+  dx agents run --json
+- Store receipts under G:\Dx\.dx\receipts\agents.
+- Do not store passwords or social secrets in Zed. Zed should trigger/view CLI-managed connection state.
+
+Checks:
+- Prefer code review and targeted checks.
+- Use git diff --check.
+- Use targeted cargo check for touched crates when the bridge compiles as a milestone.
+- Do not run repeated full builds.
+- Commit coherent completed changes.
+```
+
+#### Chat D Prompt: Zed AI Panel Full-Width UI
+
+```text
+You are Codex GPT-5.5 Extra High working as the Zed GPUI launch UX worker. Work in G:\Zed on branch dev. Do not remove existing Zed AI features. Write real GPUI code, not dummy UI. Avoid repeated full builds.
+
+Goal: make the Zed AI panel feel like DX: full-width by default, Codex Desktop-inspired on the right, NotebookLM-inspired sources on the left, with smooth professional organization.
+
+Required UI:
+- AI panel full width by default when no file/editor is open.
+- When an editor/file is open, AI can behave like the normal panel.
+- Left side rail: Sources.
+- Main area: chat/task/agent workspace.
+- Right rail: Progress, Git, Background Tasks.
+- Sidebar actions: New Chat, Search, Plugins, Automations.
+- Workspace chat groups: Pinned and All Chats.
+- Add subtle smooth animation only if GPUI patterns make it safe and cheap.
+- Preserve current Write, Ask, existing thread behavior, model picker, token usage, and background task functionality.
+
+Implementation:
+1. Inspect crates/agent_ui and existing sidebar/workspace patterns.
+2. Add small focused modules/components instead of bloating one file.
+3. Wire real data where available; use graceful empty states only when the backend is missing.
+4. Add hooks for DX CLI receipts but do not block UI on missing tools.
+
+Checks:
+- git diff --check.
+- Targeted cargo check for touched Zed crates at milestone.
+- No repeated full builds or just run until final integration.
+- Commit coherent completed changes.
+```
+
+#### Chat E Prompt: Launch Status + Final Integration
+
+```text
+You are Codex GPT-5.5 Extra High working as the launch integrator. Work across G:\Zed and G:\Dx after the feature workers make progress. Your job is to make the repo launch-trackable, not to rebuild everything from scratch.
+
+Goal:
+- Create or update a 100-point DX launch status file.
+- Track WWW+Forge, token/RLM/serializer, agents, Zed AI panel, sidebar, sources rail, right progress rail, web preview, provider catalog, metasearch, Check, Drive/Forge, Deploy.
+- Keep the status honest: complete, partial, blocked, next action.
+- Sync git correctly once coherent changes are healthy.
+
+Rules:
+- Do not waste hours running full builds after every change.
+- Use git status, git diff --check, conflict-marker search, and targeted checks.
+- Run final just run only when the launch candidate is assembled and the user wants runtime validation.
+- Commit coherent changes with professional messages.
+- Push dev when clean and appropriate.
+```
+
+### Orchestrator Notes For Every Worker
+
+- Ship fast, but do not create throwaway slop.
+- Prefer real integration over mock UI.
+- Preserve existing working features.
+- Keep files small and maintainable.
+- Do not delete source, models, inspirations, or user work.
+- Do not spend the day proving the whole universe compiles after every tiny edit.
+- Code first, inspect carefully, then run lightweight checks at milestones.
+- The launch demo matters most: Zed should visibly connect DX-WWW, Forge, Agents, Sources, Progress, Token meters, and the new sidebar experience.
 
 ## Executive Thesis
 
@@ -52,7 +296,7 @@ DX wins by playing smart, not by pretending a small model is a frontier model. G
 
 ## Launch Narrative
 
-The public launch story for May 28 should be:
+The public launch story for the May 22 sprint launch should be:
 
 - DX/Zed is a native AI editor, not a slow AI shell.
 - It runs local models directly and fast, while still supporting frontier remote models.
@@ -235,7 +479,7 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | DCP bridge | 0/100 | DCP/MCP/ACP/local tools share one capability, permission, and receipt model | Define minimum DCP schema |
 | Media tool bridge | 42/100 | Agent can plan safe ffmpeg/ffprobe inspect/extract actions and validate approved runner readiness through managed no-shell receipts before any native execution | Add the actual no-shell media runner and produced-file receipts |
 | Codex-style rails | 5/100 | Left Sources and right project/task rail are optional and cheap when closed | Design rail state model |
-| Launch demo package | 0/100 | May 28 demos show speed, local model tools, provider freedom, metasearch, and panels | Build 3 demo scripts |
+| Launch demo package | 0/100 | May 22 sprint demos show speed, local model tools, provider freedom, metasearch, and panels | Build 3 demo scripts |
 
 Overall implementation status: 100/100 for the completed launch-spine set.
 
@@ -328,7 +572,7 @@ Overall planning and product direction status: 100/100 for the current roadmap.
     - website/copy,
     - launch video scripts.
 
-## May 28 Launch Plan
+## May 22 Sprint Launch Plan
 
 ### Demo 1: Local Model Speed
 
@@ -390,8 +634,8 @@ At milestone boundaries:
 
 ## Disk And Workspace Policy
 
-- Keep Zed in `F:\Zed`.
-- Keep Flow and DX tools on G drive.
+- Keep the active Zed checkout at `G:\Zed` for launch stability, exposed through `G:\Dx\zed`.
+- Keep Flow and DX tools on G drive, exposed through the `G:\Dx` launch hub.
 - Clean only rebuildable outputs when G drive becomes tight.
 - Do not delete source code, models, provider integrations, docs, or hand-authored assets.
 - Safe rebuildable cleanup candidates include Cargo `target` directories and dedicated Cargo target caches such as `G:\.flow-cargo-target`.
@@ -439,6 +683,6 @@ Do not get lost in the size of the vision. The path is simple:
 - Give small models powerful tools.
 - Give every risky action a backup.
 - Keep developers in control.
-- Ship the demo on May 28.
+- Ship the sprint demo on May 22.
 
 If those seven things are true, DX is not just another editor fork. It is a new kind of developer workstation.
