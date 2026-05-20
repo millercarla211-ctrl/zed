@@ -30,7 +30,9 @@ pub use artifact::{
 pub use error::DxCatalogError;
 pub use execution::{
     CatalogExecutionAdapterKind, CatalogExecutionPermission, CatalogExecutionPlan,
-    CatalogExecutionPlanRequest, build_catalog_execution_plan,
+    CatalogExecutionPlanRequest, CatalogProviderAdapterModelSpec,
+    CatalogProviderAdapterRegistrationSpec, build_catalog_execution_plan,
+    build_catalog_provider_registration_specs,
 };
 pub use generator::{
     CatalogBuildOutput, CatalogBuildReport, CatalogConflictPolicy, CatalogGeneratorInput,

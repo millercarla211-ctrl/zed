@@ -1,3 +1,17 @@
+[2026-05-20] - DX Catalog Adapter Registration Specs
+
+ADDED:
+- Added safe provider adapter registration specs for OpenAI-compatible, OpenRouter, Ollama-compatible, and LiteLLM catalog providers.
+- Registration specs include settings paths, base URLs, auth profile IDs, user-approval requirements, settings-registration readiness, execution readiness, blockers, model capability summaries, and next actions.
+
+CHANGED:
+- Exported the registration spec API from `dx_catalog` so Agent/provider settings code can consume a structured contract instead of guessing how to expose catalog-only models.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move `dx_catalog` to 98/100, universal provider routing to 48/100, and the overall feature set to 66/100.
+
+NOTES:
+- This is still permission-first: no provider settings are written automatically, and no catalog-only picker rows are exposed until explicit approval and adapter readiness are wired.
+- No `just run`, Cargo build/check/test/clippy, downloads, model loading, cleanup, or browser automation was run for this source-level slice.
+
 [2026-05-20] - DX Catalog Execution Plan Contract
 
 ADDED:

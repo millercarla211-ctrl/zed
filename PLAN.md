@@ -223,8 +223,8 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | Screen Dock Carousel | 85/100 | Smooth, full-width screen switching with polish, reduced motion, persistence, and no layout regression | Add spring polish after current feature batch |
 | Root product plan backup | 100/100 | Canonical root plan plus detailed roadmap and launch thesis are committed | Keep updated as architecture changes |
 | G-drive rebuildable cleanup | 100/100 | Flow Cargo target outputs cleaned without deleting source or models | Repeat only when space drops |
-| `dx_catalog` provider/model archive | 96/100 | `rkyv` + `memmap2` catalog loader/generator powers model picker and routing | Generate the production catalog artifact from G-drive sources |
-| Universal provider routing | 42/100 | Local, remote, free-tier, premium, and fallback routes work from one catalog | Register safe provider adapters from catalog execution plans |
+| `dx_catalog` provider/model archive | 98/100 | `rkyv` + `memmap2` catalog loader/generator powers model picker and routing | Generate the production catalog artifact from G-drive sources |
+| Universal provider routing | 48/100 | Local, remote, free-tier, premium, and fallback routes work from one catalog | Wire registration specs into provider settings after explicit approval |
 | Metasearch AI tool | 10/100 | Agent panel can search many engines with cited compact results | Add Zed tool adapter around metasearch crates |
 | Serializer/RLM prep pipeline | 10/100 | Tool catalogs, chats, sources, and search results compact before model calls | Define AI context packing boundary |
 | Forge safety and backup policy | 10/100 | Risky actions create zstd/Forge backups, receipts, and restore paths instead of permanent loss | Define no-permanent-delete policy |
@@ -237,7 +237,7 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | Codex-style rails | 5/100 | Left Sources and right project/task rail are optional and cheap when closed | Design rail state model |
 | Launch demo package | 0/100 | May 28 demos show speed, local model tools, provider freedom, metasearch, and panels | Build 3 demo scripts |
 
-Overall implementation status: 62/100.
+Overall implementation status: 66/100.
 
 Overall planning and product direction status: 100/100 for the current roadmap.
 

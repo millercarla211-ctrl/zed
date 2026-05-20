@@ -3,6 +3,7 @@ use crate::{
     ProviderAuthKind, ProviderKind, ProviderRecord, RoutingRole, select_catalog_route,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -75,6 +76,42 @@ pub struct CatalogExecutionPlan {
     pub ready_for_adapter_registration: bool,
     pub blockers: Vec<String>,
     pub next_action: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CatalogProviderAdapterRegistrationSpec {
+    pub provider_id: String,
+    pub provider_name: String,
+    pub adapter_kind: CatalogExecutionAdapterKind,
+    pub permission: CatalogExecutionPermission,
+    pub settings_path: Option<String>,
+    pub base_url: Option<String>,
+    pub auth_profile_id: Option<String>,
+    pub auth_configured: bool,
+    pub user_approval_required: bool,
+    pub can_register_settings: bool,
+    pub ready_for_execution: bool,
+    pub registration_blockers: Vec<String>,
+    pub execution_blockers: Vec<String>,
+    pub models: Vec<CatalogProviderAdapterModelSpec>,
+    pub next_action: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CatalogProviderAdapterModelSpec {
+    pub model_id: String,
+    pub display_name: String,
+    pub context_window_tokens: Option<u32>,
+    pub max_output_tokens: Option<u32>,
+    pub supports_tools: bool,
+    pub supports_images: bool,
+    pub supports_audio: bool,
+    pub supports_video: bool,
+    pub supports_streaming: bool,
+    pub free_tier: bool,
+    pub premium_account: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -157,6 +194,34 @@ pub fn build_catalog_execution_plan(
     ))
 }
 
+pub fn build_catalog_provider_registration_specs(
+    catalog: &DxCatalog,
+) -> Vec<CatalogProviderAdapterRegistrationSpec> {
+    let mut models_by_provider = BTreeMap::<String, Vec<&ModelRecord>>::new();
+    for model in &catalog.models {
+        models_by_provider
+            .entry(model.provider_id.clone())
+            .or_default()
+            .push(model);
+    }
+
+    let mut specs = Vec::new();
+    for provider in &catalog.providers {
+        let Some(models) = models_by_provider.get(provider.id.as_str()) else {
+            continue;
+        };
+
+        let adapter_kind = adapter_kind(provider);
+        if !is_registration_candidate(adapter_kind) {
+            continue;
+        }
+
+        specs.push(provider_registration_spec(catalog, provider, models));
+    }
+
+    specs
+}
+
 fn execution_plan_for_model(
     request: CatalogExecutionPlanRequest,
     model: &ModelRecord,
@@ -214,6 +279,111 @@ fn execution_plan_for_model(
     }
 }
 
+fn provider_registration_spec(
+    catalog: &DxCatalog,
+    provider: &ProviderRecord,
+    models: &[&ModelRecord],
+) -> CatalogProviderAdapterRegistrationSpec {
+    let adapter_kind = adapter_kind(provider);
+    let permission = permission(provider);
+    let base_url = effective_base_url(provider);
+    let auth_configured = auth_configured(provider, permission);
+    let settings_path = settings_path(provider, adapter_kind);
+    let mut registration_blockers = registration_blockers(
+        provider,
+        adapter_kind,
+        base_url.as_deref(),
+        settings_path.as_deref(),
+    );
+    let mut execution_blockers = Vec::new();
+    let mut model_specs = Vec::new();
+
+    for model in models {
+        model_specs.push(model_registration_spec(model, provider));
+        if let Some(plan) = build_catalog_execution_plan(
+            catalog,
+            CatalogExecutionPlanRequest::for_model_id(model.id.clone()),
+        ) {
+            execution_blockers.extend(plan.blockers);
+        }
+    }
+
+    registration_blockers.sort();
+    registration_blockers.dedup();
+    execution_blockers.sort();
+    execution_blockers.dedup();
+
+    let can_register_settings = registration_blockers.is_empty();
+    let ready_for_execution = can_register_settings && execution_blockers.is_empty();
+    let user_approval_required = !provider.is_enabled_by_default
+        || matches!(
+            permission,
+            CatalogExecutionPermission::LocalRuntime | CatalogExecutionPermission::Custom
+        );
+    let next_action = if ready_for_execution {
+        format!(
+            "Register `{}` using `{}` and expose {} catalog model(s).",
+            provider.id,
+            adapter_kind.label(),
+            model_specs.len()
+        )
+    } else if can_register_settings {
+        execution_blockers.first().cloned().unwrap_or_else(|| {
+            format!(
+                "Collect user permission and credentials for `{}` before execution.",
+                provider.id
+            )
+        })
+    } else {
+        registration_blockers.first().cloned().unwrap_or_else(|| {
+            format!(
+                "Resolve registration requirements for catalog provider `{}`.",
+                provider.id
+            )
+        })
+    };
+
+    CatalogProviderAdapterRegistrationSpec {
+        provider_id: provider.id.clone(),
+        provider_name: provider.display_name.clone(),
+        adapter_kind,
+        permission,
+        settings_path,
+        base_url,
+        auth_profile_id: provider
+            .auth_profile
+            .as_ref()
+            .map(|profile| profile.profile_id.clone()),
+        auth_configured,
+        user_approval_required,
+        can_register_settings,
+        ready_for_execution,
+        registration_blockers,
+        execution_blockers,
+        models: model_specs,
+        next_action,
+    }
+}
+
+fn model_registration_spec(
+    model: &ModelRecord,
+    provider: &ProviderRecord,
+) -> CatalogProviderAdapterModelSpec {
+    CatalogProviderAdapterModelSpec {
+        model_id: model.id.clone(),
+        display_name: model.display_name.clone(),
+        context_window_tokens: model.context_window_tokens,
+        max_output_tokens: model.max_output_tokens,
+        supports_tools: model.capabilities.tools || provider.supports_tools,
+        supports_images: model.capabilities.vision,
+        supports_audio: model.capabilities.audio,
+        supports_video: model.capabilities.video,
+        supports_streaming: model.capabilities.streaming || provider.supports_streaming,
+        free_tier: model.capabilities.free_tier || provider.supports_free_tier,
+        premium_account: model.capabilities.premium_account || provider.supports_premium_account,
+    }
+}
+
 fn adapter_kind(provider: &ProviderRecord) -> CatalogExecutionAdapterKind {
     match provider.kind {
         ProviderKind::LocalLlamaCpp => CatalogExecutionAdapterKind::LocalLlamaCpp,
@@ -228,6 +398,66 @@ fn adapter_kind(provider: &ProviderRecord) -> CatalogExecutionAdapterKind {
         ProviderKind::Custom => CatalogExecutionAdapterKind::Custom,
         ProviderKind::ModelsDev | ProviderKind::Unknown => CatalogExecutionAdapterKind::Unsupported,
     }
+}
+
+fn is_registration_candidate(adapter_kind: CatalogExecutionAdapterKind) -> bool {
+    matches!(
+        adapter_kind,
+        CatalogExecutionAdapterKind::OpenAiCompatibleHttp
+            | CatalogExecutionAdapterKind::OpenRouterHttp
+            | CatalogExecutionAdapterKind::OllamaCompatibleHttp
+            | CatalogExecutionAdapterKind::LiteLlmProxy
+    )
+}
+
+fn settings_path(
+    provider: &ProviderRecord,
+    adapter_kind: CatalogExecutionAdapterKind,
+) -> Option<String> {
+    match adapter_kind {
+        CatalogExecutionAdapterKind::OpenAiCompatibleHttp
+        | CatalogExecutionAdapterKind::OllamaCompatibleHttp
+        | CatalogExecutionAdapterKind::LiteLlmProxy => {
+            Some(format!("language_models.openai_compatible.{}", provider.id))
+        }
+        CatalogExecutionAdapterKind::OpenRouterHttp => {
+            Some("language_models.open_router".to_string())
+        }
+        _ => None,
+    }
+}
+
+fn registration_blockers(
+    provider: &ProviderRecord,
+    adapter_kind: CatalogExecutionAdapterKind,
+    base_url: Option<&str>,
+    settings_path: Option<&str>,
+) -> Vec<String> {
+    let mut blockers = Vec::new();
+
+    if settings_path.is_none() {
+        blockers.push(format!(
+            "No settings path is defined for provider `{}` with adapter `{}`.",
+            provider.id,
+            adapter_kind.label()
+        ));
+    }
+
+    if adapter_requires_base_url(adapter_kind) && base_url.is_none() {
+        blockers.push(format!(
+            "Provider `{}` needs a base URL before adapter settings can be written.",
+            provider.id
+        ));
+    }
+
+    if adapter_kind == CatalogExecutionAdapterKind::LiteLlmProxy && base_url.is_none() {
+        blockers.push(format!(
+            "LiteLLM provider `{}` needs an explicit proxy base URL.",
+            provider.id
+        ));
+    }
+
+    blockers
 }
 
 fn permission(provider: &ProviderRecord) -> CatalogExecutionPermission {
