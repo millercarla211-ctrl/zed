@@ -1,3 +1,17 @@
+[2026-05-20] - DX Metasearch Source-Pack Receipts
+
+ADDED:
+- Added optional managed source-pack receipt writing to `search_dx_metasearch` behind `write_source_pack_receipt`.
+- Added `zed.dx.metasearch.source_pack_receipt.v1` summaries and latest/archive receipt files under workspace `tools/dx-metasearch/source-packs` or the Zed data fallback.
+
+CHANGED:
+- `search_dx_metasearch` now receives the project context so it can resolve the active workspace root for permissioned receipt writes.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move the Metasearch AI tool lane to 58/100, the Serializer/RLM prep lane to 20/100, and the overall feature set to 92/100.
+
+NOTES:
+- Receipts preserve the compact source pack and search summary only; this slice does not deep-fetch source URLs, run serializer/RLM adapters, start the metasearch server, or dispatch browser input.
+- No `just run`, Cargo build/check/test/clippy, downloads, cleanup, browser automation, or live metasearch server run was used for this source-level slice.
+
 [2026-05-20] - DX Metasearch Source-Pack Handoff
 
 ADDED:

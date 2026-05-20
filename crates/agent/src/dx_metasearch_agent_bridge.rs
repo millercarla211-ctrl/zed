@@ -29,6 +29,8 @@ const SOURCE_PACK_APPROX_CHARS_PER_TOKEN: usize = 4;
 pub(crate) const DX_METASEARCH_RESULT_SCHEMA: &str = "zed.dx.metasearch.result.v1";
 pub(crate) const DX_METASEARCH_STATUS_SCHEMA: &str = "zed.dx.metasearch.status.v1";
 pub(crate) const DX_METASEARCH_SOURCE_PACK_SCHEMA: &str = "zed.dx.metasearch.source_pack.v1";
+pub(crate) const DX_METASEARCH_SOURCE_PACK_RECEIPT_SCHEMA: &str =
+    "zed.dx.metasearch.source_pack_receipt.v1";
 
 #[derive(Clone, Debug)]
 pub(crate) struct DxMetasearchRequest {
@@ -60,6 +62,7 @@ pub(crate) struct DxMetasearchCompactResponse {
     pub summary: DxMetasearchSummary,
     pub results: Vec<DxMetasearchCompactResult>,
     pub source_pack: DxMetasearchSourcePack,
+    pub source_pack_receipt: Option<DxMetasearchSourcePackReceipt>,
     pub next_action: String,
 }
 
@@ -216,6 +219,21 @@ pub(crate) struct DxMetasearchSourcePackItem {
     pub score: f64,
     pub excerpt: String,
     pub published_date: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchSourcePackReceipt {
+    pub schema: &'static str,
+    pub status: &'static str,
+    pub root_mode: String,
+    pub receipt_dir: String,
+    pub latest_path: String,
+    pub archive_path: String,
+    pub written_bytes: usize,
+    pub source_pack_schema: &'static str,
+    pub item_count: usize,
+    pub estimated_tokens: usize,
+    pub next_action: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -603,6 +621,7 @@ fn compact_response(
         },
         results: returned_results,
         source_pack,
+        source_pack_receipt: None,
         next_action,
     }
 }

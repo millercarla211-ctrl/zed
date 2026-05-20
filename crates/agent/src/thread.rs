@@ -1689,6 +1689,7 @@ impl Thread {
         self.add_tool(TerminalTool::new(self.project.clone(), environment.clone()));
         self.add_tool(WebSearchTool);
         self.add_tool(DxMetasearchTool::new(
+            self.project.clone(),
             self.project.read(cx).client().http_client(),
         ));
         self.add_tool(DxMetasearchStatusTool::new(

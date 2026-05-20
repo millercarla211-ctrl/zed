@@ -225,8 +225,8 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | G-drive rebuildable cleanup | 100/100 | Flow Cargo target outputs cleaned without deleting source or models | Repeat only when space drops |
 | `dx_catalog` provider/model archive | 100/100 | `rkyv` + `memmap2` catalog loader/generator powers model picker, routing, source materialization, and approved Agent artifact generation | Keep stable while provider registration approvals are wired |
 | Universal provider routing | 76/100 | Local, remote, free-tier, premium, and fallback routes work from one catalog, with approved catalog specs writing into native Zed language-model settings, read-only Agent validation for native settings/runtime readiness, and an explicit permissioned Agent registration tool | Continue serializer/RLM execution integration and cross-panel routing |
-| Metasearch AI tool | 48/100 | Agent panel can search many engines, inspect service/engine readiness, and return token-aware cited source packs through permissioned DX metasearch tools | Add persisted source-pack receipts and deep source fetch/extract tools |
-| Serializer/RLM prep pipeline | 18/100 | Metasearch search results now include a compact source-pack handoff with token-budget metadata and serializer/RLM-ready machine-format hints | Wire actual serializer/RLM adapters after source-pack receipts |
+| Metasearch AI tool | 58/100 | Agent panel can search many engines, inspect service/engine readiness, return token-aware cited source packs, and optionally persist managed source-pack receipts through permissioned DX metasearch tools | Add deep source fetch/extract tools for selected source IDs |
+| Serializer/RLM prep pipeline | 20/100 | Metasearch search results can now persist compact source-pack receipts with token-budget metadata and serializer/RLM-ready machine-format hints | Wire actual serializer/RLM adapters after deep source extraction |
 | Forge safety and backup policy | 10/100 | Risky actions create zstd/Forge backups, receipts, and restore paths instead of permanent loss | Define no-permanent-delete policy |
 | Forge panel | 5/100 | Code/media snapshots, remotes, sync plans, jobs, and restore warnings visible | Add Forge host adapter plan and panel skeleton |
 | Drive/Sources rail | 5/100 | NotebookLM-style source sets and markdown task docs feed agents | Define source set model |
@@ -237,7 +237,7 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | Codex-style rails | 5/100 | Left Sources and right project/task rail are optional and cheap when closed | Design rail state model |
 | Launch demo package | 0/100 | May 28 demos show speed, local model tools, provider freedom, metasearch, and panels | Build 3 demo scripts |
 
-Overall implementation status: 91/100.
+Overall implementation status: 92/100.
 
 Overall planning and product direction status: 100/100 for the current roadmap.
 
