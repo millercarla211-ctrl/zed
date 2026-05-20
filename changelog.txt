@@ -1,3 +1,17 @@
+[2026-05-21] - DX Source Attachment Context Handoff
+
+ADDED:
+- Added `source_attachment` input support to `prepare_dx_metasearch_context` so `zed.dx.sources.attachment.v1` manifests and attachment receipts can feed metasearch source-pack receipt sources into the serializer/RLM context bundle path.
+
+CHANGED:
+- The metasearch context adapter now reads selected managed metasearch source-pack attachment receipt paths with a bounded JSON read, refuses unmanaged receipt paths, merges cited source-pack items into compact context, and reports media/restore/path-only source references as explicit non-text warnings.
+- Removed an avoidable `expect` from the DX metasearch context receipt target path selection.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 52/100 and move the next target to launch demo recipes plus the approved serializer/RLM reducer runner gate.
+
+NOTES:
+- This handoff reads managed receipt JSON only; it does not run external serializer/RLM crates, metasearch, ffmpeg/ffprobe, Forge, shell commands, network fetches, browser input, or source mutations.
+- No local server, `just run`, Cargo build/check/test/clippy, npm build, browser automation, or runtime visual proof was started.
+
 [2026-05-21] - DX Source Attachment Receipts
 
 ADDED:

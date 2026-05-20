@@ -29,6 +29,8 @@ pub struct DxMetasearchContextAdapterToolInput {
     pub source_pack: Option<Value>,
     /// Optional `zed.dx.metasearch.source_extract.v1` objects or stringified JSON values.
     pub source_extracts: Vec<Value>,
+    /// Optional `zed.dx.sources.attachment.v1` object, source attachment receipt, or stringified JSON.
+    pub source_attachment: Option<Value>,
     /// Optional question or task this context bundle should support.
     pub question: Option<String>,
     /// Approximate token budget for the compact context. Defaults to 1600 and caps at 8000.
@@ -44,6 +46,7 @@ impl Default for DxMetasearchContextAdapterToolInput {
         Self {
             source_pack: None,
             source_extracts: Vec::new(),
+            source_attachment: None,
             question: None,
             token_budget: Some(1_600),
             write_context_receipt: false,
@@ -67,6 +70,7 @@ impl From<DxMetasearchContextAdapterToolInput>
         Self {
             source_pack: input.source_pack,
             source_extracts: input.source_extracts,
+            source_attachment: input.source_attachment,
             question: input.question,
             token_budget: input.token_budget,
         }
@@ -99,8 +103,9 @@ impl AgentTool for DxMetasearchContextAdapterTool {
         _cx: &mut App,
     ) -> SharedString {
         if let Ok(input) = input {
-            let source_count =
-                input.source_extracts.len() + usize::from(input.source_pack.is_some());
+            let source_count = input.source_extracts.len()
+                + usize::from(input.source_pack.is_some())
+                + usize::from(input.source_attachment.is_some());
             format!(
                 "Prepare DX metasearch context for {} source input(s)",
                 MarkdownInlineCode(&source_count.to_string())
@@ -121,11 +126,12 @@ impl AgentTool for DxMetasearchContextAdapterTool {
 
         cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|error| error.to_string())?;
-            let source_input_count =
-                input.source_extracts.len() + usize::from(input.source_pack.is_some());
+            let source_input_count = input.source_extracts.len()
+                + usize::from(input.source_pack.is_some())
+                + usize::from(input.source_attachment.is_some());
             if source_input_count == 0 {
                 return Err(
-                    "DX metasearch context adapter needs a source pack or source extract."
+                    "DX metasearch context adapter needs a source pack, source extract, or source attachment."
                         .to_string(),
                 );
             }
@@ -184,13 +190,9 @@ impl DxMetasearchContextReceiptTarget {
     fn new(project_root: Option<PathBuf>, root_mode: DxMetasearchContextReceiptRootMode) -> Self {
         let use_workspace = matches!(root_mode, DxMetasearchContextReceiptRootMode::Workspace)
             && project_root.is_some();
-        let allowed_root = if use_workspace {
-            project_root
-                .as_ref()
-                .expect("workspace root checked above")
-                .join("tools")
-        } else {
-            data_dir().join("dx-metasearch")
+        let allowed_root = match (root_mode, project_root.as_ref()) {
+            (DxMetasearchContextReceiptRootMode::Workspace, Some(root)) => root.join("tools"),
+            _ => data_dir().join("dx-metasearch"),
         };
         let receipt_dir = if use_workspace {
             allowed_root.join("dx-metasearch").join("context")

@@ -3,7 +3,9 @@ use serde_json::Value;
 use std::{
     collections::BTreeMap,
     env,
-    path::PathBuf,
+    fs::File,
+    io::Read,
+    path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -13,11 +15,13 @@ const DEFAULT_SERIALIZER_ROOT: &str = r"G:\Workspaces\flow\serializer";
 const DEFAULT_RLM_ROOT: &str = r"G:\Workspaces\flow\rlm";
 const SOURCE_PACK_SCHEMA: &str = "zed.dx.metasearch.source_pack.v1";
 const SOURCE_EXTRACT_SCHEMA: &str = "zed.dx.metasearch.source_extract.v1";
+const SOURCE_ATTACHMENT_SCHEMA: &str = "zed.dx.sources.attachment.v1";
 const DEFAULT_CONTEXT_TOKEN_BUDGET: usize = 1_600;
 const MIN_CONTEXT_TOKEN_BUDGET: usize = 200;
 const MAX_CONTEXT_TOKEN_BUDGET: usize = 8_000;
 const APPROX_CHARS_PER_TOKEN: usize = 4;
 const MIN_SOURCE_CONTEXT_CHARS: usize = 160;
+const MAX_ATTACHMENT_RECEIPT_BYTES: u64 = 1024 * 1024;
 
 pub(crate) const DX_METASEARCH_CONTEXT_BUNDLE_SCHEMA: &str =
     "zed.dx.serializer_rlm.context_bundle.v1";
@@ -28,6 +32,7 @@ pub(crate) const DX_METASEARCH_CONTEXT_RECEIPT_SCHEMA: &str =
 pub(crate) struct DxMetasearchContextAdapterRequest {
     pub source_pack: Option<Value>,
     pub source_extracts: Vec<Value>,
+    pub source_attachment: Option<Value>,
     pub question: Option<String>,
     pub token_budget: Option<usize>,
 }
@@ -53,6 +58,7 @@ pub(crate) struct DxMetasearchContextRequestSummary {
     pub char_budget: usize,
     pub source_pack_provided: bool,
     pub source_extract_count: usize,
+    pub source_attachment_provided: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -146,6 +152,27 @@ pub(crate) fn build_metasearch_context_bundle(
     let mut candidates = Vec::new();
     let mut candidate_index = BTreeMap::new();
 
+    if let Some(source_attachment) = &request.source_attachment {
+        let source_attachment = decode_json_string(source_attachment)?;
+        if let Some(attachment) = locate_schema_object(
+            &source_attachment,
+            SOURCE_ATTACHMENT_SCHEMA,
+            "source_attachment",
+        ) {
+            collect_source_attachment(
+                attachment,
+                &mut candidates,
+                &mut candidate_index,
+                &mut warnings,
+            );
+        } else {
+            warnings.push(
+                "source_attachment was provided but did not contain zed.dx.sources.attachment.v1."
+                    .to_string(),
+            );
+        }
+    }
+
     if let Some(source_pack) = &request.source_pack {
         let source_pack = decode_json_string(source_pack)?;
         if let Some(pack) = locate_schema_object(&source_pack, SOURCE_PACK_SCHEMA, "source_pack") {
@@ -174,7 +201,7 @@ pub(crate) fn build_metasearch_context_bundle(
 
     if candidates.is_empty() {
         return Err(
-            "DX metasearch context adapter needs at least one source-pack item or source extract."
+            "DX metasearch context adapter needs at least one source-pack item, source-pack attachment receipt, or source extract."
                 .to_string(),
         );
     }
@@ -210,6 +237,7 @@ pub(crate) fn build_metasearch_context_bundle(
             char_budget,
             source_pack_provided: request.source_pack.is_some(),
             source_extract_count: request.source_extracts.len(),
+            source_attachment_provided: request.source_attachment.is_some(),
         },
         adapter: DxMetasearchContextAdapterStatus {
             mode: "source_only_contract",
@@ -244,6 +272,79 @@ pub(crate) fn build_metasearch_context_bundle(
         context_receipt: None,
         next_action,
     })
+}
+
+fn collect_source_attachment(
+    attachment: &Value,
+    candidates: &mut Vec<SourceCandidate>,
+    candidate_index: &mut BTreeMap<String, usize>,
+    warnings: &mut Vec<String>,
+) {
+    let Some(source_sets) = attachment.get("source_sets").and_then(Value::as_array) else {
+        warnings.push("source_attachment did not contain any source_sets.".to_string());
+        return;
+    };
+
+    let mut non_text_reference_count = 0;
+    for source_set in source_sets {
+        let Some(sources) = source_set.get("sources").and_then(Value::as_array) else {
+            continue;
+        };
+        for source in sources {
+            let kind = string_field(source, "kind").unwrap_or_default();
+            let attach_as = string_field(source, "attach_as").unwrap_or_default();
+            let path = string_field(source, "path").unwrap_or_default();
+            if kind == "metasearch_source_pack" && attach_as == "receipt" {
+                collect_source_pack_receipt_path(&path, candidates, candidate_index, warnings);
+            } else if !path.trim().is_empty() {
+                non_text_reference_count += 1;
+            }
+        }
+    }
+
+    if non_text_reference_count > 0 {
+        warnings.push(format!(
+            "{non_text_reference_count} source attachment reference(s) were kept as file or directory paths and not embedded into serializer/RLM context text."
+        ));
+    }
+}
+
+fn collect_source_pack_receipt_path(
+    path: &str,
+    candidates: &mut Vec<SourceCandidate>,
+    candidate_index: &mut BTreeMap<String, usize>,
+    warnings: &mut Vec<String>,
+) {
+    if path.trim().is_empty() {
+        warnings
+            .push("A metasearch source-pack attachment was missing a receipt path.".to_string());
+        return;
+    }
+
+    let path = Path::new(path);
+    if !is_managed_source_pack_receipt_path(path) {
+        warnings.push(format!(
+            "Refusing unmanaged source-pack attachment receipt path {}.",
+            path.display()
+        ));
+        return;
+    }
+
+    let Some(receipt) = read_receipt_json(path) else {
+        warnings.push(format!(
+            "Could not read source-pack attachment receipt at {}.",
+            path.display()
+        ));
+        return;
+    };
+    if let Some(pack) = locate_schema_object(&receipt, SOURCE_PACK_SCHEMA, "source_pack") {
+        collect_source_pack_items(pack, candidates, candidate_index);
+    } else {
+        warnings.push(format!(
+            "Attachment receipt at {} did not contain zed.dx.metasearch.source_pack.v1.",
+            path.display()
+        ));
+    }
 }
 
 fn collect_source_pack_items(
@@ -446,6 +547,38 @@ fn decode_json_string(value: &Value) -> Result<Value, String> {
     }
 
     Ok(value.clone())
+}
+
+fn read_receipt_json(path: &Path) -> Option<Value> {
+    let mut file = File::open(path).ok()?;
+    let mut buffer = Vec::new();
+    file.by_ref()
+        .take(MAX_ATTACHMENT_RECEIPT_BYTES)
+        .read_to_end(&mut buffer)
+        .ok()?;
+    serde_json::from_slice(&buffer).ok()
+}
+
+fn is_managed_source_pack_receipt_path(path: &Path) -> bool {
+    let is_json = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("json"));
+    if !is_json {
+        return false;
+    }
+
+    let components = path
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .map(|component| component.to_ascii_lowercase())
+        .collect::<Vec<_>>();
+
+    components.windows(3).any(|window| {
+        window[0] == "tools" && window[1] == "dx-metasearch" && window[2] == "source-packs"
+    }) || components
+        .windows(2)
+        .any(|window| window[0] == "dx-metasearch" && window[1] == "source-packs")
 }
 
 fn external_root(
