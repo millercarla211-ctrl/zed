@@ -473,17 +473,17 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | Serializer/RLM prep pipeline | 44/100 | Metasearch source packs and deep extracts can be compacted into a citation-preserving `zed.dx.serializer_rlm.context_bundle.v1` receipt, discover serializer/RLM roots, and produce `zed.dx.serializer_rlm.execution_plan.v1` approval receipts without running external reducers | Add the actual approved external reducer runner after safety review |
 | Forge safety and backup policy | 84/100 | Risky actions can produce permissioned no-permanent-delete Forge/zstd safety-policy receipts, validate reviewed backup/quarantine runner readiness, execute a native zstd backup bundle plus manifest before target mutation, and restore that backup into a managed verified preview with receipts | Render Forge history in panel UI, then add broader move/overwrite coverage and explicit restore-to-target flow after preview audit |
 | Forge panel | 24/100 | Code/media snapshots, remotes, sync plans, jobs, restore warnings, and receipt history are visible through panel-facing contracts | Promote the Tool History rail into richer Forge cards with restore preview warnings |
-| Drive/Sources rail | 28/100 | NotebookLM-style source sets and markdown task docs feed agents | Add selectable attachment actions and source-set receipts |
+| Drive/Sources rail | 46/100 | NotebookLM-style source sets and markdown task docs feed agents through rail-visible source sets plus managed Agent attachment receipts | Wire attachment receipts into serializer/RLM context preparation |
 | Check panel | 5/100 | Project score and blockers include structure, lint/format status, visual proof, deploy readiness | Define score schema and read-only scanner |
 | Deploy panel | 0/100 | CI/CD readiness, env state, URLs, logs, rollback, receipts visible | Define deploy target registry |
 | DCP bridge | 0/100 | DCP/MCP/ACP/local tools share one capability, permission, and receipt model | Define minimum DCP schema |
 | Media tool bridge | 74/100 | Agent can plan safe ffmpeg/ffprobe inspect/extract actions, validate approved runner readiness, execute approved no-shell ffmpeg/ffprobe argument vectors, hash produced files, persist managed execution receipts, and expose produced files as durable source entries | Add launch demo recipes for metasearch-to-media source flows |
-| Codex-style rails | 20/100 | Left Sources and right project/task rail are optional and cheap when closed | Add selectable source attachment actions and compact rail controls |
+| Codex-style rails | 28/100 | Left Sources and right project/task rail are optional, cheap when closed, and backed by receipt-producing Agent actions | Add compact rail controls and richer source attachment affordances |
 | Launch demo package | 0/100 | May 22 sprint demos show speed, local model tools, provider freedom, metasearch, and panels | Build 3 demo scripts |
 
 Overall implementation status: 100/100 for the completed launch-spine set.
 
-Current next 100-point feature set status: 38/100 for DX Native Tool Execution, Restore, Panels, and Launch Demos.
+Current next 100-point feature set status: 46/100 for DX Native Tool Execution, Restore, Panels, and Launch Demos.
 
 Overall planning and product direction status: 100/100 for the current roadmap.
 
@@ -551,6 +551,7 @@ Overall planning and product direction status: 100/100 for the current roadmap.
    - markdown tasks,
    - project memory packs,
    - attach sources to agent tasks,
+   - managed source attachment receipts,
    - media output and restore-preview source attachments.
 
 9. Check panel

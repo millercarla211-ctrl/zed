@@ -1,3 +1,17 @@
+[2026-05-21] - DX Source Attachment Receipts
+
+ADDED:
+- Added `prepare_dx_source_attachment`, a permissioned Agent tool that packages selected workspace roots, DX metasearch source-pack receipts, produced media files, and Forge restore previews into `zed.dx.sources.attachment.v1` manifests.
+- Added managed `zed.dx.sources.attachment_receipt.v1` latest/archive receipts under workspace `tools/dx-sources/attachments` or Zed data fallback.
+
+CHANGED:
+- Registered the source attachment tool with Agent threads beside metasearch context, serializer/RLM planning, media, and Forge tools.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 46/100 and move the next target to launch demo recipes plus serializer/RLM source handoff.
+
+NOTES:
+- Source attachments reference paths and compact receipts only; they do not embed binary media, run DX CLI commands, start metasearch, run ffmpeg/ffprobe, mutate sources, fetch network pages, or dispatch browser input.
+- No local server, `just run`, Cargo build/check/test/clippy, npm build, browser automation, or runtime visual proof was started.
+
 [2026-05-21] - DX Durable Source Sets
 
 ADDED:

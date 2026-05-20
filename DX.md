@@ -43,7 +43,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Added `execute_dx_media_tool`, a permissioned Agent tool that consumes approved media runner gates, executes ffmpeg/ffprobe via no-shell argument vectors, refuses overwrites and path traversal, records stdout/stderr previews, hashes produced files, and writes managed DX media execution receipts.
 - Added a cached workspace tool-history scanner for `tools/dx-forge` and `tools/dx-media/executions`, then rendered Forge History and Media Executions in the DX right rail with missing/empty states.
 - Added the first durable Sources rail model for workspace roots, DX metasearch source-pack receipts, produced media files, and Forge restore previews.
-- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 38/100; the next highest-value target is selectable source attachment actions and receipts for Agent context.
+- Added `prepare_dx_source_attachment`, a permissioned Agent tool that packages selected workspace roots, metasearch source-pack receipts, produced media files, and Forge restore previews into managed source attachment receipts for later Agent context.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 46/100; the next highest-value target is launch demo recipes for metasearch-to-media-to-source flows and serializer/RLM handoff.
 
 ## Remaining Proof
 

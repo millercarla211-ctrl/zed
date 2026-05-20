@@ -12,6 +12,7 @@ mod dx_media_tool_runner_gate;
 mod dx_metasearch_agent_bridge;
 mod dx_metasearch_context_adapter;
 mod dx_serializer_rlm_execution_plan;
+mod dx_source_attachment;
 mod legacy_thread;
 mod native_agent_server;
 pub mod outline;
