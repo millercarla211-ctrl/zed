@@ -26,10 +26,10 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 54,
+        overall_implementation_status: 58,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
-        dx_catalog_status: 90,
+        dx_catalog_status: 93,
         features: vec![
             feature(
                 "Browser/Chrome functional plugin execution",
@@ -45,15 +45,15 @@ pub fn current_launch_status() -> DxLaunchStatus {
             ),
             feature(
                 "dx_catalog provider/model archive",
-                90,
-                "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, source adapters, source discovery, local GGUF model reader, provider/auth reader, models.dev/OpenRouter/LiteLLM JSON model parsers, Agent picker projection, route selection, OpenRouter input, auth-profile enrichment, optional generated-artifact Agent picker enrichment, and launch status are in place.",
-                "Route selected catalog records into real Agent thread model switching and provider execution.",
+                93,
+                "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, source adapters, source discovery, local GGUF model reader, provider/auth reader, models.dev/OpenRouter/LiteLLM JSON model parsers, Agent picker projection, route selection, OpenRouter input, auth-profile enrichment, optional generated-artifact Agent picker enrichment, catalog alias resolution, and route IDs that resolve to executable Agent models are in place.",
+                "Add permissioned provider execution adapters for catalog-only providers.",
             ),
             feature(
                 "Universal provider routing",
-                30,
+                36,
                 "One router picks local, free, premium, and remote providers from dx_catalog.",
-                "Connect route selections to provider execution with permissioned adapters.",
+                "Expose catalog-only routes after execution adapters are safe.",
             ),
             feature(
                 "Metasearch AI tool",

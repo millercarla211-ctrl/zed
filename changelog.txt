@@ -1,3 +1,17 @@
+[2026-05-20] - DX Catalog Route Selection Bridge
+
+ADDED:
+- Added catalog route resolution for Agent model selection so catalog model IDs, aliases, and role route IDs can map to existing executable Agent model IDs before a thread switches models.
+
+CHANGED:
+- Agent model lookup now resolves catalog-backed IDs through the cached DX catalog bridge while keeping persisted settings and runtime execution on the real registered provider/model.
+- Selected-model hints now reuse catalog enrichment, keeping the active model row consistent with the picker list.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move `dx_catalog` to 93/100, universal provider routing to 36/100, and the overall feature set to 58/100.
+
+NOTES:
+- This slice still does not expose catalog-only provider rows. The next implementation target is permissioned provider execution adapters for providers/models that are only present in the catalog.
+- No `just run`, Cargo build/check/test/clippy, downloads, model loading, cleanup, or browser automation was run for this source-level slice.
+
 [2026-05-20] - DX Catalog Agent Picker Bridge
 
 ADDED:

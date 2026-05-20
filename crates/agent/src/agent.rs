@@ -147,6 +147,7 @@ pub struct LanguageModels {
     models: HashMap<acp::ModelId, Arc<dyn LanguageModel>>,
     /// Cached list for returning language model information
     model_list: acp_thread::AgentModelList,
+    catalog_bridge: Option<dx_catalog_agent_bridge::DxCatalogAgentBridge>,
     refresh_models_rx: watch::Receiver<()>,
     refresh_models_tx: watch::Sender<()>,
     _authenticate_all_providers_task: Task<()>,
@@ -159,6 +160,7 @@ impl LanguageModels {
         let mut this = Self {
             models: HashMap::default(),
             model_list: acp_thread::AgentModelList::Grouped(IndexMap::default()),
+            catalog_bridge: None,
             refresh_models_rx,
             refresh_models_tx,
             _authenticate_all_providers_task: Self::authenticate_all_language_model_providers(cx),
@@ -177,16 +179,15 @@ impl LanguageModels {
 
         let mut language_model_list = IndexMap::default();
         let mut recommended_models = HashSet::default();
-        let catalog_bridge = dx_catalog_agent_bridge::DxCatalogAgentBridge::load_from_environment();
+        self.catalog_bridge =
+            dx_catalog_agent_bridge::DxCatalogAgentBridge::load_from_environment();
 
         let mut recommended = Vec::new();
         for provider in &providers {
             for model in provider.recommended_models(cx) {
                 recommended_models.insert((model.provider_id(), model.id()));
                 let mut model_info = Self::map_language_model_to_info(&model, provider);
-                if let Some(catalog_bridge) = &catalog_bridge {
-                    catalog_bridge.enrich_model_info(&mut model_info);
-                }
+                self.enrich_model_info_from_catalog(&mut model_info);
                 recommended.push(model_info);
             }
         }
@@ -202,9 +203,7 @@ impl LanguageModels {
             let mut provider_models = Vec::new();
             for model in provider.provided_models(cx) {
                 let mut model_info = Self::map_language_model_to_info(&model, &provider);
-                if let Some(catalog_bridge) = &catalog_bridge {
-                    catalog_bridge.enrich_model_info(&mut model_info);
-                }
+                self.enrich_model_info_from_catalog(&mut model_info);
                 let model_id = model_info.id.clone();
                 provider_models.push(model_info);
                 models.insert(model_id, model);
@@ -227,7 +226,26 @@ impl LanguageModels {
     }
 
     pub fn model_from_id(&self, model_id: &acp::ModelId) -> Option<Arc<dyn LanguageModel>> {
-        self.models.get(model_id).cloned()
+        let model_id = self.resolved_model_id(model_id)?;
+        self.models.get(&model_id).cloned()
+    }
+
+    fn resolved_model_id(&self, model_id: &acp::ModelId) -> Option<acp::ModelId> {
+        if self.models.contains_key(model_id) {
+            return Some(model_id.clone());
+        }
+
+        let resolved = self.catalog_bridge.as_ref()?.resolve_model_id(
+            model_id.0.as_ref(),
+            self.models.keys().map(|model_id| model_id.0.as_ref()),
+        )?;
+        Some(acp::ModelId::new(resolved))
+    }
+
+    fn enrich_model_info_from_catalog(&self, model_info: &mut acp_thread::AgentModelInfo) {
+        if let Some(catalog_bridge) = &self.catalog_bridge {
+            catalog_bridge.enrich_model_info(model_info);
+        }
     }
 
     fn map_language_model_to_info(
@@ -2112,16 +2130,18 @@ impl acp_thread::AgentModelSelector for NativeAgentModelSelector {
     }
 
     fn selected_model_hint(&self, cx: &App) -> Option<acp_thread::AgentModelInfo> {
-        let thread = self
-            .connection
-            .0
-            .read(cx)
+        let connection = self.connection.0.read(cx);
+        let thread = connection
             .sessions
             .get(&self.session_id)
             .map(|session| session.thread.clone())?;
         let model = thread.read(cx).model()?;
         let provider = LanguageModelRegistry::read_global(cx).provider(&model.provider_id())?;
-        Some(LanguageModels::map_language_model_to_info(model, &provider))
+        let mut model_info = LanguageModels::map_language_model_to_info(model, &provider);
+        connection
+            .models
+            .enrich_model_info_from_catalog(&mut model_info);
+        Some(model_info)
     }
 
     fn watch(&self, cx: &mut App) -> Option<watch::Receiver<()>> {

@@ -2,7 +2,7 @@ use acp_thread::AgentModelInfo;
 use collections::{HashMap, HashSet};
 use dx_catalog::{
     AgentPickerAuthState, AgentPickerProjectionOptions, DxCatalog, ModelRecord, ProviderRecord,
-    build_agent_picker_projection, read_catalog_artifact,
+    RoutingRole, build_agent_picker_projection, read_catalog_artifact,
 };
 use std::env;
 use std::path::PathBuf;
@@ -15,6 +15,7 @@ const DX_CATALOG_ARTIFACT_FILE_NAME: &str = "catalog.dxcat";
 #[derive(Clone, Debug, Default)]
 pub struct DxCatalogAgentBridge {
     models: HashMap<String, CatalogModelPresentation>,
+    route_candidates: HashMap<String, Vec<String>>,
 }
 
 #[derive(Clone, Debug)]
@@ -46,6 +47,23 @@ impl DxCatalogAgentBridge {
                 model_info.cost = Some(cost_label.clone().into());
             }
         }
+    }
+
+    pub fn resolve_model_id<'a>(
+        &self,
+        requested_model_id: &str,
+        executable_model_ids: impl IntoIterator<Item = &'a str>,
+    ) -> Option<String> {
+        let executable_model_ids = executable_model_ids.into_iter().collect::<HashSet<_>>();
+        if executable_model_ids.contains(requested_model_id) {
+            return Some(requested_model_id.to_string());
+        }
+
+        self.route_candidates
+            .get(requested_model_id)?
+            .iter()
+            .find(|candidate| executable_model_ids.contains(candidate.as_str()))
+            .cloned()
     }
 
     fn load_uncached() -> Option<Self> {
@@ -87,6 +105,7 @@ impl DxCatalogAgentBridge {
                 .include_provider_groups(false)
                 .include_unselectable_models(true),
         );
+        let route_recommendations = projection.route_recommendations.clone();
         let picker_models = projection
             .groups
             .into_iter()
@@ -95,10 +114,13 @@ impl DxCatalogAgentBridge {
             .collect::<HashMap<_, _>>();
 
         let mut models = HashMap::new();
+        let mut route_candidates = HashMap::new();
+        let mut model_lookup_keys = HashMap::new();
         for model in &catalog.models {
             let Some(provider) = providers.get(model.provider_id.as_str()).copied() else {
                 continue;
             };
+            let lookup_keys = model_lookup_keys_for_record(model, provider);
 
             let presentation = picker_models
                 .get(&model.id)
@@ -116,12 +138,43 @@ impl DxCatalogAgentBridge {
                     cost_label: None,
                 });
 
-            for key in model_lookup_keys(model, provider) {
+            for key in &lookup_keys {
                 models.entry(key).or_insert_with(|| presentation.clone());
             }
+            insert_route_candidates(
+                &mut route_candidates,
+                lookup_keys.clone(),
+                lookup_keys.clone(),
+            );
+            model_lookup_keys.insert(model.id.clone(), lookup_keys);
         }
 
-        Self { models }
+        for route in route_recommendations {
+            let mut candidates = Vec::new();
+            push_catalog_model_candidates(
+                &mut candidates,
+                &model_lookup_keys,
+                route.primary_model_id.as_str(),
+            );
+            for fallback_model_id in &route.fallback_model_ids {
+                push_catalog_model_candidates(
+                    &mut candidates,
+                    &model_lookup_keys,
+                    fallback_model_id.as_str(),
+                );
+            }
+
+            insert_route_candidates(
+                &mut route_candidates,
+                catalog_role_route_ids(route.role),
+                candidates,
+            );
+        }
+
+        Self {
+            models,
+            route_candidates,
+        }
     }
 }
 
@@ -159,7 +212,62 @@ fn catalog_artifact_candidates() -> Vec<CatalogArtifactCandidate> {
     candidates
 }
 
-fn model_lookup_keys(model: &ModelRecord, provider: &ProviderRecord) -> Vec<String> {
+fn insert_route_candidates(
+    route_candidates: &mut HashMap<String, Vec<String>>,
+    route_ids: Vec<String>,
+    candidates: Vec<String>,
+) {
+    if candidates.is_empty() {
+        return;
+    }
+
+    for route_id in route_ids {
+        route_candidates
+            .entry(route_id)
+            .or_insert(candidates.clone());
+    }
+}
+
+fn push_catalog_model_candidates(
+    candidates: &mut Vec<String>,
+    model_lookup_keys: &HashMap<String, Vec<String>>,
+    catalog_model_id: &str,
+) {
+    let mut seen = candidates.iter().cloned().collect::<HashSet<_>>();
+    for candidate in model_lookup_keys
+        .get(catalog_model_id)
+        .into_iter()
+        .flat_map(|candidates| candidates.iter())
+    {
+        if seen.insert(candidate.clone()) {
+            candidates.push(candidate.clone());
+        }
+    }
+}
+
+fn catalog_role_route_ids(role: RoutingRole) -> Vec<String> {
+    let role = routing_role_key(role);
+    vec![
+        format!("dx_catalog/route/{role}"),
+        format!("dx_catalog/{role}"),
+        format!("dx/{role}"),
+    ]
+}
+
+fn routing_role_key(role: RoutingRole) -> &'static str {
+    match role {
+        RoutingRole::Helper => "helper",
+        RoutingRole::ToolAgent => "tool_agent",
+        RoutingRole::Coding => "coding",
+        RoutingRole::Reasoning => "reasoning",
+        RoutingRole::Vision => "vision",
+        RoutingRole::Audio => "audio",
+        RoutingRole::Embeddings => "embeddings",
+        RoutingRole::Fallback => "fallback",
+    }
+}
+
+fn model_lookup_keys_for_record(model: &ModelRecord, provider: &ProviderRecord) -> Vec<String> {
     let mut keys = Vec::new();
     let mut seen = HashSet::new();
 
