@@ -26,10 +26,10 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 42,
+        overall_implementation_status: 46,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
-        dx_catalog_status: 70,
+        dx_catalog_status: 78,
         features: vec![
             feature(
                 "Browser/Chrome functional plugin execution",
@@ -45,9 +45,9 @@ pub fn current_launch_status() -> DxLaunchStatus {
             ),
             feature(
                 "dx_catalog provider/model archive",
-                70,
-                "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, source adapters, source discovery, local GGUF model source reader, provider/auth source reader, OpenRouter input, auth-profile enrichment, and launch status are in place.",
-                "Add concrete model-catalog parsers for models.dev/OpenRouter/LiteLLM and wire generated artifacts into the Agent model picker.",
+                78,
+                "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, source adapters, source discovery, local GGUF model reader, provider/auth reader, models.dev/OpenRouter/LiteLLM JSON model parsers, OpenRouter input, auth-profile enrichment, and launch status are in place.",
+                "Wire generated dx_catalog artifacts into the Agent model picker and route selection.",
             ),
             feature(
                 "Universal provider routing",

@@ -16,3 +16,4 @@ doctest = false
 memmap2 = "0.9.8"
 rkyv = "0.7.45"
 serde.workspace = true
+serde_json.workspace = true

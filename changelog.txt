@@ -1,3 +1,15 @@
+[2026-05-20] - DX Catalog JSON Model Readers
+
+ADDED:
+- Added tolerant `dx_catalog` JSON model readers for models.dev provider maps, OpenRouter `/api/v1/models` responses, and LiteLLM `model_list` configs.
+- Exported model catalog reader options, reports, skipped-entry diagnostics, and file/inline JSON read helpers.
+
+CHANGED:
+- Added `serde_json` to `dx_catalog`, exposed the LiteLLM catalog adapter input, and updated launch status to move `dx_catalog` to 78/100 and the overall feature set to 46/100.
+
+NOTES:
+- The readers map provider/model IDs, context/output limits, capabilities, pricing, free-tier hints, and recommended roles into the existing rkyv/memmap catalog pipeline. No network download, `just run`, or Cargo build/check/test/clippy was run for this documentation/source-only slice.
+
 [2026-05-20] - DX Catalog Provider Auth Reader
 
 ADDED:

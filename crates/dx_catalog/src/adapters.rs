@@ -38,7 +38,7 @@ impl SourceMetadata {
         self
     }
 
-    fn into_record(self, kind: CatalogSourceKind) -> CatalogSourceRecord {
+    pub(crate) fn into_record(self, kind: CatalogSourceKind) -> CatalogSourceRecord {
         CatalogSourceRecord {
             id: self.id,
             kind,
@@ -399,6 +399,19 @@ pub fn lite_llm_aliases_input(
 
     CatalogGeneratorInput::new(metadata.into_record(CatalogSourceKind::LiteLlmAliases))
         .with_providers(providers)
+}
+
+pub fn lite_llm_catalog_input(
+    metadata: SourceMetadata,
+    providers: impl IntoIterator<Item = ExternalProviderInput>,
+    models: impl IntoIterator<Item = ExternalModelInput>,
+) -> CatalogGeneratorInput {
+    external_catalog_input(
+        metadata,
+        CatalogSourceKind::LiteLlmAliases,
+        providers,
+        models,
+    )
 }
 
 pub fn auth_profiles_input(

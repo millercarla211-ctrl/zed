@@ -23,6 +23,7 @@ pub enum DxCatalogError {
         actual_len: usize,
     },
     EmptyPayload,
+    Json(serde_json::Error),
     Serialize(String),
 }
 
@@ -56,6 +57,7 @@ impl fmt::Display for DxCatalogError {
                 "dx catalog payload is truncated: expected {expected_len} bytes, got {actual_len}"
             ),
             Self::EmptyPayload => write!(f, "dx catalog archive payload is empty"),
+            Self::Json(error) => write!(f, "dx catalog JSON parse failed: {error}"),
             Self::Serialize(error) => write!(f, "dx catalog serialization failed: {error}"),
         }
     }
@@ -65,6 +67,7 @@ impl Error for DxCatalogError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Io(error) => Some(error),
+            Self::Json(error) => Some(error),
             _ => None,
         }
     }
@@ -73,5 +76,11 @@ impl Error for DxCatalogError {
 impl From<io::Error> for DxCatalogError {
     fn from(error: io::Error) -> Self {
         Self::Io(error)
+    }
+}
+
+impl From<serde_json::Error> for DxCatalogError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::Json(error)
     }
 }
