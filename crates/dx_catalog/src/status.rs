@@ -26,7 +26,7 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 97,
+        overall_implementation_status: 98,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
         dx_catalog_status: 100,
@@ -69,9 +69,9 @@ pub fn current_launch_status() -> DxLaunchStatus {
             ),
             feature(
                 "Forge safety and backup policy",
-                10,
-                "Risky file operations create reversible Forge/zstd receipts instead of permanent loss.",
-                "Define the no-permanent-delete command receipt contract.",
+                32,
+                "Risky file operations can now produce permissioned no-permanent-delete Forge/zstd safety-policy receipts with managed backup, quarantine, manifest, and restore paths before any future mutation runner exists.",
+                "Add the reviewed backup/quarantine runner and restore receipt writer.",
             ),
             feature(
                 "Forge panel",

@@ -1,3 +1,17 @@
+[2026-05-20] - DX Forge Safety Policy
+
+ADDED:
+- Added `plan_dx_forge_safety_policy`, a permissioned Agent tool for Forge/zstd no-permanent-delete safety-policy planning.
+- Added `zed.dx.forge.safety_policy.v1` and managed policy receipt support with backup archive, manifest, quarantine, restore, and no-permanent-delete safety fields.
+
+CHANGED:
+- Registered the Forge safety policy tool with Agent threads beside the DX metasearch, serializer/RLM, catalog, and media tools.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move Forge safety and backup policy to 32/100 and the overall DX Native Tools Integration set to 98/100.
+
+NOTES:
+- This slice creates the safety policy and receipt contract only; it does not run Forge, zstd, shell commands, deletes, moves, overwrites, model calls, browser input, or backup archive writes.
+- No `just run`, Cargo build/check/test/clippy, downloads, cleanup, browser automation, or live Forge execution was used for this source-level slice.
+
 [2026-05-20] - DX Media Runner Gate
 
 ADDED:
