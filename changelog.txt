@@ -1,3 +1,17 @@
+[2026-05-20] - DX Serializer/RLM Context Adapter
+
+ADDED:
+- Added `prepare_dx_metasearch_context`, a permissioned Agent tool that compacts metasearch source packs and deep source extracts into `zed.dx.serializer_rlm.context_bundle.v1`.
+- Added a source-only DX serializer/RLM adapter contract with G-drive serializer/RLM root discovery, citation-preserving source items, token-budgeted context text, and optional managed context receipts.
+
+CHANGED:
+- Updated metasearch next actions so source-pack and source-extract tools route Agents into the new compact context adapter before future external reductions.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move the Metasearch AI tool lane to 72/100, the Serializer/RLM prep lane to 34/100, and the overall feature set to 94/100.
+
+NOTES:
+- This slice creates the safe source-only adapter and receipt format; it does not execute the external serializer/RLM crates, start metasearch, fetch network pages, run model calls, or dispatch browser input.
+- No `just run`, Cargo build/check/test/clippy, downloads, cleanup, browser automation, or live external serializer/RLM execution was used for this source-level slice.
+
 [2026-05-20] - DX Metasearch Deep Source Extraction Tool
 
 ADDED:

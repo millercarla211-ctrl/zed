@@ -303,7 +303,7 @@ impl DxMetasearchSourcePackReceiptTarget {
                 "runs_serializer_or_rlm": false,
                 "dispatches_browser_input": false,
             },
-            "next_action": "Use the latest receipt for Agent source context, then run extract_dx_metasearch_source for selected source IDs when the short excerpts are not enough."
+            "next_action": "Use the latest receipt for Agent source context, run extract_dx_metasearch_source for selected source IDs when short excerpts are not enough, then call prepare_dx_metasearch_context for a compact serializer/RLM-ready bundle."
         });
         let receipt_json = serde_json::to_vec_pretty(&receipt)
             .map_err(|error| format!("Failed to serialize source-pack receipt: {error}"))?;
@@ -338,7 +338,7 @@ impl DxMetasearchSourcePackReceiptTarget {
             source_pack_schema: response.source_pack.schema,
             item_count: response.source_pack.item_count,
             estimated_tokens: response.source_pack.estimated_tokens,
-            next_action: "Use the latest receipt for Agent source context, then run extract_dx_metasearch_source on selected source IDs when needed.".to_string(),
+            next_action: "Use the latest receipt for Agent source context, extract selected source IDs when needed, then call prepare_dx_metasearch_context for a compact bundle.".to_string(),
         })
     }
 

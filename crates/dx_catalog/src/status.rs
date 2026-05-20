@@ -26,7 +26,7 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 93,
+        overall_implementation_status: 94,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
         dx_catalog_status: 100,
@@ -57,15 +57,15 @@ pub fn current_launch_status() -> DxLaunchStatus {
             ),
             feature(
                 "Metasearch AI tool",
-                68,
-                "Agent panel can call cancellable multi-engine cited search through permissioned DX metasearch tools, inspect service/engine readiness, emit compact citations, return token-aware cited source packs, optionally persist managed source-pack receipts, and fetch bounded readable extracts for selected source IDs.",
-                "Add extract receipts plus serializer/RLM adapter hooks.",
+                72,
+                "Agent panel can call cancellable multi-engine cited search through permissioned DX metasearch tools, inspect service/engine readiness, emit compact citations, return token-aware cited source packs, persist managed source-pack receipts, fetch bounded readable extracts, and prepare compact context bundles.",
+                "Connect context bundles into panel surfaces and external reductions.",
             ),
             feature(
                 "Serializer/RLM context pipeline",
-                24,
-                "Metasearch search results can persist compact source-pack receipts and selected sources can return bounded deep extracts with token-budget metadata and serializer/RLM-ready machine-format hints.",
-                "Wire actual serializer/RLM adapters to source-pack and extract outputs.",
+                34,
+                "Metasearch source packs and deep extracts can be compacted into a citation-preserving context bundle receipt with serializer/RLM root discovery and token-budget metadata.",
+                "Add explicit approved external serializer/RLM execution after adapter review.",
             ),
             feature(
                 "Forge safety and backup policy",

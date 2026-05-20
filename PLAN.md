@@ -225,8 +225,8 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | G-drive rebuildable cleanup | 100/100 | Flow Cargo target outputs cleaned without deleting source or models | Repeat only when space drops |
 | `dx_catalog` provider/model archive | 100/100 | `rkyv` + `memmap2` catalog loader/generator powers model picker, routing, source materialization, and approved Agent artifact generation | Keep stable while provider registration approvals are wired |
 | Universal provider routing | 76/100 | Local, remote, free-tier, premium, and fallback routes work from one catalog, with approved catalog specs writing into native Zed language-model settings, read-only Agent validation for native settings/runtime readiness, and an explicit permissioned Agent registration tool | Continue serializer/RLM execution integration and cross-panel routing |
-| Metasearch AI tool | 68/100 | Agent panel can search many engines, inspect service/engine readiness, return token-aware cited source packs, optionally persist managed source-pack receipts, and fetch bounded readable extracts for selected source IDs through permissioned DX metasearch tools | Add extract receipts plus serializer/RLM adapter hooks |
-| Serializer/RLM prep pipeline | 24/100 | Metasearch search results can persist compact source-pack receipts and selected sources can return bounded deep extracts with token-budget metadata and serializer/RLM-ready machine-format hints | Wire actual serializer/RLM adapters to source-pack and extract outputs |
+| Metasearch AI tool | 72/100 | Agent panel can search many engines, inspect service/engine readiness, return token-aware cited source packs, persist managed source-pack receipts, fetch bounded readable extracts, and prepare compact context bundles through permissioned DX metasearch tools | Connect context bundles into panel surfaces and external reductions |
+| Serializer/RLM prep pipeline | 34/100 | Metasearch source packs and deep extracts can be compacted into a citation-preserving `zed.dx.serializer_rlm.context_bundle.v1` receipt with serializer/RLM root discovery and token-budget metadata | Add explicit approved external serializer/RLM execution after adapter review |
 | Forge safety and backup policy | 10/100 | Risky actions create zstd/Forge backups, receipts, and restore paths instead of permanent loss | Define no-permanent-delete policy |
 | Forge panel | 5/100 | Code/media snapshots, remotes, sync plans, jobs, and restore warnings visible | Add Forge host adapter plan and panel skeleton |
 | Drive/Sources rail | 5/100 | NotebookLM-style source sets and markdown task docs feed agents | Define source set model |
@@ -237,7 +237,7 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | Codex-style rails | 5/100 | Left Sources and right project/task rail are optional and cheap when closed | Design rail state model |
 | Launch demo package | 0/100 | May 28 demos show speed, local model tools, provider freedom, metasearch, and panels | Build 3 demo scripts |
 
-Overall implementation status: 93/100.
+Overall implementation status: 94/100.
 
 Overall planning and product direction status: 100/100 for the current roadmap.
 

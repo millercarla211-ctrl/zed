@@ -739,9 +739,9 @@ fn compact_source_extract_response(
     let next_action = if extracted_chars == 0 {
         "Try a different source-pack item, fetch the page through the browser preview, or inspect the metasearch result snippet only.".to_string()
     } else if output_truncated || body_truncated {
-        "Use this bounded extract for immediate Agent context, then pass the same source metadata to serializer/RLM compaction before expanding more text.".to_string()
+        "Use this bounded extract for immediate Agent context, then call prepare_dx_metasearch_context with the source pack and extracts before expanding more text.".to_string()
     } else {
-        "Use content.text as cited Agent context now, and pass this schema to serializer/RLM adapters when that lane is enabled.".to_string()
+        "Use content.text as cited Agent context now, or call prepare_dx_metasearch_context to create the serializer/RLM-ready context bundle.".to_string()
     };
 
     DxMetasearchSourceExtractResponse {
@@ -828,7 +828,7 @@ fn compact_response(
     } else if !response.engines_failed.is_empty() {
         "Use the returned citations, then inspect failed engines before relying on this as exhaustive.".to_string()
     } else {
-        "Use source_pack.items for token-aware cited Agent context, then hand the same schema to serializer/RLM compaction when that lane is enabled.".to_string()
+        "Use source_pack.items for token-aware cited Agent context, then call prepare_dx_metasearch_context when multiple sources or extracts need one compact bundle.".to_string()
     };
 
     DxMetasearchCompactResponse {
@@ -913,7 +913,7 @@ fn build_source_pack(query: &str, results: &[DxMetasearchCompactResult]) -> DxMe
             item_count
         )
     } else {
-        "Use these source-pack items directly as cited Agent context, or pass them to serializer/RLM compaction for the next call."
+        "Use these source-pack items directly as cited Agent context, or call prepare_dx_metasearch_context for the next compact Agent call."
             .to_string()
     };
 
