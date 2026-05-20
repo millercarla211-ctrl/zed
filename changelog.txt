@@ -1,3 +1,17 @@
+[2026-05-20] - DX Forge Backup Runner Gate
+
+ADDED:
+- Added `gate_dx_forge_backup_runner`, a permissioned Agent tool that validates `zed.dx.forge.safety_policy.v1` policies or policy receipts before any future Forge/zstd backup runner executes.
+- Added `zed.dx.forge.backup_runner_gate.v1` and managed runner-gate receipt support with no-permanent-delete, backup-before-mutation, manifest, quarantine, restore-receipt, and managed-path safety checks.
+
+CHANGED:
+- Registered the Forge backup runner gate beside the Forge safety policy, DX media, metasearch, serializer/RLM, and catalog Agent tools.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move Forge safety and backup policy to 55/100 and the overall DX Native Tools Integration set to 99/100.
+
+NOTES:
+- This slice creates the reviewed runner gate and receipt contract only; it does not run Forge, zstd, shell commands, deletes, moves, overwrites, backup archive writes, model calls, or browser input.
+- No `just run`, Cargo build/check/test/clippy, downloads, cleanup, browser automation, or live Forge execution was used for this source-level slice.
+
 [2026-05-20] - DX Forge Safety Policy
 
 ADDED:
