@@ -1701,6 +1701,7 @@ impl Thread {
         ));
         self.add_tool(DxMetasearchContextAdapterTool::new(self.project.clone()));
         self.add_tool(DxSerializerRlmExecutionPlanTool::new(self.project.clone()));
+        self.add_tool(DxSerializerRlmRunnerGateTool::new(self.project.clone()));
         self.add_tool(DxSourceAttachmentTool::new(self.project.clone()));
         self.add_tool(DxMetasearchStatusTool::new(
             self.project.read(cx).client().http_client(),

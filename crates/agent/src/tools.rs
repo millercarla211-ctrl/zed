@@ -42,6 +42,7 @@ mod dx_metasearch_source_extract_tool;
 mod dx_metasearch_status_tool;
 mod dx_metasearch_tool;
 mod dx_serializer_rlm_execution_plan_tool;
+mod dx_serializer_rlm_runner_gate_tool;
 mod dx_source_attachment_tool;
 mod edit_file_tool;
 mod edit_session;
@@ -139,6 +140,7 @@ pub use dx_metasearch_source_extract_tool::*;
 pub use dx_metasearch_status_tool::*;
 pub use dx_metasearch_tool::*;
 pub use dx_serializer_rlm_execution_plan_tool::*;
+pub use dx_serializer_rlm_runner_gate_tool::*;
 pub use dx_source_attachment_tool::*;
 pub use edit_file_tool::*;
 pub use fetch_tool::*;
@@ -274,6 +276,7 @@ tools! {
     DxMetasearchStatusTool,
     DxMetasearchTool,
     DxSerializerRlmExecutionPlanTool,
+    DxSerializerRlmRunnerGateTool,
     DxSourceAttachmentTool,
     DxCatalogProviderSettingsRegistrationTool,
     DxCatalogProviderSettingsTool,

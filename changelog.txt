@@ -1,3 +1,18 @@
+[2026-05-21] - DX Serializer/RLM Runner Gate
+
+ADDED:
+- Added `gate_dx_serializer_rlm_runner`, a permissioned Agent tool that validates `zed.dx.serializer_rlm.execution_plan.v1` objects or execution receipts before any future serializer/RLM reducer runner can execute.
+- Added `zed.dx.serializer_rlm.runner_gate.v1` and `zed.dx.serializer_rlm.runner_gate_receipt.v1` contracts with runner approval, execution-receipt, step-readiness, serializer/RLM target, and model-call policy checks.
+
+CHANGED:
+- Updated the primary launch demo recipe to include the serializer/RLM runner gate after execution planning and added the runner-gates receipt root to demo recipe status.
+- Removed an avoidable `expect` from the serializer/RLM execution-plan receipt target path selection.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 64/100 and move the next target to a reduced-context receipt writer before any model-call runner.
+
+NOTES:
+- The runner gate does not run serializer/RLM code, Cargo, external processes, network requests, model calls, browser input, or reduced-context writes. It requires explicit runner approval and keeps RLM model-call approval separate.
+- No local server, `just run`, Cargo build/check/test/clippy, npm build, browser automation, or runtime visual proof was started.
+
 [2026-05-21] - DX Launch Demo Recipes
 
 ADDED:

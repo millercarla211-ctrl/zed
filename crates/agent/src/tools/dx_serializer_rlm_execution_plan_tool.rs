@@ -199,13 +199,9 @@ impl DxSerializerRlmExecutionReceiptTarget {
             root_mode,
             DxSerializerRlmExecutionReceiptRootMode::Workspace
         ) && project_root.is_some();
-        let allowed_root = if use_workspace {
-            project_root
-                .as_ref()
-                .expect("workspace root checked above")
-                .join("tools")
-        } else {
-            data_dir().join("dx-serializer-rlm")
+        let allowed_root = match (root_mode, project_root.as_ref()) {
+            (DxSerializerRlmExecutionReceiptRootMode::Workspace, Some(root)) => root.join("tools"),
+            _ => data_dir().join("dx-serializer-rlm"),
         };
         let receipt_dir = if use_workspace {
             allowed_root.join("dx-serializer-rlm").join("execution")

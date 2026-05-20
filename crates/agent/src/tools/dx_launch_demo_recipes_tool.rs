@@ -276,12 +276,14 @@ fn metasearch_to_context_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDem
             "prepare_dx_source_attachment",
             "prepare_dx_metasearch_context",
             "plan_dx_serializer_rlm_execution",
+            "gate_dx_serializer_rlm_runner",
         ],
         receipt_contracts: vec![
             "zed.dx.metasearch.source_pack_receipt.v1",
             "zed.dx.sources.attachment_receipt.v1",
             "zed.dx.serializer_rlm.context_receipt.v1",
             "zed.dx.serializer_rlm.execution_receipt.v1",
+            "zed.dx.serializer_rlm.runner_gate_receipt.v1",
         ],
         steps: vec![
             step(
@@ -324,6 +326,14 @@ fn metasearch_to_context_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDem
                 true,
                 "Does not run external serializer/RLM crates or model calls.",
             ),
+            step(
+                6,
+                "gate_dx_serializer_rlm_runner",
+                "Validate the execution receipt and model-call policy before any reducer runner is wired.",
+                Some("zed.dx.serializer_rlm.runner_gate_receipt.v1"),
+                true,
+                "Does not run serializer/RLM code, cargo, external processes, or model calls.",
+            ),
         ],
         proof_gates: vec![
             "Metasearch status is healthy or the missing-service state is reported.",
@@ -331,9 +341,10 @@ fn metasearch_to_context_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDem
             "Latest source attachment receipt exists under tools/dx-sources/attachments.",
             "Latest context receipt includes at least one cited item.",
             "Serializer/RLM execution plan remains dry-run unless explicitly approved.",
+            "Runner gate receipt is ready only after explicit runner and model-call approvals.",
         ],
         blockers: recipe_blockers(workspace_root),
-        next_action: "Use this as the flagship demo path before adding the external reducer runner gate.",
+        next_action: "Use this as the flagship demo path before adding the reduced-context receipt writer.",
     }
 }
 
@@ -498,6 +509,12 @@ fn receipt_roots(workspace_root: Option<&Path>) -> Vec<DxLaunchDemoReceiptRoot> 
             root.join("tools")
                 .join("dx-serializer-rlm")
                 .join("execution"),
+        ),
+        (
+            "serializer/RLM runner gates",
+            root.join("tools")
+                .join("dx-serializer-rlm")
+                .join("runner-gates"),
         ),
         (
             "media executions",
