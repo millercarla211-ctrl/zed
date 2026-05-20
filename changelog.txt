@@ -5270,9 +5270,11 @@ NOTES:
 
 ADDED:
 - `PLAN.md` now captures the DX/Zed launch thesis, May 28 demo plan, architecture map, 100-point feature tracker, build order, testing policy, disk policy, and business reality check.
+- `PLAN.md` now also captures the performance and responsibility thesis: direct local runtime speed, RLM and serializer token savings, `rkyv`/`memmap2` catalog loading, Forge/zstd backup-first safety, and the developer-positive launch mantra.
 
 CHANGED:
 - `todo.txt` now records the root launch plan and G-drive rebuildable cleanup as completed while keeping `dx_catalog` as the next implementation target.
+- `todo.txt` now records the performance/responsibility thesis as completed documentation.
 
 NOTES:
 - Cleaned only verified rebuildable Cargo target outputs from `G:\Workspaces\flow\target`, `G:\Workspaces\flow\forge\target`, `G:\Workspaces\flow\providers\target`, and `G:\.flow-cargo-target`.

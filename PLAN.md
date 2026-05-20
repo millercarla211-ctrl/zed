@@ -18,6 +18,38 @@ The product advantage comes from four compounding strengths:
 
 This can become a venture-scale product if the execution is excellent: fast onboarding, reliable model routing, polished panels, trustworthy permissions, strong demos, and a clear launch story. "Billions" is not guaranteed by the idea alone, but the wedge is real: a native editor plus fast local AI plus powerful tools plus provider freedom is a differentiated opportunity.
 
+## Performance And Responsibility Thesis
+
+The most important DX idea is that AI should become faster, cheaper, more capable, and more responsible at the same time. Most products treat those as tradeoffs. DX should make them reinforce each other.
+
+The performance thesis:
+
+- Direct llama.cpp integration can remove avoidable sidecar/RPC overhead from latency-critical local-agent loops. In the best-fit workflows, the target is up to 90% faster task feel versus heavier universal local-model stacks.
+- RLM can reduce long-context prompts by up to 90% on workloads where recursive search, reduction, and citation-preserving summaries replace raw document stuffing.
+- dx-serializer can reduce verbose JSON/tool/schema/conversation payloads by up to 70% in suitable agent formats, with packed machine-oriented forms for repeated sessions.
+- `rkyv` plus `memmap2` should make provider catalogs, tool catalogs, source summaries, and other large read-mostly data far faster than reparsing JSON on editor startup.
+- The point is not a synthetic benchmark trophy. The point is time-to-useful-action: small local models should feel dramatically more capable because DX gives them fast runtime, compact context, and precise tools.
+
+The responsibility thesis:
+
+- DX should make AI powerful without making it reckless.
+- Forge should become the default safety layer for risky project operations.
+- Delete should not mean permanent loss by default. Destructive actions should create a local, compressed, restorable backup or quarantine first.
+- For space saving, prefer zstd-compressed archives or content-addressed Forge snapshots over irreversible deletion.
+- Tool calls should leave receipts: what changed, where the backup is, how to restore, and which source state was used.
+- This is how DX makes AI useful to serious developers: powerful enough to act, responsible enough to trust.
+
+The developer-positive thesis:
+
+- The goal is not to make software developers obsolete.
+- The goal is to stop the chaos where developers are threatened by expensive black-box AI tools that are slow, locked down, and provider-controlled.
+- DX should make AI a developer-owned tool again: local when possible, remote when useful, transparent, reversible, fast, and integrated with real project state.
+- If a local model can do practical work freely, repeatedly, and safely through strong tools, developers win. They keep agency, spend less money, and move faster.
+
+Internal rally line:
+
+DX wins by playing smart, not by pretending a small model is a frontier model. Give the model speed, memory, sources, tools, Forge safety, and compact context, and suddenly it can beat much larger systems on real workflows. That is the moment worth building toward.
+
 ## Launch Narrative
 
 The public launch story for May 28 should be:
@@ -33,6 +65,7 @@ Example demo story:
 - A frontier model can extract audio from video by reasoning through terminal commands.
 - DX can give a smaller local model a direct media tool backed by ffmpeg, so the model only has to understand the user's intent and select the right tool.
 - This makes local AI feel smarter because the product carries the mechanical expertise.
+- DX can make that action safe by storing a Forge/zstd backup or receipt before risky file operations.
 
 ## Product Pillars
 
@@ -64,6 +97,7 @@ Example demo story:
 - Examples: ffmpeg media manipulation, project search, metasearch, code health checks, source ingestion, deploy status, Git/Forge actions, file transforms, OCR, transcription, screenshots, web preview, and structured editing.
 - Use tool schemas compacted by serializer so the model gets more useful capability with fewer tokens.
 - Keep every tool permissioned, auditable, and reversible where possible.
+- Prefer reversible Forge-backed actions over permanent deletion or silent mutation.
 
 ### 5. Source-Grounded Agent Workspace
 
@@ -193,6 +227,7 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | Universal provider routing | 10/100 | Local, remote, free-tier, premium, and fallback routes work from one catalog | Integrate `zeroclaw-providers` metadata |
 | Metasearch AI tool | 10/100 | Agent panel can search many engines with cited compact results | Add Zed tool adapter around metasearch crates |
 | Serializer/RLM prep pipeline | 10/100 | Tool catalogs, chats, sources, and search results compact before model calls | Define AI context packing boundary |
+| Forge safety and backup policy | 10/100 | Risky actions create zstd/Forge backups, receipts, and restore paths instead of permanent loss | Define no-permanent-delete policy |
 | Forge panel | 5/100 | Code/media snapshots, remotes, sync plans, jobs, and restore warnings visible | Add Forge host adapter plan and panel skeleton |
 | Drive/Sources rail | 5/100 | NotebookLM-style source sets and markdown task docs feed agents | Define source set model |
 | Check panel | 5/100 | Project score and blockers include structure, lint/format status, visual proof, deploy readiness | Define score schema and read-only scanner |
@@ -239,40 +274,47 @@ Overall planning and product direction status: 100/100 for the current roadmap.
    - inspect metadata,
    - safe output path receipts.
 
-6. Forge panel
+6. Forge safety policy
+   - no permanent delete by default,
+   - zstd backup/quarantine path,
+   - Forge snapshot receipts,
+   - restore commands,
+   - visible risk confirmations.
+
+7. Forge panel
    - snapshot status,
    - media-aware diffs,
    - remote plans,
    - job receipts,
    - restore preview.
 
-7. Drive/Sources rail
+8. Drive/Sources rail
    - source sets,
    - markdown tasks,
    - project memory packs,
    - attach sources to agent tasks.
 
-8. Check panel
+9. Check panel
    - score schema,
    - file/folder structure review,
    - imported check status,
    - visual proof receipts,
    - recommended fixes.
 
-9. Deploy panel
+10. Deploy panel
    - target registry,
    - env readiness,
    - CI/CD logs,
    - preview/production URLs,
    - rollback receipts.
 
-10. DCP bridge
+11. DCP bridge
     - minimum capability schema,
     - MCP/ACP adapters,
     - permission policy,
     - receipts.
 
-11. Launch polish
+12. Launch polish
     - full-width default workflow,
     - left/right rails,
     - demo workspaces,
@@ -379,3 +421,17 @@ But the product will not win from vision alone. The hard requirements are:
 - and a polished enough first release that users can feel the speed advantage immediately.
 
 The plan is bold, but the smart path is practical: build the provider catalog first, then metasearch and tool bridges, then Forge/Drive/Check/Deploy panels, then launch with the strongest demos.
+
+## Focus Mantra
+
+Do not get lost in the size of the vision. The path is simple:
+
+- Make AI faster.
+- Make AI cheaper.
+- Make AI safer.
+- Give small models powerful tools.
+- Give every risky action a backup.
+- Keep developers in control.
+- Ship the demo on May 28.
+
+If those seven things are true, DX is not just another editor fork. It is a new kind of developer workstation.
