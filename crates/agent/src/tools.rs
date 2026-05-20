@@ -35,6 +35,7 @@ mod dx_forge_restore_executor_tool;
 mod dx_forge_safety_policy_tool;
 mod dx_media_tool_plan_tool;
 mod dx_media_tool_runner_gate_tool;
+mod dx_media_tool_runner_tool;
 mod dx_metasearch_context_adapter_tool;
 mod dx_metasearch_source_extract_tool;
 mod dx_metasearch_status_tool;
@@ -129,6 +130,7 @@ pub use dx_forge_restore_executor_tool::*;
 pub use dx_forge_safety_policy_tool::*;
 pub use dx_media_tool_plan_tool::*;
 pub use dx_media_tool_runner_gate_tool::*;
+pub use dx_media_tool_runner_tool::*;
 pub use dx_metasearch_context_adapter_tool::*;
 pub use dx_metasearch_source_extract_tool::*;
 pub use dx_metasearch_status_tool::*;
@@ -261,6 +263,7 @@ tools! {
     DxForgeSafetyPolicyTool,
     DxMediaToolPlanTool,
     DxMediaToolRunnerGateTool,
+    DxMediaToolRunnerTool,
     DxMetasearchContextAdapterTool,
     DxMetasearchSourceExtractTool,
     DxMetasearchStatusTool,

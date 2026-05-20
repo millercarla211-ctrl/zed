@@ -13,12 +13,13 @@ use crate::{
     DxCatalogProviderSettingsRegistrationTool, DxCatalogProviderSettingsTool,
     DxForgeBackupExecutorTool, DxForgeBackupRunnerGateTool, DxForgeHistoryTool,
     DxForgeRestoreExecutorTool, DxForgeSafetyPolicyTool, DxMediaToolPlanTool,
-    DxMediaToolRunnerGateTool, DxMetasearchContextAdapterTool, DxMetasearchSourceExtractTool,
-    DxMetasearchStatusTool, DxMetasearchTool, DxSerializerRlmExecutionPlanTool, EditFileTool,
-    FetchTool, FindPathTool, FindReferencesTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool,
-    ListDirectoryTool, MovePathTool, ProjectSnapshot, ReadFileTool, RenameTool, SpawnAgentTool,
-    SystemPromptTemplate, Template, Templates, TerminalTool, ToolPermissionDecision,
-    UpdatePlanTool, UserAgentsMd, WebSearchTool, WriteFileTool, decide_permission_from_settings,
+    DxMediaToolRunnerGateTool, DxMediaToolRunnerTool, DxMetasearchContextAdapterTool,
+    DxMetasearchSourceExtractTool, DxMetasearchStatusTool, DxMetasearchTool,
+    DxSerializerRlmExecutionPlanTool, EditFileTool, FetchTool, FindPathTool, FindReferencesTool,
+    GetCodeActionsTool, GoToDefinitionTool, GrepTool, ListDirectoryTool, MovePathTool,
+    ProjectSnapshot, ReadFileTool, RenameTool, SpawnAgentTool, SystemPromptTemplate, Template,
+    Templates, TerminalTool, ToolPermissionDecision, UpdatePlanTool, UserAgentsMd, WebSearchTool,
+    WriteFileTool, decide_permission_from_settings,
 };
 use acp_thread::{MentionUri, UserMessageId};
 use action_log::ActionLog;
@@ -1705,6 +1706,7 @@ impl Thread {
         ));
         self.add_tool(DxMediaToolPlanTool::new(self.project.clone()));
         self.add_tool(DxMediaToolRunnerGateTool::new(self.project.clone()));
+        self.add_tool(DxMediaToolRunnerTool::new(self.project.clone()));
         self.add_tool(DxForgeSafetyPolicyTool::new(self.project.clone()));
         self.add_tool(DxForgeBackupRunnerGateTool::new(self.project.clone()));
         self.add_tool(DxForgeBackupExecutorTool::new(self.project.clone()));

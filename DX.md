@@ -40,8 +40,11 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Added an Agent action beside the existing Write/Ask mode and model controls while preserving the current model picker, profile selector, token usage, and thread behavior.
 - Added New Chat, Search, Plugins, and Automations sidebar actions plus Pinned/All Chats group headers; Automations routes to the existing project debug-task configuration until the DX automation receipt producer has a first-class Zed panel.
 - Made the Agent panel default to full-width/zoomed when the workspace has no active editor item; user zoom toggles still override that default.
+- Added `execute_dx_media_tool`, a permissioned Agent tool that consumes approved media runner gates, executes ffmpeg/ffprobe via no-shell argument vectors, refuses overwrites and path traversal, records stdout/stderr previews, hashes produced files, and writes managed DX media execution receipts.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 24/100; the next highest-value target is panel rendering for Forge history and DX media execution receipts.
 
 ## Remaining Proof
 
 - Runtime visual proof is still pending because this launch lane forbids local servers, `just run`, full Cargo builds, and heavy validation without explicit permission.
 - The DX CLI receipt producers remain external to Zed; this slice reads receipt files and reports missing or empty receipt states only.
+- The media runner source slice has rustfmt/diff/conflict validation only so far; Cargo check/test and runtime ffmpeg proof remain deferred under the repo's launch validation rules.

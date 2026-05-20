@@ -7,6 +7,7 @@ mod dx_forge_backup_runner_gate;
 mod dx_forge_restore_executor;
 mod dx_forge_safety_policy;
 mod dx_media_tool_plan;
+mod dx_media_tool_runner;
 mod dx_media_tool_runner_gate;
 mod dx_metasearch_agent_bridge;
 mod dx_metasearch_context_adapter;

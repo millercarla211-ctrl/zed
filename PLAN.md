@@ -477,13 +477,13 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | Check panel | 5/100 | Project score and blockers include structure, lint/format status, visual proof, deploy readiness | Define score schema and read-only scanner |
 | Deploy panel | 0/100 | CI/CD readiness, env state, URLs, logs, rollback, receipts visible | Define deploy target registry |
 | DCP bridge | 0/100 | DCP/MCP/ACP/local tools share one capability, permission, and receipt model | Define minimum DCP schema |
-| Media tool bridge | 42/100 | Agent can plan safe ffmpeg/ffprobe inspect/extract actions and validate approved runner readiness through managed no-shell receipts before any native execution | Add the actual no-shell media runner and produced-file receipts |
+| Media tool bridge | 66/100 | Agent can plan safe ffmpeg/ffprobe inspect/extract actions, validate approved runner readiness, execute approved no-shell ffmpeg/ffprobe argument vectors, hash produced files, and persist managed execution receipts | Render media execution receipts in the panel/source rails and add launch demo recipes |
 | Codex-style rails | 5/100 | Left Sources and right project/task rail are optional and cheap when closed | Design rail state model |
 | Launch demo package | 0/100 | May 22 sprint demos show speed, local model tools, provider freedom, metasearch, and panels | Build 3 demo scripts |
 
 Overall implementation status: 100/100 for the completed launch-spine set.
 
-Current next 100-point feature set status: 12/100 for DX Native Tool Execution, Restore, Panels, and Launch Demos.
+Current next 100-point feature set status: 24/100 for DX Native Tool Execution, Restore, Panels, and Launch Demos.
 
 Overall planning and product direction status: 100/100 for the current roadmap.
 
@@ -518,7 +518,9 @@ Overall planning and product direction status: 100/100 for the current roadmap.
    - convert media,
    - trim media,
    - inspect metadata,
-   - safe output path receipts.
+   - no-shell execution receipts,
+   - safe output path receipts,
+   - produced-file panel/source rail rendering.
 
 6. Forge safety policy
    - no permanent delete by default,

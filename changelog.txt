@@ -1,3 +1,17 @@
+[2026-05-21] - DX Media Execution Runner
+
+ADDED:
+- Added `execute_dx_media_tool`, a permissioned Agent tool that consumes approved `zed.dx.media_tool.runner_gate.v1` objects or runner-gate receipts and executes ffmpeg/ffprobe with no shell interpolation.
+- Added `zed.dx.media_tool.execution.v1` and `zed.dx.media_tool.execution_receipt.v1` contracts with produced-file metadata, size, SHA-256 hashes, stdout/stderr previews, and latest/archive receipt paths under managed DX media directories.
+
+CHANGED:
+- Registered the media execution runner beside the existing media plan and runner-gate tools.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 24/100 and move the next target to panel rendering for Forge/media receipt history.
+
+NOTES:
+- The runner refuses unapproved execution, missing execution receipts, shell-wrapper executables, shell operator/newline arguments, action/executable mismatches, unmanaged outputs, parent traversal, non-absolute outputs, and output overwrites.
+- No local server, `just run`, Cargo build/check/test/clippy, npm build, browser automation, DX CLI execution, or runtime ffmpeg/ffprobe proof was started.
+
 [2026-05-21] - DX AI Workspace Launch Chrome
 
 ADDED:
