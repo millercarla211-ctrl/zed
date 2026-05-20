@@ -4,6 +4,7 @@ use rkyv::{
     Deserialize as RkyvDeserialize, Infallible, archived_root,
     ser::{Serializer, serializers::AllocSerializer},
 };
+use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File},
     path::{Path, PathBuf},
@@ -14,7 +15,7 @@ pub const DX_CATALOG_ARTIFACT_VERSION: u16 = 1;
 
 const HEADER_LEN: usize = 64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CatalogArtifactHeader {
     pub version: u16,
     pub header_len: u16,

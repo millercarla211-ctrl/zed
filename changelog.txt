@@ -1,3 +1,17 @@
+[2026-05-20] - DX Catalog Production Artifact Materializer
+
+ADDED:
+- Added a `dx_catalog` materialization module that discovers configured/G-drive sources, reads provider/auth/model/local/manual source inputs, merges them with last-good fallback, validates the final catalog, writes the `rkyv` artifact, and reports adapter-registration readiness.
+- Added source-read and artifact-build reports covering discovery counts, provider/model/local/manual reads, skipped JSON catalog candidates, source errors, artifact header data, and ready registration spec counts.
+
+CHANGED:
+- Exported the production materialization API from `dx_catalog` and made catalog build/artifact report types serializable for command/status surfaces.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move `dx_catalog` to 99/100, universal provider routing to 50/100, and the overall feature set to 70/100.
+
+NOTES:
+- The materializer still does not auto-register providers, download models, parse sources at editor startup, or run a live build. The next slice should add an explicit approved command/settings trigger that writes `catalog.dxcat` to the Agent-discoverable path.
+- No `just run`, Cargo build/check/test/clippy, downloads, model loading, cleanup, or browser automation was run for this source-level slice.
+
 [2026-05-20] - DX Catalog Adapter Registration Specs
 
 ADDED:

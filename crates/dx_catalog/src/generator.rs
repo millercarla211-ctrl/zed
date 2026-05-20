@@ -2,6 +2,7 @@ use crate::{
     AuthProfileLink, CatalogSourceRecord, CatalogValidationReport, DX_CATALOG_SCHEMA_VERSION,
     DxCatalog, ModelRecord, ProviderAuthKind, ProviderRecord, RoutingRule,
 };
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone)]
@@ -79,7 +80,8 @@ impl CatalogGeneratorOptions {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CatalogConflictPolicy {
     PreferFirstSource,
     PreferLatestSource,
@@ -91,7 +93,7 @@ pub struct CatalogBuildOutput {
     pub report: CatalogBuildReport,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CatalogBuildReport {
     pub generated_catalog_valid: bool,
     pub used_last_good: bool,

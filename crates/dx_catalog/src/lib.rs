@@ -4,6 +4,7 @@ mod artifact;
 mod error;
 mod execution;
 mod generator;
+mod materialize;
 mod model_catalog_readers;
 mod provider_readers;
 mod readers;
@@ -38,6 +39,12 @@ pub use generator::{
     CatalogBuildOutput, CatalogBuildReport, CatalogConflictPolicy, CatalogGeneratorInput,
     CatalogGeneratorOptions, ProviderAuthProfileUpdate, build_catalog,
     build_catalog_with_last_good,
+};
+pub use materialize::{
+    CatalogArtifactBuildOptions, CatalogArtifactBuildOutput, CatalogArtifactBuildReport,
+    CatalogSourceReadError, CatalogSourceReadOptions, CatalogSourceReadOutput,
+    CatalogSourceReadReport, ManualCatalogSourceReport, SkippedCatalogSourceCandidate,
+    build_catalog_artifact_from_sources, read_discovered_catalog_sources,
 };
 pub use model_catalog_readers::{
     ModelCatalogReadOutput, ModelCatalogReadReport, ModelCatalogReaderOptions,
