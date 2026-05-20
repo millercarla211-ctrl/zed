@@ -1,3 +1,17 @@
+[2026-05-20] - DX Catalog Provider Settings Registration Tool
+
+ADDED:
+- Added `register_dx_catalog_provider_settings`, a permissioned Agent tool that can produce dry-run receipts or queue writable DX catalog provider specs into native language-model settings after explicit approval.
+- Added a structured registration result schema with requested-provider filtering, artifact discovery, selected/skipped counts, model counts, per-provider registration action, and live validation details.
+
+CHANGED:
+- Agent threads now expose both the read-only provider-settings inspection tool and the explicit registration tool, keeping preview and settings writes as separate professional surfaces.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move Universal Provider Routing to 76/100 and the overall feature set to 85/100.
+
+NOTES:
+- The registration tool does not write secrets, call provider APIs, download models, launch local runtimes, or generate catalog artifacts. It writes only eligible provider URLs/model metadata through native settings after permission approval.
+- No `just run`, Cargo build/check/test/clippy, downloads, model loading, cleanup, browser automation, or provider network validation was run for this source-level slice.
+
 [2026-05-20] - DX Catalog Live Provider Settings Validation
 
 ADDED:

@@ -36,6 +36,8 @@ const DX_CATALOG_ARTIFACT_FILE_NAME: &str = "catalog.dxcat";
 const DEFAULT_CATALOG_MODEL_MAX_TOKENS: u64 = 200_000;
 pub(crate) const DX_CATALOG_PROVIDER_SETTINGS_PREVIEW_SCHEMA: &str =
     "zed.dx_catalog.provider_settings.registration_preview.v2";
+pub(crate) const DX_CATALOG_PROVIDER_SETTINGS_REGISTRATION_SCHEMA: &str =
+    "zed.dx_catalog.provider_settings.registration_result.v1";
 
 #[derive(Clone, Debug, Default)]
 pub struct DxCatalogAgentBridge {
@@ -498,6 +500,153 @@ pub(crate) fn provider_settings_registration_preview(cx: &gpui::App) -> serde_js
             &live_report,
             approval_enabled,
             dry_run_enabled,
+        ),
+    })
+}
+
+pub(crate) fn register_provider_settings_from_catalog(
+    fs: Arc<dyn Fs>,
+    provider_ids: &[String],
+    dry_run: bool,
+    cx: &gpui::App,
+) -> serde_json::Value {
+    let requested_provider_ids = provider_ids
+        .iter()
+        .map(|provider_id| provider_id.trim().to_ascii_lowercase())
+        .filter(|provider_id| !provider_id.is_empty())
+        .collect::<Vec<_>>();
+    let requested_filter = (!requested_provider_ids.is_empty()).then(|| {
+        requested_provider_ids
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>()
+    });
+    let artifact_candidates = catalog_artifact_candidate_preview();
+    let Some(artifact) =
+        read_first_available_catalog_artifact_with_path("provider settings registration tool")
+    else {
+        return serde_json::json!({
+            "schema": DX_CATALOG_PROVIDER_SETTINGS_REGISTRATION_SCHEMA,
+            "generated_at_ms": current_unix_ms(),
+            "artifact_loaded": false,
+            "artifact_path": serde_json::Value::Null,
+            "artifact_candidates": artifact_candidates,
+            "dry_run": dry_run,
+            "settings_write_queued": false,
+            "requested_provider_ids": requested_provider_ids,
+            "requested_provider_ids_not_found": [],
+            "summary": {
+                "catalog_provider_count": 0,
+                "catalog_model_count": 0,
+                "registration_spec_count": 0,
+                "eligible_provider_count": 0,
+                "skipped_provider_count": 0,
+                "matched_provider_count": 0,
+                "selected_provider_count": 0,
+                "selected_model_count": 0,
+            },
+            "providers": [],
+            "next_action": "Generate or point DX_CATALOG_ARTIFACT/DX_CATALOG_PATH at a validated catalog.dxcat before registering provider settings.",
+        });
+    };
+
+    let specs = build_catalog_provider_registration_specs(&artifact.catalog);
+    let report = CatalogProviderSettingsRegistrationReport::from_specs(&specs);
+    let requested_provider_ids_not_found = requested_provider_ids
+        .iter()
+        .filter(|requested_provider_id| {
+            !specs
+                .iter()
+                .any(|spec| spec.provider_id.eq_ignore_ascii_case(requested_provider_id))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let requested_not_found_count = requested_provider_ids_not_found.len();
+    let matches_requested_filter = |spec: &CatalogProviderAdapterRegistrationSpec| {
+        requested_filter.as_ref().map_or(true, |filter| {
+            filter.contains(&spec.provider_id.to_ascii_lowercase())
+        })
+    };
+    let matched_specs = specs
+        .iter()
+        .filter(|spec| matches_requested_filter(spec))
+        .cloned()
+        .collect::<Vec<_>>();
+    let selected_specs = matched_specs
+        .iter()
+        .filter(|spec| can_write_provider_settings(spec))
+        .cloned()
+        .collect::<Vec<_>>();
+    let selected_report = CatalogProviderSettingsRegistrationReport::from_specs(&selected_specs);
+    let settings_write_queued = !dry_run && !selected_specs.is_empty();
+
+    if settings_write_queued {
+        let specs_to_apply = selected_specs.clone();
+        update_settings_file(fs, cx, move |settings, _| {
+            for spec in &specs_to_apply {
+                apply_provider_settings_spec(settings, spec);
+            }
+        });
+    }
+
+    let providers = matched_specs
+        .iter()
+        .map(|spec| {
+            let live_validation = provider_settings_live_validation(spec, cx);
+            let mut provider =
+                provider_settings_registration_preview_provider(spec, &live_validation);
+            let selected_for_registration = can_write_provider_settings(spec);
+            let registration_action = if !selected_for_registration {
+                "skipped"
+            } else if dry_run {
+                "would_register"
+            } else {
+                "registered"
+            };
+
+            if let Some(object) = provider.as_object_mut() {
+                object.insert(
+                    "selected_for_registration".to_string(),
+                    selected_for_registration.into(),
+                );
+                object.insert(
+                    "registration_action".to_string(),
+                    registration_action.into(),
+                );
+            }
+
+            provider
+        })
+        .collect::<Vec<_>>();
+
+    serde_json::json!({
+        "schema": DX_CATALOG_PROVIDER_SETTINGS_REGISTRATION_SCHEMA,
+        "generated_at_ms": current_unix_ms(),
+        "artifact_loaded": true,
+        "artifact_path": artifact.path.display().to_string(),
+        "artifact_candidates": artifact_candidates,
+        "dry_run": dry_run,
+        "settings_write_queued": settings_write_queued,
+        "requested_provider_ids": requested_provider_ids,
+        "requested_provider_ids_not_found": requested_provider_ids_not_found,
+        "summary": {
+            "catalog_provider_count": artifact.catalog.providers.len(),
+            "catalog_model_count": artifact.catalog.models.len(),
+            "registration_spec_count": specs.len(),
+            "eligible_provider_count": report.eligible_provider_count,
+            "skipped_provider_count": report.skipped_provider_count,
+            "matched_provider_count": matched_specs.len(),
+            "selected_provider_count": selected_specs.len(),
+            "selected_openai_compatible_provider_count": selected_report.openai_compatible_provider_count,
+            "selected_open_router_model_count": selected_report.open_router_model_count,
+            "selected_model_count": selected_report.model_count,
+        },
+        "providers": providers,
+        "next_action": provider_settings_registration_result_next_action(
+            selected_specs.len(),
+            requested_not_found_count,
+            dry_run,
+            settings_write_queued,
         ),
     })
 }
@@ -1007,6 +1156,36 @@ fn provider_settings_registration_preview_next_action(
         "Provider settings registration is approved for {} provider(s); restart or reload Agent startup to apply the settings bridge.",
         report.eligible_provider_count
     )
+}
+
+fn provider_settings_registration_result_next_action(
+    selected_provider_count: usize,
+    requested_not_found_count: usize,
+    dry_run: bool,
+    settings_write_queued: bool,
+) -> String {
+    if selected_provider_count == 0 {
+        if requested_not_found_count > 0 {
+            return "No requested provider IDs matched writable catalog provider settings specs. Inspect the preview tool for exact provider IDs.".to_string();
+        }
+
+        return "No matched catalog providers are writable by the native provider-settings bridge yet."
+            .to_string();
+    }
+
+    if dry_run {
+        return format!(
+            "Dry run complete for {selected_provider_count} provider(s). Run again with dry_run=false after reviewing the receipt to queue native settings updates."
+        );
+    }
+
+    if settings_write_queued {
+        return format!(
+            "Queued native settings updates for {selected_provider_count} provider(s). Restart or reload language-model providers, then inspect live validation again."
+        );
+    }
+
+    "Review the registration receipt and rerun with dry_run=false when ready.".to_string()
 }
 
 fn materialize_catalog_artifact_if_approved() {
