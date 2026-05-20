@@ -16,10 +16,10 @@ use agent_ui::threads_archive_view::{
     fuzzy_match_positions,
 };
 use agent_ui::{
-    AcpThreadImportOnboarding, Agent, AgentPanel, AgentPanelEvent, AgentPanelTerminalInfo,
-    AgentThreadSource, ArchiveSelectedThread, CrossChannelImportOnboarding, DEFAULT_THREAD_TITLE,
-    NewThread, RemoveSelectedThread, TerminalId, ThreadId, ThreadImportModal,
-    channels_with_threads, import_threads_from_other_channels,
+    AcpThreadImportOnboarding, Agent, AgentPanel, AgentPanelEvent, AgentThreadSource,
+    ArchiveSelectedThread, CrossChannelImportOnboarding, DEFAULT_THREAD_TITLE, NewThread,
+    RemoveSelectedThread, TerminalId, ThreadId, ThreadImportModal, channels_with_threads,
+    import_threads_from_other_channels,
 };
 use chrono::{DateTime, Utc};
 use editor::Editor;

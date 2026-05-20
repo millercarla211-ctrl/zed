@@ -19,6 +19,7 @@ pub mod security_modal;
 pub mod shared_screen;
 pub use shared_screen::SharedScreen;
 pub mod focus_follows_mouse;
+mod screen_carousel;
 mod status_bar;
 pub mod tasks;
 mod theme_preview;
@@ -107,6 +108,7 @@ use remote::{
     remote_client::ConnectionIdentifier,
 };
 use schemars::JsonSchema;
+use screen_carousel::ScreenCarouselState;
 use serde::Deserialize;
 use session::AppSession;
 use settings::{
@@ -253,6 +255,14 @@ actions!(
         ActivateNextPane,
         /// Activates the previous pane in the workspace.
         ActivatePreviousPane,
+        /// Activates the next screen in the screen dock carousel.
+        ActivateNextScreen,
+        /// Activates the previous screen in the screen dock carousel.
+        ActivatePreviousScreen,
+        /// Reveals the next screen without activating it.
+        PeekNextScreen,
+        /// Reveals the previous screen without activating it.
+        PeekPreviousScreen,
         /// Activates the last pane in the workspace.
         ActivateLastPane,
         /// Switches to the next window.
@@ -1369,6 +1379,8 @@ pub struct Workspace {
     last_active_center_pane: Option<WeakEntity<Pane>>,
     #[allow(dead_code)]
     screen_kind_widths: HashMap<WorkspaceScreenKind, f32>,
+    screen_carousel: ScreenCarouselState,
+    _screen_carousel_reveal_task: Option<Task<()>>,
     last_active_view_id: Option<proto::ViewId>,
     status_bar: Entity<StatusBar>,
     pub(crate) modal_layer: Entity<ModalLayer>,
@@ -1817,6 +1829,8 @@ impl Workspace {
             active_pane: center_pane.clone(),
             last_active_center_pane: Some(center_pane.downgrade()),
             screen_kind_widths: Default::default(),
+            screen_carousel: Default::default(),
+            _screen_carousel_reveal_task: None,
             last_active_view_id: None,
             status_bar,
             modal_layer,
@@ -7552,6 +7566,24 @@ impl Workspace {
             .on_action(cx.listener(|workspace, _: &ActivateNextPane, window, cx| {
                 workspace.activate_next_pane(window, cx)
             }))
+            .on_action(
+                cx.listener(|workspace, _: &ActivatePreviousScreen, window, cx| {
+                    workspace.activate_previous_screen(window, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|workspace, _: &ActivateNextScreen, window, cx| {
+                    workspace.activate_next_screen(window, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|workspace, _: &PeekPreviousScreen, _window, cx| {
+                    workspace.peek_previous_screen(cx)
+                }),
+            )
+            .on_action(cx.listener(|workspace, _: &PeekNextScreen, _window, cx| {
+                workspace.peek_next_screen(cx)
+            }))
             .on_action(cx.listener(|workspace, _: &ActivateLastPane, window, cx| {
                 workspace.activate_last_pane(window, cx)
             }))
@@ -8871,12 +8903,20 @@ impl Render for Workspace {
                                                                 .when_some(paddings.0, |this, p| {
                                                                     this.child(p.border_r_1())
                                                                 })
-                                                                .child(self.center.render(
-                                                                    self.zoomed.as_ref(),
-                                                                    &pane_render_context,
-                                                                    window,
-                                                                    cx,
-                                                                ))
+                                                                .child({
+                                                                    let center = self
+                                                                        .center
+                                                                        .render(
+                                                                            self.zoomed.as_ref(),
+                                                                            &pane_render_context,
+                                                                            window,
+                                                                            cx,
+                                                                        )
+                                                                        .into_any_element();
+                                                                    self.render_screen_carousel_center(
+                                                                        center, cx,
+                                                                    )
+                                                                })
                                                                 .when_some(
                                                                     paddings.1,
                                                                     |this, p| {
@@ -8937,12 +8977,21 @@ impl Render for Workspace {
                                                                                 )
                                                                             },
                                                                         )
-                                                                        .child(self.center.render(
-                                                                            self.zoomed.as_ref(),
-                                                                            &pane_render_context,
-                                                                            window,
-                                                                            cx,
-                                                                        ))
+                                                                        .child({
+                                                                            let center = self
+                                                                                .center
+                                                                                .render(
+                                                                                    self.zoomed
+                                                                                        .as_ref(),
+                                                                                    &pane_render_context,
+                                                                                    window,
+                                                                                    cx,
+                                                                                )
+                                                                                .into_any_element();
+                                                                            self.render_screen_carousel_center(
+                                                                                center, cx,
+                                                                            )
+                                                                        })
                                                                         .when_some(
                                                                             paddings.1,
                                                                             |this, p| {
@@ -9005,12 +9054,21 @@ impl Render for Workspace {
                                                                                 )
                                                                             },
                                                                         )
-                                                                        .child(self.center.render(
-                                                                            self.zoomed.as_ref(),
-                                                                            &pane_render_context,
-                                                                            window,
-                                                                            cx,
-                                                                        ))
+                                                                        .child({
+                                                                            let center = self
+                                                                                .center
+                                                                                .render(
+                                                                                    self.zoomed
+                                                                                        .as_ref(),
+                                                                                    &pane_render_context,
+                                                                                    window,
+                                                                                    cx,
+                                                                                )
+                                                                                .into_any_element();
+                                                                            self.render_screen_carousel_center(
+                                                                                center, cx,
+                                                                            )
+                                                                        })
                                                                         .when_some(
                                                                             paddings.1,
                                                                             |this, p| {
@@ -9057,12 +9115,20 @@ impl Render for Workspace {
                                                         .when_some(paddings.0, |this, p| {
                                                             this.child(p.border_r_1())
                                                         })
-                                                        .child(self.center.render(
-                                                            self.zoomed.as_ref(),
-                                                            &pane_render_context,
-                                                            window,
-                                                            cx,
-                                                        ))
+                                                        .child({
+                                                            let center = self
+                                                                .center
+                                                                .render(
+                                                                    self.zoomed.as_ref(),
+                                                                    &pane_render_context,
+                                                                    window,
+                                                                    cx,
+                                                                )
+                                                                .into_any_element();
+                                                            self.render_screen_carousel_center(
+                                                                center, cx,
+                                                            )
+                                                        })
                                                         .when_some(paddings.1, |this, p| {
                                                             this.child(p.border_l_1())
                                                         }),

@@ -3065,7 +3065,7 @@ dependencies = [
  "cloud_llm_client",
  "collections",
  "credentials_provider",
- "derive_more",
+ "derive_more 2.1.1",
  "feature_flags",
  "fs",
  "futures 0.3.32",
