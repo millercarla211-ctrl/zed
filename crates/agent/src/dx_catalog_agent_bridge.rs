@@ -3,14 +3,20 @@ use collections::{HashMap, HashSet};
 use dx_catalog::{
     AgentPickerAuthState, AgentPickerProjectionOptions, CatalogArtifactBuildOptions,
     CatalogExecutionAdapterKind, CatalogExecutionPermission, CatalogExecutionPlan,
-    CatalogExecutionPlanRequest, DxCatalog, ModelRecord, ProviderRecord, RoutingRole,
+    CatalogExecutionPlanRequest, CatalogProviderAdapterModelSpec,
+    CatalogProviderAdapterRegistrationSpec, DxCatalog, ModelRecord, ProviderRecord, RoutingRole,
     build_agent_picker_projection, build_catalog_artifact_from_sources,
-    build_catalog_execution_plan, read_catalog_artifact,
+    build_catalog_execution_plan, build_catalog_provider_registration_specs, read_catalog_artifact,
+};
+use fs::Fs;
+use settings::{
+    OpenAiCompatibleAvailableModel, OpenAiCompatibleModelCapabilities,
+    OpenAiCompatibleSettingsContent, OpenRouterAvailableModel, update_settings_file,
 };
 use std::{
     env,
     path::{Path, PathBuf},
-    sync::OnceLock,
+    sync::{Arc, OnceLock},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -21,7 +27,11 @@ const DX_CATALOG_LAST_GOOD_ENV: &str = "DX_CATALOG_LAST_GOOD";
 const DX_CATALOG_GENERATE_ENV: &str = "DX_CATALOG_GENERATE";
 const DX_CATALOG_GENERATE_ON_LOAD_ENV: &str = "DX_CATALOG_GENERATE_ON_LOAD";
 const DX_CATALOG_SOURCE_REVISION_ENV: &str = "DX_CATALOG_SOURCE_REVISION";
+const DX_CATALOG_REGISTER_PROVIDERS_ENV: &str = "DX_CATALOG_REGISTER_PROVIDERS";
+const DX_CATALOG_REGISTER_PROVIDER_SETTINGS_ENV: &str = "DX_CATALOG_REGISTER_PROVIDER_SETTINGS";
+const DX_CATALOG_REGISTER_PROVIDERS_DRY_RUN_ENV: &str = "DX_CATALOG_REGISTER_PROVIDERS_DRY_RUN";
 const DX_CATALOG_ARTIFACT_FILE_NAME: &str = "catalog.dxcat";
+const DEFAULT_CATALOG_MODEL_MAX_TOKENS: u64 = 200_000;
 
 #[derive(Clone, Debug, Default)]
 pub struct DxCatalogAgentBridge {
@@ -245,6 +255,97 @@ impl DxCatalogAgentBridge {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+struct CatalogProviderSettingsRegistrationReport {
+    eligible_provider_count: usize,
+    skipped_provider_count: usize,
+    openai_compatible_provider_count: usize,
+    open_router_model_count: usize,
+    model_count: usize,
+}
+
+impl CatalogProviderSettingsRegistrationReport {
+    fn from_specs(specs: &[CatalogProviderAdapterRegistrationSpec]) -> Self {
+        let mut report = Self::default();
+
+        for spec in specs {
+            if !can_write_provider_settings(spec) {
+                report.skipped_provider_count += 1;
+                continue;
+            }
+
+            report.eligible_provider_count += 1;
+            report.model_count += spec.models.len();
+            match spec.adapter_kind {
+                CatalogExecutionAdapterKind::OpenRouterHttp => {
+                    report.open_router_model_count += spec.models.len();
+                }
+                CatalogExecutionAdapterKind::OpenAiCompatibleHttp
+                | CatalogExecutionAdapterKind::OllamaCompatibleHttp
+                | CatalogExecutionAdapterKind::LiteLlmProxy => {
+                    report.openai_compatible_provider_count += 1;
+                }
+                _ => {}
+            }
+        }
+
+        report
+    }
+}
+
+pub fn apply_provider_settings_if_approved(fs: Arc<dyn Fs>, cx: &gpui::App) {
+    if !provider_settings_registration_approved() {
+        return;
+    }
+
+    materialize_catalog_artifact_if_approved();
+
+    let Some(catalog) = read_first_available_catalog_artifact("provider settings registration")
+    else {
+        return;
+    };
+    let all_specs = build_catalog_provider_registration_specs(&catalog);
+    let report = CatalogProviderSettingsRegistrationReport::from_specs(&all_specs);
+    let specs = all_specs
+        .into_iter()
+        .filter(can_write_provider_settings)
+        .collect::<Vec<_>>();
+
+    if report.eligible_provider_count == 0 {
+        log::warn!(
+            "DX catalog provider settings registration was approved, but no catalog providers were eligible for settings registration"
+        );
+        return;
+    }
+
+    if env_flag_enabled(DX_CATALOG_REGISTER_PROVIDERS_DRY_RUN_ENV) {
+        log::info!(
+            "DX catalog provider settings registration dry run: providers={}, skipped={}, openai_compatible={}, openrouter_models={}, models={}",
+            report.eligible_provider_count,
+            report.skipped_provider_count,
+            report.openai_compatible_provider_count,
+            report.open_router_model_count,
+            report.model_count,
+        );
+        return;
+    }
+
+    update_settings_file(fs, cx, move |settings, _| {
+        for spec in &specs {
+            apply_provider_settings_spec(settings, spec);
+        }
+    });
+
+    log::info!(
+        "DX catalog provider settings registration queued: providers={}, skipped={}, openai_compatible={}, openrouter_models={}, models={}",
+        report.eligible_provider_count,
+        report.skipped_provider_count,
+        report.openai_compatible_provider_count,
+        report.open_router_model_count,
+        report.model_count,
+    );
+}
+
 impl From<CatalogExecutionPlan> for CatalogExecutionSummary {
     fn from(plan: CatalogExecutionPlan) -> Self {
         Self {
@@ -296,6 +397,33 @@ fn catalog_artifact_candidates() -> Vec<CatalogArtifactCandidate> {
     candidates
 }
 
+fn read_first_available_catalog_artifact(log_context: &str) -> Option<DxCatalog> {
+    let candidates = catalog_artifact_candidates();
+    for candidate in candidates {
+        if !candidate.path.is_file() {
+            if let Some(env_var) = candidate.env_var {
+                log::warn!(
+                    "DX catalog artifact path from {env_var} does not exist or is not a file for {log_context}: {}",
+                    candidate.path.display()
+                );
+            }
+            continue;
+        }
+
+        match read_catalog_artifact(&candidate.path) {
+            Ok(catalog) => return Some(catalog),
+            Err(error) => {
+                log::warn!(
+                    "failed to read DX catalog artifact for {log_context} at {}: {error}",
+                    candidate.path.display()
+                );
+            }
+        }
+    }
+
+    None
+}
+
 fn materialize_catalog_artifact_if_approved() {
     if !catalog_generation_approved() {
         return;
@@ -340,6 +468,170 @@ fn catalog_generation_approved() -> bool {
         .iter()
         .copied()
         .any(env_flag_enabled)
+}
+
+fn provider_settings_registration_approved() -> bool {
+    [
+        DX_CATALOG_REGISTER_PROVIDERS_ENV,
+        DX_CATALOG_REGISTER_PROVIDER_SETTINGS_ENV,
+    ]
+    .iter()
+    .copied()
+    .any(env_flag_enabled)
+}
+
+fn can_write_provider_settings(spec: &CatalogProviderAdapterRegistrationSpec) -> bool {
+    spec.can_register_settings
+        && matches!(
+            spec.adapter_kind,
+            CatalogExecutionAdapterKind::OpenAiCompatibleHttp
+                | CatalogExecutionAdapterKind::OllamaCompatibleHttp
+                | CatalogExecutionAdapterKind::OpenRouterHttp
+                | CatalogExecutionAdapterKind::LiteLlmProxy
+        )
+        && spec
+            .base_url
+            .as_ref()
+            .is_some_and(|url| !url.trim().is_empty())
+        && !spec.models.is_empty()
+}
+
+fn apply_provider_settings_spec(
+    settings: &mut settings::SettingsContent,
+    spec: &CatalogProviderAdapterRegistrationSpec,
+) {
+    match spec.adapter_kind {
+        CatalogExecutionAdapterKind::OpenRouterHttp => {
+            apply_open_router_provider_settings(settings, spec);
+        }
+        CatalogExecutionAdapterKind::OpenAiCompatibleHttp
+        | CatalogExecutionAdapterKind::OllamaCompatibleHttp
+        | CatalogExecutionAdapterKind::LiteLlmProxy => {
+            apply_openai_compatible_provider_settings(settings, spec);
+        }
+        _ => {}
+    }
+}
+
+fn apply_openai_compatible_provider_settings(
+    settings: &mut settings::SettingsContent,
+    spec: &CatalogProviderAdapterRegistrationSpec,
+) {
+    let Some(api_url) = spec.base_url.clone() else {
+        return;
+    };
+    let language_models = settings.language_models.get_or_insert_default();
+    let providers = language_models.openai_compatible.get_or_insert_default();
+    let provider = providers
+        .entry(Arc::from(spec.provider_id.as_str()))
+        .or_insert_with(|| OpenAiCompatibleSettingsContent {
+            api_url: api_url.clone(),
+            available_models: Vec::new(),
+        });
+
+    if provider.api_url.trim().is_empty() {
+        provider.api_url = api_url;
+    }
+    for model in &spec.models {
+        upsert_openai_compatible_model(
+            &mut provider.available_models,
+            openai_compatible_model_from_catalog(model),
+        );
+    }
+}
+
+fn apply_open_router_provider_settings(
+    settings: &mut settings::SettingsContent,
+    spec: &CatalogProviderAdapterRegistrationSpec,
+) {
+    let language_models = settings.language_models.get_or_insert_default();
+    let open_router = language_models.open_router.get_or_insert_default();
+    let should_set_api_url = open_router
+        .api_url
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .is_empty();
+    if should_set_api_url {
+        if let Some(api_url) = &spec.base_url {
+            open_router.api_url = Some(api_url.clone());
+        }
+    }
+    let models = open_router.available_models.get_or_insert_default();
+    for model in &spec.models {
+        upsert_open_router_model(models, open_router_model_from_catalog(model));
+    }
+}
+
+fn openai_compatible_model_from_catalog(
+    model: &CatalogProviderAdapterModelSpec,
+) -> OpenAiCompatibleAvailableModel {
+    OpenAiCompatibleAvailableModel {
+        name: model.model_id.clone(),
+        display_name: Some(model.display_name.clone()),
+        max_tokens: model
+            .context_window_tokens
+            .map(u64::from)
+            .unwrap_or(DEFAULT_CATALOG_MODEL_MAX_TOKENS),
+        max_output_tokens: model.max_output_tokens.map(u64::from),
+        max_completion_tokens: model.max_output_tokens.map(u64::from),
+        reasoning_effort: None,
+        capabilities: OpenAiCompatibleModelCapabilities {
+            tools: model.supports_tools,
+            images: model.supports_images,
+            parallel_tool_calls: false,
+            prompt_cache_key: false,
+            chat_completions: true,
+            interleaved_reasoning: false,
+        },
+    }
+}
+
+fn open_router_model_from_catalog(
+    model: &CatalogProviderAdapterModelSpec,
+) -> OpenRouterAvailableModel {
+    OpenRouterAvailableModel {
+        name: model.model_id.clone(),
+        display_name: Some(model.display_name.clone()),
+        max_tokens: model
+            .context_window_tokens
+            .map(u64::from)
+            .unwrap_or(DEFAULT_CATALOG_MODEL_MAX_TOKENS),
+        max_output_tokens: model.max_output_tokens.map(u64::from),
+        max_completion_tokens: model.max_output_tokens.map(u64::from),
+        supports_tools: Some(model.supports_tools),
+        supports_images: Some(model.supports_images),
+        mode: None,
+        provider: None,
+    }
+}
+
+fn upsert_openai_compatible_model(
+    models: &mut Vec<OpenAiCompatibleAvailableModel>,
+    model: OpenAiCompatibleAvailableModel,
+) {
+    if let Some(existing) = models
+        .iter_mut()
+        .find(|existing| existing.name == model.name)
+    {
+        *existing = model;
+    } else {
+        models.push(model);
+    }
+}
+
+fn upsert_open_router_model(
+    models: &mut Vec<OpenRouterAvailableModel>,
+    model: OpenRouterAvailableModel,
+) {
+    if let Some(existing) = models
+        .iter_mut()
+        .find(|existing| existing.name == model.name)
+    {
+        *existing = model;
+    } else {
+        models.push(model);
+    }
 }
 
 fn env_flag_enabled(key: &str) -> bool {

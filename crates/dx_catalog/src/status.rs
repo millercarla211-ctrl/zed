@@ -26,7 +26,7 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 74,
+        overall_implementation_status: 78,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
         dx_catalog_status: 100,
@@ -47,13 +47,13 @@ pub fn current_launch_status() -> DxLaunchStatus {
                 "dx_catalog provider/model archive",
                 100,
                 "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, source adapters, source discovery, local GGUF model reader, provider/auth reader, models.dev/OpenRouter/LiteLLM JSON model parsers, Agent picker projection, route selection, OpenRouter input, auth-profile enrichment, optional generated-artifact Agent picker enrichment, catalog alias resolution, route IDs that resolve to executable Agent models, permissioned catalog execution plans, provider adapter registration specs, production artifact materialization from discovered G-drive sources, and an explicit Agent-approved artifact generation trigger are in place.",
-                "Keep the catalog stable while wiring provider registration approvals.",
+                "Keep the catalog stable while provider settings approvals and metasearch are wired.",
             ),
             feature(
                 "Universal provider routing",
-                52,
-                "One router picks local, free, premium, and remote providers from dx_catalog.",
-                "Wire registration specs into provider settings after explicit approval.",
+                60,
+                "One router picks local, free, premium, and remote providers from dx_catalog; approved provider settings registration can now write catalog specs into native Zed language-model settings.",
+                "Add a UI/command approval surface plus live credential/runtime validation before exposing catalog-only routes as fully executable.",
             ),
             feature(
                 "Metasearch AI tool",

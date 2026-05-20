@@ -1,3 +1,17 @@
+[2026-05-20] - DX Catalog Approved Provider Settings Registration
+
+ADDED:
+- Added an explicit Agent-side `DX_CATALOG_REGISTER_PROVIDERS` / `DX_CATALOG_REGISTER_PROVIDER_SETTINGS` approval bridge that maps eligible catalog provider registration specs into native Zed language-model settings.
+- Added a dry-run flag, `DX_CATALOG_REGISTER_PROVIDERS_DRY_RUN`, so operators can inspect registration counts without writing settings.
+
+CHANGED:
+- Agent startup can now translate catalog OpenAI-compatible, OpenRouter, Ollama-compatible, and LiteLLM specs into `language_models.openai_compatible` and `language_models.open_router` settings after approval.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move Universal Provider Routing to 60/100 and the overall feature set to 78/100.
+
+NOTES:
+- The bridge writes only provider URLs and model metadata, preserving existing provider URLs when users already configured them. It does not write API keys, download models, start local runtimes, expose unsafe catalog-only rows, or run build/runtime checks.
+- No `just run`, Cargo build/check/test/clippy, downloads, model loading, cleanup, browser automation, or provider network validation was run for this source-level slice.
+
 [2026-05-20] - DX Catalog Approved Generation Trigger
 
 ADDED:
