@@ -1,0 +1,18 @@
+[package]
+name = "dx_catalog"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "GPL-3.0-or-later"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[dependencies]
+memmap2 = "0.9.8"
+rkyv = "0.7.45"
+serde.workspace = true

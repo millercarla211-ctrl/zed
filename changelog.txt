@@ -1,3 +1,16 @@
+[2026-05-20] - DX Catalog Foundation
+
+ADDED:
+- Added `crates/dx_catalog` with archived provider/model catalog types, catalog source records, routing rules, validation reports, artifact header parsing, trusted rkyv serialization helpers, and a `memmap2` read path.
+- Added a `dx_catalog` launch-status API so the product can report the current launch feature status without scraping docs.
+
+CHANGED:
+- Registered `dx_catalog` in the workspace metadata and lockfile.
+- Updated `PLAN.md` and `todo.txt` to move `dx_catalog` from 5/100 to 22/100 and set the next target to catalog generator inputs.
+
+NOTES:
+- This slice is a foundation slice. It does not run `just`, Cargo build/check/test/clippy, browser automation, model downloads, cleanup, or destructive file operations.
+
 [2026-05-19] - Upstream Main Sync into Dev
 
 CHANGED:
