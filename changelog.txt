@@ -1,3 +1,17 @@
+[2026-05-21] - DX Workspace Tool History Rail
+
+ADDED:
+- Added `crates/agent_ui/src/dx_receipt_history.rs`, a cached workspace receipt scanner for managed Forge and media execution receipts under `tools/dx-forge` and `tools/dx-media/executions`.
+- Added a Tool History section to the DX right rail that renders Forge History and Media Executions counts plus recent receipt paths with graceful no-workspace, missing-root, and empty-root states.
+
+CHANGED:
+- Updated the DX launch workspace status model so panel rendering can read workspace-local tool receipts without running CLI commands or external tools.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 30/100 and move the next target to durable source set modeling.
+
+NOTES:
+- This is read-only panel rendering; it does not execute Forge, ffmpeg, ffprobe, DX CLI commands, file restores, browser input, or background automation.
+- No local server, `just run`, Cargo build/check/test/clippy, npm build, browser automation, or runtime visual proof was started.
+
 [2026-05-21] - DX Media Execution Runner
 
 ADDED:

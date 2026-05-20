@@ -13,6 +13,7 @@ pub(crate) mod conversation_view;
 mod diagnostics;
 pub mod draft_prompt_store;
 mod dx_launch_workspace;
+mod dx_receipt_history;
 mod entry_view_state;
 mod external_source_prompt;
 mod favorite_models;

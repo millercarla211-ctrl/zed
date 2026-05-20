@@ -9,6 +9,8 @@ use std::{
 use gpui::{AnyElement, App, SharedString, prelude::*};
 use ui::{IconName, prelude::*};
 
+use crate::dx_receipt_history::{DxToolHistoryBucket, DxToolHistorySnapshot};
+
 const DX_RECEIPTS_ROOT: &str = r"G:\Dx\.dx\receipts";
 const RECEIPT_CACHE_TTL: Duration = Duration::from_secs(5);
 
@@ -33,6 +35,7 @@ pub(crate) struct DxLaunchWorkspaceStatus {
     pub background_task_count: usize,
     pub visible_worktree_count: usize,
     pub receipt_snapshot: DxReceiptSnapshot,
+    pub tool_history: DxToolHistorySnapshot,
 }
 
 static RECEIPT_CACHE: OnceLock<Mutex<Option<(Instant, DxReceiptSnapshot)>>> = OnceLock::new();
@@ -231,6 +234,8 @@ fn render_right_rail(status: &DxLaunchWorkspaceStatus, cx: &mut App) -> AnyEleme
             "Worktrees",
             status.visible_worktree_count.to_string(),
         ))
+        .child(section_title("Tool History", IconName::Archive))
+        .child(tool_history_state(&status.tool_history, cx))
         .child(section_title("Background Tasks", IconName::Clock))
         .child(background_task_state(status.background_task_count, cx))
         .child(section_title("Token And Tool Slots", IconName::Sliders))
@@ -280,6 +285,53 @@ fn receipt_source_state(snapshot: &DxReceiptSnapshot, cx: &mut App) -> AnyElemen
         for (ix, label) in snapshot.latest.iter().enumerate() {
             stack = stack.child(source_row(
                 SharedString::from(format!("latest-receipt-{ix}")),
+                IconName::FileTextOutlined,
+                label.clone(),
+                cx,
+            ));
+        }
+    }
+
+    stack.into_any_element()
+}
+
+fn tool_history_state(snapshot: &DxToolHistorySnapshot, cx: &App) -> AnyElement {
+    let mut stack = v_flex().gap_1();
+
+    for (ix, bucket) in snapshot.buckets.iter().enumerate() {
+        stack = stack.child(tool_history_bucket(
+            SharedString::from(format!("dx-tool-history-{ix}")),
+            bucket,
+            cx,
+        ));
+    }
+
+    stack.into_any_element()
+}
+
+fn tool_history_bucket(id: SharedString, bucket: &DxToolHistoryBucket, cx: &App) -> AnyElement {
+    let state = if !bucket.root_exists {
+        format!("Missing: {}", bucket.root_label)
+    } else if bucket.count == 0 {
+        "No receipts".to_string()
+    } else {
+        format!("{} receipts", bucket.count)
+    };
+    let mut stack = v_flex()
+        .id(id)
+        .gap_1()
+        .rounded_sm()
+        .border_1()
+        .border_color(cx.theme().colors().border_variant)
+        .px_2()
+        .py_1()
+        .child(metric_row(bucket.label, state));
+
+    if bucket.root_exists {
+        let bucket_id = bucket.label.to_ascii_lowercase().replace(' ', "-");
+        for (ix, label) in bucket.latest.iter().enumerate() {
+            stack = stack.child(source_row(
+                SharedString::from(format!("{bucket_id}-latest-{ix}")),
                 IconName::FileTextOutlined,
                 label.clone(),
                 cx,
