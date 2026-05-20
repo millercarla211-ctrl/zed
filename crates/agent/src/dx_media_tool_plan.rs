@@ -197,7 +197,7 @@ pub(crate) fn build_dx_media_tool_plan(
             blockers: blockers.clone(),
         },
         action_plan: DxMediaToolActionPlan {
-            action,
+            action: action.clone(),
             status: action_status.to_string(),
             executable_tool: if action == "inspect" {
                 "ffprobe".to_string()

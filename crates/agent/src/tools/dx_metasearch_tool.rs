@@ -2,7 +2,7 @@ use crate::{AgentTool, ToolCallEventStream, ToolInput, dx_metasearch_agent_bridg
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
 use futures::FutureExt as _;
-use gpui::{App, Entity, SharedString, Task};
+use gpui::{App, AppContext, Entity, SharedString, Task};
 use http_client::HttpClientWithUrl;
 use paths::data_dir;
 use project::Project;
@@ -375,8 +375,8 @@ fn workspace_root_for_project(project: &Entity<Project>, cx: &App) -> Option<Pat
         .map(|worktree| worktree.read(cx).abs_path().as_ref().to_path_buf())
 }
 
-fn path_string(path: &Path) -> String {
-    path.display().to_string()
+fn path_string(path: impl AsRef<Path>) -> String {
+    path.as_ref().display().to_string()
 }
 
 fn current_epoch_millis() -> u64 {

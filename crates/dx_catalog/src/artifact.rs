@@ -142,11 +142,14 @@ impl MappedCatalogArtifact {
         // mapping creation succeeds. Callers should store catalog artifacts under
         // DX-managed cache paths and rewrite them atomically.
         let mmap = unsafe { MmapOptions::new().map(&file)? };
-        let artifact = CatalogArtifactRef::parse(&mmap)?;
+        let header = {
+            let artifact = CatalogArtifactRef::parse(&mmap)?;
+            artifact.header()
+        };
         Ok(Self {
             path,
             mmap,
-            header: artifact.header(),
+            header,
         })
     }
 
@@ -176,7 +179,7 @@ pub fn serialize_catalog_payload(catalog: &DxCatalog) -> Result<Vec<u8>> {
     serializer
         .serialize_value(catalog)
         .map_err(|error| DxCatalogError::Serialize(format!("{error:?}")))?;
-    Ok(serializer.into_serializer().into_inner())
+    Ok(serializer.into_serializer().into_inner().to_vec())
 }
 
 pub fn deserialize_trusted_catalog_payload(payload: &[u8]) -> Result<DxCatalog> {
@@ -189,9 +192,10 @@ pub fn deserialize_trusted_catalog_payload(payload: &[u8]) -> Result<DxCatalog> 
     // bytes must go through a bytecheck-backed validator before this path is used.
     let archived = unsafe { archived_root::<DxCatalog>(payload) };
     let mut deserializer = Infallible;
-    let catalog = archived
-        .deserialize(&mut deserializer)
-        .map_err(|error| match error {})?;
+    let catalog = match archived.deserialize(&mut deserializer) {
+        Ok(catalog) => catalog,
+        Err(error) => match error {},
+    };
     Ok(catalog)
 }
 

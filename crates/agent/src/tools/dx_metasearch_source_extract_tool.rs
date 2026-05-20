@@ -2,7 +2,7 @@ use crate::{AgentTool, ToolCallEventStream, ToolInput, dx_metasearch_agent_bridg
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
 use futures::FutureExt as _;
-use gpui::{App, SharedString, Task};
+use gpui::{App, AppContext, SharedString, Task};
 use http_client::HttpClientWithUrl;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

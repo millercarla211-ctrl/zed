@@ -165,6 +165,7 @@ dependencies = [
  "context_server",
  "ctor",
  "db",
+ "dx_catalog",
  "editor",
  "env_logger 0.11.8",
  "eval_utils",
@@ -199,6 +200,7 @@ dependencies = [
  "serde",
  "serde_json",
  "settings",
+ "sha2",
  "shell_command_parser",
  "smallvec",
  "sqlez",
@@ -5260,6 +5262,7 @@ dependencies = [
  "memmap2",
  "rkyv",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

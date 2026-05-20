@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 use std::{
-    path::{Path, PathBuf},
+    path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
 

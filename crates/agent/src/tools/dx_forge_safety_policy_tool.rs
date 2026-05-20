@@ -320,8 +320,8 @@ fn workspace_root_for_project(project: &Entity<Project>, cx: &App) -> Option<Pat
         .map(|worktree| worktree.read(cx).abs_path().as_ref().to_path_buf())
 }
 
-fn path_string(path: &Path) -> String {
-    path.display().to_string()
+fn path_string(path: impl AsRef<Path>) -> String {
+    path.as_ref().display().to_string()
 }
 
 fn current_epoch_millis() -> u128 {

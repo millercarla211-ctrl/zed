@@ -174,10 +174,10 @@ impl DxCatalogAgentBridge {
             .map(|model| (model.model_id.clone(), model))
             .collect::<HashMap<_, _>>();
 
-        let mut models = HashMap::new();
-        let mut route_candidates = HashMap::new();
-        let mut model_lookup_keys = HashMap::new();
-        let mut execution_plans = HashMap::new();
+        let mut models = HashMap::default();
+        let mut route_candidates = HashMap::default();
+        let mut model_lookup_keys = HashMap::default();
+        let mut execution_plans = HashMap::default();
         for model in &catalog.models {
             let Some(provider) = providers.get(model.provider_id.as_str()).copied() else {
                 continue;
@@ -206,7 +206,9 @@ impl DxCatalogAgentBridge {
                 });
 
             for key in &lookup_keys {
-                models.entry(key).or_insert_with(|| presentation.clone());
+                models
+                    .entry(key.clone())
+                    .or_insert_with(|| presentation.clone());
             }
             insert_route_candidates(
                 &mut route_candidates,
@@ -1510,7 +1512,7 @@ fn routing_role_key(role: RoutingRole) -> &'static str {
 
 fn model_lookup_keys_for_record(model: &ModelRecord, provider: &ProviderRecord) -> Vec<String> {
     let mut keys = Vec::new();
-    let mut seen = HashSet::new();
+    let mut seen = HashSet::default();
 
     push_model_lookup_key(&mut keys, &mut seen, model.id.clone());
     push_model_lookup_key(

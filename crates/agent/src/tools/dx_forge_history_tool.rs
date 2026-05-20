@@ -447,8 +447,8 @@ fn string_field(value: &Value, path: &[&str]) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-fn path_string(path: &Path) -> String {
-    path.display().to_string()
+fn path_string(path: impl AsRef<Path>) -> String {
+    path.as_ref().display().to_string()
 }
 
 fn system_time_to_millis(time: SystemTime) -> Option<u128> {
