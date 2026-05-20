@@ -38,6 +38,7 @@ use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, receipt_snapshot, render_workspace_chrome,
 };
 use crate::dx_receipt_history::tool_history_snapshot;
+use crate::dx_source_sets::source_set_snapshot;
 use crate::terminal_thread_metadata_store::{TerminalThreadMetadata, TerminalThreadMetadataStore};
 use crate::thread_metadata_store::{ThreadId, ThreadMetadataStore, ThreadMetadataStoreEvent};
 use crate::{
@@ -5753,14 +5754,15 @@ impl AgentPanel {
 
         let visible_worktree_count = self.project.read(cx).visible_worktrees(cx).count();
 
+        let source_sets = source_set_snapshot(&workspace_roots);
         let tool_history = tool_history_snapshot(&workspace_roots);
 
         DxLaunchWorkspaceStatus {
-            workspace_roots,
             active_status: self.dx_active_status(cx),
             background_task_count: self.retained_threads.len(),
             visible_worktree_count,
             receipt_snapshot: receipt_snapshot(),
+            source_sets,
             tool_history,
         }
     }

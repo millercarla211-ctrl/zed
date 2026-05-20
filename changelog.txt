@@ -1,3 +1,17 @@
+[2026-05-21] - DX Durable Source Sets
+
+ADDED:
+- Added `crates/agent_ui/src/dx_source_sets.rs`, a cached Sources rail model that discovers workspace roots, DX metasearch source-pack receipts, produced media files, and Forge restore preview directories.
+- Rendered source sets in the DX Sources rail with typed icons, source details, paths, and graceful no-workspace or empty-receipt states.
+
+CHANGED:
+- Replaced the earlier workspace-root-only Sources rail list with panel-facing source sets that can become future Agent attachment receipts.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 38/100 and move the next target to selectable source attachment actions.
+
+NOTES:
+- This slice reads managed workspace files only; it does not run DX CLI commands, metasearch, ffmpeg, ffprobe, Forge, browser input, or source attachment mutations.
+- No local server, `just run`, Cargo build/check/test/clippy, npm build, browser automation, or runtime visual proof was started.
+
 [2026-05-21] - DX Workspace Tool History Rail
 
 ADDED:

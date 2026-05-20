@@ -10,6 +10,7 @@ use gpui::{AnyElement, App, SharedString, prelude::*};
 use ui::{IconName, prelude::*};
 
 use crate::dx_receipt_history::{DxToolHistoryBucket, DxToolHistorySnapshot};
+use crate::dx_source_sets::{DxSourceItem, DxSourceKind, DxSourceSet, DxSourceSetSnapshot};
 
 const DX_RECEIPTS_ROOT: &str = r"G:\Dx\.dx\receipts";
 const RECEIPT_CACHE_TTL: Duration = Duration::from_secs(5);
@@ -30,11 +31,11 @@ pub(crate) struct DxReceiptSnapshot {
 
 #[derive(Clone)]
 pub(crate) struct DxLaunchWorkspaceStatus {
-    pub workspace_roots: Vec<String>,
     pub active_status: SharedString,
     pub background_task_count: usize,
     pub visible_worktree_count: usize,
     pub receipt_snapshot: DxReceiptSnapshot,
+    pub source_sets: DxSourceSetSnapshot,
     pub tool_history: DxToolHistorySnapshot,
 }
 
@@ -206,7 +207,7 @@ fn render_sources_rail(
         .child(section_title("Workspace", IconName::Library))
         .child(sidebar_actions)
         .child(section_title("Sources", IconName::Book))
-        .child(source_stack(status, cx))
+        .child(source_set_stack(&status.source_sets, cx))
         .child(section_title("Receipts", IconName::FileTextOutlined))
         .child(receipt_source_state(&status.receipt_snapshot, cx))
         .into_any_element()
@@ -243,23 +244,99 @@ fn render_right_rail(status: &DxLaunchWorkspaceStatus, cx: &mut App) -> AnyEleme
         .into_any_element()
 }
 
-fn source_stack(status: &DxLaunchWorkspaceStatus, cx: &mut App) -> AnyElement {
+fn source_set_stack(snapshot: &DxSourceSetSnapshot, cx: &App) -> AnyElement {
     let mut stack = v_flex().gap_1();
 
-    if status.workspace_roots.is_empty() {
+    if snapshot.total_sources == 0 {
         stack = stack.child(muted_card("No workspace source", cx));
     } else {
-        for (ix, root) in status.workspace_roots.iter().take(4).enumerate() {
-            stack = stack.child(source_row(
-                SharedString::from(format!("source-root-{ix}")),
-                IconName::Folder,
-                root.clone(),
+        for (ix, set) in snapshot.sets.iter().enumerate() {
+            stack = stack.child(source_set_card(
+                SharedString::from(format!("source-set-{ix}")),
+                set,
                 cx,
             ));
         }
     }
 
     stack.into_any_element()
+}
+
+fn source_set_card(id: SharedString, set: &DxSourceSet, cx: &App) -> AnyElement {
+    let mut stack = v_flex()
+        .id(id)
+        .gap_1()
+        .rounded_sm()
+        .border_1()
+        .border_color(cx.theme().colors().border_variant)
+        .px_2()
+        .py_1()
+        .child(metric_row(set.label, set.status.clone()));
+
+    if set.sources.is_empty() {
+        return stack.into_any_element();
+    }
+
+    let set_id = set.label.to_ascii_lowercase().replace(' ', "-");
+    for (ix, source) in set.sources.iter().take(3).enumerate() {
+        stack = stack.child(source_item_row(
+            SharedString::from(format!("{set_id}-source-{ix}")),
+            source,
+            cx,
+        ));
+    }
+
+    stack.into_any_element()
+}
+
+fn source_item_row(id: SharedString, source: &DxSourceItem, cx: &App) -> AnyElement {
+    v_flex()
+        .id(id)
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().element_background)
+        .child(
+            h_flex()
+                .gap_1()
+                .min_w_0()
+                .items_center()
+                .child(
+                    Icon::new(source_kind_icon(source.kind))
+                        .size(IconSize::XSmall)
+                        .color(Color::Muted),
+                )
+                .child(
+                    Label::new(source.label.clone())
+                        .size(LabelSize::XSmall)
+                        .color(Color::Default)
+                        .truncate(),
+                ),
+        )
+        .child(
+            Label::new(source.detail.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .child(
+            Label::new(source.path.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .into_any_element()
+}
+
+fn source_kind_icon(kind: DxSourceKind) -> IconName {
+    match kind {
+        DxSourceKind::WorkspaceRoot => IconName::Folder,
+        DxSourceKind::MetasearchSourcePack => IconName::FileTextOutlined,
+        DxSourceKind::MediaOutput => IconName::File,
+        DxSourceKind::ForgeRestorePreview => IconName::Archive,
+    }
 }
 
 fn receipt_source_state(snapshot: &DxReceiptSnapshot, cx: &mut App) -> AnyElement {
