@@ -26,7 +26,7 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 89,
+        overall_implementation_status: 91,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
         dx_catalog_status: 100,
@@ -53,19 +53,19 @@ pub fn current_launch_status() -> DxLaunchStatus {
                 "Universal provider routing",
                 76,
                 "One router picks local, free, premium, and remote providers from dx_catalog; approved provider settings registration can write catalog specs into native Zed language-model settings; the Agent preview validates native settings, runtime registry registration, credential/auth state, and matching model exposure; and an explicit permissioned Agent tool can queue approved native settings registration.",
-                "Continue metasearch source-pack handoff and serializer/RLM compaction.",
+                "Continue serializer/RLM execution integration and cross-panel routing.",
             ),
             feature(
                 "Metasearch AI tool",
-                36,
-                "Agent panel can call cancellable multi-engine cited search through a permissioned DX metasearch HTTP adapter, emit compact citations, and inspect service/engine readiness before searches.",
-                "Add source-pack handoff and serializer/RLM compaction.",
+                48,
+                "Agent panel can call cancellable multi-engine cited search through permissioned DX metasearch tools, inspect service/engine readiness, emit compact citations, and return token-aware cited source packs.",
+                "Add persisted source-pack receipts and deep source fetch/extract tools.",
             ),
             feature(
                 "Serializer/RLM context pipeline",
-                10,
-                "Tool catalogs, source packs, and search results compact before model calls.",
-                "Define the serializer/RLM boundary for AI panel calls.",
+                18,
+                "Metasearch search results now include a compact source-pack handoff with token-budget metadata and serializer/RLM-ready machine-format hints.",
+                "Wire actual serializer/RLM adapters after source-pack receipts.",
             ),
             feature(
                 "Forge safety and backup policy",

@@ -20,9 +20,15 @@ const MAX_ENGINE_COUNT: usize = 24;
 const SNIPPET_CHAR_LIMIT: usize = 420;
 const DEFAULT_ENGINE_STATUS_LIMIT: usize = 40;
 const MAX_ENGINE_STATUS_LIMIT: usize = 200;
+const SOURCE_PACK_TOTAL_CHAR_BUDGET: usize = 2600;
+const SOURCE_PACK_TITLE_CHAR_LIMIT: usize = 120;
+const SOURCE_PACK_EXCERPT_CHAR_LIMIT: usize = 280;
+const SOURCE_PACK_MIN_EXCERPT_CHAR_LIMIT: usize = 96;
+const SOURCE_PACK_APPROX_CHARS_PER_TOKEN: usize = 4;
 
 pub(crate) const DX_METASEARCH_RESULT_SCHEMA: &str = "zed.dx.metasearch.result.v1";
 pub(crate) const DX_METASEARCH_STATUS_SCHEMA: &str = "zed.dx.metasearch.status.v1";
+pub(crate) const DX_METASEARCH_SOURCE_PACK_SCHEMA: &str = "zed.dx.metasearch.source_pack.v1";
 
 #[derive(Clone, Debug)]
 pub(crate) struct DxMetasearchRequest {
@@ -53,6 +59,7 @@ pub(crate) struct DxMetasearchCompactResponse {
     pub source: DxMetasearchSource,
     pub summary: DxMetasearchSummary,
     pub results: Vec<DxMetasearchCompactResult>,
+    pub source_pack: DxMetasearchSourcePack,
     pub next_action: String,
 }
 
@@ -159,6 +166,55 @@ pub(crate) struct DxMetasearchCompactResult {
     pub score: f64,
     pub category: String,
     pub thumbnail: Option<String>,
+    pub published_date: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchSourcePack {
+    pub schema: &'static str,
+    pub query: String,
+    pub mode: &'static str,
+    pub item_count: usize,
+    pub omitted_result_count: usize,
+    pub estimated_chars: usize,
+    pub estimated_tokens: usize,
+    pub char_budget: usize,
+    pub token_budget: usize,
+    pub budget_exceeded: bool,
+    pub compression: DxMetasearchSourcePackCompression,
+    pub handoff: DxMetasearchSourcePackHandoff,
+    pub items: Vec<DxMetasearchSourcePackItem>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchSourcePackCompression {
+    pub profile: &'static str,
+    pub title_char_limit: usize,
+    pub excerpt_char_limit: usize,
+    pub approx_chars_per_token: usize,
+    pub serializer_ready: bool,
+    pub rlm_ready: bool,
+    pub loss_policy: &'static str,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchSourcePackHandoff {
+    pub source_id_style: &'static str,
+    pub citation_style: &'static str,
+    pub machine_format: &'static str,
+    pub recommended_next_action: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchSourcePackItem {
+    pub source_id: String,
+    pub citation_id: usize,
+    pub title: String,
+    pub url: String,
+    pub engine: String,
+    pub category: String,
+    pub score: f64,
+    pub excerpt: String,
     pub published_date: Option<String>,
 }
 
@@ -521,12 +577,13 @@ fn compact_response(
         })
         .collect::<Vec<_>>();
     let truncated_result_count = reported_result_count.saturating_sub(returned_results.len());
+    let source_pack = build_source_pack(&response.query, &returned_results);
     let next_action = if returned_results.is_empty() {
         "No compact citations returned. Try a broader category set or inspect metasearch engine health.".to_string()
     } else if !response.engines_failed.is_empty() {
         "Use the returned citations, then inspect failed engines before relying on this as exhaustive.".to_string()
     } else {
-        "Use the numbered citations directly in the Agent answer or source pack.".to_string()
+        "Use source_pack.items for token-aware cited Agent context, then hand the same schema to serializer/RLM compaction when that lane is enabled.".to_string()
     };
 
     DxMetasearchCompactResponse {
@@ -545,8 +602,121 @@ fn compact_response(
             search_time_ms: response.search_time_ms,
         },
         results: returned_results,
+        source_pack,
         next_action,
     }
+}
+
+fn build_source_pack(query: &str, results: &[DxMetasearchCompactResult]) -> DxMetasearchSourcePack {
+    let mut items = Vec::new();
+    let mut estimated_chars = 0usize;
+
+    for result in results {
+        let title = compact_source_pack_text(&result.title, SOURCE_PACK_TITLE_CHAR_LIMIT);
+        let mut excerpt = compact_source_pack_text(&result.snippet, SOURCE_PACK_EXCERPT_CHAR_LIMIT);
+        let source_id = format!("S{}", result.citation_id);
+        let mut candidate_chars = source_pack_item_chars(
+            &source_id,
+            &title,
+            &result.url,
+            &result.engine,
+            &result.category,
+            &excerpt,
+        );
+
+        if estimated_chars + candidate_chars > SOURCE_PACK_TOTAL_CHAR_BUDGET {
+            excerpt = compact_source_pack_text(&result.snippet, SOURCE_PACK_MIN_EXCERPT_CHAR_LIMIT);
+            candidate_chars = source_pack_item_chars(
+                &source_id,
+                &title,
+                &result.url,
+                &result.engine,
+                &result.category,
+                &excerpt,
+            );
+        }
+
+        if !items.is_empty() && estimated_chars + candidate_chars > SOURCE_PACK_TOTAL_CHAR_BUDGET {
+            break;
+        }
+
+        estimated_chars += candidate_chars;
+        items.push(DxMetasearchSourcePackItem {
+            source_id,
+            citation_id: result.citation_id,
+            title,
+            url: result.url.clone(),
+            engine: result.engine.clone(),
+            category: result.category.clone(),
+            score: result.score,
+            excerpt,
+            published_date: result.published_date.clone(),
+        });
+    }
+
+    let item_count = items.len();
+    let omitted_result_count = results.len().saturating_sub(item_count);
+    let estimated_tokens = estimate_token_count(estimated_chars);
+    let token_budget = estimate_token_count(SOURCE_PACK_TOTAL_CHAR_BUDGET);
+    let recommended_next_action = if item_count == 0 {
+        "No source-pack items are ready; broaden the search or inspect metasearch engine health."
+            .to_string()
+    } else if omitted_result_count > 0 {
+        format!(
+            "Use the {} compact source-pack item(s), then rerun with narrower engines/categories if omitted sources matter.",
+            item_count
+        )
+    } else {
+        "Use these source-pack items directly as cited Agent context, or pass them to serializer/RLM compaction for the next call."
+            .to_string()
+    };
+
+    DxMetasearchSourcePack {
+        schema: DX_METASEARCH_SOURCE_PACK_SCHEMA,
+        query: compact_source_pack_text(query, SOURCE_PACK_TITLE_CHAR_LIMIT),
+        mode: "token_aware_cited_handoff",
+        item_count,
+        omitted_result_count,
+        estimated_chars,
+        estimated_tokens,
+        char_budget: SOURCE_PACK_TOTAL_CHAR_BUDGET,
+        token_budget,
+        budget_exceeded: omitted_result_count > 0
+            || estimated_chars > SOURCE_PACK_TOTAL_CHAR_BUDGET,
+        compression: DxMetasearchSourcePackCompression {
+            profile: "dx_metasearch.cited_source_pack.compact.v1",
+            title_char_limit: SOURCE_PACK_TITLE_CHAR_LIMIT,
+            excerpt_char_limit: SOURCE_PACK_EXCERPT_CHAR_LIMIT,
+            approx_chars_per_token: SOURCE_PACK_APPROX_CHARS_PER_TOKEN,
+            serializer_ready: true,
+            rlm_ready: true,
+            loss_policy: "preserve source id, url, engine, category, score, date, and one compact excerpt; omit overflow results before expanding snippets",
+        },
+        handoff: DxMetasearchSourcePackHandoff {
+            source_id_style: "S{citation_id}",
+            citation_style: "cite as [S1], [S2], ... and preserve URLs in final attribution when needed",
+            machine_format: "json:zed.dx.metasearch.source_pack.v1",
+            recommended_next_action,
+        },
+        items,
+    }
+}
+
+fn source_pack_item_chars(
+    source_id: &str,
+    title: &str,
+    url: &str,
+    engine: &str,
+    category: &str,
+    excerpt: &str,
+) -> usize {
+    source_id.chars().count()
+        + title.chars().count()
+        + url.chars().count()
+        + engine.chars().count()
+        + category.chars().count()
+        + excerpt.chars().count()
+        + 24
 }
 
 fn metasearch_status_next_action(
@@ -659,6 +829,15 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
     let mut truncated = text.chars().take(max_chars).collect::<String>();
     truncated.push_str("...");
     truncated
+}
+
+fn compact_source_pack_text(text: &str, max_chars: usize) -> String {
+    let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    truncate_text(&normalized, max_chars)
+}
+
+fn estimate_token_count(chars: usize) -> usize {
+    (chars + SOURCE_PACK_APPROX_CHARS_PER_TOKEN - 1) / SOURCE_PACK_APPROX_CHARS_PER_TOKEN
 }
 
 fn current_unix_ms() -> u64 {

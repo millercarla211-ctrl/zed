@@ -1,3 +1,17 @@
+[2026-05-20] - DX Metasearch Source-Pack Handoff
+
+ADDED:
+- Added `zed.dx.metasearch.source_pack.v1` to `search_dx_metasearch` responses so compact citations now also include source IDs, bounded excerpts, token/character budget metadata, overflow state, and serializer/RLM-ready machine-format hints.
+- Added a token-aware source-pack builder that preserves URL, engine, category, score, date, and one compact excerpt per cited result while dropping overflow before expanding snippets.
+
+CHANGED:
+- Updated metasearch next actions to route Agents toward the compact source pack first, then future serializer/RLM compaction.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move the Metasearch AI tool lane to 48/100, the Serializer/RLM prep lane to 18/100, and the overall feature set to 91/100.
+
+NOTES:
+- This slice creates the source-pack handoff contract only; it does not persist receipts, run the external serializer/RLM crates, deep-fetch pages, or start the metasearch server.
+- No `just run`, Cargo build/check/test/clippy, downloads, cleanup, browser automation, or live metasearch server run was used for this source-level slice.
+
 [2026-05-20] - DX Metasearch Status Inspection Tool
 
 ADDED:
