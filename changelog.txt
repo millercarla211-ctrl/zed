@@ -1,3 +1,15 @@
+[2026-05-20] - DX Catalog Provider Auth Reader
+
+ADDED:
+- Added a secret-safe `dx_catalog` provider/auth source reader that turns Flow provider integration directories, provider env-key names, LiteLLM/OpenRouter/models.dev source candidates, and `.zeroclaw` provider profile sections into catalog adapter inputs.
+- Exported provider reader options, reports, skipped-entry diagnostics, and read helpers from `dx_catalog`.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and launch status to move `dx_catalog` to 70/100 and the overall launch implementation status to 42/100.
+
+NOTES:
+- This slice records provider IDs, integration names, env key names, and profile IDs only. It does not store secret values, parse remote model catalogs, run `just`, run Cargo build/check/test/clippy, delete files, or download models.
+
 [2026-05-20] - DX Catalog Local Model Reader
 
 ADDED:
