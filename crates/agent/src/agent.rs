@@ -230,6 +230,12 @@ impl LanguageModels {
         self.models.get(&model_id).cloned()
     }
 
+    fn catalog_model_selection_error(&self, model_id: &acp::ModelId) -> Option<String> {
+        self.catalog_bridge
+            .as_ref()?
+            .catalog_selection_error(model_id.0.as_ref())
+    }
+
     fn resolved_model_id(&self, model_id: &acp::ModelId) -> Option<acp::ModelId> {
         if self.models.contains_key(model_id) {
             return Some(model_id.clone());
@@ -2070,7 +2076,14 @@ impl acp_thread::AgentModelSelector for NativeAgentModelSelector {
         };
 
         let Some(model) = self.connection.0.read(cx).models.model_from_id(&model_id) else {
-            return Task::ready(Err(anyhow!("Invalid model ID {}", model_id)));
+            let selection_error = self
+                .connection
+                .0
+                .read(cx)
+                .models
+                .catalog_model_selection_error(&model_id)
+                .unwrap_or_else(|| format!("Invalid model ID {model_id}"));
+            return Task::ready(Err(anyhow!("{}", selection_error)));
         };
 
         let favorite = agent_settings::AgentSettings::get_global(cx)

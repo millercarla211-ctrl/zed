@@ -1,8 +1,10 @@
 use acp_thread::AgentModelInfo;
 use collections::{HashMap, HashSet};
 use dx_catalog::{
-    AgentPickerAuthState, AgentPickerProjectionOptions, DxCatalog, ModelRecord, ProviderRecord,
-    RoutingRole, build_agent_picker_projection, read_catalog_artifact,
+    AgentPickerAuthState, AgentPickerProjectionOptions, CatalogExecutionAdapterKind,
+    CatalogExecutionPermission, CatalogExecutionPlan, CatalogExecutionPlanRequest, DxCatalog,
+    ModelRecord, ProviderRecord, RoutingRole, build_agent_picker_projection,
+    build_catalog_execution_plan, read_catalog_artifact,
 };
 use std::env;
 use std::path::PathBuf;
@@ -16,12 +18,23 @@ const DX_CATALOG_ARTIFACT_FILE_NAME: &str = "catalog.dxcat";
 pub struct DxCatalogAgentBridge {
     models: HashMap<String, CatalogModelPresentation>,
     route_candidates: HashMap<String, Vec<String>>,
+    execution_plans: HashMap<String, CatalogExecutionSummary>,
 }
 
 #[derive(Clone, Debug)]
 struct CatalogModelPresentation {
     description: Option<String>,
     cost_label: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+struct CatalogExecutionSummary {
+    primary_model_id: String,
+    provider_name: String,
+    adapter_kind: CatalogExecutionAdapterKind,
+    permission: CatalogExecutionPermission,
+    blockers: Vec<String>,
+    next_action: String,
 }
 
 impl DxCatalogAgentBridge {
@@ -64,6 +77,27 @@ impl DxCatalogAgentBridge {
             .iter()
             .find(|candidate| executable_model_ids.contains(candidate.as_str()))
             .cloned()
+    }
+
+    pub fn catalog_selection_error(&self, requested_model_id: &str) -> Option<String> {
+        let summary = self.execution_plans.get(requested_model_id)?;
+        let blocker = if summary.blockers.is_empty() {
+            format!(
+                "The {} adapter still needs to be registered before this catalog-only model can execute.",
+                summary.adapter_kind.label()
+            )
+        } else {
+            summary.blockers.join(" ")
+        };
+
+        Some(format!(
+            "DX catalog route `{requested_model_id}` points to `{}` on `{}` but no registered executable provider owns it yet. Required adapter: {} with {}. Next action: {} Blocker: {blocker}",
+            summary.primary_model_id,
+            summary.provider_name,
+            summary.adapter_kind.label(),
+            summary.permission.label(),
+            summary.next_action
+        ))
     }
 
     fn load_uncached() -> Option<Self> {
@@ -116,11 +150,17 @@ impl DxCatalogAgentBridge {
         let mut models = HashMap::new();
         let mut route_candidates = HashMap::new();
         let mut model_lookup_keys = HashMap::new();
+        let mut execution_plans = HashMap::new();
         for model in &catalog.models {
             let Some(provider) = providers.get(model.provider_id.as_str()).copied() else {
                 continue;
             };
             let lookup_keys = model_lookup_keys_for_record(model, provider);
+            let execution_summary = build_catalog_execution_plan(
+                catalog,
+                CatalogExecutionPlanRequest::for_model_id(model.id.clone()),
+            )
+            .map(CatalogExecutionSummary::from);
 
             let presentation = picker_models
                 .get(&model.id)
@@ -146,6 +186,11 @@ impl DxCatalogAgentBridge {
                 lookup_keys.clone(),
                 lookup_keys.clone(),
             );
+            insert_execution_summaries(
+                &mut execution_plans,
+                lookup_keys.clone(),
+                execution_summary.clone(),
+            );
             model_lookup_keys.insert(model.id.clone(), lookup_keys);
         }
 
@@ -169,11 +214,35 @@ impl DxCatalogAgentBridge {
                 catalog_role_route_ids(route.role),
                 candidates,
             );
+            let execution_summary = build_catalog_execution_plan(
+                catalog,
+                CatalogExecutionPlanRequest::for_role(route.role),
+            )
+            .map(CatalogExecutionSummary::from);
+            insert_execution_summaries(
+                &mut execution_plans,
+                catalog_role_route_ids(route.role),
+                execution_summary,
+            );
         }
 
         Self {
             models,
             route_candidates,
+            execution_plans,
+        }
+    }
+}
+
+impl From<CatalogExecutionPlan> for CatalogExecutionSummary {
+    fn from(plan: CatalogExecutionPlan) -> Self {
+        Self {
+            primary_model_id: plan.primary_model_id,
+            provider_name: plan.provider_name,
+            adapter_kind: plan.adapter_kind,
+            permission: plan.permission,
+            blockers: plan.blockers,
+            next_action: plan.next_action,
         }
     }
 }
@@ -225,6 +294,20 @@ fn insert_route_candidates(
         route_candidates
             .entry(route_id)
             .or_insert(candidates.clone());
+    }
+}
+
+fn insert_execution_summaries(
+    execution_plans: &mut HashMap<String, CatalogExecutionSummary>,
+    route_ids: Vec<String>,
+    summary: Option<CatalogExecutionSummary>,
+) {
+    let Some(summary) = summary else {
+        return;
+    };
+
+    for route_id in route_ids {
+        execution_plans.entry(route_id).or_insert(summary.clone());
     }
 }
 

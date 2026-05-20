@@ -2,6 +2,7 @@ mod adapters;
 mod agent_picker;
 mod artifact;
 mod error;
+mod execution;
 mod generator;
 mod model_catalog_readers;
 mod provider_readers;
@@ -27,6 +28,10 @@ pub use artifact::{
     serialize_catalog_payload, write_catalog_artifact,
 };
 pub use error::DxCatalogError;
+pub use execution::{
+    CatalogExecutionAdapterKind, CatalogExecutionPermission, CatalogExecutionPlan,
+    CatalogExecutionPlanRequest, build_catalog_execution_plan,
+};
 pub use generator::{
     CatalogBuildOutput, CatalogBuildReport, CatalogConflictPolicy, CatalogGeneratorInput,
     CatalogGeneratorOptions, ProviderAuthProfileUpdate, build_catalog,

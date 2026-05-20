@@ -26,10 +26,10 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 58,
+        overall_implementation_status: 62,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
-        dx_catalog_status: 93,
+        dx_catalog_status: 96,
         features: vec![
             feature(
                 "Browser/Chrome functional plugin execution",
@@ -45,15 +45,15 @@ pub fn current_launch_status() -> DxLaunchStatus {
             ),
             feature(
                 "dx_catalog provider/model archive",
-                93,
-                "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, source adapters, source discovery, local GGUF model reader, provider/auth reader, models.dev/OpenRouter/LiteLLM JSON model parsers, Agent picker projection, route selection, OpenRouter input, auth-profile enrichment, optional generated-artifact Agent picker enrichment, catalog alias resolution, and route IDs that resolve to executable Agent models are in place.",
-                "Add permissioned provider execution adapters for catalog-only providers.",
+                96,
+                "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, source adapters, source discovery, local GGUF model reader, provider/auth reader, models.dev/OpenRouter/LiteLLM JSON model parsers, Agent picker projection, route selection, OpenRouter input, auth-profile enrichment, optional generated-artifact Agent picker enrichment, catalog alias resolution, route IDs that resolve to executable Agent models, and permissioned catalog execution plans are in place.",
+                "Generate the production catalog artifact from G-drive sources.",
             ),
             feature(
                 "Universal provider routing",
-                36,
+                42,
                 "One router picks local, free, premium, and remote providers from dx_catalog.",
-                "Expose catalog-only routes after execution adapters are safe.",
+                "Register safe provider adapters from catalog execution plans.",
             ),
             feature(
                 "Metasearch AI tool",

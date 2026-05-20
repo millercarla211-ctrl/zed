@@ -1,3 +1,17 @@
+[2026-05-20] - DX Catalog Execution Plan Contract
+
+ADDED:
+- Added `dx_catalog` execution plans for catalog-only provider/model routes, including adapter kind, permission/auth requirement, base URL, local runtime approval, blockers, fallback IDs, capabilities, and next action.
+- Added Agent-side catalog selection error surfacing so catalog-only IDs explain the missing permissioned adapter contract instead of failing as a generic invalid model ID.
+
+CHANGED:
+- The Agent DX catalog bridge now stores execution-plan summaries for model IDs, aliases, and role route IDs while still resolving only to real executable models.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move `dx_catalog` to 96/100, universal provider routing to 42/100, and the overall feature set to 62/100.
+
+NOTES:
+- This slice defines the safety contract for catalog-only execution; it still does not register dynamic providers or expose unexecutable picker rows.
+- No `just run`, Cargo build/check/test/clippy, downloads, model loading, cleanup, or browser automation was run for this source-level slice.
+
 [2026-05-20] - DX Catalog Route Selection Bridge
 
 ADDED:
