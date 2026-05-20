@@ -1,3 +1,15 @@
+[2026-05-20] - DX Catalog Source Discovery
+
+ADDED:
+- Added a configurable `dx_catalog` source-discovery layer for Flow roots, provider catalogs, local llama.cpp model roots, auth profile roots, and adjacent DX tool roots such as metasearch, Forge, serializer, and RLM.
+- Added source candidate and discovery report types so the editor can show which provider/model/tool inputs are available before expensive parsing or generation starts.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and launch status to move `dx_catalog` to 52/100 and the overall launch implementation status to 34/100.
+
+NOTES:
+- This slice only checks lightweight path markers and reports availability. It does not scan model contents deeply, parse external catalogs, run `just`, run Cargo build/check/test/clippy, delete files, or download models.
+
 [2026-05-20] - DX Catalog Adapter Boundary
 
 ADDED:
