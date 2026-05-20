@@ -250,7 +250,7 @@ impl DxMediaToolPlanArtifactTarget {
                 "overwrites_outputs": false,
                 "dispatches_browser_input": false,
             },
-            "next_action": "Use this plan receipt to wire the future media runner behind the same approval gate and managed-output policy."
+            "next_action": "Use this plan receipt with gate_dx_media_tool_runner before wiring any no-shell media runner."
         });
         let receipt_json = serde_json::to_vec_pretty(&receipt)
             .map_err(|error| format!("Failed to serialize media plan receipt: {error}"))?;
@@ -285,7 +285,7 @@ impl DxMediaToolPlanArtifactTarget {
             plan_schema: response.schema,
             action: response.action_plan.action.clone(),
             planned_output_count: response.action_plan.planned_outputs.len(),
-            next_action: "Use the latest media plan receipt to implement the future no-shell ffmpeg runner after review.".to_string(),
+            next_action: "Use the latest media plan receipt with gate_dx_media_tool_runner before implementing the future no-shell ffmpeg runner.".to_string(),
         })
     }
 

@@ -1,3 +1,16 @@
+[2026-05-20] - DX Media Runner Gate
+
+ADDED:
+- Added `gate_dx_media_tool_runner`, a permissioned Agent tool that validates `zed.dx.media_tool.plan.v1` objects or plan receipts before any future media runner executes.
+- Added `zed.dx.media_tool.runner_gate.v1` and managed runner-gate receipt support with no-shell, no-delete, no-overwrite, managed-output, source-existence, and argument-vector safety checks.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and launch status to move the Media tool bridge to 42/100 and the overall DX Native Tools Integration set to 97/100.
+
+NOTES:
+- This slice creates the runner readiness gate only; it does not run ffmpeg, ffprobe, shell commands, downloads, deletes, overwrites, model calls, browser input, Cargo, or media output writes.
+- No `just run`, Cargo build/check/test/clippy, downloads, cleanup, browser automation, or live media execution was used for this source-level slice.
+
 [2026-05-20] - DX Media Tool Planning Bridge
 
 ADDED:

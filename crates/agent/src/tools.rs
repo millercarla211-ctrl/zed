@@ -29,6 +29,7 @@ mod diagnostics_tool;
 mod dx_catalog_provider_settings_registration_tool;
 mod dx_catalog_provider_settings_tool;
 mod dx_media_tool_plan_tool;
+mod dx_media_tool_runner_gate_tool;
 mod dx_metasearch_context_adapter_tool;
 mod dx_metasearch_source_extract_tool;
 mod dx_metasearch_status_tool;
@@ -117,6 +118,7 @@ pub use diagnostics_tool::*;
 pub use dx_catalog_provider_settings_registration_tool::*;
 pub use dx_catalog_provider_settings_tool::*;
 pub use dx_media_tool_plan_tool::*;
+pub use dx_media_tool_runner_gate_tool::*;
 pub use dx_metasearch_context_adapter_tool::*;
 pub use dx_metasearch_source_extract_tool::*;
 pub use dx_metasearch_status_tool::*;
@@ -243,6 +245,7 @@ tools! {
     DeletePathTool,
     DiagnosticsTool,
     DxMediaToolPlanTool,
+    DxMediaToolRunnerGateTool,
     DxMetasearchContextAdapterTool,
     DxMetasearchSourceExtractTool,
     DxMetasearchStatusTool,

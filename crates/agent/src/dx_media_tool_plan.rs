@@ -161,13 +161,13 @@ pub(crate) fn build_dx_media_tool_plan(
         request.frame_timestamp.as_deref(),
     );
     let next_action = if blockers.is_empty() {
-        "Review this plan receipt, then wire the future media runner to execute the argument vector with no shell interpolation and managed output paths."
+        "Review this plan receipt, then call gate_dx_media_tool_runner to validate no-shell runner readiness before any media execution."
             .to_string()
     } else if request.approve_media_execution {
         "Resolve the listed source/action blockers before enabling the media runner for this plan."
             .to_string()
     } else {
-        "Review this dry-run media plan, then rerun with approve_media_execution=true when ready to authorize the future runner."
+        "Review this dry-run media plan, then rerun with approve_media_execution=true before calling gate_dx_media_tool_runner."
             .to_string()
     };
 

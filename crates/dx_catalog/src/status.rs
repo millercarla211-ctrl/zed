@@ -26,7 +26,7 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 96,
+        overall_implementation_status: 97,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
         dx_catalog_status: 100,
@@ -105,9 +105,9 @@ pub fn current_launch_status() -> DxLaunchStatus {
             ),
             feature(
                 "Media tool bridge",
-                28,
-                "Agent threads can plan safe ffprobe/ffmpeg inspect, audio extraction, and frame extraction work with managed output paths, no-overwrite arguments, approval state, and receipts before any native runner executes.",
-                "Add the approved no-shell media runner and produced-file receipts.",
+                42,
+                "Agent threads can plan safe ffprobe/ffmpeg inspect, audio extraction, and frame extraction work, then validate approved no-shell runner readiness with managed output paths, no-overwrite arguments, source checks, and receipts before any native runner executes.",
+                "Add the actual no-shell media runner and produced-file receipts after gate review.",
             ),
         ],
     }
