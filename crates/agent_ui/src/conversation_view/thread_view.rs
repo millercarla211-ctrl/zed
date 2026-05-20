@@ -3366,6 +3366,7 @@ impl ThreadView {
                                     .map(|this| match self.config_options_view.clone() {
                                         Some(config_view) => this.child(config_view),
                                         None => this
+                                            .children(self.render_dx_agent_action(cx))
                                             .children(self.mode_selector.clone())
                                             .children(self.model_selector.clone()),
                                     })
@@ -3374,6 +3375,34 @@ impl ThreadView {
                     ),
             )
             .into_any()
+    }
+
+    fn render_dx_agent_action(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        self.mode_selector.as_ref()?;
+
+        let focus_handle = self.focus_handle(cx);
+        Some(
+            Button::new("dx-agent-action", "Agent")
+                .label_size(LabelSize::Small)
+                .color(Color::Muted)
+                .start_icon(
+                    Icon::new(IconName::Sparkle)
+                        .size(IconSize::XSmall)
+                        .color(Color::Muted),
+                )
+                .tooltip(move |_window, cx| {
+                    Tooltip::for_action_in(
+                        "Open Agent Profile",
+                        &ToggleProfileSelector,
+                        &focus_handle,
+                        cx,
+                    )
+                })
+                .on_click(|_event, window, cx| {
+                    window.dispatch_action(Box::new(ToggleProfileSelector), cx);
+                })
+                .into_any_element(),
+        )
     }
 
     fn render_message_queue_entries(

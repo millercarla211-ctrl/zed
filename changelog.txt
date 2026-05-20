@@ -1,3 +1,19 @@
+[2026-05-21] - DX AI Workspace Launch Chrome
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace.rs` with a scoped DX launch workspace chrome for AgentPanel threads: left Sources/receipts rail, right Progress/Git/Background Tasks rail, token/tool meter slots, and cached receipt scanning for `G:\Dx\.dx\receipts`.
+- Added an Agent action beside the existing Write/Ask mode and model controls without replacing the current model picker, token usage, profile selector, or thread behavior.
+- Added New Chat, Search, Plugins, and Automations actions to the AI sidebar surfaces plus Pinned and All Chats workspace group headers; Automations opens the existing project debug-task configuration until DX automation receipts have a dedicated panel.
+
+CHANGED:
+- Wrapped existing Agent thread rendering in the DX launch workspace chrome only for the zoomed/full-workspace state, preserving narrow side-panel chat plus terminal/configuration/no-project surfaces.
+- Made the Agent panel report as zoomed by default when no editor item is open, with manual zoom overrides still respected after the user toggles zoom.
+- Updated `todo.txt` and `DX.md` with the launch-slice status.
+
+NOTES:
+- Receipt hooks only read local receipt files and show missing/empty states; they do not run DX CLI commands, wire secrets, launch social login, or mutate `G:\Dx\www`.
+- No local server, `just run`, Cargo build/check/test/clippy, npm build, browser automation, or heavy validation was started.
+
 [2026-05-21] - DX Launch Orchestrator Guidance
 
 ADDED:

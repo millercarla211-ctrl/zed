@@ -2277,8 +2277,10 @@ impl Sidebar {
                                 && (panel.active_view_is_new_draft(cx)
                                     || panel.active_conversation_view().is_none())
                         });
+                let show_chat_groups =
+                    !self.has_filter_query(cx) && !self.is_group_collapsed(key, cx);
                 self.project_header_menu_handles.entry(ix).or_default();
-                self.render_project_header(
+                let header = self.render_project_header(
                     ix,
                     false,
                     key,
@@ -2291,7 +2293,17 @@ impl Sidebar {
                     *has_threads,
                     has_active_draft,
                     cx,
-                )
+                );
+                if show_chat_groups {
+                    v_flex()
+                        .w_full()
+                        .child(header)
+                        .child(self.render_chat_group_label("Pinned", IconName::Pin, cx))
+                        .child(self.render_chat_group_label("All Chats", IconName::Chat, cx))
+                        .into_any_element()
+                } else {
+                    header
+                }
             }
             ListEntry::Thread(thread) => self.render_thread(ix, thread, is_active, is_selected, cx),
             ListEntry::Terminal(terminal) => {
@@ -2333,6 +2345,34 @@ impl Sidebar {
                 .tooltip(Tooltip::text("Remote Project"))
                 .into_any_element(),
         )
+    }
+
+    fn render_chat_group_label(
+        &self,
+        label: &'static str,
+        icon: IconName,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        h_flex()
+            .w_full()
+            .h(Tab::content_height(cx))
+            .px_3()
+            .gap_1()
+            .justify_between()
+            .border_t_1()
+            .border_color(cx.theme().colors().border_variant.opacity(0.5))
+            .child(
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .child(Icon::new(icon).size(IconSize::XSmall).color(Color::Muted))
+                    .child(
+                        Label::new(label)
+                            .size(LabelSize::XSmall)
+                            .color(Color::Muted),
+                    ),
+            )
+            .into_any_element()
     }
 
     fn render_project_header(
@@ -6743,9 +6783,19 @@ impl Sidebar {
                 h_flex()
                     .gap_1()
                     .child(button(
-                        "sidebar-toolbar-focus-search",
-                        IconName::Blocks,
-                        "Focus Search",
+                        "sidebar-toolbar-new-chat",
+                        IconName::NewThread,
+                        "New Chat",
+                        |this, _, window, cx| {
+                            if let Some(workspace) = this.active_workspace(cx) {
+                                this.create_new_thread(&workspace, window, cx);
+                            }
+                        },
+                    ))
+                    .child(button(
+                        "sidebar-toolbar-search",
+                        IconName::MagnifyingGlass,
+                        "Search",
                         |this, _, window, cx| {
                             this.focus_sidebar_filter(&FocusSidebarFilter, window, cx)
                         },
@@ -6766,6 +6816,25 @@ impl Sidebar {
             .child(
                 h_flex()
                     .gap_1()
+                    .child(button(
+                        "sidebar-toolbar-plugins",
+                        IconName::Blocks,
+                        "Plugins",
+                        |_this, _, window, cx| {
+                            window.dispatch_action(Box::new(zed_actions::AcpRegistry), cx);
+                        },
+                    ))
+                    .child(button(
+                        "sidebar-toolbar-automations",
+                        IconName::ListTodo,
+                        "Automations",
+                        |_this, _, window, cx| {
+                            window.dispatch_action(
+                                zed_actions::OpenProjectDebugTasks.boxed_clone(),
+                                cx,
+                            );
+                        },
+                    ))
                     .child(button(
                         "sidebar-toolbar-refresh",
                         IconName::RefreshTitle,

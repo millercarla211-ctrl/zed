@@ -32,3 +32,16 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Add Pinned and All Chats workspace groups.
 - Wire DX token/RLM/serializer receipts into token/tool meters.
 - Wire DX Agents CLI receipts into GPUI status surfaces.
+
+## Current Worker Update
+
+- Implemented the DX launch workspace chrome around existing Agent thread rendering when the panel is zoomed/full-workspace: left Sources/receipts rail, right Progress/Git/Background Tasks rail, and token/tool meter slots.
+- Added receipt hooks for `G:\Dx\.dx\receipts` with graceful missing/empty states and no CLI execution from Zed.
+- Added an Agent action beside the existing Write/Ask mode and model controls while preserving the current model picker, profile selector, token usage, and thread behavior.
+- Added New Chat, Search, Plugins, and Automations sidebar actions plus Pinned/All Chats group headers; Automations routes to the existing project debug-task configuration until the DX automation receipt producer has a first-class Zed panel.
+- Made the Agent panel default to full-width/zoomed when the workspace has no active editor item; user zoom toggles still override that default.
+
+## Remaining Proof
+
+- Runtime visual proof is still pending because this launch lane forbids local servers, `just run`, full Cargo builds, and heavy validation without explicit permission.
+- The DX CLI receipt producers remain external to Zed; this slice reads receipt files and reports missing or empty receipt states only.

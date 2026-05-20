@@ -34,6 +34,9 @@ use crate::ExpandMessageEditor;
 use crate::ManageProfiles;
 use crate::agent_connection_store::AgentConnectionStore;
 use crate::completion_provider::AgentContextSource;
+use crate::dx_launch_workspace::{
+    DxLaunchWorkspaceStatus, receipt_snapshot, render_workspace_chrome,
+};
 use crate::terminal_thread_metadata_store::{TerminalThreadMetadata, TerminalThreadMetadataStore};
 use crate::thread_metadata_store::{ThreadId, ThreadMetadataStore, ThreadMetadataStoreEvent};
 use crate::{
@@ -883,6 +886,7 @@ pub struct AgentPanel {
     _extension_subscription: Option<Subscription>,
     _project_subscription: Subscription,
     zoomed: bool,
+    manual_zoom_override: Option<bool>,
     pending_serialization: Option<Task<Result<()>>>,
     new_user_onboarding: Entity<AgentPanelOnboarding>,
     new_user_onboarding_upsell_dismissed: AtomicBool,
@@ -1302,6 +1306,7 @@ impl AgentPanel {
             _extension_subscription: extension_subscription,
             _project_subscription,
             zoomed: false,
+            manual_zoom_override: None,
             pending_serialization: None,
             new_user_onboarding: onboarding,
             thread_store,
@@ -4261,12 +4266,13 @@ impl Panel for AgentPanel {
         }))
     }
 
-    fn is_zoomed(&self, _window: &Window, _cx: &App) -> bool {
-        self.zoomed
+    fn is_zoomed(&self, _window: &Window, cx: &App) -> bool {
+        self.should_render_dx_launch_chrome(cx)
     }
 
     fn set_zoomed(&mut self, zoomed: bool, _window: &mut Window, cx: &mut Context<Self>) {
         self.zoomed = zoomed;
+        self.manual_zoom_override = Some(zoomed);
         cx.notify();
     }
 }
@@ -5664,6 +5670,123 @@ impl AgentPanel {
         )
     }
 
+    fn render_dx_launch_workspace(
+        &self,
+        center: AnyElement,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        if !self.should_render_dx_launch_chrome(cx) {
+            return center;
+        }
+
+        let status = self.dx_launch_workspace_status(cx);
+        let sidebar_actions = self.render_dx_launch_sidebar_actions(window, cx);
+        render_workspace_chrome(center, sidebar_actions, status, cx)
+    }
+
+    fn render_dx_launch_sidebar_actions(
+        &self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let can_create_entries = self.has_open_project(cx);
+        let action_button = |id: &'static str, icon: IconName, label: &'static str| {
+            Button::new(id, label)
+                .full_width()
+                .label_size(LabelSize::Small)
+                .color(Color::Muted)
+                .start_icon(Icon::new(icon).size(IconSize::XSmall).color(Color::Muted))
+        };
+
+        v_flex()
+            .gap_1()
+            .child(
+                action_button("dx-launch-new-chat", IconName::NewThread, "New Chat")
+                    .disabled(!can_create_entries)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.new_thread(&NewThread, window, cx);
+                    })),
+            )
+            .child(
+                action_button("dx-launch-search", IconName::MagnifyingGlass, "Search").on_click(
+                    |_event, window, cx| {
+                        window.dispatch_action(
+                            Box::new(zed_actions::agents_sidebar::FocusSidebarFilter),
+                            cx,
+                        );
+                    },
+                ),
+            )
+            .child(
+                action_button("dx-launch-plugins", IconName::Blocks, "Plugins").on_click(
+                    |_event, window, cx| {
+                        window.dispatch_action(Box::new(zed_actions::AcpRegistry), cx);
+                    },
+                ),
+            )
+            .child(
+                action_button("dx-launch-automations", IconName::ListTodo, "Automations").on_click(
+                    |_event, window, cx| {
+                        window
+                            .dispatch_action(zed_actions::OpenProjectDebugTasks.boxed_clone(), cx);
+                    },
+                ),
+            )
+            .into_any_element()
+    }
+
+    fn dx_launch_workspace_status(&self, cx: &Context<Self>) -> DxLaunchWorkspaceStatus {
+        let workspace_roots = self
+            .workspace
+            .upgrade()
+            .map(|workspace| {
+                workspace
+                    .read(cx)
+                    .root_paths(cx)
+                    .into_iter()
+                    .map(|path| path.display().to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let visible_worktree_count = self.project.read(cx).visible_worktrees(cx).count();
+
+        DxLaunchWorkspaceStatus {
+            workspace_roots,
+            active_status: self.dx_active_status(cx),
+            background_task_count: self.retained_threads.len(),
+            visible_worktree_count,
+            receipt_snapshot: receipt_snapshot(),
+        }
+    }
+
+    fn dx_active_status(&self, cx: &App) -> SharedString {
+        if let Some(thread) = self.active_agent_thread(cx) {
+            match thread.read(cx).status() {
+                ThreadStatus::Generating => "Running".into(),
+                ThreadStatus::Idle => "Ready".into(),
+            }
+        } else if self.active_terminal_id().is_some() {
+            "Terminal".into()
+        } else if self.active_view_is_new_draft(cx) {
+            "Draft".into()
+        } else {
+            "Idle".into()
+        }
+    }
+
+    fn workspace_has_no_editor_file(&self, cx: &App) -> bool {
+        self.workspace
+            .upgrade()
+            .is_some_and(|workspace| workspace.read(cx).active_item(cx).is_none())
+    }
+
+    fn should_render_dx_launch_chrome(&self, cx: &App) -> bool {
+        self.manual_zoom_override
+            .unwrap_or_else(|| self.zoomed || self.workspace_has_no_editor_file(cx))
+    }
+
     fn key_context(&self) -> KeyContext {
         let mut key_context = KeyContext::new_with_defaults();
         key_context.add("AgentPanel");
@@ -5739,7 +5862,11 @@ impl Render for AgentPanel {
                 }
                 VisibleSurface::Uninitialized => parent,
                 VisibleSurface::AgentThread(conversation_view) => parent
-                    .child(conversation_view.clone())
+                    .child(self.render_dx_launch_workspace(
+                        conversation_view.clone().into_any_element(),
+                        window,
+                        cx,
+                    ))
                     .child(self.render_drag_target(cx)),
                 VisibleSurface::Terminal(terminal_view) => parent
                     .child(terminal_view.clone())
