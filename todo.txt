@@ -3,6 +3,7 @@ IN PROGRESS:
 - Immediate next target: implement `dx_catalog` with `rkyv` plus `memmap2` archived provider/model catalogs fed by Flow local roles, `zeroclaw-providers`, models.dev, LiteLLM-style aliases, local llama.cpp models, auth profile state, and last-good offline fallback.
 
 COMPLETED:
+- DX native tools vision backup: expanded `hexed/DX_NATIVE_TOOLS_INTEGRATION_PLAN.md` with the full product thesis, canonical roadmap, prioritized next-build order, and raw prompt backup while keeping `dx_catalog` as the next implementation target.
 - Screen Dock Carousel feature slice: documented the DX competitive plan, added edge-dwell screen peeking, wrapped Editor/Browser/Terminal screen navigation, added click-to-activate preview slivers, added keyboard screen navigation/peek shortcuts, deferred rainbow cursor behind a performance gate, fixed the main-screen visibility regression by preserving full-size center-pane layout, and verified with the repo-approved lightweight checks plus final `just run`.
 - DX native tools integration plan: added `hexed/DX_NATIVE_TOOLS_INTEGRATION_PLAN.md` with phased Provider Catalog, Metasearch, Forge, Drive, Check, Deploy, DCP, serializer/RLM, and Codex-style layout work.
 - NEXT 100-POINT FEATURE SET: Browser/Chrome Functional Plugin Execution Hardening. Goal: make Browser, managed Chrome, DevTools, screenshot/annotation, inspect-element, responsive viewport, and PC-use plugin flows functional, discoverable, permission-gated, and regression-auditable from the right-side AI panels without dummy UI or unsafe input dispatch.

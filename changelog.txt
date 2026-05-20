@@ -5271,6 +5271,7 @@ NOTES:
 ADDED:
 - `hexed/DX_VISION.md` documents the DX product thesis, differentiators, screen dock carousel behavior, and rainbow cursor performance policy.
 - `hexed/DX_NATIVE_TOOLS_INTEGRATION_PLAN.md` maps the G-drive Flow, metasearch, Forge, serializer, RLM, provider, and ZeroClaw provider crates into a staged DX/Zed integration plan.
+- `hexed/DX_NATIVE_TOOLS_INTEGRATION_PLAN.md` now also includes the full DX/Zed native tools product thesis, full product vision backup, prioritized next-build order, and raw prompt backup for future recovery.
 - `crates/workspace/src/workspace.rs` adds screen dock carousel actions for previous/next activation plus previous/next peek.
 - `assets/keymaps/default-windows.json`, `assets/keymaps/default-linux.json`, and `assets/keymaps/default-macos.json` add screen activation and peek shortcuts.
 
@@ -5279,6 +5280,7 @@ CHANGED:
 - The carousel center wrapper preserves full-size flex behavior so the main Editor/Browser/Terminal screens remain visible inside the existing pane layout.
 - The rainbow cursor remains deferred because the global cursor/render path is performance-sensitive and should only ship behind an opt-in profiling gate.
 - `todo.txt` now records the next Native DX Tools Integration feature set and points the first implementation target at `dx_catalog`.
+- `todo.txt` now records the DX native tools vision backup as complete while keeping `dx_catalog` as the next implementation target.
 
 FIXED:
 - `Cargo.lock` now disambiguates the merged `client` dependency on `derive_more 2.1.1`, keeping the locked `just run` resolver path healthy after upstream sync.
@@ -5289,6 +5291,7 @@ NOTES:
 - Synced upstream `main` into local `main`, pushed the fork `main`, merged upstream changes into `dev`, and resolved conflicts in `Cargo.lock`, `crates/sidebar/src/sidebar.rs`, and `crates/title_bar/src/title_bar.rs` before starting the feature slice.
 - Verification used `rustfmt`, `git diff --check`, touched-file conflict-marker searches, and the requested locked `just run`.
 - G-drive crate inspection found `G:\Dx\dx-agents\crates\zeroclaw-providers` as the strongest provider/auth/router source, while `G:\Workspaces\flow\providers` is currently a staging shell with no main source files outside integrations/cache output.
+- The documentation-only vision backup intentionally did not rerun `just run` because the screens are already confirmed visible and no runtime source changed.
 
 [2026-05-11] - WebPreview Keyboard Ownership and Editor Speed Fix
 

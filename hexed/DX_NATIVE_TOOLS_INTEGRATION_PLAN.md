@@ -6,6 +6,51 @@ DX/Zed should become the fastest native editor for coding, agent work, local mod
 
 This plan connects the existing G-drive DX tools into the F-drive Zed fork in a maintainable order.
 
+## Executive Product Thesis
+
+DX/Zed should be a native, Rust-first development environment that combines the speed of Zed, the agent management of modern AI workspaces, the provider freedom of a universal AI router, the source grounding of NotebookLM, the task clarity of Kiro, and the shipping controls of a professional engineering console.
+
+The product bet is simple:
+
+- Keep the editor fast and full-width by default.
+- Make local models first-class through direct llama.cpp and Rust integration.
+- Make remote models first-class through the broadest provider/auth catalog in any code editor.
+- Give agents native tools for metasearch, project health, version control, deployment, sources, and long-context reduction.
+- Keep every panel real, typed, permission-aware, and connected to actual project state.
+
+This is not a plan to turn Zed into an Electron-style AI shell. It is a plan to make a native editor that can absorb the best workflows from Cursor, Codex, Claude Code, Kiro, NotebookLM, Perplexity, and deployment dashboards while staying faster and more developer-friendly.
+
+## Full Product Vision Backup
+
+The long-term product should include these major lanes:
+
+- Provider catalog: unify local models, premium-account models, free-tier models, LiteLLM-style provider aliases, models.dev metadata, OpenRouter/Ollama-style public model lists, provider auth profiles, context limits, capabilities, pricing, free-quota hints, and routing roles.
+- Fast catalog loading: store provider/model catalogs as versioned `rkyv` archives loaded with `memmap2`, so model menus and routing can start from a binary artifact instead of parsing JSON on the hot path.
+- Metasearch: expose the G-drive metasearch workspace as an AI tool in the Agent panel, searching many engines and vertical sources at once with citations, engine health, cancellation, and compact result cards.
+- Forge: integrate Forge as a version-control and sync system for code, media, datasets, databases, project files, and multi-remote backups, including GitHub, GitLab, Bitbucket, object storage, media remotes, and local/network mirrors.
+- Drive: build a source and task workspace where markdown specs, docs, web pages, PDFs, code references, prompts, media metadata, and project notes can become durable sources for agents.
+- DCP: make DCP the native DX capability protocol while bridging MCP, ACP, Codex/Claude Code style tools, local Rust tools, and browser tools through one permission and receipt model.
+- Serializer and RLM: use serializer for compact tool catalogs, packed conversations, provider catalogs, and project summaries; use RLM for long-context reduction, recursive summarization, and token-saving source preparation.
+- Check panel: add a project-quality surface for code smell, oversized files, folder structure, formatting/lint/typecheck status imports, test freshness, visual proof receipts, security posture, and deploy readiness.
+- Deploy panel: add a shipping surface for CI/CD, Vercel, Cloudflare, GitHub Actions, Docker, local scripts, custom deploy targets, logs, previews, production URLs, rollback, env status, and release receipts.
+- Workspace layout: keep the center editor/browser/terminal/media screens full-width by default; add a left Sources rail and a right project details/tasks/summary/quick links rail inspired by Codex Desktop and NotebookLM.
+- Top panels: make AI, Forge, Drive, Check, Deploy, and the existing screen dock visible as real product surfaces, not placeholder buttons.
+- Screen workflow: keep the Screen Dock Carousel as the main full-width screen navigation model, with Editor as the default coding screen and Browser/Terminal/media screens available through smooth edge reveal, keyboard commands, and click-to-activate slivers.
+- Internationalization and additional DX crates: inspect and integrate `i18`, `driven`, `dcp`, `dx-check`, and other G-drive Rust crates as adapter-backed capabilities when they are mature enough, without forcing unstable crates into editor startup.
+
+## Prioritized Next-Build Order
+
+1. `dx_catalog`: create the archived provider/model catalog loader and generator.
+2. AI model picker/routing: connect `dx_catalog` to the Agent panel provider/model selection surfaces.
+3. Metasearch AI tool: wire `metasearch-core` and `metasearch-engine` into a cancellable background tool with compact cited results.
+4. Serializer/RLM prep pipeline: compact tool catalogs, conversations, source packs, and search results before model calls.
+5. Forge panel: surface code/media snapshot status, remotes, sync plans, jobs, restore points, and conflict warnings.
+6. Drive/Sources rail: add durable sources, markdown task specs, source sets, and agent context packs.
+7. Check panel: show project score, code smell, folder structure, status imports, visual-test receipts, and recommended repairs.
+8. Deploy panel: add deploy targets, env readiness, CI/CD receipts, preview URLs, production status, and rollback.
+9. DCP bridge: unify DCP/MCP/ACP/local tools under one schema, permission model, and receipt system.
+10. Codex-style rails: add optional left Sources and right project/task rails without slowing the full-width editor.
+
 ## Local Sources Inspected
 
 - `G:\Workspaces\flow`: Rust-first local AI runtime with `ZedFlowAdapter`, `CodexFlowAdapter`, local model roles, provider-catalog planning, Forge bridge planning, metasearch, serializer, and RLM.
@@ -205,3 +250,11 @@ Implement `dx_catalog` first:
 - write a generator that can ingest the local Flow plan, `zeroclaw-providers` metadata, models.dev JSON, and LiteLLM-style aliases,
 - expose a read-only catalog service to the AI panel model picker and routing layer,
 - then use that service to power provider menus and agent model selection.
+
+## Raw Vision Backup
+
+This section preserves the original product prompt for future recovery and comparison. The main-screen visibility issue mentioned here was already fixed before this backup pass.
+
+```text
+In our g drive you can find providers, metasearch, forge, serializer, i18, driven, dcp, and other dx tools rust crates now please like make a plan that's way we can use those in our dx/zed forge code editor like we have integrate all providers or free models, lite-llm providers list, models.dev providers list as a rkyv and memmap2 so that we can read it fast not slow like json and also we can implememnt the most providers in code editor in the world, then we have forge which is like git for not only code but also everything and in there you can have many database or remove backups not only one you get with github, gitlab, and also you can do version controls of medias that github needs git-lfs which is not that good like forge - so please kindly add new metasearch  in our ai so that our ai panel can use that when they do web search or just use that as tool to search so much online places and search engines at onces beating perplexity correctly!!! and also then like kiro code editor we can make markdown based task ui with drive and use dcp to beat current claude mcp and google acp and also use serializer for speed where we can do to make our zed code editor even faster than actual zed and then like the 5 top panels we will add new forge, drive , check that uses dx-check to like give points to current project about code smell, files and folder sturcuture and also lint and formatting status and also create another by what users can deploy or many ci cd so please add these new panel so that by using check panel users can mananger current project states and also do visual test using our check panel and we also in our ai panel we added metasearch and also rlm and other token saving rust crate to save token and serializer for saving more tokens and also like the image of the codex app I gave you that from now on by defaut our zed code editor to have full width and also can be used like a panel to but the new things is that like codex desktop app in the right it will have project details and other tasks for a summary and quick links in the right and in the left there will be one sources so like the google notbooklm we can configure sources there correctly in that our dx/zed code editor fork will be the best in the world and also currnet our main screens are not showing for some reason after you implememnt the screens swipe funtionaliity so please fix that first and then please create a plan to add the features I told you!!!
+```
