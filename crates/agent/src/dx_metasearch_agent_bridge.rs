@@ -18,8 +18,11 @@ const MAX_RESULTS_LIMIT: usize = 20;
 const MAX_CATEGORY_COUNT: usize = 6;
 const MAX_ENGINE_COUNT: usize = 24;
 const SNIPPET_CHAR_LIMIT: usize = 420;
+const DEFAULT_ENGINE_STATUS_LIMIT: usize = 40;
+const MAX_ENGINE_STATUS_LIMIT: usize = 200;
 
 pub(crate) const DX_METASEARCH_RESULT_SCHEMA: &str = "zed.dx.metasearch.result.v1";
+pub(crate) const DX_METASEARCH_STATUS_SCHEMA: &str = "zed.dx.metasearch.status.v1";
 
 #[derive(Clone, Debug)]
 pub(crate) struct DxMetasearchRequest {
@@ -34,6 +37,13 @@ pub(crate) struct DxMetasearchRequest {
     pub base_url: Option<String>,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct DxMetasearchStatusRequest {
+    pub base_url: Option<String>,
+    pub include_engines: bool,
+    pub engine_limit: Option<usize>,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct DxMetasearchCompactResponse {
     pub schema: &'static str,
@@ -44,6 +54,66 @@ pub(crate) struct DxMetasearchCompactResponse {
     pub summary: DxMetasearchSummary,
     pub results: Vec<DxMetasearchCompactResult>,
     pub next_action: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchStatusResponse {
+    pub schema: &'static str,
+    pub generated_at_ms: u64,
+    pub source: DxMetasearchSource,
+    pub request: DxMetasearchStatusRequestSummary,
+    pub service: DxMetasearchServiceStatus,
+    pub engine_summary: DxMetasearchEngineSummary,
+    pub engines: Vec<DxMetasearchEngineInfo>,
+    pub next_action: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchStatusRequestSummary {
+    pub base_url: String,
+    pub status_endpoint: String,
+    pub engines_endpoint: String,
+    pub include_engines: bool,
+    pub engine_limit: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchServiceStatus {
+    pub status: String,
+    pub version: Option<String>,
+    pub engine_count: usize,
+    pub tracked_engine_count: usize,
+    pub unhealthy_engine_count: usize,
+    pub unhealthy_engines: Vec<String>,
+    pub warning_count: usize,
+    pub warnings: Vec<String>,
+    pub asset_warning_count: usize,
+    pub runtime: serde_json::Value,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchEngineSummary {
+    pub catalog_count: usize,
+    pub returned_count: usize,
+    pub truncated_count: usize,
+    pub enabled_count: usize,
+    pub disabled_count: usize,
+    pub category_count: usize,
+    pub categories: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchEngineInfo {
+    pub name: String,
+    pub display_name: Option<String>,
+    pub homepage: Option<String>,
+    pub categories: Vec<String>,
+    pub enabled: bool,
+    pub timeout_ms: Option<u64>,
+    pub weight: Option<f64>,
+    pub health_status: Option<String>,
+    pub failure_count: Option<u64>,
+    pub last_error: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -154,6 +224,35 @@ pub(crate) async fn search_metasearch(
     Ok(compact_response(api_response, normalized))
 }
 
+pub(crate) async fn inspect_metasearch_status(
+    http_client: Arc<HttpClientWithUrl>,
+    request: DxMetasearchStatusRequest,
+) -> Result<DxMetasearchStatusResponse, String> {
+    let base_url = resolve_base_url(request.base_url);
+    let status_endpoint = build_endpoint(&base_url, "/api/v1/status")?;
+    let engines_endpoint = build_endpoint(&base_url, "/api/v1/engines")?;
+    let engine_limit = request
+        .engine_limit
+        .unwrap_or(DEFAULT_ENGINE_STATUS_LIMIT)
+        .clamp(1, MAX_ENGINE_STATUS_LIMIT);
+    let status_json = fetch_json(http_client.clone(), &status_endpoint).await?;
+    let engines_json = if request.include_engines {
+        Some(fetch_json(http_client, &engines_endpoint).await?)
+    } else {
+        None
+    };
+
+    Ok(compact_status_response(
+        base_url,
+        status_endpoint,
+        engines_endpoint,
+        request.include_engines,
+        engine_limit,
+        status_json,
+        engines_json,
+    ))
+}
+
 fn normalize_request(request: DxMetasearchRequest) -> Result<DxMetasearchCompactRequest, String> {
     let query = request.query.trim();
     if query.is_empty() {
@@ -176,11 +275,7 @@ fn normalize_request(request: DxMetasearchRequest) -> Result<DxMetasearchCompact
         .max_results
         .unwrap_or(DEFAULT_MAX_RESULTS)
         .clamp(1, MAX_RESULTS_LIMIT);
-    let base_url = request
-        .base_url
-        .filter(|base_url| !base_url.trim().is_empty())
-        .or_else(|| env::var(DX_METASEARCH_BASE_URL_ENV).ok())
-        .unwrap_or_else(|| DEFAULT_METASEARCH_BASE_URL.to_string());
+    let base_url = resolve_base_url(request.base_url);
     let endpoint = build_search_endpoint(
         &base_url,
         query,
@@ -203,6 +298,54 @@ fn normalize_request(request: DxMetasearchRequest) -> Result<DxMetasearchCompact
         time_range,
         max_results,
     })
+}
+
+async fn fetch_json(
+    http_client: Arc<HttpClientWithUrl>,
+    endpoint: &str,
+) -> Result<serde_json::Value, String> {
+    let mut response = http_client
+        .get(endpoint, AsyncBody::default(), true)
+        .await
+        .map_err(|error| {
+            format!(
+                "DX metasearch request failed for {endpoint}. Is the metasearch service running? {error}"
+            )
+        })?;
+
+    let mut body = Vec::new();
+    response
+        .body_mut()
+        .read_to_end(&mut body)
+        .await
+        .map_err(|error| format!("Failed to read DX metasearch response body: {error}"))?;
+
+    let status = response.status();
+    if status.as_u16() >= 400 {
+        let text = String::from_utf8_lossy(&body);
+        return Err(format!(
+            "DX metasearch returned HTTP {} for {endpoint}: {}",
+            status.as_u16(),
+            truncate_text(&text, SNIPPET_CHAR_LIMIT)
+        ));
+    }
+
+    serde_json::from_slice::<serde_json::Value>(&body)
+        .map_err(|error| format!("Failed to parse DX metasearch JSON response: {error}"))
+}
+
+fn resolve_base_url(base_url: Option<String>) -> String {
+    base_url
+        .filter(|base_url| !base_url.trim().is_empty())
+        .or_else(|| env::var(DX_METASEARCH_BASE_URL_ENV).ok())
+        .unwrap_or_else(|| DEFAULT_METASEARCH_BASE_URL.to_string())
+}
+
+fn build_endpoint(base_url: &str, path: &str) -> Result<String, String> {
+    let path = path.trim_start_matches('/');
+    Url::parse(&format!("{}/{}", base_url.trim_end_matches('/'), path))
+        .map(|url| url.to_string())
+        .map_err(|error| format!("Invalid DX metasearch base URL `{base_url}`: {error}"))
 }
 
 fn build_search_endpoint(
@@ -238,6 +381,115 @@ fn build_search_endpoint(
     }
 
     Ok(endpoint.to_string())
+}
+
+fn compact_status_response(
+    base_url: String,
+    status_endpoint: String,
+    engines_endpoint: String,
+    include_engines: bool,
+    engine_limit: usize,
+    status_json: serde_json::Value,
+    engines_json: Option<serde_json::Value>,
+) -> DxMetasearchStatusResponse {
+    let service_status =
+        string_field(&status_json, "status").unwrap_or_else(|| "unknown".to_string());
+    let engine_count = usize_field(&status_json, "engine_count");
+    let tracked_engine_count = usize_field(&status_json, "tracked_engines")
+        .or_else(|| usize_field(&status_json, "tracked_engine_count"))
+        .unwrap_or_default();
+    let unhealthy_engines = string_array_field(&status_json, "unhealthy_engines");
+    let unhealthy_engine_count =
+        usize_field(&status_json, "unhealthy_engine_count").unwrap_or(unhealthy_engines.len());
+    let warnings = string_array_field(&status_json, "warnings");
+    let warning_count = usize_field(&status_json, "warning_count").unwrap_or(warnings.len());
+    let asset_warning_count = usize_field(&status_json, "asset_warning_count").unwrap_or_default();
+    let runtime = status_json
+        .get("runtime")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+    let all_engines = engines_json
+        .as_ref()
+        .and_then(|json| json.get("engines"))
+        .and_then(|engines| engines.as_array())
+        .map(|engines| engines.iter().map(compact_engine_info).collect::<Vec<_>>())
+        .unwrap_or_default();
+    let catalog_count = engines_json
+        .as_ref()
+        .and_then(|json| usize_field(json, "count"))
+        .or(engine_count)
+        .unwrap_or(all_engines.len());
+    let enabled_count = all_engines.iter().filter(|engine| engine.enabled).count();
+    let disabled_count = all_engines.len().saturating_sub(enabled_count);
+    let mut categories = all_engines
+        .iter()
+        .flat_map(|engine| engine.categories.iter().cloned())
+        .collect::<Vec<_>>();
+    categories.sort();
+    categories.dedup();
+    let returned_engines = all_engines
+        .into_iter()
+        .take(engine_limit)
+        .collect::<Vec<_>>();
+    let next_action = metasearch_status_next_action(
+        &service_status,
+        include_engines,
+        catalog_count,
+        unhealthy_engine_count,
+        warning_count,
+    );
+
+    DxMetasearchStatusResponse {
+        schema: DX_METASEARCH_STATUS_SCHEMA,
+        generated_at_ms: current_unix_ms(),
+        source: metasearch_source(),
+        request: DxMetasearchStatusRequestSummary {
+            base_url,
+            status_endpoint,
+            engines_endpoint,
+            include_engines,
+            engine_limit,
+        },
+        service: DxMetasearchServiceStatus {
+            status: service_status,
+            version: string_field(&status_json, "version"),
+            engine_count: engine_count.unwrap_or(catalog_count),
+            tracked_engine_count,
+            unhealthy_engine_count,
+            unhealthy_engines,
+            warning_count,
+            warnings,
+            asset_warning_count,
+            runtime,
+        },
+        engine_summary: DxMetasearchEngineSummary {
+            catalog_count,
+            returned_count: returned_engines.len(),
+            truncated_count: catalog_count.saturating_sub(returned_engines.len()),
+            enabled_count,
+            disabled_count,
+            category_count: categories.len(),
+            categories,
+        },
+        engines: returned_engines,
+        next_action,
+    }
+}
+
+fn compact_engine_info(engine: &serde_json::Value) -> DxMetasearchEngineInfo {
+    let health = engine.get("health").unwrap_or(&serde_json::Value::Null);
+    DxMetasearchEngineInfo {
+        name: string_field(engine, "name").unwrap_or_else(|| "unknown".to_string()),
+        display_name: string_field(engine, "display_name"),
+        homepage: string_field(engine, "homepage"),
+        categories: string_array_field(engine, "categories"),
+        enabled: bool_field(engine, "enabled").unwrap_or(true),
+        timeout_ms: u64_field(engine, "timeout_ms"),
+        weight: f64_field(engine, "weight"),
+        health_status: string_field(health, "status"),
+        failure_count: u64_field(health, "failure_count"),
+        last_error: string_field(health, "last_error"),
+    }
 }
 
 fn compact_response(
@@ -297,6 +549,32 @@ fn compact_response(
     }
 }
 
+fn metasearch_status_next_action(
+    status: &str,
+    include_engines: bool,
+    catalog_count: usize,
+    unhealthy_engine_count: usize,
+    warning_count: usize,
+) -> String {
+    if !include_engines {
+        return "Run again with include_engines=true before choosing exact engine filters for Agent searches."
+            .to_string();
+    }
+
+    if catalog_count == 0 {
+        return "Start or repair the DX metasearch service before routing Agent searches through it."
+            .to_string();
+    }
+
+    if status != "ok" || unhealthy_engine_count > 0 || warning_count > 0 {
+        return "Review warnings and unhealthy engines, then prefer healthy exact-engine filters for critical Agent searches."
+            .to_string();
+    }
+
+    "Metasearch service is ready for cited Agent searches; choose categories or exact engines for focused source packs."
+        .to_string()
+}
+
 fn metasearch_source() -> DxMetasearchSource {
     let root = env::var_os(DX_METASEARCH_ROOT_ENV)
         .map(PathBuf::from)
@@ -317,6 +595,40 @@ fn metasearch_source() -> DxMetasearchSource {
         integration_guide,
         mode: "http_api",
     }
+}
+
+fn string_field(json: &serde_json::Value, field: &str) -> Option<String> {
+    json.get(field)
+        .and_then(|value| value.as_str())
+        .map(ToOwned::to_owned)
+}
+
+fn string_array_field(json: &serde_json::Value, field: &str) -> Vec<String> {
+    json.get(field)
+        .and_then(|value| value.as_array())
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|value| value.as_str().map(ToOwned::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn usize_field(json: &serde_json::Value, field: &str) -> Option<usize> {
+    u64_field(json, field).and_then(|value| usize::try_from(value).ok())
+}
+
+fn u64_field(json: &serde_json::Value, field: &str) -> Option<u64> {
+    json.get(field).and_then(|value| value.as_u64())
+}
+
+fn f64_field(json: &serde_json::Value, field: &str) -> Option<f64> {
+    json.get(field).and_then(|value| value.as_f64())
+}
+
+fn bool_field(json: &serde_json::Value, field: &str) -> Option<bool> {
+    json.get(field).and_then(|value| value.as_bool())
 }
 
 fn clean_list(values: Vec<String>, limit: usize) -> Vec<String> {

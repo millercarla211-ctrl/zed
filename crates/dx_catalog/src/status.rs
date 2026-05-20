@@ -26,7 +26,7 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 87,
+        overall_implementation_status: 89,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
         dx_catalog_status: 100,
@@ -53,13 +53,13 @@ pub fn current_launch_status() -> DxLaunchStatus {
                 "Universal provider routing",
                 76,
                 "One router picks local, free, premium, and remote providers from dx_catalog; approved provider settings registration can write catalog specs into native Zed language-model settings; the Agent preview validates native settings, runtime registry registration, credential/auth state, and matching model exposure; and an explicit permissioned Agent tool can queue approved native settings registration.",
-                "Start the Metasearch AI tool lane with adapter wiring and compact cited result contracts.",
+                "Continue metasearch source-pack handoff and serializer/RLM compaction.",
             ),
             feature(
                 "Metasearch AI tool",
-                26,
-                "Agent panel can call cancellable multi-engine cited search through a permissioned DX metasearch HTTP adapter with compact citation output.",
-                "Add engine/status inspection, source-pack handoff, and serializer/RLM compaction.",
+                36,
+                "Agent panel can call cancellable multi-engine cited search through a permissioned DX metasearch HTTP adapter, emit compact citations, and inspect service/engine readiness before searches.",
+                "Add source-pack handoff and serializer/RLM compaction.",
             ),
             feature(
                 "Serializer/RLM context pipeline",

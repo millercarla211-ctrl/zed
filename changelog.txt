@@ -1,3 +1,17 @@
+[2026-05-20] - DX Metasearch Status Inspection Tool
+
+ADDED:
+- Added `inspect_dx_metasearch`, a permissioned and cancellable Agent fetch tool for DX metasearch readiness checks.
+- Added `zed.dx.metasearch.status.v1` compact status output with service health, runtime settings, warnings, unhealthy engines, and optional engine catalog metadata from `/api/v1/status` and `/api/v1/engines`.
+
+CHANGED:
+- Agent threads now expose both DX metasearch search and inspection tools, so AI panel flows can choose healthy engines before building cited source packs.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move the Metasearch AI tool lane to 36/100 and the overall feature set to 89/100.
+
+NOTES:
+- The inspection tool uses `DX_METASEARCH_BASE_URL` when set and otherwise targets `http://127.0.0.1:8888`; it does not start the server, write source packs, or run serializer/RLM compaction yet.
+- No `just run`, Cargo build/check/test/clippy, downloads, cleanup, browser automation, or live metasearch server run was used for this source-level slice.
+
 [2026-05-20] - DX Metasearch Agent Adapter
 
 ADDED:
