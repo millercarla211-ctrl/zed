@@ -26,10 +26,10 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 26,
+        overall_implementation_status: 30,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
-        dx_catalog_status: 32,
+        dx_catalog_status: 44,
         features: vec![
             feature(
                 "Browser/Chrome functional plugin execution",
@@ -45,9 +45,9 @@ pub fn current_launch_status() -> DxLaunchStatus {
             ),
             feature(
                 "dx_catalog provider/model archive",
-                32,
-                "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, and launch status are in place.",
-                "Wire concrete generator adapters for Flow, zeroclaw-providers, models.dev, LiteLLM aliases, and local llama.cpp scans.",
+                44,
+                "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, source adapters, OpenRouter input, auth-profile enrichment, and launch status are in place.",
+                "Connect adapters to real G-drive Flow, zeroclaw-providers, models.dev, LiteLLM, OpenRouter, and local model scan data.",
             ),
             feature(
                 "Universal provider routing",

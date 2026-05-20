@@ -1,3 +1,16 @@
+[2026-05-20] - DX Catalog Adapter Boundary
+
+ADDED:
+- Added `dx_catalog` adapter APIs for Flow local roles, local llama.cpp scans, ZeroClaw provider metadata, models.dev metadata, OpenRouter metadata, LiteLLM aliases, and auth profile state.
+- Added auth-profile enrichment to the catalog generator so account configuration can attach to provider records without replacing provider metadata.
+- Added local-model record helpers that convert Flow roles and llama.cpp scans into provider/model/routing records.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and launch status to move `dx_catalog` to 44/100 and the overall launch implementation status to 30/100.
+
+NOTES:
+- This slice adds typed adapter boundaries only. It does not parse external JSON, fetch network catalogs, run `just`, run Cargo build/check/test/clippy, or download models.
+
 [2026-05-20] - DX Catalog Generator Contract
 
 ADDED:

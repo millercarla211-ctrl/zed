@@ -1,6 +1,6 @@
 use crate::{
-    CatalogSourceRecord, CatalogValidationReport, DX_CATALOG_SCHEMA_VERSION, DxCatalog,
-    ModelRecord, ProviderRecord, RoutingRule,
+    AuthProfileLink, CatalogSourceRecord, CatalogValidationReport, DX_CATALOG_SCHEMA_VERSION,
+    DxCatalog, ModelRecord, ProviderAuthKind, ProviderRecord, RoutingRule,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -10,6 +10,7 @@ pub struct CatalogGeneratorInput {
     pub providers: Vec<ProviderRecord>,
     pub models: Vec<ModelRecord>,
     pub routing_rules: Vec<RoutingRule>,
+    pub auth_profiles: Vec<ProviderAuthProfileUpdate>,
 }
 
 impl CatalogGeneratorInput {
@@ -19,6 +20,7 @@ impl CatalogGeneratorInput {
             providers: Vec::new(),
             models: Vec::new(),
             routing_rules: Vec::new(),
+            auth_profiles: Vec::new(),
         }
     }
 
@@ -39,6 +41,23 @@ impl CatalogGeneratorInput {
         self.routing_rules.extend(routing_rules);
         self
     }
+
+    pub fn with_auth_profiles(
+        mut self,
+        auth_profiles: impl IntoIterator<Item = ProviderAuthProfileUpdate>,
+    ) -> Self {
+        self.auth_profiles.extend(auth_profiles);
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderAuthProfileUpdate {
+    pub provider_id: String,
+    pub profile_id: String,
+    pub configured: bool,
+    pub secret_storage_key: Option<String>,
+    pub auth_kind: Option<ProviderAuthKind>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,6 +106,8 @@ pub struct CatalogBuildReport {
     pub skipped_model_ids: Vec<String>,
     pub replaced_routing_roles: Vec<String>,
     pub skipped_routing_roles: Vec<String>,
+    pub applied_auth_profile_provider_ids: Vec<String>,
+    pub missing_auth_profile_provider_ids: Vec<String>,
     pub validation: CatalogValidationReport,
 }
 
@@ -114,6 +135,9 @@ pub fn build_catalog_with_last_good(
     let mut skipped_model_ids = Vec::new();
     let mut replaced_routing_roles = Vec::new();
     let mut skipped_routing_roles = Vec::new();
+    let mut auth_profiles = Vec::new();
+    let mut applied_auth_profile_provider_ids = Vec::new();
+    let mut missing_auth_profile_provider_ids = Vec::new();
 
     for input in inputs {
         if !source_ids.insert(input.source.id.clone()) {
@@ -152,6 +176,24 @@ pub fn build_catalog_with_last_good(
                 &mut skipped_routing_roles,
             );
         }
+
+        auth_profiles.extend(input.auth_profiles);
+    }
+
+    for auth_profile in auth_profiles {
+        if let Some(provider) = providers.get_mut(&auth_profile.provider_id) {
+            if let Some(auth_kind) = auth_profile.auth_kind {
+                provider.auth = auth_kind;
+            }
+            provider.auth_profile = Some(AuthProfileLink {
+                profile_id: auth_profile.profile_id,
+                configured: auth_profile.configured,
+                secret_storage_key: auth_profile.secret_storage_key,
+            });
+            applied_auth_profile_provider_ids.push(provider.id.clone());
+        } else {
+            missing_auth_profile_provider_ids.push(auth_profile.provider_id);
+        }
     }
 
     let catalog = DxCatalog {
@@ -189,6 +231,8 @@ pub fn build_catalog_with_last_good(
         skipped_model_ids,
         replaced_routing_roles,
         skipped_routing_roles,
+        applied_auth_profile_provider_ids,
+        missing_auth_profile_provider_ids,
         validation,
     };
 
