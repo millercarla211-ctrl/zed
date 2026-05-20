@@ -10,11 +10,11 @@ use crate::{
     AgentPluginAssetProvisionerTool, AgentPluginBootstrapTool, AgentPluginCatalogTool,
     AgentPluginRuntimeStatusTool, ApplyCodeActionTool, CodeActionStore, ContextServerRegistry,
     CopyPathTool, CreateDirectoryTool, DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool,
-    EditFileTool, FetchTool, FindPathTool, FindReferencesTool, GetCodeActionsTool,
-    GoToDefinitionTool, GrepTool, ListDirectoryTool, MovePathTool, ProjectSnapshot, ReadFileTool,
-    RenameTool, SpawnAgentTool, SystemPromptTemplate, Template, Templates, TerminalTool,
-    ToolPermissionDecision, UpdatePlanTool, UserAgentsMd, WebSearchTool, WriteFileTool,
-    decide_permission_from_settings,
+    DxCatalogProviderSettingsTool, EditFileTool, FetchTool, FindPathTool, FindReferencesTool,
+    GetCodeActionsTool, GoToDefinitionTool, GrepTool, ListDirectoryTool, MovePathTool,
+    ProjectSnapshot, ReadFileTool, RenameTool, SpawnAgentTool, SystemPromptTemplate, Template,
+    Templates, TerminalTool, ToolPermissionDecision, UpdatePlanTool, UserAgentsMd, WebSearchTool,
+    WriteFileTool, decide_permission_from_settings,
 };
 use acp_thread::{MentionUri, UserMessageId};
 use action_log::ActionLog;
@@ -1687,6 +1687,7 @@ impl Thread {
         ));
         self.add_tool(TerminalTool::new(self.project.clone(), environment.clone()));
         self.add_tool(WebSearchTool);
+        self.add_tool(DxCatalogProviderSettingsTool);
         self.add_tool(AgentPluginCatalogTool::new(self.project.clone()));
         self.add_tool(AgentPluginRuntimeStatusTool::new(self.project.clone()));
         self.add_tool(AgentBrowserPayloadTool);

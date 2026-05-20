@@ -1,3 +1,17 @@
+[2026-05-20] - DX Catalog Provider Settings Preview Tool
+
+ADDED:
+- Added `inspect_dx_catalog_provider_settings`, a read-only Agent tool for catalog provider-settings registration readiness.
+- Added a structured preview report with catalog artifact candidates, approval/dry-run/generation flags, eligible/skipped provider counts, credential/runtime blockers, settings-writable provider details, and compact model previews.
+
+CHANGED:
+- Agent threads now expose provider-registration readiness before any approved settings write, so operators can inspect what would be registered without enabling the write bridge.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move Universal Provider Routing to 64/100 and the overall feature set to 80/100.
+
+NOTES:
+- The preview does not write settings, API keys, downloads, or model/runtime state. It only reads the validated catalog artifact path already used by the Agent bridge.
+- No `just run`, Cargo build/check/test/clippy, downloads, model loading, cleanup, browser automation, or provider network validation was run for this source-level slice.
+
 [2026-05-20] - DX Catalog Approved Provider Settings Registration
 
 ADDED:

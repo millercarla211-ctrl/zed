@@ -32,6 +32,8 @@ const DX_CATALOG_REGISTER_PROVIDER_SETTINGS_ENV: &str = "DX_CATALOG_REGISTER_PRO
 const DX_CATALOG_REGISTER_PROVIDERS_DRY_RUN_ENV: &str = "DX_CATALOG_REGISTER_PROVIDERS_DRY_RUN";
 const DX_CATALOG_ARTIFACT_FILE_NAME: &str = "catalog.dxcat";
 const DEFAULT_CATALOG_MODEL_MAX_TOKENS: u64 = 200_000;
+pub(crate) const DX_CATALOG_PROVIDER_SETTINGS_PREVIEW_SCHEMA: &str =
+    "zed.dx_catalog.provider_settings.registration_preview.v1";
 
 #[derive(Clone, Debug, Default)]
 pub struct DxCatalogAgentBridge {
@@ -346,6 +348,88 @@ pub fn apply_provider_settings_if_approved(fs: Arc<dyn Fs>, cx: &gpui::App) {
     );
 }
 
+pub(crate) fn provider_settings_registration_preview() -> serde_json::Value {
+    let approval_enabled = provider_settings_registration_approved();
+    let dry_run_enabled = env_flag_enabled(DX_CATALOG_REGISTER_PROVIDERS_DRY_RUN_ENV);
+    let generation_enabled = catalog_generation_approved();
+    let artifact_candidates = catalog_artifact_candidate_preview();
+    let Some(artifact) =
+        read_first_available_catalog_artifact_with_path("provider settings preview")
+    else {
+        return serde_json::json!({
+            "schema": DX_CATALOG_PROVIDER_SETTINGS_PREVIEW_SCHEMA,
+            "generated_at_ms": current_unix_ms(),
+            "artifact_loaded": false,
+            "artifact_path": serde_json::Value::Null,
+            "artifact_candidates": artifact_candidates,
+            "approval_enabled": approval_enabled,
+            "dry_run_enabled": dry_run_enabled,
+            "generation_enabled": generation_enabled,
+            "summary": {
+                "catalog_provider_count": 0,
+                "catalog_model_count": 0,
+                "registration_spec_count": 0,
+                "eligible_provider_count": 0,
+                "skipped_provider_count": 0,
+                "openai_compatible_provider_count": 0,
+                "open_router_model_count": 0,
+                "model_count": 0,
+                "ready_for_execution_provider_count": 0,
+                "requires_user_approval_provider_count": 0,
+                "needs_auth_provider_count": 0,
+            },
+            "providers": [],
+            "next_action": "Generate or point DX_CATALOG_ARTIFACT/DX_CATALOG_PATH at a validated catalog.dxcat before previewing provider registration.",
+        });
+    };
+
+    let specs = build_catalog_provider_registration_specs(&artifact.catalog);
+    let report = CatalogProviderSettingsRegistrationReport::from_specs(&specs);
+    let ready_for_execution_provider_count = specs
+        .iter()
+        .filter(|spec| can_write_provider_settings(spec) && spec.ready_for_execution)
+        .count();
+    let requires_user_approval_provider_count = specs
+        .iter()
+        .filter(|spec| spec.user_approval_required)
+        .count();
+    let needs_auth_provider_count = specs.iter().filter(|spec| !spec.auth_configured).count();
+    let providers = specs
+        .iter()
+        .map(provider_settings_registration_preview_provider)
+        .collect::<Vec<_>>();
+
+    serde_json::json!({
+        "schema": DX_CATALOG_PROVIDER_SETTINGS_PREVIEW_SCHEMA,
+        "generated_at_ms": current_unix_ms(),
+        "artifact_loaded": true,
+        "artifact_path": artifact.path.display().to_string(),
+        "artifact_candidates": artifact_candidates,
+        "approval_enabled": approval_enabled,
+        "dry_run_enabled": dry_run_enabled,
+        "generation_enabled": generation_enabled,
+        "summary": {
+            "catalog_provider_count": artifact.catalog.providers.len(),
+            "catalog_model_count": artifact.catalog.models.len(),
+            "registration_spec_count": specs.len(),
+            "eligible_provider_count": report.eligible_provider_count,
+            "skipped_provider_count": report.skipped_provider_count,
+            "openai_compatible_provider_count": report.openai_compatible_provider_count,
+            "open_router_model_count": report.open_router_model_count,
+            "model_count": report.model_count,
+            "ready_for_execution_provider_count": ready_for_execution_provider_count,
+            "requires_user_approval_provider_count": requires_user_approval_provider_count,
+            "needs_auth_provider_count": needs_auth_provider_count,
+        },
+        "providers": providers,
+        "next_action": provider_settings_registration_preview_next_action(
+            &report,
+            approval_enabled,
+            dry_run_enabled,
+        ),
+    })
+}
+
 impl From<CatalogExecutionPlan> for CatalogExecutionSummary {
     fn from(plan: CatalogExecutionPlan) -> Self {
         Self {
@@ -362,6 +446,11 @@ impl From<CatalogExecutionPlan> for CatalogExecutionSummary {
 struct CatalogArtifactCandidate {
     path: PathBuf,
     env_var: Option<&'static str>,
+}
+
+struct CatalogArtifactLoad {
+    path: PathBuf,
+    catalog: DxCatalog,
 }
 
 fn catalog_artifact_candidates() -> Vec<CatalogArtifactCandidate> {
@@ -398,6 +487,12 @@ fn catalog_artifact_candidates() -> Vec<CatalogArtifactCandidate> {
 }
 
 fn read_first_available_catalog_artifact(log_context: &str) -> Option<DxCatalog> {
+    read_first_available_catalog_artifact_with_path(log_context).map(|load| load.catalog)
+}
+
+fn read_first_available_catalog_artifact_with_path(
+    log_context: &str,
+) -> Option<CatalogArtifactLoad> {
     let candidates = catalog_artifact_candidates();
     for candidate in candidates {
         if !candidate.path.is_file() {
@@ -411,7 +506,12 @@ fn read_first_available_catalog_artifact(log_context: &str) -> Option<DxCatalog>
         }
 
         match read_catalog_artifact(&candidate.path) {
-            Ok(catalog) => return Some(catalog),
+            Ok(catalog) => {
+                return Some(CatalogArtifactLoad {
+                    path: candidate.path,
+                    catalog,
+                });
+            }
             Err(error) => {
                 log::warn!(
                     "failed to read DX catalog artifact for {log_context} at {}: {error}",
@@ -422,6 +522,129 @@ fn read_first_available_catalog_artifact(log_context: &str) -> Option<DxCatalog>
     }
 
     None
+}
+
+fn catalog_artifact_candidate_preview() -> Vec<serde_json::Value> {
+    catalog_artifact_candidates()
+        .into_iter()
+        .map(|candidate| {
+            serde_json::json!({
+                "path": candidate.path.display().to_string(),
+                "env_var": candidate.env_var,
+                "exists": candidate.path.is_file(),
+            })
+        })
+        .collect()
+}
+
+fn provider_settings_registration_preview_provider(
+    spec: &CatalogProviderAdapterRegistrationSpec,
+) -> serde_json::Value {
+    let settings_writable = can_write_provider_settings(spec);
+    let mut registration_blockers = spec.registration_blockers.clone();
+    if !settings_writable && registration_blockers.is_empty() {
+        if !matches!(
+            spec.adapter_kind,
+            CatalogExecutionAdapterKind::OpenAiCompatibleHttp
+                | CatalogExecutionAdapterKind::OllamaCompatibleHttp
+                | CatalogExecutionAdapterKind::OpenRouterHttp
+                | CatalogExecutionAdapterKind::LiteLlmProxy
+        ) {
+            registration_blockers.push(format!(
+                "{} providers are not supported by the native provider-settings writer yet.",
+                spec.adapter_kind.label()
+            ));
+        }
+        if spec
+            .base_url
+            .as_ref()
+            .map(|url| url.trim().is_empty())
+            .unwrap_or(true)
+        {
+            registration_blockers.push("Catalog provider has no base URL.".to_string());
+        }
+        if spec.models.is_empty() {
+            registration_blockers.push("Catalog provider has no catalog models.".to_string());
+        }
+    }
+
+    let models = spec
+        .models
+        .iter()
+        .take(12)
+        .map(provider_settings_registration_preview_model)
+        .collect::<Vec<_>>();
+
+    serde_json::json!({
+        "provider_id": spec.provider_id.as_str(),
+        "provider_name": spec.provider_name.as_str(),
+        "adapter_kind": spec.adapter_kind,
+        "adapter_kind_label": spec.adapter_kind.label(),
+        "permission": spec.permission,
+        "permission_label": spec.permission.label(),
+        "settings_path": spec.settings_path.as_deref(),
+        "base_url": spec.base_url.as_deref(),
+        "auth_profile_id": spec.auth_profile_id.as_deref(),
+        "auth_configured": spec.auth_configured,
+        "user_approval_required": spec.user_approval_required,
+        "settings_writable": settings_writable,
+        "can_register_settings": spec.can_register_settings,
+        "ready_for_execution": spec.ready_for_execution,
+        "model_count": spec.models.len(),
+        "models_preview": models,
+        "truncated_model_count": spec.models.len().saturating_sub(12),
+        "registration_blockers": registration_blockers,
+        "execution_blockers": &spec.execution_blockers,
+        "next_action": spec.next_action.as_str(),
+    })
+}
+
+fn provider_settings_registration_preview_model(
+    model: &CatalogProviderAdapterModelSpec,
+) -> serde_json::Value {
+    serde_json::json!({
+        "model_id": model.model_id.as_str(),
+        "display_name": model.display_name.as_str(),
+        "context_window_tokens": model.context_window_tokens,
+        "max_output_tokens": model.max_output_tokens,
+        "supports_tools": model.supports_tools,
+        "supports_images": model.supports_images,
+        "supports_audio": model.supports_audio,
+        "supports_video": model.supports_video,
+        "supports_streaming": model.supports_streaming,
+        "free_tier": model.free_tier,
+        "premium_account": model.premium_account,
+    })
+}
+
+fn provider_settings_registration_preview_next_action(
+    report: &CatalogProviderSettingsRegistrationReport,
+    approval_enabled: bool,
+    dry_run_enabled: bool,
+) -> String {
+    if report.eligible_provider_count == 0 {
+        return "Resolve provider registration blockers before enabling catalog provider settings."
+            .to_string();
+    }
+
+    if !approval_enabled {
+        return format!(
+            "Review {} eligible provider(s), then set DX_CATALOG_REGISTER_PROVIDER_SETTINGS=1 to allow native settings registration.",
+            report.eligible_provider_count
+        );
+    }
+
+    if dry_run_enabled {
+        return format!(
+            "Dry run is enabled. Unset DX_CATALOG_REGISTER_PROVIDERS_DRY_RUN to write {} eligible provider(s) into native settings.",
+            report.eligible_provider_count
+        );
+    }
+
+    format!(
+        "Provider settings registration is approved for {} provider(s); restart or reload Agent startup to apply the settings bridge.",
+        report.eligible_provider_count
+    )
 }
 
 fn materialize_catalog_artifact_if_approved() {
