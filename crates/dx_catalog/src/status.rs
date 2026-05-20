@@ -26,7 +26,7 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 95,
+        overall_implementation_status: 96,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
         dx_catalog_status: 100,
@@ -102,6 +102,12 @@ pub fn current_launch_status() -> DxLaunchStatus {
                 0,
                 "DCP, MCP, ACP, and local tools share one permission and receipt model.",
                 "Define the minimum capability schema.",
+            ),
+            feature(
+                "Media tool bridge",
+                28,
+                "Agent threads can plan safe ffprobe/ffmpeg inspect, audio extraction, and frame extraction work with managed output paths, no-overwrite arguments, approval state, and receipts before any native runner executes.",
+                "Add the approved no-shell media runner and produced-file receipts.",
             ),
         ],
     }

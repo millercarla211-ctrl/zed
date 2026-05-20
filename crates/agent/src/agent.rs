@@ -2,6 +2,7 @@
 
 mod db;
 mod dx_catalog_agent_bridge;
+mod dx_media_tool_plan;
 mod dx_metasearch_agent_bridge;
 mod dx_metasearch_context_adapter;
 mod dx_serializer_rlm_execution_plan;

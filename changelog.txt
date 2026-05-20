@@ -1,3 +1,16 @@
+[2026-05-20] - DX Media Tool Planning Bridge
+
+ADDED:
+- Added `plan_dx_media_tool`, a permissioned Agent tool for safe ffprobe/ffmpeg media inspect, audio extraction, and frame extraction plans.
+- Added `zed.dx.media_tool.plan.v1` and managed plan receipt support with no-shell argument vectors, no-overwrite output paths, and managed output directories.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and launch status to move the Media tool bridge to 28/100 and the overall DX Native Tools Integration set to 96/100.
+
+NOTES:
+- This slice creates planning and receipt contracts only; it does not run ffmpeg, ffprobe, shell commands, downloads, deletes, overwrites, model calls, browser input, or Cargo.
+- No `just run`, Cargo build/check/test/clippy, downloads, cleanup, browser automation, or live media execution was used for this source-level slice.
+
 [2026-05-20] - DX Serializer/RLM Execution Plan Hook
 
 ADDED:

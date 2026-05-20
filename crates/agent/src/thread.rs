@@ -10,7 +10,7 @@ use crate::{
     AgentPluginAssetProvisionerTool, AgentPluginBootstrapTool, AgentPluginCatalogTool,
     AgentPluginRuntimeStatusTool, ApplyCodeActionTool, CodeActionStore, ContextServerRegistry,
     CopyPathTool, CreateDirectoryTool, DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool,
-    DxCatalogProviderSettingsRegistrationTool, DxCatalogProviderSettingsTool,
+    DxCatalogProviderSettingsRegistrationTool, DxCatalogProviderSettingsTool, DxMediaToolPlanTool,
     DxMetasearchContextAdapterTool, DxMetasearchSourceExtractTool, DxMetasearchStatusTool,
     DxMetasearchTool, DxSerializerRlmExecutionPlanTool, EditFileTool, FetchTool, FindPathTool,
     FindReferencesTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool, ListDirectoryTool,
@@ -1701,6 +1701,7 @@ impl Thread {
         self.add_tool(DxMetasearchStatusTool::new(
             self.project.read(cx).client().http_client(),
         ));
+        self.add_tool(DxMediaToolPlanTool::new(self.project.clone()));
         self.add_tool(DxCatalogProviderSettingsTool);
         self.add_tool(DxCatalogProviderSettingsRegistrationTool::new(
             self.project.clone(),

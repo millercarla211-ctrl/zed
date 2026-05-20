@@ -233,11 +233,11 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | Check panel | 5/100 | Project score and blockers include structure, lint/format status, visual proof, deploy readiness | Define score schema and read-only scanner |
 | Deploy panel | 0/100 | CI/CD readiness, env state, URLs, logs, rollback, receipts visible | Define deploy target registry |
 | DCP bridge | 0/100 | DCP/MCP/ACP/local tools share one capability, permission, and receipt model | Define minimum DCP schema |
-| Media tool bridge | 10/100 | Agent can manipulate audio/video/images through direct tools like ffmpeg | Start with safe ffmpeg actions |
+| Media tool bridge | 28/100 | Agent can plan safe ffmpeg/ffprobe inspect and extract actions with managed output paths, no-overwrite arguments, permission state, and receipts before any native runner executes | Add the approved no-shell media runner and produced-file receipts |
 | Codex-style rails | 5/100 | Left Sources and right project/task rail are optional and cheap when closed | Design rail state model |
 | Launch demo package | 0/100 | May 28 demos show speed, local model tools, provider freedom, metasearch, and panels | Build 3 demo scripts |
 
-Overall implementation status: 95/100.
+Overall implementation status: 96/100.
 
 Overall planning and product direction status: 100/100 for the current roadmap.
 
