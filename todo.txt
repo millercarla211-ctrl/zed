@@ -3,6 +3,8 @@ IN PROGRESS:
 - Immediate next target: implement `dx_catalog` with `rkyv` plus `memmap2` archived provider/model catalogs fed by Flow local roles, `zeroclaw-providers`, models.dev, LiteLLM-style aliases, local llama.cpp models, auth profile state, and last-good offline fallback.
 
 COMPLETED:
+- Root DX launch plan: added `PLAN.md` with the May 28 launch thesis, feature tracker, 100-point implementation statuses, build order, testing policy, disk policy, and business reality check.
+- G-drive Flow rebuildable cleanup: removed only verified Cargo target outputs from `G:\Workspaces\flow` and `G:\.flow-cargo-target`, preserving source code, models, docs, and DX tools.
 - DX native tools vision backup: expanded `hexed/DX_NATIVE_TOOLS_INTEGRATION_PLAN.md` with the full product thesis, canonical roadmap, prioritized next-build order, and raw prompt backup while keeping `dx_catalog` as the next implementation target.
 - Screen Dock Carousel feature slice: documented the DX competitive plan, added edge-dwell screen peeking, wrapped Editor/Browser/Terminal screen navigation, added click-to-activate preview slivers, added keyboard screen navigation/peek shortcuts, deferred rainbow cursor behind a performance gate, fixed the main-screen visibility regression by preserving full-size center-pane layout, and verified with the repo-approved lightweight checks plus final `just run`.
 - DX native tools integration plan: added `hexed/DX_NATIVE_TOOLS_INTEGRATION_PLAN.md` with phased Provider Catalog, Metasearch, Forge, Drive, Check, Deploy, DCP, serializer/RLM, and Codex-style layout work.

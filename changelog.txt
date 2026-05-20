@@ -5266,6 +5266,20 @@ NOTES:
 - Smoke-tested the tuned Qwen launch directly: `/props` reported `16384` context and `1` slot, and a tiny native `/apply-template` + `/completion` request answered `OK` in 165 ms.
 - Did not run `just run` yet; this pass used code inspection, local WebView2 docs/source research, `rustfmt`, `git diff --check`, and targeted llama.cpp smoke testing.
 
+[2026-05-20] - Root DX Launch Plan and G Drive Cleanup
+
+ADDED:
+- `PLAN.md` now captures the DX/Zed launch thesis, May 28 demo plan, architecture map, 100-point feature tracker, build order, testing policy, disk policy, and business reality check.
+
+CHANGED:
+- `todo.txt` now records the root launch plan and G-drive rebuildable cleanup as completed while keeping `dx_catalog` as the next implementation target.
+
+NOTES:
+- Cleaned only verified rebuildable Cargo target outputs from `G:\Workspaces\flow\target`, `G:\Workspaces\flow\forge\target`, `G:\Workspaces\flow\providers\target`, and `G:\.flow-cargo-target`.
+- Preserved source code, models, docs, and DX tool folders.
+- G drive free space increased from about 2.90 GB to about 25.39 GB.
+- This was a documentation and safe cleanup pass; no `just run` was run.
+
 [2026-05-20] - Screen Dock Carousel Planning and Implementation Slice
 
 ADDED:
