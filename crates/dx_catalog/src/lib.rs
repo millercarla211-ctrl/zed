@@ -1,5 +1,6 @@
 mod artifact;
 mod error;
+mod generator;
 mod status;
 mod types;
 
@@ -9,6 +10,10 @@ pub use artifact::{
     serialize_catalog_payload, write_catalog_artifact,
 };
 pub use error::DxCatalogError;
+pub use generator::{
+    CatalogBuildOutput, CatalogBuildReport, CatalogConflictPolicy, CatalogGeneratorInput,
+    CatalogGeneratorOptions, build_catalog, build_catalog_with_last_good,
+};
 pub use status::{DxLaunchStatus, LaunchFeatureStatus, current_launch_status};
 pub use types::{
     AuthProfileLink, CatalogSourceKind, CatalogSourceRecord, CatalogValidationReport,

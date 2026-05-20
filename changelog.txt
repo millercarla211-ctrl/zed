@@ -1,3 +1,16 @@
+[2026-05-20] - DX Catalog Generator Contract
+
+ADDED:
+- Added `dx_catalog` generator inputs for typed source batches from Flow, ZeroClaw providers, models.dev, LiteLLM aliases, local llama.cpp scans, and auth profile adapters.
+- Added deterministic provider/model/routing-rule merge behavior with first-source or latest-source conflict policy.
+- Added build reports with duplicate, replaced, skipped, validation, and last-good fallback fields.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and `dx_catalog` launch status from 22/100 to 32/100 for the catalog lane and 26/100 overall launch implementation.
+
+NOTES:
+- This slice defines the generator/fallback contract only. It does not parse external catalogs yet, run `just`, run Cargo build/check/test/clippy, download models, or touch runtime processes.
+
 [2026-05-20] - DX Catalog Foundation
 
 ADDED:
