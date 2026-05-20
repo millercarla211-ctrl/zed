@@ -1,6 +1,7 @@
 #![recursion_limit = "512"]
 
 mod db;
+mod dx_catalog_agent_bridge;
 mod legacy_thread;
 mod native_agent_server;
 pub mod outline;
@@ -176,12 +177,17 @@ impl LanguageModels {
 
         let mut language_model_list = IndexMap::default();
         let mut recommended_models = HashSet::default();
+        let catalog_bridge = dx_catalog_agent_bridge::DxCatalogAgentBridge::load_from_environment();
 
         let mut recommended = Vec::new();
         for provider in &providers {
             for model in provider.recommended_models(cx) {
                 recommended_models.insert((model.provider_id(), model.id()));
-                recommended.push(Self::map_language_model_to_info(&model, provider));
+                let mut model_info = Self::map_language_model_to_info(&model, provider);
+                if let Some(catalog_bridge) = &catalog_bridge {
+                    catalog_bridge.enrich_model_info(&mut model_info);
+                }
+                recommended.push(model_info);
             }
         }
         if !recommended.is_empty() {
@@ -195,7 +201,10 @@ impl LanguageModels {
         for provider in providers {
             let mut provider_models = Vec::new();
             for model in provider.provided_models(cx) {
-                let model_info = Self::map_language_model_to_info(&model, &provider);
+                let mut model_info = Self::map_language_model_to_info(&model, &provider);
+                if let Some(catalog_bridge) = &catalog_bridge {
+                    catalog_bridge.enrich_model_info(&mut model_info);
+                }
                 let model_id = model_info.id.clone();
                 provider_models.push(model_info);
                 models.insert(model_id, model);

@@ -1,3 +1,16 @@
+[2026-05-20] - DX Catalog Agent Picker Bridge
+
+ADDED:
+- Added an optional Agent-side DX catalog bridge that reads a generated `DX_CATALOG_ARTIFACT`, `DX_CATALOG_PATH`, or canonical data-dir catalog artifact once, matches catalog model IDs/aliases to real registered Agent language models, and enriches picker rows with catalog descriptions and cost labels.
+
+CHANGED:
+- Agent model-list refresh now applies catalog metadata to recommended and provider model groups without adding catalog-only dummy rows that cannot execute yet.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move `dx_catalog` to 90/100, universal provider routing to 30/100, and the overall feature set to 54/100.
+
+NOTES:
+- This slice keeps model execution on existing registered providers. The next implementation target is permissioned catalog route selection into real Agent thread switching/provider execution.
+- No `just run`, Cargo build/check/test/clippy, downloads, model loading, cleanup, or browser automation was run for this source-level slice.
+
 [2026-05-20] - DX Catalog Agent Picker Projection
 
 ADDED:
