@@ -2,6 +2,7 @@ mod adapters;
 mod artifact;
 mod error;
 mod generator;
+mod readers;
 mod sources;
 mod status;
 mod types;
@@ -22,6 +23,10 @@ pub use generator::{
     CatalogBuildOutput, CatalogBuildReport, CatalogConflictPolicy, CatalogGeneratorInput,
     CatalogGeneratorOptions, ProviderAuthProfileUpdate, build_catalog,
     build_catalog_with_last_good,
+};
+pub use readers::{
+    LocalModelCatalogReadOutput, LocalModelCatalogReadReport, LocalModelSourceReaderOptions,
+    SkippedLocalModelFile, read_local_model_source, read_local_models_from_root,
 };
 pub use sources::{
     CatalogSourceCandidate, CatalogSourceCandidateStatus, CatalogSourceDiscoveryConfig,

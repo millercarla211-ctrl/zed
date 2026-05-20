@@ -223,7 +223,7 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | Screen Dock Carousel | 85/100 | Smooth, full-width screen switching with polish, reduced motion, persistence, and no layout regression | Add spring polish after current feature batch |
 | Root product plan backup | 100/100 | Canonical root plan plus detailed roadmap and launch thesis are committed | Keep updated as architecture changes |
 | G-drive rebuildable cleanup | 100/100 | Flow Cargo target outputs cleaned without deleting source or models | Repeat only when space drops |
-| `dx_catalog` provider/model archive | 52/100 | `rkyv` + `memmap2` catalog loader/generator powers model picker and routing | Add concrete source readers that turn discovered Flow, `zeroclaw-providers`, models.dev, LiteLLM, OpenRouter, auth, and local model roots into adapter inputs |
+| `dx_catalog` provider/model archive | 60/100 | `rkyv` + `memmap2` catalog loader/generator powers model picker and routing | Add provider/auth source readers that turn discovered Flow provider, OpenRouter, LiteLLM, and auth roots into adapter inputs |
 | Universal provider routing | 10/100 | Local, remote, free-tier, premium, and fallback routes work from one catalog | Integrate `zeroclaw-providers` metadata |
 | Metasearch AI tool | 10/100 | Agent panel can search many engines with cited compact results | Add Zed tool adapter around metasearch crates |
 | Serializer/RLM prep pipeline | 10/100 | Tool catalogs, chats, sources, and search results compact before model calls | Define AI context packing boundary |
@@ -237,7 +237,7 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | Codex-style rails | 5/100 | Left Sources and right project/task rail are optional and cheap when closed | Design rail state model |
 | Launch demo package | 0/100 | May 28 demos show speed, local model tools, provider freedom, metasearch, and panels | Build 3 demo scripts |
 
-Overall implementation status: 34/100.
+Overall implementation status: 38/100.
 
 Overall planning and product direction status: 100/100 for the current roadmap.
 

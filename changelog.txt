@@ -1,3 +1,15 @@
+[2026-05-20] - DX Catalog Local Model Reader
+
+ADDED:
+- Added a bounded `dx_catalog` local model source reader that converts discovered GGUF/llama.cpp roots into catalog adapter inputs with stable model IDs, path hints, size notes, quantization hints, parameter-count hints, role hints, and skipped projector-file reporting.
+- Exported the local model reader options, reports, and read helpers from `dx_catalog`.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and launch status to move `dx_catalog` to 60/100 and the overall launch implementation status to 38/100.
+
+NOTES:
+- This slice reads filesystem names and metadata only. It does not load model contents, parse remote catalogs, run `just`, run Cargo build/check/test/clippy, delete files, or download models.
+
 [2026-05-20] - DX Catalog Source Discovery
 
 ADDED:
