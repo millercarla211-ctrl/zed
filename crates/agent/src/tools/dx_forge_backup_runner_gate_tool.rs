@@ -237,7 +237,7 @@ impl DxForgeBackupRunnerGateArtifactTarget {
                 "overwrites_files": false,
                 "permanent_delete_allowed": false,
             },
-            "next_action": "Use this runner gate receipt to implement the future Forge/zstd backup runner and restore receipt writer."
+            "next_action": "Use this runner gate receipt with execute_dx_forge_backup before any archive/quarantine execution."
         });
         let receipt_json = serde_json::to_vec_pretty(&receipt).map_err(|error| {
             format!("Failed to serialize Forge backup runner gate receipt: {error}")
@@ -276,7 +276,7 @@ impl DxForgeBackupRunnerGateArtifactTarget {
             planned_archive_path: response.policy.planned_archive_path.clone(),
             planned_manifest_path: response.policy.planned_manifest_path.clone(),
             planned_quarantine_path: response.policy.planned_quarantine_path.clone(),
-            next_action: "Use the latest Forge backup runner gate receipt to add the future archive/quarantine executor after review.".to_string(),
+            next_action: "Use the latest Forge backup runner gate receipt with execute_dx_forge_backup after review.".to_string(),
         })
     }
 

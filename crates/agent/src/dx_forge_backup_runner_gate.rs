@@ -221,7 +221,7 @@ pub(crate) fn build_dx_forge_backup_runner_gate(
         "approval_required"
     };
     let next_action = if runner_ready {
-        "Use this gate receipt to implement the future Forge/zstd backup runner, then write backup and restore receipts before any target mutation."
+        "Use this gate receipt with execute_dx_forge_backup to write a native zstd backup bundle, manifest, and execution receipt before any target mutation."
             .to_string()
     } else if request.approve_runner {
         "Resolve the listed Forge backup runner blockers before any archive or quarantine execution."

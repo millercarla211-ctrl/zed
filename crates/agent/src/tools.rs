@@ -28,6 +28,7 @@ mod delete_path_tool;
 mod diagnostics_tool;
 mod dx_catalog_provider_settings_registration_tool;
 mod dx_catalog_provider_settings_tool;
+mod dx_forge_backup_executor_tool;
 mod dx_forge_backup_runner_gate_tool;
 mod dx_forge_safety_policy_tool;
 mod dx_media_tool_plan_tool;
@@ -119,6 +120,7 @@ pub use delete_path_tool::*;
 pub use diagnostics_tool::*;
 pub use dx_catalog_provider_settings_registration_tool::*;
 pub use dx_catalog_provider_settings_tool::*;
+pub use dx_forge_backup_executor_tool::*;
 pub use dx_forge_backup_runner_gate_tool::*;
 pub use dx_forge_safety_policy_tool::*;
 pub use dx_media_tool_plan_tool::*;
@@ -248,6 +250,7 @@ tools! {
     CreateDirectoryTool,
     DeletePathTool,
     DiagnosticsTool,
+    DxForgeBackupExecutorTool,
     DxForgeBackupRunnerGateTool,
     DxForgeSafetyPolicyTool,
     DxMediaToolPlanTool,

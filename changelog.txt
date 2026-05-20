@@ -1,3 +1,18 @@
+[2026-05-20] - DX Forge Backup Executor
+
+ADDED:
+- Added `execute_dx_forge_backup`, a permissioned Agent tool that consumes `zed.dx.forge.backup_runner_gate.v1` gates and writes native zstd backup bundles, hash manifests, execution receipts, and optional delete-to-quarantine moves.
+- Added `zed.dx.forge.backup_execution.v1`, `zed.dx.forge.backup_execution_receipt.v1`, and `zed.dx.forge.backup_manifest.v1` output contracts.
+
+CHANGED:
+- Registered the Forge backup executor beside the Forge safety policy and backup runner gate.
+- Updated `PLAN.md`, `todo.txt`, and launch status to mark the current DX Native Tools Integration launch-spine set at 100/100 and define the next 100-point feature set.
+
+NOTES:
+- The executor uses the native Rust zstd library and SHA-256 manifests; it does not shell out, run Forge/zstd binaries, overwrite planned artifacts, follow symlinks, or permanently delete targets.
+- Delete operations require explicit quarantine approval and move the target to the planned quarantine path after backup instead of deleting it.
+- No `just run`, Cargo build/check/test/clippy, downloads, cleanup, browser automation, or live Forge execution was used for this source-level slice.
+
 [2026-05-20] - DX Forge Backup Runner Gate
 
 ADDED:

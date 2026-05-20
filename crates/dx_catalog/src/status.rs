@@ -26,7 +26,7 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 99,
+        overall_implementation_status: 100,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
         dx_catalog_status: 100,
@@ -69,9 +69,9 @@ pub fn current_launch_status() -> DxLaunchStatus {
             ),
             feature(
                 "Forge safety and backup policy",
-                55,
-                "Risky file operations can now produce permissioned no-permanent-delete Forge/zstd safety-policy receipts and validate reviewed backup/quarantine runner readiness with managed archive, manifest, quarantine, and restore paths before any future mutation executes.",
-                "Add the actual archive/quarantine executor and restore receipt writer after runner-gate review.",
+                72,
+                "Risky file operations can now produce permissioned no-permanent-delete Forge/zstd safety-policy receipts, validate reviewed backup/quarantine runner readiness, and execute a native zstd backup bundle plus manifest with optional quarantine before target mutation.",
+                "Add restore execution receipts, Forge panel history, and broader move/overwrite coverage in the next set.",
             ),
             feature(
                 "Forge panel",
