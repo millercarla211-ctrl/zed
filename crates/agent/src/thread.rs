@@ -11,14 +11,14 @@ use crate::{
     AgentPluginRuntimeStatusTool, ApplyCodeActionTool, CodeActionStore, ContextServerRegistry,
     CopyPathTool, CreateDirectoryTool, DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool,
     DxCatalogProviderSettingsRegistrationTool, DxCatalogProviderSettingsTool,
-    DxForgeBackupExecutorTool, DxForgeBackupRunnerGateTool, DxForgeSafetyPolicyTool,
-    DxMediaToolPlanTool, DxMediaToolRunnerGateTool, DxMetasearchContextAdapterTool,
-    DxMetasearchSourceExtractTool, DxMetasearchStatusTool, DxMetasearchTool,
-    DxSerializerRlmExecutionPlanTool, EditFileTool, FetchTool, FindPathTool, FindReferencesTool,
-    GetCodeActionsTool, GoToDefinitionTool, GrepTool, ListDirectoryTool, MovePathTool,
-    ProjectSnapshot, ReadFileTool, RenameTool, SpawnAgentTool, SystemPromptTemplate, Template,
-    Templates, TerminalTool, ToolPermissionDecision, UpdatePlanTool, UserAgentsMd, WebSearchTool,
-    WriteFileTool, decide_permission_from_settings,
+    DxForgeBackupExecutorTool, DxForgeBackupRunnerGateTool, DxForgeHistoryTool,
+    DxForgeRestoreExecutorTool, DxForgeSafetyPolicyTool, DxMediaToolPlanTool,
+    DxMediaToolRunnerGateTool, DxMetasearchContextAdapterTool, DxMetasearchSourceExtractTool,
+    DxMetasearchStatusTool, DxMetasearchTool, DxSerializerRlmExecutionPlanTool, EditFileTool,
+    FetchTool, FindPathTool, FindReferencesTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool,
+    ListDirectoryTool, MovePathTool, ProjectSnapshot, ReadFileTool, RenameTool, SpawnAgentTool,
+    SystemPromptTemplate, Template, Templates, TerminalTool, ToolPermissionDecision,
+    UpdatePlanTool, UserAgentsMd, WebSearchTool, WriteFileTool, decide_permission_from_settings,
 };
 use acp_thread::{MentionUri, UserMessageId};
 use action_log::ActionLog;
@@ -1708,6 +1708,8 @@ impl Thread {
         self.add_tool(DxForgeSafetyPolicyTool::new(self.project.clone()));
         self.add_tool(DxForgeBackupRunnerGateTool::new(self.project.clone()));
         self.add_tool(DxForgeBackupExecutorTool::new(self.project.clone()));
+        self.add_tool(DxForgeRestoreExecutorTool::new(self.project.clone()));
+        self.add_tool(DxForgeHistoryTool::new(self.project.clone()));
         self.add_tool(DxCatalogProviderSettingsTool);
         self.add_tool(DxCatalogProviderSettingsRegistrationTool::new(
             self.project.clone(),

@@ -69,15 +69,15 @@ pub fn current_launch_status() -> DxLaunchStatus {
             ),
             feature(
                 "Forge safety and backup policy",
-                72,
-                "Risky file operations can now produce permissioned no-permanent-delete Forge/zstd safety-policy receipts, validate reviewed backup/quarantine runner readiness, and execute a native zstd backup bundle plus manifest with optional quarantine before target mutation.",
-                "Add restore execution receipts, Forge panel history, and broader move/overwrite coverage in the next set.",
+                84,
+                "Risky file operations can now produce permissioned no-permanent-delete Forge/zstd safety-policy receipts, validate reviewed backup/quarantine runner readiness, execute a native zstd backup bundle plus manifest before target mutation, and restore that backup into a managed verified preview with receipts.",
+                "Render Forge history in panel UI, then add broader move/overwrite coverage and explicit restore-to-target flow after preview audit.",
             ),
             feature(
                 "Forge panel",
-                5,
-                "Snapshots, remotes, jobs, restore points, and media-aware status are visible.",
-                "Add a read-only host adapter and panel skeleton.",
+                14,
+                "Snapshots, remotes, jobs, restore points, media-aware status, and receipt history are visible through panel-facing contracts.",
+                "Add a Forge panel skeleton that renders the history contract.",
             ),
             feature(
                 "Drive/Sources rail",

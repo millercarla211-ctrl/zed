@@ -207,7 +207,7 @@ pub(crate) fn execute_dx_forge_backup(
     let next_action = if quarantine_failed {
         "Use the backup, manifest, and execution receipt to audit the failed quarantine before retrying or restoring."
     } else {
-        "Use the backup, manifest, and execution receipt to restore or audit this mutation before any future cleanup."
+        "Use execute_dx_forge_restore with this backup execution to write a managed restore preview and restore receipt before any future cleanup."
     };
 
     Ok(DxForgeBackupExecution {
@@ -490,8 +490,8 @@ fn write_backup_bundle(
         directory_count,
         total_file_bytes,
         root_sha256,
-        restore_instruction:
-            "Restore by reading the manifest, decoding the zstd backup bundle, verifying entry hashes, and writing a restore receipt."
+            restore_instruction:
+            "Restore by calling execute_dx_forge_restore, which decodes the zstd backup bundle, verifies entry hashes, writes a managed preview, and records a restore receipt."
                 .to_string(),
     })
 }

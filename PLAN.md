@@ -227,8 +227,8 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | Universal provider routing | 76/100 | Local, remote, free-tier, premium, and fallback routes work from one catalog, with approved catalog specs writing into native Zed language-model settings, read-only Agent validation for native settings/runtime readiness, and an explicit permissioned Agent registration tool | Continue serializer/RLM execution integration and cross-panel routing |
 | Metasearch AI tool | 74/100 | Agent panel can search many engines, inspect service/engine readiness, return token-aware cited source packs, persist managed source-pack receipts, fetch bounded readable extracts, prepare compact context bundles, and create approved serializer/RLM execution-plan receipts through permissioned DX metasearch tools | Connect context bundles and execution-plan receipts into panel surfaces |
 | Serializer/RLM prep pipeline | 44/100 | Metasearch source packs and deep extracts can be compacted into a citation-preserving `zed.dx.serializer_rlm.context_bundle.v1` receipt, discover serializer/RLM roots, and produce `zed.dx.serializer_rlm.execution_plan.v1` approval receipts without running external reducers | Add the actual approved external reducer runner after safety review |
-| Forge safety and backup policy | 72/100 | Risky actions can produce permissioned no-permanent-delete Forge/zstd safety-policy receipts, validate reviewed backup/quarantine runner readiness, and execute a native zstd backup bundle plus manifest with optional quarantine before target mutation | Add restore execution receipts, Forge panel history, and broader move/overwrite coverage in the next set |
-| Forge panel | 5/100 | Code/media snapshots, remotes, sync plans, jobs, and restore warnings visible | Add Forge host adapter plan and panel skeleton |
+| Forge safety and backup policy | 84/100 | Risky actions can produce permissioned no-permanent-delete Forge/zstd safety-policy receipts, validate reviewed backup/quarantine runner readiness, execute a native zstd backup bundle plus manifest before target mutation, and restore that backup into a managed verified preview with receipts | Render Forge history in panel UI, then add broader move/overwrite coverage and explicit restore-to-target flow after preview audit |
+| Forge panel | 14/100 | Code/media snapshots, remotes, sync plans, jobs, restore warnings, and receipt history are visible through panel-facing contracts | Add Forge panel skeleton that renders the history contract |
 | Drive/Sources rail | 5/100 | NotebookLM-style source sets and markdown task docs feed agents | Define source set model |
 | Check panel | 5/100 | Project score and blockers include structure, lint/format status, visual proof, deploy readiness | Define score schema and read-only scanner |
 | Deploy panel | 0/100 | CI/CD readiness, env state, URLs, logs, rollback, receipts visible | Define deploy target registry |
@@ -237,7 +237,9 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | Codex-style rails | 5/100 | Left Sources and right project/task rail are optional and cheap when closed | Design rail state model |
 | Launch demo package | 0/100 | May 28 demos show speed, local model tools, provider freedom, metasearch, and panels | Build 3 demo scripts |
 
-Overall implementation status: 100/100 for the current launch-spine set.
+Overall implementation status: 100/100 for the completed launch-spine set.
+
+Current next 100-point feature set status: 12/100 for DX Native Tool Execution, Restore, Panels, and Launch Demos.
 
 Overall planning and product direction status: 100/100 for the current roadmap.
 
@@ -279,16 +281,18 @@ Overall planning and product direction status: 100/100 for the current roadmap.
    - permissioned safety-policy receipt,
    - reviewed backup/quarantine runner gate,
    - native zstd backup execution,
+   - managed restore preview execution,
    - zstd backup/quarantine path,
    - manifest and restore receipt requirements,
    - visible risk confirmations,
-   - next target: restore executor, Forge panel history, and broader mutation coverage.
+   - next target: Forge panel history, restore-to-target approvals, and broader mutation coverage.
 
 7. Forge panel
    - snapshot status,
    - media-aware diffs,
    - remote plans,
    - job receipts,
+   - receipt history contract,
    - restore preview.
 
 8. Drive/Sources rail

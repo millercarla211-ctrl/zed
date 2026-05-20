@@ -244,7 +244,7 @@ impl DxForgeBackupExecutorArtifactTarget {
                 "permanent_delete_allowed": false,
                 "overwrites_outputs": false,
             },
-            "next_action": "Use this execution receipt and manifest for restore, audit, or future Forge panel history."
+            "next_action": "Use this execution receipt with execute_dx_forge_restore for a managed restore preview, audit, or future Forge panel history."
         });
         let receipt_json = serde_json::to_vec_pretty(&receipt).map_err(|error| {
             format!("Failed to serialize Forge backup execution receipt: {error}")
@@ -284,7 +284,7 @@ impl DxForgeBackupExecutorArtifactTarget {
             quarantine_path: response.execution.quarantine_path.clone(),
             target_mutation_applied: response.execution.target_mutation_applied,
             next_action:
-                "Use the latest Forge backup execution receipt to add restore UI and Forge panel history."
+                "Use the latest Forge backup execution receipt with execute_dx_forge_restore before adding restore UI and Forge panel history."
                     .to_string(),
         })
     }

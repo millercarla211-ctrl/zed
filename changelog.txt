@@ -1,3 +1,21 @@
+[2026-05-20] - DX Forge Restore Executor
+
+ADDED:
+- Added `execute_dx_forge_restore`, a permissioned Agent tool that consumes `zed.dx.forge.backup_execution.v1` executions or receipts and writes managed restore previews plus restore receipts.
+- Added `zed.dx.forge.restore_execution.v1` and `zed.dx.forge.restore_execution_receipt.v1` output contracts.
+- Added `inspect_dx_forge_history`, a read-only Agent tool that summarizes managed DX Forge safety-policy, runner-gate, backup-execution, and restore-execution receipts for future panel timelines.
+
+CHANGED:
+- Registered the Forge restore executor beside safety policy, backup runner gate, and backup executor tools.
+- Updated backup executor next actions so successful backup receipts route directly into `execute_dx_forge_restore`.
+- Updated `PLAN.md`, `todo.txt`, and launch status to record the completed launch-spine set and the new DX Native Tool Execution/Restore/Panels/Demos set at 12/100.
+
+NOTES:
+- Restore execution decodes the native zstd backup bundle, verifies the manifest/root hash and each SHA-256 file entry, and writes only under a managed restore preview directory.
+- The restore path does not mutate live targets, overwrite files, shell out, run Forge/zstd binaries, delete files, or perform restore-to-target writes.
+- History inspection skips restored preview directories so user-restored JSON files are not mistaken for Forge receipt history.
+- No `just run`, Cargo build/check/test/clippy, downloads, cleanup, browser automation, or live Forge external process was used for this source-level slice.
+
 [2026-05-20] - DX Forge Backup Executor
 
 ADDED:
