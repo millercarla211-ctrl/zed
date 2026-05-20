@@ -23,7 +23,6 @@ use auto_update::AutoUpdateStatus;
 use call::ActiveCall;
 use client::{Client, UserStore, zed_urls};
 use cloud_api_types::Plan;
-use feature_flags::{FeatureFlagAppExt as _, SkillsFeatureFlag};
 
 use gpui::{
     Action, Anchor, Animation, AnimationExt, AnyElement, App, Context, Element, Entity, Focusable,
@@ -51,7 +50,7 @@ use workspace::{
     GoBack, GoForward, MultiWorkspace, NewCenterTerminal, NewFile, NewLiquidGlass, NewWebPreview,
     OpenLog, ToggleFileFinder, ToggleProjectSymbols, ToggleWorktreeSecurity, Workspace,
     item::{ItemHandle, WorkspaceScreenKind},
-    notifications::NotifyResultExt,
+    notifications::{NotifyResultExt, NotifyTaskExt as _},
 };
 
 use zed_actions::OpenRemote;
@@ -439,22 +438,7 @@ impl TitleBar {
             titlebar
         });
 
-        // The banner label stays static ("Introducing: Skills") regardless
-        // of whether the user had Rules to migrate; the explainer modal
-        // is where the migration-specific summary surfaces. Keeping the
-        // label static avoids the rebuild-on-migration-completion plumbing
-        // we'd otherwise need to dodge the title-bar-vs-migration race.
-        let banner = Some(cx.new(|cx| {
-            OnboardingBanner::new(
-                "Skills Migration Announcement",
-                IconName::Sparkle,
-                "Skills",
-                Some("Introducing:".into()),
-                zed_actions::agent::OpenRulesToSkillsMigrationInfo.boxed_clone(),
-                cx,
-            )
-            .visible_when(|cx| cx.has_flag::<SkillsFeatureFlag>())
-        }));
+        let banner = None;
 
         let mut this = Self {
             platform_titlebar,
@@ -1684,6 +1668,7 @@ impl TitleBar {
         let show_update_button = self.update_version.read(cx).show_update_in_menu_bar();
 
         let user_store = self.user_store.clone();
+        let workspace = self.workspace.clone();
         let user_store_read = user_store.read(cx);
         let user = user_store_read.current_user();
 
@@ -1750,6 +1735,7 @@ impl TitleBar {
                 let current_organization = current_organization.clone();
                 let organizations = organizations.clone();
                 let user_store = user_store.clone();
+                let workspace = workspace.clone();
 
                 let ai_enabled = !project::DisableAiSettings::get_global(cx).disable_ai;
                 let current_layout = AgentSettings::get_layout(cx);
@@ -1841,11 +1827,13 @@ impl TitleBar {
                                 {
                                     let user_store = user_store.clone();
                                     let organization = organization.clone();
-                                    move |_window, cx| {
-                                        user_store.update(cx, |user_store, cx| {
+                                    let workspace = workspace.clone();
+                                    move |window, cx| {
+                                        let task = user_store.update(cx, |user_store, cx| {
                                             user_store
-                                                .set_current_organization(organization.clone(), cx);
+                                                .set_current_organization(organization.clone(), cx)
                                         });
+                                        task.detach_and_notify_err(workspace.clone(), window, cx);
                                     }
                                 },
                             );
