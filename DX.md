@@ -45,7 +45,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Added the first durable Sources rail model for workspace roots, DX metasearch source-pack receipts, produced media files, and Forge restore previews.
 - Added `prepare_dx_source_attachment`, a permissioned Agent tool that packages selected workspace roots, metasearch source-pack receipts, produced media files, and Forge restore previews into managed source attachment receipts for later Agent context.
 - Wired `prepare_dx_metasearch_context` to accept source attachment manifests/receipts, embed metasearch source-pack receipt text into compact cited context, and warn on path-only media/restore references instead of embedding binary payloads.
-- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 52/100; the next highest-value target is launch demo recipes for metasearch-to-media-to-source flows and the approved serializer/RLM reducer runner gate.
+- Added `list_dx_launch_demo_recipes`, a permissioned read-only Agent tool that lists metasearch-to-context, media-output-to-sources, and Forge-restore-preview-to-sources demo flows with required tool chains, receipt gates, safety notes, and workspace receipt-root status.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 58/100; the next highest-value target is the approved serializer/RLM reducer runner gate with external execution off by default.
 
 ## Remaining Proof
 

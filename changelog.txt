@@ -1,3 +1,17 @@
+[2026-05-21] - DX Launch Demo Recipes
+
+ADDED:
+- Added `list_dx_launch_demo_recipes`, a permissioned read-only Agent tool that returns machine-readable DX launch demo recipes for metasearch-to-context, media-output-to-sources, and Forge-restore-preview-to-sources flows.
+- Each recipe includes the required Agent tools, receipt contracts, ordered proof gates, safety notes, workspace receipt-root status, and graceful no-workspace blockers.
+
+CHANGED:
+- Registered the launch demo recipe tool with Agent threads and the built-in tool schema list.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 58/100 and move the next target to the approved serializer/RLM reducer runner gate.
+
+NOTES:
+- The recipe tool is read-only; it does not run DX tools, start local servers, write receipts, mutate sources, dispatch browser input, or invoke external media/Forge/serializer/RLM executables.
+- No local server, `just run`, Cargo build/check/test/clippy, npm build, browser automation, or runtime visual proof was started.
+
 [2026-05-21] - DX Source Attachment Context Handoff
 
 ADDED:

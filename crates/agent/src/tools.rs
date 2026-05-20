@@ -33,6 +33,7 @@ mod dx_forge_backup_runner_gate_tool;
 mod dx_forge_history_tool;
 mod dx_forge_restore_executor_tool;
 mod dx_forge_safety_policy_tool;
+mod dx_launch_demo_recipes_tool;
 mod dx_media_tool_plan_tool;
 mod dx_media_tool_runner_gate_tool;
 mod dx_media_tool_runner_tool;
@@ -129,6 +130,7 @@ pub use dx_forge_backup_runner_gate_tool::*;
 pub use dx_forge_history_tool::*;
 pub use dx_forge_restore_executor_tool::*;
 pub use dx_forge_safety_policy_tool::*;
+pub use dx_launch_demo_recipes_tool::*;
 pub use dx_media_tool_plan_tool::*;
 pub use dx_media_tool_runner_gate_tool::*;
 pub use dx_media_tool_runner_tool::*;
@@ -263,6 +265,7 @@ tools! {
     DxForgeHistoryTool,
     DxForgeRestoreExecutorTool,
     DxForgeSafetyPolicyTool,
+    DxLaunchDemoRecipesTool,
     DxMediaToolPlanTool,
     DxMediaToolRunnerGateTool,
     DxMediaToolRunnerTool,

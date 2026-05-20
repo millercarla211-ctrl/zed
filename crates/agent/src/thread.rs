@@ -1713,6 +1713,7 @@ impl Thread {
         self.add_tool(DxForgeBackupExecutorTool::new(self.project.clone()));
         self.add_tool(DxForgeRestoreExecutorTool::new(self.project.clone()));
         self.add_tool(DxForgeHistoryTool::new(self.project.clone()));
+        self.add_tool(DxLaunchDemoRecipesTool::new(self.project.clone()));
         self.add_tool(DxCatalogProviderSettingsTool);
         self.add_tool(DxCatalogProviderSettingsRegistrationTool::new(
             self.project.clone(),
