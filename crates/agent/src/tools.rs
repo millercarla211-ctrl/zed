@@ -28,6 +28,7 @@ mod delete_path_tool;
 mod diagnostics_tool;
 mod dx_catalog_provider_settings_registration_tool;
 mod dx_catalog_provider_settings_tool;
+mod dx_metasearch_tool;
 mod edit_file_tool;
 mod edit_session;
 #[cfg(all(test, feature = "unit-eval"))]
@@ -110,6 +111,7 @@ pub use delete_path_tool::*;
 pub use diagnostics_tool::*;
 pub use dx_catalog_provider_settings_registration_tool::*;
 pub use dx_catalog_provider_settings_tool::*;
+pub use dx_metasearch_tool::*;
 pub use edit_file_tool::*;
 pub use fetch_tool::*;
 pub use find_path_tool::*;
@@ -230,6 +232,7 @@ tools! {
     CreateDirectoryTool,
     DeletePathTool,
     DiagnosticsTool,
+    DxMetasearchTool,
     DxCatalogProviderSettingsRegistrationTool,
     DxCatalogProviderSettingsTool,
     EditFileTool,

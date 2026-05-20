@@ -2,6 +2,7 @@
 
 mod db;
 mod dx_catalog_agent_bridge;
+mod dx_metasearch_agent_bridge;
 mod legacy_thread;
 mod native_agent_server;
 pub mod outline;

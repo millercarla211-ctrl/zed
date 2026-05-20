@@ -1,3 +1,17 @@
+[2026-05-20] - DX Metasearch Agent Adapter
+
+ADDED:
+- Added `search_dx_metasearch`, a permissioned and cancellable Agent fetch tool for the local DX metasearch HTTP API.
+- Added a DX metasearch bridge that builds `/api/v1/search` requests, supports category/engine/language/safe-search/page/time-range filters, and returns `zed.dx.metasearch.result.v1` compact citations.
+
+CHANGED:
+- Agent threads now expose DX metasearch beside the existing web-search tool, giving AI panel flows a direct path to the G-drive metasearch service without copying that large workspace into editor hot paths.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move the Metasearch AI tool lane to 26/100 and the overall feature set to 87/100.
+
+NOTES:
+- The tool uses `DX_METASEARCH_BASE_URL` when set and otherwise targets `http://127.0.0.1:8888`; it does not start the server, scrape directly, or write source packs yet.
+- No `just run`, Cargo build/check/test/clippy, downloads, cleanup, browser automation, or live metasearch server run was used for this source-level slice.
+
 [2026-05-20] - DX Catalog Provider Settings Registration Tool
 
 ADDED:
