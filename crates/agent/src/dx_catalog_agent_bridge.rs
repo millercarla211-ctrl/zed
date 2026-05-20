@@ -1,17 +1,26 @@
 use acp_thread::AgentModelInfo;
 use collections::{HashMap, HashSet};
 use dx_catalog::{
-    AgentPickerAuthState, AgentPickerProjectionOptions, CatalogExecutionAdapterKind,
-    CatalogExecutionPermission, CatalogExecutionPlan, CatalogExecutionPlanRequest, DxCatalog,
-    ModelRecord, ProviderRecord, RoutingRole, build_agent_picker_projection,
+    AgentPickerAuthState, AgentPickerProjectionOptions, CatalogArtifactBuildOptions,
+    CatalogExecutionAdapterKind, CatalogExecutionPermission, CatalogExecutionPlan,
+    CatalogExecutionPlanRequest, DxCatalog, ModelRecord, ProviderRecord, RoutingRole,
+    build_agent_picker_projection, build_catalog_artifact_from_sources,
     build_catalog_execution_plan, read_catalog_artifact,
 };
-use std::env;
-use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::{
+    env,
+    path::{Path, PathBuf},
+    sync::OnceLock,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 const DX_CATALOG_ARTIFACT_ENV: &str = "DX_CATALOG_ARTIFACT";
 const DX_CATALOG_PATH_ENV: &str = "DX_CATALOG_PATH";
+const DX_CATALOG_OUTPUT_ENV: &str = "DX_CATALOG_OUTPUT";
+const DX_CATALOG_LAST_GOOD_ENV: &str = "DX_CATALOG_LAST_GOOD";
+const DX_CATALOG_GENERATE_ENV: &str = "DX_CATALOG_GENERATE";
+const DX_CATALOG_GENERATE_ON_LOAD_ENV: &str = "DX_CATALOG_GENERATE_ON_LOAD";
+const DX_CATALOG_SOURCE_REVISION_ENV: &str = "DX_CATALOG_SOURCE_REVISION";
 const DX_CATALOG_ARTIFACT_FILE_NAME: &str = "catalog.dxcat";
 
 #[derive(Clone, Debug, Default)]
@@ -101,6 +110,8 @@ impl DxCatalogAgentBridge {
     }
 
     fn load_uncached() -> Option<Self> {
+        materialize_catalog_artifact_if_approved();
+
         let candidates = catalog_artifact_candidates();
         for candidate in candidates {
             if !candidate.path.is_file() {
@@ -255,7 +266,11 @@ struct CatalogArtifactCandidate {
 fn catalog_artifact_candidates() -> Vec<CatalogArtifactCandidate> {
     let mut candidates = Vec::new();
 
-    for env_var in [DX_CATALOG_ARTIFACT_ENV, DX_CATALOG_PATH_ENV] {
+    for env_var in [
+        DX_CATALOG_ARTIFACT_ENV,
+        DX_CATALOG_PATH_ENV,
+        DX_CATALOG_OUTPUT_ENV,
+    ] {
         if let Some(path) = env::var_os(env_var).map(PathBuf::from) {
             candidates.push(CatalogArtifactCandidate {
                 path,
@@ -279,6 +294,93 @@ fn catalog_artifact_candidates() -> Vec<CatalogArtifactCandidate> {
     }
 
     candidates
+}
+
+fn materialize_catalog_artifact_if_approved() {
+    if !catalog_generation_approved() {
+        return;
+    }
+
+    let artifact_path = catalog_materialization_artifact_path();
+    let source_revision = env::var(DX_CATALOG_SOURCE_REVISION_ENV)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "agent-approved-materialization".to_string());
+    let generated_unix_ms = current_unix_ms();
+    let mut options =
+        CatalogArtifactBuildOptions::new(artifact_path.clone(), source_revision, generated_unix_ms);
+
+    if let Some(last_good_path) = catalog_last_good_artifact_path(&artifact_path) {
+        options = options.with_last_good_artifact_path(last_good_path);
+    }
+
+    match build_catalog_artifact_from_sources(options) {
+        Ok(output) => {
+            log::info!(
+                "DX catalog artifact materialized at {} from {} available source(s); providers={}, models={}, ready_registration_specs={}/{}",
+                output.report.artifact_path.display(),
+                output.report.discovery.available_count,
+                output.report.build.provider_count,
+                output.report.build.model_count,
+                output.report.ready_registration_spec_count,
+                output.report.registration_spec_count,
+            );
+        }
+        Err(error) => {
+            log::warn!(
+                "DX catalog artifact materialization was requested but failed for {}: {error}",
+                artifact_path.display()
+            );
+        }
+    }
+}
+
+fn catalog_generation_approved() -> bool {
+    [DX_CATALOG_GENERATE_ENV, DX_CATALOG_GENERATE_ON_LOAD_ENV]
+        .iter()
+        .copied()
+        .any(env_flag_enabled)
+}
+
+fn env_flag_enabled(key: &str) -> bool {
+    env::var(key)
+        .ok()
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false)
+}
+
+fn catalog_materialization_artifact_path() -> PathBuf {
+    for env_var in [
+        DX_CATALOG_ARTIFACT_ENV,
+        DX_CATALOG_PATH_ENV,
+        DX_CATALOG_OUTPUT_ENV,
+    ] {
+        if let Some(path) = env::var_os(env_var).map(PathBuf::from) {
+            return path;
+        }
+    }
+
+    paths::data_dir()
+        .join("dx_catalog")
+        .join(DX_CATALOG_ARTIFACT_FILE_NAME)
+}
+
+fn catalog_last_good_artifact_path(artifact_path: &Path) -> Option<PathBuf> {
+    env::var_os(DX_CATALOG_LAST_GOOD_ENV)
+        .map(PathBuf::from)
+        .or_else(|| artifact_path.is_file().then(|| artifact_path.to_path_buf()))
+}
+
+fn current_unix_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or_default()
 }
 
 fn insert_route_candidates(

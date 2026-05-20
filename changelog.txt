@@ -1,3 +1,17 @@
+[2026-05-20] - DX Catalog Approved Generation Trigger
+
+ADDED:
+- Added an explicit Agent-side `DX_CATALOG_GENERATE` / `DX_CATALOG_GENERATE_ON_LOAD` trigger that materializes the production `catalog.dxcat` artifact before the Agent bridge reads catalog metadata.
+- The trigger writes to `DX_CATALOG_ARTIFACT`, `DX_CATALOG_PATH`, `DX_CATALOG_OUTPUT`, or the normal Agent-discoverable data-dir path, and can reuse `DX_CATALOG_LAST_GOOD` or the existing output artifact as the last-good fallback.
+
+CHANGED:
+- Agent catalog discovery now recognizes `DX_CATALOG_OUTPUT` as both a write target and read candidate.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move `dx_catalog` to 100/100, universal provider routing to 52/100, and the overall feature set to 74/100.
+
+NOTES:
+- This remains opt-in and permission-first: normal Agent startup does not parse G-drive sources, write artifacts, register providers, download models, or expose unsafe catalog-only execution rows.
+- No `just run`, Cargo build/check/test/clippy, downloads, model loading, cleanup, or browser automation was run for this source-level slice.
+
 [2026-05-20] - DX Catalog Production Artifact Materializer
 
 ADDED:

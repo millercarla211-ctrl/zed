@@ -26,10 +26,10 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 70,
+        overall_implementation_status: 74,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
-        dx_catalog_status: 99,
+        dx_catalog_status: 100,
         features: vec![
             feature(
                 "Browser/Chrome functional plugin execution",
@@ -45,13 +45,13 @@ pub fn current_launch_status() -> DxLaunchStatus {
             ),
             feature(
                 "dx_catalog provider/model archive",
-                99,
-                "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, source adapters, source discovery, local GGUF model reader, provider/auth reader, models.dev/OpenRouter/LiteLLM JSON model parsers, Agent picker projection, route selection, OpenRouter input, auth-profile enrichment, optional generated-artifact Agent picker enrichment, catalog alias resolution, route IDs that resolve to executable Agent models, permissioned catalog execution plans, provider adapter registration specs, and production artifact materialization from discovered G-drive sources are in place.",
-                "Expose a small approved command/settings trigger that writes the catalog artifact to the Agent-discoverable path.",
+                100,
+                "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, source adapters, source discovery, local GGUF model reader, provider/auth reader, models.dev/OpenRouter/LiteLLM JSON model parsers, Agent picker projection, route selection, OpenRouter input, auth-profile enrichment, optional generated-artifact Agent picker enrichment, catalog alias resolution, route IDs that resolve to executable Agent models, permissioned catalog execution plans, provider adapter registration specs, production artifact materialization from discovered G-drive sources, and an explicit Agent-approved artifact generation trigger are in place.",
+                "Keep the catalog stable while wiring provider registration approvals.",
             ),
             feature(
                 "Universal provider routing",
-                50,
+                52,
                 "One router picks local, free, premium, and remote providers from dx_catalog.",
                 "Wire registration specs into provider settings after explicit approval.",
             ),
