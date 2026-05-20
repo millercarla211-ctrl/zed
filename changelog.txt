@@ -1,3 +1,17 @@
+[2026-05-20] - DX Metasearch Deep Source Extraction Tool
+
+ADDED:
+- Added `extract_dx_metasearch_source`, a permissioned and cancellable Agent fetch tool for expanding a selected DX metasearch source-pack URL into bounded readable text.
+- Added `zed.dx.metasearch.source_extract.v1` output with source metadata, HTTP fetch metadata, content kind, truncation warnings, estimated token count, and serializer/RLM-ready machine-format hints.
+
+CHANGED:
+- Agent threads now expose search, status inspection, source-pack receipt writing, and deep source extraction as separate DX metasearch tools.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move the Metasearch AI tool lane to 68/100, the Serializer/RLM prep lane to 24/100, and the overall feature set to 93/100.
+
+NOTES:
+- Deep extraction fetches a selected page only after tool authorization; it does not start the metasearch server, run serializer/RLM adapters, write extract receipts, dispatch browser input, or run model/tool downloads.
+- No `just run`, Cargo build/check/test/clippy, downloads, cleanup, browser automation, or live metasearch server run was used for this source-level slice.
+
 [2026-05-20] - DX Metasearch Source-Pack Receipts
 
 ADDED:

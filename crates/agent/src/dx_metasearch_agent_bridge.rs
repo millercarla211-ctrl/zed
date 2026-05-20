@@ -25,12 +25,17 @@ const SOURCE_PACK_TITLE_CHAR_LIMIT: usize = 120;
 const SOURCE_PACK_EXCERPT_CHAR_LIMIT: usize = 280;
 const SOURCE_PACK_MIN_EXCERPT_CHAR_LIMIT: usize = 96;
 const SOURCE_PACK_APPROX_CHARS_PER_TOKEN: usize = 4;
+const DEFAULT_SOURCE_EXTRACT_CHAR_LIMIT: usize = 4_000;
+const MIN_SOURCE_EXTRACT_CHAR_LIMIT: usize = 500;
+const MAX_SOURCE_EXTRACT_CHAR_LIMIT: usize = 12_000;
+const MAX_SOURCE_EXTRACT_FETCH_BYTES: usize = 1_500_000;
 
 pub(crate) const DX_METASEARCH_RESULT_SCHEMA: &str = "zed.dx.metasearch.result.v1";
 pub(crate) const DX_METASEARCH_STATUS_SCHEMA: &str = "zed.dx.metasearch.status.v1";
 pub(crate) const DX_METASEARCH_SOURCE_PACK_SCHEMA: &str = "zed.dx.metasearch.source_pack.v1";
 pub(crate) const DX_METASEARCH_SOURCE_PACK_RECEIPT_SCHEMA: &str =
     "zed.dx.metasearch.source_pack_receipt.v1";
+pub(crate) const DX_METASEARCH_SOURCE_EXTRACT_SCHEMA: &str = "zed.dx.metasearch.source_extract.v1";
 
 #[derive(Clone, Debug)]
 pub(crate) struct DxMetasearchRequest {
@@ -50,6 +55,16 @@ pub(crate) struct DxMetasearchStatusRequest {
     pub base_url: Option<String>,
     pub include_engines: bool,
     pub engine_limit: Option<usize>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct DxMetasearchSourceExtractRequest {
+    pub url: String,
+    pub source_id: Option<String>,
+    pub title: Option<String>,
+    pub engine: Option<String>,
+    pub category: Option<String>,
+    pub max_chars: Option<usize>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -76,6 +91,58 @@ pub(crate) struct DxMetasearchStatusResponse {
     pub engine_summary: DxMetasearchEngineSummary,
     pub engines: Vec<DxMetasearchEngineInfo>,
     pub next_action: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchSourceExtractResponse {
+    pub schema: &'static str,
+    pub generated_at_ms: u64,
+    pub source: DxMetasearchSource,
+    pub request: DxMetasearchSourceExtractRequestSummary,
+    pub fetch: DxMetasearchSourceExtractFetch,
+    pub content: DxMetasearchSourceExtractContent,
+    pub compression: DxMetasearchSourceExtractCompression,
+    pub next_action: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchSourceExtractRequestSummary {
+    pub url: String,
+    pub source_id: Option<String>,
+    pub title: Option<String>,
+    pub engine: Option<String>,
+    pub category: Option<String>,
+    pub max_chars: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchSourceExtractFetch {
+    pub status_code: u16,
+    pub content_type: Option<String>,
+    pub fetched_bytes: usize,
+    pub body_truncated: bool,
+    pub max_fetch_bytes: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchSourceExtractContent {
+    pub kind: &'static str,
+    pub extracted_chars: usize,
+    pub estimated_tokens: usize,
+    pub output_char_limit: usize,
+    pub output_truncated: bool,
+    pub text: String,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct DxMetasearchSourceExtractCompression {
+    pub profile: &'static str,
+    pub machine_format: &'static str,
+    pub approx_chars_per_token: usize,
+    pub serializer_ready: bool,
+    pub rlm_ready: bool,
+    pub loss_policy: &'static str,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -327,6 +394,59 @@ pub(crate) async fn inspect_metasearch_status(
     ))
 }
 
+pub(crate) async fn extract_metasearch_source(
+    http_client: Arc<HttpClientWithUrl>,
+    request: DxMetasearchSourceExtractRequest,
+) -> Result<DxMetasearchSourceExtractResponse, String> {
+    let request = normalize_source_extract_request(request)?;
+    let mut response = http_client
+        .get(&request.url, AsyncBody::default(), true)
+        .await
+        .map_err(|error| {
+            format!(
+                "DX metasearch source extract failed for {}. Is the source reachable? {error}",
+                request.url
+            )
+        })?;
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|value| value.to_str().ok())
+        .map(ToOwned::to_owned);
+    let status = response.status();
+    let mut body = Vec::new();
+    response
+        .body_mut()
+        .read_to_end(&mut body)
+        .await
+        .map_err(|error| format!("Failed to read DX metasearch source body: {error}"))?;
+
+    if status.as_u16() >= 400 {
+        let text = String::from_utf8_lossy(&body);
+        return Err(format!(
+            "DX metasearch source extract returned HTTP {} for {}: {}",
+            status.as_u16(),
+            request.url,
+            truncate_text(&text, SNIPPET_CHAR_LIMIT)
+        ));
+    }
+
+    let fetched_bytes = body.len();
+    let body_truncated = fetched_bytes > MAX_SOURCE_EXTRACT_FETCH_BYTES;
+    if body_truncated {
+        body.truncate(MAX_SOURCE_EXTRACT_FETCH_BYTES);
+    }
+
+    Ok(compact_source_extract_response(
+        request,
+        status.as_u16(),
+        content_type,
+        fetched_bytes,
+        body_truncated,
+        body,
+    ))
+}
+
 fn normalize_request(request: DxMetasearchRequest) -> Result<DxMetasearchCompactRequest, String> {
     let query = request.query.trim();
     if query.is_empty() {
@@ -371,6 +491,35 @@ fn normalize_request(request: DxMetasearchRequest) -> Result<DxMetasearchCompact
         page,
         time_range,
         max_results,
+    })
+}
+
+fn normalize_source_extract_request(
+    request: DxMetasearchSourceExtractRequest,
+) -> Result<DxMetasearchSourceExtractRequestSummary, String> {
+    let url = request.url.trim();
+    if url.is_empty() {
+        return Err("DX metasearch source URL is required.".to_string());
+    }
+    let parsed_url = Url::parse(url)
+        .map_err(|error| format!("Invalid DX metasearch source URL `{url}`: {error}"))?;
+    if !matches!(parsed_url.scheme(), "http" | "https") {
+        return Err(format!(
+            "DX metasearch source URL must use http or https, got `{}`.",
+            parsed_url.scheme()
+        ));
+    }
+
+    Ok(DxMetasearchSourceExtractRequestSummary {
+        url: parsed_url.to_string(),
+        source_id: clean_optional_text(request.source_id, SOURCE_PACK_TITLE_CHAR_LIMIT),
+        title: clean_optional_text(request.title, SOURCE_PACK_TITLE_CHAR_LIMIT),
+        engine: clean_optional_text(request.engine, SOURCE_PACK_TITLE_CHAR_LIMIT),
+        category: clean_optional_text(request.category, SOURCE_PACK_TITLE_CHAR_LIMIT),
+        max_chars: request
+            .max_chars
+            .unwrap_or(DEFAULT_SOURCE_EXTRACT_CHAR_LIMIT)
+            .clamp(MIN_SOURCE_EXTRACT_CHAR_LIMIT, MAX_SOURCE_EXTRACT_CHAR_LIMIT),
     })
 }
 
@@ -546,6 +695,84 @@ fn compact_status_response(
             categories,
         },
         engines: returned_engines,
+        next_action,
+    }
+}
+
+fn compact_source_extract_response(
+    request: DxMetasearchSourceExtractRequestSummary,
+    status_code: u16,
+    content_type: Option<String>,
+    fetched_bytes: usize,
+    body_truncated: bool,
+    body: Vec<u8>,
+) -> DxMetasearchSourceExtractResponse {
+    let raw_text = String::from_utf8_lossy(&body);
+    let content_kind = source_extract_kind(content_type.as_deref(), &raw_text);
+    let mut warnings = Vec::new();
+    if body_truncated {
+        warnings.push(format!(
+            "Fetched body exceeded {} bytes and was truncated before text extraction.",
+            MAX_SOURCE_EXTRACT_FETCH_BYTES
+        ));
+    }
+
+    let readable_text = match content_kind {
+        "html" => html_to_compact_text(&raw_text),
+        "json" | "xml" | "text" | "unknown_text" => compact_source_pack_text(&raw_text, usize::MAX),
+        _ => compact_source_pack_text(&raw_text, usize::MAX),
+    };
+    let output_truncated = readable_text.chars().count() > request.max_chars;
+    if output_truncated {
+        warnings.push(format!(
+            "Extracted text exceeded {} characters and was truncated for Agent context.",
+            request.max_chars
+        ));
+    }
+    if readable_text.trim().is_empty() {
+        warnings.push("No readable text was extracted from the fetched source.".to_string());
+    }
+
+    let output_char_limit = request.max_chars;
+    let text = truncate_source_extract_text(&readable_text, output_char_limit);
+    let extracted_chars = text.chars().count();
+    let next_action = if extracted_chars == 0 {
+        "Try a different source-pack item, fetch the page through the browser preview, or inspect the metasearch result snippet only.".to_string()
+    } else if output_truncated || body_truncated {
+        "Use this bounded extract for immediate Agent context, then pass the same source metadata to serializer/RLM compaction before expanding more text.".to_string()
+    } else {
+        "Use content.text as cited Agent context now, and pass this schema to serializer/RLM adapters when that lane is enabled.".to_string()
+    };
+
+    DxMetasearchSourceExtractResponse {
+        schema: DX_METASEARCH_SOURCE_EXTRACT_SCHEMA,
+        generated_at_ms: current_unix_ms(),
+        source: metasearch_source(),
+        request,
+        fetch: DxMetasearchSourceExtractFetch {
+            status_code,
+            content_type,
+            fetched_bytes,
+            body_truncated,
+            max_fetch_bytes: MAX_SOURCE_EXTRACT_FETCH_BYTES,
+        },
+        content: DxMetasearchSourceExtractContent {
+            kind: content_kind,
+            extracted_chars,
+            estimated_tokens: estimate_token_count(extracted_chars),
+            output_char_limit,
+            output_truncated,
+            text,
+            warnings,
+        },
+        compression: DxMetasearchSourceExtractCompression {
+            profile: "dx_metasearch.deep_source_extract.compact.v1",
+            machine_format: "json:zed.dx.metasearch.source_extract.v1",
+            approx_chars_per_token: SOURCE_PACK_APPROX_CHARS_PER_TOKEN,
+            serializer_ready: true,
+            rlm_ready: true,
+            loss_policy: "preserve URL, source ID, title, engine, category, content type, fetch status, and bounded readable text; truncate before expanding to full page text",
+        },
         next_action,
     }
 }
@@ -820,6 +1047,91 @@ fn bool_field(json: &serde_json::Value, field: &str) -> Option<bool> {
     json.get(field).and_then(|value| value.as_bool())
 }
 
+fn clean_optional_text(value: Option<String>, max_chars: usize) -> Option<String> {
+    value
+        .map(|value| compact_source_pack_text(&value, max_chars))
+        .filter(|value| !value.is_empty())
+}
+
+fn source_extract_kind(content_type: Option<&str>, text: &str) -> &'static str {
+    let content_type = content_type
+        .map(|content_type| content_type.to_ascii_lowercase())
+        .unwrap_or_default();
+
+    if content_type.contains("html") || text.trim_start().starts_with('<') {
+        "html"
+    } else if content_type.contains("json") {
+        "json"
+    } else if content_type.contains("xml") {
+        "xml"
+    } else if content_type.starts_with("text/") {
+        "text"
+    } else if content_type.is_empty() {
+        "unknown_text"
+    } else {
+        "unknown_binary_or_text"
+    }
+}
+
+fn html_to_compact_text(html: &str) -> String {
+    let without_blocks = strip_html_blocks(html, &["script", "style", "noscript", "svg", "head"]);
+    let mut text = String::with_capacity(without_blocks.len().min(32_000));
+    let mut in_tag = false;
+
+    for character in without_blocks.chars() {
+        match character {
+            '<' => {
+                in_tag = true;
+                text.push(' ');
+            }
+            '>' => {
+                in_tag = false;
+                text.push(' ');
+            }
+            _ if !in_tag => text.push(character),
+            _ => {}
+        }
+    }
+
+    compact_source_pack_text(&decode_basic_html_entities(&text), usize::MAX)
+}
+
+fn strip_html_blocks(input: &str, tags: &[&str]) -> String {
+    let mut output = input.to_string();
+
+    for tag in tags {
+        let open_tag = format!("<{tag}");
+        let close_tag = format!("</{tag}>");
+        loop {
+            let lower = output.to_ascii_lowercase();
+            let Some(start) = lower.find(&open_tag) else {
+                break;
+            };
+            let after_open = lower[start..]
+                .find('>')
+                .map(|offset| start + offset + 1)
+                .unwrap_or(output.len());
+            let end = lower[after_open..]
+                .find(&close_tag)
+                .map(|offset| after_open + offset + close_tag.len())
+                .unwrap_or(after_open);
+            output.replace_range(start..end, " ");
+        }
+    }
+
+    output
+}
+
+fn decode_basic_html_entities(text: &str) -> String {
+    text.replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+}
+
 fn clean_list(values: Vec<String>, limit: usize) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut cleaned = Vec::new();
@@ -847,6 +1159,25 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
 
     let mut truncated = text.chars().take(max_chars).collect::<String>();
     truncated.push_str("...");
+    truncated
+}
+
+fn truncate_source_extract_text(text: &str, max_chars: usize) -> String {
+    let text = text.trim();
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+
+    let suffix = "...";
+    if max_chars <= suffix.len() {
+        return text.chars().take(max_chars).collect();
+    }
+
+    let mut truncated = text
+        .chars()
+        .take(max_chars - suffix.len())
+        .collect::<String>();
+    truncated.push_str(suffix);
     truncated
 }
 

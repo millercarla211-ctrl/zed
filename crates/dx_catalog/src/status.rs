@@ -26,7 +26,7 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 92,
+        overall_implementation_status: 93,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
         dx_catalog_status: 100,
@@ -57,15 +57,15 @@ pub fn current_launch_status() -> DxLaunchStatus {
             ),
             feature(
                 "Metasearch AI tool",
-                58,
-                "Agent panel can call cancellable multi-engine cited search through permissioned DX metasearch tools, inspect service/engine readiness, emit compact citations, return token-aware cited source packs, and optionally persist managed source-pack receipts.",
-                "Add deep source fetch/extract tools for selected source IDs.",
+                68,
+                "Agent panel can call cancellable multi-engine cited search through permissioned DX metasearch tools, inspect service/engine readiness, emit compact citations, return token-aware cited source packs, optionally persist managed source-pack receipts, and fetch bounded readable extracts for selected source IDs.",
+                "Add extract receipts plus serializer/RLM adapter hooks.",
             ),
             feature(
                 "Serializer/RLM context pipeline",
-                20,
-                "Metasearch search results can now persist compact source-pack receipts with token-budget metadata and serializer/RLM-ready machine-format hints.",
-                "Wire actual serializer/RLM adapters after deep source extraction.",
+                24,
+                "Metasearch search results can persist compact source-pack receipts and selected sources can return bounded deep extracts with token-budget metadata and serializer/RLM-ready machine-format hints.",
+                "Wire actual serializer/RLM adapters to source-pack and extract outputs.",
             ),
             feature(
                 "Forge safety and backup policy",
