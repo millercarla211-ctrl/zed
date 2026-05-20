@@ -1,8 +1,8 @@
 [build]
 # v0 mangling scheme provides more detailed backtraces around closures
 rustflags = ["-C", "symbol-mangling-version=v0", "--cfg", "tokio_unstable"]
-# Keep Zed build artifacts on the F: drive for this relocated checkout.
-target-dir = "F:/Zed/target"
+# Keep Zed build artifacts on the G: drive for this active checkout.
+target-dir = "G:/Zed/target"
 # Ryzen 5 5600G: 12 logical CPUs, 24GB RAM. Use single-job cold builds to limit peak virtual memory.
 jobs = 1
 
