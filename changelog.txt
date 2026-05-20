@@ -1,3 +1,16 @@
+[2026-05-21] - DX Launch Orchestrator Guidance
+
+ADDED:
+- Added `DX.md` with Zed-specific launch worker guidance for the May 22 DX sprint.
+- Added the Zed lane to the central `G:\Dx\WORKER_PROMPTS.md` orchestration pack.
+
+CHANGED:
+- Updated `todo.txt` with the May 22 orchestration status and worker constraints.
+
+NOTES:
+- No local server, `just run`, full Cargo build, or runtime validation was started.
+- Worker chats must use `[@superpowers](plugin://superpowers@openai-curated)` and ask before heavy build/runtime commands.
+
 [2026-05-20] - DX Forge Restore Executor
 
 ADDED:

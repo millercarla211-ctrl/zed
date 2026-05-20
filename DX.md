@@ -1,0 +1,34 @@
+# DX/Zed Launch Worker Notes
+
+Date: 2026-05-21
+Launch target: 2026-05-22
+
+## Worker Role
+
+This checkout is the Zed/DX editor surface. Worker chats here should focus on GPUI integration, AI panel polish, DX Agents bridge hooks, token meters, source rails, progress rails, and launch-safe runtime wiring.
+
+## Required Reading
+
+- `G:\Dx\WORKER_PROMPTS.md`
+- `G:\Dx\DX.md`
+- `G:\Zed\AGENTS.md`
+- `G:\Zed\PLAN.md`
+
+## Hard Rules
+
+- Use `[@superpowers](plugin://superpowers@openai-curated)` in new worker chats.
+- Preserve existing Zed AI behavior.
+- Do not create dummy UI.
+- Do not start local servers.
+- Do not run `just run`, full Cargo builds, or expensive workspace checks until the user opens the governed final validation window.
+- Prefer code reading, targeted implementation, `git diff --check`, conflict-marker search, and narrow checks after coherent milestones.
+- Update `todo.txt`, `changelog.txt`, and this file when changing launch status.
+
+## Current Launch Targets
+
+- Add `Agent` alongside existing AI actions like `Write` and `Ask`.
+- Add left Sources rail and right Progress/Git/Background Tasks rail.
+- Add New Chat, Search, Plugins, and Automations actions.
+- Add Pinned and All Chats workspace groups.
+- Wire DX token/RLM/serializer receipts into token/tool meters.
+- Wire DX Agents CLI receipts into GPUI status surfaces.
