@@ -26,10 +26,10 @@ pub struct LaunchFeatureStatus {
 
 pub fn current_launch_status() -> DxLaunchStatus {
     DxLaunchStatus {
-        overall_implementation_status: 46,
+        overall_implementation_status: 50,
         planning_status: 100,
         browser_chrome_hardening_status: 99,
-        dx_catalog_status: 78,
+        dx_catalog_status: 86,
         features: vec![
             feature(
                 "Browser/Chrome functional plugin execution",
@@ -45,15 +45,15 @@ pub fn current_launch_status() -> DxLaunchStatus {
             ),
             feature(
                 "dx_catalog provider/model archive",
-                78,
-                "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, source adapters, source discovery, local GGUF model reader, provider/auth reader, models.dev/OpenRouter/LiteLLM JSON model parsers, OpenRouter input, auth-profile enrichment, and launch status are in place.",
-                "Wire generated dx_catalog artifacts into the Agent model picker and route selection.",
+                86,
+                "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, source adapters, source discovery, local GGUF model reader, provider/auth reader, models.dev/OpenRouter/LiteLLM JSON model parsers, Agent picker projection, route selection, OpenRouter input, auth-profile enrichment, and launch status are in place.",
+                "Connect the Agent UI to a generated dx_catalog artifact and render the picker projection.",
             ),
             feature(
                 "Universal provider routing",
-                10,
+                24,
                 "One router picks local, free, premium, and remote providers from dx_catalog.",
-                "Connect dx_catalog records to the Agent model picker and route selection.",
+                "Connect route selections to real Agent thread model switching and provider execution.",
             ),
             feature(
                 "Metasearch AI tool",

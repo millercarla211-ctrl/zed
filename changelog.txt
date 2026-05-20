@@ -1,3 +1,16 @@
+[2026-05-20] - DX Catalog Agent Picker Projection
+
+ADDED:
+- Added a `dx_catalog` Agent picker projection that turns archived catalog records into picker-ready groups, model rows, auth/selectability states, cost labels, capability badges, and summary counts.
+- Added role-based catalog route selection with local/free/premium/configured preferences and fallback model IDs for Agent routing.
+
+CHANGED:
+- Exported the Agent picker projection and route-selection APIs from `dx_catalog`.
+- Updated `PLAN.md`, `todo.txt`, and launch status to move `dx_catalog` to 86/100, universal provider routing to 24/100, and the overall feature set to 50/100.
+
+NOTES:
+- This slice creates the stable contract for the Agent UI and thread router to consume next. It does not run `just`, run Cargo build/check/test/clippy, fetch remote catalogs, or switch live Agent models yet.
+
 [2026-05-20] - DX Catalog JSON Model Readers
 
 ADDED:

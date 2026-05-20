@@ -1,4 +1,5 @@
 mod adapters;
+mod agent_picker;
 mod artifact;
 mod error;
 mod generator;
@@ -14,6 +15,11 @@ pub use adapters::{
     LiteLlmAliasInput, LlamaCppModelInput, SourceMetadata, auth_profiles_input,
     flow_local_roles_input, lite_llm_aliases_input, lite_llm_catalog_input, llama_cpp_scan_input,
     models_dev_input, openrouter_input, zeroclaw_providers_input,
+};
+pub use agent_picker::{
+    AgentPickerAuthState, AgentPickerGroup, AgentPickerModel, AgentPickerProjection,
+    AgentPickerProjectionOptions, AgentPickerProjectionSummary, AgentRoutePreferences,
+    CatalogRouteSelection, build_agent_picker_projection, select_catalog_route,
 };
 pub use artifact::{
     CatalogArtifactHeader, CatalogArtifactRef, DX_CATALOG_ARTIFACT_VERSION, DX_CATALOG_MAGIC,
