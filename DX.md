@@ -66,6 +66,7 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Updated the Review Receipts action so drafted Agent prompts include live DX receipt buckets, latest receipt paths, tool-history buckets, proof freshness, and deploy receipt state.
 - Expanded the Runtime Proof handoff card so drafted Agent prompts include live Check score items, blockers, receipt root/latest receipts, deploy targets, and deploy receipt buckets.
 - Added a dedicated Import Proof guided card that drafts the exact operator-evidence contract for `import_dx_runtime_proof` without running validation from Zed.
+- Added content-aware runtime proof status scanning so the right rail and Check score distinguish missing evidence, blocked imports, unpaired status copies, and paired runtime-green candidates.
 - Added row-level source controls so visible Sources rail rows can draft real Attach or Review Agent prompts without relying only on the separate Source Actions cards.
 - Added row-level receipt drilldowns so Sources rail rows show the managed source-pack, reduced-context, media execution, or restore receipt that produced each visible source.
 - Expanded source receipt drilldowns with receipt type/size metadata and added row-level Receipt handoff buttons that draft source-specific receipt review prompts.
@@ -73,7 +74,7 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Added `capture_dx_forge_restore_approval`, a permissioned Agent tool that captures operator restore approval evidence, target path, rollback status, overwrite posture, blockers, and managed approval receipts under `tools/dx-forge/restore-approvals` without mutating target paths.
 - Added `preview_dx_serializer_rlm_reducer_execution`, a permissioned Agent tool that captures dry-run external reducer execution previews under `tools/dx-serializer-rlm/execution-previews` without running external reducers, Cargo, model calls, shell commands, network, or unmanaged writes.
 - Added `execute_dx_serializer_rlm_reducer`, a permissioned Agent tool that runs only approved no-shell absolute serializer/RLM reducer command vectors under approved DX roots, feeds deterministic reduced-context text by stdin when requested, captures stdout/stderr previews and hashes, and writes managed external-execution receipts.
-- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 99.95/100; the remaining launch gap is governed runtime proof evidence/import plus any future restore-to-target mutation after preview/rollback evidence is ready.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 99.97/100; the remaining launch gap is governed runtime proof evidence/import plus any future restore-to-target mutation after preview/rollback evidence is ready.
 
 ## Remaining Proof
 
@@ -99,6 +100,7 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - The live receipt-review draft slice has formatting/diff/conflict validation only so far; runtime click proof remains deferred under the repo's launch validation rules.
 - The runtime proof live-context slice has formatting/diff/conflict validation only so far; runtime click proof remains deferred under the repo's launch validation rules.
 - The runtime proof import handoff slice has formatting/diff/conflict validation only so far; runtime click proof and actual operator evidence import remain deferred under the repo's launch validation rules.
+- The runtime proof status scanner slice has formatting/diff/conflict validation only so far; runtime visual proof and actual operator evidence import remain deferred under the repo's launch validation rules.
 - The row-level source control slice has formatting/diff/conflict validation only so far; runtime click proof remains deferred under the repo's launch validation rules.
 - The row-level receipt drilldown slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
 - The source receipt review handoff slice has formatting/diff/conflict validation only so far; runtime click proof remains deferred under the repo's launch validation rules.

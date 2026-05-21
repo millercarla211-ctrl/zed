@@ -1,3 +1,16 @@
+[2026-05-21] - DX Runtime Proof Status Scanner
+
+ADDED:
+- Added a cached runtime proof status scanner for managed `tools/dx-runtime-proof/imports` and `tools/dx-runtime-proof/status` receipts.
+- Added right-rail Runtime Proof status rows that distinguish missing roots, missing evidence, blocked imports, unpaired receipts, and paired runtime-green candidates.
+- Added runtime proof claim-readiness context to Check scoring and runtime proof/import prompts.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current next-set status at 99.97/100 while keeping final runtime proof gated on governed operator evidence.
+
+NOTES:
+- This slice reads managed receipt files only. It does not run `just run`, Cargo, local servers, browser automation, deploys, shell commands, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Runtime Proof Import Handoff
 
 ADDED:

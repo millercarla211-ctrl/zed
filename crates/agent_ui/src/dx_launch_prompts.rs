@@ -5,6 +5,7 @@ use crate::dx_deploy_targets::{DxDeployTarget, DxDeployTargetSnapshot};
 use crate::dx_launch_workspace::DxReceiptSnapshot;
 use crate::dx_proof_freshness::DxProofFreshnessSnapshot;
 use crate::dx_receipt_history::DxToolHistorySnapshot;
+use crate::dx_runtime_proof_status::DxRuntimeProofStatusSnapshot;
 use crate::dx_source_sets::{DxSourceItem, DxSourceKind};
 
 pub(crate) fn source_action_icon(kind: DxSourceKind) -> IconName {
@@ -132,6 +133,7 @@ pub(crate) fn runtime_proof_prompt(
     receipt_snapshot: &DxReceiptSnapshot,
     proof_freshness: &DxProofFreshnessSnapshot,
     deploy_targets: &DxDeployTargetSnapshot,
+    runtime_proof_status: &DxRuntimeProofStatusSnapshot,
 ) -> String {
     let check_items = check_score
         .items
@@ -195,9 +197,10 @@ pub(crate) fn runtime_proof_prompt(
         8,
         "No deploy receipt buckets are tracked yet",
     );
+    let runtime_status = runtime_proof_status_prompt_context(runtime_proof_status);
 
     format!(
-        "Prepare the DX runtime proof handoff for this workspace. Current Check score: {score}/100 ({state}). Check items: {check_items}. Check blockers: {check_blockers}. Current receipts: {receipt_root}; latest receipts: {latest_receipts}. Deploy targets: {deploy_target_rows}. Deploy receipt buckets: {deploy_receipts}. {proof_rows} First use plan_dx_runtime_proof to write the governed manual validation checklist without running validation. If I provide operator evidence from that governed validation window, use import_dx_runtime_proof to write only managed runtime proof import/status receipts. Do not run just run, cargo, builds, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions unless I explicitly approve the governed tool request.",
+        "Prepare the DX runtime proof handoff for this workspace. Current Check score: {score}/100 ({state}). Check items: {check_items}. Check blockers: {check_blockers}. Current receipts: {receipt_root}; latest receipts: {latest_receipts}. Deploy targets: {deploy_target_rows}. Deploy receipt buckets: {deploy_receipts}. Runtime proof status: {runtime_status}. {proof_rows} First use plan_dx_runtime_proof to write the governed manual validation checklist without running validation. If I provide operator evidence from that governed validation window, use import_dx_runtime_proof to write only managed runtime proof import/status receipts. Do not run just run, cargo, builds, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions unless I explicitly approve the governed tool request.",
         score = check_score.score,
         state = check_score.state,
     )
@@ -207,6 +210,7 @@ pub(crate) fn runtime_proof_import_prompt(
     check_score: &DxCheckScoreSnapshot,
     proof_freshness: &DxProofFreshnessSnapshot,
     deploy_targets: &DxDeployTargetSnapshot,
+    runtime_proof_status: &DxRuntimeProofStatusSnapshot,
 ) -> String {
     let check_blockers = bounded_join(&check_score.blockers, 4, "No current Check blockers");
     let proof_rows = proof_freshness
@@ -232,9 +236,10 @@ pub(crate) fn runtime_proof_import_prompt(
         .map(|target| format!("{} {} at {}", target.platform, target.label, target.path))
         .collect::<Vec<_>>();
     let deploy_target_rows = bounded_join(&deploy_target_rows, 3, "No deploy targets detected");
+    let runtime_status = runtime_proof_status_prompt_context(runtime_proof_status);
 
     format!(
-        "Prepare the DX runtime proof import handoff for this workspace. Current Check score: {score}/100 ({state}). Check blockers: {check_blockers}. Proof freshness rows: {proof_rows}. Deploy targets: {deploy_target_rows}. Operator evidence from the governed validation window is required before calling import_dx_runtime_proof. If I have not provided that evidence yet, draft the exact fields I need to provide and stop. When evidence is provided, use import_dx_runtime_proof with operator_status set to passed, blocked, or failed; include proof_summary, evidence lines, blockers, final_command, source, write_runtime_proof_receipt=true, and receipt_root_mode=workspace. Do not run just run, cargo, builds, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions.",
+        "Prepare the DX runtime proof import handoff for this workspace. Current Check score: {score}/100 ({state}). Check blockers: {check_blockers}. Proof freshness rows: {proof_rows}. Deploy targets: {deploy_target_rows}. Runtime proof status: {runtime_status}. Operator evidence from the governed validation window is required before calling import_dx_runtime_proof. If I have not provided that evidence yet, draft the exact fields I need to provide and stop. When evidence is provided, use import_dx_runtime_proof with operator_status set to passed, blocked, or failed; include proof_summary, evidence lines, blockers, final_command, source, write_runtime_proof_receipt=true, and receipt_root_mode=workspace. Do not run just run, cargo, builds, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions.",
         score = check_score.score,
         state = check_score.state,
     )
@@ -316,6 +321,43 @@ pub(crate) fn receipt_review_prompt(
 
     format!(
         "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Tool history buckets: {tool_buckets}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
+    )
+}
+
+fn runtime_proof_status_prompt_context(snapshot: &DxRuntimeProofStatusSnapshot) -> String {
+    let latest_import = snapshot
+        .latest_import
+        .as_ref()
+        .map(|receipt| {
+            format!(
+                "latest import {} status {} evidence {} blockers {}",
+                receipt.label,
+                receipt.validation_status,
+                receipt.evidence_count,
+                receipt.blocker_count
+            )
+        })
+        .unwrap_or_else(|| "no latest import receipt".to_string());
+    let latest_status = snapshot
+        .latest_status
+        .as_ref()
+        .map(|receipt| {
+            format!(
+                "latest status {} claim_ready {}",
+                receipt.label, receipt.can_claim_runtime_green
+            )
+        })
+        .unwrap_or_else(|| "no latest status receipt".to_string());
+    let blockers = bounded_join(&snapshot.blockers, 3, "no runtime proof status blockers");
+
+    format!(
+        "{}; {} import receipt(s), {} status receipt(s); {}; {}; blockers: {}",
+        snapshot.claim_state,
+        snapshot.import_receipt_count,
+        snapshot.status_receipt_count,
+        latest_import,
+        latest_status,
+        blockers
     )
 }
 

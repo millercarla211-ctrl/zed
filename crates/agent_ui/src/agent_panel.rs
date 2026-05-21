@@ -46,6 +46,7 @@ use crate::dx_launch_workspace::{
 };
 use crate::dx_proof_freshness::proof_freshness_snapshot;
 use crate::dx_receipt_history::tool_history_snapshot;
+use crate::dx_runtime_proof_status::runtime_proof_status_snapshot;
 use crate::dx_source_sets::{DxSourceKind, DxSourceSetSnapshot, source_set_snapshot};
 use crate::terminal_thread_metadata_store::{TerminalThreadMetadata, TerminalThreadMetadataStore};
 use crate::thread_metadata_store::{ThreadId, ThreadMetadataStore, ThreadMetadataStoreEvent};
@@ -6023,6 +6024,7 @@ impl AgentPanel {
                     &status.receipt_snapshot,
                     &status.proof_freshness,
                     &status.deploy_targets,
+                    &status.runtime_proof_status,
                 ),
                 can_create_entries,
                 cx,
@@ -6038,6 +6040,7 @@ impl AgentPanel {
                     &status.check_score,
                     &status.proof_freshness,
                     &status.deploy_targets,
+                    &status.runtime_proof_status,
                 ),
                 can_create_entries,
                 cx,
@@ -6171,6 +6174,7 @@ impl AgentPanel {
         let tool_history = tool_history_snapshot(&workspace_roots);
         let deploy_targets = deploy_target_snapshot(&workspace_roots);
         let proof_freshness = proof_freshness_snapshot(&workspace_roots);
+        let runtime_proof_status = runtime_proof_status_snapshot(&workspace_roots);
         let deploy_env_receipt_count = deploy_targets.receipt_bucket_count("Env");
         let deploy_log_receipt_count = deploy_targets.receipt_bucket_count("Logs");
         let deploy_rollback_receipt_count = deploy_targets.receipt_bucket_count("Rollback");
@@ -6206,6 +6210,8 @@ impl AgentPanel {
             visual_proof_receipt_count: proof_freshness.receipt_count("Visual Proof"),
             runtime_plan_receipt_count: proof_freshness.receipt_count("Runtime Plan"),
             runtime_proof_receipt_count: proof_freshness.receipt_count("Runtime Proof"),
+            runtime_proof_claim_ready: runtime_proof_status.runtime_green_candidate(),
+            runtime_proof_claim_state: runtime_proof_status.claim_state.as_str(),
             fresh_proof_receipt_count: proof_freshness.fresh_receipt_count(),
         });
 
@@ -6219,6 +6225,7 @@ impl AgentPanel {
             check_score,
             deploy_targets,
             proof_freshness,
+            runtime_proof_status,
         }
     }
 

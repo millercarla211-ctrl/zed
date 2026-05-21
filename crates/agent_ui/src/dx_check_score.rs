@@ -33,6 +33,8 @@ pub(crate) struct DxCheckScoreInput<'a> {
     pub visual_proof_receipt_count: usize,
     pub runtime_plan_receipt_count: usize,
     pub runtime_proof_receipt_count: usize,
+    pub runtime_proof_claim_ready: bool,
+    pub runtime_proof_claim_state: &'a str,
     pub fresh_proof_receipt_count: usize,
 }
 
@@ -113,8 +115,14 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
     if input.visual_proof_receipt_count > 0 {
         score += 4;
     }
-    if input.runtime_proof_receipt_count > 0 {
+    if input.runtime_proof_claim_ready {
         score += 3;
+    } else if input.runtime_proof_receipt_count > 0 {
+        score += 1;
+        blockers.push(format!(
+            "Runtime proof receipts are not claim-ready: {}",
+            input.runtime_proof_claim_state
+        ));
     } else if input.runtime_plan_receipt_count > 0 {
         score += 1;
         blockers
@@ -201,12 +209,13 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
                     }
                 } else {
                     format!(
-                        "{} validation, {} visual, {} runtime plan, {} runtime, {} fresh",
+                        "{} validation, {} visual, {} runtime plan, {} runtime, {} fresh, {}",
                         input.validation_proof_receipt_count,
                         input.visual_proof_receipt_count,
                         input.runtime_plan_receipt_count,
                         input.runtime_proof_receipt_count,
-                        input.fresh_proof_receipt_count
+                        input.fresh_proof_receipt_count,
+                        input.runtime_proof_claim_state
                     )
                 },
             },

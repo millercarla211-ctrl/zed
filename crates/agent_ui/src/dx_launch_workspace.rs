@@ -13,6 +13,7 @@ use crate::dx_check_score::DxCheckScoreSnapshot;
 use crate::dx_deploy_targets::{DxDeployReceiptBucket, DxDeployTarget, DxDeployTargetSnapshot};
 use crate::dx_proof_freshness::{DxProofFreshnessBucket, DxProofFreshnessSnapshot};
 use crate::dx_receipt_history::{DxToolHistoryBucket, DxToolHistorySnapshot};
+use crate::dx_runtime_proof_status::{DxRuntimeProofReceiptSummary, DxRuntimeProofStatusSnapshot};
 use crate::dx_source_sets::{
     DxSourceAttachmentSummary, DxSourceItem, DxSourceKind, DxSourceReceiptDrilldown, DxSourceSet,
     DxSourceSetSnapshot,
@@ -46,6 +47,7 @@ pub(crate) struct DxLaunchWorkspaceStatus {
     pub check_score: DxCheckScoreSnapshot,
     pub deploy_targets: DxDeployTargetSnapshot,
     pub proof_freshness: DxProofFreshnessSnapshot,
+    pub runtime_proof_status: DxRuntimeProofStatusSnapshot,
 }
 
 pub(crate) struct DxSourceRowControl {
@@ -274,6 +276,8 @@ fn render_right_rail(
         .child(check_score_state(&status.check_score, cx))
         .child(section_title("Proof Freshness", IconName::FileTextOutlined))
         .child(proof_freshness_state(&status.proof_freshness, cx))
+        .child(section_title("Runtime Proof", IconName::Check))
+        .child(runtime_proof_status_state(&status.runtime_proof_status, cx))
         .child(section_title("Guided Proofs", IconName::Sparkle))
         .child(guided_cards)
         .child(section_title("Git", IconName::GitBranch))
@@ -747,6 +751,105 @@ fn proof_freshness_bucket_row(
     } else if !bucket.root_exists {
         stack = stack.child(
             Label::new(bucket.root_label)
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+    }
+
+    stack.into_any_element()
+}
+
+fn runtime_proof_status_state(snapshot: &DxRuntimeProofStatusSnapshot, cx: &App) -> AnyElement {
+    let mut stack = v_flex()
+        .gap_1()
+        .child(metric_row("Claim", snapshot.claim_state.clone()))
+        .child(metric_row(
+            "Receipts",
+            format!(
+                "{} import, {} status",
+                snapshot.import_receipt_count, snapshot.status_receipt_count
+            ),
+        ));
+
+    if snapshot.workspace_root_count == 0 {
+        stack = stack.child(muted_card("No workspace roots", cx));
+    } else if !snapshot.import_root_exists && !snapshot.status_root_exists {
+        stack = stack.child(muted_card("No runtime proof receipt roots", cx));
+    }
+
+    if let Some(receipt) = snapshot.latest_import.as_ref() {
+        stack = stack.child(runtime_proof_receipt_row(
+            "dx-runtime-proof-latest-import",
+            "Import",
+            receipt,
+            cx,
+        ));
+    }
+
+    if let Some(receipt) = snapshot.latest_status.as_ref() {
+        stack = stack.child(runtime_proof_receipt_row(
+            "dx-runtime-proof-latest-status",
+            "Status",
+            receipt,
+            cx,
+        ));
+    }
+
+    for (ix, blocker) in snapshot.blockers.iter().take(2).enumerate() {
+        stack = stack.child(signal_row(
+            SharedString::from(format!("dx-runtime-proof-blocker-{ix}")),
+            IconName::Warning,
+            Color::Warning,
+            blocker.clone(),
+        ));
+    }
+
+    stack.into_any_element()
+}
+
+fn runtime_proof_receipt_row(
+    id: &'static str,
+    label: &'static str,
+    receipt: &DxRuntimeProofReceiptSummary,
+    cx: &App,
+) -> AnyElement {
+    let state = if receipt.runtime_green_candidate || receipt.can_claim_runtime_green {
+        "Claim-ready".to_string()
+    } else {
+        format!(
+            "{} - {} blocker(s)",
+            receipt.validation_status, receipt.blocker_count
+        )
+    };
+    let mut stack = v_flex()
+        .id(id)
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().element_background)
+        .child(metric_row(label, state))
+        .child(
+            Label::new(format!(
+                "{} evidence - operator {}",
+                receipt.evidence_count, receipt.operator_status
+            ))
+            .size(LabelSize::XSmall)
+            .color(Color::Muted)
+            .truncate(),
+        )
+        .child(
+            Label::new(receipt.label.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+
+    if let Some(headline) = receipt.headline.as_ref() {
+        stack = stack.child(
+            Label::new(headline.clone())
                 .size(LabelSize::XSmall)
                 .color(Color::Muted)
                 .truncate(),
