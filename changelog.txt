@@ -1,3 +1,15 @@
+[2026-05-21] - DX Binary Cache Artifact Review Routing
+
+ADDED:
+- Added top-level Binary Cache `artifact-review` status for malformed, expired, partial, missing-root, or unknown receipt-cache artifact states.
+- Added regenerate guidance for artifact-review states while keeping JSON receipt readers authoritative.
+
+CHANGED:
+- Binary Cache readiness now distinguishes missing artifacts from artifacts that exist but need review.
+
+NOTES:
+- This slice does not run CLI commands, start servers, run Cargo/`just run`, write artifacts, make binary caches authoritative over JSON receipts, or change existing receipt producers.
+
 [2026-05-21] - DX Binary Cache Rail Artifact Health
 
 ADDED:

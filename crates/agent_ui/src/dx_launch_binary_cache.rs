@@ -143,6 +143,10 @@ pub(crate) fn binary_cache_snapshot(input: DxBinaryCacheInput) -> DxBinaryCacheS
         .iter()
         .filter(|row| binary_cache_state_from_artifact(&row.state))
         .count();
+    let binary_attention_count = rows
+        .iter()
+        .filter(|row| binary_cache_state_needs_attention(&row.state))
+        .count();
     let json_ready_count = rows
         .iter()
         .filter(|row| row.state == "json-ready" || row.state == "stale")
@@ -150,6 +154,8 @@ pub(crate) fn binary_cache_snapshot(input: DxBinaryCacheInput) -> DxBinaryCacheS
 
     let status = if binary_ready_count == rows.len() {
         "ready"
+    } else if binary_attention_count > 0 {
+        "artifact-review"
     } else if binary_backed_count > 0 || json_ready_count > 0 {
         "json-authoritative"
     } else {
@@ -157,6 +163,10 @@ pub(crate) fn binary_cache_snapshot(input: DxBinaryCacheInput) -> DxBinaryCacheS
     };
     let operator_summary = match status {
         "ready" => "Provider/catalog and receipt metadata are binary-backed.".to_string(),
+        "artifact-review" => {
+            "Receipt-cache artifacts need review; JSON receipt readers remain authoritative."
+                .to_string()
+        }
         "json-authoritative" => {
             "JSON receipt readers remain authoritative while missing binary artifacts are reported."
                 .to_string()
@@ -168,6 +178,8 @@ pub(crate) fn binary_cache_snapshot(input: DxBinaryCacheInput) -> DxBinaryCacheS
         format!("Create DX receipt root at {}", input.receipt_root.display())
     } else if !input.launch_latest_present {
         "dx launch status --json".to_string()
+    } else if binary_attention_count > 0 {
+        "Regenerate metadata-only receipt cache artifacts".to_string()
     } else if binary_ready_count < rows.len() {
         "Materialize metadata-only receipt cache artifacts".to_string()
     } else {
@@ -325,6 +337,13 @@ fn binary_cache_state_from_artifact(state: &str) -> bool {
     matches!(
         state,
         "ready" | "partial" | "stale" | "expired" | "malformed" | "missing-roots" | "empty"
+    )
+}
+
+fn binary_cache_state_needs_attention(state: &str) -> bool {
+    matches!(
+        state,
+        "partial" | "expired" | "malformed" | "missing-roots" | "unknown"
     )
 }
 
