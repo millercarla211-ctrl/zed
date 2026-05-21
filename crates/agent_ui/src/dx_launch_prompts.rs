@@ -1,6 +1,7 @@
 use ui::IconName;
 
 use crate::dx_deploy_targets::{DxDeployTarget, DxDeployTargetSnapshot};
+use crate::dx_proof_freshness::DxProofFreshnessSnapshot;
 use crate::dx_source_sets::{DxSourceItem, DxSourceKind};
 
 pub(crate) fn source_action_icon(kind: DxSourceKind) -> IconName {
@@ -91,5 +92,38 @@ pub(crate) fn deploy_readiness_prompt(
         receipt_count = snapshot.receipt_count,
         latest = latest,
         receipt_buckets = receipt_buckets,
+    )
+}
+
+pub(crate) fn runtime_proof_prompt(snapshot: &DxProofFreshnessSnapshot) -> String {
+    let proof_rows = snapshot
+        .buckets
+        .iter()
+        .map(|bucket| {
+            let latest = if bucket.latest.is_empty() {
+                if bucket.root_exists {
+                    "no latest receipt paths".to_string()
+                } else {
+                    format!("missing root {}", bucket.root_label)
+                }
+            } else {
+                format!("latest {}", bucket.latest.join(", "))
+            };
+
+            format!(
+                "{}: {} receipt(s), {}, {}; {}",
+                bucket.label, bucket.count, bucket.status, bucket.description, latest
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    let proof_rows = if proof_rows.is_empty() {
+        "No proof freshness rows are available yet.".to_string()
+    } else {
+        format!("Current proof freshness rows: {proof_rows}.")
+    };
+
+    format!(
+        "Prepare the DX runtime proof handoff for this workspace. Review the Check score, Proof Freshness rows, Deploy URL/status receipt buckets, deploy targets, and current launch receipts. {proof_rows} First use plan_dx_runtime_proof to write the governed manual validation checklist without running validation. If I provide operator evidence from that governed validation window, use import_dx_runtime_proof to write only managed runtime proof import/status receipts. Do not run just run, cargo, builds, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions unless I explicitly approve the governed tool request."
     )
 }

@@ -37,12 +37,13 @@ use crate::completion_provider::AgentContextSource;
 use crate::dx_check_score::{DxCheckScoreInput, check_score_snapshot};
 use crate::dx_deploy_targets::{DxDeployTargetSnapshot, deploy_target_snapshot};
 use crate::dx_launch_prompts::{
-    deploy_readiness_prompt, source_action_icon, source_action_prompt, source_action_title,
+    deploy_readiness_prompt, runtime_proof_prompt, source_action_icon, source_action_prompt,
+    source_action_title,
 };
 use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, receipt_snapshot, render_workspace_chrome,
 };
-use crate::dx_proof_freshness::proof_freshness_snapshot;
+use crate::dx_proof_freshness::{DxProofFreshnessSnapshot, proof_freshness_snapshot};
 use crate::dx_receipt_history::tool_history_snapshot;
 use crate::dx_source_sets::{DxSourceKind, DxSourceSetSnapshot, source_set_snapshot};
 use crate::terminal_thread_metadata_store::{TerminalThreadMetadata, TerminalThreadMetadataStore};
@@ -112,7 +113,6 @@ const DX_LAUNCH_RECIPE_PROMPT: &str = "Run the DX launch metasearch-to-reduced-c
 const DX_RECEIPT_REVIEW_PROMPT: &str = "Inspect the current DX launch receipts for this workspace. Summarize the latest metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, and runtime-proof receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, or model calls.";
 const DX_MEDIA_PROOF_PROMPT: &str = "Prepare the DX media proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"media\". Then review any produced-file proof cards in the Sources rail and guide me through the next safe step using permissioned tools only: plan_dx_media_tool, gate_dx_media_tool_runner, execute_dx_media_tool only after an approved runner gate, and prepare_dx_source_attachment for produced files. Do not run local servers, builds, browser input, shell commands, unmanaged file writes, or media execution until I explicitly approve the tool request.";
 const DX_FORGE_PROOF_PROMPT: &str = "Prepare the DX Forge proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"forge\" and inspect_dx_forge_history. Then guide me through the next safe receipt step for safety policy, backup runner gate, backup execution, restore preview, restore receipt review, and restore-approval capture. Do not mutate target paths, permanently delete files, run local servers, builds, shell commands, browser input, or restore-to-target actions unless I explicitly approve the governed tool request.";
-const DX_RUNTIME_PROOF_PROMPT: &str = "Prepare the DX runtime proof handoff for this workspace. Review the Check score, Proof Freshness rows, Deploy URL/status receipt buckets, deploy targets, and current launch receipts. First use plan_dx_runtime_proof to write the governed manual validation checklist without running validation. If I provide operator evidence from that governed validation window, use import_dx_runtime_proof to write only managed runtime proof import/status receipts. Do not run just run, cargo, builds, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions unless I explicitly approve the governed tool request.";
 const DX_RESTORE_APPROVAL_PROMPT: &str = "Prepare a non-mutating DX Forge restore-to-target approval review for this workspace. Use inspect_dx_forge_history and visible restore-preview source rows to summarize the latest safety-policy, backup, backup-manifest, restore-preview, blockers, target path, overwrite risk, rollback evidence, and missing confirmations. If I provide operator approval evidence, use capture_dx_forge_restore_approval to write only a managed approval receipt. Do not mutate target paths, overwrite files, delete files, run shell commands, run local servers, or execute restore-to-target actions.";
 const DX_REDUCER_GUARD_PROMPT: &str = "Prepare a DX serializer/RLM reducer execution guard review for this workspace. Review metasearch source packs, source attachments, context bundles, execution-plan receipts, runner-gate receipts, reduced-context receipts, execution-preview receipts, external-execution receipts, citation coverage, token budget, and model-call approval state. If I provide approval evidence, first use preview_dx_serializer_rlm_reducer_execution for the managed dry-run preview. Use execute_dx_serializer_rlm_reducer only when I explicitly provide a no-shell absolute command vector under approved DX serializer/RLM roots and require a managed execution receipt. Do not run cargo, package managers, local servers, browser input, shell commands, network, unmanaged file writes, or model calls unless the governed tool request explicitly covers them.";
 
@@ -5699,7 +5699,7 @@ impl AgentPanel {
         let sidebar_actions = self.render_dx_launch_sidebar_actions(window, cx);
         let source_actions =
             self.render_dx_launch_source_actions(&status.source_sets, &status.deploy_targets, cx);
-        let guided_cards = self.render_dx_launch_guided_cards(window, cx);
+        let guided_cards = self.render_dx_launch_guided_cards(&status.proof_freshness, window, cx);
         render_workspace_chrome(
             center,
             sidebar_actions,
@@ -5911,6 +5911,7 @@ impl AgentPanel {
 
     fn render_dx_launch_guided_cards(
         &self,
+        proof_freshness: &DxProofFreshnessSnapshot,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -5947,7 +5948,7 @@ impl AgentPanel {
                 "Runtime Proof",
                 "Review Check score, proof freshness, and deploy URL/status gates.",
                 "Draft Proof",
-                DX_RUNTIME_PROOF_PROMPT,
+                runtime_proof_prompt(proof_freshness),
                 can_create_entries,
                 cx,
             ))
@@ -5984,11 +5985,11 @@ impl AgentPanel {
         title: &'static str,
         detail: &'static str,
         action_label: &'static str,
-        prompt: &'static str,
+        prompt: impl Into<String>,
         can_create_entries: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let prompt = prompt.to_string();
+        let prompt = prompt.into();
         v_flex()
             .id(id)
             .gap_1()
