@@ -1843,7 +1843,7 @@ fn dx_agent_receipt_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyElem
         .child(metric_row("Unsafe", unsafe_count.to_string()));
 
     if !index.present {
-        stack = stack.child(muted_card("Run dx-agents agents receipts list --json", cx));
+        stack = stack.child(muted_card("Run dx agents receipts list --json", cx));
     } else if let Some(error) = index.last_error.as_ref() {
         stack = stack.child(signal_row(
             "dx-agent-receipt-index-error".into(),

@@ -6979,12 +6979,9 @@ impl Sidebar {
                 "sidebar-activity-background-tasks",
                 IconName::Clock,
                 "Background Tasks",
-                |this, _, window, cx| {
-                    this.activity_bar_expanded = true;
-                    this.show_archive(window, cx);
-                },
+                |this, _, window, cx| this.show_background_tasks(window, cx),
             )
-            .toggle_state(is_archive)
+            .toggle_state(is_archive || self.background_task_entry_index().is_some())
             .into_any_element(),
         ];
 
@@ -7003,6 +7000,35 @@ impl Sidebar {
         ];
 
         coding_activity_bar::render_coding_activity_bar(primary_actions, secondary_actions)
+    }
+
+    fn background_task_entry_index(&self) -> Option<usize> {
+        self.contents.entries.iter().position(|entry| match entry {
+            ListEntry::Thread(thread) => {
+                thread.is_background
+                    || matches!(
+                        thread.status,
+                        AgentThreadStatus::Running | AgentThreadStatus::WaitingForConfirmation
+                    )
+            }
+            ListEntry::Terminal(_) | ListEntry::ProjectHeader { .. } => false,
+        })
+    }
+
+    fn show_background_tasks(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.activity_bar_expanded = true;
+        self.show_thread_list(window, cx);
+        self.reset_filter_editor_text(window, cx);
+        self.update_entries(cx);
+
+        if let Some(index) = self.background_task_entry_index() {
+            self.selection = Some(index);
+            self.list_state.scroll_to_reveal_item(index);
+            self.focus_handle.focus(window, cx);
+            cx.notify();
+        } else {
+            self.focus_sidebar_filter(&FocusSidebarFilter, window, cx);
+        }
     }
 
     fn manage_space(

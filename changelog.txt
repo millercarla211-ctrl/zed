@@ -1,8 +1,28 @@
+[2026-05-22] - DX Agents Receipt Refresh Public Bridge
+
+CHANGED:
+- Routed Agent Configuration receipt-index refresh controls through the public `dx agents receipts list --json` bridge.
+- Kept the runtime-owned `receipts-list-latest.json` parsing and redacted background receipt row rendering unchanged.
+
+NOTES:
+- This preserves existing Write/Ask modes, model picker, provider routing, Agent panel behavior, and receipt rendering.
+- No Cargo commands, local servers, live CLI commands, provider calls, or `just run` were executed.
+
+[2026-05-22] - DX Activity Bar Background Task Routing
+
+CHANGED:
+- Retargeted the compact activity bar Background Tasks action from archived thread history to the live sidebar thread list.
+- The action now selects the first visible running, waiting, or retained Agent task row, and falls back to normal sidebar search focus when there is no live task row.
+
+NOTES:
+- This preserves existing thread history, Write/Ask modes, model picker, Agent panel behavior, Web Preview behavior, and normal sidebar behavior outside the compact tri-pane activity bar.
+- No Cargo commands, local servers, or `just run` were executed.
+
 [2026-05-22] - DX Agents Public CLI Action Bridge
 
 CHANGED:
 - Routed Agent Configuration status, social list/connect/disconnect, automation list, and run receipt controls through the public `dx agents ... --json` bridge.
-- Kept direct `dx-agents` runtime calls for contract, receipt-index, provider/model, and catalog producer actions that are not root CLI public actions yet.
+- Kept direct `dx-agents` runtime calls for contract, provider/model, and catalog producer actions that are not root CLI public actions yet.
 - Added a fixed allowlist for public DX Agents command vectors before Zed runs the root `dx` bridge.
 
 NOTES:
@@ -19,7 +39,7 @@ FIXED:
 - Public social connect/disconnect bridge actions now require an explicit safe `--platform` argument instead of allowing bare connect/disconnect command shapes.
 
 NOTES:
-- Runtime-only contract, provider, model, catalog, import-summary, release-gate, and receipt-list actions remain on their existing guarded paths.
+- Runtime-only contract, provider, model, catalog, import-summary, and release-gate actions remain on their existing guarded paths.
 - No Cargo commands, local servers, live CLI commands, provider calls, or `just run` were executed.
 
 [2026-05-22] - DX Activity Bar Overflow Hardening

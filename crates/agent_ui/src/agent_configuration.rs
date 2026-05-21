@@ -340,7 +340,7 @@ impl AgentConfiguration {
                     .label_size(LabelSize::Small)
                     .disabled(!actions_allowed)
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_bridge_action(
+                        this.run_dx_agents_public_action(
                             vec!["agents", "receipts", "list", "--json"],
                             cx,
                         );
@@ -1005,7 +1005,7 @@ impl AgentConfiguration {
                     .icon_size(IconSize::Small)
                     .tooltip(Tooltip::text("Refresh DX Agents receipt index"))
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_bridge_action(
+                        this.run_dx_agents_public_action(
                             vec!["agents", "receipts", "list", "--json"],
                             cx,
                         );

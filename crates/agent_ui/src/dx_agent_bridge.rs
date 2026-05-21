@@ -1220,7 +1220,7 @@ fn receipt_index_summary(value: Option<&Value>, root_exists: bool) -> DxAgentRec
         last_error: value.and_then(|value| safe_string_field(value, &["last_error"])),
         next_action: value
             .and_then(|value| safe_string_field(value, &["next_action"]))
-            .unwrap_or_else(|| "dx-agents agents receipts list --json".to_string()),
+            .unwrap_or_else(|| "dx agents receipts list --json".to_string()),
     }
 }
 
@@ -1393,6 +1393,14 @@ fn is_allowed_public_dx_agents_command(args: &[String]) -> bool {
     match args {
         [agents, command, json] if agents == "agents" && json == "--json" => {
             matches!(command.as_str(), "snapshot" | "status" | "run")
+        }
+        [agents, receipts, list, json]
+            if agents == "agents"
+                && receipts == "receipts"
+                && list == "list"
+                && json == "--json" =>
+        {
+            true
         }
         [agents, social, command, json]
             if agents == "agents" && social == "social" && json == "--json" =>
