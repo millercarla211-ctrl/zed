@@ -3,6 +3,7 @@ use ui::IconName;
 use crate::dx_check_score::DxCheckScoreSnapshot;
 use crate::dx_deploy_targets::{DxDeployReceiptBucket, DxDeployTarget, DxDeployTargetSnapshot};
 use crate::dx_launch_contracts::DxLaunchContractSnapshot;
+use crate::dx_launch_readiness::DxLaunchReadinessSnapshot;
 use crate::dx_launch_receipts::DxLaunchReceiptReviewSnapshot;
 use crate::dx_launch_status::DxLaunchStatusSnapshot;
 use crate::dx_launch_workspace::DxReceiptSnapshot;
@@ -296,15 +297,33 @@ pub(crate) fn runtime_proof_evidence_template_prompt(
 
 pub(crate) fn launch_handoff_prompt(
     contracts: &DxLaunchContractSnapshot,
+    readiness: &DxLaunchReadinessSnapshot,
     launch_status: &DxLaunchStatusSnapshot,
     launch_receipts: &DxLaunchReceiptReviewSnapshot,
 ) -> String {
+    let contract_context = launch_contract_prompt_context(contracts);
+    let readiness_context = launch_readiness_prompt_context(readiness);
+    let launch_context = launch_status_prompt_context(launch_status);
+    let receipt_context = launch_receipt_review_prompt_context(launch_receipts);
+
+    format!(
+        "Review the DX launch handoff for this Zed workspace. Launch contract metadata: {contract_context}. Launch gate readiness: {readiness_context}. Launch aggregate: {launch_context}. Launch receipt diagnostics: {receipt_context}. Use the visible source-owned import-manifest, handoff, import-summary, release-gate, and fallback-drill metadata to summarize packet coverage, polling order, diagnostics commands, action-map safety, cached receipt fallback states, command fanout, redaction posture, and missing proof. If the operator asks for a refresh, draft the exact `dx launch import-manifest --json`, `dx launch handoff --json`, `dx launch import-summary --json`, `dx launch release-gate --json`, `dx launch fallback-drill --json`, `dx launch status --json`, or `dx launch receipts --json` step, but do not run CLI commands, builds, local servers, browser input, deploys, shell commands, providers, agents, DX-WWW, Forge, external serializer/RLM code, model calls, or restore-to-target actions."
+    )
+}
+
+pub(crate) fn launch_readiness_prompt(
+    readiness: &DxLaunchReadinessSnapshot,
+    contracts: &DxLaunchContractSnapshot,
+    launch_status: &DxLaunchStatusSnapshot,
+    launch_receipts: &DxLaunchReceiptReviewSnapshot,
+) -> String {
+    let readiness_context = launch_readiness_prompt_context(readiness);
     let contract_context = launch_contract_prompt_context(contracts);
     let launch_context = launch_status_prompt_context(launch_status);
     let receipt_context = launch_receipt_review_prompt_context(launch_receipts);
 
     format!(
-        "Review the DX launch handoff for this Zed workspace. Launch contract metadata: {contract_context}. Launch aggregate: {launch_context}. Launch receipt diagnostics: {receipt_context}. Use the visible source-owned import-manifest and handoff packet metadata to summarize packet coverage, polling order, diagnostics commands, action-map safety, command fanout, redaction posture, cached receipt fallback, and missing proof. If the operator asks for a refresh, draft the exact `dx launch import-manifest --json`, `dx launch handoff --json`, `dx launch status --json`, `dx launch receipts --json`, or `dx launch release-gate --json` step, but do not run CLI commands, builds, local servers, browser input, deploys, shell commands, providers, agents, DX-WWW, Forge, external serializer/RLM code, model calls, or restore-to-target actions."
+        "Review the DX launch import gate for this Zed workspace. Launch gate readiness: {readiness_context}. Launch contract metadata: {contract_context}. Launch aggregate: {launch_context}. Launch receipt diagnostics: {receipt_context}. Summarize whether Zed can safely render the import-summary, release-gate, and fallback-drill states, which cached receipt states are represented, what recovery commands should be shown, and what governed runtime proof is still missing. Do not run CLI commands, builds, local servers, browser input, deploys, shell commands, providers, agents, DX-WWW, Forge, external serializer/RLM code, model calls, or restore-to-target actions."
     )
 }
 
@@ -313,6 +332,7 @@ pub(crate) fn receipt_review_prompt(
     launch_status: &DxLaunchStatusSnapshot,
     launch_receipts: &DxLaunchReceiptReviewSnapshot,
     launch_contracts: &DxLaunchContractSnapshot,
+    launch_readiness: &DxLaunchReadinessSnapshot,
     tool_history: &DxToolHistorySnapshot,
     proof_freshness: &DxProofFreshnessSnapshot,
     deploy_targets: &DxDeployTargetSnapshot,
@@ -343,6 +363,7 @@ pub(crate) fn receipt_review_prompt(
     let launch_context = launch_status_prompt_context(launch_status);
     let launch_receipt_context = launch_receipt_review_prompt_context(launch_receipts);
     let launch_contract_context = launch_contract_prompt_context(launch_contracts);
+    let launch_readiness_context = launch_readiness_prompt_context(launch_readiness);
     let tool_buckets = tool_history
         .buckets
         .iter()
@@ -390,7 +411,7 @@ pub(crate) fn receipt_review_prompt(
     };
 
     format!(
-        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Launch aggregate: {launch_context}. Launch handoff contracts: {launch_contract_context}. Launch receipt diagnostics: {launch_receipt_context}. Tool history buckets: {tool_buckets}. Forge history context: {forge_history}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest launch status, launch receipt freshness, malformed retained snapshots, handoff packet coverage, metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, restore-target plan, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
+        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Launch aggregate: {launch_context}. Launch handoff contracts: {launch_contract_context}. Launch gate readiness: {launch_readiness_context}. Launch receipt diagnostics: {launch_receipt_context}. Tool history buckets: {tool_buckets}. Forge history context: {forge_history}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest launch status, launch receipt freshness, malformed retained snapshots, handoff packet coverage, import-summary/release-gate/fallback-drill parser states, metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, restore-target plan, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
     )
 }
 
@@ -484,6 +505,51 @@ fn launch_contract_prompt_context(snapshot: &DxLaunchContractSnapshot) -> String
         startup,
         diagnostics,
         first_packets,
+        snapshot.next_action
+    )
+}
+
+fn launch_readiness_prompt_context(snapshot: &DxLaunchReadinessSnapshot) -> String {
+    if !snapshot.root_exists {
+        return format!(
+            "missing launch example root `{}`; expected source-owned import-summary, release-gate, and fallback-drill packets",
+            snapshot.root.display()
+        );
+    }
+
+    let freshness = bounded_join(&snapshot.freshness_states, 5, "No cached freshness states");
+    let fallback_states = bounded_join(&snapshot.fallback_states, 5, "No fallback states");
+    let recovery = bounded_join(&snapshot.recovery_commands, 5, "No recovery commands");
+    let examples = snapshot
+        .examples
+        .iter()
+        .take(4)
+        .map(|example| format!("{}={} ({})", example.label, example.status, example.detail))
+        .collect::<Vec<_>>();
+    let examples = bounded_join(&examples, 4, "No source-owned launch readiness examples");
+
+    format!(
+        "status={} summary={} import_packets={} [{}] release_gate_packets={} [{}] fallback_packets={} [{}] gate_rows={}/{} passed warning={} failed={} fallback_state_count={} freshness=[{}] fallback_states=[{}] no_command_fanout={} fanout={} redaction_review={} recovery=[{}] examples=[{}] next_action={}",
+        snapshot.status,
+        snapshot.operator_summary,
+        snapshot.import_summary_count,
+        snapshot.import_status_counts.summary(),
+        snapshot.release_gate_count,
+        snapshot.release_gate_status_counts.summary(),
+        snapshot.fallback_drill_count,
+        snapshot.fallback_status_counts.summary(),
+        snapshot.passed_count,
+        snapshot.acceptance_count,
+        snapshot.warning_count,
+        snapshot.failed_count,
+        snapshot.fallback_state_count,
+        freshness,
+        fallback_states,
+        snapshot.no_command_fanout,
+        snapshot.command_fanout_count,
+        snapshot.redaction_requires_review,
+        recovery,
+        examples,
         snapshot.next_action
     )
 }

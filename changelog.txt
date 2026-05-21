@@ -1,3 +1,17 @@
+[2026-05-21] - DX Launch Gate Readiness Rail
+
+ADDED:
+- Added a metadata-only launch readiness reader for source-owned `G:\Dx\cli\fixtures\launch-examples\import-summary-*.json`, `release-gate-*.json`, and `fallback-drill-*.json` packets.
+- Surfaced import-summary, release-gate, fallback-drill, cached freshness, recovery command, no-command-fanout, and redaction posture in the DX launch right rail.
+- Added a Launch Gate guided card that drafts the safe operator review from launch readiness, handoff contracts, launch status, and receipt diagnostics.
+
+CHANGED:
+- The Launch Handoff and Review Receipts guided actions now include import-summary, release-gate, and fallback-drill parser state context.
+- Updated DX launch notes and status to 99.2/100 for the editor lane before governed runtime proof.
+
+NOTES:
+- This slice reads source-owned parser fixture metadata only. It does not run `dx launch import-summary --json`, `dx launch release-gate --json`, `dx launch fallback-drill --json`, Cargo, `just run`, local servers, providers, agents, DX-WWW, Forge, browser automation, or shell commands.
+
 [2026-05-21] - DX Studio Web Preview Contract
 
 ADDED:

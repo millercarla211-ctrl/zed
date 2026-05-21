@@ -39,11 +39,12 @@ use crate::dx_check_score::{DxCheckScoreInput, check_score_snapshot};
 use crate::dx_deploy_targets::{DxDeployTargetSnapshot, deploy_target_snapshot};
 use crate::dx_launch_contracts::launch_contract_snapshot;
 use crate::dx_launch_prompts::{
-    deploy_readiness_prompt, forge_proof_prompt, launch_handoff_prompt, receipt_review_prompt,
-    restore_approval_prompt, runtime_proof_evidence_template_prompt, runtime_proof_import_prompt,
-    runtime_proof_prompt, source_action_icon, source_action_label, source_action_prompt,
-    source_action_title, source_receipt_review_prompt,
+    deploy_readiness_prompt, forge_proof_prompt, launch_handoff_prompt, launch_readiness_prompt,
+    receipt_review_prompt, restore_approval_prompt, runtime_proof_evidence_template_prompt,
+    runtime_proof_import_prompt, runtime_proof_prompt, source_action_icon, source_action_label,
+    source_action_prompt, source_action_title, source_receipt_review_prompt,
 };
+use crate::dx_launch_readiness::launch_readiness_snapshot;
 use crate::dx_launch_receipts::launch_receipt_review_snapshot;
 use crate::dx_launch_status::launch_status_snapshot;
 use crate::dx_launch_workspace::{
@@ -5729,6 +5730,7 @@ impl AgentPanel {
             &status.launch_status,
             &status.launch_receipts,
             &status.launch_contracts,
+            &status.launch_readiness,
             &status.tool_history,
             &status.proof_freshness,
             &status.deploy_targets,
@@ -6005,6 +6007,23 @@ impl AgentPanel {
                 "Draft Handoff",
                 launch_handoff_prompt(
                     &status.launch_contracts,
+                    &status.launch_readiness,
+                    &status.launch_status,
+                    &status.launch_receipts,
+                ),
+                can_create_entries,
+                cx,
+            ))
+            .child(self.dx_launch_guided_card(
+                "dx-launch-readiness-card",
+                "dx-launch-readiness-action",
+                IconName::Check,
+                "Launch Gate",
+                "Review import-summary, release-gate, and fallback states.",
+                "Draft Gate",
+                launch_readiness_prompt(
+                    &status.launch_readiness,
+                    &status.launch_contracts,
                     &status.launch_status,
                     &status.launch_receipts,
                 ),
@@ -6205,6 +6224,7 @@ impl AgentPanel {
         let launch_status = launch_status_snapshot();
         let launch_receipts = launch_receipt_review_snapshot();
         let launch_contracts = launch_contract_snapshot();
+        let launch_readiness = launch_readiness_snapshot();
         let agent_bridge = dx_agent_bridge_snapshot(cx);
         let receipt_file_count = receipt_snapshot
             .buckets
@@ -6264,6 +6284,7 @@ impl AgentPanel {
             launch_status,
             launch_receipts,
             launch_contracts,
+            launch_readiness,
             receipt_snapshot,
             source_sets,
             tool_history,
