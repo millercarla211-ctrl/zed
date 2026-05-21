@@ -7,6 +7,7 @@ use serde_json::Value;
 
 pub const DX_STUDIO_PREVIEW_MANIFEST_SCHEMA: &str = "dx.studio.preview_manifest.v1";
 pub const DX_STUDIO_EDIT_MANIFEST_SCHEMA: &str = "dx.studio.edit_manifest.v1";
+pub const DX_STUDIO_LAUNCH_EDIT_CONTRACT_SCHEMA: &str = "dx.studio.launch_edit_contract.v1";
 pub const DX_STUDIO_DRAG_TO_PREVIEW_SCHEMA: &str = "zed.web_preview.dx_studio_drag_to_preview.v1";
 pub const DX_WWW_ROUTES_SCHEMA: &str = "dx.www.routes.v1";
 pub const DX_FORGE_PACKAGES_SCHEMA: &str = "dx.forge.packages.v1";
@@ -150,6 +151,8 @@ pub fn manifest_candidates(root: &Path) -> Vec<PathBuf> {
         root.join(".dx")
             .join("studio")
             .join("preview-manifest.json"),
+        root.join("public").join("preview-manifest.json"),
+        root.join("public").join("studio-preview-manifest.json"),
         root.join(".dx")
             .join("forge")
             .join("studio-preview-manifest.json"),
@@ -170,6 +173,13 @@ pub fn edit_manifest_candidates(root: &Path) -> Vec<PathBuf> {
     vec![
         root.join(".dx").join("studio").join("edit-manifest.json"),
         root.join(".dx").join("studio").join("studio-manifest.json"),
+        root.join("public").join("preview-manifest.json"),
+        root.join("components")
+            .join("launch")
+            .join("dx-studio-edit-contract.ts"),
+        root.join("examples")
+            .join("launch-template")
+            .join("dx-studio-edit-contract.ts"),
         root.join(".dx")
             .join("forge")
             .join("studio-edit-manifest.json"),
@@ -177,6 +187,34 @@ pub fn edit_manifest_candidates(root: &Path) -> Vec<PathBuf> {
         root.join(".dx")
             .join("forge")
             .join("template-manifest.json"),
+    ]
+}
+
+pub fn edit_operation_ids() -> [&'static str; 5] {
+    [
+        "insert_component",
+        "move_reorder_section",
+        "update_design_token",
+        "update_text_content",
+        "insert_icon_media",
+    ]
+}
+
+pub fn edit_marker_attributes() -> [&'static str; 13] {
+    [
+        "data-dx-edit-target",
+        "data-dx-edit-id",
+        "data-dx-edit-kind",
+        "data-dx-edit-ops",
+        "data-dx-edit-order",
+        "data-dx-editable-section",
+        "data-dx-insert-slot",
+        "data-dx-reorder-group",
+        "data-dx-design-token",
+        "data-dx-content-key",
+        "data-dx-editable-text",
+        "data-dx-media-slot",
+        "data-dx-token-scope",
     ]
 }
 

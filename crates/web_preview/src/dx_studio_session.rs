@@ -54,6 +54,21 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
             },
             "candidates": edit_candidates,
             "command": Value::Null,
+            "source_owned_operation_contract": {
+                "schema": dx_studio::DX_STUDIO_LAUNCH_EDIT_CONTRACT_SCHEMA,
+                "status": if has_edit_candidate {
+                    "source_manifest_candidate_present"
+                } else {
+                    "waiting_for_dx_www_manifest_producer"
+                },
+                "manifest_field": "studio_edit_contract",
+                "operation_ids": dx_studio::edit_operation_ids(),
+                "marker_attributes": dx_studio::edit_marker_attributes(),
+                "writes_files": true,
+                "writes_only_source_owned_files": true,
+                "requires_explicit_operator_action": true,
+                "mutation_command": Value::Null,
+            },
         },
         "drag_to_preview": {
             "schema": dx_studio::DX_STUDIO_DRAG_TO_PREVIEW_SCHEMA,
@@ -64,6 +79,14 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
                 contract.commands.routes,
                 contract.commands.forge_packages,
             ],
+            "operation_contract": {
+                "schema": dx_studio::DX_STUDIO_LAUNCH_EDIT_CONTRACT_SCHEMA,
+                "manifest_field": "studio_edit_contract",
+                "operation_ids": dx_studio::edit_operation_ids(),
+                "marker_attributes": dx_studio::edit_marker_attributes(),
+                "writes_files_after_explicit_operator_action": true,
+                "requires_node_modules": false,
+            },
             "mutation_command": Value::Null,
             "requires_explicit_operator_action": true,
         },

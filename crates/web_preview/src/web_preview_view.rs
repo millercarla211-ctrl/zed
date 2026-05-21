@@ -37168,6 +37168,30 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     return attributes;
   };
 
+  const DX_STUDIO_EDIT_OPERATION_IDS = [
+    "insert_component",
+    "move_reorder_section",
+    "update_design_token",
+    "update_text_content",
+    "insert_icon_media"
+  ];
+
+  const DX_STUDIO_EDIT_MARKER_ATTRIBUTES = [
+    "data-dx-edit-target",
+    "data-dx-edit-id",
+    "data-dx-edit-kind",
+    "data-dx-edit-ops",
+    "data-dx-edit-order",
+    "data-dx-editable-section",
+    "data-dx-insert-slot",
+    "data-dx-reorder-group",
+    "data-dx-design-token",
+    "data-dx-content-key",
+    "data-dx-editable-text",
+    "data-dx-media-slot",
+    "data-dx-token-scope"
+  ];
+
   const DX_STUDIO_MARKER_SELECTOR = [
     "[data-dx-route]",
     "[data-dx-source]",
@@ -37179,7 +37203,7 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     "[data-dx-component]",
     "[data-dx-state]",
     "[data-dx-action]",
-    "[data-dx-edit-target]",
+    ...DX_STUDIO_EDIT_MARKER_ATTRIBUTES.map((attribute) => `[${attribute}]`),
     "[data-dx-drag-source]",
     "[data-dx-drop-target]",
     "[data-dx-ready]"
@@ -37281,6 +37305,17 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
       ...valuesFor("data-dx-update-target")
     ]);
     const editTargets = valuesFor("data-dx-edit-target");
+    const editIds = valuesFor("data-dx-edit-id");
+    const editKinds = valuesFor("data-dx-edit-kind");
+    const editOps = valuesFor("data-dx-edit-ops");
+    const editableSections = valuesFor("data-dx-editable-section");
+    const insertSlots = valuesFor("data-dx-insert-slot");
+    const reorderGroups = valuesFor("data-dx-reorder-group");
+    const designTokens = valuesFor("data-dx-design-token");
+    const contentKeys = valuesFor("data-dx-content-key");
+    const editableText = valuesFor("data-dx-editable-text");
+    const mediaSlots = valuesFor("data-dx-media-slot");
+    const tokenScopes = valuesFor("data-dx-token-scope");
     const dragSources = valuesFor("data-dx-drag-source");
     const dropTargets = valuesFor("data-dx-drop-target");
     const manifestLinks = dxStudioManifestSnapshot();
@@ -37306,21 +37341,52 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
       markers,
       studio_edit_manifest: {
         schema: "zed.web_preview.dx_studio_page_manifest.v1",
-        status: manifestLinks.length > 0 || editTargets.length > 0 ? "advertised" : "not_advertised",
+        status: manifestLinks.length > 0 || editTargets.length > 0 || editOps.length > 0 ? "advertised" : "not_advertised",
         manifest_count: manifestLinks.length,
-        manifests: manifestLinks
+        manifests: manifestLinks,
+        source_owned_operation_contract: {
+          schema: "dx.studio.launch_edit_contract.v1",
+          status: manifestLinks.length > 0 || editTargets.length > 0 || editOps.length > 0 ? "source_manifest_candidate_present" : "not_advertised",
+          manifest_field: "studio_edit_contract",
+          operation_ids: DX_STUDIO_EDIT_OPERATION_IDS,
+          marker_attributes: DX_STUDIO_EDIT_MARKER_ATTRIBUTES,
+          writes_files: true,
+          writes_only_source_owned_files: true,
+          requires_explicit_operator_action: true,
+          mutation_command: null
+        },
+        edit_ids: editIds,
+        edit_kinds: editKinds,
+        edit_ops: editOps,
+        editable_sections: editableSections,
+        insert_slots: insertSlots,
+        reorder_groups: reorderGroups,
+        design_tokens: designTokens,
+        content_keys: contentKeys,
+        editable_text: editableText,
+        media_slots: mediaSlots,
+        token_scopes: tokenScopes
       },
       drag_to_preview: {
         schema: "zed.web_preview.dx_studio_drag_to_preview_page_contract.v1",
-        status: dropTargets.length > 0 || dragSources.length > 0 || sourceFiles.length > 0 ? "metadata_detected" : "not_detected",
+        status: dropTargets.length > 0 || dragSources.length > 0 || sourceFiles.length > 0 || editOps.length > 0 ? "metadata_detected" : "not_detected",
         read_contracts: [
           "dx www preview-manifest --json",
           "dx www routes --json",
           "dx forge packages --json"
         ],
+        operation_contract: {
+          schema: "dx.studio.launch_edit_contract.v1",
+          manifest_field: "studio_edit_contract",
+          operation_ids: DX_STUDIO_EDIT_OPERATION_IDS,
+          marker_attributes: DX_STUDIO_EDIT_MARKER_ATTRIBUTES,
+          writes_files_after_explicit_operator_action: true,
+          requires_node_modules: false
+        },
         mutation_command: null,
         source_files: sourceFiles,
         edit_targets: editTargets,
+        edit_ops: editOps,
         drag_sources: dragSources,
         drop_targets: dropTargets,
         requires_explicit_operator_action: true
@@ -37332,15 +37398,17 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
         has_hot_reload_target: hotReloadTargets.length > 0,
         has_studio_manifest: manifestLinks.length > 0,
         has_edit_target: editTargets.length > 0,
+        has_edit_operation_marker: editOps.length > 0 || editableSections.length > 0 || insertSlots.length > 0,
         has_drag_or_drop_target: dragSources.length > 0 || dropTargets.length > 0
       },
       semantic_hooks: {
         route_to_source: sourceFiles.length > 0,
         forge_readiness: forgePackages.length > 0,
-        drop_to_code_ready: markers.some((marker) => marker.attributes["data-dx-source"]),
+        drop_to_code_ready: markers.some((marker) => marker.attributes["data-dx-source"] || marker.attributes["data-dx-insert-slot"]),
         hot_reload_scope_ready: hotReloadTargets.length > 0,
         studio_edit_manifest: manifestLinks.length > 0 || editTargets.length > 0,
-        drag_to_preview_ready: dropTargets.length > 0 || dragSources.length > 0 || sourceFiles.length > 0
+        studio_edit_operation_contract: editOps.length > 0 || editableSections.length > 0 || insertSlots.length > 0,
+        drag_to_preview_ready: dropTargets.length > 0 || dragSources.length > 0 || sourceFiles.length > 0 || editOps.length > 0
       }
     };
   };

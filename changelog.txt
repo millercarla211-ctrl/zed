@@ -1,3 +1,15 @@
+[2026-05-21] - DX Studio Public Edit Contract Discovery
+
+ADDED:
+- Added `public/preview-manifest.json` and source-owned launch edit-contract files to DX Studio manifest discovery.
+- Added explicit `dx.studio.launch_edit_contract.v1` operation IDs and marker attributes to Web Preview session and page diagnostics.
+
+CHANGED:
+- Drag-to-preview diagnostics now point at the source-owned edit operation contract while keeping mutation commands disabled until a governed operator action exists.
+
+NOTES:
+- This slice does not run DX CLI commands, start servers, run Cargo/`just run`, write source files from Web Preview, or change normal non-DX Web Preview behavior.
+
 [2026-05-21] - DX Binary Cache Artifact Review Routing
 
 ADDED:
