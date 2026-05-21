@@ -1,3 +1,15 @@
+[2026-05-21] - DX Receipt Cache Producer Bridge
+
+ADDED:
+- Added a bounded metadata-only JSON receipt-folder builder for `dx_catalog`.
+- Added an explicit producer helper that builds and writes stable `DXRCP001` rkyv receipt-cache artifacts from selected receipt roots.
+
+CHANGED:
+- Updated launch status text to distinguish the source-level producer bridge from governed CLI/runtime artifact proof.
+
+NOTES:
+- This slice does not run DX CLI commands, start local servers, run Cargo/`just run`, scan receipt bodies beyond bounded metadata fields, change Zed startup, or make binary caches authoritative over JSON receipts.
+
 [2026-05-21] - DX Studio Edit And Drag Manifest Bridge
 
 ADDED:

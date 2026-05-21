@@ -9,6 +9,7 @@ mod model_catalog_readers;
 mod provider_readers;
 mod readers;
 mod receipt_cache;
+mod receipt_cache_builder;
 mod sources;
 mod status;
 mod types;
@@ -65,6 +66,10 @@ pub use receipt_cache::{
     DxReceiptCacheRoot, MappedReceiptCacheArtifact, ReceiptCacheArtifactHeader,
     ReceiptCacheArtifactRef, deserialize_trusted_receipt_cache_payload,
     read_receipt_cache_artifact, serialize_receipt_cache_payload, write_receipt_cache_artifact,
+};
+pub use receipt_cache_builder::{
+    DxReceiptCacheBuildOptions, DxReceiptCacheRootInput, build_receipt_cache_manifest,
+    write_receipt_cache_artifact_from_roots,
 };
 pub use sources::{
     CatalogSourceCandidate, CatalogSourceCandidateStatus, CatalogSourceDiscoveryConfig,
