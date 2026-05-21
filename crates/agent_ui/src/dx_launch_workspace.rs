@@ -1093,6 +1093,42 @@ fn runtime_proof_receipt_row(
         );
     }
 
+    if let Some(summary) = receipt.proof_summary.as_ref() {
+        stack = stack.child(
+            Label::new(format!("Summary {summary}"))
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+    }
+
+    if let Some(command) = receipt.final_command.as_ref() {
+        stack = stack.child(
+            Label::new(format!("Command {command}"))
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+    }
+
+    if let Some(source) = receipt.source.as_ref() {
+        stack = stack.child(
+            Label::new(format!("Source {source}"))
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+    }
+
+    if let Some(evidence) = receipt.evidence_samples.first() {
+        stack = stack.child(
+            Label::new(format!("Evidence {evidence}"))
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+    }
+
     stack.into_any_element()
 }
 

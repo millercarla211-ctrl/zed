@@ -1,3 +1,16 @@
+[2026-05-21] - DX Runtime Proof Import Drilldowns
+
+ADDED:
+- Added structured runtime proof import receipt fields for proof summary, final command, source, and bounded evidence samples.
+- Rendered the latest imported runtime proof details in the right Runtime Proof rail without opening raw receipt JSON.
+
+CHANGED:
+- Runtime proof Agent handoff prompt context now includes the latest import/status operator state, claim readiness, proof summary, command, source, and evidence sample.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` while keeping the current next-set status at 99.999/100 until governed runtime evidence is actually imported.
+
+NOTES:
+- This slice reads managed receipt files only. It does not run `just run`, Cargo, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Runtime Proof Evidence Form
 
 ADDED:

@@ -55,6 +55,10 @@ pub(crate) struct DxRuntimeProofReceiptSummary {
     pub evidence_count: usize,
     pub blocker_count: usize,
     pub headline: Option<String>,
+    pub proof_summary: Option<String>,
+    pub final_command: Option<String>,
+    pub source: Option<String>,
+    pub evidence_samples: Vec<String>,
     pub blockers: Vec<String>,
 }
 
@@ -317,6 +321,10 @@ fn parse_import_summary(path: &Path, label: &str) -> Option<DxRuntimeProofReceip
         evidence_count: usize_at(validation, "evidence_count"),
         blocker_count: usize_at(validation, "blocker_count"),
         headline: string_at(operator_status_copy, "headline"),
+        proof_summary: compact_string_at(request, "proof_summary"),
+        final_command: compact_string_at(request, "final_command"),
+        source: compact_string_at(request, "source"),
+        evidence_samples: compact_string_array_at(request, "evidence", 3),
         blockers: string_array_at(validation, "blockers"),
     })
 }
@@ -325,6 +333,7 @@ fn parse_status_summary(path: &Path, label: &str) -> Option<DxRuntimeProofReceip
     let value = read_json(path)?;
     let status_copy = value.get("operator_status_copy").unwrap_or(&Value::Null);
     let validation = value.get("validation").unwrap_or(&Value::Null);
+    let request = value.get("request").unwrap_or(&Value::Null);
 
     Some(DxRuntimeProofReceiptSummary {
         label: label.to_string(),
@@ -337,6 +346,10 @@ fn parse_status_summary(path: &Path, label: &str) -> Option<DxRuntimeProofReceip
         evidence_count: usize_at(validation, "evidence_count"),
         blocker_count: usize_at(validation, "blocker_count"),
         headline: string_at(status_copy, "headline"),
+        proof_summary: compact_string_at(request, "proof_summary"),
+        final_command: compact_string_at(request, "final_command"),
+        source: compact_string_at(request, "source"),
+        evidence_samples: compact_string_array_at(request, "evidence", 3),
         blockers: string_array_at(validation, "blockers"),
     })
 }
@@ -435,6 +448,33 @@ fn string_array_at(value: &Value, key: &str) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn compact_string_at(value: &Value, key: &str) -> Option<String> {
+    string_at(value, key)
+        .map(|value| compact_text(value, 240))
+        .filter(|value| !value.is_empty())
+}
+
+fn compact_string_array_at(value: &Value, key: &str, limit: usize) -> Vec<String> {
+    string_array_at(value, key)
+        .into_iter()
+        .take(limit)
+        .map(|value| compact_text(value, 240))
+        .filter(|value| !value.is_empty())
+        .collect()
+}
+
+fn compact_text(value: String, max_chars: usize) -> String {
+    let value = value.trim();
+    let mut chars = value.chars();
+    let compact = chars.by_ref().take(max_chars).collect::<String>();
+
+    if chars.next().is_some() {
+        format!("{compact}...")
+    } else {
+        compact
+    }
 }
 
 fn is_receipt_file(path: &Path) -> bool {

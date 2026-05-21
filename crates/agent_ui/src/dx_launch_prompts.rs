@@ -5,7 +5,7 @@ use crate::dx_deploy_targets::{DxDeployReceiptBucket, DxDeployTarget, DxDeployTa
 use crate::dx_launch_workspace::DxReceiptSnapshot;
 use crate::dx_proof_freshness::DxProofFreshnessSnapshot;
 use crate::dx_receipt_history::{DxToolHistoryReceiptSummary, DxToolHistorySnapshot};
-use crate::dx_runtime_proof_status::DxRuntimeProofStatusSnapshot;
+use crate::dx_runtime_proof_status::{DxRuntimeProofReceiptSummary, DxRuntimeProofStatusSnapshot};
 use crate::dx_source_sets::{DxSourceItem, DxSourceKind};
 
 pub(crate) fn source_action_icon(kind: DxSourceKind) -> IconName {
@@ -436,25 +436,12 @@ fn runtime_proof_status_prompt_context(snapshot: &DxRuntimeProofStatusSnapshot) 
     let latest_import = snapshot
         .latest_import
         .as_ref()
-        .map(|receipt| {
-            format!(
-                "latest import {} status {} evidence {} blockers {}",
-                receipt.label,
-                receipt.validation_status,
-                receipt.evidence_count,
-                receipt.blocker_count
-            )
-        })
+        .map(|receipt| runtime_proof_receipt_prompt_context("import", receipt))
         .unwrap_or_else(|| "no latest import receipt".to_string());
     let latest_status = snapshot
         .latest_status
         .as_ref()
-        .map(|receipt| {
-            format!(
-                "latest status {} claim_ready {}",
-                receipt.label, receipt.can_claim_runtime_green
-            )
-        })
+        .map(|receipt| runtime_proof_receipt_prompt_context("status", receipt))
         .unwrap_or_else(|| "no latest status receipt".to_string());
     let blockers = bounded_join(&snapshot.blockers, 3, "no runtime proof status blockers");
 
@@ -468,6 +455,39 @@ fn runtime_proof_status_prompt_context(snapshot: &DxRuntimeProofStatusSnapshot) 
         latest_import,
         latest_status,
         blockers
+    )
+}
+
+fn runtime_proof_receipt_prompt_context(
+    kind: &str,
+    receipt: &DxRuntimeProofReceiptSummary,
+) -> String {
+    let summary = receipt
+        .proof_summary
+        .clone()
+        .unwrap_or_else(|| "no summary".to_string());
+    let command = receipt
+        .final_command
+        .clone()
+        .unwrap_or_else(|| "no final command".to_string());
+    let source = receipt
+        .source
+        .clone()
+        .unwrap_or_else(|| "no source".to_string());
+    let evidence_sample = bounded_join(&receipt.evidence_samples, 1, "no evidence sample");
+
+    format!(
+        "latest {kind} {} status {} operator {} claim_ready {} evidence {} blockers {} summary {} command {} source {} sample {}",
+        receipt.label,
+        receipt.validation_status,
+        receipt.operator_status,
+        receipt.can_claim_runtime_green,
+        receipt.evidence_count,
+        receipt.blocker_count,
+        summary,
+        command,
+        source,
+        evidence_sample
     )
 }
 
