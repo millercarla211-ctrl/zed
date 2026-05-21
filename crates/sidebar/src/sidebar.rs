@@ -8048,30 +8048,34 @@ impl Sidebar {
         }
     }
 
-    fn draft_dx_source_action(&self, window: &mut Window, cx: &mut Context<Self>) {
+    fn update_agent_panel(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        update: impl FnOnce(&mut AgentPanel, &mut Window, &mut Context<AgentPanel>),
+    ) {
         if let Some(workspace) = self.active_workspace(cx) {
             workspace.update(cx, |workspace, cx| {
-                if let Some(panel) = workspace.panel::<AgentPanel>(cx) {
-                    panel.update(cx, |panel, cx| {
-                        panel.draft_dx_source_action_from_sidebar(window, cx);
-                    });
-                    workspace.focus_panel::<AgentPanel>(window, cx);
-                }
+                let Some(panel) = workspace.panel::<AgentPanel>(cx) else {
+                    return;
+                };
+
+                panel.update(cx, |panel, cx| update(panel, window, cx));
+                workspace.focus_panel::<AgentPanel>(window, cx);
             });
         }
     }
 
+    fn draft_dx_source_action(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.update_agent_panel(window, cx, |panel, window, cx| {
+            panel.draft_dx_source_action_from_sidebar(window, cx);
+        });
+    }
+
     fn draft_dx_automation_action(&self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.active_workspace(cx) {
-            workspace.update(cx, |workspace, cx| {
-                if let Some(panel) = workspace.panel::<AgentPanel>(cx) {
-                    panel.update(cx, |panel, cx| {
-                        panel.draft_dx_automation_action_from_sidebar(window, cx);
-                    });
-                    workspace.focus_panel::<AgentPanel>(window, cx);
-                }
-            });
-        }
+        self.update_agent_panel(window, cx, |panel, window, cx| {
+            panel.draft_dx_automation_action_from_sidebar(window, cx);
+        });
     }
 
     fn show_thread_import_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
