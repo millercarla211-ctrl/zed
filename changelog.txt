@@ -1,3 +1,28 @@
+[2026-05-22] - DX Agents Receipt Index Rows
+
+ADDED:
+- Added typed DX Agents receipt-index rendering from `G:\Dx\.dx\receipts\agents\receipts-list-latest.json` in Agent Configuration and the DX launch right rail.
+- Added a fixed `dx-agents agents receipts list --json` refresh action plus counts for known receipts, returned receipt rows, active tasks, redacted metadata, and unsafe rows.
+
+CHANGED:
+- Background task receipt display now uses redacted receipt rows and safe-to-render flags instead of relying only on latest receipt filenames.
+
+NOTES:
+- This slice does not store raw social credentials, provider keys, tokens, cookies, or receipt payloads in Zed, and it does not run Cargo, local servers, `just run`, or live dx-agents commands.
+
+[2026-05-22] - DX Crowded Coding Activity Bar
+
+ADDED:
+- Added a compact 48px activity-bar mode for the far-left AI sidebar when the active workspace has an editor item, a Web Preview/browser item, and a visible Agent panel.
+- Added icon-first activity-bar actions for New Chat, Search, Agents, Sources, Plugins, Automations, Background Tasks, Settings, project switching, and sidebar toggle controls.
+
+CHANGED:
+- The AI sidebar now preserves the central coding/editor space in the crowded editor + Web Preview + Agent panel layout while keeping the full thread/source sidebar available when expanded or outside that layout.
+
+NOTES:
+- This slice does not remove existing sidebar/thread behavior, alter Write/Ask/model picker/thread behavior, run local servers, run Cargo, or run `just run`.
+- Existing `PLAN.md` edits were left untouched and unstaged.
+
 [2026-05-21] - DX Onboarding Static Preview Manifest Targets
 
 ADDED:

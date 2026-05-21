@@ -43,6 +43,8 @@ pub(crate) struct DxAgentBridgeSnapshot {
     pub contract_summary: DxAgentContractSummary,
     pub import_summary: DxAgentImportSummary,
     pub release_gate: DxAgentReleaseGateSummary,
+    pub receipt_index: DxAgentReceiptIndexSummary,
+    pub receipts: Vec<DxAgentReceipt>,
     pub latest_receipts: Vec<String>,
     pub show_managed_providers: bool,
     pub show_in_agent_rail: bool,
@@ -208,6 +210,37 @@ pub(crate) struct DxAgentReleaseGateSummary {
     pub warning_reasons: Vec<String>,
     pub blocking_reasons: Vec<String>,
     pub acceptance_rows: Vec<String>,
+}
+
+#[derive(Clone)]
+pub(crate) struct DxAgentReceiptIndexSummary {
+    pub present: bool,
+    pub status: String,
+    pub receipt_count: usize,
+    pub returned_receipt_count: usize,
+    pub active_task_count: usize,
+    pub latest_receipt_path: Option<String>,
+    pub last_error: Option<String>,
+    pub next_action: String,
+}
+
+#[derive(Clone)]
+pub(crate) struct DxAgentReceipt {
+    pub id: String,
+    pub kind: String,
+    pub schema_version: String,
+    pub command: String,
+    pub generated_at: String,
+    pub task_id: String,
+    pub status: String,
+    pub active_task: bool,
+    pub safe_to_render: bool,
+    pub metadata_redacted: bool,
+    pub receipt_path: String,
+    pub size_bytes: usize,
+    pub modified_at: String,
+    pub last_error: Option<String>,
+    pub next_action: String,
 }
 
 static SNAPSHOT_CACHE: OnceLock<Mutex<Option<(Instant, String, DxAgentBridgeSnapshot)>>> =
@@ -450,6 +483,7 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
     let automation_value = read_json(&settings.receipt_root.join("automate-list-latest.json"));
     let provider_value = read_json(&settings.receipt_root.join("providers-list-latest.json"));
     let model_value = read_json(&settings.receipt_root.join("models-list-latest.json"));
+    let receipts_value = read_json(&settings.receipt_root.join("receipts-list-latest.json"));
     let contract_value = read_first_json(&settings.receipt_root, &["contract-latest.json"]);
     let import_summary_value = read_first_json(
         &settings.receipt_root,
@@ -484,9 +518,16 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
                 .and_then(|value| usize_field(value, &["automation_count"]))
         })
         .unwrap_or_default();
+    let receipt_index = receipt_index_summary(receipts_value.as_ref(), root_exists);
+    let receipts = receipts_value.as_ref().map(receipts).unwrap_or_default();
     let active_task_count = status_value
         .as_ref()
         .and_then(|value| usize_field(value, &["active_task_count"]))
+        .or_else(|| {
+            receipts_value
+                .as_ref()
+                .and_then(|value| usize_field(value, &["active_task_count"]))
+        })
         .unwrap_or_default();
     let last_error = status_value
         .as_ref()
@@ -545,6 +586,8 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
         contract_summary: contract_summary(contract_value.as_ref(), root_exists),
         import_summary: import_summary(import_summary_value.as_ref(), root_exists),
         release_gate: release_gate(release_gate_value.as_ref(), root_exists),
+        receipt_index,
+        receipts,
         latest_receipts: latest_receipts(&settings.receipt_root, root_exists),
         show_managed_providers: settings.show_managed_providers,
         show_in_agent_rail: settings.show_in_agent_rail,
@@ -1128,6 +1171,81 @@ fn release_gate_acceptance_rows(value: Option<&Value>) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn receipt_index_summary(value: Option<&Value>, root_exists: bool) -> DxAgentReceiptIndexSummary {
+    let status = value
+        .and_then(|value| string_field(value, &["status"]))
+        .unwrap_or_else(|| {
+            if root_exists {
+                "waiting_for_receipts_list".to_string()
+            } else {
+                "missing_receipt_root".to_string()
+            }
+        });
+
+    DxAgentReceiptIndexSummary {
+        present: value.is_some(),
+        status,
+        receipt_count: value
+            .and_then(|value| usize_field(value, &["receipt_count"]))
+            .unwrap_or_default(),
+        returned_receipt_count: value
+            .and_then(|value| usize_field(value, &["returned_receipt_count"]))
+            .unwrap_or_default(),
+        active_task_count: value
+            .and_then(|value| usize_field(value, &["active_task_count"]))
+            .unwrap_or_default(),
+        latest_receipt_path: value.and_then(|value| {
+            safe_string_field(value, &["latest_receipt_path"])
+                .filter(|path| !path.trim().is_empty())
+        }),
+        last_error: value.and_then(|value| safe_string_field(value, &["last_error"])),
+        next_action: value
+            .and_then(|value| safe_string_field(value, &["next_action"]))
+            .unwrap_or_else(|| "dx-agents agents receipts list --json".to_string()),
+    }
+}
+
+fn receipts(value: &Value) -> Vec<DxAgentReceipt> {
+    array_field(value, &["receipts"])
+        .map(|receipts| receipts.iter().take(12).filter_map(receipt_row).collect())
+        .unwrap_or_default()
+}
+
+fn receipt_row(value: &Value) -> Option<DxAgentReceipt> {
+    let safe_to_render = bool_field(value, &["safe_to_render"]).unwrap_or(false);
+    let metadata_redacted = bool_field(value, &["metadata_redacted"]).unwrap_or(false);
+    let command = safe_string_field(value, &["command"]).unwrap_or_default();
+    let task_id = safe_string_field(value, &["task_id"]).unwrap_or_default();
+    let last_error = safe_string_field(value, &["last_error"]);
+    let next_action = safe_string_field(value, &["next_action"]).unwrap_or_default();
+
+    Some(DxAgentReceipt {
+        id: safe_string_field(value, &["id"])?,
+        kind: safe_string_field(value, &["kind"]).unwrap_or_else(|| "receipt".to_string()),
+        schema_version: safe_string_field(value, &["schema_version"]).unwrap_or_default(),
+        command: if safe_to_render {
+            command
+        } else {
+            String::new()
+        },
+        generated_at: safe_string_field(value, &["generated_at"]).unwrap_or_default(),
+        task_id: if safe_to_render {
+            task_id
+        } else {
+            String::new()
+        },
+        status: safe_string_field(value, &["status"]).unwrap_or_else(|| "unknown".to_string()),
+        active_task: bool_field(value, &["active_task"]).unwrap_or(false),
+        safe_to_render,
+        metadata_redacted,
+        receipt_path: safe_string_field(value, &["receipt_path"]).unwrap_or_default(),
+        size_bytes: usize_field(value, &["size_bytes"]).unwrap_or_default(),
+        modified_at: safe_string_field(value, &["modified_at"]).unwrap_or_default(),
+        last_error,
+        next_action,
+    })
+}
+
 fn read_json(path: &Path) -> Option<Value> {
     let metadata = path.metadata().ok()?;
     if metadata.len() > MAX_RECEIPT_BYTES {
@@ -1192,6 +1310,16 @@ fn array_field<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Vec<Value>> {
 
 fn string_field(value: &Value, path: &[&str]) -> Option<String> {
     value_at(value, path)?.as_str().map(ToString::to_string)
+}
+
+fn safe_string_field(value: &Value, path: &[&str]) -> Option<String> {
+    string_field(value, path).map(|value| {
+        if is_secret_like_arg(&value) {
+            "<redacted>".to_string()
+        } else {
+            value
+        }
+    })
 }
 
 fn string_array_field(value: &Value, path: &[&str]) -> Vec<String> {

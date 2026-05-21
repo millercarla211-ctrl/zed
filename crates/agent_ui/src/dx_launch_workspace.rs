@@ -10,8 +10,8 @@ use gpui::{AnyElement, App, SharedString, prelude::*};
 use ui::{IconName, prelude::*};
 
 use crate::dx_agent_bridge::{
-    DxAgentAutomation, DxAgentBridgeSnapshot, DxAgentModel, DxAgentProvider, DxAgentRowAction,
-    DxAgentSocialAccount, DxAgentSocialActionSummary,
+    DxAgentAutomation, DxAgentBridgeSnapshot, DxAgentModel, DxAgentProvider, DxAgentReceipt,
+    DxAgentRowAction, DxAgentSocialAccount, DxAgentSocialActionSummary,
 };
 use crate::dx_check_score::DxCheckScoreSnapshot;
 use crate::dx_deploy_targets::{
@@ -321,6 +321,8 @@ fn render_right_rail(
                 .child(dx_agent_bridge_state(&status.agent_bridge, cx))
                 .child(section_title("Social Accounts", IconName::Link))
                 .child(dx_agent_social_state(&status.agent_bridge, cx))
+                .child(section_title("Agent Receipts", IconName::FileTextOutlined))
+                .child(dx_agent_receipt_state(&status.agent_bridge, cx))
                 .child(section_title("Agent Providers", IconName::Sliders))
                 .child(dx_agent_provider_state(&status.agent_bridge, cx))
         })
@@ -1430,6 +1432,17 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
             } else {
                 "review".to_string()
             },
+        ))
+        .child(metric_row(
+            "Receipt Index",
+            snapshot.receipt_index.status.clone(),
+        ))
+        .child(metric_row(
+            "Receipt Rows",
+            format!(
+                "{} / {}",
+                snapshot.receipt_index.returned_receipt_count, snapshot.receipt_index.receipt_count
+            ),
         ));
 
     if !snapshot.enabled {
@@ -1797,6 +1810,135 @@ fn dx_agent_automation_row(
             |this, action_line| {
                 this.child(
                     Label::new(action_line)
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted)
+                        .truncate(),
+                )
+            },
+        )
+        .into_any_element()
+}
+
+fn dx_agent_receipt_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyElement {
+    let index = &snapshot.receipt_index;
+    let redacted_count = snapshot
+        .receipts
+        .iter()
+        .filter(|receipt| receipt.metadata_redacted)
+        .count();
+    let unsafe_count = snapshot
+        .receipts
+        .iter()
+        .filter(|receipt| !receipt.safe_to_render)
+        .count();
+    let mut stack = v_flex()
+        .gap_1()
+        .child(metric_row("Index", index.status.clone()))
+        .child(metric_row(
+            "Returned",
+            format!("{} / {}", index.returned_receipt_count, index.receipt_count),
+        ))
+        .child(metric_row("Active", index.active_task_count.to_string()))
+        .child(metric_row("Redacted", redacted_count.to_string()))
+        .child(metric_row("Unsafe", unsafe_count.to_string()));
+
+    if !index.present {
+        stack = stack.child(muted_card("Run dx-agents agents receipts list --json", cx));
+    } else if let Some(error) = index.last_error.as_ref() {
+        stack = stack.child(signal_row(
+            "dx-agent-receipt-index-error".into(),
+            IconName::Warning,
+            Color::Warning,
+            format!("DX Agents receipt index error: {error}"),
+        ));
+    } else if unsafe_count > 0 {
+        stack = stack.child(signal_row(
+            "dx-agent-receipt-unsafe-row".into(),
+            IconName::Warning,
+            Color::Warning,
+            "DX Agents receipt index contains rows that are not safe to render.".to_string(),
+        ));
+    } else if let Some(path) = index.latest_receipt_path.as_ref() {
+        stack = stack.child(metric_row("Latest", path.clone()));
+    }
+
+    if snapshot.receipts.is_empty() {
+        stack = stack.child(muted_card("No renderable receipt rows", cx));
+    } else {
+        for (ix, receipt) in snapshot.receipts.iter().take(3).enumerate() {
+            stack = stack.child(dx_agent_receipt_row(
+                SharedString::from(format!("dx-agent-receipt-{ix}")),
+                receipt,
+                cx,
+            ));
+        }
+    }
+
+    stack
+        .child(
+            Label::new(index.next_action.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .into_any_element()
+}
+
+fn dx_agent_receipt_row(id: SharedString, receipt: &DxAgentReceipt, cx: &App) -> AnyElement {
+    let state = if !receipt.safe_to_render {
+        "Unsafe".to_string()
+    } else if receipt.active_task {
+        "Active".to_string()
+    } else if receipt.metadata_redacted {
+        format!("{} / redacted", receipt.status)
+    } else {
+        receipt.status.clone()
+    };
+    let detail = if receipt.command.is_empty() {
+        format!("{} - {} bytes", receipt.kind, receipt.size_bytes)
+    } else {
+        format!(
+            "{} - {} - {} bytes",
+            receipt.kind, receipt.command, receipt.size_bytes
+        )
+    };
+
+    v_flex()
+        .id(id)
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().element_background)
+        .child(metric_row(receipt.id.clone(), state))
+        .child(
+            Label::new(detail)
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .when(!receipt.schema_version.is_empty(), |this| {
+            this.child(
+                Label::new(receipt.schema_version.clone())
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
+        })
+        .when_some(receipt.last_error.as_ref(), |this, error| {
+            this.child(
+                Label::new(format!("Error: {error}"))
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
+        })
+        .when(
+            receipt.last_error.is_none() && !receipt.next_action.is_empty(),
+            |this| {
+                this.child(
+                    Label::new(receipt.next_action.clone())
                         .size(LabelSize::XSmall)
                         .color(Color::Muted)
                         .truncate(),

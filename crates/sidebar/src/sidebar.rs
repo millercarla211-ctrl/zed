@@ -107,6 +107,7 @@ gpui::actions!(
 const DEFAULT_WIDTH: Pixels = px(300.0);
 const MIN_WIDTH: Pixels = px(200.0);
 const MAX_WIDTH: Pixels = px(800.0);
+const CODING_ACTIVITY_BAR_WIDTH: Pixels = px(48.0);
 const SIDEBAR_SPACE_GRID_COLUMNS: usize = 4;
 const MAX_VISIBLE_SPACE_DOTS: usize = 7;
 
@@ -708,6 +709,7 @@ pub struct Sidebar {
     active_space_id: Option<WorkspaceId>,
     next_space_number: usize,
     space_page_start: usize,
+    activity_bar_expanded: bool,
     grid_entry_cache:
         RefCell<HashMap<(WorkspaceScreenKind, Option<PathBuf>), Vec<SidebarGridEntry>>>,
     recent_projects_popover_handle: PopoverMenuHandle<SidebarRecentProjects>,
@@ -828,6 +830,7 @@ impl Sidebar {
             active_space_id: None,
             next_space_number: default_next_space_number(),
             space_page_start: 0,
+            activity_bar_expanded: false,
             grid_entry_cache: RefCell::default(),
             recent_projects_popover_handle: PopoverMenuHandle::default(),
             project_header_menu_handles: HashMap::new(),
@@ -6758,6 +6761,13 @@ impl Sidebar {
     fn render_gen_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let is_archive = matches!(self.view, SidebarView::Archive(..));
         let show_import_button = is_archive && !self.should_render_acp_import_onboarding(cx);
+        let can_collapse_to_activity_bar =
+            self.activity_bar_expanded && self.should_use_coding_activity_bar(cx);
+        let collapse_icon = if self.side(cx) == SidebarSide::Left {
+            IconName::ChevronLeft
+        } else {
+            IconName::ChevronRight
+        };
         let button = |id,
                       icon,
                       tooltip,
@@ -6782,6 +6792,17 @@ impl Sidebar {
             .child(
                 h_flex()
                     .gap_1()
+                    .when(can_collapse_to_activity_bar, |this| {
+                        this.child(button(
+                            "sidebar-toolbar-collapse-activity-bar",
+                            collapse_icon,
+                            "Collapse to Activity Bar",
+                            |this, _, _window, cx| {
+                                this.activity_bar_expanded = false;
+                                cx.notify();
+                            },
+                        ))
+                    })
                     .child(button(
                         "sidebar-toolbar-new-chat",
                         IconName::NewThread,
@@ -6873,6 +6894,120 @@ impl Sidebar {
                         "Create New Space",
                         |this, _, window, cx| this.create_new_space(window, cx),
                     )),
+            )
+    }
+
+    fn render_coding_activity_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let is_archive = matches!(self.view, SidebarView::Archive(..));
+        let button = |id,
+                      icon,
+                      tooltip,
+                      on_click: fn(
+            &mut Self,
+            &gpui::ClickEvent,
+            &mut Window,
+            &mut Context<Self>,
+        )| {
+            IconButton::new(id, icon)
+                .shape(IconButtonShape::Square)
+                .style(ButtonStyle::Subtle)
+                .icon_size(IconSize::Small)
+                .tooltip(Tooltip::text(tooltip))
+                .on_click(cx.listener(on_click))
+        };
+
+        v_flex()
+            .id("workspace-sidebar-activity-bar")
+            .w_full()
+            .h_full()
+            .items_center()
+            .justify_between()
+            .py_1()
+            .child(
+                v_flex()
+                    .items_center()
+                    .gap_1()
+                    .child(button(
+                        "sidebar-activity-new-chat",
+                        IconName::NewThread,
+                        "New Chat",
+                        |this, _, window, cx| {
+                            if let Some(workspace) = this.active_workspace(cx) {
+                                this.create_new_thread(&workspace, window, cx);
+                            }
+                        },
+                    ))
+                    .child(button(
+                        "sidebar-activity-search",
+                        IconName::MagnifyingGlass,
+                        "Search",
+                        |this, _, window, cx| {
+                            this.activity_bar_expanded = true;
+                            this.show_thread_list(window, cx);
+                            this.focus_sidebar_filter(&FocusSidebarFilter, window, cx);
+                        },
+                    ))
+                    .child(button(
+                        "sidebar-activity-agents",
+                        IconName::ZedAgent,
+                        "Agents",
+                        |this, _, window, cx| this.focus_agent_panel(window, cx),
+                    ))
+                    .child(button(
+                        "sidebar-activity-sources",
+                        IconName::Book,
+                        "Sources",
+                        |this, _, window, cx| {
+                            this.activity_bar_expanded = true;
+                            this.show_thread_list(window, cx);
+                        },
+                    ))
+                    .child(button(
+                        "sidebar-activity-plugins",
+                        IconName::Blocks,
+                        "Plugins",
+                        |_this, _, window, cx| {
+                            window.dispatch_action(Box::new(zed_actions::AcpRegistry), cx);
+                        },
+                    ))
+                    .child(button(
+                        "sidebar-activity-automations",
+                        IconName::ListTodo,
+                        "Automations",
+                        |_this, _, window, cx| {
+                            window.dispatch_action(
+                                zed_actions::OpenProjectDebugTasks.boxed_clone(),
+                                cx,
+                            );
+                        },
+                    ))
+                    .child(
+                        button(
+                            "sidebar-activity-background-tasks",
+                            IconName::Clock,
+                            "Background Tasks",
+                            |this, _, window, cx| {
+                                this.activity_bar_expanded = true;
+                                this.show_archive(window, cx);
+                            },
+                        )
+                        .toggle_state(is_archive),
+                    ),
+            )
+            .child(
+                v_flex()
+                    .items_center()
+                    .gap_1()
+                    .child(button(
+                        "sidebar-activity-settings",
+                        IconName::Settings,
+                        "Settings",
+                        |_this, _, window, cx| {
+                            window.dispatch_action(Box::new(zed_actions::agent::OpenSettings), cx);
+                        },
+                    ))
+                    .child(self.render_recent_projects_button(cx))
+                    .child(self.render_sidebar_toggle_button(cx)),
             )
     }
 
@@ -6997,6 +7132,39 @@ impl Sidebar {
             .and_then(|workspace| workspace.read(cx).active_item(cx))
             .map(|item| item.screen_kind(cx))
             .unwrap_or(WorkspaceScreenKind::Editor)
+    }
+
+    fn should_use_coding_activity_bar(&self, cx: &App) -> bool {
+        let Some(workspace) = self.active_workspace(cx) else {
+            return false;
+        };
+
+        if !AgentPanel::is_visible(&workspace, cx) {
+            return false;
+        }
+
+        let workspace = workspace.read(cx);
+        if workspace.active_item(cx).is_none() {
+            return false;
+        }
+
+        let mut has_editor = false;
+        let mut has_browser = false;
+        for item in workspace.items(cx) {
+            match item.screen_kind(cx) {
+                WorkspaceScreenKind::Editor => has_editor = true,
+                WorkspaceScreenKind::Browser => has_browser = true,
+                WorkspaceScreenKind::Terminal
+                | WorkspaceScreenKind::LiquidGlass
+                | WorkspaceScreenKind::Other => {}
+            }
+
+            if has_editor && has_browser {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn project_root_path(&self, cx: &App) -> Option<PathBuf> {
@@ -7855,6 +8023,16 @@ impl Sidebar {
             .map(|w| w.read(cx).workspace().clone())
     }
 
+    fn focus_agent_panel(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(workspace) = self.active_workspace(cx) {
+            workspace.update(cx, |workspace, cx| {
+                if workspace.panel::<AgentPanel>(cx).is_some() {
+                    workspace.focus_panel::<AgentPanel>(window, cx);
+                }
+            });
+        }
+    }
+
     fn show_thread_import_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(active_workspace) = self.active_workspace(cx) else {
             return;
@@ -8119,8 +8297,12 @@ fn render_import_onboarding_banner(
 }
 
 impl WorkspaceSidebar for Sidebar {
-    fn width(&self, _cx: &App) -> Pixels {
-        self.width
+    fn width(&self, cx: &App) -> Pixels {
+        if self.should_use_coding_activity_bar(cx) && !self.activity_bar_expanded {
+            CODING_ACTIVITY_BAR_WIDTH
+        } else {
+            self.width
+        }
     }
 
     fn set_width(&mut self, width: Option<Pixels>, cx: &mut Context<Self>) {
@@ -8258,7 +8440,14 @@ impl Render for Sidebar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _titlebar_height = ui::utils::platform_title_bar_height(window);
         let ui_font = theme_settings::setup_ui_font(window, cx);
-        let sticky_header = self.render_sticky_header(window, cx);
+        let use_activity_bar =
+            self.should_use_coding_activity_bar(cx) && !self.activity_bar_expanded;
+        if !self.should_use_coding_activity_bar(cx) {
+            self.activity_bar_expanded = false;
+        }
+        let sticky_header = (!use_activity_bar)
+            .then(|| self.render_sticky_header(window, cx))
+            .flatten();
 
         let color = cx.theme().colors();
         let bg = color
@@ -8267,6 +8456,11 @@ impl Render for Sidebar {
 
         let no_open_projects = !self.contents.has_open_projects;
         let no_search_results = self.contents.entries.is_empty();
+        let sidebar_width = if use_activity_bar {
+            CODING_ACTIVITY_BAR_WIDTH
+        } else {
+            self.width
+        };
 
         v_flex()
             .id("workspace-sidebar")
@@ -8300,61 +8494,70 @@ impl Render for Sidebar {
             }))
             .font(ui_font)
             .h_full()
-            .w(self.width)
+            .w(sidebar_width)
             .bg(bg)
             .when(self.side(cx) == SidebarSide::Left, |el| el.border_r_1())
             .when(self.side(cx) == SidebarSide::Right, |el| el.border_l_1())
             .border_color(color.border)
-            .child(self.render_sidebar_header(no_open_projects, window, cx))
-            .map(|this| match &self.view {
-                SidebarView::ThreadList => this.map(|this| {
-                    if no_open_projects {
-                        this.child(self.render_empty_state(cx))
-                    } else {
-                        this.child(
-                            v_flex()
-                                .relative()
-                                .flex_1()
-                                .overflow_hidden()
-                                .child(
-                                    list(
-                                        self.list_state.clone(),
-                                        cx.processor(Self::render_list_entry),
-                                    )
-                                    .flex_1()
-                                    .size_full(),
-                                )
-                                .when(no_search_results, |this| {
-                                    this.child(self.render_no_results(cx))
-                                })
-                                .when_some(sticky_header, |this, header| this.child(header))
-                                .custom_scrollbars(
-                                    Scrollbars::new(ScrollAxes::Vertical)
-                                        .tracked_scroll_handle(&self.list_state),
-                                    window,
-                                    cx,
-                                ),
-                        )
-                    }
-                }),
-                SidebarView::Archive(archive_view) => this.child(archive_view.clone()),
-            })
             .map(|this| {
-                let show_acp = self.should_render_acp_import_onboarding(cx);
-                let show_cross_channel = self.should_render_cross_channel_import_onboarding(cx);
+                if use_activity_bar {
+                    this.child(self.render_coding_activity_bar(cx))
+                } else {
+                    this.child(self.render_sidebar_header(no_open_projects, window, cx))
+                        .map(|this| match &self.view {
+                            SidebarView::ThreadList => this.map(|this| {
+                                if no_open_projects {
+                                    this.child(self.render_empty_state(cx))
+                                } else {
+                                    this.child(
+                                        v_flex()
+                                            .relative()
+                                            .flex_1()
+                                            .overflow_hidden()
+                                            .child(
+                                                list(
+                                                    self.list_state.clone(),
+                                                    cx.processor(Self::render_list_entry),
+                                                )
+                                                .flex_1()
+                                                .size_full(),
+                                            )
+                                            .when(no_search_results, |this| {
+                                                this.child(self.render_no_results(cx))
+                                            })
+                                            .when_some(sticky_header, |this, header| {
+                                                this.child(header)
+                                            })
+                                            .custom_scrollbars(
+                                                Scrollbars::new(ScrollAxes::Vertical)
+                                                    .tracked_scroll_handle(&self.list_state),
+                                                window,
+                                                cx,
+                                            ),
+                                    )
+                                }
+                            }),
+                            SidebarView::Archive(archive_view) => this.child(archive_view.clone()),
+                        })
+                        .map(|this| {
+                            let show_acp = self.should_render_acp_import_onboarding(cx);
+                            let show_cross_channel =
+                                self.should_render_cross_channel_import_onboarding(cx);
 
-                let verbose = *self
-                    .import_banners_use_verbose_labels
-                    .get_or_insert(show_acp && show_cross_channel);
+                            let verbose = *self
+                                .import_banners_use_verbose_labels
+                                .get_or_insert(show_acp && show_cross_channel);
 
-                this.when(show_acp, |this| {
-                    this.child(self.render_acp_import_onboarding(verbose, cx))
-                })
-                .when(show_cross_channel, |this| {
-                    this.child(self.render_cross_channel_import_onboarding(verbose, cx))
-                })
+                            this.when(show_acp, |this| {
+                                this.child(self.render_acp_import_onboarding(verbose, cx))
+                            })
+                            .when(show_cross_channel, |this| {
+                                this.child(self.render_cross_channel_import_onboarding(verbose, cx))
+                            })
+                        })
+                        .child(self.render_sidebar_bottom_bar(cx))
+                }
             })
-            .child(self.render_sidebar_bottom_bar(cx))
     }
 }
 

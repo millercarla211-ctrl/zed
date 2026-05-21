@@ -50,7 +50,7 @@ use crate::{
     agent_configuration::add_llm_provider_modal::{AddLlmProviderModal, LlmCompatibleProvider},
     agent_connection_store::{AgentConnectionStatus, AgentConnectionStore},
     dx_agent_bridge::{
-        DxAgentBridgeSnapshot, DxAgentRowAction, DxAgentSocialActionSummary,
+        DxAgentBridgeSnapshot, DxAgentReceipt, DxAgentRowAction, DxAgentSocialActionSummary,
         dx_agent_bridge_snapshot, dx_agent_cli_actions_allowed, dx_agent_cli_path,
         dx_agent_dx_home, dx_agent_receipt_root, run_dx_agent_command,
         run_dx_agent_import_summary_command, run_dx_agent_release_gate_command,
@@ -332,6 +332,18 @@ impl AgentConfiguration {
                             cx,
                         );
                     })),
+            )
+            .child(
+                Button::new("dx-agents-receipts", "Receipts")
+                    .style(ButtonStyle::Outlined)
+                    .label_size(LabelSize::Small)
+                    .disabled(!actions_allowed)
+                    .on_click(cx.listener(|this, _, _window, cx| {
+                        this.run_dx_agents_bridge_action(
+                            vec!["agents", "receipts", "list", "--json"],
+                            cx,
+                        );
+                    })),
             );
 
         v_flex()
@@ -356,6 +368,7 @@ impl AgentConfiguration {
                     .child(self.render_dx_agents_release_gate_item(&snapshot, cx))
                     .child(self.render_dx_agents_social_items(&snapshot, cx))
                     .child(self.render_dx_agents_automation_items(&snapshot, cx))
+                    .child(self.render_dx_agents_receipt_items(&snapshot, cx))
                     .child(self.render_dx_agents_catalog_items(&snapshot, cx)),
             )
     }
@@ -937,6 +950,196 @@ impl AgentConfiguration {
                     );
                 }
             }
+        }
+
+        stack.into_any_element()
+    }
+
+    fn render_dx_agents_receipt_items(
+        &self,
+        snapshot: &DxAgentBridgeSnapshot,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let index = &snapshot.receipt_index;
+        let unsafe_count = snapshot
+            .receipts
+            .iter()
+            .filter(|receipt| !receipt.safe_to_render)
+            .count();
+        let redacted_count = snapshot
+            .receipts
+            .iter()
+            .filter(|receipt| receipt.metadata_redacted)
+            .count();
+        let status = if !index.present || index.last_error.is_some() || unsafe_count > 0 {
+            AiSettingItemStatus::Stopped
+        } else if index.status == "warning" || index.active_task_count > 0 {
+            AiSettingItemStatus::Starting
+        } else {
+            AiSettingItemStatus::Running
+        };
+        let mut index_item = AiSettingItem::new(
+            "dx-agents-receipt-index",
+            "Background Receipts",
+            status,
+            AiSettingItemSource::Custom,
+        )
+        .icon(
+            Icon::new(IconName::FileTextOutlined)
+                .size(IconSize::Small)
+                .color(Color::Muted),
+        )
+        .detail_label(format!(
+            "{} returned / {} known, {} active, {} redacted",
+            index.returned_receipt_count,
+            index.receipt_count,
+            index.active_task_count,
+            redacted_count
+        ));
+
+        if snapshot.enabled && snapshot.cli_actions_allowed {
+            index_item = index_item.action(
+                IconButton::new("dx-agents-receipts-list", IconName::RotateCw)
+                    .icon_color(Color::Muted)
+                    .icon_size(IconSize::Small)
+                    .tooltip(Tooltip::text("Refresh DX Agents receipt index"))
+                    .on_click(cx.listener(|this, _, _window, cx| {
+                        this.run_dx_agents_bridge_action(
+                            vec!["agents", "receipts", "list", "--json"],
+                            cx,
+                        );
+                    })),
+            );
+        }
+
+        let mut stack = v_flex()
+            .gap_1()
+            .child(Label::new("Background Receipts").size(LabelSize::Small))
+            .child(index_item);
+
+        if !index.present {
+            stack = stack.child(
+                Label::new("No receipt index yet. Run the receipt refresh action.")
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        } else if let Some(error) = index.last_error.as_ref() {
+            stack = stack.child(
+                Label::new(format!("Index error: {error}"))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        } else {
+            if let Some(path) = index.latest_receipt_path.as_ref() {
+                stack = stack.child(
+                    Label::new(format!("Latest: {path}"))
+                        .size(LabelSize::Small)
+                        .color(Color::Muted),
+                );
+            }
+            stack = stack.child(
+                Label::new(format!("Next: {}", index.next_action))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        }
+
+        if snapshot.receipts.is_empty() {
+            stack = stack.child(
+                Label::new("No renderable receipt rows in the latest receipt index.")
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        } else {
+            for receipt in snapshot.receipts.iter().take(4) {
+                stack = stack.child(self.render_dx_agents_receipt_row(receipt));
+            }
+        }
+
+        stack.into_any_element()
+    }
+
+    fn render_dx_agents_receipt_row(&self, receipt: &DxAgentReceipt) -> impl IntoElement {
+        let status = if !receipt.safe_to_render || receipt.last_error.is_some() {
+            AiSettingItemStatus::Stopped
+        } else if receipt.active_task {
+            AiSettingItemStatus::Starting
+        } else {
+            AiSettingItemStatus::Running
+        };
+        let redaction = if receipt.metadata_redacted {
+            "redacted"
+        } else {
+            "metadata"
+        };
+        let mut stack = v_flex().gap_0p5().child(
+            AiSettingItem::new(
+                format!("dx-agent-receipt-{}", receipt.id),
+                receipt.id.clone(),
+                status,
+                AiSettingItemSource::Custom,
+            )
+            .icon(
+                Icon::new(IconName::FileTextOutlined)
+                    .size(IconSize::Small)
+                    .color(Color::Muted),
+            )
+            .detail_label(format!(
+                "{} - {} - {} bytes - {}",
+                receipt.kind, receipt.status, receipt.size_bytes, redaction
+            )),
+        );
+
+        if !receipt.schema_version.is_empty() {
+            stack = stack.child(
+                Label::new(format!("Schema: {}", receipt.schema_version))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        }
+        if receipt.safe_to_render && !receipt.command.is_empty() {
+            stack = stack.child(
+                Label::new(format!("Command: {}", receipt.command))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        }
+        if !receipt.task_id.is_empty() {
+            stack = stack.child(
+                Label::new(format!("Task: {}", receipt.task_id))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        }
+        if !receipt.receipt_path.is_empty() {
+            stack = stack.child(
+                Label::new(receipt.receipt_path.clone())
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        }
+        if let Some(error) = receipt.last_error.as_ref() {
+            stack = stack.child(
+                Label::new(format!("Error: {error}"))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        } else if !receipt.next_action.is_empty() {
+            stack = stack.child(
+                Label::new(format!("Next: {}", receipt.next_action))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        }
+        if !receipt.generated_at.is_empty() || !receipt.modified_at.is_empty() {
+            stack = stack.child(
+                Label::new(format!(
+                    "Generated {} - modified {}",
+                    receipt.generated_at, receipt.modified_at
+                ))
+                .size(LabelSize::Small)
+                .color(Color::Muted),
+            );
         }
 
         stack.into_any_element()
