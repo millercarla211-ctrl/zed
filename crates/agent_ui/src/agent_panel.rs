@@ -43,6 +43,7 @@ use crate::dx_launch_prompts::{
     source_action_icon, source_action_label, source_action_prompt, source_action_title,
     source_receipt_review_prompt,
 };
+use crate::dx_launch_receipts::launch_receipt_review_snapshot;
 use crate::dx_launch_status::launch_status_snapshot;
 use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, DxSourceRowControl, receipt_snapshot, render_workspace_chrome,
@@ -5725,6 +5726,7 @@ impl AgentPanel {
         let review_receipts_prompt = receipt_review_prompt(
             &status.receipt_snapshot,
             &status.launch_status,
+            &status.launch_receipts,
             &status.tool_history,
             &status.proof_freshness,
             &status.deploy_targets,
@@ -6184,6 +6186,7 @@ impl AgentPanel {
 
         let receipt_snapshot = receipt_snapshot();
         let launch_status = launch_status_snapshot();
+        let launch_receipts = launch_receipt_review_snapshot();
         let agent_bridge = dx_agent_bridge_snapshot(cx);
         let receipt_file_count = receipt_snapshot
             .buckets
@@ -6241,6 +6244,7 @@ impl AgentPanel {
             visible_worktree_count,
             agent_bridge,
             launch_status,
+            launch_receipts,
             receipt_snapshot,
             source_sets,
             tool_history,

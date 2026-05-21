@@ -8,6 +8,19 @@ ADDED:
 NOTES:
 - This slice is file/watch/manifest architecture only. It does not start servers, run Cargo, run `just run`, execute DX CLI commands, or mutate browser profiles.
 
+[2026-05-21] - DX Launch Receipt Review Rail
+
+ADDED:
+- Added a metadata-only launch receipt review reader for `G:\Dx\.dx\receipts\launch`, covering `status-latest.json` plus retained `launch-status-*.json` snapshots with freshness, malformed, stale, expired, schema, status, and next-action metadata.
+- Surfaced launch receipt review state in the DX launch right rail beside the aggregate status card, including graceful missing-root and missing-latest states.
+
+CHANGED:
+- The Review Receipts guided action now includes launch receipt freshness and malformed-snapshot context alongside the aggregate launch status, tool history, proof freshness, and deploy receipt state.
+- Updated DX launch notes and status to 98.5/100 for the editor lane before governed runtime proof.
+
+NOTES:
+- This slice reads file metadata and bounded JSON fields only. It does not run `dx launch receipts --json`, `dx launch status --json`, Cargo, `just run`, local servers, providers, agents, DX-WWW, Forge, or browser automation.
+
 [2026-05-21] - DX Launch Status Aggregate Rail
 
 ADDED:
