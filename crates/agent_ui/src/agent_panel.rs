@@ -6257,6 +6257,34 @@ impl AgentPanel {
         );
     }
 
+    pub fn draft_dx_source_action_from_sidebar(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let status = self.dx_launch_workspace_status(cx);
+        let prompt = status
+            .source_sets
+            .sets
+            .iter()
+            .flat_map(|set| set.sources.iter())
+            .find(|source| !matches!(source.kind, DxSourceKind::WorkspaceRoot))
+            .or_else(|| {
+                status
+                    .source_sets
+                    .sets
+                    .iter()
+                    .flat_map(|set| set.sources.iter())
+                    .next()
+            })
+            .map(source_action_prompt)
+            .unwrap_or_else(|| {
+                "Review current DX Sources for this workspace. If source sets or managed receipts are available, use prepare_dx_source_attachment for the next safe attachment step. Do not run builds, local servers, browser input, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions.".to_string()
+            });
+
+        self.insert_dx_launch_prompt(prompt, window, cx);
+    }
+
     fn dx_launch_workspace_status(&self, cx: &Context<Self>) -> DxLaunchWorkspaceStatus {
         let workspace_roots = self
             .workspace

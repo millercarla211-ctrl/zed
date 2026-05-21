@@ -6951,10 +6951,7 @@ impl Sidebar {
                 "sidebar-activity-sources",
                 IconName::Book,
                 "Sources",
-                |this, _, window, cx| {
-                    this.activity_bar_expanded = true;
-                    this.show_thread_list(window, cx);
-                },
+                |this, _, window, cx| this.draft_dx_source_action(window, cx),
             )
             .into_any_element(),
             button(
@@ -8047,6 +8044,19 @@ impl Sidebar {
         if let Some(workspace) = self.active_workspace(cx) {
             workspace.update(cx, |workspace, cx| {
                 if workspace.panel::<AgentPanel>(cx).is_some() {
+                    workspace.focus_panel::<AgentPanel>(window, cx);
+                }
+            });
+        }
+    }
+
+    fn draft_dx_source_action(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(workspace) = self.active_workspace(cx) {
+            workspace.update(cx, |workspace, cx| {
+                if let Some(panel) = workspace.panel::<AgentPanel>(cx) {
+                    panel.update(cx, |panel, cx| {
+                        panel.draft_dx_source_action_from_sidebar(window, cx);
+                    });
                     workspace.focus_panel::<AgentPanel>(window, cx);
                 }
             });
