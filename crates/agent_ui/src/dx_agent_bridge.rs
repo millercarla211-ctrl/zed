@@ -276,10 +276,6 @@ pub(crate) fn dx_agent_bridge_snapshot(cx: &App) -> DxAgentBridgeSnapshot {
     read_bridge_snapshot(settings)
 }
 
-pub(crate) fn dx_agent_cli_path(cx: &App) -> String {
-    dx_agent_settings(cx).cli_path
-}
-
 pub(crate) fn dx_agent_dx_home(cx: &App) -> Option<PathBuf> {
     dx_home_from_receipt_root(&dx_agent_settings(cx).receipt_root)
 }
@@ -291,16 +287,6 @@ pub(crate) fn dx_agent_receipt_root(cx: &App) -> PathBuf {
 pub(crate) fn dx_agent_cli_actions_allowed(cx: &App) -> bool {
     let settings = dx_agent_settings(cx);
     settings.enabled && settings.cli_actions_allowed
-}
-
-pub(crate) fn run_dx_agent_command(
-    cli_path: String,
-    args: Vec<String>,
-    dx_home: Option<PathBuf>,
-) -> Result<()> {
-    run_bridge_command(cli_path, args, dx_home)?;
-    clear_snapshot_cache();
-    Ok(())
 }
 
 pub(crate) fn run_dx_agent_public_command(
@@ -913,7 +899,7 @@ fn catalog_summary(
         source_hash: catalog.and_then(|catalog| string_field(catalog, &["source_hash"])),
         safe_regeneration_command: catalog
             .and_then(|catalog| string_field(catalog, &["safe_regeneration_command"]))
-            .unwrap_or_else(|| "dx-agents providers catalog regenerate --json".to_string()),
+            .unwrap_or_else(|| "dx agents providers catalog regenerate --json".to_string()),
         path,
     }
 }
@@ -976,7 +962,7 @@ fn contract_summary(value: Option<&Value>, root_exists: bool) -> DxAgentContract
             .unwrap_or_default(),
         safe_regeneration_command: provider_catalog
             .and_then(|value| string_field(value, &["safe_regeneration_command"]))
-            .unwrap_or_else(|| "dx-agents providers catalog regenerate --json".to_string()),
+            .unwrap_or_else(|| "dx agents providers catalog regenerate --json".to_string()),
         redaction_summary,
         redaction_requires_review,
         next_action: value
@@ -1392,13 +1378,38 @@ fn is_secret_like_arg(value: &str) -> bool {
 fn is_allowed_public_dx_agents_command(args: &[String]) -> bool {
     match args {
         [agents, command, json] if agents == "agents" && json == "--json" => {
-            matches!(command.as_str(), "snapshot" | "status" | "run")
+            matches!(
+                command.as_str(),
+                "contract" | "contract-audit" | "snapshot" | "status" | "run"
+            )
         }
         [agents, receipts, list, json]
             if agents == "agents"
                 && receipts == "receipts"
                 && list == "list"
                 && json == "--json" =>
+        {
+            true
+        }
+        [agents, providers, list, json]
+            if agents == "agents"
+                && providers == "providers"
+                && list == "list"
+                && json == "--json" =>
+        {
+            true
+        }
+        [agents, providers, catalog, regenerate, json]
+            if agents == "agents"
+                && providers == "providers"
+                && catalog == "catalog"
+                && regenerate == "regenerate"
+                && json == "--json" =>
+        {
+            true
+        }
+        [agents, models, list, json]
+            if agents == "agents" && models == "models" && list == "list" && json == "--json" =>
         {
             true
         }

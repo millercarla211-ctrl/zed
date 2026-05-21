@@ -51,9 +51,8 @@ use crate::{
     agent_connection_store::{AgentConnectionStatus, AgentConnectionStore},
     dx_agent_bridge::{
         DxAgentBridgeSnapshot, DxAgentReceipt, DxAgentRowAction, DxAgentSocialActionSummary,
-        dx_agent_bridge_snapshot, dx_agent_cli_actions_allowed, dx_agent_cli_path,
-        dx_agent_dx_home, dx_agent_receipt_root, run_dx_agent_command,
-        run_dx_agent_import_summary_command, run_dx_agent_public_command,
+        dx_agent_bridge_snapshot, dx_agent_cli_actions_allowed, dx_agent_dx_home,
+        dx_agent_receipt_root, run_dx_agent_import_summary_command, run_dx_agent_public_command,
         run_dx_agent_release_gate_command,
     },
 };
@@ -283,7 +282,7 @@ impl AgentConfiguration {
                     .label_size(LabelSize::Small)
                     .disabled(!actions_allowed)
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_bridge_action(vec!["agents", "contract", "--json"], cx);
+                        this.run_dx_agents_public_action(vec!["agents", "contract", "--json"], cx);
                     })),
             )
             .child(
@@ -1290,8 +1289,8 @@ impl AgentConfiguration {
                         .icon_size(IconSize::Small)
                         .tooltip(Tooltip::text("Refresh DX provider receipt"))
                         .on_click(cx.listener(|this, _, _window, cx| {
-                            this.run_dx_agents_bridge_action(
-                                vec!["providers", "list", "--json"],
+                            this.run_dx_agents_public_action(
+                                vec!["agents", "providers", "list", "--json"],
                                 cx,
                             );
                         })),
@@ -1302,7 +1301,10 @@ impl AgentConfiguration {
                         .icon_size(IconSize::Small)
                         .tooltip(Tooltip::text("Refresh DX model receipt"))
                         .on_click(cx.listener(|this, _, _window, cx| {
-                            this.run_dx_agents_bridge_action(vec!["models", "list", "--json"], cx);
+                            this.run_dx_agents_public_action(
+                                vec!["agents", "models", "list", "--json"],
+                                cx,
+                            );
                         })),
                 )
                 .action(
@@ -1311,8 +1313,8 @@ impl AgentConfiguration {
                         .icon_size(IconSize::Small)
                         .tooltip(Tooltip::text("Regenerate DX provider catalog receipt"))
                         .on_click(cx.listener(|this, _, _window, cx| {
-                            this.run_dx_agents_bridge_action(
-                                vec!["providers", "catalog", "regenerate", "--json"],
+                            this.run_dx_agents_public_action(
+                                vec!["agents", "providers", "catalog", "regenerate", "--json"],
                                 cx,
                             );
                         })),
@@ -1352,32 +1354,6 @@ impl AgentConfiguration {
                 .color(Color::Muted),
             )
             .into_any_element()
-    }
-
-    fn run_dx_agents_bridge_action<T>(&mut self, args: Vec<T>, cx: &mut Context<Self>)
-    where
-        T: Into<String>,
-    {
-        if !dx_agent_cli_actions_allowed(cx) {
-            return;
-        }
-
-        let cli_path = dx_agent_cli_path(cx);
-        let dx_home = dx_agent_dx_home(cx);
-        let args = args.into_iter().map(Into::into).collect::<Vec<_>>();
-        let task =
-            cx.background_spawn(async move { run_dx_agent_command(cli_path, args, dx_home) });
-        cx.spawn(async move |this, cx| {
-            let result = task.await;
-            this.update(cx, |_this, cx| {
-                if let Err(error) = result {
-                    log::warn!("DX Agents bridge action failed: {error}");
-                }
-                cx.notify();
-            })
-            .log_err();
-        })
-        .detach();
     }
 
     fn run_dx_agents_public_action<T>(&mut self, args: Vec<T>, cx: &mut Context<Self>)
