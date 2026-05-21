@@ -9,6 +9,9 @@ use std::{
 use gpui::{AnyElement, App, SharedString, prelude::*};
 use ui::{IconName, prelude::*};
 
+use crate::dx_agent_bridge::{
+    DxAgentAutomation, DxAgentBridgeSnapshot, DxAgentModel, DxAgentProvider, DxAgentSocialAccount,
+};
 use crate::dx_check_score::DxCheckScoreSnapshot;
 use crate::dx_deploy_targets::{
     DxDeployReceiptBucket, DxDeployReceiptSummary, DxDeployTarget, DxDeployTargetSnapshot,
@@ -47,6 +50,7 @@ pub(crate) struct DxLaunchWorkspaceStatus {
     pub active_status: SharedString,
     pub background_task_count: usize,
     pub visible_worktree_count: usize,
+    pub agent_bridge: DxAgentBridgeSnapshot,
     pub receipt_snapshot: DxReceiptSnapshot,
     pub source_sets: DxSourceSetSnapshot,
     pub tool_history: DxToolHistorySnapshot,
@@ -278,6 +282,14 @@ fn render_right_rail(
             "Background",
             format!("{} tasks", status.background_task_count),
         ))
+        .when(status.agent_bridge.show_in_agent_rail, |this| {
+            this.child(section_title("DX Agents", IconName::ZedAgent))
+                .child(dx_agent_bridge_state(&status.agent_bridge, cx))
+                .child(section_title("Social Accounts", IconName::Link))
+                .child(dx_agent_social_state(&status.agent_bridge, cx))
+                .child(section_title("Agent Providers", IconName::Sliders))
+                .child(dx_agent_provider_state(&status.agent_bridge, cx))
+        })
         .child(section_title("Check", IconName::Check))
         .child(check_score_state(&status.check_score, cx))
         .child(section_title("Proof Freshness", IconName::FileTextOutlined))
@@ -299,6 +311,311 @@ fn render_right_rail(
         .child(background_task_state(status.background_task_count, cx))
         .child(section_title("Token And Tool Slots", IconName::Sliders))
         .child(token_meter_slots(&status.receipt_snapshot))
+        .into_any_element()
+}
+
+fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyElement {
+    let mut stack = v_flex()
+        .gap_1()
+        .child(metric_row("Bridge", snapshot.status.clone()))
+        .child(metric_row("CLI", snapshot.cli_path.clone()))
+        .child(metric_row(
+            "Accounts",
+            format!(
+                "{} connected / {} configured",
+                snapshot.connected_accounts_summary.connected,
+                snapshot.connected_accounts_summary.configured
+            ),
+        ))
+        .child(metric_row(
+            "Automations",
+            snapshot.automation_count.to_string(),
+        ))
+        .child(metric_row("Tasks", snapshot.active_task_count.to_string()))
+        .child(metric_row(
+            "Catalog",
+            if snapshot.catalog.present && !snapshot.catalog.stale {
+                "fast".to_string()
+            } else {
+                "fallback".to_string()
+            },
+        ));
+
+    if !snapshot.enabled {
+        stack = stack.child(muted_card("Disabled in Zed settings", cx));
+    } else if !snapshot.root_exists {
+        stack = stack.child(muted_card(
+            format!("Missing receipts: {}", snapshot.receipt_root.display()),
+            cx,
+        ));
+    }
+
+    if let Some(receipt) = snapshot.latest_receipts.first() {
+        stack = stack.child(metric_row("Latest", receipt.clone()));
+    }
+
+    if let Some(error) = snapshot.last_error.as_ref() {
+        stack = stack.child(signal_row(
+            "dx-agent-bridge-error".into(),
+            IconName::Warning,
+            Color::Warning,
+            error.clone(),
+        ));
+    } else {
+        stack = stack.child(
+            Label::new(snapshot.next_action.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+    }
+
+    stack.into_any_element()
+}
+
+fn dx_agent_social_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyElement {
+    let mut stack = v_flex()
+        .gap_1()
+        .child(metric_row(
+            "Supported",
+            snapshot.connected_accounts_summary.supported.to_string(),
+        ))
+        .child(metric_row(
+            "Needs",
+            snapshot
+                .connected_accounts_summary
+                .needs_connection
+                .to_string(),
+        ))
+        .child(metric_row(
+            "QR-ready",
+            snapshot
+                .connected_accounts_summary
+                .qr_connect_supported
+                .to_string(),
+        ));
+
+    if snapshot.social_accounts.is_empty() {
+        stack = stack.child(muted_card("Run social list receipt", cx));
+    } else {
+        for (ix, account) in snapshot.social_accounts.iter().take(3).enumerate() {
+            stack = stack.child(dx_agent_social_row(
+                SharedString::from(format!("dx-agent-social-{ix}")),
+                account,
+                cx,
+            ));
+        }
+    }
+
+    if !snapshot.automations.is_empty() {
+        stack = stack.child(section_title("Automations", IconName::ListTodo));
+        for (ix, automation) in snapshot.automations.iter().take(2).enumerate() {
+            stack = stack.child(dx_agent_automation_row(
+                SharedString::from(format!("dx-agent-automation-{ix}")),
+                automation,
+                cx,
+            ));
+        }
+    }
+
+    stack.into_any_element()
+}
+
+fn dx_agent_social_row(id: SharedString, account: &DxAgentSocialAccount, cx: &App) -> AnyElement {
+    let state = if account.connected {
+        "Connected".to_string()
+    } else if account.qr_connect_supported {
+        "QR ready".to_string()
+    } else if account.configured {
+        "Configured".to_string()
+    } else {
+        "Needs setup".to_string()
+    };
+
+    v_flex()
+        .id(id)
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().element_background)
+        .child(metric_row(account.platform.clone(), state))
+        .child(
+            Label::new(format!("{} - {}", account.label, account.status))
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .when(!account.next_action.is_empty(), |this| {
+            this.child(
+                Label::new(account.next_action.clone())
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
+        })
+        .into_any_element()
+}
+
+fn dx_agent_automation_row(
+    id: SharedString,
+    automation: &DxAgentAutomation,
+    cx: &App,
+) -> AnyElement {
+    let state = if automation.enabled {
+        automation.status.clone()
+    } else {
+        "paused".to_string()
+    };
+
+    v_flex()
+        .id(id)
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().element_background)
+        .child(metric_row(automation.id.clone(), state))
+        .child(
+            Label::new(format!(
+                "{} schedule from {}",
+                automation.schedule_kind, automation.source
+            ))
+            .size(LabelSize::XSmall)
+            .color(Color::Muted)
+            .truncate(),
+        )
+        .when(!automation.next_action.is_empty(), |this| {
+            this.child(
+                Label::new(automation.next_action.clone())
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
+        })
+        .into_any_element()
+}
+
+fn dx_agent_provider_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyElement {
+    let mut stack = v_flex()
+        .gap_1()
+        .child(metric_row(
+            "Providers",
+            snapshot.providers.len().to_string(),
+        ))
+        .child(metric_row("Models", snapshot.models.len().to_string()))
+        .child(metric_row(
+            "Catalog path",
+            snapshot.catalog.path.display().to_string(),
+        ))
+        .child(metric_row(
+            "Fast cache",
+            if snapshot.catalog.present && !snapshot.catalog.stale {
+                "ready"
+            } else {
+                "stale/missing"
+            },
+        ));
+
+    if !snapshot.show_managed_providers {
+        return stack
+            .child(muted_card("Managed provider rows hidden by settings", cx))
+            .into_any_element();
+    }
+
+    if let Some(source_hash) = snapshot.catalog.source_hash.as_ref() {
+        stack = stack.child(metric_row("Source hash", source_hash.clone()));
+    }
+
+    if snapshot.providers.is_empty() {
+        stack = stack.child(muted_card(
+            format!("Run {}", snapshot.catalog.safe_regeneration_command),
+            cx,
+        ));
+    } else {
+        for (ix, provider) in snapshot.providers.iter().take(3).enumerate() {
+            stack = stack.child(dx_agent_provider_row(
+                SharedString::from(format!("dx-agent-provider-{ix}")),
+                provider,
+                cx,
+            ));
+        }
+    }
+
+    for (ix, model) in snapshot.models.iter().take(2).enumerate() {
+        stack = stack.child(dx_agent_model_row(
+            SharedString::from(format!("dx-agent-model-{ix}")),
+            model,
+            cx,
+        ));
+    }
+
+    stack.into_any_element()
+}
+
+fn dx_agent_provider_row(id: SharedString, provider: &DxAgentProvider, cx: &App) -> AnyElement {
+    let state = if provider.active {
+        "Active".to_string()
+    } else if provider.configured {
+        "Configured".to_string()
+    } else if provider.local {
+        "Local".to_string()
+    } else {
+        provider.status.clone()
+    };
+    let compatibility = provider.compatibility.join(", ");
+
+    v_flex()
+        .id(id)
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().element_background)
+        .child(metric_row(provider.display_name.clone(), state))
+        .child(
+            Label::new(if compatibility.is_empty() {
+                provider.id.clone()
+            } else {
+                format!("{} - {}", provider.id, compatibility)
+            })
+            .size(LabelSize::XSmall)
+            .color(Color::Muted)
+            .truncate(),
+        )
+        .into_any_element()
+}
+
+fn dx_agent_model_row(id: SharedString, model: &DxAgentModel, cx: &App) -> AnyElement {
+    let state = if model.active {
+        "Active".to_string()
+    } else {
+        model.status.clone()
+    };
+    let compatibility = model.compatibility.join(", ");
+
+    v_flex()
+        .id(id)
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().editor_background)
+        .child(metric_row(model.model_id.clone(), state))
+        .child(
+            Label::new(if compatibility.is_empty() {
+                format!("{} / {}", model.provider_id, model.id)
+            } else {
+                format!("{} / {} - {}", model.provider_id, model.id, compatibility)
+            })
+            .size(LabelSize::XSmall)
+            .color(Color::Muted)
+            .truncate(),
+        )
         .into_any_element()
 }
 

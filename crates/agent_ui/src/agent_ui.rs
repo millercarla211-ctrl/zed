@@ -12,6 +12,7 @@ mod context_server_configuration;
 pub(crate) mod conversation_view;
 mod diagnostics;
 pub mod draft_prompt_store;
+mod dx_agent_bridge;
 mod dx_check_score;
 mod dx_deploy_targets;
 mod dx_launch_prompts;

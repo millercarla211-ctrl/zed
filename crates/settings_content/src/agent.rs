@@ -73,6 +73,39 @@ pub enum ThinkingBlockDisplay {
 
 #[with_fallible_options]
 #[derive(Clone, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, Default)]
+pub struct DxAgentsSettingsContent {
+    /// Whether Zed should render DX Agents bridge status in the agent UI.
+    ///
+    /// Default: true
+    pub enabled: Option<bool>,
+    /// The DX Agents CLI executable Zed uses for explicit bridge actions.
+    ///
+    /// Default: dx-agents
+    pub cli_path: Option<String>,
+    /// Receipt root used by the CLI bridge. Receipts must be redacted JSON.
+    ///
+    /// Default: G:\Dx\.dx\receipts\agents
+    pub receipt_root: Option<String>,
+    /// Generated rkyv/memmap provider catalog path used for fast discovery.
+    ///
+    /// Default: G:\Dx\.dx\catalog\agents\provider-model-catalog.rkyv
+    pub provider_catalog_path: Option<String>,
+    /// Whether GPUI buttons may run explicit dx-agents bridge commands.
+    ///
+    /// Default: true
+    pub allow_cli_actions: Option<bool>,
+    /// Whether provider/model rows managed by DX Agents are shown in Zed AI configuration.
+    ///
+    /// Default: true
+    pub show_managed_providers: Option<bool>,
+    /// Whether the Agent panel right rail should show background receipts and social readiness.
+    ///
+    /// Default: true
+    pub show_in_agent_rail: Option<bool>,
+}
+
+#[with_fallible_options]
+#[derive(Clone, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, Default)]
 pub struct AgentSettingsContent {
     /// Whether the Agent is enabled.
     ///
@@ -211,6 +244,8 @@ pub struct AgentSettingsContent {
     /// `always_confirm`) match against the tool's text input (command, path,
     /// URL, etc.).
     pub tool_permissions: Option<ToolPermissionsContent>,
+    /// DX Agents CLI/receipt bridge settings.
+    pub dx_agents: Option<DxAgentsSettingsContent>,
 }
 
 impl AgentSettingsContent {

@@ -49,6 +49,10 @@ use crate::{
     Agent,
     agent_configuration::add_llm_provider_modal::{AddLlmProviderModal, LlmCompatibleProvider},
     agent_connection_store::{AgentConnectionStatus, AgentConnectionStore},
+    dx_agent_bridge::{
+        DxAgentBridgeSnapshot, dx_agent_bridge_snapshot, dx_agent_cli_actions_allowed,
+        dx_agent_cli_path, dx_agent_dx_home, run_dx_agent_command,
+    },
 };
 
 pub struct AgentConfiguration {
@@ -195,6 +199,302 @@ impl AgentConfiguration {
                     )
                     .child(Label::new(description.into()).color(Color::Muted)),
             )
+    }
+
+    fn render_dx_agents_section(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let snapshot = dx_agent_bridge_snapshot(cx);
+        let actions_allowed = snapshot.enabled && snapshot.cli_actions_allowed;
+        let controls = h_flex()
+            .gap_1()
+            .child(
+                Button::new("dx-agents-refresh-status", "Refresh")
+                    .style(ButtonStyle::Outlined)
+                    .label_size(LabelSize::Small)
+                    .disabled(!actions_allowed)
+                    .on_click(cx.listener(|this, _, _window, cx| {
+                        this.run_dx_agents_bridge_action(vec!["agents", "status", "--json"], cx);
+                    })),
+            )
+            .child(
+                Button::new("dx-agents-social-list", "Social")
+                    .style(ButtonStyle::Outlined)
+                    .label_size(LabelSize::Small)
+                    .disabled(!actions_allowed)
+                    .on_click(cx.listener(|this, _, _window, cx| {
+                        this.run_dx_agents_bridge_action(
+                            vec!["agents", "social", "list", "--json"],
+                            cx,
+                        );
+                    })),
+            )
+            .child(
+                Button::new("dx-agents-automations-list", "Automations")
+                    .style(ButtonStyle::Outlined)
+                    .label_size(LabelSize::Small)
+                    .disabled(!actions_allowed)
+                    .on_click(cx.listener(|this, _, _window, cx| {
+                        this.run_dx_agents_bridge_action(
+                            vec!["agents", "automate", "list", "--json"],
+                            cx,
+                        );
+                    })),
+            );
+
+        v_flex()
+            .min_w_0()
+            .border_b_1()
+            .border_color(cx.theme().colors().border)
+            .child(self.render_section_title(
+                "DX Agents",
+                "CLI-first DX Agents bridge status, social readiness, background receipts, and managed provider/model catalog discovery.",
+                controls.into_any_element(),
+            ))
+            .child(
+                v_flex()
+                    .pl_4()
+                    .pb_4()
+                    .pr_5()
+                    .w_full()
+                    .gap_2()
+                    .child(self.render_dx_agents_status_item(&snapshot, cx))
+                    .child(self.render_dx_agents_social_items(&snapshot, cx))
+                    .child(self.render_dx_agents_catalog_items(&snapshot, cx)),
+            )
+    }
+
+    fn render_dx_agents_status_item(
+        &self,
+        snapshot: &DxAgentBridgeSnapshot,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let status = if !snapshot.enabled || !snapshot.root_exists {
+            AiSettingItemStatus::Stopped
+        } else if snapshot.last_error.is_some() || snapshot.status == "warning" {
+            AiSettingItemStatus::Starting
+        } else {
+            AiSettingItemStatus::Running
+        };
+        let detail = if let Some(error) = snapshot.last_error.as_ref() {
+            error.clone()
+        } else {
+            format!(
+                "{} task(s), {} automation(s), receipts {}, cli {}",
+                snapshot.active_task_count,
+                snapshot.automation_count,
+                if snapshot.root_exists {
+                    "ready"
+                } else {
+                    "missing"
+                },
+                snapshot.cli_path
+            )
+        };
+
+        AiSettingItem::new(
+            "dx-agents-bridge",
+            "DX Agents Runtime",
+            status,
+            AiSettingItemSource::Custom,
+        )
+        .icon(
+            Icon::new(IconName::ZedAgent)
+                .size(IconSize::Small)
+                .color(Color::Muted),
+        )
+        .detail_label(detail)
+        .when(snapshot.enabled && snapshot.cli_actions_allowed, |this| {
+            this.action(
+                IconButton::new("dx-agents-run-receipt", IconName::PlayOutlined)
+                    .icon_color(Color::Muted)
+                    .icon_size(IconSize::Small)
+                    .tooltip(Tooltip::text("Write a DX Agents run receipt"))
+                    .on_click(cx.listener(|this, _, _window, cx| {
+                        this.run_dx_agents_bridge_action(vec!["agents", "run", "--json"], cx);
+                    })),
+            )
+        })
+    }
+
+    fn render_dx_agents_social_items(
+        &self,
+        snapshot: &DxAgentBridgeSnapshot,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let mut stack = v_flex()
+            .gap_1()
+            .child(Label::new("Social Accounts").size(LabelSize::Small));
+
+        if snapshot.social_accounts.is_empty() {
+            stack = stack.child(
+                Label::new("No social receipt yet. Run the bridge refresh or social list command.")
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        } else {
+            for account in snapshot.social_accounts.iter().take(4) {
+                let state = if account.connected {
+                    "connected"
+                } else if account.qr_connect_supported {
+                    "qr ready"
+                } else if account.configured {
+                    "configured"
+                } else {
+                    "needs setup"
+                };
+                stack = stack.child(
+                    AiSettingItem::new(
+                        format!("dx-agent-social-{}", account.platform),
+                        account.label.clone(),
+                        if account.connected {
+                            AiSettingItemStatus::Running
+                        } else {
+                            AiSettingItemStatus::Stopped
+                        },
+                        AiSettingItemSource::Custom,
+                    )
+                    .icon(
+                        Icon::new(IconName::Link)
+                            .size(IconSize::Small)
+                            .color(Color::Muted),
+                    )
+                    .detail_label(format!(
+                        "{} - {} - {}",
+                        account.platform, state, account.next_action
+                    ))
+                    .action(
+                        IconButton::new(
+                            format!("dx-agent-social-list-{}", account.platform),
+                            IconName::Link,
+                        )
+                        .icon_color(Color::Muted)
+                        .icon_size(IconSize::Small)
+                        .disabled(!snapshot.enabled || !snapshot.cli_actions_allowed)
+                        .tooltip(Tooltip::text("Refresh redacted social receipt"))
+                        .on_click(cx.listener(|this, _, _window, cx| {
+                            this.run_dx_agents_bridge_action(
+                                vec!["agents", "social", "list", "--json"],
+                                cx,
+                            );
+                        })),
+                    ),
+                );
+            }
+        }
+
+        stack.into_any_element()
+    }
+
+    fn render_dx_agents_catalog_items(
+        &self,
+        snapshot: &DxAgentBridgeSnapshot,
+        _cx: &Context<Self>,
+    ) -> impl IntoElement {
+        if !snapshot.show_managed_providers {
+            return v_flex()
+                .gap_1()
+                .child(Label::new("Provider Catalog").size(LabelSize::Small))
+                .child(
+                    Label::new("Managed provider rows are hidden by DX Agents settings.")
+                        .size(LabelSize::Small)
+                        .color(Color::Muted),
+                )
+                .into_any_element();
+        }
+
+        let cache_state = if snapshot.catalog.present && !snapshot.catalog.stale {
+            "fast cache ready"
+        } else if snapshot.catalog.present {
+            "cache stale"
+        } else {
+            "cache missing"
+        };
+        let provider_detail = format!(
+            "{} provider(s), {} model(s), {}",
+            snapshot.catalog.provider_count, snapshot.catalog.model_count, cache_state
+        );
+        let active_provider = snapshot
+            .providers
+            .iter()
+            .find(|provider| provider.active)
+            .map(|provider| provider.display_name.clone())
+            .unwrap_or_else(|| "No active DX provider".to_string());
+
+        let mut stack = v_flex()
+            .gap_1()
+            .child(Label::new("Provider Catalog").size(LabelSize::Small))
+            .child(
+                AiSettingItem::new(
+                    "dx-agents-provider-catalog",
+                    "Managed Providers",
+                    if snapshot.catalog.present && !snapshot.catalog.stale {
+                        AiSettingItemStatus::Running
+                    } else {
+                        AiSettingItemStatus::Starting
+                    },
+                    AiSettingItemSource::Custom,
+                )
+                .icon(
+                    Icon::new(IconName::Sliders)
+                        .size(IconSize::Small)
+                        .color(Color::Muted),
+                )
+                .detail_label(provider_detail),
+            )
+            .child(
+                Label::new(active_provider)
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            )
+            .child(
+                Label::new(snapshot.catalog.path.display().to_string())
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+
+        if let Some(source_hash) = snapshot.catalog.source_hash.as_ref() {
+            stack = stack.child(
+                Label::new(format!("Source hash: {source_hash}"))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        }
+
+        stack
+            .child(
+                Label::new(format!(
+                    "Refresh command: {}",
+                    snapshot.catalog.safe_regeneration_command
+                ))
+                .size(LabelSize::Small)
+                .color(Color::Muted),
+            )
+            .into_any_element()
+    }
+
+    fn run_dx_agents_bridge_action<T>(&mut self, args: Vec<T>, cx: &mut Context<Self>)
+    where
+        T: Into<String>,
+    {
+        if !dx_agent_cli_actions_allowed(cx) {
+            return;
+        }
+
+        let cli_path = dx_agent_cli_path(cx);
+        let dx_home = dx_agent_dx_home(cx);
+        let args = args.into_iter().map(Into::into).collect::<Vec<_>>();
+        let task =
+            cx.background_spawn(async move { run_dx_agent_command(cli_path, args, dx_home) });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            this.update(cx, |_this, cx| {
+                if let Err(error) = result {
+                    log::warn!("DX Agents bridge action failed: {error}");
+                }
+                cx.notify();
+            })
+            .log_err();
+        })
+        .detach();
     }
 
     fn render_provider_configuration_block(
@@ -1346,6 +1646,7 @@ impl Render for AgentConfiguration {
                             .min_w_0()
                             .overflow_y_scroll()
                             .child(self.render_agent_servers_section(cx))
+                            .child(self.render_dx_agents_section(cx))
                             .child(self.render_context_servers_section(cx))
                             .child(self.render_provider_configuration_section(cx)),
                     )

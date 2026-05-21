@@ -1102,6 +1102,23 @@
         // },
       },
     },
+    // DX Agents CLI/receipt bridge settings. Zed reads redacted receipts and only runs explicit user actions.
+    "dx_agents": {
+      // Whether to render DX Agents bridge status in the Agent UI.
+      "enabled": true,
+      // CLI executable used for bridge actions such as status refresh and social-list readiness.
+      "cli_path": "dx-agents",
+      // Redacted agent receipt root written by dx-agents.
+      "receipt_root": "G:\\Dx\\.dx\\receipts\\agents",
+      // Generated rkyv/memmap catalog used for fast provider/model discovery.
+      "provider_catalog_path": "G:\\Dx\\.dx\\catalog\\agents\\provider-model-catalog.rkyv",
+      // Whether GPUI controls may run explicit dx-agents bridge commands.
+      "allow_cli_actions": true,
+      // Whether to show provider/model rows marked as managed by DX Agents.
+      "show_managed_providers": true,
+      // Whether to show DX Agents receipts, automations, and social readiness in the Agent rail.
+      "show_in_agent_rail": true,
+    },
     // When enabled, agent edits will be displayed in single-file editors for review
     "single_file_review": false,
     // When enabled, show voting thumbs for feedback on agent edits.

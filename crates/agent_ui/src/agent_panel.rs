@@ -34,6 +34,7 @@ use crate::ExpandMessageEditor;
 use crate::ManageProfiles;
 use crate::agent_connection_store::AgentConnectionStore;
 use crate::completion_provider::AgentContextSource;
+use crate::dx_agent_bridge::dx_agent_bridge_snapshot;
 use crate::dx_check_score::{DxCheckScoreInput, check_score_snapshot};
 use crate::dx_deploy_targets::{DxDeployTargetSnapshot, deploy_target_snapshot};
 use crate::dx_launch_prompts::{
@@ -6180,6 +6181,7 @@ impl AgentPanel {
         let visible_worktree_count = self.project.read(cx).visible_worktrees(cx).count();
 
         let receipt_snapshot = receipt_snapshot();
+        let agent_bridge = dx_agent_bridge_snapshot(cx);
         let receipt_file_count = receipt_snapshot
             .buckets
             .iter()
@@ -6234,6 +6236,7 @@ impl AgentPanel {
             active_status: self.dx_active_status(cx),
             background_task_count: self.retained_threads.len(),
             visible_worktree_count,
+            agent_bridge,
             receipt_snapshot,
             source_sets,
             tool_history,

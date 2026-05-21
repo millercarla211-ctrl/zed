@@ -31,11 +31,12 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Add New Chat, Search, Plugins, and Automations actions.
 - Add Pinned and All Chats workspace groups.
 - Wire DX token/RLM/serializer receipts into token/tool meters.
-- Wire DX Agents CLI receipts into GPUI status surfaces.
+- Wire DX Agents CLI receipts, social connect/disconnect actions, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
 
 - Added the DX launch onboarding Web Preview hero slice: onboarding now creates a real Web Preview child for the hero canvas, defaults to a bundled original animated DX fallback page, supports explicit `DX_ONBOARDING_PREVIEW_URL`, and exposes a detected `G:\WWW\www\demo\index.html` target action without local servers or secret import.
+- Added the DX Agents GPUI bridge surface: Zed now reads redacted Agent status/social/automation/provider/model receipts from `G:\Dx\.dx\receipts\agents`, shows DX Agents status in Agent Configuration and the launch right rail, honors settings gates for CLI actions/managed providers/rail visibility, runs fixed public `dx-agents ... --json` bridge actions only, and exposes per-account connect/disconnect receipt actions plus provider-catalog regeneration without importing `dx-agents` crates or secrets into Zed.
 - Implemented the DX launch workspace chrome around existing Agent thread rendering when the panel is zoomed/full-workspace: left Sources/receipts rail, right Progress/Git/Background Tasks rail, and token/tool meter slots.
 - Added receipt hooks for `G:\Dx\.dx\receipts` with graceful missing/empty states and no CLI execution from Zed.
 - Added an Agent action beside the existing Write/Ask mode and model controls while preserving the current model picker, profile selector, token usage, and thread behavior.
@@ -87,6 +88,7 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 ## Remaining Proof
 
 - The DX onboarding Web Preview hero has formatting, diff, conflict-marker, and source-reference validation only so far; `just run` visual proof and native WebView2 runtime proof remain deferred under the repo's launch validation rules.
+- The DX Agents bridge has formatting/diff/conflict/source-reference validation only so far; live `dx-agents ... --json` command proof, Cargo checks, social login/provider calls, local servers, and runtime rail visual proof remain deferred under the repo's launch validation rules.
 - Runtime visual proof is still pending because this launch lane forbids local servers, `just run`, full Cargo builds, and heavy validation without explicit permission.
 - The DX CLI receipt producers remain external to Zed; this slice reads receipt files and reports missing or empty receipt states only.
 - The media runner source slice has rustfmt/diff/conflict validation only so far; Cargo check/test and runtime ffmpeg proof remain deferred under the repo's launch validation rules.

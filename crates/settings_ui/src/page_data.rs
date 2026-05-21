@@ -7754,6 +7754,194 @@ fn ai_page(cx: &App) -> SettingsPage {
         items.into_boxed_slice()
     }
 
+    fn dx_agents_bridge_section() -> [SettingsPageItem; 8] {
+        [
+            SettingsPageItem::SectionHeader("DX Agents Bridge"),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Enabled",
+                description: "Show DX Agents bridge status, redacted receipts, social readiness, automations, and managed provider/model catalog state in Zed.",
+                field: Box::new(SettingField {
+                    json_path: Some("agent.dx_agents.enabled"),
+                    pick: |settings_content| {
+                        settings_content
+                            .agent
+                            .as_ref()?
+                            .dx_agents
+                            .as_ref()?
+                            .enabled
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .agent
+                            .get_or_insert_default()
+                            .dx_agents
+                            .get_or_insert_default()
+                            .enabled = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "CLI Path",
+                description: "DX Agents executable used when Zed runs an explicit bridge action.",
+                field: Box::new(SettingField {
+                    json_path: Some("agent.dx_agents.cli_path"),
+                    pick: |settings_content| {
+                        settings_content
+                            .agent
+                            .as_ref()?
+                            .dx_agents
+                            .as_ref()?
+                            .cli_path
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .agent
+                            .get_or_insert_default()
+                            .dx_agents
+                            .get_or_insert_default()
+                            .cli_path = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Receipt Root",
+                description: "Directory Zed reads for redacted DX Agents receipt JSON.",
+                field: Box::new(SettingField {
+                    json_path: Some("agent.dx_agents.receipt_root"),
+                    pick: |settings_content| {
+                        settings_content
+                            .agent
+                            .as_ref()?
+                            .dx_agents
+                            .as_ref()?
+                            .receipt_root
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .agent
+                            .get_or_insert_default()
+                            .dx_agents
+                            .get_or_insert_default()
+                            .receipt_root = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Provider Catalog Path",
+                description: "Generated rkyv/memmap provider catalog used for fast DX Agents provider and model discovery.",
+                field: Box::new(SettingField {
+                    json_path: Some("agent.dx_agents.provider_catalog_path"),
+                    pick: |settings_content| {
+                        settings_content
+                            .agent
+                            .as_ref()?
+                            .dx_agents
+                            .as_ref()?
+                            .provider_catalog_path
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .agent
+                            .get_or_insert_default()
+                            .dx_agents
+                            .get_or_insert_default()
+                            .provider_catalog_path = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Allow CLI Actions",
+                description: "Allow GPUI controls to run explicit dx-agents bridge commands such as refresh, social list readiness, automations list, and run receipts.",
+                field: Box::new(SettingField {
+                    json_path: Some("agent.dx_agents.allow_cli_actions"),
+                    pick: |settings_content| {
+                        settings_content
+                            .agent
+                            .as_ref()?
+                            .dx_agents
+                            .as_ref()?
+                            .allow_cli_actions
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .agent
+                            .get_or_insert_default()
+                            .dx_agents
+                            .get_or_insert_default()
+                            .allow_cli_actions = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Show Managed Providers",
+                description: "Show provider and model rows marked as managed by DX Agents without importing credentials.",
+                field: Box::new(SettingField {
+                    json_path: Some("agent.dx_agents.show_managed_providers"),
+                    pick: |settings_content| {
+                        settings_content
+                            .agent
+                            .as_ref()?
+                            .dx_agents
+                            .as_ref()?
+                            .show_managed_providers
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .agent
+                            .get_or_insert_default()
+                            .dx_agents
+                            .get_or_insert_default()
+                            .show_managed_providers = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Show In Agent Rail",
+                description: "Show DX Agents receipts, background tasks, automations, and social account readiness in the Agent panel rail.",
+                field: Box::new(SettingField {
+                    json_path: Some("agent.dx_agents.show_in_agent_rail"),
+                    pick: |settings_content| {
+                        settings_content
+                            .agent
+                            .as_ref()?
+                            .dx_agents
+                            .as_ref()?
+                            .show_in_agent_rail
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .agent
+                            .get_or_insert_default()
+                            .dx_agents
+                            .get_or_insert_default()
+                            .show_in_agent_rail = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+        ]
+    }
+
     fn context_servers_section() -> [SettingsPageItem; 2] {
         [
             SettingsPageItem::SectionHeader("Context Servers"),
@@ -7809,6 +7997,7 @@ fn ai_page(cx: &App) -> SettingsPage {
         items: concat_sections![
             general_section(),
             agent_configuration_section(cx),
+            dx_agents_bridge_section(),
             context_servers_section(),
             edit_prediction_language_settings_section(),
             edit_prediction_display_sub_section()

@@ -1,3 +1,19 @@
+[2026-05-21] - DX Agents Bridge Rails
+
+ADDED:
+- Added a DX Agents CLI/receipt bridge reader for redacted status, social account, automation, provider, model, and latest-receipt JSON under `G:\Dx\.dx\receipts\agents`.
+- Added DX Agents status controls to Agent Configuration using fixed public `dx-agents ... --json` command shapes, with direct refresh, connect, run-receipt, and provider-catalog regeneration actions.
+- Added per-social-account redacted connect/disconnect receipt actions that call the dx-agents CLI bridge without importing secrets or provider credentials into Zed.
+- Added DX Agents, Social Accounts, Automations, and Agent Providers rail sections to the DX launch workspace, with settings gates for managed providers and rail visibility.
+- Added `agent.dx_agents` settings and default values for bridge enablement, CLI path, receipt root, provider catalog path, CLI actions, managed providers, and Agent rail visibility.
+
+CHANGED:
+- Social account actions now prepare redacted connect/disconnect readiness receipts instead of wiring direct social login inside Zed.
+- Provider/model catalog rows now render cache metadata, source hash, and safe regeneration command text while keeping provider registration and secrets outside Zed.
+
+NOTES:
+- This slice uses source-level validation only. It does not run `just run`, Cargo builds/checks/tests/clippy, npm builds, local servers, provider calls, social login, or secret import.
+
 [2026-05-21] - DX Onboarding Web Preview Hero
 
 ADDED:
