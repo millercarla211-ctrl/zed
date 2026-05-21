@@ -303,6 +303,19 @@ pub(crate) fn run_dx_agent_command(
     Ok(())
 }
 
+pub(crate) fn run_dx_agent_public_command(
+    args: Vec<String>,
+    dx_home: Option<PathBuf>,
+) -> Result<()> {
+    if !is_allowed_public_dx_agents_command(&args) {
+        return Err(anyhow!("unsupported DX Agents public bridge command"));
+    }
+
+    run_bridge_command(DEFAULT_DX_CLI.to_string(), args, dx_home)?;
+    clear_snapshot_cache();
+    Ok(())
+}
+
 pub(crate) fn run_dx_agent_import_summary_command(
     dx_home: Option<PathBuf>,
     receipt_root: PathBuf,
@@ -645,8 +658,8 @@ fn social_action_summary(
         DxAgentSocialActionKind::Disconnect => "disconnect",
     };
     let command = match kind {
-        DxAgentSocialActionKind::Connect => "dx-agents agents social connect --json",
-        DxAgentSocialActionKind::Disconnect => "dx-agents agents social disconnect --json",
+        DxAgentSocialActionKind::Connect => "dx agents social connect --json",
+        DxAgentSocialActionKind::Disconnect => "dx agents social disconnect --json",
     };
     let waiting_status = match kind {
         DxAgentSocialActionKind::Connect => "waiting_for_social_connect_receipt",
@@ -730,7 +743,7 @@ fn automations(value: &Value) -> Vec<DxAgentAutomation> {
 
 fn social_row_actions(value: &Value) -> Vec<DxAgentRowAction> {
     row_actions(value, |id, command, receipt_filename, refresh_command| {
-        refresh_command == "dx-agents agents social list --json"
+        is_dx_agents_command(refresh_command, "social list --json")
             && match id {
                 "connect" => {
                     receipt_filename == "social-connect-latest.json"
@@ -742,7 +755,7 @@ fn social_row_actions(value: &Value) -> Vec<DxAgentRowAction> {
                 }
                 "refresh" => {
                     receipt_filename == "social-list-latest.json"
-                        && command == "dx-agents agents social list --json"
+                        && is_dx_agents_command(command, "social list --json")
                 }
                 _ => false,
             }
@@ -751,15 +764,15 @@ fn social_row_actions(value: &Value) -> Vec<DxAgentRowAction> {
 
 fn automation_row_actions(value: &Value) -> Vec<DxAgentRowAction> {
     row_actions(value, |id, command, receipt_filename, refresh_command| {
-        refresh_command == "dx-agents agents automate list --json"
+        is_dx_agents_command(refresh_command, "automate list --json")
             && match id {
                 "run" => {
                     receipt_filename == "run-latest.json"
-                        && command == "dx-agents agents run --json"
+                        && is_dx_agents_command(command, "run --json")
                 }
                 "refresh" => {
                     receipt_filename == "automate-list-latest.json"
-                        && command == "dx-agents agents automate list --json"
+                        && is_dx_agents_command(command, "automate list --json")
                 }
                 _ => false,
             }
@@ -816,9 +829,15 @@ where
 }
 
 fn is_social_action_command(command: &str, action: &str) -> bool {
-    command == format!("dx-agents agents social {action} --json")
-        || command.starts_with(&format!("dx-agents agents social {action} --platform "))
-            && command.ends_with(" --json")
+    let runtime_prefix = format!("dx-agents agents social {action}");
+    let public_prefix = format!("dx agents social {action}");
+    [runtime_prefix.as_str(), public_prefix.as_str()]
+        .into_iter()
+        .any(|prefix| {
+            command == format!("{prefix} --json")
+                || command.starts_with(&format!("{prefix} --platform "))
+                    && command.ends_with(" --json")
+        })
 }
 
 fn providers(value: &Value) -> Vec<DxAgentProvider> {
@@ -1368,6 +1387,50 @@ fn is_secret_like_arg(value: &str) -> bool {
         || lower.contains("apikey")
         || lower.contains("password")
         || lower.contains("cookie")
+}
+
+fn is_allowed_public_dx_agents_command(args: &[String]) -> bool {
+    match args {
+        [agents, command, json] if agents == "agents" && json == "--json" => {
+            matches!(command.as_str(), "snapshot" | "status" | "run")
+        }
+        [agents, social, command, json]
+            if agents == "agents" && social == "social" && json == "--json" =>
+        {
+            command == "list"
+        }
+        [agents, social, command, platform_flag, platform, json]
+            if agents == "agents"
+                && social == "social"
+                && matches!(command.as_str(), "connect" | "disconnect")
+                && platform_flag == "--platform"
+                && json == "--json" =>
+        {
+            is_safe_platform_arg(platform)
+        }
+        [agents, automate, list, json]
+            if agents == "agents"
+                && automate == "automate"
+                && list == "list"
+                && json == "--json" =>
+        {
+            true
+        }
+        _ => false,
+    }
+}
+
+fn is_dx_agents_command(command: &str, args: &str) -> bool {
+    command == format!("dx-agents agents {args}") || command == format!("dx agents {args}")
+}
+
+fn is_safe_platform_arg(platform: &str) -> bool {
+    !platform.trim().is_empty()
+        && platform.len() <= 64
+        && !is_secret_like_arg(platform)
+        && platform
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }
 
 fn bridge_command_label(cli_path: &str, args: &[String]) -> String {

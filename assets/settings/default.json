@@ -1106,7 +1106,8 @@
     "dx_agents": {
       // Whether to render DX Agents bridge status in the Agent UI.
       "enabled": true,
-      // CLI executable used for bridge actions such as status refresh and social-list readiness.
+      // DX Agents runtime CLI used for direct contract, receipt-index, and provider/model catalog actions.
+      // Public status, social, automation, and run controls call the root `dx agents ...` bridge.
       "cli_path": "dx-agents",
       // Redacted agent receipt root written by dx-agents.
       "receipt_root": "G:\\Dx\\.dx\\receipts\\agents",

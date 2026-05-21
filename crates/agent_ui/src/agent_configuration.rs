@@ -53,7 +53,8 @@ use crate::{
         DxAgentBridgeSnapshot, DxAgentReceipt, DxAgentRowAction, DxAgentSocialActionSummary,
         dx_agent_bridge_snapshot, dx_agent_cli_actions_allowed, dx_agent_cli_path,
         dx_agent_dx_home, dx_agent_receipt_root, run_dx_agent_command,
-        run_dx_agent_import_summary_command, run_dx_agent_release_gate_command,
+        run_dx_agent_import_summary_command, run_dx_agent_public_command,
+        run_dx_agent_release_gate_command,
     },
 };
 
@@ -273,7 +274,7 @@ impl AgentConfiguration {
                     .label_size(LabelSize::Small)
                     .disabled(!actions_allowed)
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_bridge_action(vec!["agents", "status", "--json"], cx);
+                        this.run_dx_agents_public_action(vec!["agents", "status", "--json"], cx);
                     })),
             )
             .child(
@@ -315,7 +316,7 @@ impl AgentConfiguration {
                     .label_size(LabelSize::Small)
                     .disabled(!actions_allowed)
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_bridge_action(
+                        this.run_dx_agents_public_action(
                             vec!["agents", "social", "list", "--json"],
                             cx,
                         );
@@ -327,7 +328,7 @@ impl AgentConfiguration {
                     .label_size(LabelSize::Small)
                     .disabled(!actions_allowed)
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_bridge_action(
+                        this.run_dx_agents_public_action(
                             vec!["agents", "automate", "list", "--json"],
                             cx,
                         );
@@ -389,7 +390,7 @@ impl AgentConfiguration {
             error.clone()
         } else {
             format!(
-                "{} task(s), {} automation(s), receipts {}, cli {}",
+                "{} task(s), {} automation(s), receipts {}, cli dx public + {} runtime",
                 snapshot.active_task_count,
                 snapshot.automation_count,
                 if snapshot.root_exists {
@@ -420,7 +421,7 @@ impl AgentConfiguration {
                     .icon_size(IconSize::Small)
                     .tooltip(Tooltip::text("Write a DX Agents run receipt"))
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_bridge_action(vec!["agents", "run", "--json"], cx);
+                        this.run_dx_agents_public_action(vec!["agents", "run", "--json"], cx);
                     })),
             )
         })
@@ -745,7 +746,7 @@ impl AgentConfiguration {
                         .disabled(!refresh_enabled)
                         .tooltip(Tooltip::text(refresh_tooltip))
                         .on_click(cx.listener(|this, _, _window, cx| {
-                            this.run_dx_agents_bridge_action(
+                            this.run_dx_agents_public_action(
                                 vec!["agents", "social", "list", "--json"],
                                 cx,
                             );
@@ -772,7 +773,7 @@ impl AgentConfiguration {
                             .tooltip(Tooltip::text(disconnect_tooltip))
                             .on_click(cx.listener(
                                 move |this, _, _window, cx| {
-                                    this.run_dx_agents_bridge_action(
+                                    this.run_dx_agents_public_action(
                                         vec![
                                             "agents".to_string(),
                                             "social".to_string(),
@@ -804,7 +805,7 @@ impl AgentConfiguration {
                             .tooltip(Tooltip::text(connect_tooltip))
                             .on_click(cx.listener(
                                 move |this, _, _window, cx| {
-                                    this.run_dx_agents_bridge_action(
+                                    this.run_dx_agents_public_action(
                                         vec![
                                             "agents".to_string(),
                                             "social".to_string(),
@@ -912,7 +913,7 @@ impl AgentConfiguration {
                         .disabled(!refresh_enabled)
                         .tooltip(Tooltip::text(refresh_tooltip))
                         .on_click(cx.listener(|this, _, _window, cx| {
-                            this.run_dx_agents_bridge_action(
+                            this.run_dx_agents_public_action(
                                 vec!["agents", "automate", "list", "--json"],
                                 cx,
                             );
@@ -936,7 +937,7 @@ impl AgentConfiguration {
                         .disabled(!run_enabled)
                         .tooltip(Tooltip::text(run_tooltip))
                         .on_click(cx.listener(|this, _, _window, cx| {
-                            this.run_dx_agents_bridge_action(vec!["agents", "run", "--json"], cx);
+                            this.run_dx_agents_public_action(vec!["agents", "run", "--json"], cx);
                         })),
                     );
                 }
@@ -1371,6 +1372,30 @@ impl AgentConfiguration {
             this.update(cx, |_this, cx| {
                 if let Err(error) = result {
                     log::warn!("DX Agents bridge action failed: {error}");
+                }
+                cx.notify();
+            })
+            .log_err();
+        })
+        .detach();
+    }
+
+    fn run_dx_agents_public_action<T>(&mut self, args: Vec<T>, cx: &mut Context<Self>)
+    where
+        T: Into<String>,
+    {
+        if !dx_agent_cli_actions_allowed(cx) {
+            return;
+        }
+
+        let dx_home = dx_agent_dx_home(cx);
+        let args = args.into_iter().map(Into::into).collect::<Vec<_>>();
+        let task = cx.background_spawn(async move { run_dx_agent_public_command(args, dx_home) });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            this.update(cx, |_this, cx| {
+                if let Err(error) = result {
+                    log::warn!("DX Agents public bridge action failed: {error}");
                 }
                 cx.notify();
             })

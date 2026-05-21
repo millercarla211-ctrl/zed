@@ -1,3 +1,27 @@
+[2026-05-22] - DX Agents Public CLI Action Bridge
+
+CHANGED:
+- Routed Agent Configuration status, social list/connect/disconnect, automation list, and run receipt controls through the public `dx agents ... --json` bridge.
+- Kept direct `dx-agents` runtime calls for contract, receipt-index, provider/model, and catalog producer actions that are not root CLI public actions yet.
+- Added a fixed allowlist for public DX Agents command vectors before Zed runs the root `dx` bridge.
+
+NOTES:
+- This preserves existing Zed AI behavior, provider routing, Write/Ask modes, model picker, and receipt rendering.
+- No Cargo commands, local servers, or `just run` were executed.
+
+[2026-05-22] - DX Agents Public Bridge Controls
+
+CHANGED:
+- Agent Configuration now routes status, social list/connect/disconnect, automation list, and run receipt actions through guarded public `dx agents ... --json` command shapes.
+- DX Agents receipt row validation now accepts both public `dx agents ...` labels and runtime `dx-agents agents ...` labels for social and automation action metadata.
+
+FIXED:
+- Public social connect/disconnect bridge actions now require an explicit safe `--platform` argument instead of allowing bare connect/disconnect command shapes.
+
+NOTES:
+- Runtime-only contract, provider, model, catalog, import-summary, release-gate, and receipt-list actions remain on their existing guarded paths.
+- No Cargo commands, local servers, live CLI commands, provider calls, or `just run` were executed.
+
 [2026-05-22] - DX Activity Bar Overflow Hardening
 
 CHANGED:
