@@ -112,13 +112,14 @@ use ui::{
 use util::ResultExt as _;
 use workspace::{
     CollaboratorId, DraggedSelection, DraggedTab, MultiWorkspace, PathList, SerializedPathList,
-    ToggleWorkspaceSidebar, ToggleZoom, Workspace, WorkspaceId,
+    ToggleWorkspaceSidebar, ToggleZoom, Workspace, WorkspaceId, WorkspaceScreenKind,
     dock::{DockPosition, Panel, PanelEvent},
     item::ItemEvent,
 };
 
 const AGENT_PANEL_KEY: &str = "agent_panel";
 const MIN_PANEL_WIDTH: Pixels = px(300.);
+const DX_CODING_PANEL_WIDTH: Pixels = px(360.);
 const LAST_USED_AGENT_KEY: &str = "agent_panel__last_used_external_agent";
 const LAST_CREATED_ENTRY_KIND_KEY: &str = "agent_panel__last_created_entry_kind";
 const TERMINAL_AGENT_TELEMETRY_ID: &str = "terminal";
@@ -4221,7 +4222,13 @@ impl Panel for AgentPanel {
     fn default_size(&self, window: &Window, cx: &App) -> Pixels {
         let settings = AgentSettings::get_global(cx);
         match self.position(window, cx) {
-            DockPosition::Left | DockPosition::Right => settings.default_width,
+            DockPosition::Left | DockPosition::Right => {
+                if self.should_use_dx_coding_panel_size(cx) {
+                    settings.default_width.min(DX_CODING_PANEL_WIDTH)
+                } else {
+                    settings.default_width
+                }
+            }
             DockPosition::Bottom => settings.default_height,
         }
     }
@@ -4238,7 +4245,7 @@ impl Panel for AgentPanel {
     }
 
     fn has_flexible_size(&self, _window: &Window, cx: &App) -> bool {
-        AgentSettings::get_global(cx).flexible
+        AgentSettings::get_global(cx).flexible && !self.should_use_dx_coding_panel_size(cx)
     }
 
     fn set_flexible_size(&mut self, flexible: bool, _window: &mut Window, cx: &mut Context<Self>) {
@@ -6394,6 +6401,40 @@ impl AgentPanel {
         self.workspace
             .upgrade()
             .is_some_and(|workspace| workspace.read(cx).active_item(cx).is_none())
+    }
+
+    fn workspace_has_editor_and_browser(&self, cx: &App) -> bool {
+        let Some(workspace) = self.workspace.upgrade() else {
+            return false;
+        };
+
+        let workspace = workspace.read(cx);
+        let mut has_editor = false;
+        let mut has_browser = false;
+
+        for pane in workspace.panes() {
+            let Some(item) = pane.read(cx).active_item() else {
+                continue;
+            };
+
+            match item.screen_kind(cx) {
+                WorkspaceScreenKind::Editor => has_editor = true,
+                WorkspaceScreenKind::Browser => has_browser = true,
+                WorkspaceScreenKind::Terminal
+                | WorkspaceScreenKind::LiquidGlass
+                | WorkspaceScreenKind::Other => {}
+            }
+
+            if has_editor && has_browser {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn should_use_dx_coding_panel_size(&self, cx: &App) -> bool {
+        self.workspace_has_editor_and_browser(cx)
     }
 
     fn should_render_dx_launch_chrome(&self, cx: &App) -> bool {

@@ -1,3 +1,23 @@
+[2026-05-22] - DX Compact Agent Dock Sizing
+
+CHANGED:
+- Constrained the Agent panel to a compact fixed coding width when visible center panes include both editor and Web Preview/browser items.
+- Preserved flexible sizing outside crowded coding layouts and kept no-editor/full-width AI mode controlled by the existing zoom/full-workspace path.
+
+NOTES:
+- This preserves existing Write/Ask modes, model picker, thread behavior, Web Preview behavior, and normal Agent panel behavior outside the tri-pane coding posture.
+- No Cargo commands, local servers, live CLI commands, provider calls, or `just run` were executed.
+
+[2026-05-22] - DX Agents Provider Catalog Public Bridge
+
+CHANGED:
+- Routed Agent Configuration provider, model, and provider-catalog refresh controls through public `dx agents providers list --json`, `dx agents models list --json`, and `dx agents providers catalog regenerate --json` command vectors.
+- Kept provider/model receipt parsing, managed provider visibility, and existing Zed AI provider routing unchanged.
+
+NOTES:
+- The public command allowlist now covers provider/model/catalog refresh actions without storing credentials or running raw social/provider secret flows in Zed.
+- No Cargo commands, local servers, live provider calls, or `just run` were executed.
+
 [2026-05-22] - DX Agents Receipt Refresh Public Bridge
 
 CHANGED:
