@@ -474,7 +474,7 @@ impl Render for DraggedSidebarSpace {
 
 #[derive(Clone)]
 enum SidebarGridAction {
-    OpenProject,
+    AddFolderToProject,
     OpenFile(PathBuf),
     OpenWebsite(&'static str),
     OpenTerminalFolder(PathBuf),
@@ -988,7 +988,6 @@ impl Sidebar {
             .position(|space| space.workspace_id == active_space_id)
     }
 
-    #[allow(dead_code)]
     fn clamped_space_page_start(&self, total_spaces: usize, active_index: Option<usize>) -> usize {
         let max_start = total_spaces.saturating_sub(MAX_VISIBLE_SPACE_DOTS);
         let mut start = self.space_page_start.min(max_start);
@@ -1080,7 +1079,6 @@ impl Sidebar {
         cx.notify();
     }
 
-    #[allow(dead_code)]
     fn activate_space(
         &mut self,
         workspace_id: WorkspaceId,
@@ -1124,45 +1122,6 @@ impl Sidebar {
             self.space_page_start += 1;
             cx.notify();
         }
-    }
-
-    #[allow(dead_code)]
-    fn active_space_label(&self, cx: &App) -> SharedString {
-        self.resolved_active_space_id(cx)
-            .and_then(|workspace_id| {
-                self.space_entries
-                    .iter()
-                    .find(|space| space.workspace_id == workspace_id)
-                    .map(|space| space.label.clone())
-            })
-            .unwrap_or_else(|| "Current space".into())
-    }
-
-    #[allow(dead_code)]
-    fn active_space_path_summary(&self, cx: &App) -> SharedString {
-        let Some(workspace_id) = self.resolved_active_space_id(cx) else {
-            return SharedString::default();
-        };
-
-        self.space_entries
-            .iter()
-            .find(|space| space.workspace_id == workspace_id)
-            .map(|space| space.path_summary.clone())
-            .unwrap_or_default()
-    }
-
-    #[allow(dead_code)]
-    fn space_path_summary_for_key(key: &ProjectGroupKey) -> SharedString {
-        key.path_list()
-            .ordered_paths()
-            .map(|path| {
-                path.file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| path.display().to_string())
-            })
-            .collect::<Vec<_>>()
-            .join(" • ")
-            .into()
     }
 
     fn is_group_collapsed(&self, key: &ProjectGroupKey, cx: &App) -> bool {
@@ -7229,25 +7188,18 @@ impl Sidebar {
     }
 
     fn editor_grid_entries(&self, cx: &App) -> Vec<SidebarGridEntry> {
-        const MIN_GRID_ITEMS: usize = 12;
+        const MAX_GRID_ITEMS: usize = 12;
 
         let Some(root_path) = self.project_root_path(cx) else {
-            // No project - fill all 12 slots with "Open Project" placeholders
-            return (0..MIN_GRID_ITEMS)
-                .map(|i| SidebarGridEntry {
-                    id: format!("sidebar-grid-open-project-{i}").into(),
-                    icon: IconName::Plus,
-                    label: "Add File".into(),
-                    subtitle: None,
-                    action: SidebarGridAction::OpenProject,
-                })
-                .collect();
+            return vec![Self::add_folder_grid_entry(
+                "sidebar-grid-add-folder-editor-empty",
+            )];
         };
 
         let mut files = Self::read_directory_entries(&root_path)
             .into_iter()
             .filter(|(_, is_dir)| !*is_dir)
-            .take(MIN_GRID_ITEMS)
+            .take(MAX_GRID_ITEMS)
             .map(|(path, _)| SidebarGridEntry {
                 id: SharedString::from(format!("sidebar-grid-file-{}", path.display())),
                 icon: Self::icon_for_path(&path),
@@ -7261,25 +7213,16 @@ impl Sidebar {
             })
             .collect::<Vec<_>>();
 
-        // Fill remaining slots with "Add File" placeholders
-        let current_count = files.len();
-        if current_count < MIN_GRID_ITEMS {
-            for i in current_count..MIN_GRID_ITEMS {
-                files.push(SidebarGridEntry {
-                    id: format!("sidebar-grid-add-file-{i}").into(),
-                    icon: IconName::Plus,
-                    label: "Add File".into(),
-                    subtitle: None,
-                    action: SidebarGridAction::OpenProject,
-                });
-            }
+        if files.len() < MAX_GRID_ITEMS {
+            files.push(Self::add_folder_grid_entry(
+                "sidebar-grid-add-folder-editor",
+            ));
         }
 
         files
     }
 
     fn browser_grid_entries(&self) -> Vec<SidebarGridEntry> {
-        const MIN_GRID_ITEMS: usize = 12;
         const SITES: [(&str, &str, IconName); 8] = [
             ("Google", "https://www.google.com", IconName::AiGoogle),
             ("GitHub", "https://github.com", IconName::Github),
@@ -7291,7 +7234,7 @@ impl Sidebar {
             ("LinkedIn", "https://www.linkedin.com", IconName::Person),
         ];
 
-        let mut entries: Vec<SidebarGridEntry> = SITES
+        SITES
             .into_iter()
             .map(|(label, url, icon)| SidebarGridEntry {
                 id: SharedString::from(format!("sidebar-grid-site-{label}")),
@@ -7300,49 +7243,26 @@ impl Sidebar {
                 subtitle: None,
                 action: SidebarGridAction::OpenWebsite(url),
             })
-            .collect();
-
-        // Fill remaining slots with "Add Website" placeholders
-        let current_count = entries.len();
-        if current_count < MIN_GRID_ITEMS {
-            for i in current_count..MIN_GRID_ITEMS {
-                entries.push(SidebarGridEntry {
-                    id: format!("sidebar-grid-add-website-{i}").into(),
-                    icon: IconName::Plus,
-                    label: "Add Website".into(),
-                    subtitle: None,
-                    action: SidebarGridAction::OpenProject,
-                });
-            }
-        }
-
-        entries
+            .collect()
     }
 
     fn terminal_grid_entries(&self, cx: &App) -> Vec<SidebarGridEntry> {
-        const MIN_GRID_ITEMS: usize = 12;
+        const MAX_GRID_ITEMS: usize = 12;
 
         let root_path = self
             .project_root_path(cx)
             .or_else(|| std::env::current_dir().ok());
 
         let Some(root_path) = root_path else {
-            // No path - fill all 12 slots with "Add Folder" placeholders
-            return (0..MIN_GRID_ITEMS)
-                .map(|i| SidebarGridEntry {
-                    id: format!("sidebar-grid-add-folder-{i}").into(),
-                    icon: IconName::Plus,
-                    label: "Add Folder".into(),
-                    subtitle: None,
-                    action: SidebarGridAction::OpenProject,
-                })
-                .collect();
+            return vec![Self::add_folder_grid_entry(
+                "sidebar-grid-add-folder-terminal-empty",
+            )];
         };
 
         let mut folders = Self::read_directory_entries(&root_path)
             .into_iter()
             .filter(|(_, is_dir)| *is_dir)
-            .take(MIN_GRID_ITEMS)
+            .take(MAX_GRID_ITEMS)
             .map(|(path, _)| SidebarGridEntry {
                 id: SharedString::from(format!("sidebar-grid-folder-{}", path.display())),
                 icon: IconName::Folder,
@@ -7356,21 +7276,23 @@ impl Sidebar {
             })
             .collect::<Vec<_>>();
 
-        // Fill remaining slots with "Add Folder" placeholders
-        let current_count = folders.len();
-        if current_count < MIN_GRID_ITEMS {
-            for i in current_count..MIN_GRID_ITEMS {
-                folders.push(SidebarGridEntry {
-                    id: format!("sidebar-grid-add-folder-{i}").into(),
-                    icon: IconName::Plus,
-                    label: "Add Folder".into(),
-                    subtitle: None,
-                    action: SidebarGridAction::OpenProject,
-                });
-            }
+        if folders.len() < MAX_GRID_ITEMS {
+            folders.push(Self::add_folder_grid_entry(
+                "sidebar-grid-add-folder-terminal",
+            ));
         }
 
         folders
+    }
+
+    fn add_folder_grid_entry(id: &'static str) -> SidebarGridEntry {
+        SidebarGridEntry {
+            id: id.into(),
+            icon: IconName::Plus,
+            label: "Add Folder".into(),
+            subtitle: None,
+            action: SidebarGridAction::AddFolderToProject,
+        }
     }
 
     fn grid_entries(&self, cx: &App) -> Vec<SidebarGridEntry> {
@@ -7451,7 +7373,7 @@ impl Sidebar {
         cx: &mut Context<Self>,
     ) {
         match action {
-            SidebarGridAction::OpenProject => {
+            SidebarGridAction::AddFolderToProject => {
                 if let Some(workspace) = self.active_workspace(cx) {
                     workspace.update(cx, |workspace, cx| {
                         workspace.add_folder_to_project(&AddFolderToProject, window, cx);
@@ -7558,35 +7480,6 @@ impl Sidebar {
         )
     }
 
-    #[allow(dead_code)]
-    fn render_current_space_heading(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let active_space_path = self.active_space_path_summary(cx);
-
-        v_flex()
-            .w_full()
-            .gap_0p5()
-            .pt_1()
-            .child(
-                Label::new("Current Space")
-                    .size(LabelSize::XSmall)
-                    .color(Color::Muted),
-            )
-            .child(
-                v_flex()
-                    .min_w_0()
-                    .gap_0p5()
-                    .child(Label::new(self.active_space_label(cx)).truncate())
-                    .when(!active_space_path.is_empty(), |this| {
-                        this.child(
-                            Label::new(active_space_path)
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted)
-                                .truncate(),
-                        )
-                    }),
-            )
-    }
-
     fn render_sidebar_header(
         &self,
         no_open_projects: bool,
@@ -7639,7 +7532,6 @@ impl Sidebar {
                     |this| {
                         this.child(self.render_gen_search_row(window, cx))
                             .child(self.render_space_grid(cx))
-                        // .child(self.render_current_space_heading(cx))
                     },
                 ))
             })

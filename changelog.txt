@@ -1,3 +1,14 @@
+[2026-05-22] - DX Sidebar Screen Grid Source Polish
+
+CHANGED:
+- Updated `crates/sidebar/src/sidebar.rs` so the expanded sidebar screen grid renders real file, folder, and site shortcut entries plus a single Add Folder action instead of repeated filler tiles.
+- Renamed the grid's folder action to match the real `add_folder_to_project` behavior.
+- Removed dead current-space heading helper code and unnecessary `allow(dead_code)` attributes from active sidebar space helpers.
+
+NOTES:
+- This is a source-quality cleanup for the AI/sidebar launch chrome; it does not change compact activity bar routing, Agent panel behavior, Write/Ask modes, model picker, thread behavior, or Web Preview behavior.
+- No Cargo commands, local servers, live CLI commands, browser automation, or `just run` were executed.
+
 [2026-05-22] - DX Screen Carousel Source Polish
 
 CHANGED:
