@@ -48,6 +48,84 @@ impl DxReceiptCacheManifest {
             .iter()
             .filter(move |entry| entry.root_id == root_id)
     }
+
+    pub fn entries_for_kind(
+        &self,
+        kind: DxReceiptCacheEntryKind,
+    ) -> impl Iterator<Item = &DxReceiptCacheEntry> {
+        self.entries.iter().filter(move |entry| entry.kind == kind)
+    }
+
+    pub fn latest_entry_for_root(&self, root_id: &str) -> Option<&DxReceiptCacheEntry> {
+        self.entries_for_root(root_id)
+            .max_by_key(|entry| entry.latest_unix_ms().unwrap_or(0))
+    }
+
+    pub fn summary(&self) -> DxReceiptCacheSummary {
+        let mut summary = DxReceiptCacheSummary {
+            root_count: capped_len(self.roots.len()),
+            present_root_count: 0,
+            missing_root_count: 0,
+            entry_count: capped_len(self.entries.len()),
+            malformed_entry_count: 0,
+            fresh_entry_count: 0,
+            stale_entry_count: 0,
+            expired_entry_count: 0,
+            unknown_entry_count: 0,
+            latest_receipt_unix_ms: None,
+        };
+
+        for root in &self.roots {
+            if root.present {
+                summary.present_root_count = summary.present_root_count.saturating_add(1);
+            } else {
+                summary.missing_root_count = summary.missing_root_count.saturating_add(1);
+            }
+            summary.latest_receipt_unix_ms =
+                max_optional_unix_ms(summary.latest_receipt_unix_ms, root.latest_unix_ms);
+        }
+
+        for entry in &self.entries {
+            match entry.freshness {
+                DxReceiptCacheFreshness::Fresh => {
+                    summary.fresh_entry_count = summary.fresh_entry_count.saturating_add(1)
+                }
+                DxReceiptCacheFreshness::Stale => {
+                    summary.stale_entry_count = summary.stale_entry_count.saturating_add(1)
+                }
+                DxReceiptCacheFreshness::Expired => {
+                    summary.expired_entry_count = summary.expired_entry_count.saturating_add(1)
+                }
+                DxReceiptCacheFreshness::Malformed => {
+                    summary.malformed_entry_count = summary.malformed_entry_count.saturating_add(1)
+                }
+                DxReceiptCacheFreshness::Unknown => {
+                    summary.unknown_entry_count = summary.unknown_entry_count.saturating_add(1)
+                }
+            }
+            summary.latest_receipt_unix_ms =
+                max_optional_unix_ms(summary.latest_receipt_unix_ms, entry.latest_unix_ms());
+        }
+
+        summary
+    }
+}
+
+#[derive(
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub struct DxReceiptCacheSummary {
+    pub root_count: u32,
+    pub present_root_count: u32,
+    pub missing_root_count: u32,
+    pub entry_count: u32,
+    pub malformed_entry_count: u32,
+    pub fresh_entry_count: u32,
+    pub stale_entry_count: u32,
+    pub expired_entry_count: u32,
+    pub unknown_entry_count: u32,
+    pub latest_receipt_unix_ms: Option<u64>,
 }
 
 #[derive(
@@ -78,6 +156,12 @@ pub struct DxReceiptCacheEntry {
     pub modified_unix_ms: Option<u64>,
     pub size_bytes: u64,
     pub freshness: DxReceiptCacheFreshness,
+}
+
+impl DxReceiptCacheEntry {
+    pub fn latest_unix_ms(&self) -> Option<u64> {
+        max_optional_unix_ms(self.modified_unix_ms, self.generated_unix_ms)
+    }
 }
 
 #[derive(
@@ -350,4 +434,16 @@ fn read_u64(bytes: &[u8], offset: usize) -> u64 {
         bytes[offset + 6],
         bytes[offset + 7],
     ])
+}
+
+fn capped_len(len: usize) -> u32 {
+    len.min(u32::MAX as usize) as u32
+}
+
+fn max_optional_unix_ms(left: Option<u64>, right: Option<u64>) -> Option<u64> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.max(right)),
+        (Some(value), None) | (None, Some(value)) => Some(value),
+        (None, None) => None,
+    }
 }

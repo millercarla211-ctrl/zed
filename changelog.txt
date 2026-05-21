@@ -1,3 +1,15 @@
+[2026-05-21] - DX Receipt Cache Summary Contract
+
+ADDED:
+- Added manifest-level summary helpers for root counts, missing roots, freshness buckets, malformed receipt counts, and latest receipt timestamps.
+- Added kind filtering and latest-per-root lookup helpers for panels and governed receipt-cache producers.
+
+CHANGED:
+- Updated the DX launch status text so the receipt-cache bridge includes the stable summary contract.
+
+NOTES:
+- This slice does not run CLI commands, start servers, run Cargo/`just run`, read receipt bodies at runtime from Zed, or make binary caches authoritative over JSON receipts.
+
 [2026-05-21] - DX Standard Receipt Cache Root Contract
 
 ADDED:
