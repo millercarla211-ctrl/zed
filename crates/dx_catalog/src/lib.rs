@@ -62,7 +62,7 @@ pub use readers::{
 };
 pub use receipt_cache::{
     DX_RECEIPT_CACHE_ARTIFACT_VERSION, DX_RECEIPT_CACHE_MAGIC, DX_RECEIPT_CACHE_SCHEMA_VERSION,
-    DxReceiptCacheEntry, DxReceiptCacheEntryKind, DxReceiptCacheFreshness,
+    DxReceiptCacheEntry, DxReceiptCacheEntryKind, DxReceiptCacheFreshness, DxReceiptCacheHealth,
     DxReceiptCacheKindSummary, DxReceiptCacheManifest, DxReceiptCacheRoot, DxReceiptCacheSummary,
     MappedReceiptCacheArtifact, ReceiptCacheArtifactHeader, ReceiptCacheArtifactRef,
     deserialize_trusted_receipt_cache_payload, read_receipt_cache_artifact,

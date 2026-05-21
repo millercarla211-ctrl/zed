@@ -1,3 +1,15 @@
+[2026-05-21] - DX Receipt Cache Health Classification
+
+ADDED:
+- Added shared receipt-cache health classification for ready, partial, stale, expired, malformed, missing-root, empty, and unknown states.
+- Added health helpers for full manifest summaries and per-kind receipt bucket summaries.
+
+CHANGED:
+- Updated DX launch status text so the receipt-cache bridge includes a shared health interpretation for future rail consumers.
+
+NOTES:
+- This slice does not run CLI commands, start servers, run Cargo/`just run`, change receipt artifact authority, read receipt bodies from Zed startup, or alter existing Zed receipt readers.
+
 [2026-05-21] - DX Receipt Cache Kind Summaries
 
 ADDED:

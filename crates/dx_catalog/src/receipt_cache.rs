@@ -144,6 +144,34 @@ pub struct DxReceiptCacheSummary {
     pub latest_receipt_unix_ms: Option<u64>,
 }
 
+impl DxReceiptCacheSummary {
+    pub fn health(&self) -> DxReceiptCacheHealth {
+        if self.malformed_entry_count > 0 {
+            return DxReceiptCacheHealth::Malformed;
+        }
+        if self.entry_count == 0 {
+            return if self.missing_root_count > 0 {
+                DxReceiptCacheHealth::MissingRoots
+            } else {
+                DxReceiptCacheHealth::Empty
+            };
+        }
+        if self.missing_root_count > 0 {
+            return DxReceiptCacheHealth::Partial;
+        }
+        if self.fresh_entry_count == self.entry_count {
+            return DxReceiptCacheHealth::Ready;
+        }
+        if self.fresh_entry_count > 0 || self.stale_entry_count > 0 {
+            return DxReceiptCacheHealth::Stale;
+        }
+        if self.expired_entry_count > 0 {
+            return DxReceiptCacheHealth::Expired;
+        }
+        DxReceiptCacheHealth::Unknown
+    }
+}
+
 #[derive(
     Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize,
 )]
@@ -199,6 +227,49 @@ impl DxReceiptCacheKindSummary {
             }
         }
     }
+
+    pub fn health(&self) -> DxReceiptCacheHealth {
+        if self.malformed_entry_count > 0 {
+            return DxReceiptCacheHealth::Malformed;
+        }
+        if self.entry_count == 0 {
+            return DxReceiptCacheHealth::Empty;
+        }
+        if self.fresh_entry_count == self.entry_count {
+            return DxReceiptCacheHealth::Ready;
+        }
+        if self.fresh_entry_count > 0 || self.stale_entry_count > 0 {
+            return DxReceiptCacheHealth::Stale;
+        }
+        if self.expired_entry_count > 0 {
+            return DxReceiptCacheHealth::Expired;
+        }
+        DxReceiptCacheHealth::Unknown
+    }
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    Archive,
+    RkyvSerialize,
+    RkyvDeserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DxReceiptCacheHealth {
+    Ready,
+    Partial,
+    Stale,
+    Expired,
+    Malformed,
+    MissingRoots,
+    Empty,
+    Unknown,
 }
 
 #[derive(
