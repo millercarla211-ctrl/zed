@@ -1,3 +1,16 @@
+[2026-05-21] - DX Row-Level Source Controls
+
+ADDED:
+- Added row-level Attach/Review controls for visible Sources rail rows.
+- Routed row-level source controls through the existing source-specific Agent prompt helpers, preserving the source attachment, reduced-context review, media output, and Forge restore-preview handoff behavior.
+
+CHANGED:
+- Extended the DX launch workspace chrome to accept AgentPanel-owned source row controls without moving prompt insertion listeners into the passive rail renderer.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` with the row-level source control slice while keeping the current next-set status at 99.9/100 until governed runtime proof evidence is imported.
+
+NOTES:
+- This slice drafts prompts only. It does not run `just run`, Cargo, local servers, browser automation, deploys, shell commands, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Runtime Proof Live Context
 
 CHANGED:

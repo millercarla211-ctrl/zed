@@ -28,6 +28,15 @@ pub(crate) fn source_action_title(source: &DxSourceItem) -> String {
     }
 }
 
+pub(crate) fn source_action_label(kind: DxSourceKind) -> &'static str {
+    match kind {
+        DxSourceKind::WorkspaceRoot
+        | DxSourceKind::MetasearchSourcePack
+        | DxSourceKind::MediaOutput => "Attach",
+        DxSourceKind::ReducedContextReceipt | DxSourceKind::ForgeRestorePreview => "Review",
+    }
+}
+
 pub(crate) fn source_action_prompt(source: &DxSourceItem) -> String {
     match source.kind {
         DxSourceKind::WorkspaceRoot => format!(

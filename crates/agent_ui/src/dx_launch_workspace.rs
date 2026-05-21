@@ -47,6 +47,11 @@ pub(crate) struct DxLaunchWorkspaceStatus {
     pub proof_freshness: DxProofFreshnessSnapshot,
 }
 
+pub(crate) struct DxSourceRowControl {
+    pub source_path: String,
+    pub element: AnyElement,
+}
+
 static RECEIPT_CACHE: OnceLock<Mutex<Option<(Instant, DxReceiptSnapshot)>>> = OnceLock::new();
 
 pub(crate) fn receipt_snapshot() -> DxReceiptSnapshot {
@@ -183,6 +188,7 @@ fn is_receipt_file(path: &Path) -> bool {
 pub(crate) fn render_workspace_chrome(
     center: AnyElement,
     sidebar_actions: AnyElement,
+    source_row_controls: Vec<DxSourceRowControl>,
     source_actions: AnyElement,
     guided_cards: AnyElement,
     status: DxLaunchWorkspaceStatus,
@@ -195,6 +201,7 @@ pub(crate) fn render_workspace_chrome(
         .bg(cx.theme().colors().panel_background)
         .child(render_sources_rail(
             sidebar_actions,
+            source_row_controls,
             source_actions,
             &status,
             cx,
@@ -206,6 +213,7 @@ pub(crate) fn render_workspace_chrome(
 
 fn render_sources_rail(
     sidebar_actions: AnyElement,
+    source_row_controls: Vec<DxSourceRowControl>,
     source_actions: AnyElement,
     status: &DxLaunchWorkspaceStatus,
     cx: &mut App,
@@ -223,7 +231,11 @@ fn render_sources_rail(
         .child(section_title("Workspace", IconName::Library))
         .child(sidebar_actions)
         .child(section_title("Sources", IconName::Book))
-        .child(source_set_stack(&status.source_sets, cx))
+        .child(source_set_stack(
+            &status.source_sets,
+            source_row_controls,
+            cx,
+        ))
         .child(section_title("Source Actions", IconName::Paperclip))
         .child(source_actions)
         .child(section_title("Attach", IconName::Link))
@@ -279,7 +291,11 @@ fn render_right_rail(
         .into_any_element()
 }
 
-fn source_set_stack(snapshot: &DxSourceSetSnapshot, cx: &App) -> AnyElement {
+fn source_set_stack(
+    snapshot: &DxSourceSetSnapshot,
+    mut source_row_controls: Vec<DxSourceRowControl>,
+    cx: &App,
+) -> AnyElement {
     let mut stack = v_flex().gap_1();
 
     if snapshot.total_sources == 0 {
@@ -289,6 +305,7 @@ fn source_set_stack(snapshot: &DxSourceSetSnapshot, cx: &App) -> AnyElement {
             stack = stack.child(source_set_card(
                 SharedString::from(format!("source-set-{ix}")),
                 set,
+                &mut source_row_controls,
                 cx,
             ));
         }
@@ -340,7 +357,12 @@ fn source_attachment_state(summary: &DxSourceAttachmentSummary, cx: &App) -> Any
     stack.into_any_element()
 }
 
-fn source_set_card(id: SharedString, set: &DxSourceSet, cx: &App) -> AnyElement {
+fn source_set_card(
+    id: SharedString,
+    set: &DxSourceSet,
+    source_row_controls: &mut Vec<DxSourceRowControl>,
+    cx: &App,
+) -> AnyElement {
     let mut stack = v_flex()
         .id(id)
         .gap_1()
@@ -357,9 +379,11 @@ fn source_set_card(id: SharedString, set: &DxSourceSet, cx: &App) -> AnyElement 
 
     let set_id = set.label.to_ascii_lowercase().replace(' ', "-");
     for (ix, source) in set.sources.iter().take(3).enumerate() {
+        let source_row_control = take_source_row_control(source_row_controls, &source.path);
         stack = stack.child(source_item_row(
             SharedString::from(format!("{set_id}-source-{ix}")),
             source,
+            source_row_control,
             cx,
         ));
     }
@@ -367,7 +391,12 @@ fn source_set_card(id: SharedString, set: &DxSourceSet, cx: &App) -> AnyElement 
     stack.into_any_element()
 }
 
-fn source_item_row(id: SharedString, source: &DxSourceItem, cx: &App) -> AnyElement {
+fn source_item_row(
+    id: SharedString,
+    source: &DxSourceItem,
+    source_row_control: Option<AnyElement>,
+    cx: &App,
+) -> AnyElement {
     let mut stack = v_flex()
         .id(id)
         .gap_0p5()
@@ -406,6 +435,10 @@ fn source_item_row(id: SharedString, source: &DxSourceItem, cx: &App) -> AnyElem
                 .truncate(),
         );
 
+    if let Some(source_row_control) = source_row_control {
+        stack = stack.child(source_row_control);
+    }
+
     for (ix, proof) in source.proofs.iter().take(2).enumerate() {
         stack = stack.child(signal_row(
             SharedString::from(format!("source-proof-{}-{ix}", source.path)),
@@ -425,6 +458,16 @@ fn source_item_row(id: SharedString, source: &DxSourceItem, cx: &App) -> AnyElem
     }
 
     stack.into_any_element()
+}
+
+fn take_source_row_control(
+    source_row_controls: &mut Vec<DxSourceRowControl>,
+    source_path: &str,
+) -> Option<AnyElement> {
+    source_row_controls
+        .iter()
+        .position(|control| control.source_path == source_path)
+        .map(|index| source_row_controls.remove(index).element)
 }
 
 fn source_kind_icon(kind: DxSourceKind) -> IconName {

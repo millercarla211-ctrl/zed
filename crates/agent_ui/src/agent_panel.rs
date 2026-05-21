@@ -38,10 +38,10 @@ use crate::dx_check_score::{DxCheckScoreInput, check_score_snapshot};
 use crate::dx_deploy_targets::{DxDeployTargetSnapshot, deploy_target_snapshot};
 use crate::dx_launch_prompts::{
     deploy_readiness_prompt, receipt_review_prompt, runtime_proof_prompt, source_action_icon,
-    source_action_prompt, source_action_title,
+    source_action_label, source_action_prompt, source_action_title,
 };
 use crate::dx_launch_workspace::{
-    DxLaunchWorkspaceStatus, receipt_snapshot, render_workspace_chrome,
+    DxLaunchWorkspaceStatus, DxSourceRowControl, receipt_snapshot, render_workspace_chrome,
 };
 use crate::dx_proof_freshness::proof_freshness_snapshot;
 use crate::dx_receipt_history::tool_history_snapshot;
@@ -5696,12 +5696,15 @@ impl AgentPanel {
 
         let status = self.dx_launch_workspace_status(cx);
         let sidebar_actions = self.render_dx_launch_sidebar_actions(&status, window, cx);
+        let source_row_controls =
+            self.render_dx_launch_source_row_controls(&status.source_sets, cx);
         let source_actions =
             self.render_dx_launch_source_actions(&status.source_sets, &status.deploy_targets, cx);
         let guided_cards = self.render_dx_launch_guided_cards(&status, window, cx);
         render_workspace_chrome(
             center,
             sidebar_actions,
+            source_row_controls,
             source_actions,
             guided_cards,
             status,
@@ -5856,6 +5859,39 @@ impl AgentPanel {
         }
 
         stack.into_any_element()
+    }
+
+    fn render_dx_launch_source_row_controls(
+        &self,
+        source_sets: &DxSourceSetSnapshot,
+        cx: &mut Context<Self>,
+    ) -> Vec<DxSourceRowControl> {
+        let can_create_entries = self.has_open_project(cx);
+
+        source_sets
+            .sets
+            .iter()
+            .flat_map(|set| set.sources.iter())
+            .enumerate()
+            .map(|(ix, source)| {
+                let icon = source_action_icon(source.kind);
+                let prompt = source_action_prompt(source);
+                let action_label = source_action_label(source.kind);
+                DxSourceRowControl {
+                    source_path: source.path.clone(),
+                    element: Button::new(format!("dx-source-row-action-{ix}"), action_label)
+                        .full_width()
+                        .label_size(LabelSize::XSmall)
+                        .color(Color::Muted)
+                        .start_icon(Icon::new(icon).size(IconSize::XSmall).color(Color::Muted))
+                        .disabled(!can_create_entries)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.insert_dx_launch_prompt(prompt.clone(), window, cx);
+                        }))
+                        .into_any_element(),
+                }
+            })
+            .collect()
     }
 
     fn dx_launch_prompt_card(
