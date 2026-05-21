@@ -43,7 +43,7 @@ use crate::dx_launch_prompts::{
 use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, receipt_snapshot, render_workspace_chrome,
 };
-use crate::dx_proof_freshness::{DxProofFreshnessSnapshot, proof_freshness_snapshot};
+use crate::dx_proof_freshness::proof_freshness_snapshot;
 use crate::dx_receipt_history::tool_history_snapshot;
 use crate::dx_source_sets::{DxSourceKind, DxSourceSetSnapshot, source_set_snapshot};
 use crate::terminal_thread_metadata_store::{TerminalThreadMetadata, TerminalThreadMetadataStore};
@@ -5698,7 +5698,7 @@ impl AgentPanel {
         let sidebar_actions = self.render_dx_launch_sidebar_actions(&status, window, cx);
         let source_actions =
             self.render_dx_launch_source_actions(&status.source_sets, &status.deploy_targets, cx);
-        let guided_cards = self.render_dx_launch_guided_cards(&status.proof_freshness, window, cx);
+        let guided_cards = self.render_dx_launch_guided_cards(&status, window, cx);
         render_workspace_chrome(
             center,
             sidebar_actions,
@@ -5917,7 +5917,7 @@ impl AgentPanel {
 
     fn render_dx_launch_guided_cards(
         &self,
-        proof_freshness: &DxProofFreshnessSnapshot,
+        status: &DxLaunchWorkspaceStatus,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -5954,7 +5954,12 @@ impl AgentPanel {
                 "Runtime Proof",
                 "Review Check score, proof freshness, and deploy URL/status gates.",
                 "Draft Proof",
-                runtime_proof_prompt(proof_freshness),
+                runtime_proof_prompt(
+                    &status.check_score,
+                    &status.receipt_snapshot,
+                    &status.proof_freshness,
+                    &status.deploy_targets,
+                ),
                 can_create_entries,
                 cx,
             ))

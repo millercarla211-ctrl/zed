@@ -1,5 +1,6 @@
 use ui::IconName;
 
+use crate::dx_check_score::DxCheckScoreSnapshot;
 use crate::dx_deploy_targets::{DxDeployTarget, DxDeployTargetSnapshot};
 use crate::dx_launch_workspace::DxReceiptSnapshot;
 use crate::dx_proof_freshness::DxProofFreshnessSnapshot;
@@ -97,8 +98,32 @@ pub(crate) fn deploy_readiness_prompt(
     )
 }
 
-pub(crate) fn runtime_proof_prompt(snapshot: &DxProofFreshnessSnapshot) -> String {
-    let proof_rows = snapshot
+pub(crate) fn runtime_proof_prompt(
+    check_score: &DxCheckScoreSnapshot,
+    receipt_snapshot: &DxReceiptSnapshot,
+    proof_freshness: &DxProofFreshnessSnapshot,
+    deploy_targets: &DxDeployTargetSnapshot,
+) -> String {
+    let check_items = check_score
+        .items
+        .iter()
+        .map(|item| format!("{}={}", item.label, item.state))
+        .collect::<Vec<_>>();
+    let check_items = bounded_join(&check_items, 6, "No Check score items are visible yet");
+    let check_blockers = bounded_join(&check_score.blockers, 4, "No current Check blockers");
+    let receipt_root = if receipt_snapshot.root_exists {
+        format!(
+            "receipt root present at `{}`",
+            receipt_snapshot.root.display()
+        )
+    } else {
+        format!(
+            "receipt root missing at `{}`",
+            receipt_snapshot.root.display()
+        )
+    };
+    let latest_receipts = bounded_join(&receipt_snapshot.latest, 4, "No latest DX receipts");
+    let proof_rows = proof_freshness
         .buckets
         .iter()
         .map(|bucket| {
@@ -124,9 +149,28 @@ pub(crate) fn runtime_proof_prompt(snapshot: &DxProofFreshnessSnapshot) -> Strin
     } else {
         format!("Current proof freshness rows: {proof_rows}.")
     };
+    let deploy_target_rows = deploy_targets
+        .targets
+        .iter()
+        .take(3)
+        .map(|target| format!("{} {} at {}", target.platform, target.label, target.path))
+        .collect::<Vec<_>>();
+    let deploy_target_rows = bounded_join(&deploy_target_rows, 3, "No deploy targets detected");
+    let deploy_receipts = deploy_targets
+        .receipt_buckets
+        .iter()
+        .map(|bucket| format!("{}={} ({})", bucket.label, bucket.count, bucket.status))
+        .collect::<Vec<_>>();
+    let deploy_receipts = bounded_join(
+        &deploy_receipts,
+        8,
+        "No deploy receipt buckets are tracked yet",
+    );
 
     format!(
-        "Prepare the DX runtime proof handoff for this workspace. Review the Check score, Proof Freshness rows, Deploy URL/status receipt buckets, deploy targets, and current launch receipts. {proof_rows} First use plan_dx_runtime_proof to write the governed manual validation checklist without running validation. If I provide operator evidence from that governed validation window, use import_dx_runtime_proof to write only managed runtime proof import/status receipts. Do not run just run, cargo, builds, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions unless I explicitly approve the governed tool request."
+        "Prepare the DX runtime proof handoff for this workspace. Current Check score: {score}/100 ({state}). Check items: {check_items}. Check blockers: {check_blockers}. Current receipts: {receipt_root}; latest receipts: {latest_receipts}. Deploy targets: {deploy_target_rows}. Deploy receipt buckets: {deploy_receipts}. {proof_rows} First use plan_dx_runtime_proof to write the governed manual validation checklist without running validation. If I provide operator evidence from that governed validation window, use import_dx_runtime_proof to write only managed runtime proof import/status receipts. Do not run just run, cargo, builds, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions unless I explicitly approve the governed tool request.",
+        score = check_score.score,
+        state = check_score.state,
     )
 }
 
