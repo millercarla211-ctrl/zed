@@ -1,3 +1,17 @@
+[2026-05-21] - DX Onboarding Static Preview Manifest Targets
+
+ADDED:
+- Added DX onboarding support for source-owned `public/preview-manifest.json` route selection.
+- Added static/export Web Preview target resolution for `.dx\vercel-landing\index.html`, `public`, `out`, and `dist` launch HTML files.
+- Added bounded `G:\WWW\www\examples` discovery when examples expose a preview manifest or renderable static page.
+
+CHANGED:
+- The onboarding Web Preview hero now prefers a manifest-backed static DX WWW route before legacy Forge/demo evidence and still only uses `dx dev` URLs for explicitly selected roots.
+
+NOTES:
+- This slice does not run DX CLI commands, start servers, run Cargo/`just run`, import secrets, mutate DX-WWW packages, or change normal Web Preview behavior.
+- Existing `PLAN.md` edits were left untouched and unstaged.
+
 [2026-05-21] - DX Studio Public Manifest Compatibility
 
 ADDED:

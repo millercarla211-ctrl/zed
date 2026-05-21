@@ -4,15 +4,61 @@ use std::{
     time::SystemTime,
 };
 
+use serde_json::Value;
+
 const DX_ONBOARDING_PREVIEW_URL_ENV: &str = "DX_ONBOARDING_PREVIEW_URL";
 const DX_WWW_WORKSPACE_ENV: &str = "DX_WWW_WORKSPACE";
 const DX_WWW_ROOT_ENV: &str = "DX_WWW_ROOT";
 const DX_WWW_HUB_ROOT: &str = r"G:\WWW";
 const DX_WWW_FRAMEWORK_ROOT: &str = r"G:\WWW\www";
+const DX_WWW_EXAMPLES_ROOT: &str = r"G:\WWW\www\examples";
 const DX_WWW_GENERATED_PROJECT_LIMIT: usize = 8;
 const DX_WWW_PREVIEW_MANIFEST_COMMAND: &str = "dx www preview-manifest --json";
 const DX_WWW_ROUTES_COMMAND: &str = "dx www routes --json";
 const DX_FORGE_PACKAGES_COMMAND: &str = "dx forge packages --json";
+const DX_WWW_PREVIEW_MANIFEST_PATH: &str = r"public\preview-manifest.json";
+const DX_WWW_STATIC_PREVIEW_CANDIDATES: &[DxWwwPreviewCandidate] = &[
+    DxWwwPreviewCandidate {
+        relative_path: r".dx\vercel-landing\index.html",
+        title: "DX WWW launch preview",
+        source: DxLaunchPreviewSource::StaticExport,
+    },
+    DxWwwPreviewCandidate {
+        relative_path: r"public\launch\index.html",
+        title: "DX WWW launch preview",
+        source: DxLaunchPreviewSource::StaticExport,
+    },
+    DxWwwPreviewCandidate {
+        relative_path: r"public\launch.html",
+        title: "DX WWW launch preview",
+        source: DxLaunchPreviewSource::StaticExport,
+    },
+    DxWwwPreviewCandidate {
+        relative_path: r"public\index.html",
+        title: "DX WWW public preview",
+        source: DxLaunchPreviewSource::StaticExport,
+    },
+    DxWwwPreviewCandidate {
+        relative_path: r"out\launch\index.html",
+        title: "DX WWW exported launch preview",
+        source: DxLaunchPreviewSource::StaticExport,
+    },
+    DxWwwPreviewCandidate {
+        relative_path: r"out\index.html",
+        title: "DX WWW exported preview",
+        source: DxLaunchPreviewSource::StaticExport,
+    },
+    DxWwwPreviewCandidate {
+        relative_path: r"dist\launch\index.html",
+        title: "DX WWW built launch preview",
+        source: DxLaunchPreviewSource::StaticExport,
+    },
+    DxWwwPreviewCandidate {
+        relative_path: r"dist\index.html",
+        title: "DX WWW built preview",
+        source: DxLaunchPreviewSource::StaticExport,
+    },
+];
 const DX_WWW_PREVIEW_CANDIDATES: &[DxWwwPreviewCandidate] = &[
     DxWwwPreviewCandidate {
         relative_path: r"public\forge\adoption.html",
@@ -89,6 +135,7 @@ pub enum DxLaunchPreviewSource {
     ExplicitUrl,
     ExplicitFile,
     SelectedWorkspaceRoute,
+    StaticExport,
     ForgeEvidence,
     FrameworkDemo,
     BundledFallback,
@@ -100,6 +147,7 @@ impl DxLaunchPreviewSource {
             Self::ExplicitUrl => "Selected URL",
             Self::ExplicitFile => "Selected file",
             Self::SelectedWorkspaceRoute => "Selected workspace",
+            Self::StaticExport => "Static export",
             Self::ForgeEvidence => "Forge evidence",
             Self::FrameworkDemo => "Framework demo",
             Self::BundledFallback => "Bundled fallback",
@@ -110,6 +158,7 @@ impl DxLaunchPreviewSource {
         match self {
             Self::ExplicitUrl | Self::ExplicitFile => DX_ONBOARDING_PREVIEW_URL_ENV,
             Self::SelectedWorkspaceRoute => "DX_WWW_WORKSPACE / DX_WWW_ROOT",
+            Self::StaticExport => "public preview manifest / static export",
             Self::ForgeEvidence => "bounded G:\\WWW evidence scan",
             Self::FrameworkDemo => "G:\\WWW\\www demo fallback",
             Self::BundledFallback => "embedded onboarding asset",
@@ -124,7 +173,7 @@ impl DxLaunchPreviewSource {
             Self::ExplicitFile => {
                 "selected file; DX Studio route metadata waits for runtime proof".to_string()
             }
-            Self::SelectedWorkspaceRoute => format!(
+            Self::SelectedWorkspaceRoute | Self::StaticExport => format!(
                 "{DX_WWW_PREVIEW_MANIFEST_COMMAND}; {DX_WWW_ROUTES_COMMAND}; {DX_FORGE_PACKAGES_COMMAND}"
             ),
             Self::ForgeEvidence => {
@@ -264,16 +313,9 @@ fn dx_www_preview_target() -> Option<DxLaunchPreviewTarget> {
 }
 
 fn dx_www_preview_target_for_root(root: DxWwwRootCandidate) -> Option<DxLaunchPreviewTarget> {
-    DX_WWW_PREVIEW_CANDIDATES
-        .iter()
-        .find_map(|candidate| {
-            file_target_with_detail(
-                root.path.join(candidate.relative_path),
-                candidate.title,
-                candidate.source,
-                Some(&root.path),
-            )
-        })
+    dx_www_manifest_static_target(&root.path)
+        .or_else(|| dx_www_static_preview_target(&root.path))
+        .or_else(|| dx_www_legacy_preview_target(&root.path))
         .or_else(|| {
             if root.explicit {
                 dx_www_dev_route_target(&root.path)
@@ -283,12 +325,56 @@ fn dx_www_preview_target_for_root(root: DxWwwRootCandidate) -> Option<DxLaunchPr
         })
 }
 
+fn dx_www_manifest_static_target(root: &Path) -> Option<DxLaunchPreviewTarget> {
+    let manifest = dx_www_preview_manifest(root)?;
+    let route = preferred_preview_manifest_route(&manifest)?;
+    let route_path = string_for_keys(route, &["route"]).unwrap_or("/");
+    let preview_file = route_static_preview_candidates(root, route_path)
+        .into_iter()
+        .chain(generic_static_preview_candidate_paths(root))
+        .find(|path| path.is_file())?;
+
+    let mut target = file_target_with_detail(
+        preview_file.clone(),
+        "DX WWW launch preview",
+        DxLaunchPreviewSource::StaticExport,
+        Some(root),
+    )?;
+    target.detail = manifest_preview_detail(root, &preview_file, route, route_path);
+    Some(target)
+}
+
+fn dx_www_static_preview_target(root: &Path) -> Option<DxLaunchPreviewTarget> {
+    DX_WWW_STATIC_PREVIEW_CANDIDATES
+        .iter()
+        .find_map(|candidate| {
+            file_target_with_detail(
+                root.join(candidate.relative_path),
+                candidate.title,
+                candidate.source,
+                Some(root),
+            )
+        })
+}
+
+fn dx_www_legacy_preview_target(root: &Path) -> Option<DxLaunchPreviewTarget> {
+    DX_WWW_PREVIEW_CANDIDATES.iter().find_map(|candidate| {
+        file_target_with_detail(
+            root.join(candidate.relative_path),
+            candidate.title,
+            candidate.source,
+            Some(root),
+        )
+    })
+}
+
 fn dx_www_roots() -> Vec<DxWwwRootCandidate> {
     let mut roots = Vec::new();
     push_env_root(&mut roots, DX_WWW_WORKSPACE_ENV);
     push_env_root(&mut roots, DX_WWW_ROOT_ENV);
     push_recent_generated_launch_apps(&mut roots);
     push_recent_www_evidence_roots(&mut roots);
+    push_recent_www_example_roots(&mut roots);
     push_root(&mut roots, PathBuf::from(DX_WWW_FRAMEWORK_ROOT), false);
     roots
 }
@@ -355,6 +441,124 @@ fn push_recent_www_evidence_roots(roots: &mut Vec<DxWwwRootCandidate>) {
     for root in evidence_roots {
         push_root(roots, root, false);
     }
+}
+
+fn push_recent_www_example_roots(roots: &mut Vec<DxWwwRootCandidate>) {
+    let examples_root = Path::new(DX_WWW_EXAMPLES_ROOT);
+    let mut example_roots = recent_child_dirs(examples_root)
+        .into_iter()
+        .filter(|root| has_dx_www_static_preview(root) || has_dx_www_preview_manifest(root))
+        .collect::<Vec<_>>();
+
+    example_roots.truncate(DX_WWW_GENERATED_PROJECT_LIMIT);
+    for root in example_roots {
+        push_root(roots, root, false);
+    }
+}
+
+fn has_dx_www_static_preview(root: &Path) -> bool {
+    DX_WWW_STATIC_PREVIEW_CANDIDATES
+        .iter()
+        .any(|candidate| root.join(candidate.relative_path).is_file())
+}
+
+fn has_dx_www_preview_manifest(root: &Path) -> bool {
+    root.join(DX_WWW_PREVIEW_MANIFEST_PATH).is_file()
+}
+
+fn dx_www_preview_manifest(root: &Path) -> Option<Value> {
+    let contents = fs::read_to_string(root.join(DX_WWW_PREVIEW_MANIFEST_PATH)).ok()?;
+    serde_json::from_str(&contents).ok()
+}
+
+fn preferred_preview_manifest_route(manifest: &Value) -> Option<&Value> {
+    let routes = manifest.get("routes")?.as_array()?;
+    routes
+        .iter()
+        .find(|route| string_for_keys(route, &["route"]) == Some("/launch"))
+        .or_else(|| {
+            routes
+                .iter()
+                .find(|route| string_for_keys(route, &["route"]) == Some("/"))
+        })
+        .or_else(|| routes.first())
+}
+
+fn route_static_preview_candidates(root: &Path, route: &str) -> Vec<PathBuf> {
+    let route = route.trim_matches('/');
+    if route.is_empty() {
+        return generic_static_preview_candidate_paths(root);
+    }
+
+    let mut candidates = Vec::new();
+    for directory in ["public", "out", "dist"] {
+        candidates.push(join_route_index(root, directory, route));
+        if !route.contains('/') {
+            candidates.push(root.join(directory).join(format!("{route}.html")));
+        }
+    }
+    candidates
+}
+
+fn generic_static_preview_candidate_paths(root: &Path) -> Vec<PathBuf> {
+    DX_WWW_STATIC_PREVIEW_CANDIDATES
+        .iter()
+        .map(|candidate| root.join(candidate.relative_path))
+        .collect()
+}
+
+fn join_route_index(root: &Path, directory: &str, route: &str) -> PathBuf {
+    let mut path = root.join(directory);
+    for segment in route.split('/').filter(|segment| !segment.is_empty()) {
+        path.push(segment);
+    }
+    path.join("index.html")
+}
+
+fn manifest_preview_detail(
+    root: &Path,
+    preview_file: &Path,
+    route: &Value,
+    route_path: &str,
+) -> String {
+    let relative = preview_file
+        .strip_prefix(root)
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|_| preview_file.display().to_string());
+    let mut detail = format!("{} - {}; route {route_path}", root.display(), relative);
+
+    if let Some(source_file) = string_for_keys(route, &["sourceFile", "source_file"]) {
+        detail.push_str(&format!(", source {source_file}"));
+    }
+
+    let package_count = array_len_for_keys(route, &["forgePackages", "forge_packages"]);
+    if package_count > 0 {
+        detail.push_str(&format!(", {package_count} packages"));
+    }
+
+    let marker_count = array_len_for_keys(route, &["dataDxMarkers", "data_dx_markers"]);
+    if marker_count > 0 {
+        detail.push_str(&format!(", {marker_count} markers"));
+    }
+
+    if let Some(hot_reload) = string_for_keys(route, &["hotReloadTarget", "hot_reload_target"]) {
+        detail.push_str(&format!(", hot reload {hot_reload}"));
+    }
+
+    detail
+}
+
+fn string_for_keys<'a>(value: &'a Value, keys: &[&str]) -> Option<&'a str> {
+    keys.iter()
+        .find_map(|key| value.get(*key)?.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn array_len_for_keys(value: &Value, keys: &[&str]) -> usize {
+    keys.iter()
+        .find_map(|key| value.get(*key)?.as_array().map(|array| array.len()))
+        .unwrap_or(0)
 }
 
 fn recent_child_dirs(parent: &Path) -> Vec<PathBuf> {

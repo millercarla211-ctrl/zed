@@ -35,6 +35,7 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 
 ## Current Worker Update
 
+- Added DX onboarding static preview manifest selection: the Web Preview hero now reads `public/preview-manifest.json`, prefers `/launch` then `/`, resolves real static/export HTML targets such as `.dx\vercel-landing\index.html`, `public\launch.html`, `out\launch\index.html`, or `dist\launch\index.html`, and scans bounded `G:\WWW\www\examples` roots when they expose a manifest or renderable preview.
 - Added the DX Studio Web Preview contract slice: Zed Web Preview now detects DX-WWW workspaces from the root `dx`/route/Forge shape, opens the DX route origin by default for DX projects, exposes the `dx www preview-manifest --json`, `dx www routes --json`, and `dx forge packages --json` command contract, and collects `data-dx-*` route/source/Forge/hot-reload markers in page diagnostics without affecting normal websites.
 - Completed the DX Studio edit/drag manifest slice: Web Preview session snapshots now expose source-owned Studio/Edit manifest candidates, real DX-WWW read contracts, and a metadata-only drag-to-preview contract while page diagnostics collect manifest links plus `data-dx-edit-target` / drag / drop markers without executing CLI commands or changing non-DX sites.
 - Added DX Studio public manifest/edit-operation discovery: Web Preview now treats `public/preview-manifest.json` and source-owned `dx.studio.launch_edit_contract.v1` manifests as first-class candidates, advertises the explicit edit operation/marker contract in session and page diagnostics, and keeps all mutation commands disabled until a governed operator action exists.
@@ -117,7 +118,7 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 
 ## Remaining Proof
 
-- The DX Studio Web Preview contract has diff/conflict/source-level validation only so far; live route opening, hot-reload timing, Cargo checks, `just run`, and local server proof remain deferred under the repo's launch validation rules.
+- The DX onboarding and DX Studio Web Preview contracts have diff/conflict/source-level validation only so far; live route opening, hot-reload timing, Cargo checks, `just run`, and local server proof remain deferred under the repo's launch validation rules.
 - The DX Studio edit/drag manifest, public edit-operation contract, and public-manifest field compatibility slice has diff/conflict/source-level validation only so far; live page marker proof, drag/drop runtime behavior, Cargo checks, `just run`, and DX-WWW CLI producer proof remain deferred under the repo's launch validation rules.
 - The DX Studio session module split has formatting/diff/conflict/source-reference validation only so far; Cargo checks, `just run`, and runtime WebView proof remain deferred under the repo's launch validation rules.
 - The DX onboarding Web Preview hero has formatting, diff, conflict-marker, and source-reference validation only so far; `just run` visual proof and native WebView2 runtime proof remain deferred under the repo's launch validation rules.
