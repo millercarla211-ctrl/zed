@@ -1,3 +1,15 @@
+[2026-05-21] - DX Studio Edit And Drag Manifest Bridge
+
+ADDED:
+- Added source-owned Studio/Edit manifest candidate reporting to the Web Preview session snapshot.
+- Added a metadata-only drag-to-preview contract that advertises existing DX-WWW read contracts and required `data-dx-*` markers without a mutation command.
+
+CHANGED:
+- Web Preview page diagnostics now collect page-advertised Studio/Edit manifest links plus `data-dx-edit-target`, `data-dx-drag-source`, and `data-dx-drop-target` markers.
+
+NOTES:
+- This slice does not execute DX CLI commands, start local servers, run Cargo/`just run`, mutate pages, add drag/drop runtime behavior, or change normal non-DX Web Preview behavior.
+
 [2026-05-21] - DX Onboarding Demo Action Coverage
 
 CHANGED:

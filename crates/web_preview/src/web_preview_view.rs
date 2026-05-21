@@ -1518,6 +1518,7 @@ impl WebPreviewView {
                 "database_id": self.workspace_context.workspace_id.as_ref().map(|id| format!("{id:?}")),
                 "root_path": self.workspace_context.root_path.as_ref().map(|path| path.display().to_string()),
             },
+            "dx_studio": self.dx_studio_contract_snapshot(),
             "profile_dir": self.workspace_context.profile_dir.display().to_string(),
             "zoom": self.zoom_factor,
             "viewport": self.viewport_mode.snapshot(),
@@ -1828,6 +1829,70 @@ impl WebPreviewView {
                 "clear_cache": true,
             },
         })
+    }
+
+    fn dx_studio_contract_snapshot(&self) -> Option<Value> {
+        let root_path = self.workspace_context.root_path.as_ref()?;
+        let contract = dx_studio::manifest_contract(root_path);
+        let project = contract.project.as_ref()?;
+        let preview_candidates = contract
+            .manifest_candidates
+            .iter()
+            .map(|path| dx_studio_manifest_candidate_snapshot(path))
+            .collect::<Vec<_>>();
+        let edit_candidates = contract
+            .edit_manifest_candidates
+            .iter()
+            .map(|path| dx_studio_manifest_candidate_snapshot(path))
+            .collect::<Vec<_>>();
+        let has_edit_candidate = contract
+            .edit_manifest_candidates
+            .iter()
+            .any(|path| path.is_file());
+
+        Some(serde_json::json!({
+            "schema": "zed.web_preview.dx_studio_contract.v1",
+            "project": {
+                "root": path_string(&project.root),
+                "confidence": project.confidence,
+                "reasons": project.reasons,
+                "strict_dx_file": project.strict_dx_file,
+                "legacy_toml_present": project.legacy_toml_present,
+                "node_modules_present": project.node_modules_present,
+            },
+            "commands": {
+                "preview_manifest": contract.commands.preview_manifest,
+                "routes": contract.commands.routes,
+                "forge_packages": contract.commands.forge_packages,
+            },
+            "preview_manifest": {
+                "schema": contract.schema,
+                "default_preview_url": contract.default_preview_url,
+                "candidates": preview_candidates,
+            },
+            "studio_edit_manifest": {
+                "schema": dx_studio::DX_STUDIO_EDIT_MANIFEST_SCHEMA,
+                "status": if has_edit_candidate {
+                    "source_manifest_candidate_present"
+                } else {
+                    "waiting_for_dx_www_manifest_producer"
+                },
+                "candidates": edit_candidates,
+                "command": Value::Null,
+            },
+            "drag_to_preview": {
+                "schema": dx_studio::DX_STUDIO_DRAG_TO_PREVIEW_SCHEMA,
+                "status": "metadata_contract_ready",
+                "attributes": dx_studio::drag_to_preview_attributes(),
+                "read_contracts": [
+                    contract.commands.preview_manifest,
+                    contract.commands.routes,
+                    contract.commands.forge_packages,
+                ],
+                "mutation_command": Value::Null,
+                "requires_explicit_operator_action": true,
+            },
+        }))
     }
 
     fn agent_browser_policy_snapshot(&self) -> Value {
@@ -36081,6 +36146,22 @@ fn path_string(path: impl AsRef<Path>) -> String {
     path.as_ref().display().to_string()
 }
 
+fn dx_studio_manifest_candidate_snapshot(path: &Path) -> Value {
+    let metadata = fs::metadata(path).ok();
+    let modified_ms = metadata
+        .as_ref()
+        .and_then(|metadata| metadata.modified().ok())
+        .and_then(system_time_ms);
+
+    serde_json::json!({
+        "path": path_string(path),
+        "exists": metadata.is_some(),
+        "bytes": metadata.as_ref().map(|metadata| metadata.len()),
+        "modified_ms": modified_ms,
+        "extension": path.extension().and_then(|extension| extension.to_str()),
+    })
+}
+
 fn system_time_ms(time: SystemTime) -> Option<u64> {
     time.duration_since(UNIX_EPOCH)
         .ok()
@@ -37176,7 +37257,23 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     "[data-dx-component]",
     "[data-dx-state]",
     "[data-dx-action]",
+    "[data-dx-edit-target]",
+    "[data-dx-drag-source]",
+    "[data-dx-drop-target]",
     "[data-dx-ready]"
+  ].join(",");
+
+  const DX_STUDIO_MANIFEST_SELECTOR = [
+    "link[rel='dx-studio-manifest']",
+    "link[rel='dx-edit-manifest']",
+    "link[data-dx-studio-manifest]",
+    "link[data-dx-edit-manifest]",
+    "meta[name='dx-studio-manifest']",
+    "meta[name='dx-edit-manifest']",
+    "meta[data-dx-studio-manifest]",
+    "meta[data-dx-edit-manifest]",
+    "[data-dx-studio-manifest]",
+    "[data-dx-edit-manifest]"
   ].join(",");
 
   const dxUniqueStrings = (values) => {
@@ -37199,6 +37296,37 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
       }
     }
     return attributes;
+  };
+
+  const dxStudioManifestSnapshot = () => {
+    let elements = [];
+    try {
+      elements = Array.from(document.querySelectorAll(DX_STUDIO_MANIFEST_SELECTOR));
+    } catch (_error) {
+      elements = [];
+    }
+
+    return elements.slice(0, 24).map((element, index) => {
+      const attributes = dxStudioMarkerAttributes(element);
+      for (const name of ["rel", "name", "href", "content", "type"]) {
+        const value = element.getAttribute(name);
+        if (value) attributes[name] = limitText(value, 260);
+      }
+
+      const reference = element.getAttribute("href")
+        || element.getAttribute("content")
+        || element.getAttribute("data-dx-studio-manifest")
+        || element.getAttribute("data-dx-edit-manifest")
+        || null;
+
+      return {
+        index,
+        selector: cssSelector(element),
+        tag: element.tagName.toLowerCase(),
+        reference: reference ? limitText(reference, 260) : null,
+        attributes
+      };
+    });
   };
 
   const dxStudioSnapshot = () => {
@@ -37230,6 +37358,10 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
       ...valuesFor("data-dx-hot-reload-target"),
       ...valuesFor("data-dx-update-target")
     ]);
+    const editTargets = valuesFor("data-dx-edit-target");
+    const dragSources = valuesFor("data-dx-drag-source");
+    const dropTargets = valuesFor("data-dx-drop-target");
+    const manifestLinks = dxStudioManifestSnapshot();
     const route = routeMarkers[0]
       || document.documentElement?.getAttribute("data-dx-route")
       || document.body?.getAttribute("data-dx-route")
@@ -37243,21 +37375,50 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
       forge_packages: forgePackages,
       assets,
       hot_reload_targets: hotReloadTargets,
+      edit_targets: editTargets,
+      drag_sources: dragSources,
+      drop_targets: dropTargets,
       marker_count: elements.length,
       returned_marker_count: markers.length,
       truncated: elements.length > markers.length,
       markers,
+      studio_edit_manifest: {
+        schema: "zed.web_preview.dx_studio_page_manifest.v1",
+        status: manifestLinks.length > 0 || editTargets.length > 0 ? "advertised" : "not_advertised",
+        manifest_count: manifestLinks.length,
+        manifests: manifestLinks
+      },
+      drag_to_preview: {
+        schema: "zed.web_preview.dx_studio_drag_to_preview_page_contract.v1",
+        status: dropTargets.length > 0 || dragSources.length > 0 || sourceFiles.length > 0 ? "metadata_detected" : "not_detected",
+        read_contracts: [
+          "dx www preview-manifest --json",
+          "dx www routes --json",
+          "dx forge packages --json"
+        ],
+        mutation_command: null,
+        source_files: sourceFiles,
+        edit_targets: editTargets,
+        drag_sources: dragSources,
+        drop_targets: dropTargets,
+        requires_explicit_operator_action: true
+      },
       readiness: {
         has_route_marker: Boolean(route),
         has_source_marker: sourceFiles.length > 0,
         has_forge_marker: forgePackages.length > 0,
-        has_hot_reload_target: hotReloadTargets.length > 0
+        has_hot_reload_target: hotReloadTargets.length > 0,
+        has_studio_manifest: manifestLinks.length > 0,
+        has_edit_target: editTargets.length > 0,
+        has_drag_or_drop_target: dragSources.length > 0 || dropTargets.length > 0
       },
       semantic_hooks: {
         route_to_source: sourceFiles.length > 0,
         forge_readiness: forgePackages.length > 0,
         drop_to_code_ready: markers.some((marker) => marker.attributes["data-dx-source"]),
-        hot_reload_scope_ready: hotReloadTargets.length > 0
+        hot_reload_scope_ready: hotReloadTargets.length > 0,
+        studio_edit_manifest: manifestLinks.length > 0 || editTargets.length > 0,
+        drag_to_preview_ready: dropTargets.length > 0 || dragSources.length > 0 || sourceFiles.length > 0
       }
     };
   };

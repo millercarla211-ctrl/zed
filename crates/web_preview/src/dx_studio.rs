@@ -6,6 +6,8 @@ use std::{
 use serde_json::Value;
 
 pub const DX_STUDIO_PREVIEW_MANIFEST_SCHEMA: &str = "dx.studio.preview_manifest.v1";
+pub const DX_STUDIO_EDIT_MANIFEST_SCHEMA: &str = "dx.studio.edit_manifest.v1";
+pub const DX_STUDIO_DRAG_TO_PREVIEW_SCHEMA: &str = "zed.web_preview.dx_studio_drag_to_preview.v1";
 pub const DX_WWW_ROUTES_SCHEMA: &str = "dx.www.routes.v1";
 pub const DX_FORGE_PACKAGES_SCHEMA: &str = "dx.forge.packages.v1";
 pub const DX_STUDIO_PREVIEW_MANIFEST_COMMAND: &str = "dx www preview-manifest --json";
@@ -50,6 +52,7 @@ pub struct DxStudioManifestContract {
     pub commands: DxStudioCommands,
     pub project: Option<DxStudioProjectDetection>,
     pub manifest_candidates: Vec<PathBuf>,
+    pub edit_manifest_candidates: Vec<PathBuf>,
     pub default_preview_url: Option<String>,
 }
 
@@ -67,6 +70,7 @@ pub fn manifest_contract(root: &Path) -> DxStudioManifestContract {
         commands: studio_commands(),
         project: detect_project(root),
         manifest_candidates: manifest_candidates(root),
+        edit_manifest_candidates: edit_manifest_candidates(root),
         default_preview_url: default_preview_url(root),
     }
 }
@@ -143,7 +147,9 @@ pub fn detect_project(root: &Path) -> Option<DxStudioProjectDetection> {
 
 pub fn manifest_candidates(root: &Path) -> Vec<PathBuf> {
     vec![
-        root.join(".dx").join("studio").join("preview-manifest.json"),
+        root.join(".dx")
+            .join("studio")
+            .join("preview-manifest.json"),
         root.join(".dx")
             .join("forge")
             .join("studio-preview-manifest.json"),
@@ -157,6 +163,31 @@ pub fn manifest_candidates(root: &Path) -> Vec<PathBuf> {
         root.join("examples")
             .join("launch-template")
             .join("launch-route-contract.ts"),
+    ]
+}
+
+pub fn edit_manifest_candidates(root: &Path) -> Vec<PathBuf> {
+    vec![
+        root.join(".dx").join("studio").join("edit-manifest.json"),
+        root.join(".dx").join("studio").join("studio-manifest.json"),
+        root.join(".dx")
+            .join("forge")
+            .join("studio-edit-manifest.json"),
+        root.join(".dx").join("forge").join("source-manifest.json"),
+        root.join(".dx")
+            .join("forge")
+            .join("template-manifest.json"),
+    ]
+}
+
+pub fn drag_to_preview_attributes() -> [&'static str; 6] {
+    [
+        "data-dx-route",
+        "data-dx-source",
+        "data-dx-edit-target",
+        "data-dx-drag-source",
+        "data-dx-drop-target",
+        "data-dx-hot-reload-target",
     ]
 }
 
@@ -302,7 +333,9 @@ fn read_preview_manifest_target_for_source(
 fn read_preview_manifest_routes(root: &Path) -> Vec<DxStudioPreviewTarget> {
     let origin = dev_server_origin(root);
     for candidate in manifest_candidates(root) {
-        let extension = candidate.extension().and_then(|extension| extension.to_str());
+        let extension = candidate
+            .extension()
+            .and_then(|extension| extension.to_str());
 
         let Ok(contents) = fs::read_to_string(candidate) else {
             continue;
@@ -510,7 +543,11 @@ mod tests {
     #[test]
     fn route_for_app_source_uses_next_familiar_segments() {
         let root = Path::new(r"G:\Dx\www");
-        let source = root.join("app").join("(marketing)").join("docs").join("page.tsx");
+        let source = root
+            .join("app")
+            .join("(marketing)")
+            .join("docs")
+            .join("page.tsx");
         assert_eq!(route_for_source(root, &source), Some("/docs".to_string()));
     }
 
