@@ -31,6 +31,7 @@ pub(crate) struct DxCheckScoreInput<'a> {
     pub deploy_status_receipt_count: usize,
     pub validation_proof_receipt_count: usize,
     pub visual_proof_receipt_count: usize,
+    pub runtime_plan_receipt_count: usize,
     pub runtime_proof_receipt_count: usize,
     pub fresh_proof_receipt_count: usize,
 }
@@ -114,6 +115,10 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
     }
     if input.runtime_proof_receipt_count > 0 {
         score += 3;
+    } else if input.runtime_plan_receipt_count > 0 {
+        score += 1;
+        blockers
+            .push("Runtime proof plan exists; runtime proof import is still missing".to_string());
     } else {
         blockers.push("No runtime proof receipts yet".to_string());
     }
@@ -186,12 +191,20 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
             DxCheckScoreItem {
                 label: "Proof Freshness",
                 state: if proof_receipt_count == 0 {
-                    "No validation/visual/runtime proof".to_string()
+                    if input.runtime_plan_receipt_count > 0 {
+                        format!(
+                            "{} runtime plan, no imported runtime proof",
+                            input.runtime_plan_receipt_count
+                        )
+                    } else {
+                        "No validation/visual/runtime proof".to_string()
+                    }
                 } else {
                     format!(
-                        "{} validation, {} visual, {} runtime, {} fresh",
+                        "{} validation, {} visual, {} runtime plan, {} runtime, {} fresh",
                         input.validation_proof_receipt_count,
                         input.visual_proof_receipt_count,
+                        input.runtime_plan_receipt_count,
                         input.runtime_proof_receipt_count,
                         input.fresh_proof_receipt_count
                     )

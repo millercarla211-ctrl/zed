@@ -37,6 +37,7 @@ impl DxProofFreshnessSnapshot {
     pub(crate) fn fresh_receipt_count(&self) -> usize {
         self.buckets
             .iter()
+            .filter(|bucket| bucket.label != "Runtime Plan")
             .filter(|bucket| bucket.status == "Fresh")
             .map(|bucket| bucket.count)
             .sum()
@@ -96,10 +97,15 @@ fn scan_proof_freshness(workspace_roots: &[String]) -> DxProofFreshnessSnapshot 
             &workspace_roots,
         ),
         proof_bucket(
+            "Runtime Plan",
+            "tools/dx-runtime-proof/plans",
+            &["tools/dx-runtime-proof/plans"],
+            &workspace_roots,
+        ),
+        proof_bucket(
             "Runtime Proof",
-            "tools/dx-runtime-proof",
+            "tools/dx-runtime-proof/imports",
             &[
-                "tools/dx-runtime-proof",
                 "tools/dx-runtime-proof/imports",
                 "tools/dx-runtime-proof/status",
                 "tools/agent-plugins/runtime-green",

@@ -1,3 +1,13 @@
+[2026-05-21] - DX Runtime Proof Plan Visibility
+
+CHANGED:
+- Split runtime proof plan receipts into their own Proof Freshness bucket under `tools/dx-runtime-proof/plans`.
+- Updated Check scoring so runtime proof plans count as readiness evidence but do not count as imported runtime proof.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 99.6/100.
+
+NOTES:
+- This slice is UI/status accounting only. It does not run `just run`, Cargo, local servers, browser automation, deploys, shell commands, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Runtime Proof Plan Receipts
 
 ADDED:
