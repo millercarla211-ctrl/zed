@@ -109,6 +109,22 @@ impl DxReceiptCacheManifest {
 
         summary
     }
+
+    pub fn kind_summary(&self, kind: DxReceiptCacheEntryKind) -> DxReceiptCacheKindSummary {
+        let mut summary = DxReceiptCacheKindSummary::empty(kind);
+        for entry in self.entries_for_kind(kind) {
+            summary.record_entry(entry);
+        }
+        summary
+    }
+
+    pub fn kind_summaries(&self) -> Vec<DxReceiptCacheKindSummary> {
+        DxReceiptCacheEntryKind::ALL
+            .iter()
+            .copied()
+            .map(|kind| self.kind_summary(kind))
+            .collect()
+    }
 }
 
 #[derive(
@@ -126,6 +142,63 @@ pub struct DxReceiptCacheSummary {
     pub expired_entry_count: u32,
     pub unknown_entry_count: u32,
     pub latest_receipt_unix_ms: Option<u64>,
+}
+
+#[derive(
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub struct DxReceiptCacheKindSummary {
+    pub kind: DxReceiptCacheEntryKind,
+    pub entry_count: u32,
+    pub malformed_entry_count: u32,
+    pub fresh_entry_count: u32,
+    pub stale_entry_count: u32,
+    pub expired_entry_count: u32,
+    pub unknown_entry_count: u32,
+    pub total_size_bytes: u64,
+    pub latest_receipt_unix_ms: Option<u64>,
+}
+
+impl DxReceiptCacheKindSummary {
+    pub fn empty(kind: DxReceiptCacheEntryKind) -> Self {
+        Self {
+            kind,
+            entry_count: 0,
+            malformed_entry_count: 0,
+            fresh_entry_count: 0,
+            stale_entry_count: 0,
+            expired_entry_count: 0,
+            unknown_entry_count: 0,
+            total_size_bytes: 0,
+            latest_receipt_unix_ms: None,
+        }
+    }
+
+    fn record_entry(&mut self, entry: &DxReceiptCacheEntry) {
+        self.entry_count = self.entry_count.saturating_add(1);
+        self.total_size_bytes = self.total_size_bytes.saturating_add(entry.size_bytes);
+        self.latest_receipt_unix_ms =
+            max_optional_unix_ms(self.latest_receipt_unix_ms, entry.latest_unix_ms());
+
+        match entry.freshness {
+            DxReceiptCacheFreshness::Fresh => {
+                self.fresh_entry_count = self.fresh_entry_count.saturating_add(1)
+            }
+            DxReceiptCacheFreshness::Stale => {
+                self.stale_entry_count = self.stale_entry_count.saturating_add(1)
+            }
+            DxReceiptCacheFreshness::Expired => {
+                self.expired_entry_count = self.expired_entry_count.saturating_add(1)
+            }
+            DxReceiptCacheFreshness::Malformed => {
+                self.malformed_entry_count = self.malformed_entry_count.saturating_add(1)
+            }
+            DxReceiptCacheFreshness::Unknown => {
+                self.unknown_entry_count = self.unknown_entry_count.saturating_add(1)
+            }
+        }
+    }
 }
 
 #[derive(
@@ -189,6 +262,22 @@ pub enum DxReceiptCacheEntryKind {
     Deploy,
     RuntimeProof,
     Other,
+}
+
+impl DxReceiptCacheEntryKind {
+    pub const ALL: [Self; 11] = [
+        Self::Agents,
+        Self::Launch,
+        Self::Tokens,
+        Self::Forge,
+        Self::Sources,
+        Self::Media,
+        Self::Rlm,
+        Self::Serializer,
+        Self::Deploy,
+        Self::RuntimeProof,
+        Self::Other,
+    ];
 }
 
 #[derive(

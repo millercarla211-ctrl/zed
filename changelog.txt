@@ -1,3 +1,15 @@
+[2026-05-21] - DX Receipt Cache Kind Summaries
+
+ADDED:
+- Added per-kind receipt-cache summaries for Agent, launch, token, Forge, source, media, RLM, serializer, deploy, runtime-proof, and other receipt buckets.
+- Added the stable entry-kind list used by cache rail consumers and governed producers.
+
+CHANGED:
+- Updated the DX launch status text so the receipt-cache bridge covers root, manifest, and per-kind summary contracts.
+
+NOTES:
+- This slice does not run CLI commands, start servers, run Cargo/`just run`, change receipt artifact authority, or alter existing Zed receipt readers.
+
 [2026-05-21] - DX Receipt Cache Summary Contract
 
 ADDED:
