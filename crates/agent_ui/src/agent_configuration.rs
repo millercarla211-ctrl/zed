@@ -462,7 +462,7 @@ impl AgentConfiguration {
     fn render_dx_agents_catalog_items(
         &self,
         snapshot: &DxAgentBridgeSnapshot,
-        _cx: &Context<Self>,
+        cx: &mut Context<Self>,
     ) -> impl IntoElement {
         if !snapshot.show_managed_providers {
             return v_flex()
@@ -494,27 +494,68 @@ impl AgentConfiguration {
             .map(|provider| provider.display_name.clone())
             .unwrap_or_else(|| "No active DX provider".to_string());
 
+        let catalog_status = if snapshot.catalog.present && !snapshot.catalog.stale {
+            AiSettingItemStatus::Running
+        } else {
+            AiSettingItemStatus::Starting
+        };
+        let mut catalog_item = AiSettingItem::new(
+            "dx-agents-provider-catalog",
+            "Managed Providers",
+            catalog_status,
+            AiSettingItemSource::Custom,
+        )
+        .icon(
+            Icon::new(IconName::Sliders)
+                .size(IconSize::Small)
+                .color(Color::Muted),
+        )
+        .detail_label(provider_detail);
+
+        if snapshot.enabled && snapshot.cli_actions_allowed {
+            catalog_item = catalog_item
+                .action(
+                    IconButton::new("dx-agents-providers-list", IconName::RotateCw)
+                        .icon_color(Color::Muted)
+                        .icon_size(IconSize::Small)
+                        .tooltip(Tooltip::text("Refresh DX provider receipt"))
+                        .on_click(cx.listener(|this, _, _window, cx| {
+                            this.run_dx_agents_bridge_action(
+                                vec!["providers", "list", "--json"],
+                                cx,
+                            );
+                        })),
+                )
+                .action(
+                    IconButton::new("dx-agents-models-list", IconName::ListTodo)
+                        .icon_color(Color::Muted)
+                        .icon_size(IconSize::Small)
+                        .tooltip(Tooltip::text("Refresh DX model receipt"))
+                        .on_click(cx.listener(|this, _, _window, cx| {
+                            this.run_dx_agents_bridge_action(
+                                vec!["models", "list", "--json"],
+                                cx,
+                            );
+                        })),
+                )
+                .action(
+                    IconButton::new("dx-agents-provider-catalog-regenerate", IconName::Download)
+                        .icon_color(Color::Muted)
+                        .icon_size(IconSize::Small)
+                        .tooltip(Tooltip::text("Regenerate DX provider catalog receipt"))
+                        .on_click(cx.listener(|this, _, _window, cx| {
+                            this.run_dx_agents_bridge_action(
+                                vec!["providers", "catalog", "regenerate", "--json"],
+                                cx,
+                            );
+                        })),
+                );
+        }
+
         let mut stack = v_flex()
             .gap_1()
             .child(Label::new("Provider Catalog").size(LabelSize::Small))
-            .child(
-                AiSettingItem::new(
-                    "dx-agents-provider-catalog",
-                    "Managed Providers",
-                    if snapshot.catalog.present && !snapshot.catalog.stale {
-                        AiSettingItemStatus::Running
-                    } else {
-                        AiSettingItemStatus::Starting
-                    },
-                    AiSettingItemSource::Custom,
-                )
-                .icon(
-                    Icon::new(IconName::Sliders)
-                        .size(IconSize::Small)
-                        .color(Color::Muted),
-                )
-                .detail_label(provider_detail),
-            )
+            .child(catalog_item)
             .child(
                 Label::new(active_provider)
                     .size(LabelSize::Small)
