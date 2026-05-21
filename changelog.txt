@@ -1,3 +1,16 @@
+[2026-05-21] - DX Runtime Proof Evidence Form
+
+ADDED:
+- Added plan-derived runtime proof evidence metadata to the Runtime Proof rail, including minimum evidence count and accepted evidence examples from the latest plan receipt.
+- Added an Evidence Form guided card that drafts the exact operator fields needed before `import_dx_runtime_proof` can write managed import/status receipts.
+
+CHANGED:
+- Runtime proof prompt context now includes minimum evidence and accepted examples from the latest plan receipt.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current next-set status at 99.999/100 while keeping actual runtime proof gated on governed operator evidence.
+
+NOTES:
+- This slice drafts operator evidence fields only. It does not run `just run`, Cargo, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Forge History Drilldowns
 
 ADDED:

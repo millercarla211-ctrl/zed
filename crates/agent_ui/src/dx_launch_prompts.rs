@@ -261,6 +261,36 @@ pub(crate) fn runtime_proof_import_prompt(
     )
 }
 
+pub(crate) fn runtime_proof_evidence_template_prompt(
+    check_score: &DxCheckScoreSnapshot,
+    proof_freshness: &DxProofFreshnessSnapshot,
+    deploy_targets: &DxDeployTargetSnapshot,
+    runtime_proof_status: &DxRuntimeProofStatusSnapshot,
+) -> String {
+    let check_blockers = bounded_join(&check_score.blockers, 4, "No current Check blockers");
+    let proof_rows = proof_freshness
+        .buckets
+        .iter()
+        .map(|bucket| format!("{}={} ({})", bucket.label, bucket.count, bucket.status))
+        .collect::<Vec<_>>();
+    let proof_rows = bounded_join(&proof_rows, 5, "No proof freshness rows are available yet");
+    let deploy_target_rows = deploy_targets
+        .targets
+        .iter()
+        .take(3)
+        .map(|target| format!("{} {} at {}", target.platform, target.label, target.path))
+        .collect::<Vec<_>>();
+    let deploy_target_rows = bounded_join(&deploy_target_rows, 3, "No deploy targets detected");
+    let runtime_status = runtime_proof_status_prompt_context(runtime_proof_status);
+    let evidence_template = runtime_proof_evidence_template(runtime_proof_status);
+
+    format!(
+        "Draft a fillable DX runtime proof evidence template for this workspace and stop before importing anything. Current Check score: {score}/100 ({state}). Check blockers: {check_blockers}. Proof freshness rows: {proof_rows}. Deploy targets: {deploy_target_rows}. Runtime proof status: {runtime_status}. Use this template shape exactly and leave placeholders where evidence is missing: {evidence_template}. Do not call import_dx_runtime_proof until I provide completed operator evidence from the governed validation window. Do not run just run, cargo, builds, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions.",
+        score = check_score.score,
+        state = check_score.state,
+    )
+}
+
 pub(crate) fn receipt_review_prompt(
     receipt_snapshot: &DxReceiptSnapshot,
     tool_history: &DxToolHistorySnapshot,
@@ -386,12 +416,18 @@ fn runtime_proof_status_prompt_context(snapshot: &DxRuntimeProofStatusSnapshot) 
                 .clone()
                 .unwrap_or_else(|| "unknown command".to_string());
             format!(
-                "latest plan {} status {} command {} steps {} required {} requirements {} blockers {}",
+                "latest plan {} status {} command {} steps {} required {} minimum_evidence {} examples {} requirements {} blockers {}",
                 plan.label,
                 plan.status,
                 command,
                 plan.checklist_step_count,
                 plan.required_step_count,
+                runtime_proof_minimum_evidence(plan),
+                bounded_join(
+                    &plan.accepted_evidence_examples,
+                    3,
+                    "no accepted evidence examples"
+                ),
                 requirements,
                 plan.blocker_count
             )
@@ -486,6 +522,43 @@ fn forge_history_summary_prompt(summary: &DxToolHistoryReceiptSummary) -> String
     }
 
     parts.join(", ")
+}
+
+fn runtime_proof_evidence_template(snapshot: &DxRuntimeProofStatusSnapshot) -> String {
+    let final_command = snapshot
+        .latest_plan
+        .as_ref()
+        .and_then(|plan| plan.expected_final_command.clone())
+        .unwrap_or_else(|| "just run".to_string());
+    let minimum_evidence = snapshot
+        .latest_plan
+        .as_ref()
+        .map(runtime_proof_minimum_evidence)
+        .unwrap_or(1);
+    let accepted_examples = snapshot
+        .latest_plan
+        .as_ref()
+        .map(|plan| {
+            bounded_join(
+                &plan.accepted_evidence_examples,
+                5,
+                "final command exit status, visible Zed/DX window title, Agent panel route or action exercised",
+            )
+        })
+        .unwrap_or_else(|| {
+            "final command exit status, visible Zed/DX window title, Agent panel route or action exercised"
+                .to_string()
+        });
+
+    format!(
+        "operator_status=<passed|blocked|failed>; proof_summary=<one sentence>; final_command={final_command}; source=<governed validation window>; evidence=<at least {minimum_evidence} line(s): {accepted_examples}>; blockers=<empty when passed, otherwise blocker lines>; write_runtime_proof_receipt=true; receipt_root_mode=workspace"
+    )
+}
+
+fn runtime_proof_minimum_evidence(
+    plan: &crate::dx_runtime_proof_status::DxRuntimeProofPlanSummary,
+) -> usize {
+    plan.minimum_evidence_lines_for_pass.max(1)
 }
 
 fn runtime_proof_plan_requirements(

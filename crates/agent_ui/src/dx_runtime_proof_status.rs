@@ -34,6 +34,8 @@ pub(crate) struct DxRuntimeProofPlanSummary {
     pub expected_final_command: Option<String>,
     pub checklist_step_count: usize,
     pub required_step_count: usize,
+    pub minimum_evidence_lines_for_pass: usize,
+    pub accepted_evidence_examples: Vec<String>,
     pub requires_clean_git: bool,
     pub requires_diff_check: bool,
     pub requires_visual_evidence: bool,
@@ -275,6 +277,14 @@ fn parse_plan_summary(path: &Path, label: &str) -> Option<DxRuntimeProofPlanSumm
             .or_else(|| string_at(evidence_contract, "final_command")),
         checklist_step_count,
         required_step_count: usize_at(status, "required_step_count"),
+        minimum_evidence_lines_for_pass: usize_at(
+            evidence_contract,
+            "minimum_evidence_lines_for_pass",
+        ),
+        accepted_evidence_examples: string_array_at(
+            evidence_contract,
+            "accepted_evidence_examples",
+        ),
         requires_clean_git: bool_at(request, "require_clean_git"),
         requires_diff_check: bool_at(request, "require_diff_check"),
         requires_visual_evidence: bool_at(request, "require_runtime_visual_evidence"),

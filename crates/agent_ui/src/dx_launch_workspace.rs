@@ -974,6 +974,15 @@ fn runtime_proof_plan_row(plan: &DxRuntimeProofPlanSummary, cx: &App) -> AnyElem
         );
     }
 
+    if plan.minimum_evidence_lines_for_pass > 0 || !plan.accepted_evidence_examples.is_empty() {
+        stack = stack.child(
+            Label::new(runtime_proof_plan_evidence_detail(plan))
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+    }
+
     if plan.blocker_count > 0 {
         stack = stack.child(
             Label::new(format!("{} blocker(s)", plan.blocker_count))
@@ -991,6 +1000,26 @@ fn runtime_proof_plan_row(plan: &DxRuntimeProofPlanSummary, cx: &App) -> AnyElem
     }
 
     stack.into_any_element()
+}
+
+fn runtime_proof_plan_evidence_detail(plan: &DxRuntimeProofPlanSummary) -> String {
+    let minimum = if plan.minimum_evidence_lines_for_pass > 0 {
+        format!("{}+ evidence", plan.minimum_evidence_lines_for_pass)
+    } else {
+        "evidence required".to_string()
+    };
+    let examples = if plan.accepted_evidence_examples.is_empty() {
+        "use operator proof lines".to_string()
+    } else {
+        plan.accepted_evidence_examples
+            .iter()
+            .take(2)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
+    format!("{minimum} - {examples}")
 }
 
 fn runtime_proof_plan_requirements(plan: &DxRuntimeProofPlanSummary) -> String {

@@ -38,8 +38,9 @@ use crate::dx_check_score::{DxCheckScoreInput, check_score_snapshot};
 use crate::dx_deploy_targets::{DxDeployTargetSnapshot, deploy_target_snapshot};
 use crate::dx_launch_prompts::{
     deploy_readiness_prompt, forge_proof_prompt, receipt_review_prompt, restore_approval_prompt,
-    runtime_proof_import_prompt, runtime_proof_prompt, source_action_icon, source_action_label,
-    source_action_prompt, source_action_title, source_receipt_review_prompt,
+    runtime_proof_evidence_template_prompt, runtime_proof_import_prompt, runtime_proof_prompt,
+    source_action_icon, source_action_label, source_action_prompt, source_action_title,
+    source_receipt_review_prompt,
 };
 use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, DxSourceRowControl, receipt_snapshot, render_workspace_chrome,
@@ -6035,6 +6036,22 @@ impl AgentPanel {
                 "Capture operator evidence into managed runtime receipts.",
                 "Draft Import",
                 runtime_proof_import_prompt(
+                    &status.check_score,
+                    &status.proof_freshness,
+                    &status.deploy_targets,
+                    &status.runtime_proof_status,
+                ),
+                can_create_entries,
+                cx,
+            ))
+            .child(self.dx_launch_guided_card(
+                "dx-runtime-proof-evidence-card",
+                "dx-runtime-proof-evidence-action",
+                IconName::ListTodo,
+                "Evidence Form",
+                "Draft the operator fields needed before proof import.",
+                "Draft Form",
+                runtime_proof_evidence_template_prompt(
                     &status.check_score,
                     &status.proof_freshness,
                     &status.deploy_targets,

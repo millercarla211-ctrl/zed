@@ -79,7 +79,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Added content-aware Deploy receipt drilldowns so deploy buckets can surface latest receipt headline, status, target, URL, and blocker counts in the right rail and Agent handoff prompts.
 - Added restore approval visibility to the read-only Forge history contract so `inspect_dx_forge_history` reports `restore_approval` entries, approval readiness, evidence counts, blockers, target paths, and preview roots.
 - Added content-aware Forge history drilldowns so the right rail and Forge/Restore Approval prompts surface latest restore-target plan status, approval readiness, target path, preview root, and blockers without opening raw receipt JSON.
-- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 99.998/100; the remaining launch gap is governed runtime proof evidence/import plus any future restore-to-target mutation after preview/rollback evidence is ready.
+- Added a Runtime Evidence Form guided card plus plan-derived evidence metadata in the Runtime Proof rail, so operators can draft the exact `import_dx_runtime_proof` fields from the latest plan before any proof import.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 99.999/100; the remaining launch gap is governed runtime proof evidence/import plus any future restore-to-target mutation after preview/rollback evidence is ready.
 
 ## Remaining Proof
 
@@ -108,6 +109,7 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - The runtime proof import handoff slice has formatting/diff/conflict validation only so far; runtime click proof and actual operator evidence import remain deferred under the repo's launch validation rules.
 - The runtime proof status scanner slice has formatting/diff/conflict validation only so far; runtime visual proof and actual operator evidence import remain deferred under the repo's launch validation rules.
 - The runtime proof plan drilldown slice has formatting/diff/conflict validation only so far; runtime visual proof and actual operator evidence import remain deferred under the repo's launch validation rules.
+- The runtime proof evidence-form slice has formatting/diff/conflict validation only so far; runtime visual proof and actual operator evidence import remain deferred under the repo's launch validation rules.
 - The row-level source control slice has formatting/diff/conflict validation only so far; runtime click proof remains deferred under the repo's launch validation rules.
 - The row-level receipt drilldown slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
 - The source receipt review handoff slice has formatting/diff/conflict validation only so far; runtime click proof remains deferred under the repo's launch validation rules.
