@@ -216,6 +216,15 @@ impl AgentConfiguration {
                     })),
             )
             .child(
+                Button::new("dx-agents-contract", "Contract")
+                    .style(ButtonStyle::Outlined)
+                    .label_size(LabelSize::Small)
+                    .disabled(!actions_allowed)
+                    .on_click(cx.listener(|this, _, _window, cx| {
+                        this.run_dx_agents_bridge_action(vec!["agents", "contract", "--json"], cx);
+                    })),
+            )
+            .child(
                 Button::new("dx-agents-social-list", "Social")
                     .style(ButtonStyle::Outlined)
                     .label_size(LabelSize::Small)
@@ -257,6 +266,7 @@ impl AgentConfiguration {
                     .w_full()
                     .gap_2()
                     .child(self.render_dx_agents_status_item(&snapshot, cx))
+                    .child(self.render_dx_agents_contract_item(&snapshot, cx))
                     .child(self.render_dx_agents_social_items(&snapshot, cx))
                     .child(self.render_dx_agents_catalog_items(&snapshot, cx)),
             )
@@ -313,6 +323,71 @@ impl AgentConfiguration {
                     })),
             )
         })
+    }
+
+    fn render_dx_agents_contract_item(
+        &self,
+        snapshot: &DxAgentBridgeSnapshot,
+        _cx: &Context<Self>,
+    ) -> impl IntoElement {
+        let summary = &snapshot.contract_summary;
+        let status = if !summary.present {
+            AiSettingItemStatus::Stopped
+        } else if summary.redaction_requires_review || summary.status == "warning" {
+            AiSettingItemStatus::Starting
+        } else {
+            AiSettingItemStatus::Running
+        };
+        let mut stack = v_flex().gap_1().child(
+            AiSettingItem::new(
+                "dx-agents-contract-summary",
+                "Bridge Contract",
+                status,
+                AiSettingItemSource::Custom,
+            )
+            .icon(
+                Icon::new(IconName::FileTextOutlined)
+                    .size(IconSize::Small)
+                    .color(Color::Muted),
+            )
+            .detail_label(format!(
+                "{} command(s), {} receipt(s), catalog {}, redaction {}",
+                summary.command_count,
+                summary.receipt_count,
+                summary.provider_catalog_source,
+                summary.redaction_summary
+            )),
+        );
+
+        if !summary.present {
+            stack = stack.child(
+                Label::new("No contract receipt yet. Run the Contract action.")
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        } else if let Some(note) = summary.receipt_notes.first() {
+            stack = stack.child(
+                Label::new(note.clone())
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        }
+
+        if summary.redaction_requires_review {
+            stack = stack.child(
+                Label::new("Contract redaction flags need review before launch.")
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        } else if summary.present {
+            stack = stack.child(
+                Label::new(format!("Next: {}", summary.next_action))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        }
+
+        stack.into_any_element()
     }
 
     fn render_dx_agents_social_items(

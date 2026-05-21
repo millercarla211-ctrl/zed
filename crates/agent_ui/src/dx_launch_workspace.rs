@@ -339,6 +339,31 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
             } else {
                 "fallback".to_string()
             },
+        ))
+        .child(metric_row("Contract", snapshot.contract_summary.status.clone()))
+        .child(metric_row(
+            "Commands",
+            snapshot.contract_summary.command_count.to_string(),
+        ))
+        .child(metric_row(
+            "Receipts",
+            snapshot.contract_summary.receipt_count.to_string(),
+        ))
+        .child(metric_row(
+            "Contract Catalog",
+            format!(
+                "{} / {} receipt(s)",
+                snapshot.contract_summary.provider_catalog_source,
+                snapshot.contract_summary.provider_catalog_receipt_count
+            ),
+        ))
+        .child(metric_row(
+            "Redaction",
+            if snapshot.contract_summary.redaction_requires_review {
+                "review".to_string()
+            } else {
+                snapshot.contract_summary.redaction_summary.clone()
+            },
         ));
 
     if !snapshot.enabled {
@@ -348,13 +373,30 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
             format!("Missing receipts: {}", snapshot.receipt_root.display()),
             cx,
         ));
+    } else if !snapshot.contract_summary.present {
+        stack = stack.child(muted_card("Run dx-agents agents contract --json", cx));
     }
 
     if let Some(receipt) = snapshot.latest_receipts.first() {
         stack = stack.child(metric_row("Latest", receipt.clone()));
     }
+    if let Some(command) = snapshot.contract_summary.commands.first() {
+        stack = stack.child(metric_row("Command", command.clone()));
+    } else if snapshot.contract_summary.present {
+        stack = stack.child(metric_row(
+            "Catalog Regen",
+            snapshot.contract_summary.safe_regeneration_command.clone(),
+        ));
+    }
 
-    if let Some(error) = snapshot.last_error.as_ref() {
+    if snapshot.contract_summary.redaction_requires_review {
+        stack = stack.child(signal_row(
+            "dx-agent-contract-redaction-review".into(),
+            IconName::Warning,
+            Color::Warning,
+            "DX Agents bridge contract reports redaction flags that need review.".to_string(),
+        ));
+    } else if let Some(error) = snapshot.last_error.as_ref() {
         stack = stack.child(signal_row(
             "dx-agent-bridge-error".into(),
             IconName::Warning,
@@ -362,8 +404,13 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
             error.clone(),
         ));
     } else {
+        let next_action = if snapshot.contract_summary.present {
+            snapshot.contract_summary.next_action.clone()
+        } else {
+            snapshot.next_action.clone()
+        };
         stack = stack.child(
-            Label::new(snapshot.next_action.clone())
+            Label::new(next_action)
                 .size(LabelSize::XSmall)
                 .color(Color::Muted)
                 .truncate(),

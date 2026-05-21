@@ -4,6 +4,7 @@ ADDED:
 - Added a DX Agents CLI/receipt bridge reader for redacted status, social account, automation, provider, model, and latest-receipt JSON under `G:\Dx\.dx\receipts\agents`.
 - Added DX Agents status controls to Agent Configuration using fixed public `dx-agents agents status/social list/automate list/run --json` command shapes.
 - Added per-social-account redacted social-list refresh actions that call the dx-agents CLI bridge without importing secrets, provider credentials, or social-login flows into Zed.
+- Added metadata-only DX Agents bridge-contract visibility for `dx-agents agents contract --json`, fixed command coverage, receipt contracts, provider-catalog recovery guidance, and redaction posture.
 - Added DX Agents, Social Accounts, Automations, and Agent Providers rail sections to the DX launch workspace, with settings gates for managed providers and rail visibility.
 - Added `agent.dx_agents` settings and default values for bridge enablement, CLI path, receipt root, provider catalog path, CLI actions, managed providers, and Agent rail visibility.
 

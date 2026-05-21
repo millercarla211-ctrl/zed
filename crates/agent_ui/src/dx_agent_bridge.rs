@@ -37,6 +37,7 @@ pub(crate) struct DxAgentBridgeSnapshot {
     pub providers: Vec<DxAgentProvider>,
     pub models: Vec<DxAgentModel>,
     pub catalog: DxAgentCatalogSummary,
+    pub contract_summary: DxAgentContractSummary,
     pub latest_receipts: Vec<String>,
     pub show_managed_providers: bool,
     pub show_in_agent_rail: bool,
@@ -104,6 +105,22 @@ pub(crate) struct DxAgentCatalogSummary {
     pub safe_regeneration_command: String,
 }
 
+#[derive(Clone)]
+pub(crate) struct DxAgentContractSummary {
+    pub present: bool,
+    pub status: String,
+    pub command_count: usize,
+    pub receipt_count: usize,
+    pub provider_catalog_source: String,
+    pub provider_catalog_receipt_count: usize,
+    pub safe_regeneration_command: String,
+    pub redaction_summary: String,
+    pub redaction_requires_review: bool,
+    pub next_action: String,
+    pub commands: Vec<String>,
+    pub receipt_notes: Vec<String>,
+}
+
 static SNAPSHOT_CACHE: OnceLock<Mutex<Option<(Instant, String, DxAgentBridgeSnapshot)>>> =
     OnceLock::new();
 
@@ -155,6 +172,10 @@ pub(crate) fn run_dx_agent_command(
     args: Vec<String>,
     dx_home: Option<PathBuf>,
 ) -> Result<()> {
+    run_bridge_command(cli_path, args, dx_home)
+}
+
+fn run_bridge_command(cli_path: String, args: Vec<String>, dx_home: Option<PathBuf>) -> Result<()> {
     if args.iter().any(|arg| is_secret_like_arg(arg)) {
         return Err(anyhow!(
             "DX Agents bridge commands cannot include secret-like arguments"
@@ -237,6 +258,7 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
     let automation_value = read_json(&settings.receipt_root.join("automate-list-latest.json"));
     let provider_value = read_json(&settings.receipt_root.join("providers-list-latest.json"));
     let model_value = read_json(&settings.receipt_root.join("models-list-latest.json"));
+    let contract_value = read_first_json(&settings.receipt_root, &["contract-latest.json"]);
 
     let status = status_value
         .as_ref()
@@ -310,6 +332,7 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
             model_value.as_ref(),
             settings.provider_catalog_path.clone(),
         ),
+        contract_summary: contract_summary(contract_value.as_ref(), root_exists),
         latest_receipts: latest_receipts(&settings.receipt_root, root_exists),
         show_managed_providers: settings.show_managed_providers,
         show_in_agent_rail: settings.show_in_agent_rail,
@@ -451,6 +474,98 @@ fn catalog_summary(
     }
 }
 
+fn contract_summary(value: Option<&Value>, root_exists: bool) -> DxAgentContractSummary {
+    let provider_catalog = value.and_then(|value| value.get("provider_catalog"));
+    let redaction = value.and_then(|value| value.get("redaction"));
+    let status = value
+        .and_then(|value| string_field(value, &["status"]))
+        .unwrap_or_else(|| {
+            if root_exists {
+                "waiting_for_contract_receipt".to_string()
+            } else {
+                "missing_receipt_root".to_string()
+            }
+        });
+
+    let exports_secret_values = redaction
+        .and_then(|value| bool_field(value, &["exports_secret_values"]))
+        .unwrap_or(false);
+    let exports_account_targets = redaction
+        .and_then(|value| bool_field(value, &["exports_account_targets"]))
+        .unwrap_or(false);
+    let exports_automation_bodies = redaction
+        .and_then(|value| bool_field(value, &["exports_automation_bodies"]))
+        .unwrap_or(false);
+    let exports_tool_payloads = redaction
+        .and_then(|value| bool_field(value, &["exports_tool_payloads"]))
+        .unwrap_or(false);
+    let redaction_requires_review = exports_secret_values
+        || exports_account_targets
+        || exports_automation_bodies
+        || exports_tool_payloads;
+    let redaction_summary = if redaction_requires_review {
+        "review required".to_string()
+    } else if redaction.is_some() {
+        "metadata only".to_string()
+    } else {
+        "unknown".to_string()
+    };
+
+    DxAgentContractSummary {
+        present: value.is_some(),
+        status,
+        command_count: value
+            .and_then(|value| value_at(value, &["commands"]))
+            .and_then(|value| value.as_object())
+            .map(|commands| commands.len())
+            .unwrap_or_default(),
+        receipt_count: value
+            .and_then(|value| array_field(value, &["receipts"]))
+            .map(|receipts| receipts.len())
+            .unwrap_or_default(),
+        provider_catalog_source: provider_catalog
+            .and_then(|value| string_field(value, &["source_format"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        provider_catalog_receipt_count: provider_catalog
+            .and_then(|value| array_field(value, &["json_receipts"]))
+            .map(|receipts| receipts.len())
+            .unwrap_or_default(),
+        safe_regeneration_command: provider_catalog
+            .and_then(|value| string_field(value, &["safe_regeneration_command"]))
+            .unwrap_or_else(|| "dx-agents providers catalog regenerate --json".to_string()),
+        redaction_summary,
+        redaction_requires_review,
+        next_action: value
+            .and_then(|value| string_field(value, &["next_action"]))
+            .unwrap_or_else(|| "dx-agents agents contract --json".to_string()),
+        commands: value
+            .map(|value| string_values_field(value, &["commands"]))
+            .unwrap_or_default(),
+        receipt_notes: receipt_notes(value),
+    }
+}
+
+fn receipt_notes(value: Option<&Value>) -> Vec<String> {
+    value
+        .and_then(|value| array_field(value, &["receipts"]))
+        .map(|receipts| {
+            receipts
+                .iter()
+                .filter_map(|receipt| {
+                    let name = string_field(receipt, &["name"])?;
+                    let command = string_field(receipt, &["command"]).unwrap_or_default();
+                    if command.is_empty() {
+                        Some(name)
+                    } else {
+                        Some(format!("{name}: {command}"))
+                    }
+                })
+                .take(4)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn read_json(path: &Path) -> Option<Value> {
     let metadata = path.metadata().ok()?;
     if metadata.len() > MAX_RECEIPT_BYTES {
@@ -460,6 +575,10 @@ fn read_json(path: &Path) -> Option<Value> {
     let mut source = String::new();
     file.read_to_string(&mut source).ok()?;
     serde_json::from_str(&source).ok()
+}
+
+fn read_first_json(root: &Path, names: &[&str]) -> Option<Value> {
+    names.iter().find_map(|name| read_json(&root.join(name)))
 }
 
 fn latest_receipts(root: &Path, root_exists: bool) -> Vec<String> {
@@ -519,6 +638,19 @@ fn string_array_field(value: &Value, path: &[&str]) -> Vec<String> {
             values
                 .iter()
                 .filter_map(|value| value.as_str().map(ToString::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn string_values_field(value: &Value, path: &[&str]) -> Vec<String> {
+    value_at(value, path)
+        .and_then(|value| value.as_object())
+        .map(|values| {
+            values
+                .values()
+                .filter_map(|value| value.as_str().map(ToString::to_string))
+                .take(8)
                 .collect()
         })
         .unwrap_or_default()
