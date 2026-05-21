@@ -31,6 +31,7 @@ mod dx_catalog_provider_settings_tool;
 mod dx_forge_backup_executor_tool;
 mod dx_forge_backup_runner_gate_tool;
 mod dx_forge_history_tool;
+mod dx_forge_restore_approval_tool;
 mod dx_forge_restore_executor_tool;
 mod dx_forge_safety_policy_tool;
 mod dx_launch_demo_recipes_tool;
@@ -132,6 +133,7 @@ pub use dx_catalog_provider_settings_tool::*;
 pub use dx_forge_backup_executor_tool::*;
 pub use dx_forge_backup_runner_gate_tool::*;
 pub use dx_forge_history_tool::*;
+pub use dx_forge_restore_approval_tool::*;
 pub use dx_forge_restore_executor_tool::*;
 pub use dx_forge_safety_policy_tool::*;
 pub use dx_launch_demo_recipes_tool::*;
@@ -270,6 +272,7 @@ tools! {
     DxForgeBackupExecutorTool,
     DxForgeBackupRunnerGateTool,
     DxForgeHistoryTool,
+    DxForgeRestoreApprovalTool,
     DxForgeRestoreExecutorTool,
     DxForgeSafetyPolicyTool,
     DxLaunchDemoRecipesTool,

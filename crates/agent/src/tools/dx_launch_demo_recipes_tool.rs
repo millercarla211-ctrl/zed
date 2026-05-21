@@ -188,6 +188,7 @@ fn build_launch_demo_recipes(
         metasearch_to_context_recipe(workspace_root.as_ref()),
         media_to_sources_recipe(workspace_root.as_ref()),
         forge_restore_to_sources_recipe(workspace_root.as_ref()),
+        forge_restore_approval_recipe(workspace_root.as_ref()),
         runtime_proof_import_recipe(workspace_root.as_ref()),
     ];
 
@@ -478,6 +479,50 @@ fn forge_restore_to_sources_recipe(workspace_root: Option<&PathBuf>) -> DxLaunch
     }
 }
 
+fn forge_restore_approval_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDemoRecipe {
+    DxLaunchDemoRecipe {
+        id: "forge-restore-approval-capture",
+        title: "Forge Restore Approval Capture",
+        priority: "optional",
+        status: recipe_status(workspace_root),
+        intent: "Capture operator restore-to-target approval evidence as a managed receipt after a restore preview has been reviewed, without mutating target files.",
+        required_tools: vec![
+            "inspect_dx_forge_history",
+            "capture_dx_forge_restore_approval",
+        ],
+        receipt_contracts: vec![
+            "zed.dx.forge.history.v1",
+            "zed.dx.forge.restore_approval_receipt.v1",
+        ],
+        steps: vec![
+            step(
+                1,
+                "inspect_dx_forge_history",
+                "Review managed Forge backup and restore-preview receipts before approval capture.",
+                Some("zed.dx.forge.history.v1"),
+                false,
+                "Read-only receipt scan; does not touch target paths.",
+            ),
+            step(
+                2,
+                "capture_dx_forge_restore_approval",
+                "Persist operator approval, rollback evidence, overwrite posture, target path, and blockers as a managed approval receipt.",
+                Some("zed.dx.forge.restore_approval_receipt.v1"),
+                true,
+                "Writes approval receipts only; no restore-to-target mutation, overwrite, delete, shell, or external process execution.",
+            ),
+        ],
+        proof_gates: vec![
+            "Restore execution receipt reports a managed preview with verified hashes.",
+            "Operator approval and rollback evidence are captured explicitly.",
+            "Any overwrite posture is recorded as evidence only and does not perform writes.",
+            "Approval receipts live under tools/dx-forge/restore-approvals.",
+        ],
+        blockers: recipe_blockers(workspace_root),
+        next_action: "Use this before any future restore-to-target executor exists; it records approval evidence without applying it.",
+    }
+}
+
 fn runtime_proof_import_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDemoRecipe {
     DxLaunchDemoRecipe {
         id: "runtime-proof-import-to-status",
@@ -572,6 +617,12 @@ fn receipt_roots(workspace_root: Option<&Path>) -> Vec<DxLaunchDemoReceiptRoot> 
         (
             "Forge restores",
             root.join("tools").join("dx-forge").join("restores"),
+        ),
+        (
+            "Forge restore approvals",
+            root.join("tools")
+                .join("dx-forge")
+                .join("restore-approvals"),
         ),
         (
             "runtime proof imports",

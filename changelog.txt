@@ -1,3 +1,17 @@
+[2026-05-21] - DX Restore Approval Receipt Capture
+
+ADDED:
+- Added `capture_dx_forge_restore_approval`, a permissioned Agent tool that records restore-preview evidence, target path, rollback verification, overwrite posture, blockers, and managed approval receipts.
+- Added managed restore approval receipts under workspace `tools/dx-forge/restore-approvals` or Zed data fallback.
+- Added a Forge restore approval capture launch demo recipe and receipt root.
+
+CHANGED:
+- Updated Forge proof, receipt review, and Restore Approval handoff prompts to route provided operator evidence through `capture_dx_forge_restore_approval`.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 97/100 and move the next target to external reducer dry-run preview.
+
+NOTES:
+- This slice records approval evidence only. It does not mutate target paths, overwrite files, delete files, run `just run`, Cargo, local servers, browser automation, shell commands, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Runtime Proof Import Capture
 
 ADDED:

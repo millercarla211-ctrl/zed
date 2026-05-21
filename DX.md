@@ -60,7 +60,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Added Restore Approval and Reducer Guard handoff cards plus sharper source prompts for restore-preview and reduced-context receipt rows.
 - Added runtime proof freshness/status buckets for managed runtime proof, import, and runtime-status receipt roots.
 - Added `import_dx_runtime_proof`, a permissioned Agent tool that captures operator-supplied runtime proof summaries, evidence, blockers, import receipts, and operator status copy receipts under managed runtime-proof roots.
-- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 95/100; the next highest-value target is receipt-backed restore approval capture plus external reducer execution dry-run preview before any live mutation or external reducer run.
+- Added `capture_dx_forge_restore_approval`, a permissioned Agent tool that captures operator restore approval evidence, target path, rollback status, overwrite posture, blockers, and managed approval receipts under `tools/dx-forge/restore-approvals` without mutating target paths.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 97/100; the next highest-value target is external reducer execution dry-run preview before any live mutation or external serializer/RLM run.
 
 ## Remaining Proof
 
@@ -80,3 +81,4 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - The restore approval and reducer guard handoff slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
 - The runtime proof status bucket slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
 - The runtime proof import capture slice has formatting/diff/conflict validation only so far; Cargo check/test and runtime proof remain deferred under the repo's launch validation rules.
+- The restore approval capture slice has formatting/diff/conflict validation only so far; Cargo check/test and restore-to-target runtime proof remain deferred under the repo's launch validation rules.

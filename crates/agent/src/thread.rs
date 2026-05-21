@@ -12,10 +12,10 @@ use crate::{
     CopyPathTool, CreateDirectoryTool, DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool,
     DxCatalogProviderSettingsRegistrationTool, DxCatalogProviderSettingsTool,
     DxForgeBackupExecutorTool, DxForgeBackupRunnerGateTool, DxForgeHistoryTool,
-    DxForgeRestoreExecutorTool, DxForgeSafetyPolicyTool, DxMediaToolPlanTool,
-    DxMediaToolRunnerGateTool, DxMediaToolRunnerTool, DxMetasearchContextAdapterTool,
-    DxMetasearchSourceExtractTool, DxMetasearchStatusTool, DxMetasearchTool,
-    DxSerializerRlmExecutionPlanTool, DxSerializerRlmReducedContextTool,
+    DxForgeRestoreApprovalTool, DxForgeRestoreExecutorTool, DxForgeSafetyPolicyTool,
+    DxMediaToolPlanTool, DxMediaToolRunnerGateTool, DxMediaToolRunnerTool,
+    DxMetasearchContextAdapterTool, DxMetasearchSourceExtractTool, DxMetasearchStatusTool,
+    DxMetasearchTool, DxSerializerRlmExecutionPlanTool, DxSerializerRlmReducedContextTool,
     DxSerializerRlmRunnerGateTool, DxSourceAttachmentTool, EditFileTool, FetchTool, FindPathTool,
     FindReferencesTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool, ListDirectoryTool,
     MovePathTool, ProjectSnapshot, ReadFileTool, RenameTool, SpawnAgentTool, SystemPromptTemplate,
@@ -1715,6 +1715,7 @@ impl Thread {
         self.add_tool(DxForgeBackupRunnerGateTool::new(self.project.clone()));
         self.add_tool(DxForgeBackupExecutorTool::new(self.project.clone()));
         self.add_tool(DxForgeRestoreExecutorTool::new(self.project.clone()));
+        self.add_tool(DxForgeRestoreApprovalTool::new(self.project.clone()));
         self.add_tool(DxForgeHistoryTool::new(self.project.clone()));
         self.add_tool(DxLaunchDemoRecipesTool::new(self.project.clone()));
         self.add_tool(DxRuntimeProofImportTool::new(self.project.clone()));
