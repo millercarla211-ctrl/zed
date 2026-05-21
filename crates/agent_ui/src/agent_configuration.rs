@@ -632,34 +632,34 @@ impl AgentConfiguration {
                 } else {
                     "needs setup"
                 };
-                stack = stack.child(
-                    AiSettingItem::new(
-                        format!("dx-agent-social-{}", account.platform),
-                        account.label.clone(),
-                        if account.connected {
-                            AiSettingItemStatus::Running
-                        } else {
-                            AiSettingItemStatus::Stopped
-                        },
-                        AiSettingItemSource::Custom,
-                    )
-                    .icon(
-                        Icon::new(IconName::Link)
-                            .size(IconSize::Small)
-                            .color(Color::Muted),
-                    )
-                    .detail_label(format!(
-                        "{} - {} - {}",
-                        account.platform, state, account.next_action
-                    ))
-                    .action(
+                let mut item = AiSettingItem::new(
+                    format!("dx-agent-social-{}", account.platform),
+                    account.label.clone(),
+                    if account.connected {
+                        AiSettingItemStatus::Running
+                    } else {
+                        AiSettingItemStatus::Stopped
+                    },
+                    AiSettingItemSource::Custom,
+                )
+                .icon(
+                    Icon::new(IconName::Link)
+                        .size(IconSize::Small)
+                        .color(Color::Muted),
+                )
+                .detail_label(format!(
+                    "{} - {} - {}",
+                    account.platform, state, account.next_action
+                ));
+
+                if snapshot.enabled && snapshot.cli_actions_allowed {
+                    item = item.action(
                         IconButton::new(
                             format!("dx-agent-social-list-{}", account.platform),
-                            IconName::Link,
+                            IconName::RotateCw,
                         )
                         .icon_color(Color::Muted)
                         .icon_size(IconSize::Small)
-                        .disabled(!snapshot.enabled || !snapshot.cli_actions_allowed)
                         .tooltip(Tooltip::text("Refresh redacted social receipt"))
                         .on_click(cx.listener(|this, _, _window, cx| {
                             this.run_dx_agents_bridge_action(
@@ -667,12 +667,161 @@ impl AgentConfiguration {
                                 cx,
                             );
                         })),
-                    ),
+                    );
+
+                    let platform = account.platform.clone();
+                    if account.connected {
+                        item = item.action(
+                            IconButton::new(
+                                format!("dx-agent-social-disconnect-{}", account.platform),
+                                IconName::Trash,
+                            )
+                            .icon_color(Color::Muted)
+                            .icon_size(IconSize::Small)
+                            .tooltip(Tooltip::text("Prepare redacted disconnect/revoke receipt"))
+                            .on_click(cx.listener(
+                                move |this, _, _window, cx| {
+                                    this.run_dx_agents_bridge_action(
+                                        vec![
+                                            "agents".to_string(),
+                                            "social".to_string(),
+                                            "disconnect".to_string(),
+                                            "--platform".to_string(),
+                                            platform.clone(),
+                                            "--json".to_string(),
+                                        ],
+                                        cx,
+                                    );
+                                },
+                            )),
+                        );
+                    } else {
+                        item = item.action(
+                            IconButton::new(
+                                format!("dx-agent-social-connect-{}", account.platform),
+                                IconName::Link,
+                            )
+                            .icon_color(Color::Muted)
+                            .icon_size(IconSize::Small)
+                            .tooltip(Tooltip::text("Prepare redacted connect/QR receipt"))
+                            .on_click(cx.listener(
+                                move |this, _, _window, cx| {
+                                    this.run_dx_agents_bridge_action(
+                                        vec![
+                                            "agents".to_string(),
+                                            "social".to_string(),
+                                            "connect".to_string(),
+                                            "--platform".to_string(),
+                                            platform.clone(),
+                                            "--json".to_string(),
+                                        ],
+                                        cx,
+                                    );
+                                },
+                            )),
+                        );
+                    }
+                }
+
+                stack = stack.child(item);
+            }
+
+            if snapshot.social_connect.present {
+                stack = stack
+                    .child(self.render_dx_agents_social_action_receipt(&snapshot.social_connect));
+            }
+
+            if snapshot.social_disconnect.present {
+                stack = stack.child(
+                    self.render_dx_agents_social_action_receipt(&snapshot.social_disconnect),
                 );
             }
         }
 
         stack.into_any_element()
+    }
+
+    fn render_dx_agents_social_action_receipt(
+        &self,
+        receipt: &DxAgentSocialActionSummary,
+    ) -> impl IntoElement {
+        let connected = if receipt.connected.unwrap_or(false) {
+            "connected"
+        } else {
+            "not connected"
+        };
+        let explicit_action = if receipt.explicit_user_action_required {
+            "user action required"
+        } else {
+            "no user action required"
+        };
+        let detail = if receipt.action == "connect" {
+            let support = if receipt.connect_supported {
+                "supported"
+            } else {
+                "unsupported"
+            };
+            let qr = if receipt.qr_supported {
+                "QR ready"
+            } else {
+                "QR unavailable"
+            };
+            let link = if receipt.link_supported {
+                "link ready"
+            } else {
+                "link unavailable"
+            };
+            format!(
+                "{} ({}) connect {}, via {}, {}, {}, {}, {}, config {}",
+                receipt.label,
+                receipt.platform,
+                support,
+                receipt.connect_method,
+                qr,
+                link,
+                connected,
+                explicit_action,
+                receipt.safe_config_state
+            )
+        } else {
+            let support = if receipt.disconnect_supported {
+                "supported"
+            } else {
+                "not needed"
+            };
+            let revoke = if receipt.manual_revoke_required {
+                "provider revoke required"
+            } else {
+                "no provider revoke required"
+            };
+            format!(
+                "{} ({}) disconnect {}, {}, {}, {}, config {}",
+                receipt.label,
+                receipt.platform,
+                support,
+                revoke,
+                connected,
+                explicit_action,
+                receipt.safe_config_state
+            )
+        };
+
+        v_flex()
+            .gap_0p5()
+            .child(
+                Label::new(format!(
+                    "Last {} receipt: {} - {}",
+                    receipt.action, receipt.status, detail
+                ))
+                .size(LabelSize::Small)
+                .color(Color::Muted),
+            )
+            .child(
+                Label::new(format!("Next: {}", receipt.next_action))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            )
+            .into_any_element()
     }
 
     fn render_dx_agents_catalog_items(

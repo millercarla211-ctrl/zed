@@ -11,6 +11,15 @@ CHANGED:
 NOTES:
 - This slice reads metadata receipts and runs only the explicit `dx agents release-gate --json` action on user click. It does not import secrets, start `dx-agents`, run provider calls, start local servers, or run Cargo/`just run` validation.
 
+[2026-05-21] - DX Agents Social Action Receipts
+
+ADDED:
+- Added per-account DX Agents social connect/disconnect controls in Agent Configuration that run only fixed `dx-agents agents social connect --platform <platform> --json` or `dx-agents agents social disconnect --platform <platform> --json` command vectors.
+- Surfaced the latest redacted social connect/disconnect receipts in Agent Configuration and the DX launch right rail, including QR/link support, explicit-user-action posture, safe config state, and revoke readiness without exposing payloads.
+
+NOTES:
+- This slice uses receipt metadata only. Zed still does not store QR payloads, link payloads, tokens, cookies, account targets, provider secrets, or social credentials.
+
 [2026-05-21] - DX Agents Import Summary Readiness
 
 ADDED:

@@ -11,6 +11,7 @@ use ui::{IconName, prelude::*};
 
 use crate::dx_agent_bridge::{
     DxAgentAutomation, DxAgentBridgeSnapshot, DxAgentModel, DxAgentProvider, DxAgentSocialAccount,
+    DxAgentSocialActionSummary,
 };
 use crate::dx_check_score::DxCheckScoreSnapshot;
 use crate::dx_deploy_targets::{
@@ -608,6 +609,22 @@ fn dx_agent_social_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
         }
     }
 
+    if snapshot.social_connect.present {
+        stack = stack.child(dx_agent_social_action_row(
+            SharedString::from("dx-agent-social-connect-receipt"),
+            &snapshot.social_connect,
+            cx,
+        ));
+    }
+
+    if snapshot.social_disconnect.present {
+        stack = stack.child(dx_agent_social_action_row(
+            SharedString::from("dx-agent-social-disconnect-receipt"),
+            &snapshot.social_disconnect,
+            cx,
+        ));
+    }
+
     if !snapshot.automations.is_empty() {
         stack = stack.child(section_title("Automations", IconName::ListTodo));
         for (ix, automation) in snapshot.automations.iter().take(2).enumerate() {
@@ -656,6 +673,59 @@ fn dx_agent_social_row(id: SharedString, account: &DxAgentSocialAccount, cx: &Ap
                     .truncate(),
             )
         })
+        .into_any_element()
+}
+
+fn dx_agent_social_action_row(
+    id: SharedString,
+    receipt: &DxAgentSocialActionSummary,
+    cx: &App,
+) -> AnyElement {
+    let detail = if receipt.action == "connect" {
+        format!(
+            "{} via {} (supported {}, qr {}, link {}, connected {})",
+            receipt.label,
+            receipt.connect_method,
+            receipt.connect_supported,
+            receipt.qr_supported,
+            receipt.link_supported,
+            receipt.connected.unwrap_or(false)
+        )
+    } else {
+        format!(
+            "{} supported {}, revoke {}, connected {}, state {}",
+            receipt.label,
+            receipt.disconnect_supported,
+            receipt.manual_revoke_required,
+            receipt.connected.unwrap_or(false),
+            receipt.safe_config_state
+        )
+    };
+
+    v_flex()
+        .id(id)
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().element_background)
+        .child(metric_row(
+            format!("Last {}", receipt.action),
+            receipt.status.clone(),
+        ))
+        .child(
+            Label::new(detail)
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .child(
+            Label::new(receipt.next_action.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
         .into_any_element()
 }
 
