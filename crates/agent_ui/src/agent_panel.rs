@@ -6297,6 +6297,64 @@ impl AgentPanel {
         self.insert_dx_launch_prompt(prompt, window, cx);
     }
 
+    pub fn draft_dx_automation_action_from_sidebar(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let status = self.dx_launch_workspace_status(cx);
+        let agent_bridge = &status.agent_bridge;
+        let prompt = if let Some(automation) = agent_bridge.automations.first() {
+            let actions = automation
+                .actions
+                .iter()
+                .take(3)
+                .map(|action| {
+                    format!(
+                        "{}: command `{}`; enabled={}; user_action_required={}; writes_receipt={}; receipt `{}`",
+                        action.label.as_str(),
+                        action.command.as_str(),
+                        action.enabled,
+                        action.user_action_required,
+                        action.writes_receipt,
+                        action.receipt_filename.as_str()
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
+            let actions = if actions.is_empty() {
+                "No row actions are visible for this automation receipt yet.".to_string()
+            } else {
+                format!("Visible row actions: {actions}.")
+            };
+
+            format!(
+                "Review DX Agents automation `{id}` from `{source}`. Status `{status}`, enabled={enabled}, schedule `{schedule}`. {actions} Next action: {next_action}. Use only the fixed public DX Agents automation receipt contracts such as `dx agents automate list --json` or `dx agents run --json` when explicitly approved. Do not run builds, local servers, browser input, shell commands, provider calls, secret import, social login, or unmanaged automation runners.",
+                id = automation.id.as_str(),
+                source = automation.source.as_str(),
+                status = automation.status.as_str(),
+                enabled = automation.enabled,
+                schedule = automation.schedule_kind.as_str(),
+                next_action = if automation.next_action.is_empty() {
+                    "review latest automation receipt metadata"
+                } else {
+                    automation.next_action.as_str()
+                }
+            )
+        } else {
+            format!(
+                "Review DX Agents automations for this workspace. Receipt root `{}` exists={}; bridge status `{}`; automation_count={}; active_task_count={}. If automation receipts are missing or stale, prepare the next safe operator step around `dx agents automate list --json` without running it automatically. Do not run builds, local servers, browser input, shell commands, provider calls, secret import, social login, or unmanaged automation runners.",
+                agent_bridge.receipt_root.display(),
+                agent_bridge.root_exists,
+                agent_bridge.status.as_str(),
+                agent_bridge.automation_count,
+                agent_bridge.active_task_count
+            )
+        };
+
+        self.insert_dx_launch_prompt(prompt, window, cx);
+    }
+
     fn dx_launch_workspace_status(&self, cx: &Context<Self>) -> DxLaunchWorkspaceStatus {
         let workspace_roots = self
             .workspace

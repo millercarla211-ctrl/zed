@@ -1,3 +1,13 @@
+[2026-05-22] - DX Compact Automations Action
+
+CHANGED:
+- Wired the compact activity bar Automations action to draft a DX Agents automation receipt review from the Agent bridge snapshot.
+- Kept the compact coding layout in place and avoided direct automation command execution, shell calls, secret import, or social-login flows.
+
+NOTES:
+- This preserves existing Zed project task behavior outside the compact activity bar and preserves Agent panel, Web Preview, Write/Ask, model picker, and thread behavior.
+- No Cargo commands, local servers, live CLI commands, provider calls, automation runners, or `just run` were executed.
+
 [2026-05-22] - DX Compact Agent Width Cap
 
 CHANGED:

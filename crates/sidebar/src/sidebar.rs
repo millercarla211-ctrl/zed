@@ -6967,9 +6967,7 @@ impl Sidebar {
                 "sidebar-activity-automations",
                 IconName::ListTodo,
                 "Automations",
-                |_this, _, window, cx| {
-                    window.dispatch_action(zed_actions::OpenProjectDebugTasks.boxed_clone(), cx);
-                },
+                |this, _, window, cx| this.draft_dx_automation_action(window, cx),
             )
             .into_any_element(),
             button(
@@ -8056,6 +8054,19 @@ impl Sidebar {
                 if let Some(panel) = workspace.panel::<AgentPanel>(cx) {
                     panel.update(cx, |panel, cx| {
                         panel.draft_dx_source_action_from_sidebar(window, cx);
+                    });
+                    workspace.focus_panel::<AgentPanel>(window, cx);
+                }
+            });
+        }
+    }
+
+    fn draft_dx_automation_action(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(workspace) = self.active_workspace(cx) {
+            workspace.update(cx, |workspace, cx| {
+                if let Some(panel) = workspace.panel::<AgentPanel>(cx) {
+                    panel.update(cx, |panel, cx| {
+                        panel.draft_dx_automation_action_from_sidebar(window, cx);
                     });
                     workspace.focus_panel::<AgentPanel>(window, cx);
                 }
