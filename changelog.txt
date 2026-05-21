@@ -1,3 +1,15 @@
+[2026-05-22] - DX Activity Bar Module Split
+
+ADDED:
+- Added `crates/sidebar/src/coding_activity_bar.rs` for the compact activity-bar shell used by the crowded editor + Web Preview + Agent layout.
+
+CHANGED:
+- Kept activity-bar action wiring in the existing sidebar while moving the reusable narrow-bar layout into a small module.
+
+NOTES:
+- This is a structure-only refinement; it does not change thread behavior, Agent panel behavior, Web Preview behavior, Write/Ask/model picker behavior, or sidebar commands.
+- No Cargo commands, local servers, or `just run` were executed.
+
 [2026-05-22] - DX Visible Pane Activity Bar Trigger
 
 CHANGED:

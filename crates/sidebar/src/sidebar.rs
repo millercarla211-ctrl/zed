@@ -1,3 +1,4 @@
+mod coding_activity_bar;
 mod thread_switcher;
 
 use acp_thread::ThreadStatus;
@@ -6916,99 +6917,92 @@ impl Sidebar {
                 .on_click(cx.listener(on_click))
         };
 
-        v_flex()
-            .id("workspace-sidebar-activity-bar")
-            .w_full()
-            .h_full()
-            .items_center()
-            .justify_between()
-            .py_1()
-            .child(
-                v_flex()
-                    .items_center()
-                    .gap_1()
-                    .child(button(
-                        "sidebar-activity-new-chat",
-                        IconName::NewThread,
-                        "New Chat",
-                        |this, _, window, cx| {
-                            if let Some(workspace) = this.active_workspace(cx) {
-                                this.create_new_thread(&workspace, window, cx);
-                            }
-                        },
-                    ))
-                    .child(button(
-                        "sidebar-activity-search",
-                        IconName::MagnifyingGlass,
-                        "Search",
-                        |this, _, window, cx| {
-                            this.activity_bar_expanded = true;
-                            this.show_thread_list(window, cx);
-                            this.focus_sidebar_filter(&FocusSidebarFilter, window, cx);
-                        },
-                    ))
-                    .child(button(
-                        "sidebar-activity-agents",
-                        IconName::ZedAgent,
-                        "Agents",
-                        |this, _, window, cx| this.focus_agent_panel(window, cx),
-                    ))
-                    .child(button(
-                        "sidebar-activity-sources",
-                        IconName::Book,
-                        "Sources",
-                        |this, _, window, cx| {
-                            this.activity_bar_expanded = true;
-                            this.show_thread_list(window, cx);
-                        },
-                    ))
-                    .child(button(
-                        "sidebar-activity-plugins",
-                        IconName::Blocks,
-                        "Plugins",
-                        |_this, _, window, cx| {
-                            window.dispatch_action(Box::new(zed_actions::AcpRegistry), cx);
-                        },
-                    ))
-                    .child(button(
-                        "sidebar-activity-automations",
-                        IconName::ListTodo,
-                        "Automations",
-                        |_this, _, window, cx| {
-                            window.dispatch_action(
-                                zed_actions::OpenProjectDebugTasks.boxed_clone(),
-                                cx,
-                            );
-                        },
-                    ))
-                    .child(
-                        button(
-                            "sidebar-activity-background-tasks",
-                            IconName::Clock,
-                            "Background Tasks",
-                            |this, _, window, cx| {
-                                this.activity_bar_expanded = true;
-                                this.show_archive(window, cx);
-                            },
-                        )
-                        .toggle_state(is_archive),
-                    ),
+        let primary_actions = vec![
+            button(
+                "sidebar-activity-new-chat",
+                IconName::NewThread,
+                "New Chat",
+                |this, _, window, cx| {
+                    if let Some(workspace) = this.active_workspace(cx) {
+                        this.create_new_thread(&workspace, window, cx);
+                    }
+                },
             )
-            .child(
-                v_flex()
-                    .items_center()
-                    .gap_1()
-                    .child(button(
-                        "sidebar-activity-settings",
-                        IconName::Settings,
-                        "Settings",
-                        |_this, _, window, cx| {
-                            window.dispatch_action(Box::new(zed_actions::agent::OpenSettings), cx);
-                        },
-                    ))
-                    .child(self.render_recent_projects_button(cx))
-                    .child(self.render_sidebar_toggle_button(cx)),
+            .into_any_element(),
+            button(
+                "sidebar-activity-search",
+                IconName::MagnifyingGlass,
+                "Search",
+                |this, _, window, cx| {
+                    this.activity_bar_expanded = true;
+                    this.show_thread_list(window, cx);
+                    this.focus_sidebar_filter(&FocusSidebarFilter, window, cx);
+                },
             )
+            .into_any_element(),
+            button(
+                "sidebar-activity-agents",
+                IconName::ZedAgent,
+                "Agents",
+                |this, _, window, cx| this.focus_agent_panel(window, cx),
+            )
+            .into_any_element(),
+            button(
+                "sidebar-activity-sources",
+                IconName::Book,
+                "Sources",
+                |this, _, window, cx| {
+                    this.activity_bar_expanded = true;
+                    this.show_thread_list(window, cx);
+                },
+            )
+            .into_any_element(),
+            button(
+                "sidebar-activity-plugins",
+                IconName::Blocks,
+                "Plugins",
+                |_this, _, window, cx| {
+                    window.dispatch_action(Box::new(zed_actions::AcpRegistry), cx);
+                },
+            )
+            .into_any_element(),
+            button(
+                "sidebar-activity-automations",
+                IconName::ListTodo,
+                "Automations",
+                |_this, _, window, cx| {
+                    window.dispatch_action(zed_actions::OpenProjectDebugTasks.boxed_clone(), cx);
+                },
+            )
+            .into_any_element(),
+            button(
+                "sidebar-activity-background-tasks",
+                IconName::Clock,
+                "Background Tasks",
+                |this, _, window, cx| {
+                    this.activity_bar_expanded = true;
+                    this.show_archive(window, cx);
+                },
+            )
+            .toggle_state(is_archive)
+            .into_any_element(),
+        ];
+
+        let secondary_actions = vec![
+            button(
+                "sidebar-activity-settings",
+                IconName::Settings,
+                "Settings",
+                |_this, _, window, cx| {
+                    window.dispatch_action(Box::new(zed_actions::agent::OpenSettings), cx);
+                },
+            )
+            .into_any_element(),
+            self.render_recent_projects_button(cx).into_any_element(),
+            self.render_sidebar_toggle_button(cx).into_any_element(),
+        ];
+
+        coding_activity_bar::render_coding_activity_bar(primary_actions, secondary_actions)
     }
 
     fn manage_space(
