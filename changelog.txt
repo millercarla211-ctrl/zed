@@ -1,3 +1,15 @@
+[2026-05-22] - DX Visible Pane Activity Bar Trigger
+
+CHANGED:
+- Tightened the compact AI activity-bar trigger to require visible center pane activity for both the editor and Web Preview/browser surface while the Agent panel is visible.
+
+FIXED:
+- Avoided collapsing the far-left AI sidebar just because a Web Preview tab exists in the workspace but is hidden behind the active editor tab.
+
+NOTES:
+- This refinement preserves the full sidebar, thread behavior, Write/Ask/model picker behavior, Web Preview behavior, and current panel behavior.
+- No Cargo commands, local servers, or `just run` were executed.
+
 [2026-05-22] - DX Agents Receipt Index Rows
 
 ADDED:

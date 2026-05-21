@@ -7144,13 +7144,13 @@ impl Sidebar {
         }
 
         let workspace = workspace.read(cx);
-        if workspace.active_item(cx).is_none() {
-            return false;
-        }
-
         let mut has_editor = false;
         let mut has_browser = false;
-        for item in workspace.items(cx) {
+        for pane in workspace.panes() {
+            let Some(item) = pane.read(cx).active_item() else {
+                continue;
+            };
+
             match item.screen_kind(cx) {
                 WorkspaceScreenKind::Editor => has_editor = true,
                 WorkspaceScreenKind::Browser => has_browser = true,
