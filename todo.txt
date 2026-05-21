@@ -13,9 +13,9 @@ IN PROGRESS:
 
 COMPLETED:
 - DX Studio public edit-operation contract discovery: Web Preview now includes `public/preview-manifest.json` and source-owned launch edit-contract files in DX Studio manifest discovery, advertises edit operation IDs/marker attributes in session and page diagnostics, and keeps mutation commands explicitly disabled.
-- DX Binary Cache artifact-review routing: added top-level artifact-review status and regenerate guidance when receipt-cache artifacts are malformed, expired, partial, missing-root, or unknown while preserving JSON receipt authority.
+- DX Binary Cache artifact-review routing: added top-level artifact-review status and regenerate guidance when receipt-cache artifacts are malformed, expired, partial, missing-roots, or unknown while preserving JSON receipt authority.
 - DX Binary Cache rail artifact health: wired the Zed-facing Binary Cache rail to read `DXRCP001` receipt-cache artifacts through `dx_catalog`, render launch/receipt/token/RLM/serializer health when artifacts exist, keep JSON-authoritative fallback states when artifacts are missing, and surface malformed artifacts without marking meter rows ready.
-- DX receipt-cache health classification: added shared ready/partial/stale/expired/malformed/missing-root/empty/unknown health helpers for manifest and per-kind summaries so rail consumers can avoid divergent status logic.
+- DX receipt-cache health classification: added shared ready/partial/stale/expired/malformed/missing-roots/empty/unknown health helpers for manifest and per-kind summaries so rail consumers can avoid divergent status logic.
 - DX receipt-cache kind summaries: added per-kind cache summaries for Agent, launch, token, Forge, source, media, RLM, serializer, deploy, runtime-proof, and other receipt buckets so rail consumers can avoid bespoke counting.
 - DX receipt-cache summary helpers: added manifest-level summary, kind filtering, and latest-per-root helpers so Zed rails and governed producers can consume root/freshness/malformed/latest metadata without rescanning JSON receipt folders.
 - DX standard receipt-cache root contract: added canonical `dx_catalog` helpers for launch/agent/token/Forge/source/media/RLM/serializer/deploy/runtime-proof receipt buckets so governed cache producers can share the same mapping as the Zed rails without duplicating bucket definitions.

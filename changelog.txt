@@ -13,7 +13,7 @@ NOTES:
 [2026-05-21] - DX Binary Cache Artifact Review Routing
 
 ADDED:
-- Added top-level Binary Cache `artifact-review` status for malformed, expired, partial, missing-root, or unknown receipt-cache artifact states.
+- Added top-level Binary Cache `artifact-review` status for malformed, expired, partial, missing-roots, or unknown receipt-cache artifact states.
 - Added regenerate guidance for artifact-review states while keeping JSON receipt readers authoritative.
 
 CHANGED:
@@ -37,7 +37,7 @@ NOTES:
 [2026-05-21] - DX Receipt Cache Health Classification
 
 ADDED:
-- Added shared receipt-cache health classification for ready, partial, stale, expired, malformed, missing-root, empty, and unknown states.
+- Added shared receipt-cache health classification for ready, partial, stale, expired, malformed, missing-roots, empty, and unknown states.
 - Added health helpers for full manifest summaries and per-kind receipt bucket summaries.
 
 CHANGED:
