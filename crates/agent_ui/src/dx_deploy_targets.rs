@@ -41,6 +41,13 @@ pub(crate) struct DxDeployReceiptBucket {
     pub latest: Vec<String>,
 }
 
+struct DeployReceiptBucketSpec {
+    label: &'static str,
+    root_label: &'static str,
+    children: &'static [&'static str],
+    include_legacy_direct: bool,
+}
+
 impl DxDeployTargetSnapshot {
     pub(crate) fn receipt_bucket_count(&self, label: &str) -> usize {
         self.receipt_buckets
@@ -171,41 +178,67 @@ fn scan_deploy_receipts(
 
 fn deploy_receipt_buckets(workspace_roots: &[PathBuf]) -> Vec<DxDeployReceiptBucket> {
     [
-        ("Readiness", "readiness"),
-        ("Env", "env"),
-        ("Logs", "logs"),
-        ("Rollback", "rollback"),
+        DeployReceiptBucketSpec {
+            label: "Readiness",
+            root_label: "tools/dx-deploy/readiness",
+            children: &["readiness"],
+            include_legacy_direct: true,
+        },
+        DeployReceiptBucketSpec {
+            label: "Env",
+            root_label: "tools/dx-deploy/env",
+            children: &["env"],
+            include_legacy_direct: false,
+        },
+        DeployReceiptBucketSpec {
+            label: "Logs",
+            root_label: "tools/dx-deploy/logs",
+            children: &["logs"],
+            include_legacy_direct: false,
+        },
+        DeployReceiptBucketSpec {
+            label: "Rollback",
+            root_label: "tools/dx-deploy/rollback",
+            children: &["rollback"],
+            include_legacy_direct: false,
+        },
+        DeployReceiptBucketSpec {
+            label: "URLs",
+            root_label: "tools/dx-deploy/urls",
+            children: &["urls", "url", "previews", "preview"],
+            include_legacy_direct: false,
+        },
+        DeployReceiptBucketSpec {
+            label: "Status",
+            root_label: "tools/dx-deploy/status",
+            children: &["status", "releases", "release"],
+            include_legacy_direct: false,
+        },
     ]
     .into_iter()
-    .map(|(label, child)| deploy_receipt_bucket(workspace_roots, label, child))
+    .map(|spec| deploy_receipt_bucket(workspace_roots, spec))
     .collect()
 }
 
 fn deploy_receipt_bucket(
     workspace_roots: &[PathBuf],
-    label: &'static str,
-    child: &'static str,
+    spec: DeployReceiptBucketSpec,
 ) -> DxDeployReceiptBucket {
-    let root_label = match child {
-        "readiness" => "tools/dx-deploy/readiness",
-        "env" => "tools/dx-deploy/env",
-        "logs" => "tools/dx-deploy/logs",
-        "rollback" => "tools/dx-deploy/rollback",
-        _ => "tools/dx-deploy",
-    };
     let mut root_exists = false;
     let mut count = 0;
     let mut latest = Vec::new();
 
     for root in workspace_roots {
-        let receipt_root = root.join("tools").join("dx-deploy").join(child);
-        if receipt_root.is_dir() {
-            root_exists = true;
+        for child in spec.children {
+            let receipt_root = root.join("tools").join("dx-deploy").join(child);
+            if receipt_root.is_dir() {
+                root_exists = true;
+            }
+            count += count_receipt_files(&receipt_root);
+            latest.extend(latest_receipt_labels(root, &receipt_root, 2));
         }
-        count += count_receipt_files(&receipt_root);
-        latest.extend(latest_receipt_labels(root, &receipt_root, 2));
 
-        if child == "readiness" {
+        if spec.include_legacy_direct {
             let legacy_root = root.join("tools").join("dx-deploy");
             if legacy_root.is_dir() {
                 root_exists = true;
@@ -220,8 +253,8 @@ fn deploy_receipt_bucket(
     let newest = latest.first().map(|(modified, _)| *modified);
 
     DxDeployReceiptBucket {
-        label,
-        root_label,
+        label: spec.label,
+        root_label: spec.root_label,
         root_exists,
         count,
         status: receipt_bucket_status(root_exists, count, newest),

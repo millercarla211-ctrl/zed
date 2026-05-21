@@ -474,16 +474,16 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | Forge safety and backup policy | 84/100 | Risky actions can produce permissioned no-permanent-delete Forge/zstd safety-policy receipts, validate reviewed backup/quarantine runner readiness, execute a native zstd backup bundle plus manifest before target mutation, restore that backup into a managed verified preview with receipts, and expose Forge receipt history in panel rails | Add broader move/overwrite coverage and explicit restore-to-target flow after preview audit |
 | Forge panel | 32/100 | Code/media snapshots, remotes, sync plans, jobs, restore warnings, and receipt history are visible through panel-facing contracts; restore preview source rows now expose blocker/risk labels from restore receipts | Add eventual restore-to-target approvals after preview audit |
 | Drive/Sources rail | 66/100 | NotebookLM-style source sets and markdown task docs feed agents through rail-visible source sets plus managed Agent attachment receipts, attach-ready counts, source-derived prompt cards, and produced-file proof rows for output existence, receipt, hash, and empty-file warnings | Add row-level source controls |
-| Check panel | 20/100 | Project score and blockers include a typed read-only score schema for workspace structure, receipt root/file state, attach-ready sources, tool proof receipts, deploy target presence, deploy readiness receipts, env/log/rollback receipt inputs, validation/visual proof freshness, and background-task state | Add broader validation categories and runtime proof handoff |
-| Deploy panel | 18/100 | CI/CD readiness, env state, URLs, logs, rollback, receipts visible; workspace deploy target detection recognizes Vercel, Netlify, Cloudflare Wrangler, Fly, and Docker config files, and the rail now summarizes readiness/env/logs/rollback receipt buckets under `tools/dx-deploy` with freshness states | Add URL/status receipt summaries and runtime proof |
+| Check panel | 23/100 | Project score and blockers include a typed read-only score schema for workspace structure, receipt root/file state, attach-ready sources, tool proof receipts, deploy target presence, deploy readiness receipts, env/log/rollback receipt inputs, URL/status deploy receipts, validation/visual proof freshness, and background-task state | Add broader validation categories and restore/runtime approval gates |
+| Deploy panel | 22/100 | CI/CD readiness, env state, URLs, logs, rollback, receipts visible; workspace deploy target detection recognizes Vercel, Netlify, Cloudflare Wrangler, Fly, and Docker config files, and the rail now summarizes readiness/env/logs/rollback plus URL/status receipt buckets under `tools/dx-deploy` with freshness states | Add richer deploy receipt drilldowns and runtime proof |
 | DCP bridge | 0/100 | DCP/MCP/ACP/local tools share one capability, permission, and receipt model | Define minimum DCP schema |
 | Media tool bridge | 80/100 | Agent can plan safe ffmpeg/ffprobe inspect/extract actions, validate approved runner readiness, execute approved no-shell ffmpeg/ffprobe argument vectors, hash produced files, persist managed execution receipts, expose produced files as durable source entries with proof rows, and advertise guided media proof actions | Add runtime media proof |
-| Codex-style rails | 46/100 | Left Sources and right project/task rail are optional, cheap when closed, backed by receipt-producing Agent actions, and now include attachment readiness, Check score surfaces, proof freshness, restore warnings, deploy target visibility, source/deploy action prompts, compact deploy proof rows, and produced-file proof rows | Add runtime-proof handoff cards |
-| Launch demo package | 60/100 | May 22 sprint demos show speed, local model tools, provider freedom, metasearch, receipt chains, panels, guided proof drafts, source readiness, Check scoring, proof freshness, restore warnings, deploy target visibility, source action prompts, deploy readiness receipts, deploy env/log/rollback receipt summaries, and produced-file proof rows | Add runtime proof and URL/status deploy summaries |
+| Codex-style rails | 48/100 | Left Sources and right project/task rail are optional, cheap when closed, backed by receipt-producing Agent actions, and now include attachment readiness, Check score surfaces, proof freshness, restore warnings, deploy target visibility, source/deploy action prompts, compact deploy proof rows, URL/status deploy receipts, runtime-proof handoff cards, and produced-file proof rows | Add restore approval cards and runtime proof evidence |
+| Launch demo package | 63/100 | May 22 sprint demos show speed, local model tools, provider freedom, metasearch, receipt chains, panels, guided proof drafts, source readiness, Check scoring, proof freshness, restore warnings, deploy target visibility, source action prompts, deploy readiness receipts, deploy env/log/rollback receipt summaries, URL/status deploy summaries, runtime-proof handoffs, and produced-file proof rows | Add governed runtime proof and restore approval walkthrough |
 
 Overall implementation status: 100/100 for the completed launch-spine set.
 
-Current next 100-point feature set status: 86/100 for DX Native Tool Execution, Restore, Panels, and Launch Demos.
+Current next 100-point feature set status: 88/100 for DX Native Tool Execution, Restore, Panels, and Launch Demos.
 
 Overall planning and product direction status: 100/100 for the current roadmap.
 
@@ -569,6 +569,7 @@ Overall planning and product direction status: 100/100 for the current roadmap.
    - env readiness,
    - CI/CD logs,
    - preview/production URLs,
+   - URL/status receipt buckets,
    - rollback receipts.
 
 11. DCP bridge

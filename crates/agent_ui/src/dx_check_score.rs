@@ -27,6 +27,8 @@ pub(crate) struct DxCheckScoreInput<'a> {
     pub deploy_env_receipt_count: usize,
     pub deploy_log_receipt_count: usize,
     pub deploy_rollback_receipt_count: usize,
+    pub deploy_url_receipt_count: usize,
+    pub deploy_status_receipt_count: usize,
     pub validation_proof_receipt_count: usize,
     pub visual_proof_receipt_count: usize,
     pub fresh_proof_receipt_count: usize,
@@ -93,6 +95,13 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
     if deploy_ops_receipt_count > 0 {
         score += 3;
     }
+    let deploy_url_status_receipt_count =
+        input.deploy_url_receipt_count + input.deploy_status_receipt_count;
+    if deploy_url_status_receipt_count > 0 {
+        score += 2;
+    } else if input.deploy_target_count > 0 {
+        blockers.push("No deploy URL/status receipts yet".to_string());
+    }
     let validation_visual_proof_count =
         input.validation_proof_receipt_count + input.visual_proof_receipt_count;
     if input.validation_proof_receipt_count > 0 {
@@ -153,14 +162,17 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
                 state: if input.deploy_target_count == 0 {
                     format!(
                         "No targets, {} proof receipt(s)",
-                        input.deploy_readiness_receipt_count + deploy_ops_receipt_count
+                        input.deploy_readiness_receipt_count
+                            + deploy_ops_receipt_count
+                            + deploy_url_status_receipt_count
                     )
                 } else {
                     format!(
-                        "{} target(s), {} readiness, {} ops",
+                        "{} target(s), {} readiness, {} ops, {} url/status",
                         input.deploy_target_count,
                         input.deploy_readiness_receipt_count,
-                        deploy_ops_receipt_count
+                        deploy_ops_receipt_count,
+                        deploy_url_status_receipt_count
                     )
                 },
             },

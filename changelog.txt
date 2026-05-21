@@ -1,3 +1,17 @@
+[2026-05-21] - DX Deploy URL Status And Runtime Proof Handoff
+
+ADDED:
+- Added Deploy rail receipt buckets for URL, preview, status, and release receipts under workspace `tools/dx-deploy`.
+- Added a Runtime Proof guided card that drafts the next safe validation handoff from Check score, proof freshness, deploy target, and receipt state without running tools.
+
+CHANGED:
+- Extended the read-only Check score to include deploy URL/status receipt counts and surface missing URL/status proof as a blocker when deploy targets are present.
+- Updated deploy readiness accounting so legacy readiness receipts do not double-count URL/status buckets.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 88/100 and move the next target to restore approval and serializer/RLM execution guardrails.
+
+NOTES:
+- This slice only reads managed receipt files and drafts Agent handoff text. It does not run local servers, builds, browser input, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Proof Freshness And Produced File Cards
 
 ADDED:

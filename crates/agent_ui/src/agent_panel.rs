@@ -112,6 +112,7 @@ const DX_LAUNCH_RECIPE_PROMPT: &str = "Run the DX launch metasearch-to-reduced-c
 const DX_RECEIPT_REVIEW_PROMPT: &str = "Inspect the current DX launch receipts for this workspace. Summarize the latest metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, media, and Forge receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, or model calls.";
 const DX_MEDIA_PROOF_PROMPT: &str = "Prepare the DX media proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"media\". Then review any produced-file proof cards in the Sources rail and guide me through the next safe step using permissioned tools only: plan_dx_media_tool, gate_dx_media_tool_runner, execute_dx_media_tool only after an approved runner gate, and prepare_dx_source_attachment for produced files. Do not run local servers, builds, browser input, shell commands, unmanaged file writes, or media execution until I explicitly approve the tool request.";
 const DX_FORGE_PROOF_PROMPT: &str = "Prepare the DX Forge proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"forge\" and inspect_dx_forge_history. Then guide me through the next safe receipt step for safety policy, backup runner gate, backup execution, restore preview, and restore receipt review. Do not mutate target paths, permanently delete files, run local servers, builds, shell commands, browser input, or restore-to-target actions unless I explicitly approve the governed tool request.";
+const DX_RUNTIME_PROOF_PROMPT: &str = "Prepare the DX runtime proof handoff for this workspace. Review the Check score, Proof Freshness rows, Deploy URL/status receipt buckets, deploy targets, and current launch receipts. Draft the next safe validation handoff only. Do not run just run, cargo, builds, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions unless I explicitly approve the governed tool request.";
 
 /// Maximum number of idle threads kept in the agent panel's retained list.
 /// Set as a GPUI global to override; otherwise defaults to 5.
@@ -5937,6 +5938,17 @@ impl AgentPanel {
                 can_create_entries,
                 cx,
             ))
+            .child(self.dx_launch_guided_card(
+                "dx-runtime-proof-card",
+                "dx-runtime-proof-action",
+                IconName::Check,
+                "Runtime Proof",
+                "Review Check score, proof freshness, and deploy URL/status gates.",
+                "Draft Proof",
+                DX_RUNTIME_PROOF_PROMPT,
+                can_create_entries,
+                cx,
+            ))
             .into_any_element()
     }
 
@@ -6047,10 +6059,16 @@ impl AgentPanel {
         let deploy_env_receipt_count = deploy_targets.receipt_bucket_count("Env");
         let deploy_log_receipt_count = deploy_targets.receipt_bucket_count("Logs");
         let deploy_rollback_receipt_count = deploy_targets.receipt_bucket_count("Rollback");
+        let deploy_url_receipt_count = deploy_targets.receipt_bucket_count("URLs");
+        let deploy_status_receipt_count = deploy_targets.receipt_bucket_count("Status");
         let deploy_readiness_receipt_count = deploy_targets.receipt_bucket_count("Readiness");
         let deploy_readiness_receipt_count = if deploy_readiness_receipt_count == 0 {
             deploy_targets.receipt_count.saturating_sub(
-                deploy_env_receipt_count + deploy_log_receipt_count + deploy_rollback_receipt_count,
+                deploy_env_receipt_count
+                    + deploy_log_receipt_count
+                    + deploy_rollback_receipt_count
+                    + deploy_url_receipt_count
+                    + deploy_status_receipt_count,
             )
         } else {
             deploy_readiness_receipt_count
@@ -6067,6 +6085,8 @@ impl AgentPanel {
             deploy_env_receipt_count,
             deploy_log_receipt_count,
             deploy_rollback_receipt_count,
+            deploy_url_receipt_count,
+            deploy_status_receipt_count,
             validation_proof_receipt_count: proof_freshness.receipt_count("Validation"),
             visual_proof_receipt_count: proof_freshness.receipt_count("Visual Proof"),
             fresh_proof_receipt_count: proof_freshness.fresh_receipt_count(),
