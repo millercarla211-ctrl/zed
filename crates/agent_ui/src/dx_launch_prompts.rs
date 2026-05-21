@@ -2,6 +2,7 @@ use ui::IconName;
 
 use crate::dx_check_score::DxCheckScoreSnapshot;
 use crate::dx_deploy_targets::{DxDeployReceiptBucket, DxDeployTarget, DxDeployTargetSnapshot};
+use crate::dx_launch_audit::DxLaunchAuditSnapshot;
 use crate::dx_launch_contracts::DxLaunchContractSnapshot;
 use crate::dx_launch_readiness::DxLaunchReadinessSnapshot;
 use crate::dx_launch_receipts::DxLaunchReceiptReviewSnapshot;
@@ -327,12 +328,29 @@ pub(crate) fn launch_readiness_prompt(
     )
 }
 
+pub(crate) fn launch_audit_prompt(
+    audit: &DxLaunchAuditSnapshot,
+    readiness: &DxLaunchReadinessSnapshot,
+    contracts: &DxLaunchContractSnapshot,
+    launch_status: &DxLaunchStatusSnapshot,
+) -> String {
+    let audit_context = launch_audit_prompt_context(audit);
+    let readiness_context = launch_readiness_prompt_context(readiness);
+    let contract_context = launch_contract_prompt_context(contracts);
+    let launch_context = launch_status_prompt_context(launch_status);
+
+    format!(
+        "Review the DX launch CLI audit for this Zed workspace. Launch audit: {audit_context}. Launch gate readiness: {readiness_context}. Launch handoff contracts: {contract_context}. Launch aggregate: {launch_context}. Summarize command schema coverage, startup polling commands, fixture render states, smoke checks, write/fanout risk, redaction posture, and the next safe operator command. Do not run CLI commands, builds, local servers, browser input, deploys, shell commands, providers, agents, DX-WWW, Forge, external serializer/RLM code, model calls, or restore-to-target actions."
+    )
+}
+
 pub(crate) fn receipt_review_prompt(
     receipt_snapshot: &DxReceiptSnapshot,
     launch_status: &DxLaunchStatusSnapshot,
     launch_receipts: &DxLaunchReceiptReviewSnapshot,
     launch_contracts: &DxLaunchContractSnapshot,
     launch_readiness: &DxLaunchReadinessSnapshot,
+    launch_audit: &DxLaunchAuditSnapshot,
     tool_history: &DxToolHistorySnapshot,
     proof_freshness: &DxProofFreshnessSnapshot,
     deploy_targets: &DxDeployTargetSnapshot,
@@ -364,6 +382,7 @@ pub(crate) fn receipt_review_prompt(
     let launch_receipt_context = launch_receipt_review_prompt_context(launch_receipts);
     let launch_contract_context = launch_contract_prompt_context(launch_contracts);
     let launch_readiness_context = launch_readiness_prompt_context(launch_readiness);
+    let launch_audit_context = launch_audit_prompt_context(launch_audit);
     let tool_buckets = tool_history
         .buckets
         .iter()
@@ -411,7 +430,7 @@ pub(crate) fn receipt_review_prompt(
     };
 
     format!(
-        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Launch aggregate: {launch_context}. Launch handoff contracts: {launch_contract_context}. Launch gate readiness: {launch_readiness_context}. Launch receipt diagnostics: {launch_receipt_context}. Tool history buckets: {tool_buckets}. Forge history context: {forge_history}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest launch status, launch receipt freshness, malformed retained snapshots, handoff packet coverage, import-summary/release-gate/fallback-drill parser states, metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, restore-target plan, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
+        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Launch aggregate: {launch_context}. Launch handoff contracts: {launch_contract_context}. Launch gate readiness: {launch_readiness_context}. Launch CLI audit: {launch_audit_context}. Launch receipt diagnostics: {launch_receipt_context}. Tool history buckets: {tool_buckets}. Forge history context: {forge_history}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest launch status, launch receipt freshness, malformed retained snapshots, handoff packet coverage, schemas/fixtures/smoke/status audit state, import-summary/release-gate/fallback-drill parser states, metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, restore-target plan, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
     )
 }
 
@@ -550,6 +569,46 @@ fn launch_readiness_prompt_context(snapshot: &DxLaunchReadinessSnapshot) -> Stri
         snapshot.redaction_requires_review,
         recovery,
         examples,
+        snapshot.next_action
+    )
+}
+
+fn launch_audit_prompt_context(snapshot: &DxLaunchAuditSnapshot) -> String {
+    if !snapshot.root_exists {
+        return format!(
+            "missing launch example root `{}`; expected source-owned schemas, fixtures, smoke, and status packets",
+            snapshot.root.display()
+        );
+    }
+
+    let commands = bounded_join(&snapshot.command_rows, 5, "No command rows");
+    let fixtures = bounded_join(&snapshot.fixture_rows, 3, "No fixture rows");
+    let smoke = bounded_join(&snapshot.smoke_rows, 3, "No smoke rows");
+
+    format!(
+        "status={} summary={} commands={} metadata_only={} startup_poll={} user_action={} writes={} fixtures={}/{} smoke={}/{} passed warning={} failed={} example_status={} agents={} tokens={} discovery={} fanout={} redaction_review={} commands=[{}] fixtures=[{}] smoke_rows=[{}] next_action={}",
+        snapshot.status,
+        snapshot.operator_summary,
+        snapshot.command_count,
+        snapshot.metadata_only_count,
+        snapshot.startup_poll_count,
+        snapshot.user_action_count,
+        snapshot.write_path_count,
+        snapshot.fixture_match_count,
+        snapshot.fixture_count,
+        snapshot.smoke_passed_count,
+        snapshot.smoke_check_count,
+        snapshot.smoke_warning_count,
+        snapshot.smoke_failed_count,
+        snapshot.example_status,
+        snapshot.example_agents,
+        snapshot.example_tokens,
+        snapshot.example_discovery,
+        snapshot.command_fanout_count,
+        snapshot.redaction_requires_review,
+        commands,
+        fixtures,
+        smoke,
         snapshot.next_action
     )
 }
