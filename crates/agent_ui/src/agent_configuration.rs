@@ -89,10 +89,20 @@ fn dx_agent_action_summary(actions: &[DxAgentRowAction]) -> Option<String> {
         .take(3)
         .map(|action| {
             let state = if action.enabled { "ready" } else { "disabled" };
-            let validation = if !action.command.is_empty() && !action.secrets_exposed {
+            let validation = if !action.command.is_empty()
+                && !action.public_command.is_empty()
+                && !action.refresh_command.is_empty()
+                && !action.public_refresh_command.is_empty()
+                && !action.secrets_exposed
+            {
                 "validated"
             } else {
                 "blocked"
+            };
+            let bridge = if action.public_command.starts_with("dx agents ") {
+                ", public bridge"
+            } else {
+                ""
             };
             let user_action = if action.user_action_required {
                 ", user action"
@@ -105,8 +115,8 @@ fn dx_agent_action_summary(actions: &[DxAgentRowAction]) -> Option<String> {
                 String::new()
             };
             format!(
-                "{} {} {}{}{}",
-                action.label, state, validation, user_action, receipt
+                "{} {} {}{}{}{}",
+                action.label, state, validation, bridge, user_action, receipt
             )
         })
         .collect::<Vec<_>>()
@@ -118,14 +128,21 @@ fn dx_agent_action_summary(actions: &[DxAgentRowAction]) -> Option<String> {
 fn dx_agent_action_tooltip(action: Option<&DxAgentRowAction>, fallback: &str) -> String {
     action
         .map(|action| {
-            let refresh = if action.refresh_command.is_empty() {
+            let refresh = if action.public_refresh_command.is_empty() {
                 "without refresh handoff"
+            } else if action.public_refresh_command.starts_with("dx agents ") {
+                "with public refresh handoff"
             } else {
                 "with fixed refresh handoff"
             };
+            let bridge = if action.public_command.starts_with("dx agents ") {
+                "public DX bridge"
+            } else {
+                "validated bridge"
+            };
             format!(
-                "{}; writes {}; {}",
-                fallback, action.receipt_filename, refresh
+                "{}; writes {}; {}; {}",
+                fallback, action.receipt_filename, refresh, bridge
             )
         })
         .unwrap_or_else(|| fallback.to_string())

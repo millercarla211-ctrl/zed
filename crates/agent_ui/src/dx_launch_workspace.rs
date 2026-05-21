@@ -1295,7 +1295,7 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
             cx,
         ));
     } else if !snapshot.contract_summary.present {
-        stack = stack.child(muted_card("Run dx-agents agents contract --json", cx));
+        stack = stack.child(muted_card("Run dx agents contract --json", cx));
     }
     if snapshot.enabled && snapshot.root_exists && !snapshot.import_summary.present {
         stack = stack.child(muted_card("Run dx agents import-summary --json", cx));
@@ -1523,6 +1523,10 @@ fn dx_agent_action_line(actions: &[DxAgentRowAction]) -> Option<String> {
         .iter()
         .filter(|action| action.user_action_required)
         .count();
+    let public_bridges = actions
+        .iter()
+        .filter(|action| action.public_command.starts_with("dx agents "))
+        .count();
     let receipts = actions
         .iter()
         .take(2)
@@ -1531,7 +1535,7 @@ fn dx_agent_action_line(actions: &[DxAgentRowAction]) -> Option<String> {
         .join(", ");
 
     Some(format!(
-        "{ready}/{} action(s) ready, {user_actions} user action(s), receipts {receipts}",
+        "{ready}/{} action(s) ready, {public_bridges} public bridge(s), {user_actions} user action(s), receipts {receipts}",
         actions.len()
     ))
 }

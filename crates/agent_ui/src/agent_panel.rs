@@ -6312,9 +6312,10 @@ impl AgentPanel {
                 .take(3)
                 .map(|action| {
                     format!(
-                        "{}: command `{}`; enabled={}; user_action_required={}; writes_receipt={}; receipt `{}`",
+                        "{}: public command `{}`; refresh `{}`; enabled={}; user_action_required={}; writes_receipt={}; receipt `{}`",
                         action.label.as_str(),
-                        action.command.as_str(),
+                        action.public_command.as_str(),
+                        action.public_refresh_command.as_str(),
                         action.enabled,
                         action.user_action_required,
                         action.writes_receipt,

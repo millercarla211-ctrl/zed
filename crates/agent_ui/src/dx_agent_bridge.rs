@@ -76,11 +76,13 @@ pub(crate) struct DxAgentRowAction {
     pub id: String,
     pub label: String,
     pub command: String,
+    pub public_command: String,
     pub enabled: bool,
     pub user_action_required: bool,
     pub writes_receipt: bool,
     pub receipt_filename: String,
     pub refresh_command: String,
+    pub public_refresh_command: String,
     pub secrets_exposed: bool,
 }
 
@@ -854,17 +856,29 @@ where
 {
     let id = string_field(value, &["id"])?;
     let command = string_field(value, &["command"])?;
+    let public_command = string_field(value, &["public_command"])
+        .unwrap_or_else(|| public_command_for_runtime(&command));
     let receipt_filename = string_field(value, &["receipt_filename"])?;
     let refresh_command = string_field(value, &["refresh_command"])?;
+    let public_refresh_command = string_field(value, &["public_refresh_command"])
+        .unwrap_or_else(|| public_command_for_runtime(&refresh_command));
     let secrets_exposed = bool_field(value, &["secrets_exposed"]).unwrap_or(true);
     let writes_receipt = bool_field(value, &["writes_receipt"]).unwrap_or(false);
 
     if !writes_receipt
         || secrets_exposed
         || is_secret_like_arg(&command)
+        || is_secret_like_arg(&public_command)
         || is_secret_like_arg(&receipt_filename)
         || is_secret_like_arg(&refresh_command)
+        || is_secret_like_arg(&public_refresh_command)
         || !is_allowed(&id, &command, &receipt_filename, &refresh_command)
+        || !is_allowed(
+            &id,
+            &public_command,
+            &receipt_filename,
+            &public_refresh_command,
+        )
     {
         return None;
     }
@@ -873,11 +887,13 @@ where
         label: string_field(value, &["label"]).unwrap_or_else(|| id.clone()),
         id,
         command,
+        public_command,
         enabled: bool_field(value, &["enabled"]).unwrap_or(false),
         user_action_required: bool_field(value, &["user_action_required"]).unwrap_or(false),
         writes_receipt,
         receipt_filename,
         refresh_command,
+        public_refresh_command,
         secrets_exposed,
     })
 }
@@ -1043,7 +1059,7 @@ fn contract_summary(value: Option<&Value>, root_exists: bool) -> DxAgentContract
         redaction_requires_review,
         next_action: value
             .and_then(|value| string_field(value, &["next_action"]))
-            .unwrap_or_else(|| "dx-agents agents contract --json".to_string()),
+            .unwrap_or_else(|| "dx agents contract --json".to_string()),
         commands: value
             .map(|value| string_values_field(value, &["commands"]))
             .unwrap_or_default(),
@@ -1449,6 +1465,23 @@ fn is_secret_like_arg(value: &str) -> bool {
         || lower.contains("apikey")
         || lower.contains("password")
         || lower.contains("cookie")
+}
+
+fn public_command_for_runtime(command: &str) -> String {
+    command
+        .strip_prefix("dx-agents agents ")
+        .map(|args| format!("dx agents {args}"))
+        .or_else(|| {
+            command
+                .strip_prefix("dx-agents providers ")
+                .map(|args| format!("dx agents providers {args}"))
+        })
+        .or_else(|| {
+            command
+                .strip_prefix("dx-agents models ")
+                .map(|args| format!("dx agents models {args}"))
+        })
+        .unwrap_or_else(|| command.to_string())
 }
 
 fn is_dx_agents_command(command: &str, args: &str) -> bool {

@@ -1,3 +1,15 @@
+[2026-05-22] - DX Agents Public Row Action Metadata
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_agent_bridge.rs` so social and automation row descriptors preserve and validate `public_command` / `public_refresh_command` metadata from the DX Agents bridge contract, with safe fallback from runtime-owned `dx-agents ...` command labels to public `dx agents ...` labels for older receipts.
+- Updated `crates/agent_ui/src/agent_configuration.rs` so action readiness summaries/tooltips reflect public bridge validation while execution remains on typed fixed command variants.
+- Updated Agent prompts and launch rail summaries to render the public bridge metadata instead of only the runtime-owned command labels.
+- Updated automation prompts, missing-contract guidance, and launch rail summaries to display public `dx agents ...` metadata instead of runtime-owned `dx-agents ...` command labels.
+
+NOTES:
+- Zed still does not execute receipt-supplied command strings, import dx-agents crates, store social credentials, or read raw secret payloads.
+- No Cargo commands, local servers, live CLI commands, provider calls, social login, automation runners, browser automation, or `just run` were executed.
+
 [2026-05-22] - DX Token Tool Meter State Polish
 
 CHANGED:
