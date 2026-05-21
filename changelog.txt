@@ -1,3 +1,15 @@
+[2026-05-21] - DX Row-Level Receipt Drilldowns
+
+ADDED:
+- Added typed source-row receipt drilldowns for metasearch source packs, reduced-context receipts, media execution receipts, and Forge restore receipts.
+- Rendered receipt drilldowns inside visible Sources rail rows with file icons, separate from proof and warning rows.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` with the row-level receipt drilldown slice while keeping the current next-set status at 99.9/100 until governed runtime proof evidence is imported.
+
+NOTES:
+- This slice only reads and renders existing receipt metadata. It does not run `just run`, Cargo, local servers, browser automation, deploys, shell commands, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Row-Level Source Controls
 
 ADDED:

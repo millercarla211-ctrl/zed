@@ -65,6 +65,7 @@ pub(crate) struct DxSourceItem {
     pub detail: String,
     pub path: String,
     pub kind: DxSourceKind,
+    pub receipt_drilldowns: Vec<String>,
     pub proofs: Vec<String>,
     pub warnings: Vec<String>,
 }
@@ -131,6 +132,7 @@ fn workspace_root_set(workspace_roots: &[PathBuf]) -> DxSourceSet {
             detail: "Workspace root".to_string(),
             path: root.display().to_string(),
             kind: DxSourceKind::WorkspaceRoot,
+            receipt_drilldowns: Vec::new(),
             proofs: Vec::new(),
             warnings: Vec::new(),
         })
@@ -235,6 +237,7 @@ fn metasearch_source_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSource
         detail: format!("{item_count} items - ~{estimated_tokens} tokens"),
         path: receipt.label.clone(),
         kind: DxSourceKind::MetasearchSourcePack,
+        receipt_drilldowns: vec![format!("Source-pack receipt {}", receipt.label)],
         proofs: Vec::new(),
         warnings: Vec::new(),
     })
@@ -291,6 +294,7 @@ fn media_sources_from_receipt(receipt: &ReceiptCandidate) -> Vec<DxSourceItem> {
                 detail: format!("{media_kind} - {format} - {}", format_bytes(size_bytes)),
                 path,
                 kind: DxSourceKind::MediaOutput,
+                receipt_drilldowns: vec![format!("Execution receipt {}", receipt.label)],
                 proofs,
                 warnings,
             })
@@ -337,6 +341,7 @@ fn reduced_context_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSourceIt
         detail: format!("{source_count} sources - ~{tokens} tokens - {status}"),
         path: receipt.label.clone(),
         kind: DxSourceKind::ReducedContextReceipt,
+        receipt_drilldowns: vec![format!("Reduced-context receipt {}", receipt.label)],
         proofs: Vec::new(),
         warnings: Vec::new(),
     })
@@ -385,6 +390,7 @@ fn forge_restore_source_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSou
         ),
         path: restore_root,
         kind: DxSourceKind::ForgeRestorePreview,
+        receipt_drilldowns: vec![format!("Restore receipt {}", receipt.label)],
         proofs: Vec::new(),
         warnings,
     })

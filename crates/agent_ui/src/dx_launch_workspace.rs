@@ -439,6 +439,15 @@ fn source_item_row(
         stack = stack.child(source_row_control);
     }
 
+    for (ix, receipt) in source.receipt_drilldowns.iter().take(2).enumerate() {
+        stack = stack.child(signal_row(
+            SharedString::from(format!("source-receipt-{}-{ix}", source.path)),
+            IconName::FileTextOutlined,
+            Color::Muted,
+            receipt.clone(),
+        ));
+    }
+
     for (ix, proof) in source.proofs.iter().take(2).enumerate() {
         stack = stack.child(signal_row(
             SharedString::from(format!("source-proof-{}-{ix}", source.path)),
