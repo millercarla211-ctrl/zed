@@ -1,3 +1,17 @@
+[2026-05-21] - DX Deploy Receipt Summaries And Compact Rails
+
+ADDED:
+- Added Deploy rail receipt buckets for readiness, env, logs, and rollback receipts under workspace `tools/dx-deploy`.
+- Added compact Deploy proof rows with missing, empty, fresh, stale, and old states plus the latest receipt label when present.
+- Added deploy env/log/rollback receipt counts to the read-only Check score input and deploy-readiness Agent draft prompt.
+
+CHANGED:
+- Updated the Deploy rail to describe aggregate deploy receipts separately from per-bucket proof state.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 84/100 and move the next target to validation/visual proof receipt freshness plus produced-file proof cards.
+
+NOTES:
+- This slice only reads managed receipt files. It does not deploy, run builds, start local servers, invoke browser input, call external platform CLIs, run serializer/RLM code, or mutate restore targets.
+
 [2026-05-21] - DX Source Actions And Deploy Readiness Receipts
 
 ADDED:

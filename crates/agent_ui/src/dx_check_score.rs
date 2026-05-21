@@ -24,6 +24,9 @@ pub(crate) struct DxCheckScoreInput<'a> {
     pub visible_worktree_count: usize,
     pub deploy_target_count: usize,
     pub deploy_readiness_receipt_count: usize,
+    pub deploy_env_receipt_count: usize,
+    pub deploy_log_receipt_count: usize,
+    pub deploy_rollback_receipt_count: usize,
 }
 
 pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScoreSnapshot {
@@ -81,6 +84,12 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
     if input.deploy_readiness_receipt_count > 0 {
         score += 5;
     }
+    let deploy_ops_receipt_count = input.deploy_env_receipt_count
+        + input.deploy_log_receipt_count
+        + input.deploy_rollback_receipt_count;
+    if deploy_ops_receipt_count > 0 {
+        score += 3;
+    }
     let score = score.min(100);
 
     let state = if score >= 85 {
@@ -125,13 +134,15 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
                 label: "Deploy",
                 state: if input.deploy_target_count == 0 {
                     format!(
-                        "No targets, {} receipt(s)",
-                        input.deploy_readiness_receipt_count
+                        "No targets, {} proof receipt(s)",
+                        input.deploy_readiness_receipt_count + deploy_ops_receipt_count
                     )
                 } else {
                     format!(
-                        "{} target(s), {} receipt(s)",
-                        input.deploy_target_count, input.deploy_readiness_receipt_count
+                        "{} target(s), {} readiness, {} ops",
+                        input.deploy_target_count,
+                        input.deploy_readiness_receipt_count,
+                        deploy_ops_receipt_count
                     )
                 },
             },

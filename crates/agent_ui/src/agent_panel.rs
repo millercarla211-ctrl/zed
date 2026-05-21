@@ -6042,6 +6042,17 @@ impl AgentPanel {
         let source_sets = source_set_snapshot(&workspace_roots);
         let tool_history = tool_history_snapshot(&workspace_roots);
         let deploy_targets = deploy_target_snapshot(&workspace_roots);
+        let deploy_env_receipt_count = deploy_targets.receipt_bucket_count("Env");
+        let deploy_log_receipt_count = deploy_targets.receipt_bucket_count("Logs");
+        let deploy_rollback_receipt_count = deploy_targets.receipt_bucket_count("Rollback");
+        let deploy_readiness_receipt_count = deploy_targets.receipt_bucket_count("Readiness");
+        let deploy_readiness_receipt_count = if deploy_readiness_receipt_count == 0 {
+            deploy_targets.receipt_count.saturating_sub(
+                deploy_env_receipt_count + deploy_log_receipt_count + deploy_rollback_receipt_count,
+            )
+        } else {
+            deploy_readiness_receipt_count
+        };
         let check_score = check_score_snapshot(DxCheckScoreInput {
             receipt_root_exists: receipt_snapshot.root_exists,
             receipt_file_count,
@@ -6050,7 +6061,10 @@ impl AgentPanel {
             background_task_count: self.retained_threads.len(),
             visible_worktree_count,
             deploy_target_count: deploy_targets.targets.len(),
-            deploy_readiness_receipt_count: deploy_targets.receipt_count,
+            deploy_readiness_receipt_count,
+            deploy_env_receipt_count,
+            deploy_log_receipt_count,
+            deploy_rollback_receipt_count,
         });
 
         DxLaunchWorkspaceStatus {

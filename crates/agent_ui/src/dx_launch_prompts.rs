@@ -61,13 +61,25 @@ pub(crate) fn deploy_readiness_prompt(
             snapshot.latest_receipts.join(", ")
         )
     };
+    let receipt_buckets = snapshot
+        .receipt_buckets
+        .iter()
+        .map(|bucket| format!("{}: {} ({})", bucket.label, bucket.count, bucket.status))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let receipt_buckets = if receipt_buckets.is_empty() {
+        "No deploy receipt buckets are tracked yet.".to_string()
+    } else {
+        format!("Deploy receipt buckets: {receipt_buckets}.")
+    };
 
     format!(
-        "Inspect DX deploy readiness for {platform} target `{label}` at `{path}`. Read existing managed receipts under `tools/dx-deploy` if present; current readiness receipt count is {receipt_count}. {latest} Report env, URL, log, rollback, and permission gaps. Do not deploy, run builds, start local servers, invoke browser automation, mutate files, or call external platform CLIs unless I explicitly approve a governed tool request.",
+        "Inspect DX deploy readiness for {platform} target `{label}` at `{path}`. Read existing managed receipts under `tools/dx-deploy` if present; current deploy receipt count is {receipt_count}. {latest} {receipt_buckets} Report env, URL, log, rollback, and permission gaps. Do not deploy, run builds, start local servers, invoke browser automation, mutate files, or call external platform CLIs unless I explicitly approve a governed tool request.",
         platform = target.platform,
         label = target.label,
         path = target.path,
         receipt_count = snapshot.receipt_count,
         latest = latest,
+        receipt_buckets = receipt_buckets,
     )
 }

@@ -10,6 +10,8 @@ use std::{
 
 const DEPLOY_TARGET_CACHE_TTL: Duration = Duration::from_secs(5);
 const MAX_CONFIG_BYTES: u64 = 64 * 1024;
+const FRESH_RECEIPT_WINDOW: Duration = Duration::from_secs(24 * 60 * 60);
+const STALE_RECEIPT_WINDOW: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 #[derive(Clone)]
 pub(crate) struct DxDeployTargetSnapshot {
@@ -18,6 +20,7 @@ pub(crate) struct DxDeployTargetSnapshot {
     pub receipt_root_exists: bool,
     pub receipt_count: usize,
     pub latest_receipts: Vec<String>,
+    pub receipt_buckets: Vec<DxDeployReceiptBucket>,
 }
 
 #[derive(Clone)]
@@ -26,6 +29,26 @@ pub(crate) struct DxDeployTarget {
     pub platform: &'static str,
     pub detail: String,
     pub path: String,
+}
+
+#[derive(Clone)]
+pub(crate) struct DxDeployReceiptBucket {
+    pub label: &'static str,
+    pub root_label: &'static str,
+    pub root_exists: bool,
+    pub count: usize,
+    pub status: String,
+    pub latest: Vec<String>,
+}
+
+impl DxDeployTargetSnapshot {
+    pub(crate) fn receipt_bucket_count(&self, label: &str) -> usize {
+        self.receipt_buckets
+            .iter()
+            .find(|bucket| bucket.label == label)
+            .map(|bucket| bucket.count)
+            .unwrap_or_default()
+    }
 }
 
 static DEPLOY_TARGET_CACHE: OnceLock<
@@ -106,7 +129,7 @@ fn scan_deploy_targets(workspace_roots: &[String]) -> DxDeployTargetSnapshot {
     }
 
     targets.truncate(6);
-    let (receipt_root_exists, receipt_count, latest_receipts) =
+    let (receipt_root_exists, receipt_count, latest_receipts, receipt_buckets) =
         scan_deploy_receipts(&workspace_roots);
 
     DxDeployTargetSnapshot {
@@ -115,10 +138,13 @@ fn scan_deploy_targets(workspace_roots: &[String]) -> DxDeployTargetSnapshot {
         receipt_root_exists,
         receipt_count,
         latest_receipts,
+        receipt_buckets,
     }
 }
 
-fn scan_deploy_receipts(workspace_roots: &[PathBuf]) -> (bool, usize, Vec<String>) {
+fn scan_deploy_receipts(
+    workspace_roots: &[PathBuf],
+) -> (bool, usize, Vec<String>, Vec<DxDeployReceiptBucket>) {
     let mut root_exists = false;
     let mut count = 0;
     let mut latest = Vec::new();
@@ -139,7 +165,89 @@ fn scan_deploy_receipts(workspace_roots: &[PathBuf]) -> (bool, usize, Vec<String
         root_exists,
         count,
         latest.into_iter().map(|(_, label)| label).collect(),
+        deploy_receipt_buckets(workspace_roots),
     )
+}
+
+fn deploy_receipt_buckets(workspace_roots: &[PathBuf]) -> Vec<DxDeployReceiptBucket> {
+    [
+        ("Readiness", "readiness"),
+        ("Env", "env"),
+        ("Logs", "logs"),
+        ("Rollback", "rollback"),
+    ]
+    .into_iter()
+    .map(|(label, child)| deploy_receipt_bucket(workspace_roots, label, child))
+    .collect()
+}
+
+fn deploy_receipt_bucket(
+    workspace_roots: &[PathBuf],
+    label: &'static str,
+    child: &'static str,
+) -> DxDeployReceiptBucket {
+    let root_label = match child {
+        "readiness" => "tools/dx-deploy/readiness",
+        "env" => "tools/dx-deploy/env",
+        "logs" => "tools/dx-deploy/logs",
+        "rollback" => "tools/dx-deploy/rollback",
+        _ => "tools/dx-deploy",
+    };
+    let mut root_exists = false;
+    let mut count = 0;
+    let mut latest = Vec::new();
+
+    for root in workspace_roots {
+        let receipt_root = root.join("tools").join("dx-deploy").join(child);
+        if receipt_root.is_dir() {
+            root_exists = true;
+        }
+        count += count_receipt_files(&receipt_root);
+        latest.extend(latest_receipt_labels(root, &receipt_root, 2));
+
+        if child == "readiness" {
+            let legacy_root = root.join("tools").join("dx-deploy");
+            if legacy_root.is_dir() {
+                root_exists = true;
+            }
+            count += count_direct_receipt_files(&legacy_root);
+            latest.extend(latest_direct_receipt_labels(root, &legacy_root, 2));
+        }
+    }
+
+    latest.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(Ordering::Equal));
+    latest.truncate(2);
+    let newest = latest.first().map(|(modified, _)| *modified);
+
+    DxDeployReceiptBucket {
+        label,
+        root_label,
+        root_exists,
+        count,
+        status: receipt_bucket_status(root_exists, count, newest),
+        latest: latest.into_iter().map(|(_, label)| label).collect(),
+    }
+}
+
+fn receipt_bucket_status(root_exists: bool, count: usize, newest: Option<SystemTime>) -> String {
+    if !root_exists {
+        return "Missing".to_string();
+    }
+
+    if count == 0 {
+        return "No receipts".to_string();
+    }
+
+    let Some(newest) = newest else {
+        return "No timestamp".to_string();
+    };
+
+    match SystemTime::now().duration_since(newest) {
+        Ok(age) if age <= FRESH_RECEIPT_WINDOW => "Fresh".to_string(),
+        Ok(age) if age <= STALE_RECEIPT_WINDOW => "Stale".to_string(),
+        Ok(_) => "Old".to_string(),
+        Err(_) => "Fresh".to_string(),
+    }
 }
 
 fn push_vercel_project_target(root: &Path, targets: &mut Vec<DxDeployTarget>) {
@@ -232,6 +340,21 @@ fn count_receipt_files(path: &Path) -> usize {
         .sum()
 }
 
+fn count_direct_receipt_files(path: &Path) -> usize {
+    let Ok(entries) = fs::read_dir(path) else {
+        return 0;
+    };
+
+    entries
+        .flatten()
+        .take(128)
+        .filter(|entry| {
+            let path = entry.path();
+            path.is_file() && is_receipt_file(&path)
+        })
+        .count()
+}
+
 fn latest_receipt_labels(
     workspace_root: &Path,
     receipt_root: &Path,
@@ -251,6 +374,25 @@ fn latest_receipt_labels(
                 push_receipt_label(workspace_root, &child.path(), &mut receipts);
             }
         }
+    }
+
+    receipts.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(Ordering::Equal));
+    receipts.truncate(limit);
+    receipts
+}
+
+fn latest_direct_receipt_labels(
+    workspace_root: &Path,
+    receipt_root: &Path,
+    limit: usize,
+) -> Vec<(SystemTime, String)> {
+    let Ok(entries) = fs::read_dir(receipt_root) else {
+        return Vec::new();
+    };
+
+    let mut receipts = Vec::new();
+    for entry in entries.flatten().take(64) {
+        push_receipt_label(workspace_root, &entry.path(), &mut receipts);
     }
 
     receipts.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(Ordering::Equal));

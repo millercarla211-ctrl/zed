@@ -10,7 +10,7 @@ use gpui::{AnyElement, App, SharedString, prelude::*};
 use ui::{IconName, prelude::*};
 
 use crate::dx_check_score::DxCheckScoreSnapshot;
-use crate::dx_deploy_targets::{DxDeployTarget, DxDeployTargetSnapshot};
+use crate::dx_deploy_targets::{DxDeployReceiptBucket, DxDeployTarget, DxDeployTargetSnapshot};
 use crate::dx_receipt_history::{DxToolHistoryBucket, DxToolHistorySnapshot};
 use crate::dx_source_sets::{
     DxSourceAttachmentSummary, DxSourceItem, DxSourceKind, DxSourceSet, DxSourceSetSnapshot,
@@ -513,9 +513,10 @@ fn deploy_target_state(snapshot: &DxDeployTargetSnapshot, cx: &App) -> AnyElemen
         .gap_1()
         .child(metric_row("Targets", snapshot.targets.len().to_string()))
         .child(metric_row(
-            "Readiness receipts",
+            "Deploy receipts",
             snapshot.receipt_count.to_string(),
-        ));
+        ))
+        .child(deploy_receipt_bucket_stack(snapshot, cx));
 
     for (ix, target) in snapshot.targets.iter().take(3).enumerate() {
         stack = stack.child(deploy_target_row(
@@ -538,6 +539,62 @@ fn deploy_target_state(snapshot: &DxDeployTargetSnapshot, cx: &App) -> AnyElemen
                 cx,
             ));
         }
+    }
+
+    stack.into_any_element()
+}
+
+fn deploy_receipt_bucket_stack(snapshot: &DxDeployTargetSnapshot, cx: &App) -> AnyElement {
+    let mut stack = v_flex().gap_1().child(metric_row(
+        "Proof buckets",
+        format!("{} tracked", snapshot.receipt_buckets.len()),
+    ));
+
+    for (ix, bucket) in snapshot.receipt_buckets.iter().enumerate() {
+        stack = stack.child(deploy_receipt_bucket_row(
+            SharedString::from(format!("dx-deploy-receipt-bucket-{ix}")),
+            bucket,
+            cx,
+        ));
+    }
+
+    stack.into_any_element()
+}
+
+fn deploy_receipt_bucket_row(
+    id: SharedString,
+    bucket: &DxDeployReceiptBucket,
+    cx: &App,
+) -> AnyElement {
+    let state = if bucket.count == 0 {
+        bucket.status.clone()
+    } else {
+        format!("{} - {}", bucket.count, bucket.status)
+    };
+    let mut stack = v_flex()
+        .id(id)
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().element_background)
+        .child(metric_row(bucket.label, state));
+
+    if !bucket.root_exists {
+        stack = stack.child(
+            Label::new(bucket.root_label)
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+    } else if let Some(label) = bucket.latest.first() {
+        stack = stack.child(
+            Label::new(label.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
     }
 
     stack.into_any_element()
