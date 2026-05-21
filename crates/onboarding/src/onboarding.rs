@@ -507,6 +507,7 @@ impl Onboarding {
                             ),
                     )
                     .child(self.render_provider_strategy(cx))
+                    .child(self.render_preview_contract_status(&target, cx))
                     .child(self.render_preview_frame(target, window, cx))
                     .child(self.render_quick_launch_actions(cx))
                     .when(self.dx_preview_targets.dx_www.is_none(), |this| {
@@ -516,6 +517,43 @@ impl Onboarding {
                                 .color(Color::Muted),
                         )
                     }),
+            )
+            .into_any_element()
+    }
+
+    fn render_preview_contract_status(
+        &self,
+        target: &DxLaunchPreviewTarget,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .w_full()
+            .gap_2()
+            .p_3()
+            .rounded_sm()
+            .border_1()
+            .border_color(cx.theme().colors().border_variant)
+            .bg(cx.theme().colors().element_background)
+            .child(
+                v_flex()
+                    .min_w_0()
+                    .child(Label::new("Preview Contract").size(LabelSize::Small))
+                    .child(
+                        Label::new(target.detail.clone())
+                            .size(LabelSize::Small)
+                            .color(Color::Muted)
+                            .truncate(),
+                    ),
+            )
+            .child(
+                h_flex().w_full().gap_2().flex_wrap().children(
+                    self.dx_preview_targets
+                        .preview_status_rows(target)
+                        .into_iter()
+                        .map(|row| {
+                            self.render_provider_status_row(row.label, row.detail, row.state, cx)
+                        }),
+                ),
             )
             .into_any_element()
     }

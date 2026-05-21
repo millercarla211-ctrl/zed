@@ -1,3 +1,15 @@
+[2026-05-21] - DX Onboarding Preview Contract
+
+ADDED:
+- Added source-backed Preview Contract rows to the DX launch onboarding hero so the selected Web Preview target now reports target provenance, selection hook, and the relevant DX WWW command contract or bundled fallback state.
+- Tracked the command contract strings for `dx www preview-manifest --json`, `dx www routes --json`, and `dx forge packages --json` in the onboarding target model without executing the CLI.
+
+CHANGED:
+- Updated DX launch notes and status to 99.8/100 for the editor lane before governed runtime proof and upstream DX-WWW source-audit reconciliation.
+
+NOTES:
+- This slice only renders state derived from the onboarding target resolver. It does not run DX WWW/CLI commands, start local servers, run Cargo/`just run`, call providers, download assets, import secrets, or touch `G:\Dx\www` package work.
+
 [2026-05-21] - DX Onboarding WWW Target Discovery
 
 ADDED:

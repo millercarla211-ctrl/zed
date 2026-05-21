@@ -10,38 +10,49 @@ const DX_WWW_ROOT_ENV: &str = "DX_WWW_ROOT";
 const DX_WWW_HUB_ROOT: &str = r"G:\WWW";
 const DX_WWW_FRAMEWORK_ROOT: &str = r"G:\WWW\www";
 const DX_WWW_GENERATED_PROJECT_LIMIT: usize = 8;
+const DX_WWW_PREVIEW_MANIFEST_COMMAND: &str = "dx www preview-manifest --json";
+const DX_WWW_ROUTES_COMMAND: &str = "dx www routes --json";
+const DX_FORGE_PACKAGES_COMMAND: &str = "dx forge packages --json";
 const DX_WWW_PREVIEW_CANDIDATES: &[DxWwwPreviewCandidate] = &[
     DxWwwPreviewCandidate {
         relative_path: r"public\forge\adoption.html",
         title: "DX Forge adoption report",
+        source: DxLaunchPreviewSource::ForgeEvidence,
     },
     DxWwwPreviewCandidate {
         relative_path: r"public\forge\index.html",
         title: "DX Forge public evidence",
+        source: DxLaunchPreviewSource::ForgeEvidence,
     },
     DxWwwPreviewCandidate {
         relative_path: r".dx\forge\adoption-smoke\release-bundle\forge\adoption.html",
         title: "DX Forge adoption bundle",
+        source: DxLaunchPreviewSource::ForgeEvidence,
     },
     DxWwwPreviewCandidate {
         relative_path: r".dx\forge\adoption-smoke\release-bundle\forge\index.html",
         title: "DX Forge release bundle",
+        source: DxLaunchPreviewSource::ForgeEvidence,
     },
     DxWwwPreviewCandidate {
         relative_path: r"demo\demo_full.html",
         title: "DX WWW framework demo",
+        source: DxLaunchPreviewSource::FrameworkDemo,
     },
     DxWwwPreviewCandidate {
         relative_path: r"demo\todo.html",
         title: "DX WWW app demo",
+        source: DxLaunchPreviewSource::FrameworkDemo,
     },
     DxWwwPreviewCandidate {
         relative_path: r"dx-www\tests\fixtures\forge-pages\forge-site.html",
         title: "DX Forge launch evidence",
+        source: DxLaunchPreviewSource::ForgeEvidence,
     },
     DxWwwPreviewCandidate {
         relative_path: r"demo\index.html",
         title: "DX WWW fair counter",
+        source: DxLaunchPreviewSource::FrameworkDemo,
     },
 ];
 const FALLBACK_HTML: &str = include_str!("../assets/dx-launch-fallback.html");
@@ -50,6 +61,7 @@ const FALLBACK_HTML: &str = include_str!("../assets/dx-launch-fallback.html");
 struct DxWwwPreviewCandidate {
     relative_path: &'static str,
     title: &'static str,
+    source: DxLaunchPreviewSource,
 }
 
 struct DxWwwRootCandidate {
@@ -62,6 +74,74 @@ pub struct DxLaunchPreviewTarget {
     pub title: String,
     pub detail: String,
     pub url: String,
+    pub source: DxLaunchPreviewSource,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DxLaunchPreviewStatusRow {
+    pub label: &'static str,
+    pub detail: String,
+    pub state: &'static str,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DxLaunchPreviewSource {
+    ExplicitUrl,
+    ExplicitFile,
+    SelectedWorkspaceRoute,
+    ForgeEvidence,
+    FrameworkDemo,
+    BundledFallback,
+}
+
+impl DxLaunchPreviewSource {
+    fn label(self) -> &'static str {
+        match self {
+            Self::ExplicitUrl => "Selected URL",
+            Self::ExplicitFile => "Selected file",
+            Self::SelectedWorkspaceRoute => "Selected workspace",
+            Self::ForgeEvidence => "Forge evidence",
+            Self::FrameworkDemo => "Framework demo",
+            Self::BundledFallback => "Bundled fallback",
+        }
+    }
+
+    fn hook(self) -> &'static str {
+        match self {
+            Self::ExplicitUrl | Self::ExplicitFile => DX_ONBOARDING_PREVIEW_URL_ENV,
+            Self::SelectedWorkspaceRoute => "DX_WWW_WORKSPACE / DX_WWW_ROOT",
+            Self::ForgeEvidence => "bounded G:\\WWW evidence scan",
+            Self::FrameworkDemo => "G:\\WWW\\www demo fallback",
+            Self::BundledFallback => "embedded onboarding asset",
+        }
+    }
+
+    fn contract(self) -> String {
+        match self {
+            Self::ExplicitUrl => {
+                "selected URL; DX Studio route metadata waits for runtime proof".to_string()
+            }
+            Self::ExplicitFile => {
+                "selected file; DX Studio route metadata waits for runtime proof".to_string()
+            }
+            Self::SelectedWorkspaceRoute => format!(
+                "{DX_WWW_PREVIEW_MANIFEST_COMMAND}; {DX_WWW_ROUTES_COMMAND}; {DX_FORGE_PACKAGES_COMMAND}"
+            ),
+            Self::ForgeEvidence => {
+                format!("{DX_WWW_ROUTES_COMMAND}; {DX_FORGE_PACKAGES_COMMAND}")
+            }
+            Self::FrameworkDemo => format!("{DX_WWW_PREVIEW_MANIFEST_COMMAND}; static demo page"),
+            Self::BundledFallback => "bundled page; no DX CLI receipt required".to_string(),
+        }
+    }
+
+    fn state(self) -> &'static str {
+        match self {
+            Self::BundledFallback => "missing",
+            Self::SelectedWorkspaceRoute => "needs approval",
+            _ => "visible",
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -77,6 +157,7 @@ impl DxLaunchPreviewTargets {
             title: "Bundled DX launch page".to_string(),
             detail: "Local fallback with an original animated 3D scene".to_string(),
             url: html_data_url(FALLBACK_HTML),
+            source: DxLaunchPreviewSource::BundledFallback,
         };
 
         let explicit_preview = explicit_preview_target();
@@ -96,6 +177,29 @@ impl DxLaunchPreviewTargets {
     pub fn missing_dx_www_detail(&self) -> &'static str {
         "Set DX_ONBOARDING_PREVIEW_URL, DX_WWW_WORKSPACE, or add a launchable G:\\WWW / G:\\WWW\\www page to enable the DX WWW target."
     }
+
+    pub fn preview_status_rows(
+        &self,
+        target: &DxLaunchPreviewTarget,
+    ) -> Vec<DxLaunchPreviewStatusRow> {
+        vec![
+            DxLaunchPreviewStatusRow {
+                label: "Target",
+                detail: target.source.label().to_string(),
+                state: target.source.state(),
+            },
+            DxLaunchPreviewStatusRow {
+                label: "Hook",
+                detail: target.source.hook().to_string(),
+                state: target.source.state(),
+            },
+            DxLaunchPreviewStatusRow {
+                label: "Contract",
+                detail: target.source.contract(),
+                state: target.source.state(),
+            },
+        ]
+    }
 }
 
 fn explicit_preview_target() -> Option<DxLaunchPreviewTarget> {
@@ -110,19 +214,29 @@ fn explicit_preview_target() -> Option<DxLaunchPreviewTarget> {
             title: "Selected DX preview".to_string(),
             detail: format!("Loaded from {DX_ONBOARDING_PREVIEW_URL_ENV}"),
             url: trimmed.to_string(),
+            source: DxLaunchPreviewSource::ExplicitUrl,
         });
     }
 
-    file_target(PathBuf::from(trimmed), "Selected DX preview")
+    file_target(
+        PathBuf::from(trimmed),
+        "Selected DX preview",
+        DxLaunchPreviewSource::ExplicitFile,
+    )
 }
 
-fn file_target(path: PathBuf, title: &str) -> Option<DxLaunchPreviewTarget> {
-    file_target_with_detail(path, title, None)
+fn file_target(
+    path: PathBuf,
+    title: &str,
+    source: DxLaunchPreviewSource,
+) -> Option<DxLaunchPreviewTarget> {
+    file_target_with_detail(path, title, source, None)
 }
 
 fn file_target_with_detail(
     path: PathBuf,
     title: &str,
+    source: DxLaunchPreviewSource,
     root: Option<&Path>,
 ) -> Option<DxLaunchPreviewTarget> {
     let metadata = path.metadata().ok()?;
@@ -139,6 +253,7 @@ fn file_target_with_detail(
         title: title.to_string(),
         detail,
         url: file_url(&path),
+        source,
     })
 }
 
@@ -155,6 +270,7 @@ fn dx_www_preview_target_for_root(root: DxWwwRootCandidate) -> Option<DxLaunchPr
             file_target_with_detail(
                 root.path.join(candidate.relative_path),
                 candidate.title,
+                candidate.source,
                 Some(&root.path),
             )
         })
@@ -294,6 +410,7 @@ fn dx_www_dev_route_target(root: &Path) -> Option<DxLaunchPreviewTarget> {
             root.display()
         ),
         url: route_preview_url(&dx_dev_origin(root), route),
+        source: DxLaunchPreviewSource::SelectedWorkspaceRoute,
     })
 }
 
