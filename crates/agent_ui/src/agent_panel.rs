@@ -37,9 +37,9 @@ use crate::completion_provider::AgentContextSource;
 use crate::dx_check_score::{DxCheckScoreInput, check_score_snapshot};
 use crate::dx_deploy_targets::{DxDeployTargetSnapshot, deploy_target_snapshot};
 use crate::dx_launch_prompts::{
-    deploy_readiness_prompt, receipt_review_prompt, runtime_proof_import_prompt,
-    runtime_proof_prompt, source_action_icon, source_action_label, source_action_prompt,
-    source_action_title, source_receipt_review_prompt,
+    deploy_readiness_prompt, forge_proof_prompt, receipt_review_prompt, restore_approval_prompt,
+    runtime_proof_import_prompt, runtime_proof_prompt, source_action_icon, source_action_label,
+    source_action_prompt, source_action_title, source_receipt_review_prompt,
 };
 use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, DxSourceRowControl, receipt_snapshot, render_workspace_chrome,
@@ -113,8 +113,6 @@ const LAST_CREATED_ENTRY_KIND_KEY: &str = "agent_panel__last_created_entry_kind"
 const TERMINAL_AGENT_TELEMETRY_ID: &str = "terminal";
 const DX_LAUNCH_RECIPE_PROMPT: &str = "Run the DX launch metasearch-to-reduced-context recipe for this workspace. First call list_dx_launch_demo_recipes with focus=\"metasearch\". Then, using only permissioned Agent tools and no local servers or builds, guide me through the next safe receipt step: inspect_dx_metasearch, search_dx_metasearch with write_source_pack_receipt=true, prepare_dx_source_attachment, prepare_dx_metasearch_context, plan_dx_serializer_rlm_execution, gate_dx_serializer_rlm_runner, write_dx_serializer_rlm_reduced_context, and preview_dx_serializer_rlm_reducer_execution. Stop before execute_dx_serializer_rlm_reducer, external serializer/RLM runner work, or model-call execution unless I explicitly approve a no-shell absolute command vector and managed receipt.";
 const DX_MEDIA_PROOF_PROMPT: &str = "Prepare the DX media proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"media\". Then review any produced-file proof cards in the Sources rail and guide me through the next safe step using permissioned tools only: plan_dx_media_tool, gate_dx_media_tool_runner, execute_dx_media_tool only after an approved runner gate, and prepare_dx_source_attachment for produced files. Do not run local servers, builds, browser input, shell commands, unmanaged file writes, or media execution until I explicitly approve the tool request.";
-const DX_FORGE_PROOF_PROMPT: &str = "Prepare the DX Forge proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"forge\" and inspect_dx_forge_history. Then guide me through the next safe receipt step for safety policy, backup runner gate, backup execution, restore preview, restore receipt review, restore-approval capture, and restore-target dry-run planning. Do not mutate target paths, permanently delete files, run local servers, builds, shell commands, browser input, or restore-to-target actions unless I explicitly approve the governed tool request.";
-const DX_RESTORE_APPROVAL_PROMPT: &str = "Prepare a non-mutating DX Forge restore-to-target approval review for this workspace. Use inspect_dx_forge_history and visible restore-preview source rows to summarize the latest safety-policy, backup, backup-manifest, restore-preview, restore-approval, restore-target plan, blockers, target path, overwrite risk, rollback evidence, and missing confirmations. If I provide operator approval evidence, use capture_dx_forge_restore_approval to write only a managed approval receipt, then use plan_dx_forge_restore_target to write only a dry-run plan receipt when approval and rollback evidence are ready, then use inspect_dx_forge_history to confirm restore_approval and restore_target_plan entries are visible. Do not mutate target paths, overwrite files, delete files, run shell commands, run local servers, or execute restore-to-target actions.";
 const DX_REDUCER_GUARD_PROMPT: &str = "Prepare a DX serializer/RLM reducer execution guard review for this workspace. Review metasearch source packs, source attachments, context bundles, execution-plan receipts, runner-gate receipts, reduced-context receipts, execution-preview receipts, external-execution receipts, citation coverage, token budget, and model-call approval state. If I provide approval evidence, first use preview_dx_serializer_rlm_reducer_execution for the managed dry-run preview. Use execute_dx_serializer_rlm_reducer only when I explicitly provide a no-shell absolute command vector under approved DX serializer/RLM roots and require a managed execution receipt. Do not run cargo, package managers, local servers, browser input, shell commands, network, unmanaged file writes, or model calls unless the governed tool request explicitly covers them.";
 
 /// Maximum number of idle threads kept in the agent panel's retained list.
@@ -6008,7 +6006,7 @@ impl AgentPanel {
                 "Forge Proof",
                 "Review safety, backup, and restore-preview receipts.",
                 "Prepare Forge",
-                DX_FORGE_PROOF_PROMPT,
+                forge_proof_prompt(&status.tool_history),
                 can_create_entries,
                 cx,
             ))
@@ -6052,7 +6050,7 @@ impl AgentPanel {
                 "Restore Approval",
                 "Draft restore-to-target checks without mutating live paths.",
                 "Draft Approval",
-                DX_RESTORE_APPROVAL_PROMPT,
+                restore_approval_prompt(&status.tool_history),
                 can_create_entries,
                 cx,
             ))

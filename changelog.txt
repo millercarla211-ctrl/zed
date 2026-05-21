@@ -1,3 +1,16 @@
+[2026-05-21] - DX Forge History Drilldowns
+
+ADDED:
+- Added content-aware Forge history summaries for latest managed `tools/dx-forge` receipts, including restore-target plan status, approval readiness, target path, restore preview root, and blocker counts.
+- Rendered parsed Forge receipt drilldowns in the right Tool History rail before raw receipt paths.
+
+CHANGED:
+- Forge Proof, Restore Approval, and Review Receipts Agent prompts now include live Forge history context from the rail scanner.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current next-set status at 99.998/100 while keeping actual restore-to-target mutation and runtime proof gated.
+
+NOTES:
+- This slice reads managed receipt files only. It does not run Forge, zstd, shell commands, `just run`, Cargo, local servers, browser automation, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Forge Restore Target Dry-Run Plans
 
 ADDED:

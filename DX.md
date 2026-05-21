@@ -78,7 +78,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Added `execute_dx_serializer_rlm_reducer`, a permissioned Agent tool that runs only approved no-shell absolute serializer/RLM reducer command vectors under approved DX roots, feeds deterministic reduced-context text by stdin when requested, captures stdout/stderr previews and hashes, and writes managed external-execution receipts.
 - Added content-aware Deploy receipt drilldowns so deploy buckets can surface latest receipt headline, status, target, URL, and blocker counts in the right rail and Agent handoff prompts.
 - Added restore approval visibility to the read-only Forge history contract so `inspect_dx_forge_history` reports `restore_approval` entries, approval readiness, evidence counts, blockers, target paths, and preview roots.
-- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 99.997/100; the remaining launch gap is governed runtime proof evidence/import plus any future restore-to-target mutation after preview/rollback evidence is ready.
+- Added content-aware Forge history drilldowns so the right rail and Forge/Restore Approval prompts surface latest restore-target plan status, approval readiness, target path, preview root, and blockers without opening raw receipt JSON.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 99.998/100; the remaining launch gap is governed runtime proof evidence/import plus any future restore-to-target mutation after preview/rollback evidence is ready.
 
 ## Remaining Proof
 
@@ -114,5 +115,6 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - The restore approval capture slice has formatting/diff/conflict validation only so far; Cargo check/test and restore-to-target runtime proof remain deferred under the repo's launch validation rules.
 - The restore approval history visibility slice has formatting/diff/conflict validation only so far; Cargo check/test and restore-to-target runtime proof remain deferred under the repo's launch validation rules.
 - The restore-target dry-run plan slice has formatting/diff/conflict validation only so far; Cargo check/test and restore-to-target mutation remain deferred under the repo's launch validation rules.
+- The Forge history drilldown slice has formatting/diff/conflict validation only so far; Cargo check/test and restore-to-target runtime proof remain deferred under the repo's launch validation rules.
 - The serializer/RLM execution preview slice has formatting/diff/conflict validation only so far; Cargo check/test and external reducer runtime proof remain deferred under the repo's launch validation rules.
 - The serializer/RLM external execution slice has formatting/diff/conflict validation only so far; Cargo check/test and actual reducer runtime proof remain deferred under the repo's launch validation rules.
