@@ -446,7 +446,7 @@ fn catalog_summary(
         source_hash: catalog.and_then(|catalog| string_field(catalog, &["source_hash"])),
         safe_regeneration_command: catalog
             .and_then(|catalog| string_field(catalog, &["safe_regeneration_command"]))
-            .unwrap_or_else(|| "dx agents import-summary --json".to_string()),
+            .unwrap_or_else(|| "dx-agents providers catalog regenerate --json".to_string()),
         path,
     }
 }

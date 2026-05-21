@@ -10,7 +10,7 @@ ADDED:
 CHANGED:
 - Social account actions now refresh redacted social-list readiness receipts instead of wiring direct social login inside Zed.
 - Provider/model catalog rows now render cache metadata, source hash, and safe regeneration command text while keeping provider registration and secrets outside Zed.
-- Provider/model catalog fallback text now uses the metadata-only `dx agents import-summary --json` handoff when receipts do not provide a safe regeneration command.
+- Provider/model catalog fallback text now uses `dx-agents providers catalog regenerate --json` when receipts do not provide a safe regeneration command, matching the current dx-agents provider-catalog contract.
 
 NOTES:
 - This slice uses source-level validation only. It does not run `just run`, Cargo builds/checks/tests/clippy, npm builds, local servers, provider calls, social login, or secret import.
