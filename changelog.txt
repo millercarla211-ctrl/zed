@@ -1,3 +1,16 @@
+[2026-05-21] - DX Onboarding Web Preview Hero
+
+ADDED:
+- Added a DX launch onboarding hero that hosts the real Web Preview view as the primary canvas.
+- Added an explicit `DX_ONBOARDING_PREVIEW_URL` hook, a detected `G:\WWW\www\demo\index.html` target action, and a bundled original animated 3D fallback page.
+
+CHANGED:
+- The onboarding first impression now opens with DX launch copy, skip actions, provider settings, Agent panel routing, and Web Preview target switching while preserving the existing setup page below.
+- Web Preview now exposes a small onboarding constructor/load hook so onboarding can reuse native preview plumbing without fake screenshots.
+
+NOTES:
+- No local servers, `just run`, Cargo builds/checks/tests/clippy, npm builds, downloads, or secret imports were run.
+
 [2026-05-21] - DX Runtime Proof Import Drilldowns
 
 ADDED:

@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>DX Launch Preview</title>
+<style>
+:root {
+  --bg: #080a0f;
+  --panel: rgba(13, 18, 28, .78);
+  --panel-strong: rgba(19, 28, 44, .9);
+  --line: rgba(155, 176, 215, .2);
+  --text: #eef4ff;
+  --muted: #9dadc5;
+  --cyan: #63e6ff;
+  --lime: #bafc6b;
+  --rose: #ff8bd4;
+  --amber: #ffd166;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 22% 24%, rgba(99, 230, 255, .16), transparent 34%),
+    radial-gradient(circle at 76% 22%, rgba(255, 139, 212, .14), transparent 32%),
+    linear-gradient(135deg, #07080d 0%, #101829 45%, #080a0f 100%);
+  color: var(--text);
+  font: 14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+button {
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, .08);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+button:hover, button:focus {
+  border-color: rgba(99, 230, 255, .58);
+  background: rgba(99, 230, 255, .12);
+  outline: none;
+}
+.app {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(280px, .92fr) minmax(360px, 1.08fr);
+  gap: clamp(18px, 3vw, 42px);
+  padding: clamp(22px, 4vw, 58px);
+}
+.copy {
+  z-index: 2;
+  align-self: center;
+  max-width: 640px;
+}
+.eyebrow {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 6px 10px;
+  border: 1px solid rgba(99, 230, 255, .24);
+  border-radius: 999px;
+  background: rgba(99, 230, 255, .08);
+  color: var(--cyan);
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+h1 {
+  margin: 0;
+  max-width: 12ch;
+  font-size: clamp(42px, 7vw, 92px);
+  line-height: .9;
+  letter-spacing: 0;
+}
+.lead {
+  max-width: 58ch;
+  margin: 22px 0 0;
+  color: var(--muted);
+  font-size: clamp(15px, 1.7vw, 19px);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 26px;
+}
+.primary {
+  background: linear-gradient(135deg, rgba(99, 230, 255, .88), rgba(186, 252, 107, .84));
+  color: #071017;
+  border: 0;
+  font-weight: 700;
+}
+.signals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 26px;
+}
+.signal {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, .05);
+}
+.signal strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.signal span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.stage {
+  position: relative;
+  z-index: 1;
+  min-height: 540px;
+  border: 1px solid rgba(255, 255, 255, .13);
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .03));
+  box-shadow: 0 28px 90px rgba(0, 0, 0, .42);
+}
+canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.hud {
+  position: absolute;
+  inset: 18px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-content: space-between;
+  pointer-events: none;
+}
+.hud-panel {
+  width: min(360px, 72vw);
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(8, 10, 15, .62);
+  backdrop-filter: blur(18px);
+}
+.hud-panel small {
+  color: var(--muted);
+}
+.meter {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-self: end;
+  align-self: end;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(8, 10, 15, .62);
+  color: var(--muted);
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--lime);
+  box-shadow: 0 0 18px var(--lime);
+}
+.status {
+  margin-top: 16px;
+  color: var(--cyan);
+  min-height: 22px;
+}
+@media (max-width: 900px) {
+  body { overflow: auto; }
+  .app { grid-template-columns: 1fr; }
+  .stage { min-height: 420px; }
+  h1 { max-width: 10ch; }
+}
+</style>
+</head>
+<body>
+<main class="app">
+  <section class="copy" aria-labelledby="hero-title">
+    <div class="eyebrow">Zed Web Preview + DX WWW</div>
+    <h1 id="hero-title">Launch DX inside native Zed.</h1>
+    <p class="lead">This fallback proves the onboarding can render a rich app surface through Web Preview without external assets, secret import, or a local server.</p>
+    <div class="actions" aria-label="Quick launch actions">
+      <button class="primary" data-action="forge">Open Forge path</button>
+      <button data-action="providers">Provider setup</button>
+      <button data-action="agents">Agent queue</button>
+      <button data-action="checks">Browser checks</button>
+    </div>
+    <div class="status" id="status" role="status">Ready: bundled DX launch preview is running in Web Preview.</div>
+    <div class="signals">
+      <div class="signal"><strong>Native Zed</strong><span>Fast local editor shell and workspace state.</span></div>
+      <div class="signal"><strong>DX WWW</strong><span>File or explicit preview target from the launch workspace.</span></div>
+      <div class="signal"><strong>Agents</strong><span>Designed for browser, checks, and source package work.</span></div>
+      <div class="signal"><strong>Provider consent</strong><span>Setup remains explicit and user controlled.</span></div>
+    </div>
+  </section>
+  <section class="stage" aria-label="Original animated 3D DX scene">
+    <canvas id="scene"></canvas>
+    <div class="hud">
+      <div class="hud-panel">
+        <strong>DX source graph</strong><br>
+        <small>Original local canvas scene. No external assets.</small>
+      </div>
+      <div class="meter"><span class="dot"></span>Web Preview live</div>
+    </div>
+  </section>
+</main>
+<script>
+(() => {
+  const canvas = document.getElementById("scene");
+  const ctx = canvas.getContext("2d");
+  const status = document.getElementById("status");
+  const colors = ["#63e6ff", "#bafc6b", "#ff8bd4", "#ffd166"];
+  const nodes = Array.from({ length: 42 }, (_, index) => {
+    const layer = index % 7;
+    const angle = index * 0.83;
+    const radius = 86 + layer * 28;
+    return {
+      x: Math.cos(angle) * radius,
+      y: Math.sin(angle * 0.72) * radius * .62,
+      z: (layer - 3) * 58,
+      color: colors[index % colors.length]
+    };
+  });
+
+  function resize() {
+    const scale = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(canvas.clientWidth * scale);
+    canvas.height = Math.floor(canvas.clientHeight * scale);
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  }
+
+  function project(point, time) {
+    const spin = time * .00018;
+    const tilt = Math.sin(time * .00024) * .24;
+    const cos = Math.cos(spin);
+    const sin = Math.sin(spin);
+    const x = point.x * cos - point.z * sin;
+    const z = point.x * sin + point.z * cos;
+    const y = point.y * Math.cos(tilt) - z * Math.sin(tilt);
+    const depth = 720 / (720 + z);
+    return {
+      x: canvas.clientWidth * .5 + x * depth,
+      y: canvas.clientHeight * .52 + y * depth,
+      z,
+      depth,
+      color: point.color
+    };
+  }
+
+  function draw(time) {
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    ctx.clearRect(0, 0, w, h);
+    const gradient = ctx.createLinearGradient(0, 0, w, h);
+    gradient.addColorStop(0, "rgba(99,230,255,.18)");
+    gradient.addColorStop(.52, "rgba(255,139,212,.08)");
+    gradient.addColorStop(1, "rgba(186,252,107,.12)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+
+    const points = nodes.map(node => project(node, time));
+    ctx.lineWidth = 1;
+    for (let i = 0; i < points.length; i += 1) {
+      for (let j = i + 1; j < points.length; j += 1) {
+        const a = points[i];
+        const b = points[j];
+        const distance = Math.hypot(a.x - b.x, a.y - b.y);
+        if (distance < 112) {
+          ctx.strokeStyle = `rgba(180,215,255,${(1 - distance / 112) * .28})`;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    points.sort((a, b) => a.z - b.z).forEach((point, index) => {
+      const radius = 4 + point.depth * 5 + Math.sin(time * .002 + index) * 1.2;
+      ctx.beginPath();
+      ctx.fillStyle = point.color;
+      ctx.shadowColor = point.color;
+      ctx.shadowBlur = 18;
+      ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    });
+
+    requestAnimationFrame(draw);
+  }
+
+  document.querySelectorAll("button[data-action]").forEach(button => {
+    button.addEventListener("click", () => {
+      const messages = {
+        forge: "Forge path selected: templates, preview, package ownership.",
+        providers: "Provider setup selected: explicit consent required before import.",
+        agents: "Agent queue selected: ready for source-owned automations.",
+        checks: "Browser checks selected: Web Preview can host validation flows."
+      };
+      status.textContent = messages[button.dataset.action] || "DX action selected.";
+    });
+  });
+
+  window.addEventListener("resize", resize);
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

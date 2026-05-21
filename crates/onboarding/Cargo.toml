@@ -42,5 +42,8 @@ workspace.workspace = true
 zed_actions.workspace = true
 zlog.workspace = true
 
+[target.'cfg(target_os = "windows")'.dependencies]
+web_preview.workspace = true
+
 [dev-dependencies]
 db = {workspace = true, features = ["test-support"]}

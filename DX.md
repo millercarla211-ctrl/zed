@@ -35,6 +35,7 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 
 ## Current Worker Update
 
+- Added the DX launch onboarding Web Preview hero slice: onboarding now creates a real Web Preview child for the hero canvas, defaults to a bundled original animated DX fallback page, supports explicit `DX_ONBOARDING_PREVIEW_URL`, and exposes a detected `G:\WWW\www\demo\index.html` target action without local servers or secret import.
 - Implemented the DX launch workspace chrome around existing Agent thread rendering when the panel is zoomed/full-workspace: left Sources/receipts rail, right Progress/Git/Background Tasks rail, and token/tool meter slots.
 - Added receipt hooks for `G:\Dx\.dx\receipts` with graceful missing/empty states and no CLI execution from Zed.
 - Added an Agent action beside the existing Write/Ask mode and model controls while preserving the current model picker, profile selector, token usage, and thread behavior.
@@ -85,6 +86,7 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 
 ## Remaining Proof
 
+- The DX onboarding Web Preview hero has formatting, diff, conflict-marker, and source-reference validation only so far; `just run` visual proof and native WebView2 runtime proof remain deferred under the repo's launch validation rules.
 - Runtime visual proof is still pending because this launch lane forbids local servers, `just run`, full Cargo builds, and heavy validation without explicit permission.
 - The DX CLI receipt producers remain external to Zed; this slice reads receipt files and reports missing or empty receipt states only.
 - The media runner source slice has rustfmt/diff/conflict validation only so far; Cargo check/test and runtime ffmpeg proof remain deferred under the repo's launch validation rules.

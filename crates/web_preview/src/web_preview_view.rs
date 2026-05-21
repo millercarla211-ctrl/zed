@@ -904,6 +904,33 @@ impl WebPreviewView {
         })
     }
 
+    pub fn new_for_onboarding(
+        workspace: WeakEntity<Workspace>,
+        current_url: String,
+        title: Option<SharedString>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let workspace_context = workspace
+            .upgrade()
+            .map(|workspace| Self::workspace_context(workspace.read(cx), cx))
+            .unwrap_or_else(Self::fallback_workspace_context);
+
+        Self::new_for_url(
+            workspace,
+            workspace_context,
+            current_url,
+            title,
+            None,
+            window,
+            cx,
+        )
+    }
+
+    pub fn load_onboarding_url(&mut self, url: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.load_requested_url(url, window, cx);
+    }
+
     fn new_for_url(
         workspace: WeakEntity<Workspace>,
         workspace_context: PreviewWorkspaceContext,
@@ -1107,6 +1134,20 @@ impl WebPreviewView {
             workspace_id: workspace.database_id(),
             root_path,
             root_name: root_name.into(),
+            preview_key: preview_slug.clone().into(),
+            profile_dir: data_dir()
+                .join("web_preview")
+                .join("profiles")
+                .join(preview_slug),
+        }
+    }
+
+    fn fallback_workspace_context() -> PreviewWorkspaceContext {
+        let preview_slug = "dx-onboarding".to_string();
+        PreviewWorkspaceContext {
+            workspace_id: None,
+            root_path: None,
+            root_name: "DX Onboarding".into(),
             preview_key: preview_slug.clone().into(),
             profile_dir: data_dir()
                 .join("web_preview")
