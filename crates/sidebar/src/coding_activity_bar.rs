@@ -11,7 +11,22 @@ pub(crate) fn render_coding_activity_bar(
         .h_full()
         .items_center()
         .justify_between()
+        .overflow_hidden()
         .py_1()
-        .child(v_flex().items_center().gap_1().children(primary_actions))
-        .child(v_flex().items_center().gap_1().children(secondary_actions))
+        .child(
+            v_flex()
+                .min_h_0()
+                .flex_1()
+                .items_center()
+                .gap_1()
+                .overflow_y_scroll()
+                .children(primary_actions),
+        )
+        .child(
+            v_flex()
+                .flex_none()
+                .items_center()
+                .gap_1()
+                .children(secondary_actions),
+        )
 }

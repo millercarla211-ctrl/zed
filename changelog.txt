@@ -1,3 +1,15 @@
+[2026-05-22] - DX Activity Bar Overflow Hardening
+
+CHANGED:
+- The compact activity bar now keeps secondary project/settings/sidebar controls fixed while the primary action stack scrolls inside the 48px rail.
+
+FIXED:
+- Prevented the full action stack from overflowing the narrow activity bar in short editor + Web Preview + Agent panel windows.
+
+NOTES:
+- This does not change command wiring, panel visibility rules, thread behavior, Web Preview behavior, or existing Zed AI controls.
+- No Cargo commands, local servers, or `just run` were executed.
+
 [2026-05-22] - DX Activity Bar Module Split
 
 ADDED:
