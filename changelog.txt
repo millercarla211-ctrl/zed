@@ -1,3 +1,12 @@
+[2026-05-22] - DX Token Tool Meter State Polish
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_launch_workspace.rs` so Prompt, Output, and Tools meter rows show receipt-root-aware missing, waiting, or metadata-ready states instead of bare placeholder dashes.
+
+NOTES:
+- This is a source-visible UI honesty cleanup only; it does not parse receipt bodies, claim token totals, run CLI commands, or change Write/Ask/model picker/Agent/Web Preview behavior.
+- No Cargo commands, local servers, live CLI commands, browser automation, or `just run` were executed.
+
 [2026-05-22] - DX Receipt Scanner Module Split
 
 ADDED:

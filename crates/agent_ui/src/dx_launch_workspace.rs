@@ -2864,16 +2864,27 @@ fn token_meter_slots(snapshot: &DxReceiptSnapshot) -> AnyElement {
         .find(|bucket| bucket.label == "Serializer")
         .map(|bucket| bucket.count)
         .unwrap_or_default();
+    let meter_value = token_meter_value(snapshot.root_exists, token_count);
 
     v_flex()
         .gap_1()
-        .child(metric_row("Prompt", "-"))
-        .child(metric_row("Output", "-"))
-        .child(metric_row("Tools", "-"))
+        .child(metric_row("Prompt", meter_value))
+        .child(metric_row("Output", meter_value))
+        .child(metric_row("Tools", meter_value))
         .child(metric_row("Token receipts", token_count.to_string()))
         .child(metric_row("RLM receipts", rlm_count.to_string()))
         .child(metric_row("Serializer", serializer_count.to_string()))
         .into_any_element()
+}
+
+fn token_meter_value(receipt_root_exists: bool, token_receipt_count: usize) -> &'static str {
+    if !receipt_root_exists {
+        "receipt root missing"
+    } else if token_receipt_count == 0 {
+        "waiting for token receipt"
+    } else {
+        "receipt metadata ready"
+    }
 }
 
 fn section_title(label: &'static str, icon: IconName) -> AnyElement {
