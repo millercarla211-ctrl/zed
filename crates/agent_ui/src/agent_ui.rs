@@ -13,6 +13,7 @@ pub(crate) mod conversation_view;
 mod diagnostics;
 pub mod draft_prompt_store;
 mod dx_check_score;
+mod dx_deploy_targets;
 mod dx_launch_workspace;
 mod dx_receipt_history;
 mod dx_source_sets;

@@ -1,3 +1,16 @@
+[2026-05-21] - DX Restore Warnings And Deploy Registry
+
+ADDED:
+- Added a read-only Deploy target registry for the DX launch rail that detects Vercel, Netlify, Cloudflare Wrangler, Fly, and Docker config files in workspace roots without running deploy commands.
+- Added Deploy visibility to the right rail and included deploy target presence in the read-only Check score inputs.
+- Added Forge restore-preview warning labels to source rows by reading restore receipt blockers and risk flags such as target mutation, overwrites, external execution, and not-ready status.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 80/100 and move the next target to source-row action prompts plus deploy readiness receipt inputs.
+
+NOTES:
+- This slice is read-only; it scans existing workspace files and receipts only, and does not start builds, tests, local servers, deploys, browser automation, external serializer/RLM code, or restore-to-target actions.
+
 [2026-05-21] - DX Source Attachment And Check Score Rails
 
 ADDED:

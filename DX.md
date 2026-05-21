@@ -52,7 +52,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Added guided DX sidebar actions for Demo Recipe and Review Receipts; they prepare permission-safe Agent drafts for the flagship metasearch-to-reduced-context receipt chain without auto-running tools.
 - Added right-rail Media Proof and Forge Proof cards that prepare permission-safe Agent drafts for proof flows without running tools automatically.
 - Added source attachment readiness to the Sources rail and a typed read-only Check score to the right rail, both backed by actual workspace/source/receipt/tool-history state.
-- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 78/100; the next highest-value target is restore-preview warning detail plus a minimal Deploy target registry skeleton.
+- Added restore-preview warning labels to Forge source rows and a read-only Deploy rail backed by detected workspace deploy config files.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 80/100; the next highest-value target is source-row action prompts plus deploy readiness receipt inputs.
 
 ## Remaining Proof
 
@@ -64,3 +65,4 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - The guided action slice has formatting/diff/conflict validation only so far; runtime click proof remains deferred under the repo's launch validation rules.
 - The guided proof card slice has formatting/diff/conflict validation only so far; runtime click proof remains deferred under the repo's launch validation rules.
 - The source attachment and Check score slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
+- The restore-warning and Deploy registry slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.

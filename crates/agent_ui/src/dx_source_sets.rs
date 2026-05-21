@@ -65,6 +65,7 @@ pub(crate) struct DxSourceItem {
     pub detail: String,
     pub path: String,
     pub kind: DxSourceKind,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -129,6 +130,7 @@ fn workspace_root_set(workspace_roots: &[PathBuf]) -> DxSourceSet {
             detail: "Workspace root".to_string(),
             path: root.display().to_string(),
             kind: DxSourceKind::WorkspaceRoot,
+            warnings: Vec::new(),
         })
         .collect::<Vec<_>>();
 
@@ -231,6 +233,7 @@ fn metasearch_source_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSource
         detail: format!("{item_count} items - ~{estimated_tokens} tokens"),
         path: receipt.label.clone(),
         kind: DxSourceKind::MetasearchSourcePack,
+        warnings: Vec::new(),
     })
 }
 
@@ -274,6 +277,7 @@ fn media_sources_from_receipt(receipt: &ReceiptCandidate) -> Vec<DxSourceItem> {
                 detail: format!("{media_kind} - {format} - {}", format_bytes(size_bytes)),
                 path,
                 kind: DxSourceKind::MediaOutput,
+                warnings: Vec::new(),
             })
         })
         .collect()
@@ -318,6 +322,7 @@ fn reduced_context_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSourceIt
         detail: format!("{source_count} sources - ~{tokens} tokens - {status}"),
         path: receipt.label.clone(),
         kind: DxSourceKind::ReducedContextReceipt,
+        warnings: Vec::new(),
     })
 }
 
@@ -345,16 +350,58 @@ fn forge_restore_source_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSou
             )
         })
         .unwrap_or_default();
+    let warnings = forge_restore_warnings(&value);
+    let safety = if warnings.is_empty() {
+        "preview only".to_string()
+    } else {
+        format!(
+            "{} restore warning{}",
+            warnings.len(),
+            if warnings.len() == 1 { "" } else { "s" }
+        )
+    };
 
     Some(DxSourceItem {
         label: display_name(Path::new(&restore_root)),
         detail: format!(
-            "{restored_file_count} restored files - {}",
-            format_bytes(restored_bytes)
+            "{restored_file_count} restored files - {} - {safety}",
+            format_bytes(restored_bytes),
         ),
         path: restore_root,
         kind: DxSourceKind::ForgeRestorePreview,
+        warnings,
     })
+}
+
+fn forge_restore_warnings(value: &Value) -> Vec<String> {
+    let restore = value.get("restore").or_else(|| {
+        value
+            .get("restore_execution")
+            .and_then(|value| value.get("restore"))
+    });
+    let Some(restore) = restore else {
+        return vec!["Restore receipt has no restore summary".to_string()];
+    };
+
+    let mut warnings = array_strings_at(restore, &["blockers"]);
+    if bool_at(restore, &["target_mutation_applied"]).unwrap_or_default() {
+        warnings.push("Receipt reports target mutation".to_string());
+    }
+    if bool_at(restore, &["overwrote_existing_files"]).unwrap_or_default() {
+        warnings.push("Receipt reports overwritten files".to_string());
+    }
+    if bool_at(restore, &["ran_shell"]).unwrap_or_default()
+        || bool_at(restore, &["ran_external_process"]).unwrap_or_default()
+    {
+        warnings.push("Receipt reports external execution".to_string());
+    }
+    if !bool_at(restore, &["restore_ready"]).unwrap_or_default() {
+        let status = string_at(restore, &["status"]).unwrap_or_else(|| "not ready".to_string());
+        warnings.push(format!("Restore preview status: {status}"));
+    }
+
+    warnings.truncate(3);
+    warnings
 }
 
 #[derive(Clone)]
@@ -430,6 +477,20 @@ fn string_at(value: &Value, path: &[&str]) -> Option<String> {
 
 fn bool_at(value: &Value, path: &[&str]) -> Option<bool> {
     value_at(value, path).and_then(Value::as_bool)
+}
+
+fn array_strings_at(value: &Value, path: &[&str]) -> Vec<String> {
+    value_at(value, path)
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .map(ToOwned::to_owned)
+                .take(4)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn usize_at(value: &Value, path: &[&str]) -> Option<usize> {

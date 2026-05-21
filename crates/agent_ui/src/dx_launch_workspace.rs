@@ -10,6 +10,7 @@ use gpui::{AnyElement, App, SharedString, prelude::*};
 use ui::{IconName, prelude::*};
 
 use crate::dx_check_score::DxCheckScoreSnapshot;
+use crate::dx_deploy_targets::{DxDeployTarget, DxDeployTargetSnapshot};
 use crate::dx_receipt_history::{DxToolHistoryBucket, DxToolHistorySnapshot};
 use crate::dx_source_sets::{
     DxSourceAttachmentSummary, DxSourceItem, DxSourceKind, DxSourceSet, DxSourceSetSnapshot,
@@ -41,6 +42,7 @@ pub(crate) struct DxLaunchWorkspaceStatus {
     pub source_sets: DxSourceSetSnapshot,
     pub tool_history: DxToolHistorySnapshot,
     pub check_score: DxCheckScoreSnapshot,
+    pub deploy_targets: DxDeployTargetSnapshot,
 }
 
 static RECEIPT_CACHE: OnceLock<Mutex<Option<(Instant, DxReceiptSnapshot)>>> = OnceLock::new();
@@ -253,6 +255,8 @@ fn render_right_rail(
             "Worktrees",
             status.visible_worktree_count.to_string(),
         ))
+        .child(section_title("Deploy", IconName::Public))
+        .child(deploy_target_state(&status.deploy_targets, cx))
         .child(section_title("Tool History", IconName::Archive))
         .child(tool_history_state(&status.tool_history, cx))
         .child(section_title("Background Tasks", IconName::Clock))
@@ -351,7 +355,7 @@ fn source_set_card(id: SharedString, set: &DxSourceSet, cx: &App) -> AnyElement 
 }
 
 fn source_item_row(id: SharedString, source: &DxSourceItem, cx: &App) -> AnyElement {
-    v_flex()
+    let mut stack = v_flex()
         .id(id)
         .gap_0p5()
         .min_w_0()
@@ -387,8 +391,18 @@ fn source_item_row(id: SharedString, source: &DxSourceItem, cx: &App) -> AnyElem
                 .size(LabelSize::XSmall)
                 .color(Color::Muted)
                 .truncate(),
-        )
-        .into_any_element()
+        );
+
+    for (ix, warning) in source.warnings.iter().take(2).enumerate() {
+        stack = stack.child(signal_row(
+            SharedString::from(format!("source-warning-{}-{ix}", source.path)),
+            IconName::Warning,
+            Color::Warning,
+            warning.clone(),
+        ));
+    }
+
+    stack.into_any_element()
 }
 
 fn source_kind_icon(kind: DxSourceKind) -> IconName {
@@ -481,13 +495,87 @@ fn tool_history_bucket(id: SharedString, bucket: &DxToolHistoryBucket, cx: &App)
     stack.into_any_element()
 }
 
+fn deploy_target_state(snapshot: &DxDeployTargetSnapshot, cx: &App) -> AnyElement {
+    if snapshot.workspace_root_count == 0 {
+        return muted_card("No workspace", cx);
+    }
+
+    if snapshot.targets.is_empty() {
+        return muted_card("No deploy target config", cx);
+    }
+
+    let mut stack = v_flex()
+        .gap_1()
+        .child(metric_row("Targets", snapshot.targets.len().to_string()));
+
+    for (ix, target) in snapshot.targets.iter().take(3).enumerate() {
+        stack = stack.child(deploy_target_row(
+            SharedString::from(format!("dx-deploy-target-{ix}")),
+            target,
+            cx,
+        ));
+    }
+
+    stack.into_any_element()
+}
+
+fn deploy_target_row(id: SharedString, target: &DxDeployTarget, cx: &App) -> AnyElement {
+    v_flex()
+        .id(id)
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().element_background)
+        .child(
+            h_flex()
+                .gap_1()
+                .min_w_0()
+                .items_center()
+                .child(
+                    Icon::new(deploy_platform_icon(target.platform))
+                        .size(IconSize::XSmall)
+                        .color(Color::Muted),
+                )
+                .child(
+                    Label::new(target.label.clone())
+                        .size(LabelSize::XSmall)
+                        .color(Color::Default)
+                        .truncate(),
+                ),
+        )
+        .child(
+            Label::new(target.detail.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .child(
+            Label::new(target.path.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .into_any_element()
+}
+
+fn deploy_platform_icon(platform: &str) -> IconName {
+    match platform {
+        "Vercel" => IconName::AiVercel,
+        "Cloudflare" => IconName::Server,
+        "Docker" => IconName::Box,
+        _ => IconName::Public,
+    }
+}
+
 fn check_score_state(snapshot: &DxCheckScoreSnapshot, cx: &App) -> AnyElement {
     let mut stack = v_flex()
         .gap_1()
         .child(metric_row("Score", format!("{}/100", snapshot.score)))
         .child(metric_row("State", snapshot.state));
 
-    for item in snapshot.items.iter().take(4) {
+    for item in snapshot.items.iter().take(5) {
         stack = stack.child(metric_row(item.label, item.state.clone()));
     }
 
@@ -501,6 +589,26 @@ fn check_score_state(snapshot: &DxCheckScoreSnapshot, cx: &App) -> AnyElement {
     }
 
     stack.into_any_element()
+}
+
+fn signal_row(
+    id: SharedString,
+    icon: IconName,
+    color: Color,
+    label: impl Into<SharedString>,
+) -> AnyElement {
+    h_flex()
+        .id(id)
+        .gap_1()
+        .min_w_0()
+        .child(Icon::new(icon).size(IconSize::XSmall).color(color))
+        .child(
+            Label::new(label.into())
+                .size(LabelSize::XSmall)
+                .color(color)
+                .truncate(),
+        )
+        .into_any_element()
 }
 
 fn background_task_state(count: usize, cx: &App) -> AnyElement {

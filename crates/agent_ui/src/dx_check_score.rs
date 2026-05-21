@@ -22,6 +22,7 @@ pub(crate) struct DxCheckScoreInput<'a> {
     pub tool_history: &'a DxToolHistorySnapshot,
     pub background_task_count: usize,
     pub visible_worktree_count: usize,
+    pub deploy_target_count: usize,
 }
 
 pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScoreSnapshot {
@@ -71,8 +72,10 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
         score += 6;
     }
 
-    if input.receipt_file_count > 0 {
+    if input.deploy_target_count > 0 {
         score += 10;
+    } else {
+        blockers.push("No deploy target config detected".to_string());
     }
 
     let state = if score >= 85 {
@@ -112,6 +115,14 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
             DxCheckScoreItem {
                 label: "Tool Proof",
                 state: format!("{tool_receipt_count} receipt(s)"),
+            },
+            DxCheckScoreItem {
+                label: "Deploy",
+                state: if input.deploy_target_count == 0 {
+                    "No targets".to_string()
+                } else {
+                    format!("{} target(s)", input.deploy_target_count)
+                },
             },
             DxCheckScoreItem {
                 label: "Background",

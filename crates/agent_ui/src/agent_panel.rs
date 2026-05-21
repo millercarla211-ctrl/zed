@@ -35,6 +35,7 @@ use crate::ManageProfiles;
 use crate::agent_connection_store::AgentConnectionStore;
 use crate::completion_provider::AgentContextSource;
 use crate::dx_check_score::{DxCheckScoreInput, check_score_snapshot};
+use crate::dx_deploy_targets::deploy_target_snapshot;
 use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, receipt_snapshot, render_workspace_chrome,
 };
@@ -5899,6 +5900,7 @@ impl AgentPanel {
             .sum::<usize>();
         let source_sets = source_set_snapshot(&workspace_roots);
         let tool_history = tool_history_snapshot(&workspace_roots);
+        let deploy_targets = deploy_target_snapshot(&workspace_roots);
         let check_score = check_score_snapshot(DxCheckScoreInput {
             receipt_root_exists: receipt_snapshot.root_exists,
             receipt_file_count,
@@ -5906,6 +5908,7 @@ impl AgentPanel {
             tool_history: &tool_history,
             background_task_count: self.retained_threads.len(),
             visible_worktree_count,
+            deploy_target_count: deploy_targets.targets.len(),
         });
 
         DxLaunchWorkspaceStatus {
@@ -5916,6 +5919,7 @@ impl AgentPanel {
             source_sets,
             tool_history,
             check_score,
+            deploy_targets,
         }
     }
 
