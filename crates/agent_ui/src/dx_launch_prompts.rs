@@ -12,6 +12,7 @@ use crate::dx_proof_freshness::DxProofFreshnessSnapshot;
 use crate::dx_receipt_history::{DxToolHistoryReceiptSummary, DxToolHistorySnapshot};
 use crate::dx_runtime_proof_status::{DxRuntimeProofReceiptSummary, DxRuntimeProofStatusSnapshot};
 use crate::dx_source_sets::{DxSourceItem, DxSourceKind};
+use crate::dx_www_launch_evidence::DxWwwLaunchEvidenceSnapshot;
 
 pub(crate) fn source_action_icon(kind: DxSourceKind) -> IconName {
     match kind {
@@ -344,6 +345,14 @@ pub(crate) fn launch_audit_prompt(
     )
 }
 
+pub(crate) fn launch_www_evidence_prompt(snapshot: &DxWwwLaunchEvidenceSnapshot) -> String {
+    let www_context = launch_www_evidence_prompt_context(snapshot);
+
+    format!(
+        "Review the DX-WWW launch evidence handoff for this Zed workspace. WWW evidence: {www_context}. Summarize the release packet, operator index, timeline, handoff digest, release seal, restart handoff, acceptance artifacts, missing commands, and whether the visible evidence is safe to treat as no-execution handoff metadata. If artifacts are missing, draft the exact DX-WWW operator command sequence from the visible next commands and stop. Do not run DX-WWW, Forge, CLI commands, builds, local servers, browser input, deploys, shell commands, providers, agents, external serializer/RLM code, model calls, or restore-to-target actions."
+    )
+}
+
 pub(crate) fn receipt_review_prompt(
     receipt_snapshot: &DxReceiptSnapshot,
     launch_status: &DxLaunchStatusSnapshot,
@@ -351,6 +360,7 @@ pub(crate) fn receipt_review_prompt(
     launch_contracts: &DxLaunchContractSnapshot,
     launch_readiness: &DxLaunchReadinessSnapshot,
     launch_audit: &DxLaunchAuditSnapshot,
+    www_evidence: &DxWwwLaunchEvidenceSnapshot,
     tool_history: &DxToolHistorySnapshot,
     proof_freshness: &DxProofFreshnessSnapshot,
     deploy_targets: &DxDeployTargetSnapshot,
@@ -383,6 +393,7 @@ pub(crate) fn receipt_review_prompt(
     let launch_contract_context = launch_contract_prompt_context(launch_contracts);
     let launch_readiness_context = launch_readiness_prompt_context(launch_readiness);
     let launch_audit_context = launch_audit_prompt_context(launch_audit);
+    let www_context = launch_www_evidence_prompt_context(www_evidence);
     let tool_buckets = tool_history
         .buckets
         .iter()
@@ -430,7 +441,7 @@ pub(crate) fn receipt_review_prompt(
     };
 
     format!(
-        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Launch aggregate: {launch_context}. Launch handoff contracts: {launch_contract_context}. Launch gate readiness: {launch_readiness_context}. Launch CLI audit: {launch_audit_context}. Launch receipt diagnostics: {launch_receipt_context}. Tool history buckets: {tool_buckets}. Forge history context: {forge_history}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest launch status, launch receipt freshness, malformed retained snapshots, handoff packet coverage, schemas/fixtures/smoke/status audit state, import-summary/release-gate/fallback-drill parser states, metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, restore-target plan, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
+        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Launch aggregate: {launch_context}. Launch handoff contracts: {launch_contract_context}. Launch gate readiness: {launch_readiness_context}. Launch CLI audit: {launch_audit_context}. DX-WWW evidence: {www_context}. Launch receipt diagnostics: {launch_receipt_context}. Tool history buckets: {tool_buckets}. Forge history context: {forge_history}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest launch status, launch receipt freshness, malformed retained snapshots, handoff packet coverage, schemas/fixtures/smoke/status audit state, DX-WWW release/restart/acceptance evidence, import-summary/release-gate/fallback-drill parser states, metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, restore-target plan, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
     )
 }
 
@@ -610,6 +621,48 @@ fn launch_audit_prompt_context(snapshot: &DxLaunchAuditSnapshot) -> String {
         fixtures,
         smoke,
         snapshot.next_action
+    )
+}
+
+fn launch_www_evidence_prompt_context(snapshot: &DxWwwLaunchEvidenceSnapshot) -> String {
+    if !snapshot.project_root_exists {
+        return format!(
+            "missing DX-WWW project root `{}`; expected a generated DX WWW workspace or `{}` fallback",
+            snapshot.project_root.display(),
+            "G:\\WWW\\www"
+        );
+    }
+
+    let latest = bounded_join(
+        &snapshot.latest_rows,
+        4,
+        "No generated launch evidence artifacts",
+    );
+    let missing = bounded_join(
+        &snapshot.missing_rows,
+        5,
+        "No missing launch evidence artifacts",
+    );
+    let next_commands = bounded_join(&snapshot.next_commands, 5, "No next DX-WWW command");
+
+    format!(
+        "status={} summary={} project={} release_root={} release_root_present={} artifacts={}/{} json={} markdown={} ready={} warning={} blocked={} no_execution={} latest=[{}] missing=[{}] next_commands=[{}]",
+        snapshot.status,
+        snapshot.operator_summary,
+        snapshot.project_root.display(),
+        snapshot.release_root.display(),
+        snapshot.release_root_exists,
+        snapshot.present_count,
+        snapshot.expected_count,
+        snapshot.json_count,
+        snapshot.markdown_count,
+        snapshot.passed_count,
+        snapshot.warning_count,
+        snapshot.blocked_count,
+        snapshot.no_execution_count,
+        latest,
+        missing,
+        next_commands,
     )
 }
 

@@ -41,10 +41,10 @@ use crate::dx_launch_audit::launch_audit_snapshot;
 use crate::dx_launch_contracts::launch_contract_snapshot;
 use crate::dx_launch_prompts::{
     deploy_readiness_prompt, forge_proof_prompt, launch_audit_prompt, launch_handoff_prompt,
-    launch_readiness_prompt, receipt_review_prompt, restore_approval_prompt,
-    runtime_proof_evidence_template_prompt, runtime_proof_import_prompt, runtime_proof_prompt,
-    source_action_icon, source_action_label, source_action_prompt, source_action_title,
-    source_receipt_review_prompt,
+    launch_readiness_prompt, launch_www_evidence_prompt, receipt_review_prompt,
+    restore_approval_prompt, runtime_proof_evidence_template_prompt, runtime_proof_import_prompt,
+    runtime_proof_prompt, source_action_icon, source_action_label, source_action_prompt,
+    source_action_title, source_receipt_review_prompt,
 };
 use crate::dx_launch_readiness::launch_readiness_snapshot;
 use crate::dx_launch_receipts::launch_receipt_review_snapshot;
@@ -56,6 +56,7 @@ use crate::dx_proof_freshness::proof_freshness_snapshot;
 use crate::dx_receipt_history::tool_history_snapshot;
 use crate::dx_runtime_proof_status::runtime_proof_status_snapshot;
 use crate::dx_source_sets::{DxSourceKind, DxSourceSetSnapshot, source_set_snapshot};
+use crate::dx_www_launch_evidence::www_launch_evidence_snapshot;
 use crate::terminal_thread_metadata_store::{TerminalThreadMetadata, TerminalThreadMetadataStore};
 use crate::thread_metadata_store::{ThreadId, ThreadMetadataStore, ThreadMetadataStoreEvent};
 use crate::{
@@ -5734,6 +5735,7 @@ impl AgentPanel {
             &status.launch_contracts,
             &status.launch_readiness,
             &status.launch_audit,
+            &status.www_evidence,
             &status.tool_history,
             &status.proof_freshness,
             &status.deploy_targets,
@@ -6050,6 +6052,17 @@ impl AgentPanel {
                 cx,
             ))
             .child(self.dx_launch_guided_card(
+                "dx-www-evidence-card",
+                "dx-www-evidence-action",
+                IconName::Public,
+                "WWW Evidence",
+                "Review DX-WWW release packet and restart handoff artifacts.",
+                "Draft WWW",
+                launch_www_evidence_prompt(&status.www_evidence),
+                can_create_entries,
+                cx,
+            ))
+            .child(self.dx_launch_guided_card(
                 "dx-media-proof-card",
                 "dx-media-proof-action",
                 IconName::File,
@@ -6245,6 +6258,7 @@ impl AgentPanel {
         let launch_contracts = launch_contract_snapshot();
         let launch_readiness = launch_readiness_snapshot();
         let launch_audit = launch_audit_snapshot();
+        let www_evidence = www_launch_evidence_snapshot(&workspace_roots);
         let agent_bridge = dx_agent_bridge_snapshot(cx);
         let receipt_file_count = receipt_snapshot
             .buckets
@@ -6306,6 +6320,7 @@ impl AgentPanel {
             launch_contracts,
             launch_readiness,
             launch_audit,
+            www_evidence,
             receipt_snapshot,
             source_sets,
             tool_history,

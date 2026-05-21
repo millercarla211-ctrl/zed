@@ -26,6 +26,7 @@ mod dx_proof_freshness;
 mod dx_receipt_history;
 mod dx_runtime_proof_status;
 mod dx_source_sets;
+mod dx_www_launch_evidence;
 mod entry_view_state;
 mod external_source_prompt;
 mod favorite_models;

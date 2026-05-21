@@ -1,3 +1,17 @@
+[2026-05-21] - DX-WWW Launch Evidence Rail
+
+ADDED:
+- Added a read-only DX-WWW launch evidence scanner that prefers the active workspace, then `G:\WWW\www`, then the bundled launch-template fallback, and inspects `.dx\forge\template-readiness` plus `.dx\forge\release` handoff artifacts by file metadata and bounded JSON fields only.
+- Surfaced release packet, operator index, status timeline, handoff digest, release seal, restart, acceptance, and Friday baton coverage in the DX launch right rail with graceful missing-project/missing-release-root states.
+- Added a WWW Evidence guided card that drafts the next safe DX-WWW/Forge operator sequence without running CLI commands.
+
+CHANGED:
+- The Review Receipts guided action now includes DX-WWW release/restart/acceptance evidence context beside launch CLI audit, gate, and receipt diagnostics.
+- Updated DX launch notes and status to 99.4/100 for the editor lane before governed runtime proof.
+
+NOTES:
+- This slice reads source-owned project evidence metadata only. It does not run `dx forge ...`, `dx www ...`, Cargo, `just run`, local servers, providers, agents, DX-WWW, Forge, browser automation, shell commands, or restore-to-target actions.
+
 [2026-05-21] - DX Launch Audit Rail
 
 ADDED:
