@@ -1,3 +1,16 @@
+[2026-05-21] - DX Source Receipt Review Handoffs
+
+ADDED:
+- Added typed source receipt metadata with receipt label and file-size detail for source-pack, reduced-context, media execution, and restore receipt rows.
+- Added a row-level Receipt handoff button that drafts a source-specific receipt review prompt when managed receipt metadata exists.
+
+CHANGED:
+- Source rows now render receipt metadata as a nested file row before proof and warning rows, keeping receipt identity separate from validation evidence.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` with the source receipt review handoff slice while keeping the current next-set status at 99.9/100 until governed runtime proof evidence is imported.
+
+NOTES:
+- This slice drafts receipt review prompts only. It does not run `just run`, Cargo, local servers, browser automation, deploys, shell commands, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Row-Level Receipt Drilldowns
 
 ADDED:

@@ -65,9 +65,15 @@ pub(crate) struct DxSourceItem {
     pub detail: String,
     pub path: String,
     pub kind: DxSourceKind,
-    pub receipt_drilldowns: Vec<String>,
+    pub receipt_drilldowns: Vec<DxSourceReceiptDrilldown>,
     pub proofs: Vec<String>,
     pub warnings: Vec<String>,
+}
+
+#[derive(Clone)]
+pub(crate) struct DxSourceReceiptDrilldown {
+    pub label: String,
+    pub detail: String,
 }
 
 #[derive(Clone, Copy)]
@@ -237,7 +243,7 @@ fn metasearch_source_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSource
         detail: format!("{item_count} items - ~{estimated_tokens} tokens"),
         path: receipt.label.clone(),
         kind: DxSourceKind::MetasearchSourcePack,
-        receipt_drilldowns: vec![format!("Source-pack receipt {}", receipt.label)],
+        receipt_drilldowns: vec![receipt_drilldown("Source-pack receipt", receipt)],
         proofs: Vec::new(),
         warnings: Vec::new(),
     })
@@ -294,7 +300,7 @@ fn media_sources_from_receipt(receipt: &ReceiptCandidate) -> Vec<DxSourceItem> {
                 detail: format!("{media_kind} - {format} - {}", format_bytes(size_bytes)),
                 path,
                 kind: DxSourceKind::MediaOutput,
-                receipt_drilldowns: vec![format!("Execution receipt {}", receipt.label)],
+                receipt_drilldowns: vec![receipt_drilldown("Execution receipt", receipt)],
                 proofs,
                 warnings,
             })
@@ -341,7 +347,7 @@ fn reduced_context_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSourceIt
         detail: format!("{source_count} sources - ~{tokens} tokens - {status}"),
         path: receipt.label.clone(),
         kind: DxSourceKind::ReducedContextReceipt,
-        receipt_drilldowns: vec![format!("Reduced-context receipt {}", receipt.label)],
+        receipt_drilldowns: vec![receipt_drilldown("Reduced-context receipt", receipt)],
         proofs: Vec::new(),
         warnings: Vec::new(),
     })
@@ -390,10 +396,23 @@ fn forge_restore_source_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSou
         ),
         path: restore_root,
         kind: DxSourceKind::ForgeRestorePreview,
-        receipt_drilldowns: vec![format!("Restore receipt {}", receipt.label)],
+        receipt_drilldowns: vec![receipt_drilldown("Restore receipt", receipt)],
         proofs: Vec::new(),
         warnings,
     })
+}
+
+fn receipt_drilldown(label: &'static str, receipt: &ReceiptCandidate) -> DxSourceReceiptDrilldown {
+    let size = receipt
+        .path
+        .metadata()
+        .map(|metadata| format_bytes(metadata.len()))
+        .unwrap_or_else(|_| "unknown size".to_string());
+
+    DxSourceReceiptDrilldown {
+        label: label.to_string(),
+        detail: format!("{} - {size}", receipt.label),
+    }
 }
 
 fn forge_restore_warnings(value: &Value) -> Vec<String> {

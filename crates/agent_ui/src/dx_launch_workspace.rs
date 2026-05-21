@@ -14,7 +14,8 @@ use crate::dx_deploy_targets::{DxDeployReceiptBucket, DxDeployTarget, DxDeployTa
 use crate::dx_proof_freshness::{DxProofFreshnessBucket, DxProofFreshnessSnapshot};
 use crate::dx_receipt_history::{DxToolHistoryBucket, DxToolHistorySnapshot};
 use crate::dx_source_sets::{
-    DxSourceAttachmentSummary, DxSourceItem, DxSourceKind, DxSourceSet, DxSourceSetSnapshot,
+    DxSourceAttachmentSummary, DxSourceItem, DxSourceKind, DxSourceReceiptDrilldown, DxSourceSet,
+    DxSourceSetSnapshot,
 };
 
 const DX_RECEIPTS_ROOT: &str = r"G:\Dx\.dx\receipts";
@@ -440,11 +441,10 @@ fn source_item_row(
     }
 
     for (ix, receipt) in source.receipt_drilldowns.iter().take(2).enumerate() {
-        stack = stack.child(signal_row(
+        stack = stack.child(source_receipt_drilldown_row(
             SharedString::from(format!("source-receipt-{}-{ix}", source.path)),
-            IconName::FileTextOutlined,
-            Color::Muted,
-            receipt.clone(),
+            receipt,
+            cx,
         ));
     }
 
@@ -467,6 +467,36 @@ fn source_item_row(
     }
 
     stack.into_any_element()
+}
+
+fn source_receipt_drilldown_row(
+    id: SharedString,
+    receipt: &DxSourceReceiptDrilldown,
+    cx: &App,
+) -> AnyElement {
+    let label_id = SharedString::from(format!("source-receipt-label-{}", receipt.detail));
+
+    v_flex()
+        .id(id)
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().editor_background)
+        .child(signal_row(
+            label_id,
+            IconName::FileTextOutlined,
+            Color::Muted,
+            receipt.label.clone(),
+        ))
+        .child(
+            Label::new(receipt.detail.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .into_any_element()
 }
 
 fn take_source_row_control(

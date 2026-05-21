@@ -38,7 +38,7 @@ use crate::dx_check_score::{DxCheckScoreInput, check_score_snapshot};
 use crate::dx_deploy_targets::{DxDeployTargetSnapshot, deploy_target_snapshot};
 use crate::dx_launch_prompts::{
     deploy_readiness_prompt, receipt_review_prompt, runtime_proof_prompt, source_action_icon,
-    source_action_label, source_action_prompt, source_action_title,
+    source_action_label, source_action_prompt, source_action_title, source_receipt_review_prompt,
 };
 use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, DxSourceRowControl, receipt_snapshot, render_workspace_chrome,
@@ -5877,17 +5877,44 @@ impl AgentPanel {
                 let icon = source_action_icon(source.kind);
                 let prompt = source_action_prompt(source);
                 let action_label = source_action_label(source.kind);
+                let receipt_prompt = source_receipt_review_prompt(source);
+                let has_receipt_drilldowns = !source.receipt_drilldowns.is_empty();
                 DxSourceRowControl {
                     source_path: source.path.clone(),
-                    element: Button::new(format!("dx-source-row-action-{ix}"), action_label)
-                        .full_width()
-                        .label_size(LabelSize::XSmall)
-                        .color(Color::Muted)
-                        .start_icon(Icon::new(icon).size(IconSize::XSmall).color(Color::Muted))
-                        .disabled(!can_create_entries)
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.insert_dx_launch_prompt(prompt.clone(), window, cx);
-                        }))
+                    element: v_flex()
+                        .gap_1()
+                        .child(
+                            Button::new(format!("dx-source-row-action-{ix}"), action_label)
+                                .full_width()
+                                .label_size(LabelSize::XSmall)
+                                .color(Color::Muted)
+                                .start_icon(
+                                    Icon::new(icon).size(IconSize::XSmall).color(Color::Muted),
+                                )
+                                .disabled(!can_create_entries)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.insert_dx_launch_prompt(prompt.clone(), window, cx);
+                                })),
+                        )
+                        .child(
+                            Button::new(format!("dx-source-row-receipt-{ix}"), "Receipt")
+                                .full_width()
+                                .label_size(LabelSize::XSmall)
+                                .color(Color::Muted)
+                                .start_icon(
+                                    Icon::new(IconName::FileTextOutlined)
+                                        .size(IconSize::XSmall)
+                                        .color(Color::Muted),
+                                )
+                                .disabled(!can_create_entries || !has_receipt_drilldowns)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.insert_dx_launch_prompt(
+                                        receipt_prompt.clone(),
+                                        window,
+                                        cx,
+                                    );
+                                })),
+                        )
                         .into_any_element(),
                 }
             })

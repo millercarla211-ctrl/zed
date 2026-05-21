@@ -37,6 +37,26 @@ pub(crate) fn source_action_label(kind: DxSourceKind) -> &'static str {
     }
 }
 
+pub(crate) fn source_receipt_review_prompt(source: &DxSourceItem) -> String {
+    let receipts = source
+        .receipt_drilldowns
+        .iter()
+        .map(|receipt| format!("{}: {}", receipt.label, receipt.detail))
+        .collect::<Vec<_>>()
+        .join("; ");
+    let receipts = if receipts.is_empty() {
+        "No managed receipt drilldowns are visible for this source yet.".to_string()
+    } else {
+        format!("Visible receipt drilldowns: {receipts}.")
+    };
+
+    format!(
+        "Review the DX source receipt metadata for `{label}` at `{path}`. {receipts} Summarize the receipt type, source kind, proof rows, warning rows, freshness risk, and the next safe Agent action. Do not run builds, local servers, browser input, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions.",
+        label = source.label.as_str(),
+        path = source.path.as_str(),
+    )
+}
+
 pub(crate) fn source_action_prompt(source: &DxSourceItem) -> String {
     match source.kind {
         DxSourceKind::WorkspaceRoot => format!(
