@@ -1,3 +1,16 @@
+[2026-05-21] - DX Agents Release Gate Readiness
+
+ADDED:
+- Added a fixed `dx agents release-gate --json` metadata action in Agent Configuration that validates stdout JSON and caches it as the latest agents release-gate receipt without routing it through the live `dx-agents` bridge command path.
+- Added redacted release-gate receipt parsing for final acceptance counts, receipt inbox state, action-map readiness, recovery drilldown metadata, command-fanout posture, warnings/blockers, and acceptance rows.
+- Surfaced release-gate status in the DX launch right rail beside the existing DX Agents bridge contract, import summary, and provider catalog state.
+
+CHANGED:
+- Updated DX launch notes so the metadata-only release-gate path is tracked separately from live `dx-agents` command proof and first-paint import-summary proof.
+
+NOTES:
+- This slice reads metadata receipts and runs only the explicit `dx agents release-gate --json` action on user click. It does not import secrets, start `dx-agents`, run provider calls, start local servers, or run Cargo/`just run` validation.
+
 [2026-05-21] - DX Agents Import Summary Readiness
 
 ADDED:

@@ -400,6 +400,64 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
             } else {
                 "review".to_string()
             },
+        ))
+        .child(metric_row("Gate", snapshot.release_gate.status.clone()))
+        .child(metric_row(
+            "Acceptance",
+            format!(
+                "{} / {} passed",
+                snapshot.release_gate.passed_count, snapshot.release_gate.acceptance_count
+            ),
+        ))
+        .child(metric_row(
+            "Gate Warnings",
+            format!(
+                "{} warning(s) / {} blocker(s)",
+                snapshot.release_gate.warning_count, snapshot.release_gate.failed_count
+            ),
+        ))
+        .child(metric_row(
+            "Gate Receipts",
+            format!(
+                "{} / {}",
+                snapshot.release_gate.receipt_count, snapshot.release_gate.receipt_inbox_status
+            ),
+        ))
+        .child(metric_row(
+            "Gate Packets",
+            format!(
+                "{} packet(s) / {} fixture(s)",
+                snapshot.release_gate.packet_count, snapshot.release_gate.fixture_family_count
+            ),
+        ))
+        .child(metric_row(
+            "Gate Retention",
+            format!(
+                "{} / {} overflow",
+                snapshot.release_gate.retention_preview_status,
+                snapshot.release_gate.retained_run_overflow_count
+            ),
+        ))
+        .child(metric_row(
+            "Gate Action",
+            snapshot.release_gate.action_map_status.clone(),
+        ))
+        .child(metric_row(
+            "Gate Recovery",
+            format!(
+                "{} via {}, {} fixture(s)",
+                snapshot.release_gate.recovery_controls_status,
+                snapshot.release_gate.recovery_render_first,
+                snapshot.release_gate.recovery_fixture_count
+            ),
+        ))
+        .child(metric_row(
+            "Gate Fanout",
+            if snapshot.release_gate.no_command_fanout {
+                "none".to_string()
+            } else {
+                "review".to_string()
+            },
         ));
 
     if !snapshot.enabled {
@@ -414,6 +472,9 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
     }
     if snapshot.enabled && snapshot.root_exists && !snapshot.import_summary.present {
         stack = stack.child(muted_card("Run dx agents import-summary --json", cx));
+    }
+    if snapshot.enabled && snapshot.root_exists && !snapshot.release_gate.present {
+        stack = stack.child(muted_card("Run dx agents release-gate --json", cx));
     }
 
     if let Some(receipt) = snapshot.latest_receipts.first() {
@@ -430,8 +491,33 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
     if let Some(command) = snapshot.import_summary.recovery_commands.first() {
         stack = stack.child(metric_row("Import Command", command.clone()));
     }
+    if let Some(row) = snapshot.release_gate.acceptance_rows.first() {
+        stack = stack.child(metric_row("Gate Row", row.clone()));
+    }
 
-    if let Some(reason) = snapshot.import_summary.blocking_reasons.first() {
+    if let Some(reason) = snapshot.release_gate.blocking_reasons.first() {
+        stack = stack.child(signal_row(
+            "dx-agent-release-gate-blocker".into(),
+            IconName::Warning,
+            Color::Warning,
+            format!("DX Agents release gate blocker: {reason}"),
+        ));
+    } else if snapshot.release_gate.present && !snapshot.release_gate.no_command_fanout {
+        stack = stack.child(signal_row(
+            "dx-agent-release-gate-fanout-review".into(),
+            IconName::Warning,
+            Color::Warning,
+            "DX Agents release gate reports command fanout; keep bridge import blocked."
+                .to_string(),
+        ));
+    } else if let Some(reason) = snapshot.release_gate.warning_reasons.first() {
+        stack = stack.child(signal_row(
+            "dx-agent-release-gate-warning".into(),
+            IconName::Warning,
+            Color::Warning,
+            format!("DX Agents release gate warning: {reason}"),
+        ));
+    } else if let Some(reason) = snapshot.import_summary.blocking_reasons.first() {
         stack = stack.child(signal_row(
             "dx-agent-import-summary-blocker".into(),
             IconName::Warning,
@@ -468,7 +554,9 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
             error.clone(),
         ));
     } else {
-        let next_action = if snapshot.import_summary.present {
+        let next_action = if snapshot.release_gate.present {
+            snapshot.release_gate.next_action.clone()
+        } else if snapshot.import_summary.present {
             snapshot.import_summary.next_action.clone()
         } else if snapshot.contract_summary.present {
             snapshot.contract_summary.next_action.clone()

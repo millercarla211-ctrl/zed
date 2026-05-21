@@ -50,9 +50,10 @@ use crate::{
     agent_configuration::add_llm_provider_modal::{AddLlmProviderModal, LlmCompatibleProvider},
     agent_connection_store::{AgentConnectionStatus, AgentConnectionStore},
     dx_agent_bridge::{
-        DxAgentBridgeSnapshot, dx_agent_bridge_snapshot, dx_agent_cli_actions_allowed,
-        dx_agent_cli_path, dx_agent_dx_home, dx_agent_receipt_root, run_dx_agent_command,
-        run_dx_agent_import_summary_command,
+        DxAgentBridgeSnapshot, DxAgentSocialActionSummary, dx_agent_bridge_snapshot,
+        dx_agent_cli_actions_allowed, dx_agent_cli_path, dx_agent_dx_home, dx_agent_receipt_root,
+        run_dx_agent_command, run_dx_agent_import_summary_command,
+        run_dx_agent_release_gate_command,
     },
 };
 
@@ -238,6 +239,18 @@ impl AgentConfiguration {
                     })),
             )
             .child(
+                Button::new("dx-agents-release-gate", "Gate")
+                    .style(ButtonStyle::Outlined)
+                    .label_size(LabelSize::Small)
+                    .disabled(!actions_allowed)
+                    .on_click(cx.listener(|this, _, _window, cx| {
+                        this.run_dx_agents_metadata_action(
+                            vec!["agents", "release-gate", "--json"],
+                            cx,
+                        );
+                    })),
+            )
+            .child(
                 Button::new("dx-agents-social-list", "Social")
                     .style(ButtonStyle::Outlined)
                     .label_size(LabelSize::Small)
@@ -281,6 +294,7 @@ impl AgentConfiguration {
                     .child(self.render_dx_agents_status_item(&snapshot, cx))
                     .child(self.render_dx_agents_contract_item(&snapshot, cx))
                     .child(self.render_dx_agents_import_summary_item(&snapshot, cx))
+                    .child(self.render_dx_agents_release_gate_item(&snapshot, cx))
                     .child(self.render_dx_agents_social_items(&snapshot, cx))
                     .child(self.render_dx_agents_catalog_items(&snapshot, cx)),
             )
@@ -480,6 +494,112 @@ impl AgentConfiguration {
                 ))
                 .size(LabelSize::Small)
                 .color(Color::Muted),
+            );
+        }
+
+        stack.into_any_element()
+    }
+
+    fn render_dx_agents_release_gate_item(
+        &self,
+        snapshot: &DxAgentBridgeSnapshot,
+        _cx: &Context<Self>,
+    ) -> impl IntoElement {
+        let summary = &snapshot.release_gate;
+        let status = if !summary.present || summary.failed_count > 0 || !summary.no_command_fanout {
+            AiSettingItemStatus::Stopped
+        } else if summary.warning_count > 0 || summary.status == "warning" {
+            AiSettingItemStatus::Starting
+        } else {
+            AiSettingItemStatus::Running
+        };
+        let mut stack = v_flex().gap_1().child(
+            AiSettingItem::new(
+                "dx-agents-release-gate",
+                "Release Gate",
+                status,
+                AiSettingItemSource::Custom,
+            )
+            .icon(
+                Icon::new(IconName::Check)
+                    .size(IconSize::Small)
+                    .color(Color::Muted),
+            )
+            .detail_label(format!(
+                "{} passed / {} total, {} warning(s), {} blocker(s)",
+                summary.passed_count,
+                summary.acceptance_count,
+                summary.warning_count,
+                summary.failed_count
+            )),
+        );
+
+        if !summary.present {
+            stack = stack.child(
+                Label::new("No release gate receipt yet. Run the Gate action.")
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        } else if !summary.operator_summary.is_empty() {
+            stack = stack.child(
+                Label::new(summary.operator_summary.clone())
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        }
+
+        if let Some(reason) = summary.blocking_reasons.first() {
+            stack = stack.child(
+                Label::new(format!("Blocked: {reason}"))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        } else if let Some(reason) = summary.warning_reasons.first() {
+            stack = stack.child(
+                Label::new(format!("Warning: {reason}"))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        } else if summary.present {
+            stack = stack.child(
+                Label::new(format!(
+                    "Manifest {}, smoke {}, receipts {}",
+                    summary.import_manifest_status,
+                    summary.smoke_status,
+                    summary.receipt_inbox_status
+                ))
+                .size(LabelSize::Small)
+                .color(Color::Muted),
+            );
+            stack = stack.child(
+                Label::new(format!(
+                    "Action map {}, retention {}, packets {}, fixtures {}",
+                    summary.action_map_status,
+                    summary.retention_preview_status,
+                    summary.packet_count,
+                    summary.fixture_family_count
+                ))
+                .size(LabelSize::Small)
+                .color(Color::Muted),
+            );
+            stack = stack.child(
+                Label::new(format!(
+                    "Recovery: {} via {}, {} fixture(s), retained overflow {}",
+                    summary.recovery_controls_status,
+                    summary.recovery_render_first,
+                    summary.recovery_fixture_count,
+                    summary.retained_run_overflow_count
+                ))
+                .size(LabelSize::Small)
+                .color(Color::Muted),
+            );
+        }
+
+        if let Some(row) = summary.acceptance_rows.first() {
+            stack = stack.child(
+                Label::new(row.clone())
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
             );
         }
 
@@ -710,24 +830,44 @@ impl AgentConfiguration {
     where
         T: Into<String>,
     {
+        enum MetadataAction {
+            ImportSummary,
+            ReleaseGate,
+        }
+
         if !dx_agent_cli_actions_allowed(cx) {
             return;
         }
 
         let args = args.into_iter().map(Into::into).collect::<Vec<_>>();
-        if args.len() != 3
-            || args[0] != "agents"
-            || args[1] != "import-summary"
-            || args[2] != "--json"
+        let action = if args.len() == 3
+            && args[0] == "agents"
+            && args[1] == "import-summary"
+            && args[2] == "--json"
         {
+            MetadataAction::ImportSummary
+        } else if args.len() == 3
+            && args[0] == "agents"
+            && args[1] == "release-gate"
+            && args[2] == "--json"
+        {
+            MetadataAction::ReleaseGate
+        } else {
             log::warn!("Unsupported DX Agents metadata action: {}", args.join(" "));
             return;
-        }
+        };
 
         let dx_home = dx_agent_dx_home(cx);
         let receipt_root = dx_agent_receipt_root(cx);
         let task = cx.background_spawn(async move {
-            run_dx_agent_import_summary_command(dx_home, receipt_root)
+            match action {
+                MetadataAction::ImportSummary => {
+                    run_dx_agent_import_summary_command(dx_home, receipt_root)
+                }
+                MetadataAction::ReleaseGate => {
+                    run_dx_agent_release_gate_command(dx_home, receipt_root)
+                }
+            }
         });
         cx.spawn(async move |this, cx| {
             let result = task.await;

@@ -34,12 +34,15 @@ pub(crate) struct DxAgentBridgeSnapshot {
     pub last_error: Option<String>,
     pub next_action: String,
     pub social_accounts: Vec<DxAgentSocialAccount>,
+    pub social_connect: DxAgentSocialActionSummary,
+    pub social_disconnect: DxAgentSocialActionSummary,
     pub automations: Vec<DxAgentAutomation>,
     pub providers: Vec<DxAgentProvider>,
     pub models: Vec<DxAgentModel>,
     pub catalog: DxAgentCatalogSummary,
     pub contract_summary: DxAgentContractSummary,
     pub import_summary: DxAgentImportSummary,
+    pub release_gate: DxAgentReleaseGateSummary,
     pub latest_receipts: Vec<String>,
     pub show_managed_providers: bool,
     pub show_in_agent_rail: bool,
@@ -62,6 +65,25 @@ pub(crate) struct DxAgentSocialAccount {
     pub configured: bool,
     pub connected: bool,
     pub qr_connect_supported: bool,
+    pub next_action: String,
+}
+
+#[derive(Clone)]
+pub(crate) struct DxAgentSocialActionSummary {
+    pub action: &'static str,
+    pub present: bool,
+    pub status: String,
+    pub platform: String,
+    pub label: String,
+    pub connected: Option<bool>,
+    pub connect_supported: bool,
+    pub disconnect_supported: bool,
+    pub qr_supported: bool,
+    pub link_supported: bool,
+    pub connect_method: String,
+    pub manual_revoke_required: bool,
+    pub explicit_user_action_required: bool,
+    pub safe_config_state: String,
     pub next_action: String,
 }
 
@@ -145,6 +167,34 @@ pub(crate) struct DxAgentImportSummary {
     pub recovery_commands: Vec<String>,
 }
 
+#[derive(Clone)]
+pub(crate) struct DxAgentReleaseGateSummary {
+    pub present: bool,
+    pub status: String,
+    pub operator_summary: String,
+    pub acceptance_count: usize,
+    pub passed_count: usize,
+    pub warning_count: usize,
+    pub failed_count: usize,
+    pub packet_count: usize,
+    pub fixture_family_count: usize,
+    pub receipt_count: usize,
+    pub retained_run_overflow_count: usize,
+    pub import_manifest_status: String,
+    pub smoke_status: String,
+    pub receipt_inbox_status: String,
+    pub retention_preview_status: String,
+    pub action_map_status: String,
+    pub no_command_fanout: bool,
+    pub recovery_controls_status: String,
+    pub recovery_render_first: String,
+    pub recovery_fixture_count: usize,
+    pub next_action: String,
+    pub warning_reasons: Vec<String>,
+    pub blocking_reasons: Vec<String>,
+    pub acceptance_rows: Vec<String>,
+}
+
 static SNAPSHOT_CACHE: OnceLock<Mutex<Option<(Instant, String, DxAgentBridgeSnapshot)>>> =
     OnceLock::new();
 
@@ -200,7 +250,9 @@ pub(crate) fn run_dx_agent_command(
     args: Vec<String>,
     dx_home: Option<PathBuf>,
 ) -> Result<()> {
-    run_bridge_command(cli_path, args, dx_home).map(|_| ())
+    run_bridge_command(cli_path, args, dx_home)?;
+    clear_snapshot_cache();
+    Ok(())
 }
 
 pub(crate) fn run_dx_agent_import_summary_command(
@@ -220,6 +272,28 @@ pub(crate) fn run_dx_agent_import_summary_command(
         &receipt_root.join("import-summary-latest.json"),
         &output.stdout,
         "dx.agents.zed.import_summary.v1",
+    )?;
+    clear_snapshot_cache();
+    Ok(())
+}
+
+pub(crate) fn run_dx_agent_release_gate_command(
+    dx_home: Option<PathBuf>,
+    receipt_root: PathBuf,
+) -> Result<()> {
+    let output = run_bridge_command(
+        DEFAULT_DX_CLI.to_string(),
+        vec![
+            "agents".to_string(),
+            "release-gate".to_string(),
+            "--json".to_string(),
+        ],
+        dx_home,
+    )?;
+    write_json_receipt(
+        &receipt_root.join("release-gate-latest.json"),
+        &output.stdout,
+        "dx.agents.zed.release_gate.v1",
     )?;
     clear_snapshot_cache();
     Ok(())
@@ -355,6 +429,9 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
     let root_exists = settings.receipt_root.is_dir();
     let status_value = read_json(&settings.receipt_root.join("status-latest.json"));
     let social_value = read_json(&settings.receipt_root.join("social-list-latest.json"));
+    let social_connect_value = read_json(&settings.receipt_root.join("social-connect-latest.json"));
+    let social_disconnect_value =
+        read_json(&settings.receipt_root.join("social-disconnect-latest.json"));
     let automation_value = read_json(&settings.receipt_root.join("automate-list-latest.json"));
     let provider_value = read_json(&settings.receipt_root.join("providers-list-latest.json"));
     let model_value = read_json(&settings.receipt_root.join("models-list-latest.json"));
@@ -362,6 +439,10 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
     let import_summary_value = read_first_json(
         &settings.receipt_root,
         &["import-summary-latest.json", "import_summary-latest.json"],
+    );
+    let release_gate_value = read_first_json(
+        &settings.receipt_root,
+        &["release-gate-latest.json", "release_gate-latest.json"],
     );
 
     let status = status_value
@@ -425,6 +506,16 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
             .as_ref()
             .map(social_accounts)
             .unwrap_or_default(),
+        social_connect: social_action_summary(
+            social_connect_value.as_ref(),
+            root_exists,
+            DxAgentSocialActionKind::Connect,
+        ),
+        social_disconnect: social_action_summary(
+            social_disconnect_value.as_ref(),
+            root_exists,
+            DxAgentSocialActionKind::Disconnect,
+        ),
         automations: automation_value
             .as_ref()
             .map(automations)
@@ -438,6 +529,7 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
         ),
         contract_summary: contract_summary(contract_value.as_ref(), root_exists),
         import_summary: import_summary(import_summary_value.as_ref(), root_exists),
+        release_gate: release_gate(release_gate_value.as_ref(), root_exists),
         latest_receipts: latest_receipts(&settings.receipt_root, root_exists),
         show_managed_providers: settings.show_managed_providers,
         show_in_agent_rail: settings.show_in_agent_rail,
@@ -476,6 +568,81 @@ fn social_accounts(value: &Value) -> Vec<DxAgentSocialAccount> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+#[derive(Clone, Copy)]
+enum DxAgentSocialActionKind {
+    Connect,
+    Disconnect,
+}
+
+fn social_action_summary(
+    value: Option<&Value>,
+    root_exists: bool,
+    kind: DxAgentSocialActionKind,
+) -> DxAgentSocialActionSummary {
+    let action = match kind {
+        DxAgentSocialActionKind::Connect => "connect",
+        DxAgentSocialActionKind::Disconnect => "disconnect",
+    };
+    let command = match kind {
+        DxAgentSocialActionKind::Connect => "dx-agents agents social connect --json",
+        DxAgentSocialActionKind::Disconnect => "dx-agents agents social disconnect --json",
+    };
+    let waiting_status = match kind {
+        DxAgentSocialActionKind::Connect => "waiting_for_social_connect_receipt",
+        DxAgentSocialActionKind::Disconnect => "waiting_for_social_disconnect_receipt",
+    };
+    let account = value.and_then(|value| value.get("account"));
+    let flow = value.and_then(|value| value.get("flow"));
+
+    DxAgentSocialActionSummary {
+        action,
+        present: value.is_some(),
+        status: value
+            .and_then(|value| string_field(value, &["status"]))
+            .unwrap_or_else(|| {
+                if root_exists {
+                    waiting_status.to_string()
+                } else {
+                    "missing_receipt_root".to_string()
+                }
+            }),
+        platform: account
+            .and_then(|account| string_field(account, &["platform"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        label: account
+            .and_then(|account| string_field(account, &["label"]))
+            .unwrap_or_else(|| "Social account".to_string()),
+        connected: account.and_then(|account| bool_field(account, &["connected"])),
+        connect_supported: flow
+            .and_then(|flow| bool_field(flow, &["connect_supported"]))
+            .unwrap_or(false),
+        disconnect_supported: flow
+            .and_then(|flow| bool_field(flow, &["disconnect_supported"]))
+            .unwrap_or(false),
+        qr_supported: flow
+            .and_then(|flow| bool_field(flow, &["qr_supported"]))
+            .unwrap_or(false),
+        link_supported: flow
+            .and_then(|flow| bool_field(flow, &["link_supported"]))
+            .unwrap_or(false),
+        connect_method: flow
+            .and_then(|flow| string_field(flow, &["connect_method"]))
+            .unwrap_or_else(|| "none".to_string()),
+        manual_revoke_required: flow
+            .and_then(|flow| bool_field(flow, &["manual_revoke_required"]))
+            .unwrap_or(false),
+        explicit_user_action_required: flow
+            .and_then(|flow| bool_field(flow, &["explicit_user_action_required"]))
+            .unwrap_or(false),
+        safe_config_state: flow
+            .and_then(|flow| string_field(flow, &["safe_config_state"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        next_action: value
+            .and_then(|value| string_field(value, &["next_action"]))
+            .unwrap_or_else(|| command.to_string()),
+    }
 }
 
 fn automations(value: &Value) -> Vec<DxAgentAutomation> {
@@ -746,6 +913,109 @@ fn import_summary(value: Option<&Value>, root_exists: bool) -> DxAgentImportSumm
             .map(|value| string_values_field(value, &["recovery_commands"]))
             .unwrap_or_default(),
     }
+}
+
+fn release_gate(value: Option<&Value>, root_exists: bool) -> DxAgentReleaseGateSummary {
+    let recovery_controls = value.and_then(|value| value.get("recovery_controls"));
+    let status = value
+        .and_then(|value| string_field(value, &["status"]))
+        .unwrap_or_else(|| {
+            if root_exists {
+                "waiting_for_release_gate".to_string()
+            } else {
+                "missing_receipt_root".to_string()
+            }
+        });
+    let next_action = value
+        .and_then(|value| string_field(value, &["next_action"]))
+        .or_else(|| recovery_controls.and_then(|value| string_field(value, &["next_action"])))
+        .unwrap_or_else(|| "dx agents release-gate --json".to_string());
+
+    DxAgentReleaseGateSummary {
+        present: value.is_some(),
+        status,
+        operator_summary: value
+            .and_then(|value| string_field(value, &["operator_summary"]))
+            .unwrap_or_default(),
+        acceptance_count: value
+            .and_then(|value| usize_field(value, &["acceptance_count"]))
+            .unwrap_or_default(),
+        passed_count: value
+            .and_then(|value| usize_field(value, &["passed_count"]))
+            .unwrap_or_default(),
+        warning_count: value
+            .and_then(|value| usize_field(value, &["warning_count"]))
+            .unwrap_or_default(),
+        failed_count: value
+            .and_then(|value| usize_field(value, &["failed_count"]))
+            .unwrap_or_default(),
+        packet_count: value
+            .and_then(|value| usize_field(value, &["packet_count"]))
+            .unwrap_or_default(),
+        fixture_family_count: value
+            .and_then(|value| usize_field(value, &["fixture_family_count"]))
+            .unwrap_or_default(),
+        receipt_count: value
+            .and_then(|value| usize_field(value, &["receipt_count"]))
+            .unwrap_or_default(),
+        retained_run_overflow_count: value
+            .and_then(|value| usize_field(value, &["retained_run_overflow_count"]))
+            .unwrap_or_default(),
+        import_manifest_status: value
+            .and_then(|value| string_field(value, &["import_manifest_status"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        smoke_status: value
+            .and_then(|value| string_field(value, &["smoke_status"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        receipt_inbox_status: value
+            .and_then(|value| string_field(value, &["receipt_inbox_status"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        retention_preview_status: value
+            .and_then(|value| string_field(value, &["retention_preview_status"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        action_map_status: value
+            .and_then(|value| string_field(value, &["action_map_status"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        no_command_fanout: value
+            .and_then(|value| bool_field(value, &["no_command_fanout"]))
+            .or_else(|| {
+                recovery_controls.and_then(|value| bool_field(value, &["no_command_fanout"]))
+            })
+            .unwrap_or(false),
+        recovery_controls_status: recovery_controls
+            .and_then(|value| string_field(value, &["status"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        recovery_render_first: recovery_controls
+            .and_then(|value| string_field(value, &["render_first"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        recovery_fixture_count: recovery_controls
+            .and_then(|value| usize_field(value, &["fixture_count"]))
+            .unwrap_or_default(),
+        next_action,
+        warning_reasons: value
+            .map(|value| string_array_field(value, &["warning_reasons"]))
+            .unwrap_or_default(),
+        blocking_reasons: value
+            .map(|value| string_array_field(value, &["blocking_reasons"]))
+            .unwrap_or_default(),
+        acceptance_rows: release_gate_acceptance_rows(value),
+    }
+}
+
+fn release_gate_acceptance_rows(value: Option<&Value>) -> Vec<String> {
+    value
+        .and_then(|value| array_field(value, &["acceptance"]))
+        .map(|rows| {
+            rows.iter()
+                .filter_map(|row| {
+                    let label = string_field(row, &["label"])?;
+                    let status = string_field(row, &["status"]).unwrap_or_else(|| "unknown".into());
+                    Some(format!("{label}: {status}"))
+                })
+                .take(4)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn read_json(path: &Path) -> Option<Value> {
