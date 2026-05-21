@@ -2,6 +2,7 @@ use ui::IconName;
 
 use crate::dx_check_score::DxCheckScoreSnapshot;
 use crate::dx_deploy_targets::{DxDeployReceiptBucket, DxDeployTarget, DxDeployTargetSnapshot};
+use crate::dx_launch_contracts::DxLaunchContractSnapshot;
 use crate::dx_launch_receipts::DxLaunchReceiptReviewSnapshot;
 use crate::dx_launch_status::DxLaunchStatusSnapshot;
 use crate::dx_launch_workspace::DxReceiptSnapshot;
@@ -293,10 +294,25 @@ pub(crate) fn runtime_proof_evidence_template_prompt(
     )
 }
 
+pub(crate) fn launch_handoff_prompt(
+    contracts: &DxLaunchContractSnapshot,
+    launch_status: &DxLaunchStatusSnapshot,
+    launch_receipts: &DxLaunchReceiptReviewSnapshot,
+) -> String {
+    let contract_context = launch_contract_prompt_context(contracts);
+    let launch_context = launch_status_prompt_context(launch_status);
+    let receipt_context = launch_receipt_review_prompt_context(launch_receipts);
+
+    format!(
+        "Review the DX launch handoff for this Zed workspace. Launch contract metadata: {contract_context}. Launch aggregate: {launch_context}. Launch receipt diagnostics: {receipt_context}. Use the visible source-owned import-manifest and handoff packet metadata to summarize packet coverage, polling order, diagnostics commands, action-map safety, command fanout, redaction posture, cached receipt fallback, and missing proof. If the operator asks for a refresh, draft the exact `dx launch import-manifest --json`, `dx launch handoff --json`, `dx launch status --json`, `dx launch receipts --json`, or `dx launch release-gate --json` step, but do not run CLI commands, builds, local servers, browser input, deploys, shell commands, providers, agents, DX-WWW, Forge, external serializer/RLM code, model calls, or restore-to-target actions."
+    )
+}
+
 pub(crate) fn receipt_review_prompt(
     receipt_snapshot: &DxReceiptSnapshot,
     launch_status: &DxLaunchStatusSnapshot,
     launch_receipts: &DxLaunchReceiptReviewSnapshot,
+    launch_contracts: &DxLaunchContractSnapshot,
     tool_history: &DxToolHistorySnapshot,
     proof_freshness: &DxProofFreshnessSnapshot,
     deploy_targets: &DxDeployTargetSnapshot,
@@ -326,6 +342,7 @@ pub(crate) fn receipt_review_prompt(
     let latest_receipts = bounded_join(&receipt_snapshot.latest, 4, "No latest DX receipts");
     let launch_context = launch_status_prompt_context(launch_status);
     let launch_receipt_context = launch_receipt_review_prompt_context(launch_receipts);
+    let launch_contract_context = launch_contract_prompt_context(launch_contracts);
     let tool_buckets = tool_history
         .buckets
         .iter()
@@ -373,7 +390,7 @@ pub(crate) fn receipt_review_prompt(
     };
 
     format!(
-        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Launch aggregate: {launch_context}. Launch receipt diagnostics: {launch_receipt_context}. Tool history buckets: {tool_buckets}. Forge history context: {forge_history}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest launch status, launch receipt freshness, malformed retained snapshots, metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, restore-target plan, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
+        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Launch aggregate: {launch_context}. Launch handoff contracts: {launch_contract_context}. Launch receipt diagnostics: {launch_receipt_context}. Tool history buckets: {tool_buckets}. Forge history context: {forge_history}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest launch status, launch receipt freshness, malformed retained snapshots, handoff packet coverage, metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, restore-target plan, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
     )
 }
 
@@ -418,6 +435,55 @@ fn launch_status_prompt_context(snapshot: &DxLaunchStatusSnapshot) -> String {
         snapshot.discovery.status,
         snapshot.discovery.templates_command,
         snapshot.discovery.packages_command,
+        snapshot.next_action
+    )
+}
+
+fn launch_contract_prompt_context(snapshot: &DxLaunchContractSnapshot) -> String {
+    if !snapshot.manifest_present {
+        return format!(
+            "missing import manifest `{}`; expected dx.launch.import_manifest.v1",
+            snapshot.manifest_path.display()
+        );
+    }
+
+    if !snapshot.handoff_present {
+        return format!(
+            "missing handoff packet `{}`; expected dx.launch.handoff.v1",
+            snapshot.handoff_path.display()
+        );
+    }
+
+    let startup = bounded_join(&snapshot.startup_commands, 5, "No startup commands");
+    let diagnostics = bounded_join(&snapshot.diagnostics_commands, 5, "No diagnostics commands");
+    let first_packets = bounded_join(&snapshot.first_packets, 5, "No packet commands");
+    let refresh = snapshot
+        .refresh_command
+        .as_deref()
+        .unwrap_or("dx launch status --json");
+    let cached = snapshot
+        .cached_receipt_path
+        .as_deref()
+        .unwrap_or(".dx/receipts/launch/status-latest.json");
+
+    format!(
+        "status={} summary={} packets={} fixture_families={} commands={} actions={} metadata_only={} fanout={} confirmations={} no_command_fanout={} redaction_review={} refresh={} cached={} startup=[{}] diagnostics=[{}] first_packets=[{}] next_action={}",
+        snapshot.status,
+        snapshot.operator_summary,
+        snapshot.packet_count,
+        snapshot.fixture_family_count,
+        snapshot.command_count,
+        snapshot.action_count,
+        snapshot.metadata_only_count,
+        snapshot.command_fanout_count,
+        snapshot.confirmation_action_count,
+        snapshot.no_command_fanout,
+        snapshot.redaction_requires_review,
+        refresh,
+        cached,
+        startup,
+        diagnostics,
+        first_packets,
         snapshot.next_action
     )
 }

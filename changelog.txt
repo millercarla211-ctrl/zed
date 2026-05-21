@@ -8,6 +8,20 @@ ADDED:
 NOTES:
 - This slice is file/watch/manifest architecture only. It does not start servers, run Cargo, run `just run`, execute DX CLI commands, or mutate browser profiles.
 
+[2026-05-21] - DX Launch Handoff Contract Rail
+
+ADDED:
+- Added a metadata-only launch handoff contract reader for source-owned `G:\Dx\cli\fixtures\launch-examples\import-manifest.json` and `handoff.json`.
+- Surfaced packet count, fixture-family count, action-map count, startup/detail/diagnostics commands, cached receipt path, no-command-fanout state, confirmation count, and first packet/action metadata in the DX launch right rail.
+- Added a Launch Handoff guided card that drafts the safe operator review from current launch status, handoff contracts, and launch receipt diagnostics.
+
+CHANGED:
+- The Review Receipts guided action now includes launch handoff packet coverage and polling/action-map context.
+- Updated DX launch notes and status to 99/100 for the editor lane before governed runtime proof.
+
+NOTES:
+- This slice reads source-owned parser packet metadata only. It does not run `dx launch import-manifest --json`, `dx launch handoff --json`, `dx launch status --json`, Cargo, `just run`, local servers, providers, agents, DX-WWW, Forge, browser automation, or shell commands.
+
 [2026-05-21] - DX Launch Receipt Review Rail
 
 ADDED:
