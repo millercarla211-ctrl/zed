@@ -216,25 +216,25 @@ impl AgentConfiguration {
                     })),
             )
             .child(
-                Button::new("dx-agents-social-list", "Social")
+                Button::new("dx-agents-social-connect", "Connect")
                     .style(ButtonStyle::Outlined)
                     .label_size(LabelSize::Small)
                     .disabled(!actions_allowed)
                     .on_click(cx.listener(|this, _, _window, cx| {
                         this.run_dx_agents_bridge_action(
-                            vec!["agents", "social", "list", "--json"],
+                            vec!["agents", "social", "connect", "--json"],
                             cx,
                         );
                     })),
             )
             .child(
-                Button::new("dx-agents-automations-list", "Automations")
+                Button::new("dx-agents-regenerate-catalog", "Catalog")
                     .style(ButtonStyle::Outlined)
                     .label_size(LabelSize::Small)
                     .disabled(!actions_allowed)
                     .on_click(cx.listener(|this, _, _window, cx| {
                         this.run_dx_agents_bridge_action(
-                            vec!["agents", "automate", "list", "--json"],
+                            vec!["providers", "catalog", "regenerate", "--json"],
                             cx,
                         );
                     })),
@@ -363,19 +363,55 @@ impl AgentConfiguration {
                     ))
                     .action(
                         IconButton::new(
-                            format!("dx-agent-social-list-{}", account.platform),
+                            format!("dx-agent-social-connect-{}", account.platform),
                             IconName::Link,
                         )
                         .icon_color(Color::Muted)
                         .icon_size(IconSize::Small)
-                        .disabled(!snapshot.enabled || !snapshot.cli_actions_allowed)
-                        .tooltip(Tooltip::text("Refresh redacted social receipt"))
-                        .on_click(cx.listener(|this, _, _window, cx| {
-                            this.run_dx_agents_bridge_action(
-                                vec!["agents", "social", "list", "--json"],
-                                cx,
-                            );
-                        })),
+                        .disabled(account.connected || !snapshot.cli_actions_allowed)
+                        .tooltip(Tooltip::text("Prepare redacted QR/link connect receipt"))
+                        .on_click({
+                            let platform = account.platform.clone();
+                            cx.listener(move |this, _, _window, cx| {
+                                this.run_dx_agents_bridge_action(
+                                    vec![
+                                        "agents".to_string(),
+                                        "social".to_string(),
+                                        "connect".to_string(),
+                                        "--platform".to_string(),
+                                        platform.clone(),
+                                        "--json".to_string(),
+                                    ],
+                                    cx,
+                                );
+                            })
+                        }),
+                    )
+                    .action(
+                        IconButton::new(
+                            format!("dx-agent-social-disconnect-{}", account.platform),
+                            IconName::Close,
+                        )
+                        .icon_color(Color::Muted)
+                        .icon_size(IconSize::Small)
+                        .disabled(!account.connected || !snapshot.cli_actions_allowed)
+                        .tooltip(Tooltip::text("Prepare redacted disconnect receipt"))
+                        .on_click({
+                            let platform = account.platform.clone();
+                            cx.listener(move |this, _, _window, cx| {
+                                this.run_dx_agents_bridge_action(
+                                    vec![
+                                        "agents".to_string(),
+                                        "social".to_string(),
+                                        "disconnect".to_string(),
+                                        "--platform".to_string(),
+                                        platform.clone(),
+                                        "--json".to_string(),
+                                    ],
+                                    cx,
+                                );
+                            })
+                        }),
                     ),
                 );
             }
