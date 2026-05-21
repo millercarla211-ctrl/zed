@@ -585,31 +585,43 @@ fn forge_restore_approval_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDe
 fn runtime_proof_import_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDemoRecipe {
     DxLaunchDemoRecipe {
         id: "runtime-proof-import-to-status",
-        title: "Runtime Proof Import To Status Rail",
+        title: "Runtime Proof Plan And Import To Status Rail",
         priority: "optional",
         status: recipe_status(workspace_root),
-        intent: "Capture operator-supplied proof from a governed validation window into managed runtime proof import and status receipts for the Check and Proof Freshness rails.",
-        required_tools: vec!["import_dx_runtime_proof"],
+        intent: "Prepare the governed manual validation checklist, then capture operator-supplied proof from that window into managed runtime proof import and status receipts for the Check and Proof Freshness rails.",
+        required_tools: vec!["plan_dx_runtime_proof", "import_dx_runtime_proof"],
         receipt_contracts: vec![
+            "zed.dx.runtime_proof.plan_receipt.v1",
             "zed.dx.runtime_proof.import.v1",
             "zed.dx.runtime_proof.status_copy.v1",
         ],
-        steps: vec![step(
-            1,
-            "import_dx_runtime_proof",
-            "Persist operator-provided runtime proof summary, evidence, and blockers as managed import/status receipts.",
-            Some("zed.dx.runtime_proof.import.v1"),
-            true,
-            "Writes only managed runtime proof receipts; does not run just run, Cargo, browser automation, deploys, reducers, or restore-to-target actions.",
-        )],
+        steps: vec![
+            step(
+                1,
+                "plan_dx_runtime_proof",
+                "Prepare the governed manual runtime validation checklist and managed receipt target contract.",
+                Some("zed.dx.runtime_proof.plan_receipt.v1"),
+                true,
+                "Writes only managed runtime-proof plan receipts; does not run just run, Cargo, browser automation, deploys, reducers, or restore-to-target actions.",
+            ),
+            step(
+                2,
+                "import_dx_runtime_proof",
+                "Persist operator-provided runtime proof summary, evidence, and blockers as managed import/status receipts after evidence exists.",
+                Some("zed.dx.runtime_proof.import.v1"),
+                true,
+                "Writes only managed runtime proof receipts; does not run just run, Cargo, browser automation, deploys, reducers, or restore-to-target actions.",
+            ),
+        ],
         proof_gates: vec![
+            "Plan receipt records required manual evidence and keeps runtime_green_claim_ready=false before import.",
             "Operator evidence comes from an explicitly governed validation window.",
             "Passed imports include at least one evidence line.",
             "Status copy remains not claim-ready when blockers or missing evidence exist.",
             "Runtime proof receipts live under tools/dx-runtime-proof.",
         ],
         blockers: recipe_blockers(workspace_root),
-        next_action: "Use this only after manual runtime evidence exists; it records proof but does not create runtime proof by itself.",
+        next_action: "Run the plan first; import only after manual runtime evidence exists.",
     }
 }
 
@@ -694,6 +706,10 @@ fn receipt_roots(workspace_root: Option<&Path>) -> Vec<DxLaunchDemoReceiptRoot> 
             root.join("tools")
                 .join("dx-forge")
                 .join("restore-approvals"),
+        ),
+        (
+            "runtime proof plans",
+            root.join("tools").join("dx-runtime-proof").join("plans"),
         ),
         (
             "runtime proof imports",

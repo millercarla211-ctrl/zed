@@ -1,3 +1,17 @@
+[2026-05-21] - DX Runtime Proof Plan Receipts
+
+ADDED:
+- Added `plan_dx_runtime_proof`, a permissioned Agent tool that prepares governed manual runtime validation checklists and optional managed plan receipts.
+- Added runtime proof plan receipt roots under workspace `tools/dx-runtime-proof/plans` or Zed data fallback.
+- Extended the runtime-proof launch demo recipe so proof planning happens before any operator evidence import.
+
+CHANGED:
+- Updated the Runtime Proof handoff prompt to call `plan_dx_runtime_proof` before `import_dx_runtime_proof`.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 99.5/100 and keep the remaining gap on governed runtime evidence/import.
+
+NOTES:
+- This slice writes plan receipts only. It does not run `just run`, Cargo, local servers, browser automation, deploys, shell commands, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Serializer RLM External Execution Receipts
 
 ADDED:

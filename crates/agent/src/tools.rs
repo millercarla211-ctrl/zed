@@ -43,6 +43,7 @@ mod dx_metasearch_source_extract_tool;
 mod dx_metasearch_status_tool;
 mod dx_metasearch_tool;
 mod dx_runtime_proof_import_tool;
+mod dx_runtime_proof_plan_tool;
 mod dx_serializer_rlm_execution_plan_tool;
 mod dx_serializer_rlm_execution_preview_tool;
 mod dx_serializer_rlm_external_execution_tool;
@@ -147,6 +148,7 @@ pub use dx_metasearch_source_extract_tool::*;
 pub use dx_metasearch_status_tool::*;
 pub use dx_metasearch_tool::*;
 pub use dx_runtime_proof_import_tool::*;
+pub use dx_runtime_proof_plan_tool::*;
 pub use dx_serializer_rlm_execution_plan_tool::*;
 pub use dx_serializer_rlm_execution_preview_tool::*;
 pub use dx_serializer_rlm_external_execution_tool::*;
@@ -287,6 +289,7 @@ tools! {
     DxMetasearchSourceExtractTool,
     DxMetasearchStatusTool,
     DxMetasearchTool,
+    DxRuntimeProofPlanTool,
     DxSerializerRlmExternalExecutionTool,
     DxSerializerRlmExecutionPreviewTool,
     DxSerializerRlmExecutionPlanTool,

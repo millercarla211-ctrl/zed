@@ -15,13 +15,14 @@ use crate::{
     DxForgeRestoreApprovalTool, DxForgeRestoreExecutorTool, DxForgeSafetyPolicyTool,
     DxMediaToolPlanTool, DxMediaToolRunnerGateTool, DxMediaToolRunnerTool,
     DxMetasearchContextAdapterTool, DxMetasearchSourceExtractTool, DxMetasearchStatusTool,
-    DxMetasearchTool, DxSerializerRlmExecutionPlanTool, DxSerializerRlmExecutionPreviewTool,
-    DxSerializerRlmExternalExecutionTool, DxSerializerRlmReducedContextTool,
-    DxSerializerRlmRunnerGateTool, DxSourceAttachmentTool, EditFileTool, FetchTool, FindPathTool,
-    FindReferencesTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool, ListDirectoryTool,
-    MovePathTool, ProjectSnapshot, ReadFileTool, RenameTool, SpawnAgentTool, SystemPromptTemplate,
-    Template, Templates, TerminalTool, ToolPermissionDecision, UpdatePlanTool, UserAgentsMd,
-    WebSearchTool, WriteFileTool, decide_permission_from_settings,
+    DxMetasearchTool, DxRuntimeProofPlanTool, DxSerializerRlmExecutionPlanTool,
+    DxSerializerRlmExecutionPreviewTool, DxSerializerRlmExternalExecutionTool,
+    DxSerializerRlmReducedContextTool, DxSerializerRlmRunnerGateTool, DxSourceAttachmentTool,
+    EditFileTool, FetchTool, FindPathTool, FindReferencesTool, GetCodeActionsTool,
+    GoToDefinitionTool, GrepTool, ListDirectoryTool, MovePathTool, ProjectSnapshot, ReadFileTool,
+    RenameTool, SpawnAgentTool, SystemPromptTemplate, Template, Templates, TerminalTool,
+    ToolPermissionDecision, UpdatePlanTool, UserAgentsMd, WebSearchTool, WriteFileTool,
+    decide_permission_from_settings,
 };
 use acp_thread::{MentionUri, UserMessageId};
 use action_log::ActionLog;
@@ -1725,6 +1726,7 @@ impl Thread {
         self.add_tool(DxForgeRestoreApprovalTool::new(self.project.clone()));
         self.add_tool(DxForgeHistoryTool::new(self.project.clone()));
         self.add_tool(DxLaunchDemoRecipesTool::new(self.project.clone()));
+        self.add_tool(DxRuntimeProofPlanTool::new(self.project.clone()));
         self.add_tool(DxRuntimeProofImportTool::new(self.project.clone()));
         self.add_tool(DxCatalogProviderSettingsTool);
         self.add_tool(DxCatalogProviderSettingsRegistrationTool::new(
