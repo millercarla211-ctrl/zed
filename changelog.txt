@@ -1,3 +1,16 @@
+[2026-05-21] - DX Forge Restore Target Dry-Run Plans
+
+ADDED:
+- Added `plan_dx_forge_restore_target`, a permissioned Agent tool that consumes restore approval receipts and writes managed restore-target dry-run plan receipts under `tools/dx-forge/restore-target-plans`.
+- Added restore target plan entries to `inspect_dx_forge_history`, including plan readiness, target path, restore preview path, blockers, and counts.
+- Added a Forge restore target dry-run demo recipe and updated Forge handoff prompts to route approval evidence into the new plan step.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current next-set status at 99.997/100 while keeping actual restore-to-target mutation and runtime proof gated.
+
+NOTES:
+- This slice writes managed plan receipts only. It does not mutate target paths, overwrite files, delete files, run shell commands, run Forge/zstd binaries, start local servers, dispatch browser input, or execute restore-to-target actions.
+
 [2026-05-21] - DX Runtime Proof Plan Drilldowns
 
 ADDED:

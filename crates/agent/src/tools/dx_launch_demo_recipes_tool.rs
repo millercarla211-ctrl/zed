@@ -190,6 +190,7 @@ fn build_launch_demo_recipes(
         media_to_sources_recipe(workspace_root.as_ref()),
         forge_restore_to_sources_recipe(workspace_root.as_ref()),
         forge_restore_approval_recipe(workspace_root.as_ref()),
+        forge_restore_target_plan_recipe(workspace_root.as_ref()),
         runtime_proof_import_recipe(workspace_root.as_ref()),
     ];
 
@@ -580,6 +581,47 @@ fn forge_restore_approval_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDe
         ],
         blockers: recipe_blockers(workspace_root),
         next_action: "Use this before any future restore-to-target executor applies changes; it records approval evidence and keeps it visible in Forge history without mutating targets.",
+    }
+}
+
+fn forge_restore_target_plan_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDemoRecipe {
+    DxLaunchDemoRecipe {
+        id: "forge-restore-target-dry-run-plan",
+        title: "Forge Restore Target Dry-Run Plan",
+        priority: "optional",
+        status: recipe_status(workspace_root),
+        intent: "Turn restore-preview and approval receipts into a governed dry-run plan for a future restore-to-target executor without mutating live files.",
+        required_tools: vec!["inspect_dx_forge_history", "plan_dx_forge_restore_target"],
+        receipt_contracts: vec![
+            "zed.dx.forge.history.v1",
+            "zed.dx.forge.restore_target_plan_receipt.v1",
+        ],
+        steps: vec![
+            step(
+                1,
+                "inspect_dx_forge_history",
+                "Find the latest restore approval, restore preview, backup, and manifest receipts.",
+                Some("zed.dx.forge.history.v1"),
+                false,
+                "Read-only receipt scan; does not inspect or mutate live target contents.",
+            ),
+            step(
+                2,
+                "plan_dx_forge_restore_target",
+                "Write a dry-run restore-to-target plan with target existence, overwrite posture, rollback, preview, and approval gates.",
+                Some("zed.dx.forge.restore_target_plan_receipt.v1"),
+                true,
+                "Writes plan receipts only; no target mutation, overwrite, delete, shell, external process, Forge, or zstd execution.",
+            ),
+        ],
+        proof_gates: vec![
+            "Restore approval receipt is approval-ready and rollback-verified.",
+            "Managed restore preview still exists and has verified hash evidence.",
+            "Target path and overwrite posture are explicit.",
+            "Plan receipt stays non-mutating and visible through inspect_dx_forge_history.",
+        ],
+        blockers: recipe_blockers(workspace_root),
+        next_action: "Use this after restore approval capture to prove the future restore-to-target path is governed before any mutation tool exists.",
     }
 }
 
