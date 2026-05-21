@@ -65,6 +65,7 @@ pub(crate) struct DxSourceItem {
     pub detail: String,
     pub path: String,
     pub kind: DxSourceKind,
+    pub proofs: Vec<String>,
     pub warnings: Vec<String>,
 }
 
@@ -130,6 +131,7 @@ fn workspace_root_set(workspace_roots: &[PathBuf]) -> DxSourceSet {
             detail: "Workspace root".to_string(),
             path: root.display().to_string(),
             kind: DxSourceKind::WorkspaceRoot,
+            proofs: Vec::new(),
             warnings: Vec::new(),
         })
         .collect::<Vec<_>>();
@@ -233,6 +235,7 @@ fn metasearch_source_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSource
         detail: format!("{item_count} items - ~{estimated_tokens} tokens"),
         path: receipt.label.clone(),
         kind: DxSourceKind::MetasearchSourcePack,
+        proofs: Vec::new(),
         warnings: Vec::new(),
     })
 }
@@ -271,13 +274,25 @@ fn media_sources_from_receipt(receipt: &ReceiptCandidate) -> Vec<DxSourceItem> {
                 string_at(file, &["media_kind"]).unwrap_or_else(|| "media".to_string());
             let format = string_at(file, &["format"]).unwrap_or_else(|| "output".to_string());
             let size_bytes = u64_at(file, &["size_bytes"]).unwrap_or_default();
+            let sha256 = string_at(file, &["sha256"]);
+            let mut proofs = vec!["Output exists on disk".to_string()];
+            if let Some(sha256) = sha256 {
+                proofs.push(format!("sha256 {}", short_hash(&sha256)));
+            }
+            proofs.push(format!("Receipt {}", receipt.label));
+
+            let mut warnings = Vec::new();
+            if size_bytes == 0 {
+                warnings.push("Produced file is empty".to_string());
+            }
 
             Some(DxSourceItem {
                 label,
                 detail: format!("{media_kind} - {format} - {}", format_bytes(size_bytes)),
                 path,
                 kind: DxSourceKind::MediaOutput,
-                warnings: Vec::new(),
+                proofs,
+                warnings,
             })
         })
         .collect()
@@ -322,6 +337,7 @@ fn reduced_context_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSourceIt
         detail: format!("{source_count} sources - ~{tokens} tokens - {status}"),
         path: receipt.label.clone(),
         kind: DxSourceKind::ReducedContextReceipt,
+        proofs: Vec::new(),
         warnings: Vec::new(),
     })
 }
@@ -369,6 +385,7 @@ fn forge_restore_source_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSou
         ),
         path: restore_root,
         kind: DxSourceKind::ForgeRestorePreview,
+        proofs: Vec::new(),
         warnings,
     })
 }
@@ -509,6 +526,10 @@ fn display_name(path: &Path) -> String {
         .filter(|name| !name.is_empty())
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| path.display().to_string())
+}
+
+fn short_hash(hash: &str) -> String {
+    hash.chars().take(12).collect()
 }
 
 fn format_bytes(bytes: u64) -> String {

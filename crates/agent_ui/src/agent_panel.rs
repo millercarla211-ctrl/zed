@@ -42,6 +42,7 @@ use crate::dx_launch_prompts::{
 use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, receipt_snapshot, render_workspace_chrome,
 };
+use crate::dx_proof_freshness::proof_freshness_snapshot;
 use crate::dx_receipt_history::tool_history_snapshot;
 use crate::dx_source_sets::{DxSourceKind, DxSourceSetSnapshot, source_set_snapshot};
 use crate::terminal_thread_metadata_store::{TerminalThreadMetadata, TerminalThreadMetadataStore};
@@ -109,7 +110,7 @@ const LAST_CREATED_ENTRY_KIND_KEY: &str = "agent_panel__last_created_entry_kind"
 const TERMINAL_AGENT_TELEMETRY_ID: &str = "terminal";
 const DX_LAUNCH_RECIPE_PROMPT: &str = "Run the DX launch metasearch-to-reduced-context recipe for this workspace. First call list_dx_launch_demo_recipes with focus=\"metasearch\". Then, using only permissioned Agent tools and no local servers or builds, guide me through the next safe receipt step: inspect_dx_metasearch, search_dx_metasearch with write_source_pack_receipt=true, prepare_dx_source_attachment, prepare_dx_metasearch_context, plan_dx_serializer_rlm_execution, gate_dx_serializer_rlm_runner, and write_dx_serializer_rlm_reduced_context. Stop before any external serializer/RLM runner or model-call execution unless I explicitly approve it.";
 const DX_RECEIPT_REVIEW_PROMPT: &str = "Inspect the current DX launch receipts for this workspace. Summarize the latest metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, media, and Forge receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, or model calls.";
-const DX_MEDIA_PROOF_PROMPT: &str = "Prepare the DX media proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"media\". Then guide me through the next safe step using permissioned tools only: plan_dx_media_tool, gate_dx_media_tool_runner, execute_dx_media_tool only after an approved runner gate, and prepare_dx_source_attachment for produced files. Do not run local servers, builds, browser input, shell commands, unmanaged file writes, or media execution until I explicitly approve the tool request.";
+const DX_MEDIA_PROOF_PROMPT: &str = "Prepare the DX media proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"media\". Then review any produced-file proof cards in the Sources rail and guide me through the next safe step using permissioned tools only: plan_dx_media_tool, gate_dx_media_tool_runner, execute_dx_media_tool only after an approved runner gate, and prepare_dx_source_attachment for produced files. Do not run local servers, builds, browser input, shell commands, unmanaged file writes, or media execution until I explicitly approve the tool request.";
 const DX_FORGE_PROOF_PROMPT: &str = "Prepare the DX Forge proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"forge\" and inspect_dx_forge_history. Then guide me through the next safe receipt step for safety policy, backup runner gate, backup execution, restore preview, and restore receipt review. Do not mutate target paths, permanently delete files, run local servers, builds, shell commands, browser input, or restore-to-target actions unless I explicitly approve the governed tool request.";
 
 /// Maximum number of idle threads kept in the agent panel's retained list.
@@ -6042,6 +6043,7 @@ impl AgentPanel {
         let source_sets = source_set_snapshot(&workspace_roots);
         let tool_history = tool_history_snapshot(&workspace_roots);
         let deploy_targets = deploy_target_snapshot(&workspace_roots);
+        let proof_freshness = proof_freshness_snapshot(&workspace_roots);
         let deploy_env_receipt_count = deploy_targets.receipt_bucket_count("Env");
         let deploy_log_receipt_count = deploy_targets.receipt_bucket_count("Logs");
         let deploy_rollback_receipt_count = deploy_targets.receipt_bucket_count("Rollback");
@@ -6065,6 +6067,9 @@ impl AgentPanel {
             deploy_env_receipt_count,
             deploy_log_receipt_count,
             deploy_rollback_receipt_count,
+            validation_proof_receipt_count: proof_freshness.receipt_count("Validation"),
+            visual_proof_receipt_count: proof_freshness.receipt_count("Visual Proof"),
+            fresh_proof_receipt_count: proof_freshness.fresh_receipt_count(),
         });
 
         DxLaunchWorkspaceStatus {
@@ -6076,6 +6081,7 @@ impl AgentPanel {
             tool_history,
             check_score,
             deploy_targets,
+            proof_freshness,
         }
     }
 

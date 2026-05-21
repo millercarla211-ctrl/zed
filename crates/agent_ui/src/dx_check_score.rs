@@ -27,6 +27,9 @@ pub(crate) struct DxCheckScoreInput<'a> {
     pub deploy_env_receipt_count: usize,
     pub deploy_log_receipt_count: usize,
     pub deploy_rollback_receipt_count: usize,
+    pub validation_proof_receipt_count: usize,
+    pub visual_proof_receipt_count: usize,
+    pub fresh_proof_receipt_count: usize,
 }
 
 pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScoreSnapshot {
@@ -90,6 +93,21 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
     if deploy_ops_receipt_count > 0 {
         score += 3;
     }
+    let validation_visual_proof_count =
+        input.validation_proof_receipt_count + input.visual_proof_receipt_count;
+    if input.validation_proof_receipt_count > 0 {
+        score += 4;
+    }
+    if input.visual_proof_receipt_count > 0 {
+        score += 4;
+    }
+    if input.fresh_proof_receipt_count > 0 {
+        score += 2;
+    } else if validation_visual_proof_count > 0 {
+        blockers.push("Validation or visual proof receipts are stale".to_string());
+    } else {
+        blockers.push("No validation or visual proof receipts yet".to_string());
+    }
     let score = score.min(100);
 
     let state = if score >= 85 {
@@ -143,6 +161,19 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
                         input.deploy_target_count,
                         input.deploy_readiness_receipt_count,
                         deploy_ops_receipt_count
+                    )
+                },
+            },
+            DxCheckScoreItem {
+                label: "Proof Freshness",
+                state: if validation_visual_proof_count == 0 {
+                    "No validation/visual proof".to_string()
+                } else {
+                    format!(
+                        "{} validation, {} visual, {} fresh",
+                        input.validation_proof_receipt_count,
+                        input.visual_proof_receipt_count,
+                        input.fresh_proof_receipt_count
                     )
                 },
             },

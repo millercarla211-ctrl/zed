@@ -11,6 +11,7 @@ use ui::{IconName, prelude::*};
 
 use crate::dx_check_score::DxCheckScoreSnapshot;
 use crate::dx_deploy_targets::{DxDeployReceiptBucket, DxDeployTarget, DxDeployTargetSnapshot};
+use crate::dx_proof_freshness::{DxProofFreshnessBucket, DxProofFreshnessSnapshot};
 use crate::dx_receipt_history::{DxToolHistoryBucket, DxToolHistorySnapshot};
 use crate::dx_source_sets::{
     DxSourceAttachmentSummary, DxSourceItem, DxSourceKind, DxSourceSet, DxSourceSetSnapshot,
@@ -43,6 +44,7 @@ pub(crate) struct DxLaunchWorkspaceStatus {
     pub tool_history: DxToolHistorySnapshot,
     pub check_score: DxCheckScoreSnapshot,
     pub deploy_targets: DxDeployTargetSnapshot,
+    pub proof_freshness: DxProofFreshnessSnapshot,
 }
 
 static RECEIPT_CACHE: OnceLock<Mutex<Option<(Instant, DxReceiptSnapshot)>>> = OnceLock::new();
@@ -257,6 +259,8 @@ fn render_right_rail(
         ))
         .child(section_title("Check", IconName::Check))
         .child(check_score_state(&status.check_score, cx))
+        .child(section_title("Proof Freshness", IconName::FileTextOutlined))
+        .child(proof_freshness_state(&status.proof_freshness, cx))
         .child(section_title("Guided Proofs", IconName::Sparkle))
         .child(guided_cards)
         .child(section_title("Git", IconName::GitBranch))
@@ -401,6 +405,15 @@ fn source_item_row(id: SharedString, source: &DxSourceItem, cx: &App) -> AnyElem
                 .color(Color::Muted)
                 .truncate(),
         );
+
+    for (ix, proof) in source.proofs.iter().take(2).enumerate() {
+        stack = stack.child(signal_row(
+            SharedString::from(format!("source-proof-{}-{ix}", source.path)),
+            IconName::Check,
+            Color::Success,
+            proof.clone(),
+        ));
+    }
 
     for (ix, warning) in source.warnings.iter().take(2).enumerate() {
         stack = stack.child(signal_row(
@@ -600,6 +613,59 @@ fn deploy_receipt_bucket_row(
     stack.into_any_element()
 }
 
+fn proof_freshness_state(snapshot: &DxProofFreshnessSnapshot, cx: &App) -> AnyElement {
+    let mut stack = v_flex().gap_1();
+
+    for (ix, bucket) in snapshot.buckets.iter().enumerate() {
+        stack = stack.child(proof_freshness_bucket_row(
+            SharedString::from(format!("dx-proof-freshness-{ix}")),
+            bucket,
+            cx,
+        ));
+    }
+
+    stack.into_any_element()
+}
+
+fn proof_freshness_bucket_row(
+    id: SharedString,
+    bucket: &DxProofFreshnessBucket,
+    cx: &App,
+) -> AnyElement {
+    let state = if bucket.count == 0 {
+        bucket.status.clone()
+    } else {
+        format!("{} - {}", bucket.count, bucket.status)
+    };
+    let mut stack = v_flex()
+        .id(id)
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().element_background)
+        .child(metric_row(bucket.label, state));
+
+    if let Some(label) = bucket.latest.first() {
+        stack = stack.child(
+            Label::new(label.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+    } else if !bucket.root_exists {
+        stack = stack.child(
+            Label::new(bucket.root_label)
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+    }
+
+    stack.into_any_element()
+}
+
 fn deploy_target_row(id: SharedString, target: &DxDeployTarget, cx: &App) -> AnyElement {
     v_flex()
         .id(id)
@@ -656,7 +722,7 @@ fn check_score_state(snapshot: &DxCheckScoreSnapshot, cx: &App) -> AnyElement {
         .child(metric_row("Score", format!("{}/100", snapshot.score)))
         .child(metric_row("State", snapshot.state));
 
-    for item in snapshot.items.iter().take(5) {
+    for item in snapshot.items.iter().take(6) {
         stack = stack.child(metric_row(item.label, item.state.clone()));
     }
 

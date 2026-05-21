@@ -38,10 +38,20 @@ pub(crate) fn source_action_prompt(source: &DxSourceItem) -> String {
             "Review this reduced-context receipt for the DX launch flow: `{}`. Summarize the selected sources, token budget, reducer status, and missing proof steps. Do not run external serializer/RLM code or model calls.",
             source.path
         ),
-        DxSourceKind::MediaOutput => format!(
-            "Prepare this produced media output as a DX source attachment: `{}`. Use prepare_dx_source_attachment only, keep binary payloads path-only, and report the next safe media proof step without running ffmpeg, shell commands, local servers, or browser input.",
-            source.path
-        ),
+        DxSourceKind::MediaOutput => {
+            let proof_summary = if source.proofs.is_empty() {
+                "No produced-file proof summary is visible yet.".to_string()
+            } else {
+                format!(
+                    "Visible produced-file proofs: {}.",
+                    source.proofs.join("; ")
+                )
+            };
+            format!(
+                "Prepare this produced media output as a DX source attachment: `{}`. {proof_summary} Use prepare_dx_source_attachment only, keep binary payloads path-only, and report the next safe media proof step without running ffmpeg, shell commands, local servers, or browser input.",
+                source.path
+            )
+        }
         DxSourceKind::ForgeRestorePreview => format!(
             "Review this Forge restore preview source: `{}`. Use inspect_dx_forge_history and prepare_dx_source_attachment as needed, summarize any restore warnings, and do not mutate target paths, overwrite files, delete files, or run restore-to-target actions.",
             source.path

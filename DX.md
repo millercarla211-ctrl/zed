@@ -55,7 +55,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Added restore-preview warning labels to Forge source rows and a read-only Deploy rail backed by detected workspace deploy config files.
 - Added source-derived action prompt cards and deploy readiness receipt counts/latest entries, still drafting only permission-safe Agent follow-ups.
 - Added Deploy rail receipt buckets for readiness, env, logs, and rollback under `tools/dx-deploy`, with compact missing/fresh/stale/old states and safer deploy-readiness prompts that include the bucket summary.
-- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 84/100; the next highest-value target is validation/visual proof receipt freshness plus produced-file proof cards.
+- Added validation and visual proof freshness rows backed by managed workspace proof roots, plus produced-file proof lines for media outputs from execution receipts.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 86/100; the next highest-value target is URL/status deploy receipt summaries plus runtime-proof handoff cards.
 
 ## Remaining Proof
 
@@ -70,3 +71,4 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - The restore-warning and Deploy registry slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
 - The source action and deploy readiness receipt slice has formatting/diff/conflict validation only so far; runtime click proof remains deferred under the repo's launch validation rules.
 - The deploy receipt bucket slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
+- The proof freshness and produced-file card slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.

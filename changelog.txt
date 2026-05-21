@@ -1,3 +1,18 @@
+[2026-05-21] - DX Proof Freshness And Produced File Cards
+
+ADDED:
+- Added a cached DX proof freshness scanner for managed validation and visual proof receipt roots, including WebPreview final validation and panel-control result receipts plus DX-native fallback roots.
+- Added Proof Freshness rows to the right Check rail with missing, empty, fresh, stale, and old states.
+- Added produced-file proof lines to media source rows for output existence, execution receipt path, SHA-256 prefix, and empty-file warnings.
+
+CHANGED:
+- Extended the read-only Check score to include validation proof, visual proof, and fresh proof receipt counts.
+- Updated Media Proof prompts to ask agents to review produced-file proof cards before drafting the next safe media step.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 86/100 and move the next target to URL/status deploy receipt summaries plus runtime-proof handoff cards.
+
+NOTES:
+- This slice only reads managed receipt files and existing produced file metadata. It does not run local servers, builds, browser input, shell commands, media tools, deploys, external serializer/RLM code, or restore-to-target actions.
+
 [2026-05-21] - DX Deploy Receipt Summaries And Compact Rails
 
 ADDED:
