@@ -1,3 +1,15 @@
+[2026-05-21] - DX Onboarding WWW Target Discovery
+
+ADDED:
+- Added bounded DX WWW target discovery for onboarding Web Preview, including `DX_WWW_WORKSPACE`, `DX_WWW_ROOT`, recent `G:\WWW\www\.dx\cache\*\launch-app` projects, and recent `G:\WWW\.dx\*` Forge evidence workspaces.
+- Added renderable local Forge/adoption evidence HTML candidates ahead of legacy demo pages, while preserving `DX_ONBOARDING_PREVIEW_URL` as the exact override and the bundled animated 3D fallback as the graceful fallback.
+
+CHANGED:
+- Updated DX launch notes and status to 99.7/100 for the editor lane before governed runtime proof and upstream DX-WWW source-audit reconciliation.
+
+NOTES:
+- This slice reads local path/config metadata only. It does not touch `G:\Dx\www`, run DX WWW/CLI commands, start local servers, run Cargo/`just run`, call providers, download assets, or import secrets.
+
 [2026-05-21] - DX Onboarding Provider Readiness
 
 ADDED:
