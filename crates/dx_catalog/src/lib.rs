@@ -69,7 +69,8 @@ pub use receipt_cache::{
 };
 pub use receipt_cache_builder::{
     DxReceiptCacheBuildOptions, DxReceiptCacheRootInput, build_receipt_cache_manifest,
-    write_receipt_cache_artifact_from_roots,
+    build_standard_dx_receipt_cache_manifest, standard_dx_receipt_cache_roots,
+    write_receipt_cache_artifact_from_roots, write_standard_dx_receipt_cache_artifact,
 };
 pub use sources::{
     CatalogSourceCandidate, CatalogSourceCandidateStatus, CatalogSourceDiscoveryConfig,

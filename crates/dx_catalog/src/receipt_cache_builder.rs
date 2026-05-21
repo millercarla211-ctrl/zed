@@ -141,6 +141,98 @@ pub fn write_receipt_cache_artifact_from_roots(
     Ok(manifest)
 }
 
+pub fn standard_dx_receipt_cache_roots(
+    receipt_root: impl AsRef<Path>,
+) -> Vec<DxReceiptCacheRootInput> {
+    let receipt_root = receipt_root.as_ref();
+    [
+        (
+            "agents",
+            "agents",
+            DxReceiptCacheEntryKind::Agents,
+            "DX Agents status, social, automation, provider, and model receipts.",
+        ),
+        (
+            "launch",
+            "launch",
+            DxReceiptCacheEntryKind::Launch,
+            "DX launch aggregate, gate, audit, handoff, and receipt-review metadata.",
+        ),
+        (
+            "tokens",
+            "tokens",
+            DxReceiptCacheEntryKind::Tokens,
+            "Token budget, estimate, pruning, serializer, and RLM meter receipts.",
+        ),
+        (
+            "forge",
+            "forge",
+            DxReceiptCacheEntryKind::Forge,
+            "Forge package, backup, restore, approval, and release receipts.",
+        ),
+        (
+            "sources",
+            "metasearch",
+            DxReceiptCacheEntryKind::Sources,
+            "Metasearch source-pack and source-extraction receipts used by the Sources rail.",
+        ),
+        (
+            "media",
+            "media",
+            DxReceiptCacheEntryKind::Media,
+            "Media plan, runner-gate, and execution receipts.",
+        ),
+        (
+            "rlm",
+            "rlm",
+            DxReceiptCacheEntryKind::Rlm,
+            "RLM planning, runner, and context-reduction receipts.",
+        ),
+        (
+            "serializer",
+            "serializer",
+            DxReceiptCacheEntryKind::Serializer,
+            "Serializer planning, runner, and reduced-context receipts.",
+        ),
+        (
+            "deploy",
+            "deploy",
+            DxReceiptCacheEntryKind::Deploy,
+            "Deploy readiness, env, log, status, URL, rollback, and release receipts.",
+        ),
+        (
+            "runtime_proof",
+            "runtime-proof",
+            DxReceiptCacheEntryKind::RuntimeProof,
+            "Runtime proof plans, imports, status copies, and final evidence receipts.",
+        ),
+    ]
+    .into_iter()
+    .map(|(id, child, kind, notes)| {
+        DxReceiptCacheRootInput::new(id, receipt_root.join(child), kind).with_notes(notes)
+    })
+    .collect()
+}
+
+pub fn build_standard_dx_receipt_cache_manifest(
+    receipt_root: impl AsRef<Path>,
+    options: DxReceiptCacheBuildOptions,
+) -> DxReceiptCacheManifest {
+    build_receipt_cache_manifest(standard_dx_receipt_cache_roots(receipt_root), options)
+}
+
+pub fn write_standard_dx_receipt_cache_artifact(
+    path: impl AsRef<Path>,
+    receipt_root: impl AsRef<Path>,
+    options: DxReceiptCacheBuildOptions,
+) -> Result<DxReceiptCacheManifest> {
+    write_receipt_cache_artifact_from_roots(
+        path,
+        standard_dx_receipt_cache_roots(receipt_root),
+        options,
+    )
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ReceiptFileMetadata {
     path: PathBuf,

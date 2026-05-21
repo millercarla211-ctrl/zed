@@ -1,3 +1,15 @@
+[2026-05-21] - DX Standard Receipt Cache Root Contract
+
+ADDED:
+- Added canonical `dx_catalog` helpers for standard DX receipt-cache roots.
+- Added build/write helpers for standard launch, agent, token, Forge, source, media, RLM, serializer, deploy, and runtime-proof receipt buckets.
+
+CHANGED:
+- Updated launch status text so the receipt-cache bridge includes the canonical bucket mapping used by Zed rails.
+
+NOTES:
+- This slice does not run DX CLI commands, start servers, run Cargo/`just run`, write cache artifacts, or make binary caches authoritative over JSON receipts.
+
 [2026-05-21] - DX Studio Session Metadata Module
 
 CHANGED:

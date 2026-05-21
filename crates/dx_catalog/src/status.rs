@@ -52,7 +52,7 @@ pub fn current_launch_status() -> DxLaunchStatus {
             feature(
                 "DX receipt binary cache bridge",
                 100,
-                "Stable metadata-only receipt cache structs, a bounded JSON receipt-folder builder, artifact header, trusted rkyv serialization/deserialization helpers, artifact writer, and a memmap read path are in place for launch, agent, token, Forge, source, media, RLM, serializer, deploy, and runtime-proof receipts without changing the JSON receipt producers.",
+                "Stable metadata-only receipt cache structs, canonical DX receipt-root mapping, a bounded JSON receipt-folder builder, artifact header, trusted rkyv serialization/deserialization helpers, artifact writer, and a memmap read path are in place for launch, agent, token, Forge, source, media, RLM, serializer, deploy, and runtime-proof receipts without changing the JSON receipt producers.",
                 "Let Zed continue using JSON receipts as authoritative until a governed CLI producer explicitly materializes receipt cache artifacts.",
             ),
             feature(
