@@ -766,11 +766,27 @@ impl Onboarding {
 
     fn render_quick_launch_actions(&self, cx: &mut Context<Self>) -> AnyElement {
         let focus = self.focus_handle.clone();
+        let has_dx_www = self.dx_preview_targets.dx_www.is_some();
 
         h_flex()
             .w_full()
             .gap_2()
             .flex_wrap()
+            .child(
+                Button::new("dx_demo_web_preview", "Web Preview")
+                    .style(ButtonStyle::Outlined)
+                    .disabled(!has_dx_www)
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(OpenDxWwwPreview.boxed_clone(), cx);
+                    }),
+            )
+            .child(
+                Button::new("dx_demo_3d_preview", "3D Scene")
+                    .style(ButtonStyle::Outlined)
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(OpenBundledDxPreview.boxed_clone(), cx);
+                    }),
+            )
             .child(
                 Button::new("dx_open_agent_panel", "Open Agent Panel")
                     .style(ButtonStyle::Filled)
@@ -781,6 +797,14 @@ impl Onboarding {
                     .on_click(move |_, window, cx| {
                         focus.dispatch_action(&ToggleWorkspaceSidebar, window, cx);
                         focus.dispatch_action(&ToggleFocus, window, cx);
+                    }),
+            )
+            .child(
+                Button::new("dx_open_automations", "Automations")
+                    .style(ButtonStyle::Outlined)
+                    .on_click(|_, window, cx| {
+                        window
+                            .dispatch_action(zed_actions::OpenProjectDebugTasks.boxed_clone(), cx);
                     }),
             )
             .child(

@@ -1,3 +1,12 @@
+[2026-05-21] - DX Onboarding Demo Action Coverage
+
+CHANGED:
+- The DX launch onboarding quick actions now include Web Preview, 3D Scene, Open Agent Panel, Automations, Provider Settings, and Skip.
+- Web Preview and 3D Scene reuse the existing onboarding preview target actions, Open Agent Panel reuses the existing Agent focus path, and Automations reuses the existing project debug-task surface.
+
+NOTES:
+- This slice does not run DX WWW, start local servers, import secrets, add social login, execute CLI commands, run Cargo/`just run`, or replace existing onboarding behavior outside the DX launch onboarding path.
+
 [2026-05-21] - DX Agents Row Action Consumption
 
 ADDED:
