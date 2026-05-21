@@ -1,3 +1,16 @@
+[2026-05-21] - DX Source Audit Rail
+
+ADDED:
+- Added a metadata-only DX source audit reader for `G:\Dx\.dx\audit\launch-source\latest.json` and the paired DX Studio WWW QA audit receipt.
+- Surfaced cross-repo source coordination, worker-output ledger state, template trust scan, DX Studio QA score, risk-review blockers, worker deltas, and next Friday action in the DX launch right rail.
+- Added a Source Audit guided card and Review Receipts context so Agent prompts can explain source-clean repos, active output, and risk-review blockers without running audit helpers.
+
+CHANGED:
+- Updated DX launch notes and status to 99.5/100 for the editor lane before governed runtime proof and upstream DX-WWW source-audit reconciliation.
+
+NOTES:
+- This slice reads hub-owned audit receipt metadata only. It does not touch `G:\Dx\www`, run audit helpers, execute CLI commands, start local servers, run Cargo/`just run`, call providers, deploy, or mutate other repos.
+
 [2026-05-21] - DX-WWW Launch Evidence Rail
 
 ADDED:

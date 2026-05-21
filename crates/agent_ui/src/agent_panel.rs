@@ -41,13 +41,14 @@ use crate::dx_launch_audit::launch_audit_snapshot;
 use crate::dx_launch_contracts::launch_contract_snapshot;
 use crate::dx_launch_prompts::{
     deploy_readiness_prompt, forge_proof_prompt, launch_audit_prompt, launch_handoff_prompt,
-    launch_readiness_prompt, launch_www_evidence_prompt, receipt_review_prompt,
-    restore_approval_prompt, runtime_proof_evidence_template_prompt, runtime_proof_import_prompt,
-    runtime_proof_prompt, source_action_icon, source_action_label, source_action_prompt,
-    source_action_title, source_receipt_review_prompt,
+    launch_readiness_prompt, launch_source_audit_prompt, launch_www_evidence_prompt,
+    receipt_review_prompt, restore_approval_prompt, runtime_proof_evidence_template_prompt,
+    runtime_proof_import_prompt, runtime_proof_prompt, source_action_icon, source_action_label,
+    source_action_prompt, source_action_title, source_receipt_review_prompt,
 };
 use crate::dx_launch_readiness::launch_readiness_snapshot;
 use crate::dx_launch_receipts::launch_receipt_review_snapshot;
+use crate::dx_launch_source_audit::launch_source_audit_snapshot;
 use crate::dx_launch_status::launch_status_snapshot;
 use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, DxSourceRowControl, receipt_snapshot, render_workspace_chrome,
@@ -5735,6 +5736,7 @@ impl AgentPanel {
             &status.launch_contracts,
             &status.launch_readiness,
             &status.launch_audit,
+            &status.source_audit,
             &status.www_evidence,
             &status.tool_history,
             &status.proof_freshness,
@@ -6052,6 +6054,17 @@ impl AgentPanel {
                 cx,
             ))
             .child(self.dx_launch_guided_card(
+                "dx-source-audit-card",
+                "dx-source-audit-action",
+                IconName::GitBranch,
+                "Source Audit",
+                "Review hub coordination, worker output, and risk-review state.",
+                "Draft Source",
+                launch_source_audit_prompt(&status.source_audit),
+                can_create_entries,
+                cx,
+            ))
+            .child(self.dx_launch_guided_card(
                 "dx-www-evidence-card",
                 "dx-www-evidence-action",
                 IconName::Public,
@@ -6258,6 +6271,7 @@ impl AgentPanel {
         let launch_contracts = launch_contract_snapshot();
         let launch_readiness = launch_readiness_snapshot();
         let launch_audit = launch_audit_snapshot();
+        let source_audit = launch_source_audit_snapshot();
         let www_evidence = www_launch_evidence_snapshot(&workspace_roots);
         let agent_bridge = dx_agent_bridge_snapshot(cx);
         let receipt_file_count = receipt_snapshot
@@ -6320,6 +6334,7 @@ impl AgentPanel {
             launch_contracts,
             launch_readiness,
             launch_audit,
+            source_audit,
             www_evidence,
             receipt_snapshot,
             source_sets,

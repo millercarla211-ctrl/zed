@@ -6,6 +6,7 @@ use crate::dx_launch_audit::DxLaunchAuditSnapshot;
 use crate::dx_launch_contracts::DxLaunchContractSnapshot;
 use crate::dx_launch_readiness::DxLaunchReadinessSnapshot;
 use crate::dx_launch_receipts::DxLaunchReceiptReviewSnapshot;
+use crate::dx_launch_source_audit::DxLaunchSourceAuditSnapshot;
 use crate::dx_launch_status::DxLaunchStatusSnapshot;
 use crate::dx_launch_workspace::DxReceiptSnapshot;
 use crate::dx_proof_freshness::DxProofFreshnessSnapshot;
@@ -353,6 +354,14 @@ pub(crate) fn launch_www_evidence_prompt(snapshot: &DxWwwLaunchEvidenceSnapshot)
     )
 }
 
+pub(crate) fn launch_source_audit_prompt(snapshot: &DxLaunchSourceAuditSnapshot) -> String {
+    let source_context = launch_source_audit_prompt_context(snapshot);
+
+    format!(
+        "Review the DX launch source audit for this Zed workspace. Source audit: {source_context}. Summarize the hub coordination verdict, worker-output ledger, source-clean repos, risk-review blockers, template trust scan, DX Studio WWW QA status, latest deltas, and the next safe Friday action. Do not touch G:\\Dx\\www package work, run builds, run local servers, run browser automation, execute CLI commands, deploy, mutate other repos, import secrets, call providers, or restore-to-target actions."
+    )
+}
+
 pub(crate) fn receipt_review_prompt(
     receipt_snapshot: &DxReceiptSnapshot,
     launch_status: &DxLaunchStatusSnapshot,
@@ -360,6 +369,7 @@ pub(crate) fn receipt_review_prompt(
     launch_contracts: &DxLaunchContractSnapshot,
     launch_readiness: &DxLaunchReadinessSnapshot,
     launch_audit: &DxLaunchAuditSnapshot,
+    source_audit: &DxLaunchSourceAuditSnapshot,
     www_evidence: &DxWwwLaunchEvidenceSnapshot,
     tool_history: &DxToolHistorySnapshot,
     proof_freshness: &DxProofFreshnessSnapshot,
@@ -393,6 +403,7 @@ pub(crate) fn receipt_review_prompt(
     let launch_contract_context = launch_contract_prompt_context(launch_contracts);
     let launch_readiness_context = launch_readiness_prompt_context(launch_readiness);
     let launch_audit_context = launch_audit_prompt_context(launch_audit);
+    let source_audit_context = launch_source_audit_prompt_context(source_audit);
     let www_context = launch_www_evidence_prompt_context(www_evidence);
     let tool_buckets = tool_history
         .buckets
@@ -441,7 +452,7 @@ pub(crate) fn receipt_review_prompt(
     };
 
     format!(
-        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Launch aggregate: {launch_context}. Launch handoff contracts: {launch_contract_context}. Launch gate readiness: {launch_readiness_context}. Launch CLI audit: {launch_audit_context}. DX-WWW evidence: {www_context}. Launch receipt diagnostics: {launch_receipt_context}. Tool history buckets: {tool_buckets}. Forge history context: {forge_history}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest launch status, launch receipt freshness, malformed retained snapshots, handoff packet coverage, schemas/fixtures/smoke/status audit state, DX-WWW release/restart/acceptance evidence, import-summary/release-gate/fallback-drill parser states, metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, restore-target plan, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
+        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Launch aggregate: {launch_context}. Launch handoff contracts: {launch_contract_context}. Launch gate readiness: {launch_readiness_context}. Launch CLI audit: {launch_audit_context}. Source audit: {source_audit_context}. DX-WWW evidence: {www_context}. Launch receipt diagnostics: {launch_receipt_context}. Tool history buckets: {tool_buckets}. Forge history context: {forge_history}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest launch status, launch receipt freshness, malformed retained snapshots, handoff packet coverage, schemas/fixtures/smoke/status audit state, source coordination verdict, DX-WWW release/restart/acceptance evidence, import-summary/release-gate/fallback-drill parser states, metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, restore-target plan, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
     )
 }
 
@@ -663,6 +674,65 @@ fn launch_www_evidence_prompt_context(snapshot: &DxWwwLaunchEvidenceSnapshot) ->
         latest,
         missing,
         next_commands,
+    )
+}
+
+fn launch_source_audit_prompt_context(snapshot: &DxLaunchSourceAuditSnapshot) -> String {
+    if !snapshot.root_exists {
+        return format!(
+            "missing source audit root `{}`; expected G:\\Dx\\.dx\\audit\\launch-source\\latest.json",
+            snapshot.root.display()
+        );
+    }
+
+    if !snapshot.latest_present {
+        return format!(
+            "missing source audit latest receipt `{}`; rerun the G:\\Dx launch source audit helper when the hub lane is ready",
+            snapshot.latest_path.display()
+        );
+    }
+
+    if !snapshot.schema_valid {
+        return format!(
+            "invalid source audit receipt `{}`: {}",
+            snapshot.latest_path.display(),
+            snapshot
+                .last_error
+                .clone()
+                .unwrap_or_else(|| "schema validation failed".to_string())
+        );
+    }
+
+    let repos = bounded_join(&snapshot.repo_rows, 4, "No repository readiness rows");
+    let blockers = bounded_join(&snapshot.blocker_rows, 4, "No source audit blockers");
+    let deltas = bounded_join(&snapshot.delta_rows, 3, "No worker-output deltas");
+
+    format!(
+        "status={} score={}/100 passed={} generated={} mode={} ready_for_commit_coordination={} repos={} active_output={} source_clean={} risk_review={} owner_review={} diff_failures={} dx_studio={}/100 passed={} checks={}/{} template_trust={} template_roots={}/{} template_node_modules={} repos=[{}] blockers=[{}] deltas=[{}] next_target={}",
+        snapshot.status,
+        snapshot.score,
+        snapshot.passed,
+        snapshot.generated_at,
+        snapshot.mode,
+        snapshot.ready_for_commit_coordination,
+        snapshot.repo_count,
+        snapshot.active_output_count,
+        snapshot.source_clean_count,
+        snapshot.risk_review_count,
+        snapshot.owner_review_count,
+        snapshot.diff_check_failure_count,
+        snapshot.dx_studio_score,
+        snapshot.dx_studio_passed,
+        snapshot.dx_studio_passed_checks,
+        snapshot.dx_studio_total_checks,
+        snapshot.template_trust_passed,
+        snapshot.template_roots_scanned,
+        snapshot.template_roots_total,
+        snapshot.template_node_modules_found,
+        repos,
+        blockers,
+        deltas,
+        snapshot.next_target
     )
 }
 
