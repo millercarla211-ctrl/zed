@@ -1,7 +1,7 @@
 use ui::IconName;
 
 use crate::dx_check_score::DxCheckScoreSnapshot;
-use crate::dx_deploy_targets::{DxDeployTarget, DxDeployTargetSnapshot};
+use crate::dx_deploy_targets::{DxDeployReceiptBucket, DxDeployTarget, DxDeployTargetSnapshot};
 use crate::dx_launch_workspace::DxReceiptSnapshot;
 use crate::dx_proof_freshness::DxProofFreshnessSnapshot;
 use crate::dx_receipt_history::DxToolHistorySnapshot;
@@ -108,7 +108,7 @@ pub(crate) fn deploy_readiness_prompt(
     let receipt_buckets = snapshot
         .receipt_buckets
         .iter()
-        .map(|bucket| format!("{}: {} ({})", bucket.label, bucket.count, bucket.status))
+        .map(deploy_receipt_bucket_prompt)
         .collect::<Vec<_>>()
         .join(", ");
     let receipt_buckets = if receipt_buckets.is_empty() {
@@ -190,7 +190,7 @@ pub(crate) fn runtime_proof_prompt(
     let deploy_receipts = deploy_targets
         .receipt_buckets
         .iter()
-        .map(|bucket| format!("{}={} ({})", bucket.label, bucket.count, bucket.status))
+        .map(deploy_receipt_bucket_prompt)
         .collect::<Vec<_>>();
     let deploy_receipts = bounded_join(
         &deploy_receipts,
@@ -310,7 +310,7 @@ pub(crate) fn receipt_review_prompt(
     let deploy_rows = deploy_targets
         .receipt_buckets
         .iter()
-        .map(|bucket| format!("{}={} ({})", bucket.label, bucket.count, bucket.status))
+        .map(deploy_receipt_bucket_prompt)
         .collect::<Vec<_>>()
         .join(", ");
     let deploy_rows = if deploy_rows.is_empty() {
@@ -322,6 +322,40 @@ pub(crate) fn receipt_review_prompt(
     format!(
         "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Tool history buckets: {tool_buckets}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
     )
+}
+
+fn deploy_receipt_bucket_prompt(bucket: &DxDeployReceiptBucket) -> String {
+    let mut parts = vec![format!(
+        "{}={} ({})",
+        bucket.label, bucket.count, bucket.status
+    )];
+
+    if let Some(summary) = bucket.latest_summary.as_ref() {
+        let mut latest = vec![
+            format!("latest {}", summary.label),
+            format!("headline {}", summary.headline),
+        ];
+
+        if let Some(status) = summary.status.as_ref() {
+            latest.push(format!("receipt_status {status}"));
+        }
+
+        if let Some(target) = summary.target.as_ref() {
+            latest.push(format!("target {target}"));
+        }
+
+        if let Some(url) = summary.url.as_ref() {
+            latest.push(format!("url {url}"));
+        }
+
+        if summary.blocker_count > 0 {
+            latest.push(format!("blockers {}", summary.blocker_count));
+        }
+
+        parts.push(latest.join(", "));
+    }
+
+    parts.join("; ")
 }
 
 fn runtime_proof_status_prompt_context(snapshot: &DxRuntimeProofStatusSnapshot) -> String {

@@ -39,6 +39,23 @@ pub(crate) struct DxDeployReceiptBucket {
     pub count: usize,
     pub status: String,
     pub latest: Vec<String>,
+    pub latest_summary: Option<DxDeployReceiptSummary>,
+}
+
+#[derive(Clone)]
+pub(crate) struct DxDeployReceiptSummary {
+    pub label: String,
+    pub headline: String,
+    pub status: Option<String>,
+    pub url: Option<String>,
+    pub target: Option<String>,
+    pub blocker_count: usize,
+}
+
+struct DeployReceiptCandidate {
+    modified: SystemTime,
+    label: String,
+    path: PathBuf,
 }
 
 struct DeployReceiptBucketSpec {
@@ -162,16 +179,24 @@ fn scan_deploy_receipts(
             root_exists = true;
         }
         count += count_receipt_files(&receipt_root);
-        latest.extend(latest_receipt_labels(root, &receipt_root, 4));
+        latest.extend(latest_receipt_candidates(root, &receipt_root, 4));
     }
 
-    latest.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(Ordering::Equal));
+    latest.sort_by(|left, right| {
+        right
+            .modified
+            .partial_cmp(&left.modified)
+            .unwrap_or(Ordering::Equal)
+    });
     latest.truncate(4);
 
     (
         root_exists,
         count,
-        latest.into_iter().map(|(_, label)| label).collect(),
+        latest
+            .into_iter()
+            .map(|candidate| candidate.label)
+            .collect(),
         deploy_receipt_buckets(workspace_roots),
     )
 }
@@ -235,7 +260,7 @@ fn deploy_receipt_bucket(
                 root_exists = true;
             }
             count += count_receipt_files(&receipt_root);
-            latest.extend(latest_receipt_labels(root, &receipt_root, 2));
+            latest.extend(latest_receipt_candidates(root, &receipt_root, 2));
         }
 
         if spec.include_legacy_direct {
@@ -244,13 +269,21 @@ fn deploy_receipt_bucket(
                 root_exists = true;
             }
             count += count_direct_receipt_files(&legacy_root);
-            latest.extend(latest_direct_receipt_labels(root, &legacy_root, 2));
+            latest.extend(latest_direct_receipt_candidates(root, &legacy_root, 2));
         }
     }
 
-    latest.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(Ordering::Equal));
+    latest.sort_by(|left, right| {
+        right
+            .modified
+            .partial_cmp(&left.modified)
+            .unwrap_or(Ordering::Equal)
+    });
     latest.truncate(2);
-    let newest = latest.first().map(|(modified, _)| *modified);
+    let newest = latest.first().map(|candidate| candidate.modified);
+    let latest_summary = latest
+        .first()
+        .and_then(|candidate| deploy_receipt_summary(candidate, spec.label));
 
     DxDeployReceiptBucket {
         label: spec.label,
@@ -258,7 +291,11 @@ fn deploy_receipt_bucket(
         root_exists,
         count,
         status: receipt_bucket_status(root_exists, count, newest),
-        latest: latest.into_iter().map(|(_, label)| label).collect(),
+        latest: latest
+            .into_iter()
+            .map(|candidate| candidate.label)
+            .collect(),
+        latest_summary,
     }
 }
 
@@ -388,11 +425,11 @@ fn count_direct_receipt_files(path: &Path) -> usize {
         .count()
 }
 
-fn latest_receipt_labels(
+fn latest_receipt_candidates(
     workspace_root: &Path,
     receipt_root: &Path,
     limit: usize,
-) -> Vec<(SystemTime, String)> {
+) -> Vec<DeployReceiptCandidate> {
     let Ok(entries) = fs::read_dir(receipt_root) else {
         return Vec::new();
     };
@@ -401,42 +438,52 @@ fn latest_receipt_labels(
     for entry in entries.flatten().take(64) {
         let path = entry.path();
         if path.is_file() {
-            push_receipt_label(workspace_root, &path, &mut receipts);
+            push_receipt_candidate(workspace_root, &path, &mut receipts);
         } else if let Ok(children) = fs::read_dir(&path) {
             for child in children.flatten().take(64) {
-                push_receipt_label(workspace_root, &child.path(), &mut receipts);
+                push_receipt_candidate(workspace_root, &child.path(), &mut receipts);
             }
         }
     }
 
-    receipts.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(Ordering::Equal));
+    receipts.sort_by(|left, right| {
+        right
+            .modified
+            .partial_cmp(&left.modified)
+            .unwrap_or(Ordering::Equal)
+    });
     receipts.truncate(limit);
     receipts
 }
 
-fn latest_direct_receipt_labels(
+fn latest_direct_receipt_candidates(
     workspace_root: &Path,
     receipt_root: &Path,
     limit: usize,
-) -> Vec<(SystemTime, String)> {
+) -> Vec<DeployReceiptCandidate> {
     let Ok(entries) = fs::read_dir(receipt_root) else {
         return Vec::new();
     };
 
     let mut receipts = Vec::new();
     for entry in entries.flatten().take(64) {
-        push_receipt_label(workspace_root, &entry.path(), &mut receipts);
+        push_receipt_candidate(workspace_root, &entry.path(), &mut receipts);
     }
 
-    receipts.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(Ordering::Equal));
+    receipts.sort_by(|left, right| {
+        right
+            .modified
+            .partial_cmp(&left.modified)
+            .unwrap_or(Ordering::Equal)
+    });
     receipts.truncate(limit);
     receipts
 }
 
-fn push_receipt_label(
+fn push_receipt_candidate(
     workspace_root: &Path,
     path: &Path,
-    receipts: &mut Vec<(SystemTime, String)>,
+    receipts: &mut Vec<DeployReceiptCandidate>,
 ) {
     if !path.is_file() || !is_receipt_file(path) {
         return;
@@ -447,7 +494,143 @@ fn push_receipt_label(
         .and_then(|metadata| metadata.modified())
         .unwrap_or(SystemTime::UNIX_EPOCH);
     let label = relative_label(workspace_root, path);
-    receipts.push((modified, label));
+    receipts.push(DeployReceiptCandidate {
+        modified,
+        label,
+        path: path.to_path_buf(),
+    });
+}
+
+fn deploy_receipt_summary(
+    candidate: &DeployReceiptCandidate,
+    bucket_label: &'static str,
+) -> Option<DxDeployReceiptSummary> {
+    let value = read_json(&candidate.path)?;
+    let status = first_string_for_keys(
+        &value,
+        &[
+            "status",
+            "state",
+            "result",
+            "conclusion",
+            "deployment_status",
+        ],
+    );
+    let headline = first_string_for_keys(
+        &value,
+        &["headline", "summary", "message", "title", "next_action"],
+    )
+    .or_else(|| status.clone())
+    .unwrap_or_else(|| format!("{bucket_label} receipt"));
+    let url = first_url(&value);
+    let target = first_string_for_keys(
+        &value,
+        &["target", "platform", "environment", "deployment", "project"],
+    );
+    let blocker_count = count_named_arrays(&value, &["blockers", "errors"]);
+
+    Some(DxDeployReceiptSummary {
+        label: candidate.label.clone(),
+        headline,
+        status,
+        url,
+        target,
+        blocker_count,
+    })
+}
+
+fn first_string_for_keys(value: &Value, keys: &[&str]) -> Option<String> {
+    first_string_for_keys_inner(value, keys, 0)
+}
+
+fn first_string_for_keys_inner(value: &Value, keys: &[&str], depth: usize) -> Option<String> {
+    if depth > 6 {
+        return None;
+    }
+
+    match value {
+        Value::Object(map) => {
+            for key in keys {
+                if let Some(value) = map.get(*key).and_then(Value::as_str) {
+                    let value = value.trim();
+                    if !value.is_empty() {
+                        return Some(value.to_string());
+                    }
+                }
+            }
+
+            map.values()
+                .take(64)
+                .find_map(|value| first_string_for_keys_inner(value, keys, depth + 1))
+        }
+        Value::Array(values) => values
+            .iter()
+            .take(64)
+            .find_map(|value| first_string_for_keys_inner(value, keys, depth + 1)),
+        _ => None,
+    }
+}
+
+fn first_url(value: &Value) -> Option<String> {
+    first_url_inner(value, 0)
+}
+
+fn first_url_inner(value: &Value, depth: usize) -> Option<String> {
+    if depth > 6 {
+        return None;
+    }
+
+    match value {
+        Value::String(value) => {
+            let value = value.trim();
+            if value.starts_with("https://") || value.starts_with("http://") {
+                Some(value.to_string())
+            } else {
+                None
+            }
+        }
+        Value::Object(map) => map
+            .values()
+            .take(64)
+            .find_map(|value| first_url_inner(value, depth + 1)),
+        Value::Array(values) => values
+            .iter()
+            .take(64)
+            .find_map(|value| first_url_inner(value, depth + 1)),
+        _ => None,
+    }
+}
+
+fn count_named_arrays(value: &Value, keys: &[&str]) -> usize {
+    count_named_arrays_inner(value, keys, 0)
+}
+
+fn count_named_arrays_inner(value: &Value, keys: &[&str], depth: usize) -> usize {
+    if depth > 6 {
+        return 0;
+    }
+
+    match value {
+        Value::Object(map) => {
+            let direct = keys
+                .iter()
+                .filter_map(|key| map.get(*key).and_then(Value::as_array))
+                .map(Vec::len)
+                .sum::<usize>();
+            direct
+                + map
+                    .values()
+                    .take(64)
+                    .map(|value| count_named_arrays_inner(value, keys, depth + 1))
+                    .sum::<usize>()
+        }
+        Value::Array(values) => values
+            .iter()
+            .take(64)
+            .map(|value| count_named_arrays_inner(value, keys, depth + 1))
+            .sum(),
+        _ => 0,
+    }
 }
 
 fn is_receipt_file(path: &Path) -> bool {

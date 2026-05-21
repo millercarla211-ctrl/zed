@@ -10,7 +10,9 @@ use gpui::{AnyElement, App, SharedString, prelude::*};
 use ui::{IconName, prelude::*};
 
 use crate::dx_check_score::DxCheckScoreSnapshot;
-use crate::dx_deploy_targets::{DxDeployReceiptBucket, DxDeployTarget, DxDeployTargetSnapshot};
+use crate::dx_deploy_targets::{
+    DxDeployReceiptBucket, DxDeployReceiptSummary, DxDeployTarget, DxDeployTargetSnapshot,
+};
 use crate::dx_proof_freshness::{DxProofFreshnessBucket, DxProofFreshnessSnapshot};
 use crate::dx_receipt_history::{DxToolHistoryBucket, DxToolHistorySnapshot};
 use crate::dx_runtime_proof_status::{DxRuntimeProofReceiptSummary, DxRuntimeProofStatusSnapshot};
@@ -687,16 +689,65 @@ fn deploy_receipt_bucket_row(
                 .color(Color::Muted)
                 .truncate(),
         );
-    } else if let Some(label) = bucket.latest.first() {
-        stack = stack.child(
-            Label::new(label.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
+    } else {
+        if let Some(summary) = bucket.latest_summary.as_ref() {
+            stack = stack
+                .child(
+                    Label::new(summary.headline.clone())
+                        .size(LabelSize::XSmall)
+                        .color(Color::Default)
+                        .truncate(),
+                )
+                .child(
+                    Label::new(deploy_receipt_summary_detail(summary))
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted)
+                        .truncate(),
+                );
+
+            if summary.blocker_count > 0 {
+                stack = stack.child(signal_row(
+                    SharedString::from(format!("dx-deploy-{}-blockers", bucket.label)),
+                    IconName::Warning,
+                    Color::Warning,
+                    format!("{} blocker(s)", summary.blocker_count),
+                ));
+            }
+        }
+
+        if let Some(label) = bucket.latest.first() {
+            stack = stack.child(
+                Label::new(label.clone())
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            );
+        }
     }
 
     stack.into_any_element()
+}
+
+fn deploy_receipt_summary_detail(summary: &DxDeployReceiptSummary) -> String {
+    let mut details = Vec::new();
+
+    if let Some(status) = summary.status.as_ref() {
+        details.push(format!("Status {status}"));
+    }
+
+    if let Some(target) = summary.target.as_ref() {
+        details.push(format!("Target {target}"));
+    }
+
+    if let Some(url) = summary.url.as_ref() {
+        details.push(url.clone());
+    }
+
+    if details.is_empty() {
+        summary.label.clone()
+    } else {
+        details.join(" - ")
+    }
 }
 
 fn proof_freshness_state(snapshot: &DxProofFreshnessSnapshot, cx: &App) -> AnyElement {

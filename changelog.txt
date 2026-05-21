@@ -1,3 +1,16 @@
+[2026-05-21] - DX Deploy Receipt Drilldowns
+
+ADDED:
+- Added content-aware deploy receipt summaries for latest managed `tools/dx-deploy` receipts, including headline, status, URL, target, and blocker counts.
+- Rendered latest deploy receipt drilldowns in the right Deploy rail.
+- Included latest deploy receipt details in Deploy Readiness, Runtime Proof, and Review Receipts Agent handoff prompts.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current next-set status at 99.98/100 while keeping final runtime proof gated on governed operator evidence.
+
+NOTES:
+- This slice reads managed receipt files only. It does not run `just run`, Cargo, local servers, browser automation, deploys, shell commands, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Runtime Proof Status Scanner
 
 ADDED:
