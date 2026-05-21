@@ -51,7 +51,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Surfaced reduced-context receipts in the launch workspace: the Sources rail now has a Reduced Context set, and the right Tool History rail scans workspace `tools/dx-serializer-rlm` receipts.
 - Added guided DX sidebar actions for Demo Recipe and Review Receipts; they prepare permission-safe Agent drafts for the flagship metasearch-to-reduced-context receipt chain without auto-running tools.
 - Added right-rail Media Proof and Forge Proof cards that prepare permission-safe Agent drafts for proof flows without running tools automatically.
-- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 76/100; the next highest-value target is richer source attachment affordances plus a read-only Check panel score schema.
+- Added source attachment readiness to the Sources rail and a typed read-only Check score to the right rail, both backed by actual workspace/source/receipt/tool-history state.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 78/100; the next highest-value target is restore-preview warning detail plus a minimal Deploy target registry skeleton.
 
 ## Remaining Proof
 
@@ -62,3 +63,4 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - The reduced-context rail slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
 - The guided action slice has formatting/diff/conflict validation only so far; runtime click proof remains deferred under the repo's launch validation rules.
 - The guided proof card slice has formatting/diff/conflict validation only so far; runtime click proof remains deferred under the repo's launch validation rules.
+- The source attachment and Check score slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.

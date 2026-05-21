@@ -1,3 +1,16 @@
+[2026-05-21] - DX Source Attachment And Check Score Rails
+
+ADDED:
+- Added a typed read-only Check score snapshot for workspace structure, receipt root/file state, attach-ready sources, tool proof receipts, and retained background tasks.
+- Added a Sources rail attachment readiness section that summarizes attach-ready managed receipts, produced media, restore previews, and workspace roots from the existing source-set model.
+- Rendered the Check score and blockers in the DX right rail without running validation commands or mutating workspace state.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 78/100 and move the next target to restore-preview warning detail plus a minimal Deploy target registry skeleton.
+
+NOTES:
+- This slice is read-only and derives state from cached workspace/source/receipt/tool-history data; it does not run builds, tests, browsers, deploys, external serializer/RLM code, or restore-to-target actions.
+
 [2026-05-21] - DX Guided Proof Cards
 
 ADDED:

@@ -34,6 +34,7 @@ use crate::ExpandMessageEditor;
 use crate::ManageProfiles;
 use crate::agent_connection_store::AgentConnectionStore;
 use crate::completion_provider::AgentContextSource;
+use crate::dx_check_score::{DxCheckScoreInput, check_score_snapshot};
 use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, receipt_snapshot, render_workspace_chrome,
 };
@@ -5890,16 +5891,31 @@ impl AgentPanel {
 
         let visible_worktree_count = self.project.read(cx).visible_worktrees(cx).count();
 
+        let receipt_snapshot = receipt_snapshot();
+        let receipt_file_count = receipt_snapshot
+            .buckets
+            .iter()
+            .map(|bucket| bucket.count)
+            .sum::<usize>();
         let source_sets = source_set_snapshot(&workspace_roots);
         let tool_history = tool_history_snapshot(&workspace_roots);
+        let check_score = check_score_snapshot(DxCheckScoreInput {
+            receipt_root_exists: receipt_snapshot.root_exists,
+            receipt_file_count,
+            source_sets: &source_sets,
+            tool_history: &tool_history,
+            background_task_count: self.retained_threads.len(),
+            visible_worktree_count,
+        });
 
         DxLaunchWorkspaceStatus {
             active_status: self.dx_active_status(cx),
             background_task_count: self.retained_threads.len(),
             visible_worktree_count,
-            receipt_snapshot: receipt_snapshot(),
+            receipt_snapshot,
             source_sets,
             tool_history,
+            check_score,
         }
     }
 

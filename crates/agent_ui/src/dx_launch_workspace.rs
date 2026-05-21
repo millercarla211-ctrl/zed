@@ -9,8 +9,11 @@ use std::{
 use gpui::{AnyElement, App, SharedString, prelude::*};
 use ui::{IconName, prelude::*};
 
+use crate::dx_check_score::DxCheckScoreSnapshot;
 use crate::dx_receipt_history::{DxToolHistoryBucket, DxToolHistorySnapshot};
-use crate::dx_source_sets::{DxSourceItem, DxSourceKind, DxSourceSet, DxSourceSetSnapshot};
+use crate::dx_source_sets::{
+    DxSourceAttachmentSummary, DxSourceItem, DxSourceKind, DxSourceSet, DxSourceSetSnapshot,
+};
 
 const DX_RECEIPTS_ROOT: &str = r"G:\Dx\.dx\receipts";
 const RECEIPT_CACHE_TTL: Duration = Duration::from_secs(5);
@@ -37,6 +40,7 @@ pub(crate) struct DxLaunchWorkspaceStatus {
     pub receipt_snapshot: DxReceiptSnapshot,
     pub source_sets: DxSourceSetSnapshot,
     pub tool_history: DxToolHistorySnapshot,
+    pub check_score: DxCheckScoreSnapshot,
 }
 
 static RECEIPT_CACHE: OnceLock<Mutex<Option<(Instant, DxReceiptSnapshot)>>> = OnceLock::new();
@@ -209,6 +213,11 @@ fn render_sources_rail(
         .child(sidebar_actions)
         .child(section_title("Sources", IconName::Book))
         .child(source_set_stack(&status.source_sets, cx))
+        .child(section_title("Attach", IconName::Link))
+        .child(source_attachment_state(
+            &status.source_sets.attachment_summary(),
+            cx,
+        ))
         .child(section_title("Receipts", IconName::FileTextOutlined))
         .child(receipt_source_state(&status.receipt_snapshot, cx))
         .into_any_element()
@@ -235,6 +244,8 @@ fn render_right_rail(
             "Background",
             format!("{} tasks", status.background_task_count),
         ))
+        .child(section_title("Check", IconName::Check))
+        .child(check_score_state(&status.check_score, cx))
         .child(section_title("Guided Proofs", IconName::Sparkle))
         .child(guided_cards)
         .child(section_title("Git", IconName::GitBranch))
@@ -264,6 +275,49 @@ fn source_set_stack(snapshot: &DxSourceSetSnapshot, cx: &App) -> AnyElement {
                 cx,
             ));
         }
+    }
+
+    stack.into_any_element()
+}
+
+fn source_attachment_state(summary: &DxSourceAttachmentSummary, cx: &App) -> AnyElement {
+    let state = if summary.attachable_sources == 0 {
+        "No attach-ready sources".to_string()
+    } else {
+        format!("{} ready", summary.attachable_sources)
+    };
+
+    let mut stack = v_flex()
+        .gap_1()
+        .child(metric_row("Attach-ready", state))
+        .child(metric_row(
+            "Workspace roots",
+            summary.workspace_roots.to_string(),
+        ))
+        .child(metric_row(
+            "Managed receipts",
+            summary.managed_receipts.to_string(),
+        ));
+
+    if summary.produced_files > 0 {
+        stack = stack.child(metric_row(
+            "Produced media",
+            summary.produced_files.to_string(),
+        ));
+    }
+
+    if summary.restore_previews > 0 {
+        stack = stack.child(metric_row(
+            "Restore previews",
+            summary.restore_previews.to_string(),
+        ));
+    }
+
+    if summary.attachable_sources == 0 {
+        stack = stack.child(muted_card(
+            "Create a source-pack or media receipt first",
+            cx,
+        ));
     }
 
     stack.into_any_element()
@@ -422,6 +476,28 @@ fn tool_history_bucket(id: SharedString, bucket: &DxToolHistoryBucket, cx: &App)
                 cx,
             ));
         }
+    }
+
+    stack.into_any_element()
+}
+
+fn check_score_state(snapshot: &DxCheckScoreSnapshot, cx: &App) -> AnyElement {
+    let mut stack = v_flex()
+        .gap_1()
+        .child(metric_row("Score", format!("{}/100", snapshot.score)))
+        .child(metric_row("State", snapshot.state));
+
+    for item in snapshot.items.iter().take(4) {
+        stack = stack.child(metric_row(item.label, item.state.clone()));
+    }
+
+    for (ix, blocker) in snapshot.blockers.iter().take(2).enumerate() {
+        stack = stack.child(source_row(
+            SharedString::from(format!("dx-check-blocker-{ix}")),
+            IconName::ListTodo,
+            blocker.clone(),
+            cx,
+        ));
     }
 
     stack.into_any_element()
