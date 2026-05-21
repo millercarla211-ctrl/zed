@@ -1,3 +1,13 @@
+[2026-05-22] - DX Screen Carousel Source Polish
+
+CHANGED:
+- Removed unused screen-carousel width persistence state, constants, and dead helper functions from `crates/workspace/src/workspace.rs`.
+- Preserved the active edge-dwell and keyboard screen switching path in `crates/workspace/src/screen_carousel.rs`.
+
+NOTES:
+- This is a source-quality cleanup before governed runtime testing; it does not change Agent panel, Web Preview, compact sidebar, Write/Ask, model picker, or thread behavior.
+- No Cargo commands, local servers, live CLI commands, browser automation, or `just run` were executed.
+
 [2026-05-22] - DX Compact Activity Bar Routing Cleanup
 
 CHANGED:
@@ -7,6 +17,15 @@ CHANGED:
 NOTES:
 - This is a maintainability cleanup for the editor + AI panel + Web Preview launch posture; it preserves existing Write/Ask modes, model picker, thread behavior, Web Preview behavior, and Agent panel behavior.
 - No Cargo commands, local servers, live CLI commands, provider calls, automation runners, or `just run` were executed.
+
+[2026-05-22] - DX Agents Social Action Metadata Guard
+
+CHANGED:
+- Tightened DX Agents social row-action metadata validation so `connect` and `disconnect` descriptors with `--platform ... --json` must pass the same safe platform-token rule as executable bridge actions.
+
+NOTES:
+- This changes only Zed receipt-metadata acceptance; Zed still executes fixed typed bridge commands and never executes receipt-supplied command strings.
+- No Cargo commands, local servers, live CLI commands, provider calls, social login, or `just run` were executed.
 
 [2026-05-22] - DX Agents Typed Command Bridge
 

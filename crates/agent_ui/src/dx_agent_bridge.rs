@@ -887,11 +887,19 @@ fn is_social_action_command(command: &str, action: &str) -> bool {
     let public_prefix = format!("dx agents social {action}");
     [runtime_prefix.as_str(), public_prefix.as_str()]
         .into_iter()
-        .any(|prefix| {
-            command == format!("{prefix} --json")
-                || command.starts_with(&format!("{prefix} --platform "))
-                    && command.ends_with(" --json")
-        })
+        .any(|prefix| social_action_command_matches_prefix(command, prefix))
+}
+
+fn social_action_command_matches_prefix(command: &str, prefix: &str) -> bool {
+    if command == format!("{prefix} --json") {
+        return true;
+    }
+
+    let platform_prefix = format!("{prefix} --platform ");
+    command
+        .strip_prefix(&platform_prefix)
+        .and_then(|value| value.strip_suffix(" --json"))
+        .is_some_and(|platform| is_safe_platform_arg(platform))
 }
 
 fn providers(value: &Value) -> Vec<DxAgentProvider> {
