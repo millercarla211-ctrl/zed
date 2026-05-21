@@ -681,24 +681,45 @@ fn dx_agent_social_action_row(
     receipt: &DxAgentSocialActionSummary,
     cx: &App,
 ) -> AnyElement {
+    let connected = if receipt.connected.unwrap_or(false) {
+        "connected"
+    } else {
+        "not connected"
+    };
     let detail = if receipt.action == "connect" {
+        let support = if receipt.connect_supported {
+            "supported"
+        } else {
+            "unsupported"
+        };
+        let qr = if receipt.qr_supported {
+            "QR ready"
+        } else {
+            "QR unavailable"
+        };
+        let link = if receipt.link_supported {
+            "link ready"
+        } else {
+            "link unavailable"
+        };
         format!(
-            "{} via {} (supported {}, qr {}, link {}, connected {})",
-            receipt.label,
-            receipt.connect_method,
-            receipt.connect_supported,
-            receipt.qr_supported,
-            receipt.link_supported,
-            receipt.connected.unwrap_or(false)
+            "{} connect {}, via {}, {}, {}, {}",
+            receipt.label, support, receipt.connect_method, qr, link, connected
         )
     } else {
+        let support = if receipt.disconnect_supported {
+            "supported"
+        } else {
+            "not needed"
+        };
+        let revoke = if receipt.manual_revoke_required {
+            "provider revoke"
+        } else {
+            "no revoke"
+        };
         format!(
-            "{} supported {}, revoke {}, connected {}, state {}",
-            receipt.label,
-            receipt.disconnect_supported,
-            receipt.manual_revoke_required,
-            receipt.connected.unwrap_or(false),
-            receipt.safe_config_state
+            "{} disconnect {}, {}, {}, config {}",
+            receipt.label, support, revoke, connected, receipt.safe_config_state
         )
     };
 
