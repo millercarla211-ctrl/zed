@@ -359,6 +359,27 @@ fn deploy_receipt_bucket_prompt(bucket: &DxDeployReceiptBucket) -> String {
 }
 
 fn runtime_proof_status_prompt_context(snapshot: &DxRuntimeProofStatusSnapshot) -> String {
+    let latest_plan = snapshot
+        .latest_plan
+        .as_ref()
+        .map(|plan| {
+            let requirements = runtime_proof_plan_requirements(plan);
+            let command = plan
+                .expected_final_command
+                .clone()
+                .unwrap_or_else(|| "unknown command".to_string());
+            format!(
+                "latest plan {} status {} command {} steps {} required {} requirements {} blockers {}",
+                plan.label,
+                plan.status,
+                command,
+                plan.checklist_step_count,
+                plan.required_step_count,
+                requirements,
+                plan.blocker_count
+            )
+        })
+        .unwrap_or_else(|| "no latest plan receipt".to_string());
     let latest_import = snapshot
         .latest_import
         .as_ref()
@@ -385,14 +406,41 @@ fn runtime_proof_status_prompt_context(snapshot: &DxRuntimeProofStatusSnapshot) 
     let blockers = bounded_join(&snapshot.blockers, 3, "no runtime proof status blockers");
 
     format!(
-        "{}; {} import receipt(s), {} status receipt(s); {}; {}; blockers: {}",
+        "{}; {} plan receipt(s), {} import receipt(s), {} status receipt(s); {}; {}; {}; blockers: {}",
         snapshot.claim_state,
+        snapshot.plan_receipt_count,
         snapshot.import_receipt_count,
         snapshot.status_receipt_count,
+        latest_plan,
         latest_import,
         latest_status,
         blockers
     )
+}
+
+fn runtime_proof_plan_requirements(
+    plan: &crate::dx_runtime_proof_status::DxRuntimeProofPlanSummary,
+) -> String {
+    let mut requirements = Vec::new();
+
+    if plan.requires_clean_git {
+        requirements.push("clean_git");
+    }
+    if plan.requires_diff_check {
+        requirements.push("diff_check");
+    }
+    if plan.requires_visual_evidence {
+        requirements.push("visual_evidence");
+    }
+    if plan.requires_import {
+        requirements.push("runtime_proof_import");
+    }
+
+    if requirements.is_empty() {
+        "none".to_string()
+    } else {
+        requirements.join(",")
+    }
 }
 
 fn bounded_join(values: &[String], limit: usize, empty: &'static str) -> String {

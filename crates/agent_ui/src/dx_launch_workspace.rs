@@ -15,7 +15,9 @@ use crate::dx_deploy_targets::{
 };
 use crate::dx_proof_freshness::{DxProofFreshnessBucket, DxProofFreshnessSnapshot};
 use crate::dx_receipt_history::{DxToolHistoryBucket, DxToolHistorySnapshot};
-use crate::dx_runtime_proof_status::{DxRuntimeProofReceiptSummary, DxRuntimeProofStatusSnapshot};
+use crate::dx_runtime_proof_status::{
+    DxRuntimeProofPlanSummary, DxRuntimeProofReceiptSummary, DxRuntimeProofStatusSnapshot,
+};
 use crate::dx_source_sets::{
     DxSourceAttachmentSummary, DxSourceItem, DxSourceKind, DxSourceReceiptDrilldown, DxSourceSet,
     DxSourceSetSnapshot,
@@ -818,15 +820,24 @@ fn runtime_proof_status_state(snapshot: &DxRuntimeProofStatusSnapshot, cx: &App)
         .child(metric_row(
             "Receipts",
             format!(
-                "{} import, {} status",
-                snapshot.import_receipt_count, snapshot.status_receipt_count
+                "{} plan, {} import, {} status",
+                snapshot.plan_receipt_count,
+                snapshot.import_receipt_count,
+                snapshot.status_receipt_count
             ),
         ));
 
     if snapshot.workspace_root_count == 0 {
         stack = stack.child(muted_card("No workspace roots", cx));
-    } else if !snapshot.import_root_exists && !snapshot.status_root_exists {
+    } else if !snapshot.plan_root_exists
+        && !snapshot.import_root_exists
+        && !snapshot.status_root_exists
+    {
         stack = stack.child(muted_card("No runtime proof receipt roots", cx));
+    }
+
+    if let Some(plan) = snapshot.latest_plan.as_ref() {
+        stack = stack.child(runtime_proof_plan_row(plan, cx));
     }
 
     if let Some(receipt) = snapshot.latest_import.as_ref() {
@@ -857,6 +868,87 @@ fn runtime_proof_status_state(snapshot: &DxRuntimeProofStatusSnapshot, cx: &App)
     }
 
     stack.into_any_element()
+}
+
+fn runtime_proof_plan_row(plan: &DxRuntimeProofPlanSummary, cx: &App) -> AnyElement {
+    let requirements = runtime_proof_plan_requirements(plan);
+    let mut stack = v_flex()
+        .id("dx-runtime-proof-latest-plan")
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().element_background)
+        .child(metric_row(
+            "Plan",
+            format!("{} - {} step(s)", plan.status, plan.checklist_step_count),
+        ))
+        .child(
+            Label::new(format!(
+                "{} required - {}",
+                plan.required_step_count, requirements
+            ))
+            .size(LabelSize::XSmall)
+            .color(Color::Muted)
+            .truncate(),
+        )
+        .child(
+            Label::new(plan.label.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+
+    if let Some(command) = plan.expected_final_command.as_ref() {
+        stack = stack.child(
+            Label::new(format!("Command {command}"))
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+    }
+
+    if plan.blocker_count > 0 {
+        stack = stack.child(
+            Label::new(format!("{} blocker(s)", plan.blocker_count))
+                .size(LabelSize::XSmall)
+                .color(Color::Warning)
+                .truncate(),
+        );
+    } else if let Some(next_action) = plan.next_action.as_ref() {
+        stack = stack.child(
+            Label::new(next_action.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+    }
+
+    stack.into_any_element()
+}
+
+fn runtime_proof_plan_requirements(plan: &DxRuntimeProofPlanSummary) -> String {
+    let mut requirements = Vec::new();
+
+    if plan.requires_clean_git {
+        requirements.push("clean git");
+    }
+    if plan.requires_diff_check {
+        requirements.push("diff check");
+    }
+    if plan.requires_visual_evidence {
+        requirements.push("visual proof");
+    }
+    if plan.requires_import {
+        requirements.push("proof import");
+    }
+
+    if requirements.is_empty() {
+        "no extra requirements".to_string()
+    } else {
+        format!("requires {}", requirements.join(", "))
+    }
 }
 
 fn runtime_proof_receipt_row(

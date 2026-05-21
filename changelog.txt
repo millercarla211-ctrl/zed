@@ -1,3 +1,16 @@
+[2026-05-21] - DX Runtime Proof Plan Drilldowns
+
+ADDED:
+- Added content-aware runtime proof plan summaries for managed `tools/dx-runtime-proof/plans` receipts.
+- Rendered latest plan command, checklist counts, requirements, blockers, and next action inside the right Runtime Proof rail.
+
+CHANGED:
+- Runtime Proof and Import Proof Agent handoff prompts now include the latest plan receipt details alongside import/status receipt state.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current next-set status at 99.995/100 while keeping final runtime proof gated on governed operator evidence.
+
+NOTES:
+- This slice reads managed plan receipts only. It does not run `just run`, Cargo, local servers, browser automation, deploys, shell commands, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Restore Approval History Visibility
 
 ADDED:

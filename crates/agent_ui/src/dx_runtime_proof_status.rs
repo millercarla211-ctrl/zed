@@ -14,14 +14,33 @@ const MAX_RECEIPT_BYTES: u64 = 128 * 1024;
 #[derive(Clone)]
 pub(crate) struct DxRuntimeProofStatusSnapshot {
     pub workspace_root_count: usize,
+    pub plan_root_exists: bool,
     pub import_root_exists: bool,
     pub status_root_exists: bool,
+    pub plan_receipt_count: usize,
     pub import_receipt_count: usize,
     pub status_receipt_count: usize,
+    pub latest_plan: Option<DxRuntimeProofPlanSummary>,
     pub latest_import: Option<DxRuntimeProofReceiptSummary>,
     pub latest_status: Option<DxRuntimeProofReceiptSummary>,
     pub claim_state: String,
     pub blockers: Vec<String>,
+}
+
+#[derive(Clone)]
+pub(crate) struct DxRuntimeProofPlanSummary {
+    pub label: String,
+    pub status: String,
+    pub expected_final_command: Option<String>,
+    pub checklist_step_count: usize,
+    pub required_step_count: usize,
+    pub requires_clean_git: bool,
+    pub requires_diff_check: bool,
+    pub requires_visual_evidence: bool,
+    pub requires_import: bool,
+    pub blocker_count: usize,
+    pub blockers: Vec<String>,
+    pub next_action: Option<String>,
 }
 
 #[derive(Clone)]
@@ -85,18 +104,25 @@ fn scan_runtime_proof_status(workspace_roots: &[String]) -> DxRuntimeProofStatus
         .map(PathBuf::from)
         .collect::<Vec<_>>();
 
+    let mut plan_root_exists = false;
     let mut import_root_exists = false;
     let mut status_root_exists = false;
+    let mut plan_receipt_count = 0;
     let mut import_receipt_count = 0;
     let mut status_receipt_count = 0;
+    let mut plan_receipts = Vec::new();
     let mut import_receipts = Vec::new();
     let mut status_receipts = Vec::new();
 
     for workspace_root in &workspace_roots {
         let runtime_root = workspace_root.join("tools").join("dx-runtime-proof");
+        let plan_root = runtime_root.join("plans");
         let import_root = runtime_root.join("imports");
         let status_root = runtime_root.join("status");
 
+        if plan_root.is_dir() {
+            plan_root_exists = true;
+        }
         if import_root.is_dir() {
             import_root_exists = true;
         }
@@ -104,15 +130,21 @@ fn scan_runtime_proof_status(workspace_roots: &[String]) -> DxRuntimeProofStatus
             status_root_exists = true;
         }
 
+        plan_receipt_count += count_receipt_files(&plan_root);
         import_receipt_count += count_receipt_files(&import_root);
         status_receipt_count += count_receipt_files(&status_root);
+        plan_receipts.extend(latest_receipt_paths(workspace_root, &plan_root));
         import_receipts.extend(latest_receipt_paths(workspace_root, &import_root));
         status_receipts.extend(latest_receipt_paths(workspace_root, &status_root));
     }
 
+    plan_receipts.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(Ordering::Equal));
     import_receipts.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(Ordering::Equal));
     status_receipts.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(Ordering::Equal));
 
+    let latest_plan = plan_receipts
+        .first()
+        .and_then(|(_, path, label)| parse_plan_summary(path, label));
     let latest_import = import_receipts
         .first()
         .and_then(|(_, path, label)| parse_import_summary(path, label));
@@ -124,18 +156,23 @@ fn scan_runtime_proof_status(workspace_roots: &[String]) -> DxRuntimeProofStatus
         workspace_roots.len(),
         import_root_exists,
         status_root_exists,
+        plan_receipt_count,
         import_receipt_count,
         status_receipt_count,
+        latest_plan.as_ref(),
         latest_import.as_ref(),
         latest_status.as_ref(),
     );
 
     DxRuntimeProofStatusSnapshot {
         workspace_root_count: workspace_roots.len(),
+        plan_root_exists,
         import_root_exists,
         status_root_exists,
+        plan_receipt_count,
         import_receipt_count,
         status_receipt_count,
+        latest_plan,
         latest_import,
         latest_status,
         claim_state,
@@ -147,8 +184,10 @@ fn claim_state(
     workspace_root_count: usize,
     import_root_exists: bool,
     status_root_exists: bool,
+    plan_receipt_count: usize,
     import_receipt_count: usize,
     status_receipt_count: usize,
+    latest_plan: Option<&DxRuntimeProofPlanSummary>,
     latest_import: Option<&DxRuntimeProofReceiptSummary>,
     latest_status: Option<&DxRuntimeProofReceiptSummary>,
 ) -> (String, Vec<String>) {
@@ -166,6 +205,16 @@ fn claim_state(
         blockers.push("Runtime proof status root is missing.".to_string());
     }
     if import_receipt_count == 0 && status_receipt_count == 0 {
+        if plan_receipt_count > 0 {
+            if let Some(plan) = latest_plan {
+                blockers.extend(plan.blockers.iter().take(3).cloned());
+            }
+            blockers.push(
+                "Runtime proof plan exists; operator evidence import is still missing.".to_string(),
+            );
+            return ("Plan ready; evidence needed".to_string(), blockers);
+        }
+
         blockers.push("No runtime proof import/status receipts are present.".to_string());
         return ("Needs operator evidence".to_string(), blockers);
     }
@@ -204,6 +253,40 @@ fn claim_state(
     }
 
     ("Import not claim-ready".to_string(), blockers)
+}
+
+fn parse_plan_summary(path: &Path, label: &str) -> Option<DxRuntimeProofPlanSummary> {
+    let value = read_json(path)?;
+    let plan = value.get("runtime_proof_plan").unwrap_or(&value);
+    let request = plan.get("request").unwrap_or(&Value::Null);
+    let status = plan.get("status").unwrap_or(&Value::Null);
+    let evidence_contract = plan.get("evidence_contract").unwrap_or(&Value::Null);
+    let blockers = string_array_at(status, "blockers");
+    let checklist_step_count = usize_at(status, "checklist_step_count")
+        .max(array_len_at(plan, "checklist"))
+        .max(usize_at(&value, "checklist_step_count"));
+
+    Some(DxRuntimeProofPlanSummary {
+        label: label.to_string(),
+        status: string_at(status, "status")
+            .or_else(|| string_at(plan, "status"))
+            .unwrap_or_else(|| "unknown".to_string()),
+        expected_final_command: string_at(request, "expected_final_command")
+            .or_else(|| string_at(evidence_contract, "final_command")),
+        checklist_step_count,
+        required_step_count: usize_at(status, "required_step_count"),
+        requires_clean_git: bool_at(request, "require_clean_git"),
+        requires_diff_check: bool_at(request, "require_diff_check"),
+        requires_visual_evidence: bool_at(request, "require_runtime_visual_evidence"),
+        requires_import: bool_at(request, "require_runtime_proof_import")
+            || bool_at(
+                evidence_contract,
+                "runtime_green_claim_requires_import_receipt",
+            ),
+        blocker_count: usize_at(status, "blocker_count").max(blockers.len()),
+        blockers,
+        next_action: string_at(plan, "next_action").or_else(|| string_at(&value, "next_action")),
+    })
 }
 
 fn parse_import_summary(path: &Path, label: &str) -> Option<DxRuntimeProofReceiptSummary> {
@@ -319,6 +402,14 @@ fn usize_at(value: &Value, key: &str) -> usize {
         .get(key)
         .and_then(Value::as_u64)
         .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or_default()
+}
+
+fn array_len_at(value: &Value, key: &str) -> usize {
+    value
+        .get(key)
+        .and_then(Value::as_array)
+        .map(Vec::len)
         .unwrap_or_default()
 }
 
