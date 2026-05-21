@@ -102,6 +102,8 @@ const MIN_PANEL_WIDTH: Pixels = px(300.);
 const LAST_USED_AGENT_KEY: &str = "agent_panel__last_used_external_agent";
 const LAST_CREATED_ENTRY_KIND_KEY: &str = "agent_panel__last_created_entry_kind";
 const TERMINAL_AGENT_TELEMETRY_ID: &str = "terminal";
+const DX_LAUNCH_RECIPE_PROMPT: &str = "Run the DX launch metasearch-to-reduced-context recipe for this workspace. First call list_dx_launch_demo_recipes with focus=\"metasearch\". Then, using only permissioned Agent tools and no local servers or builds, guide me through the next safe receipt step: inspect_dx_metasearch, search_dx_metasearch with write_source_pack_receipt=true, prepare_dx_source_attachment, prepare_dx_metasearch_context, plan_dx_serializer_rlm_execution, gate_dx_serializer_rlm_runner, and write_dx_serializer_rlm_reduced_context. Stop before any external serializer/RLM runner or model-call execution unless I explicitly approve it.";
+const DX_RECEIPT_REVIEW_PROMPT: &str = "Inspect the current DX launch receipts for this workspace. Summarize the latest metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, media, and Forge receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, or model calls.";
 
 /// Maximum number of idle threads kept in the agent panel's retained list.
 /// Set as a GPUI global to override; otherwise defaults to 5.
@@ -5735,7 +5737,47 @@ impl AgentPanel {
                     },
                 ),
             )
+            .child(
+                action_button(
+                    "dx-launch-demo-recipe",
+                    IconName::PlayOutlined,
+                    "Demo Recipe",
+                )
+                .disabled(!can_create_entries)
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.insert_dx_launch_prompt(DX_LAUNCH_RECIPE_PROMPT, window, cx);
+                })),
+            )
+            .child(
+                action_button(
+                    "dx-launch-review-receipts",
+                    IconName::FileTextOutlined,
+                    "Review Receipts",
+                )
+                .disabled(!can_create_entries)
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.insert_dx_launch_prompt(DX_RECEIPT_REVIEW_PROMPT, window, cx);
+                })),
+            )
             .into_any_element()
+    }
+
+    fn insert_dx_launch_prompt(
+        &mut self,
+        prompt: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.has_open_project(cx) {
+            return;
+        }
+
+        self.activate_draft(true, AgentThreadSource::AgentPanel, window, cx);
+        self.insert_content_blocks(
+            vec![acp::ContentBlock::Text(acp::TextContent::new(prompt))],
+            window,
+            cx,
+        );
     }
 
     fn dx_launch_workspace_status(&self, cx: &Context<Self>) -> DxLaunchWorkspaceStatus {

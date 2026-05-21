@@ -1,3 +1,16 @@
+[2026-05-21] - DX Guided Launch Actions
+
+ADDED:
+- Added Demo Recipe and Review Receipts actions to the DX launch sidebar.
+- Demo Recipe inserts a permission-safe Agent draft for the flagship metasearch-to-source-attachment-to-context-to-runner-gate-to-reduced-context flow.
+- Review Receipts inserts a receipt-audit Agent draft that summarizes current workspace receipt roots and asks for the next safe action.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 74/100 and move the next target to richer guided cards for media and Forge proof flows.
+
+NOTES:
+- These actions prepare drafts only; they do not auto-submit prompts, run tools, start servers, run builds, invoke browser input, execute external serializer/RLM code, or make model calls by themselves.
+
 [2026-05-21] - DX Reduced Context Rail Visibility
 
 ADDED:
