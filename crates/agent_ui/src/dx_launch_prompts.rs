@@ -203,6 +203,43 @@ pub(crate) fn runtime_proof_prompt(
     )
 }
 
+pub(crate) fn runtime_proof_import_prompt(
+    check_score: &DxCheckScoreSnapshot,
+    proof_freshness: &DxProofFreshnessSnapshot,
+    deploy_targets: &DxDeployTargetSnapshot,
+) -> String {
+    let check_blockers = bounded_join(&check_score.blockers, 4, "No current Check blockers");
+    let proof_rows = proof_freshness
+        .buckets
+        .iter()
+        .map(|bucket| {
+            let latest = if bucket.latest.is_empty() {
+                "no latest receipts".to_string()
+            } else {
+                format!("latest {}", bucket.latest.join(", "))
+            };
+            format!(
+                "{}={} ({}, {}; {})",
+                bucket.label, bucket.count, bucket.status, bucket.description, latest
+            )
+        })
+        .collect::<Vec<_>>();
+    let proof_rows = bounded_join(&proof_rows, 4, "No proof freshness rows are available yet");
+    let deploy_target_rows = deploy_targets
+        .targets
+        .iter()
+        .take(3)
+        .map(|target| format!("{} {} at {}", target.platform, target.label, target.path))
+        .collect::<Vec<_>>();
+    let deploy_target_rows = bounded_join(&deploy_target_rows, 3, "No deploy targets detected");
+
+    format!(
+        "Prepare the DX runtime proof import handoff for this workspace. Current Check score: {score}/100 ({state}). Check blockers: {check_blockers}. Proof freshness rows: {proof_rows}. Deploy targets: {deploy_target_rows}. Operator evidence from the governed validation window is required before calling import_dx_runtime_proof. If I have not provided that evidence yet, draft the exact fields I need to provide and stop. When evidence is provided, use import_dx_runtime_proof with operator_status set to passed, blocked, or failed; include proof_summary, evidence lines, blockers, final_command, source, write_runtime_proof_receipt=true, and receipt_root_mode=workspace. Do not run just run, cargo, builds, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions.",
+        score = check_score.score,
+        state = check_score.state,
+    )
+}
+
 pub(crate) fn receipt_review_prompt(
     receipt_snapshot: &DxReceiptSnapshot,
     tool_history: &DxToolHistorySnapshot,

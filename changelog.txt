@@ -1,3 +1,15 @@
+[2026-05-21] - DX Runtime Proof Import Handoff
+
+ADDED:
+- Added an Import Proof guided card to the DX right rail so operator validation evidence can be drafted into `import_dx_runtime_proof` receipt fields.
+- Added a runtime proof import prompt helper that reports Check blockers, proof freshness, deploy targets, required operator status values, receipt mode, and missing-evidence stop behavior.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current next-set status at 99.95/100 while keeping final runtime proof gated on governed operator evidence.
+
+NOTES:
+- This slice drafts the import handoff only. It does not run `just run`, Cargo, local servers, browser automation, deploys, shell commands, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Source Receipt Review Handoffs
 
 ADDED:

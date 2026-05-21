@@ -37,8 +37,9 @@ use crate::completion_provider::AgentContextSource;
 use crate::dx_check_score::{DxCheckScoreInput, check_score_snapshot};
 use crate::dx_deploy_targets::{DxDeployTargetSnapshot, deploy_target_snapshot};
 use crate::dx_launch_prompts::{
-    deploy_readiness_prompt, receipt_review_prompt, runtime_proof_prompt, source_action_icon,
-    source_action_label, source_action_prompt, source_action_title, source_receipt_review_prompt,
+    deploy_readiness_prompt, receipt_review_prompt, runtime_proof_import_prompt,
+    runtime_proof_prompt, source_action_icon, source_action_label, source_action_prompt,
+    source_action_title, source_receipt_review_prompt,
 };
 use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, DxSourceRowControl, receipt_snapshot, render_workspace_chrome,
@@ -6020,6 +6021,21 @@ impl AgentPanel {
                 runtime_proof_prompt(
                     &status.check_score,
                     &status.receipt_snapshot,
+                    &status.proof_freshness,
+                    &status.deploy_targets,
+                ),
+                can_create_entries,
+                cx,
+            ))
+            .child(self.dx_launch_guided_card(
+                "dx-runtime-proof-import-card",
+                "dx-runtime-proof-import-action",
+                IconName::FileTextOutlined,
+                "Import Proof",
+                "Capture operator evidence into managed runtime receipts.",
+                "Draft Import",
+                runtime_proof_import_prompt(
+                    &status.check_score,
                     &status.proof_freshness,
                     &status.deploy_targets,
                 ),
