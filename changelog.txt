@@ -8,6 +8,19 @@ ADDED:
 NOTES:
 - This slice is file/watch/manifest architecture only. It does not start servers, run Cargo, run `just run`, execute DX CLI commands, or mutate browser profiles.
 
+[2026-05-21] - DX Launch Status Aggregate Rail
+
+ADDED:
+- Added a metadata-only `dx.launch.status.v1` receipt reader for `G:\Dx\.dx\receipts\launch\status-latest.json`.
+- Surfaced launch aggregate status, agent account counts, automation/task counts, token budget, discovery readiness, and `dx www templates --json` / `dx forge packages --json` bridge commands in the DX launch right rail.
+
+CHANGED:
+- The Review Receipts guided action now includes the latest launch aggregate state or the exact missing receipt path before asking Agent to inspect receipt status.
+- The root receipt buckets now include the `Launch` receipt folder beside Agents, Tokens, Forge, Sources, Media, RLM, and Serializer.
+
+NOTES:
+- This slice reads redacted receipt metadata only. It does not run `dx launch status --json`, start servers, run Cargo, run `just run`, call providers, read receipt bodies, or import secrets.
+
 [2026-05-21] - DX Onboarding Preview Target Selection
 
 CHANGED:

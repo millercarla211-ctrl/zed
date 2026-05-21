@@ -2,6 +2,7 @@ use ui::IconName;
 
 use crate::dx_check_score::DxCheckScoreSnapshot;
 use crate::dx_deploy_targets::{DxDeployReceiptBucket, DxDeployTarget, DxDeployTargetSnapshot};
+use crate::dx_launch_status::DxLaunchStatusSnapshot;
 use crate::dx_launch_workspace::DxReceiptSnapshot;
 use crate::dx_proof_freshness::DxProofFreshnessSnapshot;
 use crate::dx_receipt_history::{DxToolHistoryReceiptSummary, DxToolHistorySnapshot};
@@ -293,6 +294,7 @@ pub(crate) fn runtime_proof_evidence_template_prompt(
 
 pub(crate) fn receipt_review_prompt(
     receipt_snapshot: &DxReceiptSnapshot,
+    launch_status: &DxLaunchStatusSnapshot,
     tool_history: &DxToolHistorySnapshot,
     proof_freshness: &DxProofFreshnessSnapshot,
     deploy_targets: &DxDeployTargetSnapshot,
@@ -320,6 +322,7 @@ pub(crate) fn receipt_review_prompt(
         receipt_buckets
     };
     let latest_receipts = bounded_join(&receipt_snapshot.latest, 4, "No latest DX receipts");
+    let launch_context = launch_status_prompt_context(launch_status);
     let tool_buckets = tool_history
         .buckets
         .iter()
@@ -367,7 +370,52 @@ pub(crate) fn receipt_review_prompt(
     };
 
     format!(
-        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Tool history buckets: {tool_buckets}. Forge history context: {forge_history}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, restore-target plan, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
+        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Launch aggregate: {launch_context}. Tool history buckets: {tool_buckets}. Forge history context: {forge_history}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest launch status, metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, restore-target plan, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
+    )
+}
+
+fn launch_status_prompt_context(snapshot: &DxLaunchStatusSnapshot) -> String {
+    if !snapshot.root_exists {
+        return format!(
+            "missing launch receipt root `{}`; run dx launch status --json when the CLI lane is ready",
+            snapshot.root.display()
+        );
+    }
+
+    if !snapshot.latest_present {
+        return format!(
+            "no latest launch status receipt at `{}`; expected schema dx.launch.status.v1",
+            snapshot.latest_path.display()
+        );
+    }
+
+    if !snapshot.schema_valid {
+        return format!(
+            "invalid latest launch status receipt `{}`: {}",
+            snapshot.latest_path.display(),
+            snapshot
+                .last_error
+                .clone()
+                .unwrap_or_else(|| "schema validation failed".to_string())
+        );
+    }
+
+    format!(
+        "status={}, summary={}, agents={} connected of {} configured ({}) tokens_status={} budget={} estimated={} soft={} hard={} discovery={} templates_command={} packages_command={} next_action={}",
+        snapshot.status,
+        snapshot.operator_summary,
+        snapshot.agents.connected_accounts,
+        snapshot.agents.configured_accounts,
+        snapshot.agents.status,
+        snapshot.tokens.status,
+        snapshot.tokens.budget_state,
+        snapshot.tokens.estimated_tokens,
+        snapshot.tokens.soft_budget_tokens,
+        snapshot.tokens.hard_budget_tokens,
+        snapshot.discovery.status,
+        snapshot.discovery.templates_command,
+        snapshot.discovery.packages_command,
+        snapshot.next_action
     )
 }
 

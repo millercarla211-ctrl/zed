@@ -17,6 +17,7 @@ use crate::dx_check_score::DxCheckScoreSnapshot;
 use crate::dx_deploy_targets::{
     DxDeployReceiptBucket, DxDeployReceiptSummary, DxDeployTarget, DxDeployTargetSnapshot,
 };
+use crate::dx_launch_status::DxLaunchStatusSnapshot;
 use crate::dx_proof_freshness::{DxProofFreshnessBucket, DxProofFreshnessSnapshot};
 use crate::dx_receipt_history::{
     DxToolHistoryBucket, DxToolHistoryReceiptSummary, DxToolHistorySnapshot,
@@ -52,6 +53,7 @@ pub(crate) struct DxLaunchWorkspaceStatus {
     pub background_task_count: usize,
     pub visible_worktree_count: usize,
     pub agent_bridge: DxAgentBridgeSnapshot,
+    pub launch_status: DxLaunchStatusSnapshot,
     pub receipt_snapshot: DxReceiptSnapshot,
     pub source_sets: DxSourceSetSnapshot,
     pub tool_history: DxToolHistorySnapshot,
@@ -93,6 +95,7 @@ fn scan_receipts_root() -> DxReceiptSnapshot {
 
     let buckets = [
         ("Agents", "agents"),
+        ("Launch", "launch"),
         ("Tokens", "tokens"),
         ("Forge", "forge"),
         ("Sources", "metasearch"),
@@ -283,6 +286,8 @@ fn render_right_rail(
             "Background",
             format!("{} tasks", status.background_task_count),
         ))
+        .child(section_title("Launch Status", IconName::Check))
+        .child(launch_status_state(&status.launch_status, cx))
         .when(status.agent_bridge.show_in_agent_rail, |this| {
             this.child(section_title("DX Agents", IconName::ZedAgent))
                 .child(dx_agent_bridge_state(&status.agent_bridge, cx))
@@ -313,6 +318,143 @@ fn render_right_rail(
         .child(section_title("Token And Tool Slots", IconName::Sliders))
         .child(token_meter_slots(&status.receipt_snapshot))
         .into_any_element()
+}
+
+fn launch_status_state(snapshot: &DxLaunchStatusSnapshot, cx: &App) -> AnyElement {
+    let mut stack = v_flex()
+        .gap_1()
+        .child(metric_row("Status", snapshot.status.clone()))
+        .child(
+            Label::new(snapshot.operator_summary.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .child(metric_row(
+            "Agents",
+            format!(
+                "{} / {} connected, {} need setup ({})",
+                snapshot.agents.connected_accounts,
+                snapshot.agents.configured_accounts,
+                snapshot.agents.accounts_needing_connection,
+                snapshot.agents.status
+            ),
+        ))
+        .child(metric_row(
+            "Agent Work",
+            format!(
+                "{} automation(s), {} active task(s), {} QR-ready",
+                snapshot.agents.automation_count,
+                snapshot.agents.active_task_count,
+                snapshot.agents.qr_connect_supported
+            ),
+        ))
+        .child(metric_row(
+            "Tokens",
+            format!(
+                "{} / {} ({})",
+                snapshot.tokens.budget_state,
+                snapshot.tokens.estimated_tokens,
+                snapshot.tokens.status
+            ),
+        ))
+        .child(metric_row(
+            "Budget",
+            format!(
+                "{} soft / {} hard",
+                snapshot.tokens.soft_budget_tokens, snapshot.tokens.hard_budget_tokens
+            ),
+        ))
+        .child(metric_row(
+            "Discovery",
+            format!(
+                "{} / manifest {} / binary {}",
+                snapshot.discovery.status,
+                yes_no(snapshot.discovery.www_manifest_present),
+                yes_no(snapshot.discovery.configured_binary_present)
+            ),
+        ))
+        .child(metric_row(
+            "Templates",
+            snapshot.discovery.templates_command.clone(),
+        ))
+        .child(metric_row(
+            "Packages",
+            snapshot.discovery.packages_command.clone(),
+        ));
+
+    if !snapshot.root_exists {
+        stack = stack.child(muted_card(
+            format!("Missing launch receipts: {}", snapshot.root.display()),
+            cx,
+        ));
+    } else if !snapshot.latest_present {
+        stack = stack.child(muted_card(
+            format!(
+                "Run dx launch status --json to write {}",
+                snapshot.latest_path.display()
+            ),
+            cx,
+        ));
+    } else if !snapshot.schema_valid {
+        stack = stack.child(signal_row(
+            "dx-launch-status-invalid".into(),
+            IconName::Warning,
+            Color::Warning,
+            snapshot
+                .last_error
+                .clone()
+                .unwrap_or_else(|| "Launch status receipt schema is invalid".to_string()),
+        ));
+    } else if snapshot.redaction_requires_review {
+        stack = stack.child(signal_row(
+            "dx-launch-status-redaction-review".into(),
+            IconName::Warning,
+            Color::Warning,
+            "Launch status redaction flags need review".to_string(),
+        ));
+    } else if let Some(error) = snapshot.last_error.as_ref() {
+        stack = stack.child(signal_row(
+            "dx-launch-status-warning".into(),
+            IconName::Warning,
+            Color::Warning,
+            error.clone(),
+        ));
+    } else {
+        stack = stack.child(
+            Label::new(snapshot.next_action.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+    }
+
+    if snapshot.schema_valid {
+        stack = stack
+            .child(metric_row(
+                "Agent Next",
+                snapshot.agents.next_action.clone(),
+            ))
+            .child(metric_row(
+                "Token Next",
+                snapshot.tokens.next_action.clone(),
+            ))
+            .child(metric_row(
+                "Discovery Next",
+                snapshot.discovery.next_action.clone(),
+            ));
+
+        if !snapshot.redaction_summary.is_empty() {
+            stack = stack.child(
+                Label::new(snapshot.redaction_summary.clone())
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            );
+        }
+    }
+
+    stack.into_any_element()
 }
 
 fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyElement {
@@ -1789,6 +1931,10 @@ fn deploy_platform_icon(platform: &str) -> IconName {
         "Docker" => IconName::Box,
         _ => IconName::Public,
     }
+}
+
+fn yes_no(value: bool) -> &'static str {
+    if value { "yes" } else { "no" }
 }
 
 fn check_score_state(snapshot: &DxCheckScoreSnapshot, cx: &App) -> AnyElement {

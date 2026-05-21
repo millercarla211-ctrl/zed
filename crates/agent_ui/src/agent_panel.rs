@@ -43,6 +43,7 @@ use crate::dx_launch_prompts::{
     source_action_icon, source_action_label, source_action_prompt, source_action_title,
     source_receipt_review_prompt,
 };
+use crate::dx_launch_status::launch_status_snapshot;
 use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, DxSourceRowControl, receipt_snapshot, render_workspace_chrome,
 };
@@ -5723,6 +5724,7 @@ impl AgentPanel {
         let can_create_entries = self.has_open_project(cx);
         let review_receipts_prompt = receipt_review_prompt(
             &status.receipt_snapshot,
+            &status.launch_status,
             &status.tool_history,
             &status.proof_freshness,
             &status.deploy_targets,
@@ -6181,6 +6183,7 @@ impl AgentPanel {
         let visible_worktree_count = self.project.read(cx).visible_worktrees(cx).count();
 
         let receipt_snapshot = receipt_snapshot();
+        let launch_status = launch_status_snapshot();
         let agent_bridge = dx_agent_bridge_snapshot(cx);
         let receipt_file_count = receipt_snapshot
             .buckets
@@ -6237,6 +6240,7 @@ impl AgentPanel {
             background_task_count: self.retained_threads.len(),
             visible_worktree_count,
             agent_bridge,
+            launch_status,
             receipt_snapshot,
             source_sets,
             tool_history,
