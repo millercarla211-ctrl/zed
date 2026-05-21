@@ -22,6 +22,7 @@ IN PROGRESS:
 - Immediate next target: keep restore-to-target mutation deferred until manual preview/rollback proof is ready, reconcile the upstream DX-WWW source audit, then use the governed runtime proof plan/import path, Launch Gate/Audit/Source Audit handoffs, and Import Proof handoff to close the final launch proof gap without running heavy validation in this lane.
 
 COMPLETED:
+- DX Studio edit-contract parser hardening: Web Preview now requires explicit DX Studio manifest or operation metadata before marking edit surfaces as write-capable or source-owned, keeping missing write-policy fields conservative before runtime proof.
 - DX Studio write-contract metadata hardening: Web Preview session snapshots now mark whether the source-owned edit contract is loaded and keep write-file readiness false until a real DX-WWW edit manifest exists.
 - DX Agents public row-action metadata: Zed now preserves and validates `public_command` / `public_refresh_command` from social and automation row descriptors, requires those fields to advertise the public root `dx agents ...` bridge, falls back from runtime-owned `dx-agents ...` commands to public `dx agents ...` metadata when older receipts omit the fields, surfaces the public command metadata in prompts/rails, and still executes only fixed typed bridge command variants.
 - DX Agents social row-action validation hardening: rendered social connect/disconnect action descriptors now require a safe `--platform` token before Zed accepts the row metadata, matching the executable bridge's platform guard.

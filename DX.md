@@ -35,6 +35,7 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 
 ## Current Worker Update
 
+- Tightened DX Studio edit-contract parsing so Web Preview requires explicit manifest or operation metadata before marking an edit surface as write-capable or source-owned; missing fields now stay conservative while normal Web Preview behavior and the no-node-modules default remain unchanged.
 - Tightened DX Studio Web Preview session metadata so missing source-owned edit contracts no longer advertise write-file readiness; the session snapshot now marks edit contract loaded state explicitly and keeps mutation fields false until a real manifest is present.
 - Aligned DX Agents row-action parsing with the latest bridge contract: Zed now carries and validates `public_command` / `public_refresh_command` metadata for social and automation rows, requires those fields to advertise the public root `dx agents ... --json` bridge, uses the public command metadata in prompts and rail summaries, and still executes only typed fixed command variants.
 - Tightened DX Agents social row-action metadata validation: Zed now only accepts rendered `dx agents social connect/disconnect --platform ... --json` action descriptors when the platform token passes the same safe platform rule as executable bridge actions.
@@ -139,6 +140,7 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 
 ## Remaining Proof
 
+- The DX Studio edit-contract parser hardening has formatting/diff/conflict/source-reference validation only so far; live WebView diagnostics and DX-WWW manifest producer proof remain deferred under the repo's launch validation rules.
 - The DX onboarding and DX Studio Web Preview contracts have diff/conflict/source-level validation only so far; live route opening, hot-reload timing, Cargo checks, `just run`, and local server proof remain deferred under the repo's launch validation rules.
 - The DX Studio edit/drag manifest, public edit-operation contract, and public-manifest field compatibility slice has diff/conflict/source-level validation only so far; live page marker proof, drag/drop runtime behavior, Cargo checks, `just run`, and DX-WWW CLI producer proof remain deferred under the repo's launch validation rules.
 - The DX Studio session module split has formatting/diff/conflict/source-reference validation only so far; Cargo checks, `just run`, and runtime WebView proof remain deferred under the repo's launch validation rules.

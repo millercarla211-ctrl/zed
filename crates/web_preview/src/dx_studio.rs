@@ -297,7 +297,7 @@ pub fn edit_contract_summary(root: &Path) -> Option<DxStudioEditContractSummary>
                 .or_else(|| {
                     operation_bool_any(contract, "operations", &["writes_files", "writesFiles"])
                 })
-                .unwrap_or(true),
+                .unwrap_or(false),
             writes_only_source_owned_files: bool_for_keys(
                 contract,
                 &[
@@ -306,7 +306,18 @@ pub fn edit_contract_summary(root: &Path) -> Option<DxStudioEditContractSummary>
                     "sourceOwned",
                 ],
             )
-            .unwrap_or(true),
+            .or_else(|| {
+                operation_bool_all(
+                    contract,
+                    "operations",
+                    &[
+                        "writes_only_source_owned_files",
+                        "writesOnlySourceOwnedFiles",
+                        "sourceOwned",
+                    ],
+                )
+            })
+            .unwrap_or(false),
             requires_node_modules: bool_for_keys(
                 contract,
                 &["requires_node_modules", "requiresNodeModules"],
@@ -672,6 +683,23 @@ fn operation_bool_any(value: &Value, key: &str, field_keys: &[&str]) -> Option<b
             .iter()
             .any(|operation| bool_for_keys(operation, field_keys).unwrap_or(false))
     })
+}
+
+fn operation_bool_all(value: &Value, key: &str, field_keys: &[&str]) -> Option<bool> {
+    let operations = value.get(key).and_then(Value::as_array)?;
+    if operations.is_empty() {
+        return None;
+    }
+
+    for operation in operations {
+        match bool_for_keys(operation, field_keys) {
+            Some(true) => {}
+            Some(false) => return Some(false),
+            None => return None,
+        }
+    }
+
+    Some(true)
 }
 
 fn selector_marker_values(value: &Value, key: &str) -> Vec<String> {
