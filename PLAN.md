@@ -6,9 +6,62 @@ Primary repo: `G:\Zed`
 Canonical DX hub: `G:\Dx`
 Supporting DX tools: `G:\Dx\www`, `G:\Dx\cli`, `G:\Dx\dx-agents`, `G:\WWW`, `G:\Workspaces\flow`
 
+## Current Launch Plan Snapshot
+
+This is the current source of truth while the launch plan is still being discussed and refined.
+
+DX should launch as a native Zed-based AI editor that connects five proof points into one product:
+
+- a beautiful first-run onboarding powered by Web Preview and DX WWW,
+- a Forge-native web/app creation stack with React ecosystem gems converted into small source-owned packages,
+- a full-width AI workspace with Sources, Agent actions, Progress, Git, Background Tasks, receipts, and token/tool meters,
+- premium-provider first-run routing for impressive first outputs, followed by the local llama.cpp speed and cost moat,
+- safe native tools for browser/check workflows, media, Forge backup/restore, serializer/RLM context reduction, metasearch, and deploy proof.
+
+The launch demo should flow like this:
+
+1. Open DX and show the custom onboarding instead of the default Zed onboarding.
+2. Detect existing AI provider readiness without exposing secrets, then let the user explicitly import or skip.
+3. Use the strongest approved remote model for the first visible wow task: Remotion-style video, 3D web scene, browser visual check, or agent automation.
+4. Open the DX WWW / Forge launch template in Web Preview to show auth, state, query, forms, i18n, UI, markdown/MDX, payment, AI, 3D, and WebAssembly readiness.
+5. Open the full DX editor workspace to show the real developer advantage: Sources on the left, AI/Agent work in the center, and Progress/Git/Background Tasks on the right.
+6. Show the deeper moat after the first wow moment: direct local llama.cpp execution, provider freedom, Forge safety, RLM/token savings, serializer receipts, and native Zed performance.
+
+The pre-launch build order is:
+
+1. Lock the plan and worker prompts so every parallel chat is aligned.
+2. Make onboarding the main first-run experience.
+3. Add provider readiness/import cards with explicit approval and skip controls.
+4. Wire onboarding demo actions to the existing Web Preview, DX WWW launch template, AI workspace, Agent, and Check/browser proof surfaces.
+5. Add only cheap delight polish before launch: subtle hue glow and optional sound cues. Defer any global rainbow cursor until profiling proves it is safe.
+6. Run one final governed runtime proof after the launch flow is stitched.
+
+Do not chase these before the launch demo unless the core flow is already proven: a full Chrome-control plugin, full enterprise credential migration, global animated cursor effects, restore-to-target mutation, or broad rebuild/test loops.
+
 ## May 22 Launch Sprint Orchestration
 
 Tomorrow's launch goal is to make DX feel like one coherent product: a native Zed-based code editor, DX-WWW and Forge for fast app creation, DX Agents for automation and social workflows, and token-efficient local/remote AI tooling that feels faster and more responsible than the current Electron-heavy editor market.
+
+### Launch Onboarding And Provider Strategy
+
+The first-run DX onboarding should win trust and excitement before explaining the deeper local-runtime moat. Wealthy and early power users often judge AI products by whether they can immediately create impressive outputs: videos, 3D scenes, web apps, browser automations, and agent workflows. For launch, DX should therefore lead with visible capability and use the strongest approved model path available.
+
+The onboarding strategy is:
+
+- Show a beautiful DX onboarding instead of the default Zed onboarding.
+- Use Web Preview as the hero canvas for a polished DX WWW / Forge launch experience.
+- Include first-run demo actions for Remotion-style video creation, 3D art/web scenes, browser visual checks, and agent workspace automation.
+- Detect existing provider readiness from Zed settings, DX catalog auth profiles, OpenCode/OpenClaw-style config markers, environment key names, and known provider setup locations.
+- Never display raw API keys or secrets.
+- Never silently import or use another application's credentials.
+- Show detected providers as readiness cards with source, provider, status, and an explicit `Import to DX` or `Use in DX` action.
+- Store approved credentials through the existing Zed/GPUI credential provider and system keychain path.
+- If no provider is ready, show manual inputs for OpenAI, Anthropic, OpenRouter, OpenAI-compatible, and OpenCode-compatible providers.
+- Keep a `Skip` action visible on every onboarding step so users can enter the editor immediately.
+
+For first launch routing, DX should prefer the strongest approved remote provider for the first demo task, because that gives the highest chance of an impressive first output. After that, the product should reveal the deeper DX advantage: direct local llama.cpp execution, provider freedom, Forge safety, RLM/token efficiency, serializer receipts, browser/check automation, and native Zed performance.
+
+The onboarding must make the security posture part of the product trust story: DX can discover setup readiness, but the user stays in control of credential import and model execution.
 
 The sprint should be split across parallel Codex Desktop GPT-5.5 Extra High chats. Each worker should write real code first, inspect the obvious integration errors by reading, and only run lightweight checks at coherent milestones. Repeated full builds are not allowed during the sprint because the product needs more implementation time than rebuild time.
 
