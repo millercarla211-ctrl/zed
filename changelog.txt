@@ -8,6 +8,15 @@ ADDED:
 NOTES:
 - This slice is file/watch/manifest architecture only. It does not start servers, run Cargo, run `just run`, execute DX CLI commands, or mutate browser profiles.
 
+[2026-05-21] - DX Onboarding Preview Target Selection
+
+CHANGED:
+- The DX onboarding hero now prefers launchable `G:\WWW\www` pages on first paint before falling back to the bundled 3D page, using a fixed local candidate order and ignoring missing or empty files.
+- The `Load G:\WWW` action now reloads the same detected DX WWW target instead of relying on a single hard-coded demo file.
+
+NOTES:
+- This slice only changes local target selection. It does not start servers, run Cargo, run `just run`, execute DX CLI commands, download assets, or import secrets.
+
 [2026-05-21] - DX Agents Release Gate Readiness
 
 ADDED:
@@ -66,7 +75,7 @@ NOTES:
 
 ADDED:
 - Added a DX launch onboarding hero that hosts the real Web Preview view as the primary canvas.
-- Added an explicit `DX_ONBOARDING_PREVIEW_URL` hook, a detected `G:\WWW\www\demo\index.html` target action, and a bundled original animated 3D fallback page.
+- Added an explicit `DX_ONBOARDING_PREVIEW_URL` hook, a detected `G:\WWW\www` target action, and a bundled original animated 3D fallback page.
 
 CHANGED:
 - The onboarding first impression now opens with DX launch copy, skip actions, provider settings, Agent panel routing, and Web Preview target switching while preserving the existing setup page below.

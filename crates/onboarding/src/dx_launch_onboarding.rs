@@ -1,7 +1,16 @@
 use std::{env, path::PathBuf};
 
 const DX_ONBOARDING_PREVIEW_URL_ENV: &str = "DX_ONBOARDING_PREVIEW_URL";
-const DX_WWW_DEMO_PATH: &str = r"G:\WWW\www\demo\index.html";
+const DX_WWW_ROOT: &str = r"G:\WWW\www";
+const DX_WWW_PREVIEW_CANDIDATES: &[(&str, &str)] = &[
+    (r"demo\demo_full.html", "DX WWW framework demo"),
+    (r"demo\todo.html", "DX WWW app demo"),
+    (
+        r"dx-www\tests\fixtures\forge-pages\forge-site.html",
+        "DX Forge launch evidence",
+    ),
+    (r"demo\index.html", "DX WWW fair counter"),
+];
 const FALLBACK_HTML: &str = include_str!("../assets/dx-launch-fallback.html");
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,10 +36,11 @@ impl DxLaunchPreviewTargets {
         };
 
         let explicit_preview = explicit_preview_target();
-        let dx_www = explicit_preview
+        let dx_www = dx_www_preview_target();
+        let primary = explicit_preview
             .clone()
-            .or_else(|| file_target(PathBuf::from(DX_WWW_DEMO_PATH), "DX WWW demo"));
-        let primary = explicit_preview.unwrap_or_else(|| fallback.clone());
+            .or_else(|| dx_www.clone())
+            .unwrap_or_else(|| fallback.clone());
 
         Self {
             primary,
@@ -40,7 +50,7 @@ impl DxLaunchPreviewTargets {
     }
 
     pub fn missing_dx_www_detail(&self) -> &'static str {
-        "Set DX_ONBOARDING_PREVIEW_URL or add G:\\WWW\\www\\demo\\index.html to enable the DX WWW target."
+        "Set DX_ONBOARDING_PREVIEW_URL or add a launchable G:\\WWW\\www demo page to enable the DX WWW target."
     }
 }
 
@@ -63,7 +73,8 @@ fn explicit_preview_target() -> Option<DxLaunchPreviewTarget> {
 }
 
 fn file_target(path: PathBuf, title: &str) -> Option<DxLaunchPreviewTarget> {
-    if !path.exists() {
+    let metadata = path.metadata().ok()?;
+    if !metadata.is_file() || metadata.len() == 0 {
         return None;
     }
 
@@ -72,6 +83,13 @@ fn file_target(path: PathBuf, title: &str) -> Option<DxLaunchPreviewTarget> {
         detail: path.display().to_string(),
         url: file_url(&path),
     })
+}
+
+fn dx_www_preview_target() -> Option<DxLaunchPreviewTarget> {
+    let root = PathBuf::from(DX_WWW_ROOT);
+    DX_WWW_PREVIEW_CANDIDATES
+        .iter()
+        .find_map(|(relative_path, title)| file_target(root.join(*relative_path), *title))
 }
 
 fn has_url_scheme(raw: &str) -> bool {
