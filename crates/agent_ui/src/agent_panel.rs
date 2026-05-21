@@ -113,6 +113,8 @@ const DX_RECEIPT_REVIEW_PROMPT: &str = "Inspect the current DX launch receipts f
 const DX_MEDIA_PROOF_PROMPT: &str = "Prepare the DX media proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"media\". Then review any produced-file proof cards in the Sources rail and guide me through the next safe step using permissioned tools only: plan_dx_media_tool, gate_dx_media_tool_runner, execute_dx_media_tool only after an approved runner gate, and prepare_dx_source_attachment for produced files. Do not run local servers, builds, browser input, shell commands, unmanaged file writes, or media execution until I explicitly approve the tool request.";
 const DX_FORGE_PROOF_PROMPT: &str = "Prepare the DX Forge proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"forge\" and inspect_dx_forge_history. Then guide me through the next safe receipt step for safety policy, backup runner gate, backup execution, restore preview, and restore receipt review. Do not mutate target paths, permanently delete files, run local servers, builds, shell commands, browser input, or restore-to-target actions unless I explicitly approve the governed tool request.";
 const DX_RUNTIME_PROOF_PROMPT: &str = "Prepare the DX runtime proof handoff for this workspace. Review the Check score, Proof Freshness rows, Deploy URL/status receipt buckets, deploy targets, and current launch receipts. Draft the next safe validation handoff only. Do not run just run, cargo, builds, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions unless I explicitly approve the governed tool request.";
+const DX_RESTORE_APPROVAL_PROMPT: &str = "Prepare a non-mutating DX Forge restore-to-target approval review for this workspace. Use inspect_dx_forge_history and visible restore-preview source rows to summarize the latest safety-policy, backup, backup-manifest, restore-preview, blockers, target path, overwrite risk, rollback evidence, and missing confirmations. Draft the exact approval checklist and governed tool request that would be required later, but do not mutate target paths, overwrite files, delete files, run shell commands, run local servers, or execute restore-to-target actions.";
+const DX_REDUCER_GUARD_PROMPT: &str = "Prepare a DX serializer/RLM reducer execution guard review for this workspace. Review metasearch source packs, source attachments, context bundles, execution-plan receipts, runner-gate receipts, reduced-context receipts, citation coverage, token budget, and model-call approval state. Draft the next governed approval checklist only. Do not run external serializer/RLM crates, cargo, model calls, local servers, browser input, shell commands, or unmanaged file writes.";
 
 /// Maximum number of idle threads kept in the agent panel's retained list.
 /// Set as a GPUI global to override; otherwise defaults to 5.
@@ -5946,6 +5948,28 @@ impl AgentPanel {
                 "Review Check score, proof freshness, and deploy URL/status gates.",
                 "Draft Proof",
                 DX_RUNTIME_PROOF_PROMPT,
+                can_create_entries,
+                cx,
+            ))
+            .child(self.dx_launch_guided_card(
+                "dx-restore-approval-card",
+                "dx-restore-approval-action",
+                IconName::FileLock,
+                "Restore Approval",
+                "Draft restore-to-target checks without mutating live paths.",
+                "Draft Approval",
+                DX_RESTORE_APPROVAL_PROMPT,
+                can_create_entries,
+                cx,
+            ))
+            .child(self.dx_launch_guided_card(
+                "dx-reducer-guard-card",
+                "dx-reducer-guard-action",
+                IconName::ListTodo,
+                "Reducer Guard",
+                "Review serializer/RLM gates before any external reducer run.",
+                "Draft Guard",
+                DX_REDUCER_GUARD_PROMPT,
                 can_create_entries,
                 cx,
             ))

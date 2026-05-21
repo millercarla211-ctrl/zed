@@ -35,7 +35,7 @@ pub(crate) fn source_action_prompt(source: &DxSourceItem) -> String {
             source.path
         ),
         DxSourceKind::ReducedContextReceipt => format!(
-            "Review this reduced-context receipt for the DX launch flow: `{}`. Summarize the selected sources, token budget, reducer status, and missing proof steps. Do not run external serializer/RLM code or model calls.",
+            "Review this reduced-context receipt for the DX launch flow: `{}`. Summarize the selected sources, token budget, reducer status, citation coverage, runner-gate readiness, model-call approval state, and missing proof steps. Draft the serializer/RLM execution guard only; do not run external serializer/RLM code or model calls.",
             source.path
         ),
         DxSourceKind::MediaOutput => {
@@ -53,7 +53,7 @@ pub(crate) fn source_action_prompt(source: &DxSourceItem) -> String {
             )
         }
         DxSourceKind::ForgeRestorePreview => format!(
-            "Review this Forge restore preview source: `{}`. Use inspect_dx_forge_history and prepare_dx_source_attachment as needed, summarize any restore warnings, and do not mutate target paths, overwrite files, delete files, or run restore-to-target actions.",
+            "Review this Forge restore preview source: `{}`. Use inspect_dx_forge_history and prepare_dx_source_attachment as needed, summarize restore warnings, target path, overwrite risk, rollback evidence, and required restore-to-target approvals. Draft the approval checklist only; do not mutate target paths, overwrite files, delete files, or run restore-to-target actions.",
             source.path
         ),
     }

@@ -1,3 +1,15 @@
+[2026-05-21] - DX Restore Approval And Reducer Guard Handoffs
+
+ADDED:
+- Added right-rail Restore Approval and Reducer Guard cards that draft permission-safe Agent handoffs for restore-to-target approval review and serializer/RLM reducer execution guard checks.
+- Added restore-preview and reduced-context source action prompt wording that asks for approval evidence, runner-gate readiness, citation coverage, and risk summaries before any mutation or external reducer run.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 90/100 and move the next target to governed runtime proof import/status surfaces.
+
+NOTES:
+- This slice drafts checklists only. It does not mutate target paths, overwrite files, delete files, run local servers, builds, browser input, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Deploy URL Status And Runtime Proof Handoff
 
 ADDED:

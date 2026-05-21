@@ -57,7 +57,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Added Deploy rail receipt buckets for readiness, env, logs, and rollback under `tools/dx-deploy`, with compact missing/fresh/stale/old states and safer deploy-readiness prompts that include the bucket summary.
 - Added validation and visual proof freshness rows backed by managed workspace proof roots, plus produced-file proof lines for media outputs from execution receipts.
 - Added URL/status deploy receipt buckets plus a Runtime Proof handoff card that drafts the next safe validation plan from Check score, proof freshness, deploy target, and receipt state without running tools.
-- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 88/100; the next highest-value target is a non-mutating restore-to-target approval review skeleton plus serializer/RLM reducer execution guardrails.
+- Added Restore Approval and Reducer Guard handoff cards plus sharper source prompts for restore-preview and reduced-context receipt rows.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 90/100; the next highest-value target is governed runtime proof import/status surfaces before any external reducer execution or live restore mutation.
 
 ## Remaining Proof
 
@@ -74,3 +75,4 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - The deploy receipt bucket slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
 - The proof freshness and produced-file card slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
 - The deploy URL/status and runtime-proof handoff slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
+- The restore approval and reducer guard handoff slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
