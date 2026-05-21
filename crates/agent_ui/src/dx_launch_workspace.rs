@@ -645,15 +645,23 @@ fn proof_freshness_bucket_row(
         .px_1()
         .py_0p5()
         .bg(cx.theme().colors().element_background)
-        .child(metric_row(bucket.label, state));
-
-    if let Some(label) = bucket.latest.first() {
-        stack = stack.child(
-            Label::new(label.clone())
+        .child(metric_row(bucket.label, state))
+        .child(
+            Label::new(bucket.description)
                 .size(LabelSize::XSmall)
                 .color(Color::Muted)
                 .truncate(),
         );
+
+    if !bucket.latest.is_empty() {
+        for label in bucket.latest.iter().take(2) {
+            stack = stack.child(
+                Label::new(label.clone())
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            );
+        }
     } else if !bucket.root_exists {
         stack = stack.child(
             Label::new(bucket.root_label)

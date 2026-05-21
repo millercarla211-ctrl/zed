@@ -18,6 +18,7 @@ pub(crate) struct DxProofFreshnessSnapshot {
 #[derive(Clone)]
 pub(crate) struct DxProofFreshnessBucket {
     pub label: &'static str,
+    pub description: &'static str,
     pub root_label: &'static str,
     pub root_exists: bool,
     pub count: usize,
@@ -78,6 +79,7 @@ fn scan_proof_freshness(workspace_roots: &[String]) -> DxProofFreshnessSnapshot 
     let buckets = vec![
         proof_bucket(
             "Validation",
+            "Check and validation receipts",
             "tools/agent-plugins/browser-final-validation",
             &[
                 "tools/agent-plugins/browser-final-validation",
@@ -88,6 +90,7 @@ fn scan_proof_freshness(workspace_roots: &[String]) -> DxProofFreshnessSnapshot 
         ),
         proof_bucket(
             "Visual Proof",
+            "Panel and screenshot proof",
             "tools/agent-plugins/browser-panel-control-results",
             &[
                 "tools/agent-plugins/browser-panel-control-results",
@@ -98,12 +101,14 @@ fn scan_proof_freshness(workspace_roots: &[String]) -> DxProofFreshnessSnapshot 
         ),
         proof_bucket(
             "Runtime Plan",
+            "Checklist only, not runtime proof",
             "tools/dx-runtime-proof/plans",
             &["tools/dx-runtime-proof/plans"],
             &workspace_roots,
         ),
         proof_bucket(
             "Runtime Proof",
+            "Imported runtime evidence",
             "tools/dx-runtime-proof/imports",
             &[
                 "tools/dx-runtime-proof/imports",
@@ -120,6 +125,7 @@ fn scan_proof_freshness(workspace_roots: &[String]) -> DxProofFreshnessSnapshot 
 
 fn proof_bucket(
     label: &'static str,
+    description: &'static str,
     root_label: &'static str,
     relative_roots: &[&'static str],
     workspace_roots: &[PathBuf],
@@ -145,6 +151,7 @@ fn proof_bucket(
 
     DxProofFreshnessBucket {
         label,
+        description,
         root_label,
         root_exists,
         count,

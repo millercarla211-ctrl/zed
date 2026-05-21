@@ -1,3 +1,13 @@
+[2026-05-21] - DX Proof Freshness Drilldowns
+
+CHANGED:
+- Proof Freshness buckets now show concise descriptions for validation, visual proof, runtime plan, and imported runtime proof lanes.
+- Proof Freshness rows now render up to two latest receipt paths instead of hiding the second scanned receipt.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 99.7/100.
+
+NOTES:
+- This slice is panel rendering only. It does not run `just run`, Cargo, local servers, browser automation, deploys, shell commands, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Runtime Proof Plan Visibility
 
 CHANGED:
