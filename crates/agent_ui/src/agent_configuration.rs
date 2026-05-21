@@ -51,7 +51,8 @@ use crate::{
     agent_connection_store::{AgentConnectionStatus, AgentConnectionStore},
     dx_agent_bridge::{
         DxAgentBridgeSnapshot, dx_agent_bridge_snapshot, dx_agent_cli_actions_allowed,
-        dx_agent_cli_path, dx_agent_dx_home, run_dx_agent_command,
+        dx_agent_cli_path, dx_agent_dx_home, dx_agent_receipt_root, run_dx_agent_command,
+        run_dx_agent_import_summary_command,
     },
 };
 
@@ -225,6 +226,18 @@ impl AgentConfiguration {
                     })),
             )
             .child(
+                Button::new("dx-agents-import-summary", "Summary")
+                    .style(ButtonStyle::Outlined)
+                    .label_size(LabelSize::Small)
+                    .disabled(!actions_allowed)
+                    .on_click(cx.listener(|this, _, _window, cx| {
+                        this.run_dx_agents_metadata_action(
+                            vec!["agents", "import-summary", "--json"],
+                            cx,
+                        );
+                    })),
+            )
+            .child(
                 Button::new("dx-agents-social-list", "Social")
                     .style(ButtonStyle::Outlined)
                     .label_size(LabelSize::Small)
@@ -267,6 +280,7 @@ impl AgentConfiguration {
                     .gap_2()
                     .child(self.render_dx_agents_status_item(&snapshot, cx))
                     .child(self.render_dx_agents_contract_item(&snapshot, cx))
+                    .child(self.render_dx_agents_import_summary_item(&snapshot, cx))
                     .child(self.render_dx_agents_social_items(&snapshot, cx))
                     .child(self.render_dx_agents_catalog_items(&snapshot, cx)),
             )
@@ -384,6 +398,88 @@ impl AgentConfiguration {
                 Label::new(format!("Next: {}", summary.next_action))
                     .size(LabelSize::Small)
                     .color(Color::Muted),
+            );
+        }
+
+        stack.into_any_element()
+    }
+
+    fn render_dx_agents_import_summary_item(
+        &self,
+        snapshot: &DxAgentBridgeSnapshot,
+        _cx: &Context<Self>,
+    ) -> impl IntoElement {
+        let summary = &snapshot.import_summary;
+        let status = if !summary.present
+            || summary.release_gate_failed_count > 0
+            || !summary.no_command_fanout
+        {
+            AiSettingItemStatus::Stopped
+        } else if summary.release_gate_warning_count > 0 || summary.status == "warning" {
+            AiSettingItemStatus::Starting
+        } else {
+            AiSettingItemStatus::Running
+        };
+        let mut stack = v_flex().gap_1().child(
+            AiSettingItem::new(
+                "dx-agents-import-summary",
+                "Import Summary",
+                status,
+                AiSettingItemSource::Custom,
+            )
+            .icon(
+                Icon::new(IconName::FileTextOutlined)
+                    .size(IconSize::Small)
+                    .color(Color::Muted),
+            )
+            .detail_label(format!(
+                "release {}, action map {}, {} action(s), freshness {}",
+                summary.release_gate_status,
+                summary.action_map_status,
+                summary.action_count,
+                summary.freshness_state
+            )),
+        );
+
+        if !summary.present {
+            stack = stack.child(
+                Label::new("No import summary receipt yet. Run the Summary action.")
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        } else if !summary.operator_summary.is_empty() {
+            stack = stack.child(
+                Label::new(summary.operator_summary.clone())
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        }
+
+        if let Some(reason) = summary.blocking_reasons.first() {
+            stack = stack.child(
+                Label::new(format!("Blocked: {reason}"))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        } else if let Some(reason) = summary.warning_reasons.first() {
+            stack = stack.child(
+                Label::new(format!("Warning: {reason}"))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        } else if summary.present {
+            let states = if summary.recovery_states.is_empty() {
+                "none".to_string()
+            } else {
+                summary.recovery_states.join(", ")
+            };
+            stack = stack.child(
+                Label::new(format!(
+                    "Recovery: {} via {}, states {}",
+                    summary.recovery_controls_status, summary.recovery_render_first, states
+                ))
+                .size(LabelSize::Small)
+                .color(Color::Muted),
             );
         }
 
@@ -532,10 +628,7 @@ impl AgentConfiguration {
                         .icon_size(IconSize::Small)
                         .tooltip(Tooltip::text("Refresh DX model receipt"))
                         .on_click(cx.listener(|this, _, _window, cx| {
-                            this.run_dx_agents_bridge_action(
-                                vec!["models", "list", "--json"],
-                                cx,
-                            );
+                            this.run_dx_agents_bridge_action(vec!["models", "list", "--json"], cx);
                         })),
                 )
                 .action(
@@ -605,6 +698,42 @@ impl AgentConfiguration {
             this.update(cx, |_this, cx| {
                 if let Err(error) = result {
                     log::warn!("DX Agents bridge action failed: {error}");
+                }
+                cx.notify();
+            })
+            .log_err();
+        })
+        .detach();
+    }
+
+    fn run_dx_agents_metadata_action<T>(&mut self, args: Vec<T>, cx: &mut Context<Self>)
+    where
+        T: Into<String>,
+    {
+        if !dx_agent_cli_actions_allowed(cx) {
+            return;
+        }
+
+        let args = args.into_iter().map(Into::into).collect::<Vec<_>>();
+        if args.len() != 3
+            || args[0] != "agents"
+            || args[1] != "import-summary"
+            || args[2] != "--json"
+        {
+            log::warn!("Unsupported DX Agents metadata action: {}", args.join(" "));
+            return;
+        }
+
+        let dx_home = dx_agent_dx_home(cx);
+        let receipt_root = dx_agent_receipt_root(cx);
+        let task = cx.background_spawn(async move {
+            run_dx_agent_import_summary_command(dx_home, receipt_root)
+        });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            this.update(cx, |_this, cx| {
+                if let Err(error) = result {
+                    log::warn!("DX Agents metadata action failed: {error}");
                 }
                 cx.notify();
             })

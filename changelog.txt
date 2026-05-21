@@ -1,3 +1,16 @@
+[2026-05-21] - DX Agents Import Summary Readiness
+
+ADDED:
+- Added a fixed `dx agents import-summary --json` metadata action in Agent Configuration that validates stdout JSON and caches it as the latest agents import-summary receipt without routing it through the live `dx-agents` bridge command path.
+- Added redacted import-summary receipt parsing for release gates, action maps, recovery controls, freshness, command-fanout posture, warnings/blockers, and recovery commands.
+- Surfaced import-summary status in the DX launch right rail beside the existing DX Agents bridge-contract and provider catalog state.
+
+CHANGED:
+- Updated DX launch notes so the metadata-only import-summary path is tracked separately from live `dx-agents` command proof.
+
+NOTES:
+- This slice reads metadata receipts and runs only the explicit `dx agents import-summary --json` action on user click. It does not import secrets, start `dx-agents`, run provider calls, start local servers, or run Cargo/`just run` validation.
+
 [2026-05-21] - DX Agents Bridge Rails
 
 ADDED:

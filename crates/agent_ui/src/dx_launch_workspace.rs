@@ -340,7 +340,10 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
                 "fallback".to_string()
             },
         ))
-        .child(metric_row("Contract", snapshot.contract_summary.status.clone()))
+        .child(metric_row(
+            "Contract",
+            snapshot.contract_summary.status.clone(),
+        ))
         .child(metric_row(
             "Commands",
             snapshot.contract_summary.command_count.to_string(),
@@ -364,6 +367,39 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
             } else {
                 snapshot.contract_summary.redaction_summary.clone()
             },
+        ))
+        .child(metric_row("Import", snapshot.import_summary.status.clone()))
+        .child(metric_row(
+            "Release",
+            format!(
+                "{} / {} warning(s) / {} blocker(s)",
+                snapshot.import_summary.release_gate_status,
+                snapshot.import_summary.release_gate_warning_count,
+                snapshot.import_summary.release_gate_failed_count
+            ),
+        ))
+        .child(metric_row(
+            "Action Map",
+            format!(
+                "{} / {} action(s)",
+                snapshot.import_summary.action_map_status, snapshot.import_summary.action_count
+            ),
+        ))
+        .child(metric_row(
+            "Recovery",
+            format!(
+                "{} / {} fixture(s)",
+                snapshot.import_summary.recovery_controls_status,
+                snapshot.import_summary.recovery_fixture_count
+            ),
+        ))
+        .child(metric_row(
+            "Command Fanout",
+            if snapshot.import_summary.no_command_fanout {
+                "none".to_string()
+            } else {
+                "review".to_string()
+            },
         ));
 
     if !snapshot.enabled {
@@ -375,6 +411,9 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
         ));
     } else if !snapshot.contract_summary.present {
         stack = stack.child(muted_card("Run dx-agents agents contract --json", cx));
+    }
+    if snapshot.enabled && snapshot.root_exists && !snapshot.import_summary.present {
+        stack = stack.child(muted_card("Run dx agents import-summary --json", cx));
     }
 
     if let Some(receipt) = snapshot.latest_receipts.first() {
@@ -388,8 +427,33 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
             snapshot.contract_summary.safe_regeneration_command.clone(),
         ));
     }
+    if let Some(command) = snapshot.import_summary.recovery_commands.first() {
+        stack = stack.child(metric_row("Import Command", command.clone()));
+    }
 
-    if snapshot.contract_summary.redaction_requires_review {
+    if let Some(reason) = snapshot.import_summary.blocking_reasons.first() {
+        stack = stack.child(signal_row(
+            "dx-agent-import-summary-blocker".into(),
+            IconName::Warning,
+            Color::Warning,
+            format!("DX Agents import summary blocker: {reason}"),
+        ));
+    } else if snapshot.import_summary.present && !snapshot.import_summary.no_command_fanout {
+        stack = stack.child(signal_row(
+            "dx-agent-import-summary-fanout-review".into(),
+            IconName::Warning,
+            Color::Warning,
+            "DX Agents import summary reports command fanout; keep recovery controls disabled."
+                .to_string(),
+        ));
+    } else if let Some(reason) = snapshot.import_summary.warning_reasons.first() {
+        stack = stack.child(signal_row(
+            "dx-agent-import-summary-warning".into(),
+            IconName::Warning,
+            Color::Warning,
+            format!("DX Agents import summary warning: {reason}"),
+        ));
+    } else if snapshot.contract_summary.redaction_requires_review {
         stack = stack.child(signal_row(
             "dx-agent-contract-redaction-review".into(),
             IconName::Warning,
@@ -404,7 +468,9 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
             error.clone(),
         ));
     } else {
-        let next_action = if snapshot.contract_summary.present {
+        let next_action = if snapshot.import_summary.present {
+            snapshot.import_summary.next_action.clone()
+        } else if snapshot.contract_summary.present {
             snapshot.contract_summary.next_action.clone()
         } else {
             snapshot.next_action.clone()

@@ -3,7 +3,7 @@ use std::{
     fs::{self, File},
     io::Read,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Output},
     sync::{Mutex, OnceLock},
     time::{Duration, Instant, SystemTime},
 };
@@ -14,6 +14,7 @@ use serde_json::Value;
 use settings::SettingsStore;
 
 const DEFAULT_DX_AGENTS_CLI: &str = "dx-agents";
+const DEFAULT_DX_CLI: &str = "dx";
 const DEFAULT_AGENT_RECEIPT_ROOT: &str = r"G:\Dx\.dx\receipts\agents";
 const DEFAULT_PROVIDER_CATALOG_PATH: &str = r"G:\Dx\.dx\catalog\agents\provider-model-catalog.rkyv";
 const SNAPSHOT_CACHE_TTL: Duration = Duration::from_secs(5);
@@ -38,6 +39,7 @@ pub(crate) struct DxAgentBridgeSnapshot {
     pub models: Vec<DxAgentModel>,
     pub catalog: DxAgentCatalogSummary,
     pub contract_summary: DxAgentContractSummary,
+    pub import_summary: DxAgentImportSummary,
     pub latest_receipts: Vec<String>,
     pub show_managed_providers: bool,
     pub show_in_agent_rail: bool,
@@ -121,6 +123,28 @@ pub(crate) struct DxAgentContractSummary {
     pub receipt_notes: Vec<String>,
 }
 
+#[derive(Clone)]
+pub(crate) struct DxAgentImportSummary {
+    pub present: bool,
+    pub status: String,
+    pub operator_summary: String,
+    pub release_gate_status: String,
+    pub release_gate_warning_count: usize,
+    pub release_gate_failed_count: usize,
+    pub action_map_status: String,
+    pub action_count: usize,
+    pub no_command_fanout: bool,
+    pub recovery_controls_status: String,
+    pub recovery_render_first: String,
+    pub recovery_states: Vec<String>,
+    pub recovery_fixture_count: usize,
+    pub freshness_state: String,
+    pub next_action: String,
+    pub warning_reasons: Vec<String>,
+    pub blocking_reasons: Vec<String>,
+    pub recovery_commands: Vec<String>,
+}
+
 static SNAPSHOT_CACHE: OnceLock<Mutex<Option<(Instant, String, DxAgentBridgeSnapshot)>>> =
     OnceLock::new();
 
@@ -162,6 +186,10 @@ pub(crate) fn dx_agent_dx_home(cx: &App) -> Option<PathBuf> {
     dx_home_from_receipt_root(&dx_agent_settings(cx).receipt_root)
 }
 
+pub(crate) fn dx_agent_receipt_root(cx: &App) -> PathBuf {
+    dx_agent_settings(cx).receipt_root
+}
+
 pub(crate) fn dx_agent_cli_actions_allowed(cx: &App) -> bool {
     let settings = dx_agent_settings(cx);
     settings.enabled && settings.cli_actions_allowed
@@ -172,10 +200,36 @@ pub(crate) fn run_dx_agent_command(
     args: Vec<String>,
     dx_home: Option<PathBuf>,
 ) -> Result<()> {
-    run_bridge_command(cli_path, args, dx_home)
+    run_bridge_command(cli_path, args, dx_home).map(|_| ())
 }
 
-fn run_bridge_command(cli_path: String, args: Vec<String>, dx_home: Option<PathBuf>) -> Result<()> {
+pub(crate) fn run_dx_agent_import_summary_command(
+    dx_home: Option<PathBuf>,
+    receipt_root: PathBuf,
+) -> Result<()> {
+    let output = run_bridge_command(
+        DEFAULT_DX_CLI.to_string(),
+        vec![
+            "agents".to_string(),
+            "import-summary".to_string(),
+            "--json".to_string(),
+        ],
+        dx_home,
+    )?;
+    write_json_receipt(
+        &receipt_root.join("import-summary-latest.json"),
+        &output.stdout,
+        "dx.agents.zed.import_summary.v1",
+    )?;
+    clear_snapshot_cache();
+    Ok(())
+}
+
+fn run_bridge_command(
+    cli_path: String,
+    args: Vec<String>,
+    dx_home: Option<PathBuf>,
+) -> Result<Output> {
     if args.iter().any(|arg| is_secret_like_arg(arg)) {
         return Err(anyhow!(
             "DX Agents bridge commands cannot include secret-like arguments"
@@ -201,7 +255,53 @@ fn run_bridge_command(cli_path: String, args: Vec<String>, dx_home: Option<PathB
         ));
     }
 
+    Ok(output)
+}
+
+fn write_json_receipt(path: &Path, stdout: &[u8], expected_schema: &str) -> Result<()> {
+    if u64::try_from(stdout.len()).unwrap_or(u64::MAX) > MAX_RECEIPT_BYTES {
+        return Err(anyhow!("DX Agents metadata response is too large"));
+    }
+
+    let value: Value = serde_json::from_slice(stdout)
+        .context("DX Agents metadata command returned invalid JSON")?;
+    let schema_version = string_field(&value, &["schema_version"])
+        .ok_or_else(|| anyhow!("DX Agents metadata JSON is missing schema_version"))?;
+    if schema_version != expected_schema {
+        return Err(anyhow!(
+            "DX Agents metadata JSON schema mismatch: expected {expected_schema}, got {schema_version}"
+        ));
+    }
+
+    let parent = path
+        .parent()
+        .ok_or_else(|| anyhow!("DX Agents metadata receipt path has no parent"))?;
+    fs::create_dir_all(parent).with_context(|| {
+        format!(
+            "failed to create DX Agents metadata receipt directory `{}`",
+            parent.display()
+        )
+    })?;
+
+    let mut bytes =
+        serde_json::to_vec_pretty(&value).context("failed to serialize DX Agents metadata JSON")?;
+    bytes.push(b'\n');
+    fs::write(path, bytes).with_context(|| {
+        format!(
+            "failed to write DX Agents metadata receipt `{}`",
+            path.display()
+        )
+    })?;
+
     Ok(())
+}
+
+fn clear_snapshot_cache() {
+    if let Some(cache) = SNAPSHOT_CACHE.get() {
+        if let Ok(mut cache) = cache.lock() {
+            *cache = None;
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -259,6 +359,10 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
     let provider_value = read_json(&settings.receipt_root.join("providers-list-latest.json"));
     let model_value = read_json(&settings.receipt_root.join("models-list-latest.json"));
     let contract_value = read_first_json(&settings.receipt_root, &["contract-latest.json"]);
+    let import_summary_value = read_first_json(
+        &settings.receipt_root,
+        &["import-summary-latest.json", "import_summary-latest.json"],
+    );
 
     let status = status_value
         .as_ref()
@@ -333,6 +437,7 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
             settings.provider_catalog_path.clone(),
         ),
         contract_summary: contract_summary(contract_value.as_ref(), root_exists),
+        import_summary: import_summary(import_summary_value.as_ref(), root_exists),
         latest_receipts: latest_receipts(&settings.receipt_root, root_exists),
         show_managed_providers: settings.show_managed_providers,
         show_in_agent_rail: settings.show_in_agent_rail,
@@ -564,6 +669,83 @@ fn receipt_notes(value: Option<&Value>) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn import_summary(value: Option<&Value>, root_exists: bool) -> DxAgentImportSummary {
+    let release_gate = value.and_then(|value| value.get("release_gate"));
+    let action_map = value.and_then(|value| value.get("action_map"));
+    let recovery_controls = value.and_then(|value| value.get("recovery_controls"));
+    let freshness_policy = value.and_then(|value| value.get("freshness_policy"));
+    let status = value
+        .and_then(|value| string_field(value, &["status"]))
+        .unwrap_or_else(|| {
+            if root_exists {
+                "waiting_for_import_summary".to_string()
+            } else {
+                "missing_receipt_root".to_string()
+            }
+        });
+    let next_action = release_gate
+        .and_then(|value| string_field(value, &["next_action"]))
+        .or_else(|| action_map.and_then(|value| string_field(value, &["next_action"])))
+        .or_else(|| recovery_controls.and_then(|value| string_field(value, &["next_action"])))
+        .or_else(|| value.and_then(|value| string_field(value, &["next_action"])))
+        .unwrap_or_else(|| "dx agents import-summary --json".to_string());
+
+    DxAgentImportSummary {
+        present: value.is_some(),
+        status,
+        operator_summary: value
+            .and_then(|value| string_field(value, &["operator_summary"]))
+            .unwrap_or_default(),
+        release_gate_status: release_gate
+            .and_then(|value| string_field(value, &["status"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        release_gate_warning_count: release_gate
+            .and_then(|value| usize_field(value, &["warning_count"]))
+            .unwrap_or_default(),
+        release_gate_failed_count: release_gate
+            .and_then(|value| usize_field(value, &["failed_count"]))
+            .unwrap_or_default(),
+        action_map_status: action_map
+            .and_then(|value| string_field(value, &["status"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        action_count: action_map
+            .and_then(|value| usize_field(value, &["action_count"]))
+            .unwrap_or_default(),
+        no_command_fanout: value
+            .and_then(|value| bool_field(value, &["no_command_fanout"]))
+            .or_else(|| action_map.and_then(|value| bool_field(value, &["no_command_fanout"])))
+            .or_else(|| {
+                recovery_controls.and_then(|value| bool_field(value, &["no_command_fanout"]))
+            })
+            .unwrap_or(false),
+        recovery_controls_status: recovery_controls
+            .and_then(|value| string_field(value, &["status"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        recovery_render_first: recovery_controls
+            .and_then(|value| string_field(value, &["render_first"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        recovery_states: recovery_controls
+            .map(|value| string_array_field(value, &["states"]))
+            .unwrap_or_default(),
+        recovery_fixture_count: recovery_controls
+            .and_then(|value| usize_field(value, &["fixture_count"]))
+            .unwrap_or_default(),
+        freshness_state: freshness_policy
+            .and_then(|value| string_field(value, &["latest_freshness_state"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        next_action,
+        warning_reasons: release_gate
+            .map(|value| string_array_field(value, &["warning_reasons"]))
+            .unwrap_or_default(),
+        blocking_reasons: release_gate
+            .map(|value| string_array_field(value, &["blocking_reasons"]))
+            .unwrap_or_default(),
+        recovery_commands: value
+            .map(|value| string_values_field(value, &["recovery_commands"]))
+            .unwrap_or_default(),
+    }
 }
 
 fn read_json(path: &Path) -> Option<Value> {
