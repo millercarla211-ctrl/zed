@@ -44,6 +44,7 @@ mod dx_metasearch_status_tool;
 mod dx_metasearch_tool;
 mod dx_runtime_proof_import_tool;
 mod dx_serializer_rlm_execution_plan_tool;
+mod dx_serializer_rlm_execution_preview_tool;
 mod dx_serializer_rlm_reduced_context_tool;
 mod dx_serializer_rlm_runner_gate_tool;
 mod dx_source_attachment_tool;
@@ -146,6 +147,7 @@ pub use dx_metasearch_status_tool::*;
 pub use dx_metasearch_tool::*;
 pub use dx_runtime_proof_import_tool::*;
 pub use dx_serializer_rlm_execution_plan_tool::*;
+pub use dx_serializer_rlm_execution_preview_tool::*;
 pub use dx_serializer_rlm_reduced_context_tool::*;
 pub use dx_serializer_rlm_runner_gate_tool::*;
 pub use dx_source_attachment_tool::*;
@@ -283,6 +285,7 @@ tools! {
     DxMetasearchSourceExtractTool,
     DxMetasearchStatusTool,
     DxMetasearchTool,
+    DxSerializerRlmExecutionPreviewTool,
     DxSerializerRlmExecutionPlanTool,
     DxSerializerRlmReducedContextTool,
     DxSerializerRlmRunnerGateTool,

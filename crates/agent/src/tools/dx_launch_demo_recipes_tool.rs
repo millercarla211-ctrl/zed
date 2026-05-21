@@ -271,7 +271,7 @@ fn metasearch_to_context_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDem
         title: "Metasearch Sources To Serializer/RLM Context",
         priority: "primary",
         status: recipe_status(workspace_root),
-        intent: "Search DX metasearch, persist a cited source pack, attach the source pack through the Sources rail contract, compact it for serializer/RLM context, and produce approved execution, runner-gate, and reduced-context receipts.",
+        intent: "Search DX metasearch, persist a cited source pack, attach the source pack through the Sources rail contract, compact it for serializer/RLM context, and produce approved execution, runner-gate, reduced-context, and dry-run execution-preview receipts.",
         required_tools: vec![
             "inspect_dx_metasearch",
             "search_dx_metasearch",
@@ -280,6 +280,7 @@ fn metasearch_to_context_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDem
             "plan_dx_serializer_rlm_execution",
             "gate_dx_serializer_rlm_runner",
             "write_dx_serializer_rlm_reduced_context",
+            "preview_dx_serializer_rlm_reducer_execution",
         ],
         receipt_contracts: vec![
             "zed.dx.metasearch.source_pack_receipt.v1",
@@ -288,6 +289,7 @@ fn metasearch_to_context_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDem
             "zed.dx.serializer_rlm.execution_receipt.v1",
             "zed.dx.serializer_rlm.runner_gate_receipt.v1",
             "zed.dx.serializer_rlm.reduced_context_receipt.v1",
+            "zed.dx.serializer_rlm.execution_preview_receipt.v1",
         ],
         steps: vec![
             step(
@@ -346,6 +348,14 @@ fn metasearch_to_context_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDem
                 true,
                 "Truncates existing context only; does not run serializer/RLM code, cargo, external processes, or model calls.",
             ),
+            step(
+                8,
+                "preview_dx_serializer_rlm_reducer_execution",
+                "Write a dry-run preview receipt describing the external reducer execution that would be allowed later.",
+                Some("zed.dx.serializer_rlm.execution_preview_receipt.v1"),
+                true,
+                "Writes preview receipts only; does not run serializer/RLM code, cargo, external processes, network, or model calls.",
+            ),
         ],
         proof_gates: vec![
             "Metasearch status is healthy or the missing-service state is reported.",
@@ -355,9 +365,10 @@ fn metasearch_to_context_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDem
             "Serializer/RLM execution plan remains dry-run unless explicitly approved.",
             "Runner gate receipt is ready only after explicit runner and model-call approvals.",
             "Reduced-context receipt includes cited source summaries and no external execution evidence.",
+            "Execution preview receipt stays dry-run only and reports no external process or model-call execution.",
         ],
         blockers: recipe_blockers(workspace_root),
-        next_action: "Use this as the flagship demo path before wiring the optional external serializer/RLM runner.",
+        next_action: "Use this as the flagship demo path before wiring the separately approved external serializer/RLM runner.",
     }
 }
 
@@ -609,6 +620,12 @@ fn receipt_roots(workspace_root: Option<&Path>) -> Vec<DxLaunchDemoReceiptRoot> 
             root.join("tools")
                 .join("dx-serializer-rlm")
                 .join("reduced-context"),
+        ),
+        (
+            "serializer/RLM execution previews",
+            root.join("tools")
+                .join("dx-serializer-rlm")
+                .join("execution-previews"),
         ),
         (
             "media executions",

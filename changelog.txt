@@ -1,3 +1,17 @@
+[2026-05-21] - DX Serializer RLM Execution Preview Receipts
+
+ADDED:
+- Added `preview_dx_serializer_rlm_reducer_execution`, a permissioned Agent tool that consumes runner-gate and reduced-context receipts, summarizes the future external reducer run, and writes managed dry-run execution-preview receipts.
+- Added serializer/RLM execution preview receipt roots under workspace `tools/dx-serializer-rlm/execution-previews` or Zed data fallback.
+- Extended the primary metasearch launch demo recipe with the dry-run execution-preview receipt step.
+
+CHANGED:
+- Updated the launch recipe, receipt review, and Reducer Guard handoff prompts to route reducer preview evidence through `preview_dx_serializer_rlm_reducer_execution`.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 98/100 and move the next target to governed external reducer execution.
+
+NOTES:
+- This slice writes dry-run preview receipts only. It does not run external serializer/RLM crates, Cargo, model calls, shell commands, network, browser input, or unmanaged file writes.
+
 [2026-05-21] - DX Restore Approval Receipt Capture
 
 ADDED:
