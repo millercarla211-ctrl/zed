@@ -181,6 +181,7 @@ fn is_receipt_file(path: &Path) -> bool {
 pub(crate) fn render_workspace_chrome(
     center: AnyElement,
     sidebar_actions: AnyElement,
+    source_actions: AnyElement,
     guided_cards: AnyElement,
     status: DxLaunchWorkspaceStatus,
     cx: &mut App,
@@ -190,7 +191,12 @@ pub(crate) fn render_workspace_chrome(
         .size_full()
         .min_w_0()
         .bg(cx.theme().colors().panel_background)
-        .child(render_sources_rail(sidebar_actions, &status, cx))
+        .child(render_sources_rail(
+            sidebar_actions,
+            source_actions,
+            &status,
+            cx,
+        ))
         .child(div().flex_1().min_w_0().size_full().child(center))
         .child(render_right_rail(&status, guided_cards, cx))
         .into_any_element()
@@ -198,6 +204,7 @@ pub(crate) fn render_workspace_chrome(
 
 fn render_sources_rail(
     sidebar_actions: AnyElement,
+    source_actions: AnyElement,
     status: &DxLaunchWorkspaceStatus,
     cx: &mut App,
 ) -> AnyElement {
@@ -215,6 +222,8 @@ fn render_sources_rail(
         .child(sidebar_actions)
         .child(section_title("Sources", IconName::Book))
         .child(source_set_stack(&status.source_sets, cx))
+        .child(section_title("Source Actions", IconName::Paperclip))
+        .child(source_actions)
         .child(section_title("Attach", IconName::Link))
         .child(source_attachment_state(
             &status.source_sets.attachment_summary(),
@@ -500,13 +509,13 @@ fn deploy_target_state(snapshot: &DxDeployTargetSnapshot, cx: &App) -> AnyElemen
         return muted_card("No workspace", cx);
     }
 
-    if snapshot.targets.is_empty() {
-        return muted_card("No deploy target config", cx);
-    }
-
     let mut stack = v_flex()
         .gap_1()
-        .child(metric_row("Targets", snapshot.targets.len().to_string()));
+        .child(metric_row("Targets", snapshot.targets.len().to_string()))
+        .child(metric_row(
+            "Readiness receipts",
+            snapshot.receipt_count.to_string(),
+        ));
 
     for (ix, target) in snapshot.targets.iter().take(3).enumerate() {
         stack = stack.child(deploy_target_row(
@@ -514,6 +523,21 @@ fn deploy_target_state(snapshot: &DxDeployTargetSnapshot, cx: &App) -> AnyElemen
             target,
             cx,
         ));
+    }
+
+    if snapshot.targets.is_empty() {
+        stack = stack.child(muted_card("No deploy target config", cx));
+    }
+
+    if snapshot.receipt_root_exists {
+        for (ix, label) in snapshot.latest_receipts.iter().take(2).enumerate() {
+            stack = stack.child(source_row(
+                SharedString::from(format!("dx-deploy-receipt-{ix}")),
+                IconName::FileTextOutlined,
+                label.clone(),
+                cx,
+            ));
+        }
     }
 
     stack.into_any_element()

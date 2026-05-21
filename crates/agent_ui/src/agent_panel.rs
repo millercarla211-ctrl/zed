@@ -35,12 +35,15 @@ use crate::ManageProfiles;
 use crate::agent_connection_store::AgentConnectionStore;
 use crate::completion_provider::AgentContextSource;
 use crate::dx_check_score::{DxCheckScoreInput, check_score_snapshot};
-use crate::dx_deploy_targets::deploy_target_snapshot;
+use crate::dx_deploy_targets::{DxDeployTargetSnapshot, deploy_target_snapshot};
+use crate::dx_launch_prompts::{
+    deploy_readiness_prompt, source_action_icon, source_action_prompt, source_action_title,
+};
 use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, receipt_snapshot, render_workspace_chrome,
 };
 use crate::dx_receipt_history::tool_history_snapshot;
-use crate::dx_source_sets::source_set_snapshot;
+use crate::dx_source_sets::{DxSourceKind, DxSourceSetSnapshot, source_set_snapshot};
 use crate::terminal_thread_metadata_store::{TerminalThreadMetadata, TerminalThreadMetadataStore};
 use crate::thread_metadata_store::{ThreadId, ThreadMetadataStore, ThreadMetadataStoreEvent};
 use crate::{
@@ -5690,8 +5693,17 @@ impl AgentPanel {
 
         let status = self.dx_launch_workspace_status(cx);
         let sidebar_actions = self.render_dx_launch_sidebar_actions(window, cx);
+        let source_actions =
+            self.render_dx_launch_source_actions(&status.source_sets, &status.deploy_targets, cx);
         let guided_cards = self.render_dx_launch_guided_cards(window, cx);
-        render_workspace_chrome(center, sidebar_actions, guided_cards, status, cx)
+        render_workspace_chrome(
+            center,
+            sidebar_actions,
+            source_actions,
+            guided_cards,
+            status,
+            cx,
+        )
     }
 
     fn render_dx_launch_sidebar_actions(
@@ -5767,6 +5779,132 @@ impl AgentPanel {
             .into_any_element()
     }
 
+    fn render_dx_launch_source_actions(
+        &self,
+        source_sets: &DxSourceSetSnapshot,
+        deploy_targets: &DxDeployTargetSnapshot,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let can_create_entries = self.has_open_project(cx);
+        let mut stack = v_flex().gap_1();
+        let mut card_count = 0usize;
+
+        for source in source_sets
+            .sets
+            .iter()
+            .flat_map(|set| set.sources.iter())
+            .filter(|source| !matches!(source.kind, DxSourceKind::WorkspaceRoot))
+            .take(2)
+        {
+            let prompt = source_action_prompt(source);
+            stack = stack.child(self.dx_launch_prompt_card(
+                format!("dx-source-action-card-{card_count}"),
+                format!("dx-source-action-{card_count}"),
+                source_action_icon(source.kind),
+                source_action_title(source),
+                source.path.clone(),
+                "Draft Action",
+                prompt,
+                can_create_entries,
+                cx,
+            ));
+            card_count += 1;
+        }
+
+        if let Some(target) = deploy_targets.targets.first() {
+            let prompt = deploy_readiness_prompt(target, deploy_targets);
+            stack = stack.child(self.dx_launch_prompt_card(
+                "dx-deploy-readiness-card".to_string(),
+                "dx-deploy-readiness-action".to_string(),
+                IconName::Public,
+                "Deploy Readiness".to_string(),
+                target.path.clone(),
+                "Draft Check",
+                prompt,
+                can_create_entries,
+                cx,
+            ));
+            card_count += 1;
+        }
+
+        if card_count == 0 {
+            stack = stack.child(
+                v_flex()
+                    .id("dx-source-actions-empty")
+                    .rounded_sm()
+                    .border_1()
+                    .border_color(cx.theme().colors().border_variant)
+                    .px_2()
+                    .py_1()
+                    .child(
+                        Label::new("No source action yet")
+                            .size(LabelSize::XSmall)
+                            .color(Color::Muted)
+                            .truncate(),
+                    ),
+            );
+        }
+
+        stack.into_any_element()
+    }
+
+    fn dx_launch_prompt_card(
+        &self,
+        id: impl Into<gpui::ElementId>,
+        action_id: impl Into<gpui::ElementId>,
+        icon: IconName,
+        title: String,
+        detail: String,
+        action_label: &'static str,
+        prompt: String,
+        can_create_entries: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .id(id)
+            .gap_1()
+            .rounded_sm()
+            .border_1()
+            .border_color(cx.theme().colors().border_variant)
+            .px_2()
+            .py_1()
+            .child(
+                h_flex()
+                    .gap_1()
+                    .min_w_0()
+                    .items_center()
+                    .child(Icon::new(icon).size(IconSize::XSmall).color(Color::Muted))
+                    .child(
+                        Label::new(title)
+                            .size(LabelSize::XSmall)
+                            .color(Color::Default)
+                            .truncate(),
+                    ),
+            )
+            .child(
+                Label::new(detail)
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
+            .child(
+                Button::new(action_id, action_label)
+                    .full_width()
+                    .label_size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .start_icon(
+                        Icon::new(IconName::Paperclip)
+                            .size(IconSize::XSmall)
+                            .color(Color::Muted),
+                    )
+                    .disabled(!can_create_entries)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.insert_dx_launch_prompt(prompt.clone(), window, cx);
+                    })),
+            )
+            .into_any_element()
+    }
+
     fn render_dx_launch_guided_cards(
         &self,
         _window: &mut Window,
@@ -5813,6 +5951,7 @@ impl AgentPanel {
         can_create_entries: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let prompt = prompt.to_string();
         v_flex()
             .id(id)
             .gap_1()
@@ -5852,7 +5991,7 @@ impl AgentPanel {
                     )
                     .disabled(!can_create_entries)
                     .on_click(cx.listener(move |this, _, window, cx| {
-                        this.insert_dx_launch_prompt(prompt, window, cx);
+                        this.insert_dx_launch_prompt(prompt.clone(), window, cx);
                     })),
             )
             .into_any_element()
@@ -5860,7 +5999,7 @@ impl AgentPanel {
 
     fn insert_dx_launch_prompt(
         &mut self,
-        prompt: &'static str,
+        prompt: impl Into<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -5870,7 +6009,9 @@ impl AgentPanel {
 
         self.activate_draft(true, AgentThreadSource::AgentPanel, window, cx);
         self.insert_content_blocks(
-            vec![acp::ContentBlock::Text(acp::TextContent::new(prompt))],
+            vec![acp::ContentBlock::Text(acp::TextContent::new(
+                prompt.into(),
+            ))],
             window,
             cx,
         );
@@ -5909,6 +6050,7 @@ impl AgentPanel {
             background_task_count: self.retained_threads.len(),
             visible_worktree_count,
             deploy_target_count: deploy_targets.targets.len(),
+            deploy_readiness_receipt_count: deploy_targets.receipt_count,
         });
 
         DxLaunchWorkspaceStatus {

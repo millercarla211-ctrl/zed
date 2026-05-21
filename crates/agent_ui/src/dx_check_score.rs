@@ -23,6 +23,7 @@ pub(crate) struct DxCheckScoreInput<'a> {
     pub background_task_count: usize,
     pub visible_worktree_count: usize,
     pub deploy_target_count: usize,
+    pub deploy_readiness_receipt_count: usize,
 }
 
 pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScoreSnapshot {
@@ -77,6 +78,10 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
     } else {
         blockers.push("No deploy target config detected".to_string());
     }
+    if input.deploy_readiness_receipt_count > 0 {
+        score += 5;
+    }
+    let score = score.min(100);
 
     let state = if score >= 85 {
         "Demo ready"
@@ -119,9 +124,15 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
             DxCheckScoreItem {
                 label: "Deploy",
                 state: if input.deploy_target_count == 0 {
-                    "No targets".to_string()
+                    format!(
+                        "No targets, {} receipt(s)",
+                        input.deploy_readiness_receipt_count
+                    )
                 } else {
-                    format!("{} target(s)", input.deploy_target_count)
+                    format!(
+                        "{} target(s), {} receipt(s)",
+                        input.deploy_target_count, input.deploy_readiness_receipt_count
+                    )
                 },
             },
             DxCheckScoreItem {

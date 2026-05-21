@@ -1,3 +1,17 @@
+[2026-05-21] - DX Source Actions And Deploy Readiness Receipts
+
+ADDED:
+- Added source-derived action prompt cards to the DX Sources rail for metasearch, reduced-context, produced-media, and Forge restore-preview source entries.
+- Added a deploy readiness prompt card that drafts a safe Agent readiness review for detected deploy targets without running deploy commands.
+- Added managed deploy readiness receipt scanning under `tools/dx-deploy`, including readiness receipt counts and latest receipt labels in the Deploy rail.
+
+CHANGED:
+- Extended the read-only Check score to include deploy readiness receipt counts and cap the score at 100.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 82/100 and move the next target to deploy env/log/rollback receipt summaries plus compact rail controls.
+
+NOTES:
+- These actions draft prompts only; they do not auto-submit, run tools, deploy, start servers, run builds, invoke browser input, execute external serializer/RLM code, or mutate restore targets.
+
 [2026-05-21] - DX Restore Warnings And Deploy Registry
 
 ADDED:
