@@ -576,9 +576,10 @@ fn forge_restore_approval_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDe
             "Operator approval and rollback evidence are captured explicitly.",
             "Any overwrite posture is recorded as evidence only and does not perform writes.",
             "Approval receipts live under tools/dx-forge/restore-approvals.",
+            "inspect_dx_forge_history reports restore_approval entries after capture.",
         ],
         blockers: recipe_blockers(workspace_root),
-        next_action: "Use this before any future restore-to-target executor exists; it records approval evidence without applying it.",
+        next_action: "Use this before any future restore-to-target executor applies changes; it records approval evidence and keeps it visible in Forge history without mutating targets.",
     }
 }
 

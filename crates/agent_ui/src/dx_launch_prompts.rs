@@ -87,7 +87,7 @@ pub(crate) fn source_action_prompt(source: &DxSourceItem) -> String {
             )
         }
         DxSourceKind::ForgeRestorePreview => format!(
-            "Review this Forge restore preview source: `{}`. Use inspect_dx_forge_history and prepare_dx_source_attachment as needed, summarize restore warnings, target path, overwrite risk, rollback evidence, and required restore-to-target approvals. Draft the approval checklist only; do not mutate target paths, overwrite files, delete files, or run restore-to-target actions.",
+            "Review this Forge restore preview source: `{}`. Use inspect_dx_forge_history and prepare_dx_source_attachment as needed, summarize restore warnings, target path, overwrite risk, rollback evidence, visible restore_approval entries, and required restore-to-target approvals. Draft the approval checklist only; do not mutate target paths, overwrite files, delete files, or run restore-to-target actions.",
             source.path
         ),
     }

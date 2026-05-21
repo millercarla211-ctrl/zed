@@ -134,6 +134,7 @@ struct DxForgeHistoryCounts {
     runner_gate: usize,
     backup_execution: usize,
     restore_execution: usize,
+    restore_approval: usize,
     unknown: usize,
 }
 
@@ -152,6 +153,9 @@ struct DxForgeHistoryEntry {
     archive_path: Option<String>,
     manifest_path: Option<String>,
     restore_destination_root: Option<String>,
+    approval_ready: Option<bool>,
+    evidence_count: Option<usize>,
+    blocker_count: Option<usize>,
     next_action: Option<String>,
 }
 
@@ -249,7 +253,13 @@ fn collect_history_entries(root: &Path) -> Result<Vec<DxForgeHistoryEntry>, Stri
     }
 
     let mut entries = Vec::new();
-    for folder in ["safety-policies", "runner-gates", "executions", "restores"] {
+    for folder in [
+        "safety-policies",
+        "runner-gates",
+        "executions",
+        "restores",
+        "restore-approvals",
+    ] {
         let folder_path = root.join(folder);
         if !folder_path.exists() {
             continue;
@@ -328,7 +338,11 @@ fn read_history_entry(path: &Path) -> Option<DxForgeHistoryEntry> {
         archive_path: history_archive_path(&value),
         manifest_path: history_manifest_path(&value),
         restore_destination_root: history_restore_destination_root(&value),
+        approval_ready: history_approval_ready(&value),
+        evidence_count: history_evidence_count(&value),
+        blocker_count: history_blocker_count(&value),
         next_action: string_field(&value, &["next_action"])
+            .or_else(|| string_field(&value, &["restore_approval", "next_action"]))
             .or_else(|| string_field(&value, &["restore_execution", "next_action"]))
             .or_else(|| string_field(&value, &["backup_execution", "next_action"]))
             .or_else(|| string_field(&value, &["runner_gate", "next_action"]))
@@ -337,7 +351,9 @@ fn read_history_entry(path: &Path) -> Option<DxForgeHistoryEntry> {
 }
 
 fn history_kind(schema: &str, value: &Value) -> String {
-    if schema.contains(".restore_execution") || value.get("restore_execution").is_some() {
+    if schema.contains(".restore_approval") || value.get("restore_approval").is_some() {
+        "restore_approval"
+    } else if schema.contains(".restore_execution") || value.get("restore_execution").is_some() {
         "restore_execution"
     } else if schema.contains(".backup_execution") || value.get("backup_execution").is_some() {
         "backup_execution"
@@ -352,7 +368,8 @@ fn history_kind(schema: &str, value: &Value) -> String {
 }
 
 fn history_status(value: &Value) -> Option<String> {
-    string_field(value, &["status"])
+    string_field(value, &["restore_approval", "validation", "status"])
+        .or_else(|| string_field(value, &["status"]))
         .or_else(|| string_field(value, &["restore_execution", "restore", "status"]))
         .or_else(|| string_field(value, &["backup_execution", "execution", "status"]))
         .or_else(|| string_field(value, &["runner_gate", "validation", "status"]))
@@ -368,7 +385,8 @@ fn history_operation(value: &Value) -> Option<String> {
 }
 
 fn history_target_path(value: &Value) -> Option<String> {
-    string_field(value, &["restore_execution", "backup", "target_path"])
+    string_field(value, &["restore_approval", "request", "target_path"])
+        .or_else(|| string_field(value, &["restore_execution", "backup", "target_path"]))
         .or_else(|| string_field(value, &["backup_execution", "gate", "target_path"]))
         .or_else(|| string_field(value, &["runner_gate", "policy", "target_path"]))
         .or_else(|| string_field(value, &["forge_safety_policy", "policy", "target_path"]))
@@ -377,6 +395,12 @@ fn history_target_path(value: &Value) -> Option<String> {
 fn history_archive_path(value: &Value) -> Option<String> {
     string_field(value, &["archive_path_written"])
         .or_else(|| string_field(value, &["backup_archive_path"]))
+        .or_else(|| {
+            string_field(
+                value,
+                &["restore_approval", "restore", "backup_archive_path"],
+            )
+        })
         .or_else(|| string_field(value, &["restore_execution", "backup", "archive_path"]))
         .or_else(|| string_field(value, &["backup_execution", "execution", "archive_path"]))
         .or_else(|| string_field(value, &["runner_gate", "policy", "planned_archive_path"]))
@@ -391,6 +415,12 @@ fn history_archive_path(value: &Value) -> Option<String> {
 fn history_manifest_path(value: &Value) -> Option<String> {
     string_field(value, &["manifest_path_written"])
         .or_else(|| string_field(value, &["backup_manifest_path"]))
+        .or_else(|| {
+            string_field(
+                value,
+                &["restore_approval", "restore", "backup_manifest_path"],
+            )
+        })
         .or_else(|| string_field(value, &["restore_execution", "backup", "manifest_path"]))
         .or_else(|| string_field(value, &["backup_execution", "execution", "manifest_path"]))
         .or_else(|| string_field(value, &["runner_gate", "policy", "planned_manifest_path"]))
@@ -403,12 +433,34 @@ fn history_manifest_path(value: &Value) -> Option<String> {
 }
 
 fn history_restore_destination_root(value: &Value) -> Option<String> {
-    string_field(value, &["restore_destination_root"]).or_else(|| {
-        string_field(
-            value,
-            &["restore_execution", "restore", "restore_destination_root"],
-        )
-    })
+    string_field(value, &["restore_destination_root"])
+        .or_else(|| {
+            string_field(
+                value,
+                &["restore_approval", "restore", "restore_destination_root"],
+            )
+        })
+        .or_else(|| {
+            string_field(
+                value,
+                &["restore_execution", "restore", "restore_destination_root"],
+            )
+        })
+}
+
+fn history_approval_ready(value: &Value) -> Option<bool> {
+    bool_field(value, &["restore_approval", "validation", "approval_ready"])
+        .or_else(|| bool_field(value, &["approval_ready"]))
+}
+
+fn history_evidence_count(value: &Value) -> Option<usize> {
+    usize_field(value, &["restore_approval", "validation", "evidence_count"])
+        .or_else(|| usize_field(value, &["evidence_count"]))
+}
+
+fn history_blocker_count(value: &Value) -> Option<usize> {
+    usize_field(value, &["restore_approval", "validation", "blocker_count"])
+        .or_else(|| usize_field(value, &["blocker_count"]))
 }
 
 fn count_entries(entries: &[DxForgeHistoryEntry]) -> DxForgeHistoryCounts {
@@ -419,6 +471,7 @@ fn count_entries(entries: &[DxForgeHistoryEntry]) -> DxForgeHistoryCounts {
             "runner_gate" => counts.runner_gate += 1,
             "backup_execution" => counts.backup_execution += 1,
             "restore_execution" => counts.restore_execution += 1,
+            "restore_approval" => counts.restore_approval += 1,
             _ => counts.unknown += 1,
         }
     }
@@ -445,6 +498,16 @@ fn string_field(value: &Value, path: &[&str]) -> Option<String> {
     value_at(value, path)
         .and_then(Value::as_str)
         .map(ToOwned::to_owned)
+}
+
+fn bool_field(value: &Value, path: &[&str]) -> Option<bool> {
+    value_at(value, path).and_then(Value::as_bool)
+}
+
+fn usize_field(value: &Value, path: &[&str]) -> Option<usize> {
+    value_at(value, path)
+        .and_then(Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok())
 }
 
 fn path_string(path: impl AsRef<Path>) -> String {

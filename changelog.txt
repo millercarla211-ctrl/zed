@@ -1,3 +1,16 @@
+[2026-05-21] - DX Restore Approval History Visibility
+
+ADDED:
+- Added restore approval receipts to the read-only `inspect_dx_forge_history` scan path.
+- Added `restore_approval` history counts and entry fields for approval readiness, evidence count, blocker count, target path, backup manifest/archive, and restore preview root.
+
+CHANGED:
+- Updated Forge restore approval demo guidance and source-row prompts so approval capture is followed by a read-only history confirmation.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current next-set status at 99.99/100 while keeping final runtime proof and restore-to-target mutation gated.
+
+NOTES:
+- This slice reads managed Forge receipts only. It does not mutate target paths, overwrite files, delete files, run `just run`, Cargo, local servers, browser automation, shell commands, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Deploy Receipt Drilldowns
 
 ADDED:
