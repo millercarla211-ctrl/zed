@@ -57,6 +57,20 @@ pub struct DxStudioManifestContract {
     pub default_preview_url: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DxStudioEditContractSummary {
+    pub source: PathBuf,
+    pub schema: Option<String>,
+    pub route: Option<String>,
+    pub operation_ids: Vec<String>,
+    pub marker_attributes: Vec<String>,
+    pub surface_count: usize,
+    pub writes_files: bool,
+    pub writes_only_source_owned_files: bool,
+    pub requires_node_modules: bool,
+    pub absolute_positioning: bool,
+}
+
 pub fn studio_commands() -> DxStudioCommands {
     DxStudioCommands {
         preview_manifest: DX_STUDIO_PREVIEW_MANIFEST_COMMAND,
@@ -200,12 +214,13 @@ pub fn edit_operation_ids() -> [&'static str; 5] {
     ]
 }
 
-pub fn edit_marker_attributes() -> [&'static str; 13] {
+pub fn edit_marker_attributes() -> [&'static str; 14] {
     [
         "data-dx-edit-target",
         "data-dx-edit-id",
         "data-dx-edit-kind",
         "data-dx-edit-ops",
+        "data-dx-operation",
         "data-dx-edit-order",
         "data-dx-editable-section",
         "data-dx-insert-slot",
@@ -216,6 +231,108 @@ pub fn edit_marker_attributes() -> [&'static str; 13] {
         "data-dx-media-slot",
         "data-dx-token-scope",
     ]
+}
+
+pub fn edit_contract_summary(root: &Path) -> Option<DxStudioEditContractSummary> {
+    for candidate in edit_manifest_candidates(root) {
+        if candidate
+            .extension()
+            .and_then(|extension| extension.to_str())
+            != Some("json")
+        {
+            continue;
+        }
+
+        let Ok(contents) = fs::read_to_string(&candidate) else {
+            continue;
+        };
+        let Ok(manifest) = serde_json::from_str::<Value>(&contents) else {
+            continue;
+        };
+        let Some(contract) = edit_contract_value(&manifest) else {
+            continue;
+        };
+
+        let mut operation_ids =
+            string_values_for_keys(contract, &["operation_ids", "operationIds"]);
+        if operation_ids.is_empty() {
+            operation_ids =
+                string_values_for_keys(&manifest, &["editable_operations", "editableOperations"]);
+        }
+        if operation_ids.is_empty() {
+            operation_ids = operation_values(contract, "operations", &["id", "operation"]);
+        }
+        if operation_ids.is_empty() {
+            operation_ids = edit_operation_ids()
+                .iter()
+                .map(|operation| (*operation).to_string())
+                .collect();
+        }
+
+        let mut marker_attributes =
+            string_values_for_keys(contract, &["marker_attributes", "markerAttributes"]);
+        marker_attributes.extend(selector_marker_values(contract, "operations"));
+        if marker_attributes.is_empty() {
+            marker_attributes = edit_marker_attributes()
+                .iter()
+                .map(|marker| (*marker).to_string())
+                .collect();
+        }
+
+        return Some(DxStudioEditContractSummary {
+            source: candidate,
+            schema: string_for_keys(contract, &["schema", "schema_version", "schemaVersion"]),
+            route: string_for_keys(contract, &["route", "route_path", "routePath"]),
+            operation_ids: unique_strings(operation_ids),
+            marker_attributes: unique_strings(marker_attributes),
+            surface_count: array_len_for_keys(contract, &["surfaces", "editable_surfaces"])
+                .or_else(|| {
+                    array_len_for_keys(
+                        &manifest,
+                        &["editable_surface_index", "editableSurfaceIndex"],
+                    )
+                })
+                .unwrap_or(0),
+            writes_files: bool_for_keys(contract, &["writes_files", "writesFiles"])
+                .or_else(|| {
+                    operation_bool_any(contract, "operations", &["writes_files", "writesFiles"])
+                })
+                .unwrap_or(true),
+            writes_only_source_owned_files: bool_for_keys(
+                contract,
+                &[
+                    "writes_only_source_owned_files",
+                    "writesOnlySourceOwnedFiles",
+                    "sourceOwned",
+                ],
+            )
+            .unwrap_or(true),
+            requires_node_modules: bool_for_keys(
+                contract,
+                &["requires_node_modules", "requiresNodeModules"],
+            )
+            .unwrap_or_else(|| {
+                !bool_for_keys(
+                    contract,
+                    &["no_node_modules_required", "noNodeModulesRequired"],
+                )
+                .or_else(|| {
+                    bool_for_keys(
+                        &manifest,
+                        &["no_node_modules_required", "noNodeModulesRequired"],
+                    )
+                })
+                .unwrap_or(true)
+            }),
+            absolute_positioning: bool_for_keys(
+                contract,
+                &["absolute_positioning", "absolutePositioning"],
+            )
+            .unwrap_or(false),
+        });
+    }
+
+    None
 }
 
 pub fn drag_to_preview_attributes() -> [&'static str; 6] {
@@ -411,26 +528,40 @@ fn route_from_manifest_value(value: &Value, origin: &str) -> Option<DxStudioPrev
     let url = value
         .pointer("/preview/url")
         .and_then(Value::as_str)
+        .or_else(|| value.get("preview_url").and_then(Value::as_str))
+        .or_else(|| value.get("previewUrl").and_then(Value::as_str))
         .map(ToString::to_string)
         .unwrap_or_else(|| route_preview_url(origin, &route));
     let hot_reload_target = value
         .pointer("/preview/hot_reload_target")
         .and_then(Value::as_str)
+        .or_else(|| value.get("hot_reload_target").and_then(Value::as_str))
+        .or_else(|| value.get("hotReloadTarget").and_then(Value::as_str))
         .map(ToString::to_string)
         .unwrap_or_else(|| route.clone());
     let hot_reload_version_endpoint = value
         .pointer("/preview/hot_reload_version_endpoint")
         .and_then(Value::as_str)
+        .or_else(|| {
+            value
+                .get("hot_reload_version_endpoint")
+                .and_then(Value::as_str)
+        })
+        .or_else(|| {
+            value
+                .get("hotReloadVersionEndpoint")
+                .and_then(Value::as_str)
+        })
         .map(ToString::to_string)
         .unwrap_or_else(|| DX_HOT_RELOAD_VERSION_ENDPOINT.to_string());
 
     Some(DxStudioPreviewTarget {
         route,
         url,
-        source_files: string_array(value, "source_files"),
-        forge_packages: string_array(value, "forge_packages"),
-        assets: string_array(value, "assets"),
-        data_dx_markers: string_array(value, "data_dx_markers"),
+        source_files: string_values_for_keys(value, &["source_files", "sourceFiles", "sourceFile"]),
+        forge_packages: string_values_for_keys(value, &["forge_packages", "forgePackages"]),
+        assets: string_values_for_keys(value, &["assets"]),
+        data_dx_markers: string_values_for_keys(value, &["data_dx_markers", "dataDxMarkers"]),
         hot_reload_target,
         hot_reload_version_endpoint,
     })
@@ -471,15 +602,113 @@ fn route_from_launch_contract(contents: &str, origin: &str) -> Option<DxStudioPr
     })
 }
 
-fn string_array(value: &Value, key: &str) -> Vec<String> {
+fn edit_contract_value(manifest: &Value) -> Option<&Value> {
+    manifest
+        .get("studio_edit_contract")
+        .or_else(|| manifest.get("editContract"))
+        .or_else(|| {
+            let schema = manifest
+                .get("schema")
+                .or_else(|| manifest.get("schema_version"))
+                .or_else(|| manifest.get("schemaVersion"))
+                .and_then(Value::as_str)?;
+            (schema == DX_STUDIO_LAUNCH_EDIT_CONTRACT_SCHEMA).then_some(manifest)
+        })
+}
+
+fn string_values_for_keys(value: &Value, keys: &[&str]) -> Vec<String> {
+    let mut values = Vec::new();
+    for key in keys {
+        if let Some(candidate) = value.get(*key) {
+            push_string_values(candidate, &mut values);
+        }
+    }
+    unique_strings(values)
+}
+
+fn push_string_values(value: &Value, values: &mut Vec<String>) {
+    if let Some(value) = value.as_str() {
+        values.push(value.to_string());
+    } else if let Some(array) = value.as_array() {
+        values.extend(
+            array
+                .iter()
+                .filter_map(Value::as_str)
+                .map(ToString::to_string),
+        );
+    }
+}
+
+fn string_for_keys(value: &Value, keys: &[&str]) -> Option<String> {
+    keys.iter()
+        .find_map(|key| value.get(*key).and_then(Value::as_str))
+        .map(ToString::to_string)
+}
+
+fn bool_for_keys(value: &Value, keys: &[&str]) -> Option<bool> {
+    keys.iter()
+        .find_map(|key| value.get(*key).and_then(Value::as_bool))
+}
+
+fn array_len_for_keys(value: &Value, keys: &[&str]) -> Option<usize> {
+    keys.iter()
+        .find_map(|key| value.get(*key).and_then(Value::as_array))
+        .map(Vec::len)
+}
+
+fn operation_values(value: &Value, key: &str, field_keys: &[&str]) -> Vec<String> {
     value
         .get(key)
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter_map(Value::as_str)
-        .map(ToString::to_string)
+        .filter_map(|operation| string_for_keys(operation, field_keys))
         .collect()
+}
+
+fn operation_bool_any(value: &Value, key: &str, field_keys: &[&str]) -> Option<bool> {
+    value.get(key).and_then(Value::as_array).map(|operations| {
+        operations
+            .iter()
+            .any(|operation| bool_for_keys(operation, field_keys).unwrap_or(false))
+    })
+}
+
+fn selector_marker_values(value: &Value, key: &str) -> Vec<String> {
+    value
+        .get(key)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|operation| operation.get("selector").and_then(Value::as_str))
+        .flat_map(markers_from_selector)
+        .collect()
+}
+
+fn markers_from_selector(selector: &str) -> Vec<String> {
+    selector
+        .split('[')
+        .skip(1)
+        .filter_map(|part| {
+            let marker = part
+                .split(|character| matches!(character, ']' | '=' | '~' | '|' | '^' | '$' | '*'))
+                .next()
+                .unwrap_or("")
+                .trim();
+            (marker.starts_with("data-dx-") || marker == "data-visual-audit")
+                .then(|| marker.to_string())
+        })
+        .collect()
+}
+
+fn unique_strings(values: Vec<String>) -> Vec<String> {
+    let mut unique = Vec::new();
+    for value in values {
+        if !value.is_empty() && !unique.contains(&value) {
+            unique.push(value);
+        }
+    }
+    unique
 }
 
 fn read_dx_key(contents: &str, key: &str) -> Option<String> {

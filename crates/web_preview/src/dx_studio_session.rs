@@ -24,6 +24,63 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
         .edit_manifest_candidates
         .iter()
         .any(|path| path.is_file());
+    let edit_contract_summary = dx_studio::edit_contract_summary(root_path);
+    let edit_contract_status = if edit_contract_summary.is_some() {
+        "source_contract_loaded"
+    } else if has_edit_candidate {
+        "source_manifest_candidate_present"
+    } else {
+        "waiting_for_dx_www_manifest_producer"
+    };
+    let edit_operation_ids = edit_contract_summary
+        .as_ref()
+        .map(|summary| summary.operation_ids.clone())
+        .filter(|operation_ids| !operation_ids.is_empty())
+        .unwrap_or_else(|| {
+            dx_studio::edit_operation_ids()
+                .iter()
+                .map(|operation| (*operation).to_string())
+                .collect()
+        });
+    let edit_marker_attributes = edit_contract_summary
+        .as_ref()
+        .map(|summary| summary.marker_attributes.clone())
+        .filter(|attributes| !attributes.is_empty())
+        .unwrap_or_else(|| {
+            dx_studio::edit_marker_attributes()
+                .iter()
+                .map(|attribute| (*attribute).to_string())
+                .collect()
+        });
+    let edit_contract_source = edit_contract_summary
+        .as_ref()
+        .map(|summary| path_string(&summary.source));
+    let edit_contract_schema = edit_contract_summary
+        .as_ref()
+        .and_then(|summary| summary.schema.clone());
+    let edit_contract_route = edit_contract_summary
+        .as_ref()
+        .and_then(|summary| summary.route.clone());
+    let edit_contract_surface_count = edit_contract_summary
+        .as_ref()
+        .map(|summary| summary.surface_count)
+        .unwrap_or(0);
+    let edit_contract_writes_files = edit_contract_summary
+        .as_ref()
+        .map(|summary| summary.writes_files)
+        .unwrap_or(true);
+    let edit_contract_writes_only_source_owned_files = edit_contract_summary
+        .as_ref()
+        .map(|summary| summary.writes_only_source_owned_files)
+        .unwrap_or(true);
+    let edit_contract_requires_node_modules = edit_contract_summary
+        .as_ref()
+        .map(|summary| summary.requires_node_modules)
+        .unwrap_or(false);
+    let edit_contract_absolute_positioning = edit_contract_summary
+        .as_ref()
+        .map(|summary| summary.absolute_positioning)
+        .unwrap_or(false);
 
     Some(serde_json::json!({
         "schema": "zed.web_preview.dx_studio_contract.v1",
@@ -47,25 +104,23 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
         },
         "studio_edit_manifest": {
             "schema": dx_studio::DX_STUDIO_EDIT_MANIFEST_SCHEMA,
-            "status": if has_edit_candidate {
-                "source_manifest_candidate_present"
-            } else {
-                "waiting_for_dx_www_manifest_producer"
-            },
+            "status": edit_contract_status,
             "candidates": edit_candidates,
             "command": Value::Null,
             "source_owned_operation_contract": {
                 "schema": dx_studio::DX_STUDIO_LAUNCH_EDIT_CONTRACT_SCHEMA,
-                "status": if has_edit_candidate {
-                    "source_manifest_candidate_present"
-                } else {
-                    "waiting_for_dx_www_manifest_producer"
-                },
+                "status": edit_contract_status,
+                "source": edit_contract_source.clone(),
+                "manifest_schema": edit_contract_schema,
+                "route": edit_contract_route,
                 "manifest_field": "studio_edit_contract",
-                "operation_ids": dx_studio::edit_operation_ids(),
-                "marker_attributes": dx_studio::edit_marker_attributes(),
-                "writes_files": true,
-                "writes_only_source_owned_files": true,
+                "operation_ids": edit_operation_ids.clone(),
+                "marker_attributes": edit_marker_attributes.clone(),
+                "surface_count": edit_contract_surface_count,
+                "writes_files": edit_contract_writes_files,
+                "writes_only_source_owned_files": edit_contract_writes_only_source_owned_files,
+                "requires_node_modules": edit_contract_requires_node_modules,
+                "absolute_positioning": edit_contract_absolute_positioning,
                 "requires_explicit_operator_action": true,
                 "mutation_command": Value::Null,
             },
@@ -82,10 +137,12 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
             "operation_contract": {
                 "schema": dx_studio::DX_STUDIO_LAUNCH_EDIT_CONTRACT_SCHEMA,
                 "manifest_field": "studio_edit_contract",
-                "operation_ids": dx_studio::edit_operation_ids(),
-                "marker_attributes": dx_studio::edit_marker_attributes(),
+                "operation_ids": edit_operation_ids,
+                "marker_attributes": edit_marker_attributes,
+                "source": edit_contract_source,
+                "surface_count": edit_contract_surface_count,
                 "writes_files_after_explicit_operator_action": true,
-                "requires_node_modules": false,
+                "requires_node_modules": edit_contract_requires_node_modules,
             },
             "mutation_command": Value::Null,
             "requires_explicit_operator_action": true,

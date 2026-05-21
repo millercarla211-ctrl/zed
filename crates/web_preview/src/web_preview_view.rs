@@ -37181,6 +37181,7 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     "data-dx-edit-id",
     "data-dx-edit-kind",
     "data-dx-edit-ops",
+    "data-dx-operation",
     "data-dx-edit-order",
     "data-dx-editable-section",
     "data-dx-insert-slot",
@@ -37201,6 +37202,7 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     "[data-dx-hot-reload-target]",
     "[data-dx-update-target]",
     "[data-dx-component]",
+    "[data-dx-section]",
     "[data-dx-state]",
     "[data-dx-action]",
     ...DX_STUDIO_EDIT_MARKER_ATTRIBUTES.map((attribute) => `[${attribute}]`),
@@ -37307,7 +37309,10 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     const editTargets = valuesFor("data-dx-edit-target");
     const editIds = valuesFor("data-dx-edit-id");
     const editKinds = valuesFor("data-dx-edit-kind");
-    const editOps = valuesFor("data-dx-edit-ops");
+    const editOps = dxUniqueStrings([
+      ...valuesFor("data-dx-edit-ops"),
+      ...valuesFor("data-dx-operation")
+    ]);
     const editableSections = valuesFor("data-dx-editable-section");
     const insertSlots = valuesFor("data-dx-insert-slot");
     const reorderGroups = valuesFor("data-dx-reorder-group");

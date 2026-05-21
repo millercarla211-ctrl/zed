@@ -1,3 +1,16 @@
+[2026-05-21] - DX Studio Public Manifest Compatibility
+
+ADDED:
+- Added tolerant DX Studio route reads for public manifest fields such as `sourceFile`, `forgePackages`, `dataDxMarkers`, and `hotReloadTarget`.
+- Added loaded edit-contract summaries for source, schema, route, operation IDs, marker attributes, surface count, write policy, node_modules posture, and absolute-positioning posture.
+
+CHANGED:
+- Web Preview session diagnostics now distinguish a loaded source-owned edit contract from a mere manifest candidate while keeping mutation commands disabled.
+
+NOTES:
+- This slice does not run DX CLI commands, start servers, run Cargo/`just run`, write source files from Web Preview, or change normal non-DX Web Preview behavior.
+- Existing `PLAN.md` edits were left untouched and unstaged.
+
 [2026-05-21] - DX Studio Public Edit Contract Discovery
 
 ADDED:
