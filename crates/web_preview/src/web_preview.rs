@@ -8,6 +8,8 @@ use workspace::{Workspace, register_project_item};
 #[cfg(target_os = "windows")]
 pub(crate) mod agent_browser_contracts;
 #[cfg(target_os = "windows")]
+pub mod dx_studio;
+#[cfg(target_os = "windows")]
 pub mod web_preview_view;
 #[cfg(target_os = "windows")]
 pub(crate) mod windows_visual_webview;

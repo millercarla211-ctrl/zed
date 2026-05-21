@@ -1,3 +1,13 @@
+[2026-05-21] - DX Studio Web Preview Contract
+
+ADDED:
+- Added a `web_preview::dx_studio` contract module for detecting DX-WWW projects, discovering preview-manifest candidates, mapping App Router-style source files to routes, and declaring the Zed-facing CLI contracts: `dx www preview-manifest --json`, `dx www routes --json`, and `dx forge packages --json`.
+- Added DX-only default Web Preview routing so opening Web Preview inside a detected DX-WWW workspace targets the DX dev origin or launch route contract while normal websites still use the existing default.
+- Added `data-dx-*` marker collection to Web Preview diagnostics, DOM snapshots, and readiness probes so Zed can see route/source/Forge package/hot-reload markers for future semantic editing and drop-to-code hooks.
+
+NOTES:
+- This slice is file/watch/manifest architecture only. It does not start servers, run Cargo, run `just run`, execute DX CLI commands, or mutate browser profiles.
+
 [2026-05-21] - DX Agents Release Gate Readiness
 
 ADDED:

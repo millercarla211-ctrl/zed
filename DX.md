@@ -35,6 +35,7 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 
 ## Current Worker Update
 
+- Added the DX Studio Web Preview contract slice: Zed Web Preview now detects DX-WWW workspaces from the root `dx`/route/Forge shape, opens the DX route origin by default for DX projects, exposes the `dx www preview-manifest --json`, `dx www routes --json`, and `dx forge packages --json` command contract, and collects `data-dx-*` route/source/Forge/hot-reload markers in page diagnostics without affecting normal websites.
 - Added the DX launch onboarding Web Preview hero slice: onboarding now creates a real Web Preview child for the hero canvas, defaults to a bundled original animated DX fallback page, supports explicit `DX_ONBOARDING_PREVIEW_URL`, and exposes a detected `G:\WWW\www\demo\index.html` target action without local servers or secret import.
 - Added the DX Agents GPUI bridge surface: Zed now reads redacted Agent status/social/automation/provider/model receipts from `G:\Dx\.dx\receipts\agents`, shows DX Agents status in Agent Configuration and the launch right rail, honors settings gates for CLI actions/managed providers/rail visibility, and runs only fixed public `dx-agents agents status/social list/automate list/run --json` bridge actions without importing `dx-agents` crates, secrets, or social-login flows into Zed.
 - Added DX Agents social action controls: Agent Configuration now exposes per-account connect/disconnect receipt actions through fixed `dx-agents agents social connect/disconnect --platform <platform> --json` command vectors, and Agent Configuration plus the right rail render redacted QR/link/revoke readiness from the latest social action receipts without storing payloads.
@@ -92,6 +93,7 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 
 ## Remaining Proof
 
+- The DX Studio Web Preview contract has diff/conflict/source-level validation only so far; live route opening, hot-reload timing, Cargo checks, `just run`, and local server proof remain deferred under the repo's launch validation rules.
 - The DX onboarding Web Preview hero has formatting, diff, conflict-marker, and source-reference validation only so far; `just run` visual proof and native WebView2 runtime proof remain deferred under the repo's launch validation rules.
 - The DX Agents bridge has formatting/diff/conflict/source-reference validation only so far; live `dx-agents ... --json` command proof, Cargo checks, provider calls, local servers, and runtime rail visual proof remain deferred under the repo's launch validation rules.
 - The DX Agents social action receipt slice has formatting/diff/conflict/source-reference validation only so far; live social connect/disconnect command proof, Cargo checks, and runtime visual proof remain deferred under the repo's launch validation rules.

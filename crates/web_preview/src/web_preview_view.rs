@@ -41,7 +41,7 @@ use workspace::{NewWebPreview, Pane, Toast, Workspace, WorkspaceId};
 use crate::agent_browser_contracts::*;
 #[cfg(target_os = "windows")]
 use crate::windows_visual_webview::WindowsVisualWebView;
-use crate::{OpenPreview, OpenPreviewToTheSide};
+use crate::{OpenPreview, OpenPreviewToTheSide, dx_studio};
 
 #[cfg(target_os = "windows")]
 use gpui_windows::window_has_focused_webview;
@@ -889,13 +889,18 @@ impl WebPreviewView {
         cx: &mut Context<Workspace>,
     ) -> Entity<Self> {
         let workspace_context = Self::workspace_context(workspace, cx);
+        let initial_url = workspace_context
+            .root_path
+            .as_deref()
+            .and_then(dx_studio::default_preview_url)
+            .unwrap_or_else(|| DEFAULT_WEB_PREVIEW_URL.to_string());
         let weak_workspace = workspace.weak_handle();
 
         cx.new(|cx| {
             Self::new_for_url(
                 weak_workspace.clone(),
                 workspace_context.clone(),
-                DEFAULT_WEB_PREVIEW_URL.to_string(),
+                initial_url,
                 None,
                 None,
                 window,
@@ -1842,6 +1847,7 @@ impl WebPreviewView {
             "title": diagnostics.pointer("/page/title").and_then(Value::as_str),
             "ready_state": diagnostics.pointer("/page/document/ready_state").and_then(Value::as_str),
             "counts": diagnostics.pointer("/page/counts").cloned(),
+            "dx_studio": diagnostics.pointer("/page/dx_studio").cloned(),
         }))
     }
 
@@ -1863,6 +1869,7 @@ impl WebPreviewView {
             "title": snapshot.pointer("/dom/title").and_then(Value::as_str),
             "ready_state": snapshot.pointer("/dom/ready_state").and_then(Value::as_str),
             "counts": snapshot.pointer("/dom/counts").cloned(),
+            "dx_studio": snapshot.pointer("/dom/dx_studio").cloned(),
         }))
     }
 
@@ -1886,6 +1893,7 @@ impl WebPreviewView {
             "ready_state": probe.pointer("/probe/ready_state").and_then(Value::as_str),
             "readiness": probe.pointer("/probe/readiness").cloned(),
             "counts": probe.pointer("/probe/counts").cloned(),
+            "dx_studio": probe.pointer("/probe/dx_studio").cloned(),
         }))
     }
 
@@ -37149,7 +37157,109 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
       const value = element.getAttribute(name);
       if (value) attributes[name] = limitText(value, 220);
     }
+    for (const attribute of Array.from(element.attributes || [])) {
+      if (attribute.name.startsWith("data-dx-") && attribute.value) {
+        attributes[attribute.name] = limitText(attribute.value, 220);
+      }
+    }
     return attributes;
+  };
+
+  const DX_STUDIO_MARKER_SELECTOR = [
+    "[data-dx-route]",
+    "[data-dx-source]",
+    "[data-dx-forge]",
+    "[data-dx-package]",
+    "[data-dx-asset]",
+    "[data-dx-hot-reload-target]",
+    "[data-dx-update-target]",
+    "[data-dx-component]",
+    "[data-dx-state]",
+    "[data-dx-action]",
+    "[data-dx-ready]"
+  ].join(",");
+
+  const dxUniqueStrings = (values) => {
+    const seen = new Set();
+    const unique = [];
+    for (const value of values) {
+      const text = limitText(value, 260);
+      if (!text || seen.has(text)) continue;
+      seen.add(text);
+      unique.push(text);
+    }
+    return unique;
+  };
+
+  const dxStudioMarkerAttributes = (element) => {
+    const attributes = {};
+    for (const attribute of Array.from(element.attributes || [])) {
+      if (attribute.name.startsWith("data-dx-") && attribute.value) {
+        attributes[attribute.name] = limitText(attribute.value, 260);
+      }
+    }
+    return attributes;
+  };
+
+  const dxStudioSnapshot = () => {
+    let elements = [];
+    try {
+      elements = Array.from(document.querySelectorAll(DX_STUDIO_MARKER_SELECTOR));
+    } catch (_error) {
+      elements = [];
+    }
+
+    const markers = elements.slice(0, 80).map((element, index) => ({
+      index,
+      selector: cssSelector(element),
+      tag: element.tagName.toLowerCase(),
+      text: limitText(element.innerText || element.textContent, 160),
+      rect: roundedRect(element),
+      attributes: dxStudioMarkerAttributes(element)
+    }));
+
+    const valuesFor = (name) => dxUniqueStrings(markers.map((marker) => marker.attributes[name]));
+    const routeMarkers = valuesFor("data-dx-route");
+    const sourceFiles = valuesFor("data-dx-source");
+    const forgePackages = dxUniqueStrings([
+      ...valuesFor("data-dx-forge"),
+      ...valuesFor("data-dx-package")
+    ]);
+    const assets = valuesFor("data-dx-asset");
+    const hotReloadTargets = dxUniqueStrings([
+      ...valuesFor("data-dx-hot-reload-target"),
+      ...valuesFor("data-dx-update-target")
+    ]);
+    const route = routeMarkers[0]
+      || document.documentElement?.getAttribute("data-dx-route")
+      || document.body?.getAttribute("data-dx-route")
+      || null;
+
+    return {
+      schema: "zed.web_preview.dx_studio_page_markers.v1",
+      status: route || markers.length > 0 ? "dx_www_route_detected" : "not_detected",
+      route,
+      source_files: sourceFiles,
+      forge_packages: forgePackages,
+      assets,
+      hot_reload_targets: hotReloadTargets,
+      marker_count: elements.length,
+      returned_marker_count: markers.length,
+      truncated: elements.length > markers.length,
+      markers,
+      readiness: {
+        has_route_marker: Boolean(route),
+        has_source_marker: sourceFiles.length > 0,
+        has_forge_marker: forgePackages.length > 0,
+        has_hot_reload_target: hotReloadTargets.length > 0
+      },
+      semantic_hooks: {
+        route_to_source: sourceFiles.length > 0,
+        forge_readiness: forgePackages.length > 0,
+        drop_to_code_ready: markers.some((marker) => marker.attributes["data-dx-source"]),
+        hot_reload_scope_ready: hotReloadTargets.length > 0
+      }
+    };
   };
 
   const domTreeNode = (node, depth, siblingIndex, budget) => {
@@ -38085,6 +38195,7 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
         },
         active_element: elementSnapshot(activeElement),
         selection: selection && String(selection).trim() ? limitText(selection.toString(), 600) : null,
+        dx_studio: dxStudioSnapshot(),
         headings,
         landmarks: sampleElements("main, nav, aside, header, footer, [role='main'], [role='navigation'], [role='complementary']", 18),
         controls: sampleElements("button, [role='button'], input, textarea, select, [contenteditable='true']", 40),
@@ -38175,6 +38286,7 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
           inputs: document.querySelectorAll("input, textarea, select, [contenteditable='true']").length,
           forms: document.forms?.length || 0
         },
+        dx_studio: dxStudioSnapshot(),
         root: rootSnapshot
       });
     },
@@ -38272,6 +38384,7 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
           busy_indicators: busyCount,
           body_text_length: body?.innerText?.length || 0
         },
+        dx_studio: dxStudioSnapshot(),
         navigation_timing: navigationTimingSnapshot(),
         selector_probe: readinessSelectorSnapshot(),
         action_target_sample: actionTargets.targets.slice(0, 24)
