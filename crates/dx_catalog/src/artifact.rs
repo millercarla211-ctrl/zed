@@ -146,11 +146,7 @@ impl MappedCatalogArtifact {
             let artifact = CatalogArtifactRef::parse(&mmap)?;
             artifact.header()
         };
-        Ok(Self {
-            path,
-            mmap,
-            header,
-        })
+        Ok(Self { path, mmap, header })
     }
 
     pub fn path(&self) -> &Path {

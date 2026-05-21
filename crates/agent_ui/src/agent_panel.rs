@@ -38,6 +38,7 @@ use crate::dx_agent_bridge::dx_agent_bridge_snapshot;
 use crate::dx_check_score::{DxCheckScoreInput, check_score_snapshot};
 use crate::dx_deploy_targets::{DxDeployTargetSnapshot, deploy_target_snapshot};
 use crate::dx_launch_audit::launch_audit_snapshot;
+use crate::dx_launch_binary_cache::{DxBinaryCacheInput, binary_cache_snapshot};
 use crate::dx_launch_contracts::launch_contract_snapshot;
 use crate::dx_launch_prompts::{
     deploy_readiness_prompt, forge_proof_prompt, launch_audit_prompt, launch_handoff_prompt,
@@ -6279,6 +6280,33 @@ impl AgentPanel {
             .iter()
             .map(|bucket| bucket.count)
             .sum::<usize>();
+        let receipt_bucket_count = |label: &str| {
+            receipt_snapshot
+                .buckets
+                .iter()
+                .find(|bucket| bucket.label == label)
+                .map(|bucket| bucket.count)
+                .unwrap_or_default()
+        };
+        let binary_cache = binary_cache_snapshot(DxBinaryCacheInput {
+            provider_catalog_path: agent_bridge.catalog.path.clone(),
+            provider_catalog_present: agent_bridge.catalog.present,
+            provider_catalog_stale: agent_bridge.catalog.stale,
+            provider_count: agent_bridge.catalog.provider_count,
+            model_count: agent_bridge.catalog.model_count,
+            launch_receipt_root: launch_receipts.root.clone(),
+            launch_latest_present: launch_receipts.latest_present,
+            launch_snapshot_count: launch_receipts.snapshot_count,
+            launch_malformed_count: launch_receipts.malformed_count,
+            launch_stale_count: launch_receipts.stale_count,
+            launch_expired_count: launch_receipts.expired_count,
+            receipt_root: receipt_snapshot.root.clone(),
+            receipt_root_exists: receipt_snapshot.root_exists,
+            receipt_file_count,
+            token_receipt_count: receipt_bucket_count("Tokens"),
+            rlm_receipt_count: receipt_bucket_count("RLM"),
+            serializer_receipt_count: receipt_bucket_count("Serializer"),
+        });
         let source_sets = source_set_snapshot(&workspace_roots);
         let tool_history = tool_history_snapshot(&workspace_roots);
         let deploy_targets = deploy_target_snapshot(&workspace_roots);
@@ -6336,6 +6364,7 @@ impl AgentPanel {
             launch_audit,
             source_audit,
             www_evidence,
+            binary_cache,
             receipt_snapshot,
             source_sets,
             tool_history,

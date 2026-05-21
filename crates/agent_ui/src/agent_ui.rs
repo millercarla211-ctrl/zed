@@ -16,6 +16,7 @@ mod dx_agent_bridge;
 mod dx_check_score;
 mod dx_deploy_targets;
 mod dx_launch_audit;
+mod dx_launch_binary_cache;
 mod dx_launch_contracts;
 mod dx_launch_prompts;
 mod dx_launch_readiness;

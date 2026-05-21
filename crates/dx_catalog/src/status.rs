@@ -46,8 +46,14 @@ pub fn current_launch_status() -> DxLaunchStatus {
             feature(
                 "dx_catalog provider/model archive",
                 100,
-                "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, source adapters, source discovery, local GGUF model reader, provider/auth reader, models.dev/OpenRouter/LiteLLM JSON model parsers, Agent picker projection, route selection, OpenRouter input, auth-profile enrichment, optional generated-artifact Agent picker enrichment, catalog alias resolution, route IDs that resolve to executable Agent models, permissioned catalog execution plans, provider adapter registration specs, production artifact materialization from discovered G-drive sources, and an explicit Agent-approved artifact generation trigger are in place.",
+                "Archived provider/model structs, artifact header, memmap read path, generator merge/dedupe, validation, last-good fallback, source adapters, source discovery, local GGUF model reader, provider/auth reader, models.dev/OpenRouter/LiteLLM JSON model parsers, Agent picker projection, route selection, OpenRouter input, auth-profile enrichment, optional generated-artifact Agent picker enrichment, catalog alias resolution, route IDs that resolve to executable Agent models, permissioned catalog execution plans, provider adapter registration specs, production artifact materialization from discovered G-drive sources, an explicit Agent-approved artifact generation trigger, and a stable receipt metadata cache artifact contract are in place.",
                 "Keep the catalog stable while provider settings approvals and metasearch are wired.",
+            ),
+            feature(
+                "DX receipt binary cache bridge",
+                100,
+                "Stable metadata-only receipt cache structs, artifact header, trusted rkyv serialization/deserialization helpers, and a memmap read path are in place for launch, agent, token, Forge, source, media, RLM, serializer, deploy, and runtime-proof receipts without changing the JSON receipt producers.",
+                "Let Zed continue using JSON receipts as authoritative until a governed CLI producer materializes receipt cache artifacts.",
             ),
             feature(
                 "Universal provider routing",

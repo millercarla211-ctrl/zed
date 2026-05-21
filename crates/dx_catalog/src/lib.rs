@@ -8,6 +8,7 @@ mod materialize;
 mod model_catalog_readers;
 mod provider_readers;
 mod readers;
+mod receipt_cache;
 mod sources;
 mod status;
 mod types;
@@ -57,6 +58,13 @@ pub use provider_readers::{
 pub use readers::{
     LocalModelCatalogReadOutput, LocalModelCatalogReadReport, LocalModelSourceReaderOptions,
     SkippedLocalModelFile, read_local_model_source, read_local_models_from_root,
+};
+pub use receipt_cache::{
+    DX_RECEIPT_CACHE_ARTIFACT_VERSION, DX_RECEIPT_CACHE_MAGIC, DX_RECEIPT_CACHE_SCHEMA_VERSION,
+    DxReceiptCacheEntry, DxReceiptCacheEntryKind, DxReceiptCacheFreshness, DxReceiptCacheManifest,
+    DxReceiptCacheRoot, MappedReceiptCacheArtifact, ReceiptCacheArtifactHeader,
+    ReceiptCacheArtifactRef, deserialize_trusted_receipt_cache_payload,
+    read_receipt_cache_artifact, serialize_receipt_cache_payload, write_receipt_cache_artifact,
 };
 pub use sources::{
     CatalogSourceCandidate, CatalogSourceCandidateStatus, CatalogSourceDiscoveryConfig,

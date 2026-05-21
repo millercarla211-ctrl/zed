@@ -10,14 +10,15 @@ use gpui::{AnyElement, App, SharedString, prelude::*};
 use ui::{IconName, prelude::*};
 
 use crate::dx_agent_bridge::{
-    DxAgentAutomation, DxAgentBridgeSnapshot, DxAgentModel, DxAgentProvider, DxAgentSocialAccount,
-    DxAgentSocialActionSummary,
+    DxAgentAutomation, DxAgentBridgeSnapshot, DxAgentModel, DxAgentProvider, DxAgentRowAction,
+    DxAgentSocialAccount, DxAgentSocialActionSummary,
 };
 use crate::dx_check_score::DxCheckScoreSnapshot;
 use crate::dx_deploy_targets::{
     DxDeployReceiptBucket, DxDeployReceiptSummary, DxDeployTarget, DxDeployTargetSnapshot,
 };
 use crate::dx_launch_audit::DxLaunchAuditSnapshot;
+use crate::dx_launch_binary_cache::{DxBinaryCacheRow, DxBinaryCacheSnapshot};
 use crate::dx_launch_contracts::DxLaunchContractSnapshot;
 use crate::dx_launch_readiness::DxLaunchReadinessSnapshot;
 use crate::dx_launch_receipts::{DxLaunchReceiptReviewSnapshot, DxLaunchReceiptSummary};
@@ -66,6 +67,7 @@ pub(crate) struct DxLaunchWorkspaceStatus {
     pub launch_audit: DxLaunchAuditSnapshot,
     pub source_audit: DxLaunchSourceAuditSnapshot,
     pub www_evidence: DxWwwLaunchEvidenceSnapshot,
+    pub binary_cache: DxBinaryCacheSnapshot,
     pub receipt_snapshot: DxReceiptSnapshot,
     pub source_sets: DxSourceSetSnapshot,
     pub tool_history: DxToolHistorySnapshot,
@@ -312,6 +314,8 @@ fn render_right_rail(
         .child(www_launch_evidence_state(&status.www_evidence, cx))
         .child(section_title("Launch Receipts", IconName::FileTextOutlined))
         .child(launch_receipt_review_state(&status.launch_receipts, cx))
+        .child(section_title("Binary Cache", IconName::Sliders))
+        .child(binary_cache_state(&status.binary_cache, cx))
         .when(status.agent_bridge.show_in_agent_rail, |this| {
             this.child(section_title("DX Agents", IconName::ZedAgent))
                 .child(dx_agent_bridge_state(&status.agent_bridge, cx))
@@ -479,6 +483,54 @@ fn launch_status_state(snapshot: &DxLaunchStatusSnapshot, cx: &App) -> AnyElemen
     }
 
     stack.into_any_element()
+}
+
+fn binary_cache_state(snapshot: &DxBinaryCacheSnapshot, cx: &App) -> AnyElement {
+    let mut stack = v_flex()
+        .gap_1()
+        .child(metric_row("Status", snapshot.status.clone()))
+        .child(
+            Label::new(snapshot.operator_summary.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .child(metric_row("Next", snapshot.next_action.clone()));
+
+    for (ix, row) in snapshot.rows.iter().take(4).enumerate() {
+        stack = stack.child(binary_cache_row(
+            SharedString::from(format!("dx-binary-cache-row-{ix}")),
+            row,
+            cx,
+        ));
+    }
+
+    stack.into_any_element()
+}
+
+fn binary_cache_row(id: SharedString, row: &DxBinaryCacheRow, cx: &App) -> AnyElement {
+    v_flex()
+        .id(id)
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().element_background)
+        .child(metric_row(row.label.clone(), row.state.clone()))
+        .child(
+            Label::new(row.detail.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .child(
+            Label::new(row.path.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .into_any_element()
 }
 
 fn launch_contract_state(snapshot: &DxLaunchContractSnapshot, cx: &App) -> AnyElement {
@@ -1592,7 +1644,41 @@ fn dx_agent_social_row(id: SharedString, account: &DxAgentSocialAccount, cx: &Ap
                     .truncate(),
             )
         })
+        .when_some(
+            dx_agent_action_line(&account.actions),
+            |this, action_line| {
+                this.child(
+                    Label::new(action_line)
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted)
+                        .truncate(),
+                )
+            },
+        )
         .into_any_element()
+}
+
+fn dx_agent_action_line(actions: &[DxAgentRowAction]) -> Option<String> {
+    if actions.is_empty() {
+        return None;
+    }
+
+    let ready = actions.iter().filter(|action| action.enabled).count();
+    let user_actions = actions
+        .iter()
+        .filter(|action| action.user_action_required)
+        .count();
+    let receipts = actions
+        .iter()
+        .take(2)
+        .map(|action| action.receipt_filename.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    Some(format!(
+        "{ready}/{} action(s) ready, {user_actions} user action(s), receipts {receipts}",
+        actions.len()
+    ))
 }
 
 fn dx_agent_social_action_row(
@@ -1706,6 +1792,17 @@ fn dx_agent_automation_row(
                     .truncate(),
             )
         })
+        .when_some(
+            dx_agent_action_line(&automation.actions),
+            |this, action_line| {
+                this.child(
+                    Label::new(action_line)
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted)
+                        .truncate(),
+                )
+            },
+        )
         .into_any_element()
 }
 

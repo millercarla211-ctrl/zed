@@ -1,3 +1,28 @@
+[2026-05-21] - DX Agents Row Action Consumption
+
+ADDED:
+- Added validated parsing for DX Agents social and automation `actions[]` descriptors from redacted receipt JSON.
+- Surfaced action readiness, user-action requirements, and target receipt filenames in Agent Configuration and the launch right rail.
+
+CHANGED:
+- Social connect/disconnect and automation run/refresh controls now honor receipt-declared enablement while still executing only fixed safe Zed bridge command vectors.
+- Added a first-class automation row section in the DX Agents settings surface beside status, social, contract, and provider/model catalog controls.
+
+NOTES:
+- This slice does not execute receipt-supplied command strings, import secrets, run dx-agents, start servers, run Cargo checks/tests/builds/clippy, or call providers. Runtime visual and command proof remain deferred to the governed validation window.
+
+[2026-05-21] - DX Metadata Binary Cache Bridge
+
+ADDED:
+- Added a stable metadata-only receipt cache artifact contract in `crates/dx_catalog`, including receipt-root/entry records, artifact header parsing, trusted rkyv serialization/deserialization helpers, and a read-only memmap artifact path.
+- Added a DX AI workspace Binary Cache right-rail section that reports provider catalog, launch receipt, global receipt-index, and token/tool meter cache readiness from real configured/default paths.
+
+CHANGED:
+- Updated DX launch notes and status to 100/100 coding-complete for the non-mutating editor lane before governed runtime proof and upstream DX-WWW source-audit reconciliation.
+
+NOTES:
+- This slice keeps JSON receipts authoritative, does not write receipt cache artifacts from Zed, does not run CLI commands, does not start local servers, does not run Cargo/`just run`, and does not touch `G:\Dx\www` package work.
+
 [2026-05-21] - DX Onboarding Preview Contract
 
 ADDED:

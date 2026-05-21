@@ -65,7 +65,21 @@ pub(crate) struct DxAgentSocialAccount {
     pub configured: bool,
     pub connected: bool,
     pub qr_connect_supported: bool,
+    pub actions: Vec<DxAgentRowAction>,
     pub next_action: String,
+}
+
+#[derive(Clone)]
+pub(crate) struct DxAgentRowAction {
+    pub id: String,
+    pub label: String,
+    pub command: String,
+    pub enabled: bool,
+    pub user_action_required: bool,
+    pub writes_receipt: bool,
+    pub receipt_filename: String,
+    pub refresh_command: String,
+    pub secrets_exposed: bool,
 }
 
 #[derive(Clone)]
@@ -94,6 +108,7 @@ pub(crate) struct DxAgentAutomation {
     pub enabled: bool,
     pub schedule_kind: String,
     pub source: String,
+    pub actions: Vec<DxAgentRowAction>,
     pub next_action: String,
 }
 
@@ -563,6 +578,7 @@ fn social_accounts(value: &Value) -> Vec<DxAgentSocialAccount> {
                     connected: bool_field(account, &["connected"]).unwrap_or(false),
                     qr_connect_supported: bool_field(account, &["qr_connect_supported"])
                         .unwrap_or(false),
+                    actions: social_row_actions(account),
                     next_action: string_field(account, &["next_action"]).unwrap_or_default(),
                 })
                 .collect()
@@ -661,11 +677,105 @@ fn automations(value: &Value) -> Vec<DxAgentAutomation> {
                         .unwrap_or_else(|| "unknown".to_string()),
                     source: string_field(automation, &["source"])
                         .unwrap_or_else(|| "unknown".to_string()),
+                    actions: automation_row_actions(automation),
                     next_action: string_field(automation, &["next_action"]).unwrap_or_default(),
                 })
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn social_row_actions(value: &Value) -> Vec<DxAgentRowAction> {
+    row_actions(value, |id, command, receipt_filename, refresh_command| {
+        refresh_command == "dx-agents agents social list --json"
+            && match id {
+                "connect" => {
+                    receipt_filename == "social-connect-latest.json"
+                        && is_social_action_command(command, "connect")
+                }
+                "disconnect" => {
+                    receipt_filename == "social-disconnect-latest.json"
+                        && is_social_action_command(command, "disconnect")
+                }
+                "refresh" => {
+                    receipt_filename == "social-list-latest.json"
+                        && command == "dx-agents agents social list --json"
+                }
+                _ => false,
+            }
+    })
+}
+
+fn automation_row_actions(value: &Value) -> Vec<DxAgentRowAction> {
+    row_actions(value, |id, command, receipt_filename, refresh_command| {
+        refresh_command == "dx-agents agents automate list --json"
+            && match id {
+                "run" => {
+                    receipt_filename == "run-latest.json"
+                        && command == "dx-agents agents run --json"
+                }
+                "refresh" => {
+                    receipt_filename == "automate-list-latest.json"
+                        && command == "dx-agents agents automate list --json"
+                }
+                _ => false,
+            }
+    })
+}
+
+fn row_actions<F>(value: &Value, is_allowed: F) -> Vec<DxAgentRowAction>
+where
+    F: Fn(&str, &str, &str, &str) -> bool,
+{
+    array_field(value, &["actions"])
+        .map(|actions| {
+            actions
+                .iter()
+                .take(8)
+                .filter_map(|action| row_action(action, &is_allowed))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn row_action<F>(value: &Value, is_allowed: &F) -> Option<DxAgentRowAction>
+where
+    F: Fn(&str, &str, &str, &str) -> bool,
+{
+    let id = string_field(value, &["id"])?;
+    let command = string_field(value, &["command"])?;
+    let receipt_filename = string_field(value, &["receipt_filename"])?;
+    let refresh_command = string_field(value, &["refresh_command"])?;
+    let secrets_exposed = bool_field(value, &["secrets_exposed"]).unwrap_or(true);
+    let writes_receipt = bool_field(value, &["writes_receipt"]).unwrap_or(false);
+
+    if !writes_receipt
+        || secrets_exposed
+        || is_secret_like_arg(&command)
+        || is_secret_like_arg(&receipt_filename)
+        || is_secret_like_arg(&refresh_command)
+        || !is_allowed(&id, &command, &receipt_filename, &refresh_command)
+    {
+        return None;
+    }
+
+    Some(DxAgentRowAction {
+        label: string_field(value, &["label"]).unwrap_or_else(|| id.clone()),
+        id,
+        command,
+        enabled: bool_field(value, &["enabled"]).unwrap_or(false),
+        user_action_required: bool_field(value, &["user_action_required"]).unwrap_or(false),
+        writes_receipt,
+        receipt_filename,
+        refresh_command,
+        secrets_exposed,
+    })
+}
+
+fn is_social_action_command(command: &str, action: &str) -> bool {
+    command == format!("dx-agents agents social {action} --json")
+        || command.starts_with(&format!("dx-agents agents social {action} --platform "))
+            && command.ends_with(" --json")
 }
 
 fn providers(value: &Value) -> Vec<DxAgentProvider> {

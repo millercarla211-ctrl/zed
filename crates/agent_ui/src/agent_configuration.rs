@@ -50,10 +50,10 @@ use crate::{
     agent_configuration::add_llm_provider_modal::{AddLlmProviderModal, LlmCompatibleProvider},
     agent_connection_store::{AgentConnectionStatus, AgentConnectionStore},
     dx_agent_bridge::{
-        DxAgentBridgeSnapshot, DxAgentSocialActionSummary, dx_agent_bridge_snapshot,
-        dx_agent_cli_actions_allowed, dx_agent_cli_path, dx_agent_dx_home, dx_agent_receipt_root,
-        run_dx_agent_command, run_dx_agent_import_summary_command,
-        run_dx_agent_release_gate_command,
+        DxAgentBridgeSnapshot, DxAgentRowAction, DxAgentSocialActionSummary,
+        dx_agent_bridge_snapshot, dx_agent_cli_actions_allowed, dx_agent_cli_path,
+        dx_agent_dx_home, dx_agent_receipt_root, run_dx_agent_command,
+        run_dx_agent_import_summary_command, run_dx_agent_release_gate_command,
     },
 };
 
@@ -70,6 +70,65 @@ pub struct AgentConfiguration {
     context_server_registry: Entity<ContextServerRegistry>,
     _subscriptions: Vec<Subscription>,
     scroll_handle: ScrollHandle,
+}
+
+fn dx_agent_row_action<'a>(
+    actions: &'a [DxAgentRowAction],
+    id: &str,
+) -> Option<&'a DxAgentRowAction> {
+    actions.iter().find(|action| action.id == id)
+}
+
+fn dx_agent_action_summary(actions: &[DxAgentRowAction]) -> Option<String> {
+    if actions.is_empty() {
+        return None;
+    }
+
+    let summary = actions
+        .iter()
+        .take(3)
+        .map(|action| {
+            let state = if action.enabled { "ready" } else { "disabled" };
+            let validation = if !action.command.is_empty() && !action.secrets_exposed {
+                "validated"
+            } else {
+                "blocked"
+            };
+            let user_action = if action.user_action_required {
+                ", user action"
+            } else {
+                ""
+            };
+            let receipt = if action.writes_receipt {
+                format!(" -> {}", action.receipt_filename)
+            } else {
+                String::new()
+            };
+            format!(
+                "{} {} {}{}{}",
+                action.label, state, validation, user_action, receipt
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+
+    Some(format!("Actions: {summary}"))
+}
+
+fn dx_agent_action_tooltip(action: Option<&DxAgentRowAction>, fallback: &str) -> String {
+    action
+        .map(|action| {
+            let refresh = if action.refresh_command.is_empty() {
+                "without refresh handoff"
+            } else {
+                "with fixed refresh handoff"
+            };
+            format!(
+                "{}; writes {}; {}",
+                fallback, action.receipt_filename, refresh
+            )
+        })
+        .unwrap_or_else(|| fallback.to_string())
 }
 
 impl AgentConfiguration {
@@ -296,6 +355,7 @@ impl AgentConfiguration {
                     .child(self.render_dx_agents_import_summary_item(&snapshot, cx))
                     .child(self.render_dx_agents_release_gate_item(&snapshot, cx))
                     .child(self.render_dx_agents_social_items(&snapshot, cx))
+                    .child(self.render_dx_agents_automation_items(&snapshot, cx))
                     .child(self.render_dx_agents_catalog_items(&snapshot, cx)),
             )
     }
@@ -632,6 +692,11 @@ impl AgentConfiguration {
                 } else {
                     "needs setup"
                 };
+                let ready_action_count = account
+                    .actions
+                    .iter()
+                    .filter(|action| action.enabled)
+                    .count();
                 let mut item = AiSettingItem::new(
                     format!("dx-agent-social-{}", account.platform),
                     account.label.clone(),
@@ -648,11 +713,15 @@ impl AgentConfiguration {
                         .color(Color::Muted),
                 )
                 .detail_label(format!(
-                    "{} - {} - {}",
-                    account.platform, state, account.next_action
+                    "{} - {} - {} ready action(s) - {}",
+                    account.platform, state, ready_action_count, account.next_action
                 ));
 
                 if snapshot.enabled && snapshot.cli_actions_allowed {
+                    let refresh_action = dx_agent_row_action(&account.actions, "refresh");
+                    let refresh_enabled = refresh_action.map_or(true, |action| action.enabled);
+                    let refresh_tooltip =
+                        dx_agent_action_tooltip(refresh_action, "Refresh redacted social receipt");
                     item = item.action(
                         IconButton::new(
                             format!("dx-agent-social-list-{}", account.platform),
@@ -660,7 +729,8 @@ impl AgentConfiguration {
                         )
                         .icon_color(Color::Muted)
                         .icon_size(IconSize::Small)
-                        .tooltip(Tooltip::text("Refresh redacted social receipt"))
+                        .disabled(!refresh_enabled)
+                        .tooltip(Tooltip::text(refresh_tooltip))
                         .on_click(cx.listener(|this, _, _window, cx| {
                             this.run_dx_agents_bridge_action(
                                 vec!["agents", "social", "list", "--json"],
@@ -671,6 +741,13 @@ impl AgentConfiguration {
 
                     let platform = account.platform.clone();
                     if account.connected {
+                        let disconnect_action = dx_agent_row_action(&account.actions, "disconnect");
+                        let disconnect_enabled =
+                            disconnect_action.map_or(true, |action| action.enabled);
+                        let disconnect_tooltip = dx_agent_action_tooltip(
+                            disconnect_action,
+                            "Prepare redacted disconnect/revoke receipt",
+                        );
                         item = item.action(
                             IconButton::new(
                                 format!("dx-agent-social-disconnect-{}", account.platform),
@@ -678,7 +755,8 @@ impl AgentConfiguration {
                             )
                             .icon_color(Color::Muted)
                             .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::text("Prepare redacted disconnect/revoke receipt"))
+                            .disabled(!disconnect_enabled)
+                            .tooltip(Tooltip::text(disconnect_tooltip))
                             .on_click(cx.listener(
                                 move |this, _, _window, cx| {
                                     this.run_dx_agents_bridge_action(
@@ -696,6 +774,12 @@ impl AgentConfiguration {
                             )),
                         );
                     } else {
+                        let connect_action = dx_agent_row_action(&account.actions, "connect");
+                        let connect_enabled = connect_action.map_or(true, |action| action.enabled);
+                        let connect_tooltip = dx_agent_action_tooltip(
+                            connect_action,
+                            "Prepare redacted connect/QR receipt",
+                        );
                         item = item.action(
                             IconButton::new(
                                 format!("dx-agent-social-connect-{}", account.platform),
@@ -703,7 +787,8 @@ impl AgentConfiguration {
                             )
                             .icon_color(Color::Muted)
                             .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::text("Prepare redacted connect/QR receipt"))
+                            .disabled(!connect_enabled)
+                            .tooltip(Tooltip::text(connect_tooltip))
                             .on_click(cx.listener(
                                 move |this, _, _window, cx| {
                                     this.run_dx_agents_bridge_action(
@@ -724,6 +809,13 @@ impl AgentConfiguration {
                 }
 
                 stack = stack.child(item);
+                if let Some(action_summary) = dx_agent_action_summary(&account.actions) {
+                    stack = stack.child(
+                        Label::new(action_summary)
+                            .size(LabelSize::Small)
+                            .color(Color::Muted),
+                    );
+                }
             }
 
             if snapshot.social_connect.present {
@@ -735,6 +827,115 @@ impl AgentConfiguration {
                 stack = stack.child(
                     self.render_dx_agents_social_action_receipt(&snapshot.social_disconnect),
                 );
+            }
+        }
+
+        stack.into_any_element()
+    }
+
+    fn render_dx_agents_automation_items(
+        &self,
+        snapshot: &DxAgentBridgeSnapshot,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let mut stack = v_flex()
+            .gap_1()
+            .child(Label::new("Automations").size(LabelSize::Small));
+
+        if snapshot.automations.is_empty() {
+            stack = stack.child(
+                Label::new(
+                    "No automation receipt yet. Run the bridge refresh or automation list command.",
+                )
+                .size(LabelSize::Small)
+                .color(Color::Muted),
+            );
+        } else {
+            for automation in snapshot.automations.iter().take(4) {
+                let ready_action_count = automation
+                    .actions
+                    .iter()
+                    .filter(|action| action.enabled)
+                    .count();
+                let detail = format!(
+                    "{} - {} - {} - {} ready action(s) - {}",
+                    automation.source,
+                    automation.schedule_kind,
+                    automation.status,
+                    ready_action_count,
+                    automation.next_action
+                );
+                let mut item = AiSettingItem::new(
+                    format!("dx-agent-automation-{}", automation.id),
+                    automation.id.clone(),
+                    if automation.enabled {
+                        AiSettingItemStatus::Running
+                    } else {
+                        AiSettingItemStatus::Stopped
+                    },
+                    AiSettingItemSource::Custom,
+                )
+                .icon(
+                    Icon::new(IconName::ListTodo)
+                        .size(IconSize::Small)
+                        .color(Color::Muted),
+                )
+                .detail_label(detail);
+
+                if snapshot.enabled && snapshot.cli_actions_allowed {
+                    let refresh_action = dx_agent_row_action(&automation.actions, "refresh");
+                    let refresh_enabled = refresh_action.map_or(true, |action| action.enabled);
+                    let refresh_tooltip = dx_agent_action_tooltip(
+                        refresh_action,
+                        "Refresh redacted automation receipt",
+                    );
+                    item = item.action(
+                        IconButton::new(
+                            format!("dx-agent-automation-refresh-{}", automation.id),
+                            IconName::RotateCw,
+                        )
+                        .icon_color(Color::Muted)
+                        .icon_size(IconSize::Small)
+                        .disabled(!refresh_enabled)
+                        .tooltip(Tooltip::text(refresh_tooltip))
+                        .on_click(cx.listener(|this, _, _window, cx| {
+                            this.run_dx_agents_bridge_action(
+                                vec!["agents", "automate", "list", "--json"],
+                                cx,
+                            );
+                        })),
+                    );
+
+                    let run_action = dx_agent_row_action(&automation.actions, "run");
+                    let run_enabled =
+                        run_action.map_or(automation.enabled, |action| action.enabled);
+                    let run_tooltip = dx_agent_action_tooltip(
+                        run_action,
+                        "Write redacted automation run receipt",
+                    );
+                    item = item.action(
+                        IconButton::new(
+                            format!("dx-agent-automation-run-{}", automation.id),
+                            IconName::PlayOutlined,
+                        )
+                        .icon_color(Color::Muted)
+                        .icon_size(IconSize::Small)
+                        .disabled(!run_enabled)
+                        .tooltip(Tooltip::text(run_tooltip))
+                        .on_click(cx.listener(|this, _, _window, cx| {
+                            this.run_dx_agents_bridge_action(vec!["agents", "run", "--json"], cx);
+                        })),
+                    );
+                }
+
+                stack = stack.child(item);
+                if let Some(action_summary) = dx_agent_action_summary(&automation.actions) {
+                    stack = stack.child(
+                        Label::new(action_summary)
+                            .size(LabelSize::Small)
+                            .color(Color::Muted),
+                    );
+                }
             }
         }
 
