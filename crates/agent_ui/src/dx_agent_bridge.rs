@@ -289,61 +289,129 @@ pub(crate) fn dx_agent_cli_actions_allowed(cx: &App) -> bool {
     settings.enabled && settings.cli_actions_allowed
 }
 
+#[derive(Clone)]
+pub(crate) enum DxAgentPublicCommand {
+    Contract,
+    Status,
+    Run,
+    ReceiptsList,
+    SocialList,
+    SocialConnect { platform: String },
+    SocialDisconnect { platform: String },
+    AutomationsList,
+    ProvidersList,
+    ModelsList,
+    ProviderCatalogRegenerate,
+}
+
+impl DxAgentPublicCommand {
+    fn args(&self) -> Vec<String> {
+        match self {
+            Self::Contract => dx_agents_args(&["contract"]),
+            Self::Status => dx_agents_args(&["status"]),
+            Self::Run => dx_agents_args(&["run"]),
+            Self::ReceiptsList => dx_agents_args(&["receipts", "list"]),
+            Self::SocialList => dx_agents_args(&["social", "list"]),
+            Self::SocialConnect { platform } => {
+                dx_agents_platform_args("connect", platform.as_str())
+            }
+            Self::SocialDisconnect { platform } => {
+                dx_agents_platform_args("disconnect", platform.as_str())
+            }
+            Self::AutomationsList => dx_agents_args(&["automate", "list"]),
+            Self::ProvidersList => dx_agents_args(&["providers", "list"]),
+            Self::ModelsList => dx_agents_args(&["models", "list"]),
+            Self::ProviderCatalogRegenerate => {
+                dx_agents_args(&["providers", "catalog", "regenerate"])
+            }
+        }
+    }
+
+    fn is_safe(&self) -> bool {
+        match self {
+            Self::SocialConnect { platform } | Self::SocialDisconnect { platform } => {
+                is_safe_platform_arg(platform)
+            }
+            _ => true,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum DxAgentMetadataCommand {
+    ImportSummary,
+    ReleaseGate,
+}
+
+impl DxAgentMetadataCommand {
+    fn args(self) -> Vec<String> {
+        match self {
+            Self::ImportSummary => dx_agents_args(&["import-summary"]),
+            Self::ReleaseGate => dx_agents_args(&["release-gate"]),
+        }
+    }
+
+    fn receipt_filename(self) -> &'static str {
+        match self {
+            Self::ImportSummary => "import-summary-latest.json",
+            Self::ReleaseGate => "release-gate-latest.json",
+        }
+    }
+
+    fn expected_schema(self) -> &'static str {
+        match self {
+            Self::ImportSummary => "dx.agents.zed.import_summary.v1",
+            Self::ReleaseGate => "dx.agents.zed.release_gate.v1",
+        }
+    }
+}
+
 pub(crate) fn run_dx_agent_public_command(
-    args: Vec<String>,
+    command: DxAgentPublicCommand,
     dx_home: Option<PathBuf>,
 ) -> Result<()> {
-    if !is_allowed_public_dx_agents_command(&args) {
+    if !command.is_safe() {
         return Err(anyhow!("unsupported DX Agents public bridge command"));
     }
 
+    let args = command.args();
     run_bridge_command(DEFAULT_DX_CLI.to_string(), args, dx_home)?;
     clear_snapshot_cache();
     Ok(())
 }
 
-pub(crate) fn run_dx_agent_import_summary_command(
+pub(crate) fn run_dx_agent_metadata_command(
+    command: DxAgentMetadataCommand,
     dx_home: Option<PathBuf>,
     receipt_root: PathBuf,
 ) -> Result<()> {
-    let output = run_bridge_command(
-        DEFAULT_DX_CLI.to_string(),
-        vec![
-            "agents".to_string(),
-            "import-summary".to_string(),
-            "--json".to_string(),
-        ],
-        dx_home,
-    )?;
+    let output = run_bridge_command(DEFAULT_DX_CLI.to_string(), command.args(), dx_home)?;
     write_json_receipt(
-        &receipt_root.join("import-summary-latest.json"),
+        &receipt_root.join(command.receipt_filename()),
         &output.stdout,
-        "dx.agents.zed.import_summary.v1",
+        command.expected_schema(),
     )?;
     clear_snapshot_cache();
     Ok(())
 }
 
-pub(crate) fn run_dx_agent_release_gate_command(
-    dx_home: Option<PathBuf>,
-    receipt_root: PathBuf,
-) -> Result<()> {
-    let output = run_bridge_command(
-        DEFAULT_DX_CLI.to_string(),
-        vec![
-            "agents".to_string(),
-            "release-gate".to_string(),
-            "--json".to_string(),
-        ],
-        dx_home,
-    )?;
-    write_json_receipt(
-        &receipt_root.join("release-gate-latest.json"),
-        &output.stdout,
-        "dx.agents.zed.release_gate.v1",
-    )?;
-    clear_snapshot_cache();
-    Ok(())
+fn dx_agents_args(args: &[&str]) -> Vec<String> {
+    let mut command = Vec::with_capacity(args.len() + 2);
+    command.push("agents".to_string());
+    command.extend(args.iter().map(|arg| (*arg).to_string()));
+    command.push("--json".to_string());
+    command
+}
+
+fn dx_agents_platform_args(action: &str, platform: &str) -> Vec<String> {
+    vec![
+        "agents".to_string(),
+        "social".to_string(),
+        action.to_string(),
+        "--platform".to_string(),
+        platform.to_string(),
+        "--json".to_string(),
+    ]
 }
 
 fn run_bridge_command(
@@ -1373,70 +1441,6 @@ fn is_secret_like_arg(value: &str) -> bool {
         || lower.contains("apikey")
         || lower.contains("password")
         || lower.contains("cookie")
-}
-
-fn is_allowed_public_dx_agents_command(args: &[String]) -> bool {
-    match args {
-        [agents, command, json] if agents == "agents" && json == "--json" => {
-            matches!(
-                command.as_str(),
-                "contract" | "contract-audit" | "snapshot" | "status" | "run"
-            )
-        }
-        [agents, receipts, list, json]
-            if agents == "agents"
-                && receipts == "receipts"
-                && list == "list"
-                && json == "--json" =>
-        {
-            true
-        }
-        [agents, providers, list, json]
-            if agents == "agents"
-                && providers == "providers"
-                && list == "list"
-                && json == "--json" =>
-        {
-            true
-        }
-        [agents, providers, catalog, regenerate, json]
-            if agents == "agents"
-                && providers == "providers"
-                && catalog == "catalog"
-                && regenerate == "regenerate"
-                && json == "--json" =>
-        {
-            true
-        }
-        [agents, models, list, json]
-            if agents == "agents" && models == "models" && list == "list" && json == "--json" =>
-        {
-            true
-        }
-        [agents, social, command, json]
-            if agents == "agents" && social == "social" && json == "--json" =>
-        {
-            command == "list"
-        }
-        [agents, social, command, platform_flag, platform, json]
-            if agents == "agents"
-                && social == "social"
-                && matches!(command.as_str(), "connect" | "disconnect")
-                && platform_flag == "--platform"
-                && json == "--json" =>
-        {
-            is_safe_platform_arg(platform)
-        }
-        [agents, automate, list, json]
-            if agents == "agents"
-                && automate == "automate"
-                && list == "list"
-                && json == "--json" =>
-        {
-            true
-        }
-        _ => false,
-    }
 }
 
 fn is_dx_agents_command(command: &str, args: &str) -> bool {

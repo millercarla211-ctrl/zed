@@ -8,6 +8,16 @@ NOTES:
 - This is a maintainability cleanup for the editor + AI panel + Web Preview launch posture; it preserves existing Write/Ask modes, model picker, thread behavior, Web Preview behavior, and Agent panel behavior.
 - No Cargo commands, local servers, live CLI commands, provider calls, automation runners, or `just run` were executed.
 
+[2026-05-22] - DX Agents Typed Command Bridge
+
+CHANGED:
+- Replaced Agent Configuration raw public bridge argument vectors with typed `DxAgentPublicCommand` routing in `crates/agent_ui/src/dx_agent_bridge.rs`.
+- Replaced import-summary/release-gate raw metadata action matching with typed `DxAgentMetadataCommand` routing and centralized receipt/schema targets.
+
+NOTES:
+- This keeps Zed on fixed public `dx agents ... --json` command shapes, keeps social platform validation in the bridge, and does not add live command proof or runtime visual proof.
+- No Cargo commands, local servers, live CLI commands, provider calls, or `just run` were executed.
+
 [2026-05-22] - DX Compact Automations Action
 
 CHANGED:

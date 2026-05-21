@@ -35,6 +35,7 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 
 ## Current Worker Update
 
+- Hardened the DX Agents action bridge: Agent Configuration now builds public `dx agents ... --json` actions from typed command variants and metadata command variants instead of raw argument vectors, keeping social connect/disconnect platform validation, receipt-cache writes for import-summary/release-gate, and fixed public command routing centralized in `dx_agent_bridge`.
 - Added DX Agents receipt-index rendering: Zed now reads `G:\Dx\.dx\receipts\agents\receipts-list-latest.json`, exposes returned/known receipt counts, active task count, latest receipt path, redaction/unsafe-row state, and typed background receipt rows in both Agent Configuration and the DX launch right rail while keeping raw receipt payloads and unsafe rows out of the UI.
 - Routed the DX Agents receipt-index refresh through the public root CLI command `dx agents receipts list --json`, so Zed can refresh the runtime-owned `receipts-list-latest.json` contract without calling the raw `dx-agents` binary directly.
 - Aligned Agent Configuration controls with the public `dx agents ... --json` command surface for status, social, automation, and run receipt actions while keeping `dx-agents` runtime receipt metadata accepted and requiring safe explicit platform arguments for connect/disconnect.

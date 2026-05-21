@@ -50,10 +50,10 @@ use crate::{
     agent_configuration::add_llm_provider_modal::{AddLlmProviderModal, LlmCompatibleProvider},
     agent_connection_store::{AgentConnectionStatus, AgentConnectionStore},
     dx_agent_bridge::{
-        DxAgentBridgeSnapshot, DxAgentReceipt, DxAgentRowAction, DxAgentSocialActionSummary,
-        dx_agent_bridge_snapshot, dx_agent_cli_actions_allowed, dx_agent_dx_home,
-        dx_agent_receipt_root, run_dx_agent_import_summary_command, run_dx_agent_public_command,
-        run_dx_agent_release_gate_command,
+        DxAgentBridgeSnapshot, DxAgentMetadataCommand, DxAgentPublicCommand, DxAgentReceipt,
+        DxAgentRowAction, DxAgentSocialActionSummary, dx_agent_bridge_snapshot,
+        dx_agent_cli_actions_allowed, dx_agent_dx_home, dx_agent_receipt_root,
+        run_dx_agent_metadata_command, run_dx_agent_public_command,
     },
 };
 
@@ -273,7 +273,7 @@ impl AgentConfiguration {
                     .label_size(LabelSize::Small)
                     .disabled(!actions_allowed)
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_public_action(vec!["agents", "status", "--json"], cx);
+                        this.run_dx_agents_public_action(DxAgentPublicCommand::Status, cx);
                     })),
             )
             .child(
@@ -282,7 +282,7 @@ impl AgentConfiguration {
                     .label_size(LabelSize::Small)
                     .disabled(!actions_allowed)
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_public_action(vec!["agents", "contract", "--json"], cx);
+                        this.run_dx_agents_public_action(DxAgentPublicCommand::Contract, cx);
                     })),
             )
             .child(
@@ -292,7 +292,7 @@ impl AgentConfiguration {
                     .disabled(!actions_allowed)
                     .on_click(cx.listener(|this, _, _window, cx| {
                         this.run_dx_agents_metadata_action(
-                            vec!["agents", "import-summary", "--json"],
+                            DxAgentMetadataCommand::ImportSummary,
                             cx,
                         );
                     })),
@@ -303,10 +303,7 @@ impl AgentConfiguration {
                     .label_size(LabelSize::Small)
                     .disabled(!actions_allowed)
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_metadata_action(
-                            vec!["agents", "release-gate", "--json"],
-                            cx,
-                        );
+                        this.run_dx_agents_metadata_action(DxAgentMetadataCommand::ReleaseGate, cx);
                     })),
             )
             .child(
@@ -315,10 +312,7 @@ impl AgentConfiguration {
                     .label_size(LabelSize::Small)
                     .disabled(!actions_allowed)
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_public_action(
-                            vec!["agents", "social", "list", "--json"],
-                            cx,
-                        );
+                        this.run_dx_agents_public_action(DxAgentPublicCommand::SocialList, cx);
                     })),
             )
             .child(
@@ -327,10 +321,7 @@ impl AgentConfiguration {
                     .label_size(LabelSize::Small)
                     .disabled(!actions_allowed)
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_public_action(
-                            vec!["agents", "automate", "list", "--json"],
-                            cx,
-                        );
+                        this.run_dx_agents_public_action(DxAgentPublicCommand::AutomationsList, cx);
                     })),
             )
             .child(
@@ -339,10 +330,7 @@ impl AgentConfiguration {
                     .label_size(LabelSize::Small)
                     .disabled(!actions_allowed)
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_public_action(
-                            vec!["agents", "receipts", "list", "--json"],
-                            cx,
-                        );
+                        this.run_dx_agents_public_action(DxAgentPublicCommand::ReceiptsList, cx);
                     })),
             );
 
@@ -420,7 +408,7 @@ impl AgentConfiguration {
                     .icon_size(IconSize::Small)
                     .tooltip(Tooltip::text("Write a DX Agents run receipt"))
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_public_action(vec!["agents", "run", "--json"], cx);
+                        this.run_dx_agents_public_action(DxAgentPublicCommand::Run, cx);
                     })),
             )
         })
@@ -745,10 +733,7 @@ impl AgentConfiguration {
                         .disabled(!refresh_enabled)
                         .tooltip(Tooltip::text(refresh_tooltip))
                         .on_click(cx.listener(|this, _, _window, cx| {
-                            this.run_dx_agents_public_action(
-                                vec!["agents", "social", "list", "--json"],
-                                cx,
-                            );
+                            this.run_dx_agents_public_action(DxAgentPublicCommand::SocialList, cx);
                         })),
                     );
 
@@ -773,14 +758,9 @@ impl AgentConfiguration {
                             .on_click(cx.listener(
                                 move |this, _, _window, cx| {
                                     this.run_dx_agents_public_action(
-                                        vec![
-                                            "agents".to_string(),
-                                            "social".to_string(),
-                                            "disconnect".to_string(),
-                                            "--platform".to_string(),
-                                            platform.clone(),
-                                            "--json".to_string(),
-                                        ],
+                                        DxAgentPublicCommand::SocialDisconnect {
+                                            platform: platform.clone(),
+                                        },
                                         cx,
                                     );
                                 },
@@ -805,14 +785,9 @@ impl AgentConfiguration {
                             .on_click(cx.listener(
                                 move |this, _, _window, cx| {
                                     this.run_dx_agents_public_action(
-                                        vec![
-                                            "agents".to_string(),
-                                            "social".to_string(),
-                                            "connect".to_string(),
-                                            "--platform".to_string(),
-                                            platform.clone(),
-                                            "--json".to_string(),
-                                        ],
+                                        DxAgentPublicCommand::SocialConnect {
+                                            platform: platform.clone(),
+                                        },
                                         cx,
                                     );
                                 },
@@ -913,7 +888,7 @@ impl AgentConfiguration {
                         .tooltip(Tooltip::text(refresh_tooltip))
                         .on_click(cx.listener(|this, _, _window, cx| {
                             this.run_dx_agents_public_action(
-                                vec!["agents", "automate", "list", "--json"],
+                                DxAgentPublicCommand::AutomationsList,
                                 cx,
                             );
                         })),
@@ -936,7 +911,7 @@ impl AgentConfiguration {
                         .disabled(!run_enabled)
                         .tooltip(Tooltip::text(run_tooltip))
                         .on_click(cx.listener(|this, _, _window, cx| {
-                            this.run_dx_agents_public_action(vec!["agents", "run", "--json"], cx);
+                            this.run_dx_agents_public_action(DxAgentPublicCommand::Run, cx);
                         })),
                     );
                 }
@@ -1004,10 +979,7 @@ impl AgentConfiguration {
                     .icon_size(IconSize::Small)
                     .tooltip(Tooltip::text("Refresh DX Agents receipt index"))
                     .on_click(cx.listener(|this, _, _window, cx| {
-                        this.run_dx_agents_public_action(
-                            vec!["agents", "receipts", "list", "--json"],
-                            cx,
-                        );
+                        this.run_dx_agents_public_action(DxAgentPublicCommand::ReceiptsList, cx);
                     })),
             );
         }
@@ -1290,7 +1262,7 @@ impl AgentConfiguration {
                         .tooltip(Tooltip::text("Refresh DX provider receipt"))
                         .on_click(cx.listener(|this, _, _window, cx| {
                             this.run_dx_agents_public_action(
-                                vec!["agents", "providers", "list", "--json"],
+                                DxAgentPublicCommand::ProvidersList,
                                 cx,
                             );
                         })),
@@ -1301,10 +1273,7 @@ impl AgentConfiguration {
                         .icon_size(IconSize::Small)
                         .tooltip(Tooltip::text("Refresh DX model receipt"))
                         .on_click(cx.listener(|this, _, _window, cx| {
-                            this.run_dx_agents_public_action(
-                                vec!["agents", "models", "list", "--json"],
-                                cx,
-                            );
+                            this.run_dx_agents_public_action(DxAgentPublicCommand::ModelsList, cx);
                         })),
                 )
                 .action(
@@ -1314,7 +1283,7 @@ impl AgentConfiguration {
                         .tooltip(Tooltip::text("Regenerate DX provider catalog receipt"))
                         .on_click(cx.listener(|this, _, _window, cx| {
                             this.run_dx_agents_public_action(
-                                vec!["agents", "providers", "catalog", "regenerate", "--json"],
+                                DxAgentPublicCommand::ProviderCatalogRegenerate,
                                 cx,
                             );
                         })),
@@ -1356,17 +1325,18 @@ impl AgentConfiguration {
             .into_any_element()
     }
 
-    fn run_dx_agents_public_action<T>(&mut self, args: Vec<T>, cx: &mut Context<Self>)
-    where
-        T: Into<String>,
-    {
+    fn run_dx_agents_public_action(
+        &mut self,
+        command: DxAgentPublicCommand,
+        cx: &mut Context<Self>,
+    ) {
         if !dx_agent_cli_actions_allowed(cx) {
             return;
         }
 
         let dx_home = dx_agent_dx_home(cx);
-        let args = args.into_iter().map(Into::into).collect::<Vec<_>>();
-        let task = cx.background_spawn(async move { run_dx_agent_public_command(args, dx_home) });
+        let task =
+            cx.background_spawn(async move { run_dx_agent_public_command(command, dx_home) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             this.update(cx, |_this, cx| {
@@ -1380,48 +1350,19 @@ impl AgentConfiguration {
         .detach();
     }
 
-    fn run_dx_agents_metadata_action<T>(&mut self, args: Vec<T>, cx: &mut Context<Self>)
-    where
-        T: Into<String>,
-    {
-        enum MetadataAction {
-            ImportSummary,
-            ReleaseGate,
-        }
-
+    fn run_dx_agents_metadata_action(
+        &mut self,
+        command: DxAgentMetadataCommand,
+        cx: &mut Context<Self>,
+    ) {
         if !dx_agent_cli_actions_allowed(cx) {
             return;
         }
 
-        let args = args.into_iter().map(Into::into).collect::<Vec<_>>();
-        let action = if args.len() == 3
-            && args[0] == "agents"
-            && args[1] == "import-summary"
-            && args[2] == "--json"
-        {
-            MetadataAction::ImportSummary
-        } else if args.len() == 3
-            && args[0] == "agents"
-            && args[1] == "release-gate"
-            && args[2] == "--json"
-        {
-            MetadataAction::ReleaseGate
-        } else {
-            log::warn!("Unsupported DX Agents metadata action: {}", args.join(" "));
-            return;
-        };
-
         let dx_home = dx_agent_dx_home(cx);
         let receipt_root = dx_agent_receipt_root(cx);
         let task = cx.background_spawn(async move {
-            match action {
-                MetadataAction::ImportSummary => {
-                    run_dx_agent_import_summary_command(dx_home, receipt_root)
-                }
-                MetadataAction::ReleaseGate => {
-                    run_dx_agent_release_gate_command(dx_home, receipt_root)
-                }
-            }
+            run_dx_agent_metadata_command(command, dx_home, receipt_root)
         });
         cx.spawn(async move |this, cx| {
             let result = task.await;
