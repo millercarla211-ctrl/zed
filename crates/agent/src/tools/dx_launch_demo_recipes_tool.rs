@@ -188,6 +188,7 @@ fn build_launch_demo_recipes(
         metasearch_to_context_recipe(workspace_root.as_ref()),
         media_to_sources_recipe(workspace_root.as_ref()),
         forge_restore_to_sources_recipe(workspace_root.as_ref()),
+        runtime_proof_import_recipe(workspace_root.as_ref()),
     ];
 
     if !input.include_optional_flows {
@@ -477,6 +478,37 @@ fn forge_restore_to_sources_recipe(workspace_root: Option<&PathBuf>) -> DxLaunch
     }
 }
 
+fn runtime_proof_import_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDemoRecipe {
+    DxLaunchDemoRecipe {
+        id: "runtime-proof-import-to-status",
+        title: "Runtime Proof Import To Status Rail",
+        priority: "optional",
+        status: recipe_status(workspace_root),
+        intent: "Capture operator-supplied proof from a governed validation window into managed runtime proof import and status receipts for the Check and Proof Freshness rails.",
+        required_tools: vec!["import_dx_runtime_proof"],
+        receipt_contracts: vec![
+            "zed.dx.runtime_proof.import.v1",
+            "zed.dx.runtime_proof.status_copy.v1",
+        ],
+        steps: vec![step(
+            1,
+            "import_dx_runtime_proof",
+            "Persist operator-provided runtime proof summary, evidence, and blockers as managed import/status receipts.",
+            Some("zed.dx.runtime_proof.import.v1"),
+            true,
+            "Writes only managed runtime proof receipts; does not run just run, Cargo, browser automation, deploys, reducers, or restore-to-target actions.",
+        )],
+        proof_gates: vec![
+            "Operator evidence comes from an explicitly governed validation window.",
+            "Passed imports include at least one evidence line.",
+            "Status copy remains not claim-ready when blockers or missing evidence exist.",
+            "Runtime proof receipts live under tools/dx-runtime-proof.",
+        ],
+        blockers: recipe_blockers(workspace_root),
+        next_action: "Use this only after manual runtime evidence exists; it records proof but does not create runtime proof by itself.",
+    }
+}
+
 fn step(
     order: usize,
     tool: &'static str,
@@ -540,6 +572,14 @@ fn receipt_roots(workspace_root: Option<&Path>) -> Vec<DxLaunchDemoReceiptRoot> 
         (
             "Forge restores",
             root.join("tools").join("dx-forge").join("restores"),
+        ),
+        (
+            "runtime proof imports",
+            root.join("tools").join("dx-runtime-proof").join("imports"),
+        ),
+        (
+            "runtime proof status",
+            root.join("tools").join("dx-runtime-proof").join("status"),
         ),
     ]
     .into_iter()

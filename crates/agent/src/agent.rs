@@ -11,6 +11,7 @@ mod dx_media_tool_runner;
 mod dx_media_tool_runner_gate;
 mod dx_metasearch_agent_bridge;
 mod dx_metasearch_context_adapter;
+mod dx_runtime_proof_import;
 mod dx_serializer_rlm_execution_plan;
 mod dx_serializer_rlm_reduced_context;
 mod dx_serializer_rlm_runner_gate;

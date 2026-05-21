@@ -41,6 +41,7 @@ mod dx_metasearch_context_adapter_tool;
 mod dx_metasearch_source_extract_tool;
 mod dx_metasearch_status_tool;
 mod dx_metasearch_tool;
+mod dx_runtime_proof_import_tool;
 mod dx_serializer_rlm_execution_plan_tool;
 mod dx_serializer_rlm_reduced_context_tool;
 mod dx_serializer_rlm_runner_gate_tool;
@@ -69,6 +70,7 @@ mod web_search_tool;
 mod write_file_tool;
 
 use crate::AgentTool;
+pub use crate::dx_runtime_proof_import::DxRuntimeProofOperatorStatus;
 use language_model::{LanguageModelRequestTool, LanguageModelToolSchemaFormat};
 use serde::{
     Deserialize, Deserializer,
@@ -140,6 +142,7 @@ pub use dx_metasearch_context_adapter_tool::*;
 pub use dx_metasearch_source_extract_tool::*;
 pub use dx_metasearch_status_tool::*;
 pub use dx_metasearch_tool::*;
+pub use dx_runtime_proof_import_tool::*;
 pub use dx_serializer_rlm_execution_plan_tool::*;
 pub use dx_serializer_rlm_reduced_context_tool::*;
 pub use dx_serializer_rlm_runner_gate_tool::*;

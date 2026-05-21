@@ -474,16 +474,16 @@ Scale: 0 means not started in the Zed fork. 100 means production-ready inside DX
 | Forge safety and backup policy | 85/100 | Risky actions can produce permissioned no-permanent-delete Forge/zstd safety-policy receipts, validate reviewed backup/quarantine runner readiness, execute a native zstd backup bundle plus manifest before target mutation, restore that backup into a managed verified preview with receipts, expose Forge receipt history in panel rails, and draft non-mutating restore approval reviews | Add broader move/overwrite coverage and explicit restore-to-target flow after preview audit |
 | Forge panel | 34/100 | Code/media snapshots, remotes, sync plans, jobs, restore warnings, approval handoffs, and receipt history are visible through panel-facing contracts; restore preview source rows now expose blocker/risk labels from restore receipts | Add receipt-backed restore-to-target approval capture after preview audit |
 | Drive/Sources rail | 66/100 | NotebookLM-style source sets and markdown task docs feed agents through rail-visible source sets plus managed Agent attachment receipts, attach-ready counts, source-derived prompt cards, and produced-file proof rows for output existence, receipt, hash, and empty-file warnings | Add row-level source controls |
-| Check panel | 26/100 | Project score and blockers include a typed read-only score schema for workspace structure, receipt root/file state, attach-ready sources, tool proof receipts, deploy target presence, deploy readiness receipts, env/log/rollback receipt inputs, URL/status deploy receipts, validation/visual/runtime proof freshness, and background-task state | Add runtime proof import receipt capture and operator status copy |
+| Check panel | 30/100 | Project score and blockers include a typed read-only score schema for workspace structure, receipt root/file state, attach-ready sources, tool proof receipts, deploy target presence, deploy readiness receipts, env/log/rollback receipt inputs, URL/status deploy receipts, validation/visual/runtime proof freshness, runtime proof import/status receipts, and background-task state | Add broader validation categories and receipt-backed approval gates |
 | Deploy panel | 22/100 | CI/CD readiness, env state, URLs, logs, rollback, receipts visible; workspace deploy target detection recognizes Vercel, Netlify, Cloudflare Wrangler, Fly, and Docker config files, and the rail now summarizes readiness/env/logs/rollback plus URL/status receipt buckets under `tools/dx-deploy` with freshness states | Add richer deploy receipt drilldowns and runtime proof |
 | DCP bridge | 0/100 | DCP/MCP/ACP/local tools share one capability, permission, and receipt model | Define minimum DCP schema |
 | Media tool bridge | 80/100 | Agent can plan safe ffmpeg/ffprobe inspect/extract actions, validate approved runner readiness, execute approved no-shell ffmpeg/ffprobe argument vectors, hash produced files, persist managed execution receipts, expose produced files as durable source entries with proof rows, and advertise guided media proof actions | Add runtime media proof |
-| Codex-style rails | 52/100 | Left Sources and right project/task rail are optional, cheap when closed, backed by receipt-producing Agent actions, and now include attachment readiness, Check score surfaces, validation/visual/runtime proof freshness, restore warnings, deploy target visibility, source/deploy action prompts, compact deploy proof rows, URL/status deploy receipts, runtime-proof handoff cards, restore approval drafts, reducer guard drafts, and produced-file proof rows | Add runtime proof import receipt capture |
-| Launch demo package | 68/100 | May 22 sprint demos show speed, local model tools, provider freedom, metasearch, receipt chains, panels, guided proof drafts, source readiness, Check scoring, validation/visual/runtime proof freshness, restore warnings, deploy target visibility, source action prompts, deploy readiness receipts, deploy env/log/rollback receipt summaries, URL/status deploy summaries, runtime-proof handoffs, restore approval reviews, reducer guard reviews, and produced-file proof rows | Add runtime proof import receipt capture and operator status copy |
+| Codex-style rails | 56/100 | Left Sources and right project/task rail are optional, cheap when closed, backed by receipt-producing Agent actions, and now include attachment readiness, Check score surfaces, validation/visual/runtime proof freshness, runtime proof import/status receipts, restore warnings, deploy target visibility, source/deploy action prompts, compact deploy proof rows, URL/status deploy receipts, runtime-proof handoff cards, restore approval drafts, reducer guard drafts, and produced-file proof rows | Add receipt-backed restore approval capture |
+| Launch demo package | 72/100 | May 22 sprint demos show speed, local model tools, provider freedom, metasearch, receipt chains, panels, guided proof drafts, source readiness, Check scoring, validation/visual/runtime proof freshness, runtime proof import/status receipts, restore warnings, deploy target visibility, source action prompts, deploy readiness receipts, deploy env/log/rollback receipt summaries, URL/status deploy summaries, runtime-proof handoffs, restore approval reviews, reducer guard reviews, and produced-file proof rows | Add restore approval capture and reducer dry-run preview |
 
 Overall implementation status: 100/100 for the completed launch-spine set.
 
-Current next 100-point feature set status: 92/100 for DX Native Tool Execution, Restore, Panels, and Launch Demos.
+Current next 100-point feature set status: 95/100 for DX Native Tool Execution, Restore, Panels, and Launch Demos.
 
 Overall planning and product direction status: 100/100 for the current roadmap.
 
@@ -565,6 +565,7 @@ Overall planning and product direction status: 100/100 for the current roadmap.
    - imported check status,
    - visual proof receipts,
    - runtime proof receipts,
+   - runtime proof import/status receipt capture,
    - recommended fixes.
 
 10. Deploy panel
@@ -584,10 +585,11 @@ Overall planning and product direction status: 100/100 for the current roadmap.
 12. Launch polish
     - full-width default workflow,
     - left/right rails,
-    - demo workspaces,
-    - machine-readable demo recipes,
-    - website/copy,
-    - launch video scripts.
+   - demo workspaces,
+   - machine-readable demo recipes,
+   - runtime proof import recipe,
+   - website/copy,
+   - launch video scripts.
 
 ## May 22 Sprint Launch Plan
 

@@ -59,7 +59,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Added URL/status deploy receipt buckets plus a Runtime Proof handoff card that drafts the next safe validation plan from Check score, proof freshness, deploy target, and receipt state without running tools.
 - Added Restore Approval and Reducer Guard handoff cards plus sharper source prompts for restore-preview and reduced-context receipt rows.
 - Added runtime proof freshness/status buckets for managed runtime proof, import, and runtime-status receipt roots.
-- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 92/100; the next highest-value target is runtime proof import receipt capture plus operator status copy before any external reducer execution or live restore mutation.
+- Added `import_dx_runtime_proof`, a permissioned Agent tool that captures operator-supplied runtime proof summaries, evidence, blockers, import receipts, and operator status copy receipts under managed runtime-proof roots.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 95/100; the next highest-value target is receipt-backed restore approval capture plus external reducer execution dry-run preview before any live mutation or external reducer run.
 
 ## Remaining Proof
 
@@ -78,3 +79,4 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - The deploy URL/status and runtime-proof handoff slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
 - The restore approval and reducer guard handoff slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
 - The runtime proof status bucket slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
+- The runtime proof import capture slice has formatting/diff/conflict validation only so far; Cargo check/test and runtime proof remain deferred under the repo's launch validation rules.

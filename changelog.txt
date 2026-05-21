@@ -1,3 +1,17 @@
+[2026-05-21] - DX Runtime Proof Import Capture
+
+ADDED:
+- Added `import_dx_runtime_proof`, a permissioned Agent tool that captures operator-supplied runtime proof status, summary, evidence, blockers, import receipts, and operator status copies.
+- Added managed runtime proof import and status copy receipt writes under workspace `tools/dx-runtime-proof` or Zed data fallback.
+- Added runtime proof import as an optional launch demo recipe and receipt root.
+
+CHANGED:
+- Updated the Runtime Proof handoff prompt to route provided operator evidence through `import_dx_runtime_proof`.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 95/100 and move the next target to restore approval capture plus reducer dry-run preview.
+
+NOTES:
+- This slice records operator evidence only. It does not run `just run`, Cargo, local servers, browser automation, deploys, shell commands, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Runtime Proof Status Buckets
 
 ADDED:
