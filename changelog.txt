@@ -1,3 +1,15 @@
+[2026-05-21] - DX Onboarding Provider Readiness
+
+ADDED:
+- Added a source-backed provider readiness model for onboarding that reads native authenticated language-model providers, DX Agents provider/model/contract receipt presence, and the DX catalog artifact path from `DX_CATALOG_ARTIFACT`, `DX_CATALOG_PATH`, or the default DX catalog location.
+- Surfaced Provider Readiness in the DX launch onboarding hero with Native, DX Receipts, and Catalog rows plus a real Provider Settings action for explicit user approval.
+
+CHANGED:
+- Updated DX launch notes and status to 99.6/100 for the editor lane before governed runtime proof and upstream DX-WWW source-audit reconciliation.
+
+NOTES:
+- This slice does not read secret values, import credentials, run DX catalog tools, execute CLI commands, start local servers, run Cargo/`just run`, call providers, or touch `G:\Dx\www` package work.
+
 [2026-05-21] - DX Source Audit Rail
 
 ADDED:

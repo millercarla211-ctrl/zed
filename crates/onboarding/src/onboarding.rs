@@ -35,10 +35,12 @@ use zed_actions::{OpenOnboarding, OpenSettings, assistant::ToggleFocus};
 mod base_keymap_picker;
 mod basics_page;
 mod dx_launch_onboarding;
+mod dx_provider_onboarding;
 pub mod multibuffer_hint;
 mod theme_preview;
 
 use dx_launch_onboarding::{DxLaunchPreviewTarget, DxLaunchPreviewTargets};
+use dx_provider_onboarding::DxProviderOnboardingStatus;
 
 /// Imports settings from Visual Studio Code.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Deserialize, JsonSchema, Action)]
@@ -213,6 +215,14 @@ pub fn show_onboarding_view(app_state: Arc<AppState>, cx: &mut App) -> Task<anyh
             });
         },
     )
+}
+
+fn provider_status_icon(state: &str) -> IconName {
+    match state {
+        "ready" | "visible" => IconName::Check,
+        "needs approval" => IconName::Warning,
+        _ => IconName::Info,
+    }
 }
 
 struct Onboarding {
@@ -496,6 +506,7 @@ impl Onboarding {
                                     ]),
                             ),
                     )
+                    .child(self.render_provider_strategy(cx))
                     .child(self.render_preview_frame(target, window, cx))
                     .child(self.render_quick_launch_actions(cx))
                     .when(self.dx_preview_targets.dx_www.is_none(), |this| {
@@ -505,6 +516,126 @@ impl Onboarding {
                                 .color(Color::Muted),
                         )
                     }),
+            )
+            .into_any_element()
+    }
+
+    fn render_provider_strategy(&self, cx: &mut Context<Self>) -> AnyElement {
+        let status = DxProviderOnboardingStatus::detect(cx);
+
+        v_flex()
+            .w_full()
+            .gap_2()
+            .p_3()
+            .rounded_sm()
+            .border_1()
+            .border_color(cx.theme().colors().border_variant)
+            .bg(cx.theme().colors().element_background)
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap_2()
+                    .justify_between()
+                    .child(
+                        v_flex()
+                            .min_w_0()
+                            .child(Label::new("Provider Readiness").size(LabelSize::Small))
+                            .child(
+                                Label::new(status.summary.clone())
+                                    .size(LabelSize::Small)
+                                    .color(Color::Muted)
+                                    .truncate(),
+                            ),
+                    )
+                    .child(
+                        Button::new("dx_provider_readiness_settings", "Provider Settings")
+                            .size(ButtonSize::Small)
+                            .style(ButtonStyle::Outlined)
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(OpenSettings.boxed_clone(), cx);
+                            }),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap_2()
+                    .flex_wrap()
+                    .child(self.render_provider_status_row(
+                        "Native",
+                        status.native_provider_label(),
+                        status.state,
+                        cx,
+                    ))
+                    .child(self.render_provider_status_row(
+                        "DX Receipts",
+                        status.receipt_label(),
+                        if status.provider_receipt_present
+                            || status.model_receipt_present
+                            || status.contract_receipt_present
+                        {
+                            "visible"
+                        } else {
+                            "missing"
+                        },
+                        cx,
+                    ))
+                    .child(self.render_provider_status_row(
+                        "Catalog",
+                        status.catalog_label(),
+                        if status.catalog_present {
+                            "visible"
+                        } else {
+                            "missing"
+                        },
+                        cx,
+                    )),
+            )
+            .child(
+                Label::new(status.next_action)
+                    .size(LabelSize::Small)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
+            .into_any_element()
+    }
+
+    fn render_provider_status_row(
+        &self,
+        label: &'static str,
+        detail: String,
+        state: &'static str,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .min_w(rems(12.))
+            .flex_1()
+            .gap_0p5()
+            .p_2()
+            .rounded_sm()
+            .border_1()
+            .border_color(cx.theme().colors().border)
+            .bg(cx.theme().colors().panel_background)
+            .child(
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .child(
+                        Icon::new(provider_status_icon(state))
+                            .size(IconSize::XSmall)
+                            .color(match state {
+                                "ready" | "visible" => Color::Success,
+                                "needs approval" => Color::Warning,
+                                _ => Color::Muted,
+                            }),
+                    )
+                    .child(Label::new(label).size(LabelSize::XSmall)),
+            )
+            .child(
+                Label::new(detail)
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
             )
             .into_any_element()
     }
