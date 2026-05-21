@@ -25,6 +25,7 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
         .iter()
         .any(|path| path.is_file());
     let edit_contract_summary = dx_studio::edit_contract_summary(root_path);
+    let edit_contract_loaded = edit_contract_summary.is_some();
     let edit_contract_status = if edit_contract_summary.is_some() {
         "source_contract_loaded"
     } else if has_edit_candidate {
@@ -68,11 +69,11 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
     let edit_contract_writes_files = edit_contract_summary
         .as_ref()
         .map(|summary| summary.writes_files)
-        .unwrap_or(true);
+        .unwrap_or(false);
     let edit_contract_writes_only_source_owned_files = edit_contract_summary
         .as_ref()
         .map(|summary| summary.writes_only_source_owned_files)
-        .unwrap_or(true);
+        .unwrap_or(false);
     let edit_contract_requires_node_modules = edit_contract_summary
         .as_ref()
         .map(|summary| summary.requires_node_modules)
@@ -110,6 +111,7 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
             "source_owned_operation_contract": {
                 "schema": dx_studio::DX_STUDIO_LAUNCH_EDIT_CONTRACT_SCHEMA,
                 "status": edit_contract_status,
+                "loaded": edit_contract_loaded,
                 "source": edit_contract_source.clone(),
                 "manifest_schema": edit_contract_schema,
                 "route": edit_contract_route,
@@ -141,7 +143,7 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
                 "marker_attributes": edit_marker_attributes,
                 "source": edit_contract_source,
                 "surface_count": edit_contract_surface_count,
-                "writes_files_after_explicit_operator_action": true,
+                "writes_files_after_explicit_operator_action": edit_contract_loaded && edit_contract_writes_files,
                 "requires_node_modules": edit_contract_requires_node_modules,
             },
             "mutation_command": Value::Null,
