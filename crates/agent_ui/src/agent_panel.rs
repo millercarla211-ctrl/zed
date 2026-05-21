@@ -4240,6 +4240,18 @@ impl Panel for AgentPanel {
         }
     }
 
+    fn max_size(&self, window: &Window, cx: &App) -> Option<Pixels> {
+        if matches!(
+            self.position(window, cx),
+            DockPosition::Left | DockPosition::Right
+        ) && self.should_use_dx_coding_panel_size(cx)
+        {
+            Some(DX_CODING_PANEL_WIDTH)
+        } else {
+            None
+        }
+    }
+
     fn supports_flexible_size(&self) -> bool {
         true
     }

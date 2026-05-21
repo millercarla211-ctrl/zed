@@ -43,6 +43,9 @@ pub trait Panel: Focusable + EventEmitter<PanelEvent> + Render + Sized {
     fn min_size(&self, _window: &Window, _cx: &App) -> Option<Pixels> {
         None
     }
+    fn max_size(&self, _window: &Window, _cx: &App) -> Option<Pixels> {
+        None
+    }
     fn initial_size_state(&self, _window: &Window, _cx: &App) -> PanelSizeState {
         PanelSizeState::default()
     }
@@ -109,6 +112,7 @@ pub trait PanelHandle: Send + Sync {
     fn pane(&self, cx: &App) -> Option<Entity<Pane>>;
     fn default_size(&self, window: &Window, cx: &App) -> Pixels;
     fn min_size(&self, window: &Window, cx: &App) -> Option<Pixels>;
+    fn max_size(&self, window: &Window, cx: &App) -> Option<Pixels>;
     fn initial_size_state(&self, window: &Window, cx: &App) -> PanelSizeState;
     fn size_state_changed(&self, window: &mut Window, cx: &mut App);
     fn supports_flexible_size(&self, cx: &App) -> bool;
@@ -195,6 +199,10 @@ where
 
     fn min_size(&self, window: &Window, cx: &App) -> Option<Pixels> {
         self.read(cx).min_size(window, cx)
+    }
+
+    fn max_size(&self, window: &Window, cx: &App) -> Option<Pixels> {
+        self.read(cx).max_size(window, cx)
     }
 
     fn initial_size_state(&self, window: &Window, cx: &App) -> PanelSizeState {

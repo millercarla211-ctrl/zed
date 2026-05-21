@@ -8086,6 +8086,7 @@ impl Workspace {
         if let Some(panel) = dock.visible_panel() {
             let size_state = dock.stored_panel_size_state(panel.as_ref());
             let min_size = panel.min_size(window, cx);
+            let max_size = panel.max_size(window, cx);
             if position.axis() == Axis::Horizontal {
                 let use_flexible = panel.has_flexible_size(window, cx);
                 let flex_grow = if use_flexible {
@@ -8102,18 +8103,24 @@ impl Workspace {
                     style.flex_shrink = Some(1.0);
                     style.flex_basis = Some(relative(0.).into());
                 } else {
-                    let size = size_state
+                    let mut size = size_state
                         .and_then(|state| state.size)
                         .unwrap_or_else(|| panel.default_size(window, cx));
+                    if let Some(max_size) = max_size {
+                        size = size.min(max_size);
+                    }
                     container = container.w(size);
                 }
                 if let Some(min) = min_size {
                     container = container.min_w(min);
                 }
             } else {
-                let size = size_state
+                let mut size = size_state
                     .and_then(|state| state.size)
                     .unwrap_or_else(|| panel.default_size(window, cx));
+                if let Some(max_size) = max_size {
+                    size = size.min(max_size);
+                }
                 container = container.h(size);
             }
         }

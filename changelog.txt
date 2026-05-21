@@ -1,3 +1,13 @@
+[2026-05-22] - DX Compact Agent Width Cap
+
+CHANGED:
+- Added an optional panel max-size hook in dock layout sizing.
+- Capped Agent panel width only when visible center panes include both editor and Web Preview/browser items, including when a wider Agent width was previously persisted.
+
+NOTES:
+- This preserves existing panel sizing behavior for all other panels and preserves normal Agent panel persisted widths outside crowded coding layouts.
+- No Cargo commands, local servers, live CLI commands, provider calls, or `just run` were executed.
+
 [2026-05-22] - DX Compact Sources Action
 
 CHANGED:
