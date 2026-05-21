@@ -872,6 +872,8 @@ where
         || is_secret_like_arg(&receipt_filename)
         || is_secret_like_arg(&refresh_command)
         || is_secret_like_arg(&public_refresh_command)
+        || !is_public_dx_agents_command(&public_command)
+        || !is_public_dx_agents_command(&public_refresh_command)
         || !is_allowed(&id, &command, &receipt_filename, &refresh_command)
         || !is_allowed(
             &id,
@@ -1482,6 +1484,10 @@ fn public_command_for_runtime(command: &str) -> String {
                 .map(|args| format!("dx agents models {args}"))
         })
         .unwrap_or_else(|| command.to_string())
+}
+
+fn is_public_dx_agents_command(command: &str) -> bool {
+    command.starts_with("dx agents ")
 }
 
 fn is_dx_agents_command(command: &str, args: &str) -> bool {
