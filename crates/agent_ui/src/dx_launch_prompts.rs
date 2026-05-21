@@ -1,7 +1,9 @@
 use ui::IconName;
 
 use crate::dx_deploy_targets::{DxDeployTarget, DxDeployTargetSnapshot};
+use crate::dx_launch_workspace::DxReceiptSnapshot;
 use crate::dx_proof_freshness::DxProofFreshnessSnapshot;
+use crate::dx_receipt_history::DxToolHistorySnapshot;
 use crate::dx_source_sets::{DxSourceItem, DxSourceKind};
 
 pub(crate) fn source_action_icon(kind: DxSourceKind) -> IconName {
@@ -126,4 +128,96 @@ pub(crate) fn runtime_proof_prompt(snapshot: &DxProofFreshnessSnapshot) -> Strin
     format!(
         "Prepare the DX runtime proof handoff for this workspace. Review the Check score, Proof Freshness rows, Deploy URL/status receipt buckets, deploy targets, and current launch receipts. {proof_rows} First use plan_dx_runtime_proof to write the governed manual validation checklist without running validation. If I provide operator evidence from that governed validation window, use import_dx_runtime_proof to write only managed runtime proof import/status receipts. Do not run just run, cargo, builds, local servers, browser automation, shell commands, deploys, external serializer/RLM code, model calls, or restore-to-target actions unless I explicitly approve the governed tool request."
     )
+}
+
+pub(crate) fn receipt_review_prompt(
+    receipt_snapshot: &DxReceiptSnapshot,
+    tool_history: &DxToolHistorySnapshot,
+    proof_freshness: &DxProofFreshnessSnapshot,
+    deploy_targets: &DxDeployTargetSnapshot,
+) -> String {
+    let receipt_root = if receipt_snapshot.root_exists {
+        format!(
+            "DX receipt root present at `{}`",
+            receipt_snapshot.root.display()
+        )
+    } else {
+        format!(
+            "DX receipt root missing at `{}`",
+            receipt_snapshot.root.display()
+        )
+    };
+    let receipt_buckets = receipt_snapshot
+        .buckets
+        .iter()
+        .map(|bucket| format!("{}={}", bucket.label, bucket.count))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let receipt_buckets = if receipt_buckets.is_empty() {
+        "No DX receipt buckets are tracked yet.".to_string()
+    } else {
+        receipt_buckets
+    };
+    let latest_receipts = bounded_join(&receipt_snapshot.latest, 4, "No latest DX receipts");
+    let tool_buckets = tool_history
+        .buckets
+        .iter()
+        .map(|bucket| {
+            format!(
+                "{}={} ({})",
+                bucket.label,
+                bucket.count,
+                if bucket.root_exists {
+                    "root present"
+                } else {
+                    "missing root"
+                }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let tool_buckets = if tool_buckets.is_empty() {
+        "No tool-history buckets are tracked yet.".to_string()
+    } else {
+        tool_buckets
+    };
+    let proof_rows = proof_freshness
+        .buckets
+        .iter()
+        .map(|bucket| format!("{}={} ({})", bucket.label, bucket.count, bucket.status))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let proof_rows = if proof_rows.is_empty() {
+        "No proof freshness buckets are tracked yet.".to_string()
+    } else {
+        proof_rows
+    };
+    let deploy_rows = deploy_targets
+        .receipt_buckets
+        .iter()
+        .map(|bucket| format!("{}={} ({})", bucket.label, bucket.count, bucket.status))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let deploy_rows = if deploy_rows.is_empty() {
+        "No deploy receipt buckets are tracked yet.".to_string()
+    } else {
+        deploy_rows
+    };
+
+    format!(
+        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Tool history buckets: {tool_buckets}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
+    )
+}
+
+fn bounded_join(values: &[String], limit: usize, empty: &'static str) -> String {
+    if values.is_empty() {
+        return empty.to_string();
+    }
+
+    values
+        .iter()
+        .take(limit)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ")
 }

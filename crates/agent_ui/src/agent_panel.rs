@@ -37,8 +37,8 @@ use crate::completion_provider::AgentContextSource;
 use crate::dx_check_score::{DxCheckScoreInput, check_score_snapshot};
 use crate::dx_deploy_targets::{DxDeployTargetSnapshot, deploy_target_snapshot};
 use crate::dx_launch_prompts::{
-    deploy_readiness_prompt, runtime_proof_prompt, source_action_icon, source_action_prompt,
-    source_action_title,
+    deploy_readiness_prompt, receipt_review_prompt, runtime_proof_prompt, source_action_icon,
+    source_action_prompt, source_action_title,
 };
 use crate::dx_launch_workspace::{
     DxLaunchWorkspaceStatus, receipt_snapshot, render_workspace_chrome,
@@ -110,7 +110,6 @@ const LAST_USED_AGENT_KEY: &str = "agent_panel__last_used_external_agent";
 const LAST_CREATED_ENTRY_KIND_KEY: &str = "agent_panel__last_created_entry_kind";
 const TERMINAL_AGENT_TELEMETRY_ID: &str = "terminal";
 const DX_LAUNCH_RECIPE_PROMPT: &str = "Run the DX launch metasearch-to-reduced-context recipe for this workspace. First call list_dx_launch_demo_recipes with focus=\"metasearch\". Then, using only permissioned Agent tools and no local servers or builds, guide me through the next safe receipt step: inspect_dx_metasearch, search_dx_metasearch with write_source_pack_receipt=true, prepare_dx_source_attachment, prepare_dx_metasearch_context, plan_dx_serializer_rlm_execution, gate_dx_serializer_rlm_runner, write_dx_serializer_rlm_reduced_context, and preview_dx_serializer_rlm_reducer_execution. Stop before execute_dx_serializer_rlm_reducer, external serializer/RLM runner work, or model-call execution unless I explicitly approve a no-shell absolute command vector and managed receipt.";
-const DX_RECEIPT_REVIEW_PROMPT: &str = "Inspect the current DX launch receipts for this workspace. Summarize the latest metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, and runtime-proof receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, or model calls.";
 const DX_MEDIA_PROOF_PROMPT: &str = "Prepare the DX media proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"media\". Then review any produced-file proof cards in the Sources rail and guide me through the next safe step using permissioned tools only: plan_dx_media_tool, gate_dx_media_tool_runner, execute_dx_media_tool only after an approved runner gate, and prepare_dx_source_attachment for produced files. Do not run local servers, builds, browser input, shell commands, unmanaged file writes, or media execution until I explicitly approve the tool request.";
 const DX_FORGE_PROOF_PROMPT: &str = "Prepare the DX Forge proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"forge\" and inspect_dx_forge_history. Then guide me through the next safe receipt step for safety policy, backup runner gate, backup execution, restore preview, restore receipt review, and restore-approval capture. Do not mutate target paths, permanently delete files, run local servers, builds, shell commands, browser input, or restore-to-target actions unless I explicitly approve the governed tool request.";
 const DX_RESTORE_APPROVAL_PROMPT: &str = "Prepare a non-mutating DX Forge restore-to-target approval review for this workspace. Use inspect_dx_forge_history and visible restore-preview source rows to summarize the latest safety-policy, backup, backup-manifest, restore-preview, blockers, target path, overwrite risk, rollback evidence, and missing confirmations. If I provide operator approval evidence, use capture_dx_forge_restore_approval to write only a managed approval receipt. Do not mutate target paths, overwrite files, delete files, run shell commands, run local servers, or execute restore-to-target actions.";
@@ -5696,7 +5695,7 @@ impl AgentPanel {
         }
 
         let status = self.dx_launch_workspace_status(cx);
-        let sidebar_actions = self.render_dx_launch_sidebar_actions(window, cx);
+        let sidebar_actions = self.render_dx_launch_sidebar_actions(&status, window, cx);
         let source_actions =
             self.render_dx_launch_source_actions(&status.source_sets, &status.deploy_targets, cx);
         let guided_cards = self.render_dx_launch_guided_cards(&status.proof_freshness, window, cx);
@@ -5712,10 +5711,17 @@ impl AgentPanel {
 
     fn render_dx_launch_sidebar_actions(
         &self,
+        status: &DxLaunchWorkspaceStatus,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let can_create_entries = self.has_open_project(cx);
+        let review_receipts_prompt = receipt_review_prompt(
+            &status.receipt_snapshot,
+            &status.tool_history,
+            &status.proof_freshness,
+            &status.deploy_targets,
+        );
         let action_button = |id: &'static str, icon: IconName, label: &'static str| {
             Button::new(id, label)
                 .full_width()
@@ -5776,8 +5782,8 @@ impl AgentPanel {
                     "Review Receipts",
                 )
                 .disabled(!can_create_entries)
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.insert_dx_launch_prompt(DX_RECEIPT_REVIEW_PROMPT, window, cx);
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.insert_dx_launch_prompt(review_receipts_prompt.clone(), window, cx);
                 })),
             )
             .into_any_element()
