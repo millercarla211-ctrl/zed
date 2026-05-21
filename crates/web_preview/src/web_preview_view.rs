@@ -41,7 +41,7 @@ use workspace::{NewWebPreview, Pane, Toast, Workspace, WorkspaceId};
 use crate::agent_browser_contracts::*;
 #[cfg(target_os = "windows")]
 use crate::windows_visual_webview::WindowsVisualWebView;
-use crate::{OpenPreview, OpenPreviewToTheSide, dx_studio};
+use crate::{OpenPreview, OpenPreviewToTheSide, dx_studio, dx_studio_session};
 
 #[cfg(target_os = "windows")]
 use gpui_windows::window_has_focused_webview;
@@ -1504,6 +1504,8 @@ impl WebPreviewView {
             || self
                 .latest_durable_agent_browser_final_runtime_headroom_cleanup_result()
                 .is_some();
+        let dx_studio =
+            dx_studio_session::contract_snapshot(self.workspace_context.root_path.as_deref());
 
         serde_json::json!({
             "schema": "zed.web_preview.session.v1",
@@ -1518,7 +1520,7 @@ impl WebPreviewView {
                 "database_id": self.workspace_context.workspace_id.as_ref().map(|id| format!("{id:?}")),
                 "root_path": self.workspace_context.root_path.as_ref().map(|path| path.display().to_string()),
             },
-            "dx_studio": self.dx_studio_contract_snapshot(),
+            "dx_studio": dx_studio,
             "profile_dir": self.workspace_context.profile_dir.display().to_string(),
             "zoom": self.zoom_factor,
             "viewport": self.viewport_mode.snapshot(),
@@ -1829,70 +1831,6 @@ impl WebPreviewView {
                 "clear_cache": true,
             },
         })
-    }
-
-    fn dx_studio_contract_snapshot(&self) -> Option<Value> {
-        let root_path = self.workspace_context.root_path.as_ref()?;
-        let contract = dx_studio::manifest_contract(root_path);
-        let project = contract.project.as_ref()?;
-        let preview_candidates = contract
-            .manifest_candidates
-            .iter()
-            .map(|path| dx_studio_manifest_candidate_snapshot(path))
-            .collect::<Vec<_>>();
-        let edit_candidates = contract
-            .edit_manifest_candidates
-            .iter()
-            .map(|path| dx_studio_manifest_candidate_snapshot(path))
-            .collect::<Vec<_>>();
-        let has_edit_candidate = contract
-            .edit_manifest_candidates
-            .iter()
-            .any(|path| path.is_file());
-
-        Some(serde_json::json!({
-            "schema": "zed.web_preview.dx_studio_contract.v1",
-            "project": {
-                "root": path_string(&project.root),
-                "confidence": project.confidence,
-                "reasons": project.reasons,
-                "strict_dx_file": project.strict_dx_file,
-                "legacy_toml_present": project.legacy_toml_present,
-                "node_modules_present": project.node_modules_present,
-            },
-            "commands": {
-                "preview_manifest": contract.commands.preview_manifest,
-                "routes": contract.commands.routes,
-                "forge_packages": contract.commands.forge_packages,
-            },
-            "preview_manifest": {
-                "schema": contract.schema,
-                "default_preview_url": contract.default_preview_url,
-                "candidates": preview_candidates,
-            },
-            "studio_edit_manifest": {
-                "schema": dx_studio::DX_STUDIO_EDIT_MANIFEST_SCHEMA,
-                "status": if has_edit_candidate {
-                    "source_manifest_candidate_present"
-                } else {
-                    "waiting_for_dx_www_manifest_producer"
-                },
-                "candidates": edit_candidates,
-                "command": Value::Null,
-            },
-            "drag_to_preview": {
-                "schema": dx_studio::DX_STUDIO_DRAG_TO_PREVIEW_SCHEMA,
-                "status": "metadata_contract_ready",
-                "attributes": dx_studio::drag_to_preview_attributes(),
-                "read_contracts": [
-                    contract.commands.preview_manifest,
-                    contract.commands.routes,
-                    contract.commands.forge_packages,
-                ],
-                "mutation_command": Value::Null,
-                "requires_explicit_operator_action": true,
-            },
-        }))
     }
 
     fn agent_browser_policy_snapshot(&self) -> Value {
@@ -36144,22 +36082,6 @@ fn env_path(name: &str) -> Option<PathBuf> {
 
 fn path_string(path: impl AsRef<Path>) -> String {
     path.as_ref().display().to_string()
-}
-
-fn dx_studio_manifest_candidate_snapshot(path: &Path) -> Value {
-    let metadata = fs::metadata(path).ok();
-    let modified_ms = metadata
-        .as_ref()
-        .and_then(|metadata| metadata.modified().ok())
-        .and_then(system_time_ms);
-
-    serde_json::json!({
-        "path": path_string(path),
-        "exists": metadata.is_some(),
-        "bytes": metadata.as_ref().map(|metadata| metadata.len()),
-        "modified_ms": modified_ms,
-        "extension": path.extension().and_then(|extension| extension.to_str()),
-    })
 }
 
 fn system_time_ms(time: SystemTime) -> Option<u64> {

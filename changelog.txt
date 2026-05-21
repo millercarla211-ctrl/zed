@@ -1,3 +1,12 @@
+[2026-05-21] - DX Studio Session Metadata Module
+
+CHANGED:
+- Moved the Web Preview DX Studio contract snapshot assembly into a focused module.
+- Kept the large Web Preview GPUI view responsible only for attaching the session snapshot field.
+
+NOTES:
+- This is a structure-only slice. It does not run DX CLI commands, start servers, run Cargo/`just run`, change normal Web Preview behavior, or add runtime drag/drop execution.
+
 [2026-05-21] - DX Receipt Cache Producer Bridge
 
 ADDED:
