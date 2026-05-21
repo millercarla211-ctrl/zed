@@ -1,3 +1,7 @@
+use dx_catalog::{
+    DxReceiptCacheEntryKind, DxReceiptCacheHealth, DxReceiptCacheKindSummary,
+    DxReceiptCacheManifest, read_receipt_cache_artifact,
+};
 use std::{
     env,
     path::{Path, PathBuf},
@@ -54,6 +58,8 @@ pub(crate) fn binary_cache_snapshot(input: DxBinaryCacheInput) -> DxBinaryCacheS
     });
     let receipt_cache_path = env_path(DX_RECEIPT_CACHE_ARTIFACT_ENV)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_RECEIPT_CACHE_ARTIFACT));
+    let launch_artifact = read_receipt_cache_artifact_state(&launch_cache_path);
+    let receipt_artifact = read_receipt_cache_artifact_state(&receipt_cache_path);
 
     let provider_row = DxBinaryCacheRow {
         label: "Provider catalog".to_string(),
@@ -68,53 +74,75 @@ pub(crate) fn binary_cache_snapshot(input: DxBinaryCacheInput) -> DxBinaryCacheS
     };
 
     let launch_json_ready = input.launch_latest_present && input.launch_malformed_count == 0;
-    let launch_row = artifact_row(
+    let launch_row = receipt_cache_artifact_row(
         "Launch receipts",
         &launch_cache_path,
-        launch_json_ready,
-        input.launch_stale_count + input.launch_expired_count > 0,
-        format!(
-            "latest {}, {} snapshot(s), {} malformed",
-            yes_no(input.launch_latest_present),
-            input.launch_snapshot_count,
-            input.launch_malformed_count
-        ),
-    );
+        &launch_artifact,
+        Some(DxReceiptCacheEntryKind::Launch),
+    )
+    .unwrap_or_else(|| {
+        artifact_row(
+            "Launch receipts",
+            &launch_cache_path,
+            launch_json_ready,
+            input.launch_stale_count + input.launch_expired_count > 0,
+            format!(
+                "latest {}, {} snapshot(s), {} malformed",
+                yes_no(input.launch_latest_present),
+                input.launch_snapshot_count,
+                input.launch_malformed_count
+            ),
+        )
+    });
 
     let receipt_json_ready = input.receipt_root_exists && input.receipt_file_count > 0;
-    let receipt_row = artifact_row(
+    let receipt_row = receipt_cache_artifact_row(
         "Receipt index",
         &receipt_cache_path,
-        receipt_json_ready,
-        false,
-        format!(
-            "{} receipt file(s) under {}",
-            input.receipt_file_count,
-            input.receipt_root.display()
-        ),
-    );
+        &receipt_artifact,
+        None,
+    )
+    .unwrap_or_else(|| {
+        artifact_row(
+            "Receipt index",
+            &receipt_cache_path,
+            receipt_json_ready,
+            false,
+            format!(
+                "{} receipt file(s) under {}",
+                input.receipt_file_count,
+                input.receipt_root.display()
+            ),
+        )
+    });
 
     let metering_source_ready =
         input.token_receipt_count + input.rlm_receipt_count + input.serializer_receipt_count > 0;
-    let metering_row = DxBinaryCacheRow {
-        label: "Token/tool meters".to_string(),
-        state: if receipt_row.present {
-            "ready".to_string()
-        } else if metering_source_ready {
-            "json-ready".to_string()
-        } else {
-            "waiting".to_string()
-        },
-        path: receipt_cache_path.display().to_string(),
-        detail: format!(
-            "{} token / {} rlm / {} serializer receipt(s)",
-            input.token_receipt_count, input.rlm_receipt_count, input.serializer_receipt_count
-        ),
-        present: receipt_row.present,
-    };
+    let receipt_cache_ready = matches!(&receipt_artifact, ReceiptCacheArtifactState::Ready(_));
+    let metering_row = metering_row_from_artifact(&receipt_cache_path, &receipt_artifact)
+        .unwrap_or_else(|| DxBinaryCacheRow {
+            label: "Token/tool meters".to_string(),
+            state: if receipt_cache_ready {
+                "ready".to_string()
+            } else if metering_source_ready {
+                "json-ready".to_string()
+            } else {
+                "waiting".to_string()
+            },
+            path: receipt_cache_path.display().to_string(),
+            detail: format!(
+                "{} token / {} rlm / {} serializer receipt(s)",
+                input.token_receipt_count, input.rlm_receipt_count, input.serializer_receipt_count
+            ),
+            present: receipt_cache_ready,
+        });
 
     let rows = vec![provider_row, launch_row, receipt_row, metering_row];
     let binary_ready_count = rows.iter().filter(|row| row.state == "ready").count();
+    let binary_backed_count = rows
+        .iter()
+        .filter(|row| binary_cache_state_from_artifact(&row.state))
+        .count();
     let json_ready_count = rows
         .iter()
         .filter(|row| row.state == "json-ready" || row.state == "stale")
@@ -122,7 +150,7 @@ pub(crate) fn binary_cache_snapshot(input: DxBinaryCacheInput) -> DxBinaryCacheS
 
     let status = if binary_ready_count == rows.len() {
         "ready"
-    } else if json_ready_count > 0 {
+    } else if binary_backed_count > 0 || json_ready_count > 0 {
         "json-authoritative"
     } else {
         "waiting"
@@ -152,6 +180,152 @@ pub(crate) fn binary_cache_snapshot(input: DxBinaryCacheInput) -> DxBinaryCacheS
         rows,
         next_action,
     }
+}
+
+enum ReceiptCacheArtifactState {
+    Missing,
+    Ready(DxReceiptCacheManifest),
+    Invalid(String),
+}
+
+fn read_receipt_cache_artifact_state(path: &Path) -> ReceiptCacheArtifactState {
+    if !path.is_file() {
+        return ReceiptCacheArtifactState::Missing;
+    }
+
+    match read_receipt_cache_artifact(path) {
+        Ok(manifest) => ReceiptCacheArtifactState::Ready(manifest),
+        Err(error) => ReceiptCacheArtifactState::Invalid(error.to_string()),
+    }
+}
+
+fn receipt_cache_artifact_row(
+    label: &str,
+    path: &Path,
+    artifact: &ReceiptCacheArtifactState,
+    kind: Option<DxReceiptCacheEntryKind>,
+) -> Option<DxBinaryCacheRow> {
+    match artifact {
+        ReceiptCacheArtifactState::Missing => None,
+        ReceiptCacheArtifactState::Invalid(error) => Some(DxBinaryCacheRow {
+            label: label.to_string(),
+            state: "malformed".to_string(),
+            path: path.display().to_string(),
+            detail: error.clone(),
+            present: true,
+        }),
+        ReceiptCacheArtifactState::Ready(manifest) => {
+            let (state, detail) = if let Some(kind) = kind {
+                let summary = manifest.kind_summary(kind);
+                (
+                    cache_health_state(summary.health()).to_string(),
+                    kind_summary_detail(&summary),
+                )
+            } else {
+                let summary = manifest.summary();
+                (
+                    cache_health_state(summary.health()).to_string(),
+                    format!(
+                        "{} entry(s), {} / {} root(s), {} malformed",
+                        summary.entry_count,
+                        summary.present_root_count,
+                        summary.root_count,
+                        summary.malformed_entry_count
+                    ),
+                )
+            };
+
+            Some(DxBinaryCacheRow {
+                label: label.to_string(),
+                state,
+                path: path.display().to_string(),
+                detail,
+                present: true,
+            })
+        }
+    }
+}
+
+fn metering_row_from_artifact(
+    path: &Path,
+    artifact: &ReceiptCacheArtifactState,
+) -> Option<DxBinaryCacheRow> {
+    let ReceiptCacheArtifactState::Ready(manifest) = artifact else {
+        return None;
+    };
+
+    let token = manifest.kind_summary(DxReceiptCacheEntryKind::Tokens);
+    let rlm = manifest.kind_summary(DxReceiptCacheEntryKind::Rlm);
+    let serializer = manifest.kind_summary(DxReceiptCacheEntryKind::Serializer);
+    let state = combined_meter_health(&[&token, &rlm, &serializer]);
+
+    Some(DxBinaryCacheRow {
+        label: "Token/tool meters".to_string(),
+        state: cache_health_state(state).to_string(),
+        path: path.display().to_string(),
+        detail: format!(
+            "tokens: {}; rlm: {}; serializer: {}",
+            kind_summary_detail(&token),
+            kind_summary_detail(&rlm),
+            kind_summary_detail(&serializer)
+        ),
+        present: true,
+    })
+}
+
+fn combined_meter_health(summaries: &[&DxReceiptCacheKindSummary]) -> DxReceiptCacheHealth {
+    if summaries
+        .iter()
+        .any(|summary| summary.health() == DxReceiptCacheHealth::Malformed)
+    {
+        return DxReceiptCacheHealth::Malformed;
+    }
+    if summaries.iter().all(|summary| summary.entry_count == 0) {
+        return DxReceiptCacheHealth::Empty;
+    }
+    if summaries
+        .iter()
+        .any(|summary| summary.health() == DxReceiptCacheHealth::Expired)
+    {
+        return DxReceiptCacheHealth::Expired;
+    }
+    if summaries
+        .iter()
+        .any(|summary| summary.health() == DxReceiptCacheHealth::Stale)
+    {
+        return DxReceiptCacheHealth::Stale;
+    }
+    DxReceiptCacheHealth::Ready
+}
+
+fn kind_summary_detail(summary: &DxReceiptCacheKindSummary) -> String {
+    format!(
+        "{} entry(s), {} fresh, {} stale, {} malformed",
+        summary.entry_count,
+        summary.fresh_entry_count,
+        summary.stale_entry_count,
+        summary.malformed_entry_count
+    )
+}
+
+fn cache_health_state(health: DxReceiptCacheHealth) -> &'static str {
+    match health {
+        DxReceiptCacheHealth::Ready => "ready",
+        DxReceiptCacheHealth::Partial => "partial",
+        DxReceiptCacheHealth::Stale => "stale",
+        DxReceiptCacheHealth::Expired => "expired",
+        DxReceiptCacheHealth::Malformed => "malformed",
+        DxReceiptCacheHealth::MissingRoots => "missing-roots",
+        DxReceiptCacheHealth::Empty => "empty",
+        DxReceiptCacheHealth::Unknown => "unknown",
+    }
+}
+
+fn binary_cache_state_from_artifact(state: &str) -> bool {
+    matches!(
+        state,
+        "ready" | "partial" | "stale" | "expired" | "malformed" | "missing-roots" | "empty"
+    )
 }
 
 fn artifact_row(

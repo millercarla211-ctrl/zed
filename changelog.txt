@@ -1,3 +1,15 @@
+[2026-05-21] - DX Binary Cache Rail Artifact Health
+
+ADDED:
+- Added `dx_catalog` receipt-cache artifact reads to the Zed-facing Binary Cache rail.
+- Added launch, receipt-index, and token/RLM/serializer bucket health display from the shared receipt-cache manifest contract when `DXRCP001` artifacts are present.
+
+CHANGED:
+- The Binary Cache rail now uses JSON-authoritative fallback states when receipt-cache artifacts are missing and surfaces malformed artifact states without marking token/tool meters ready.
+
+NOTES:
+- This slice does not run CLI commands, start servers, run Cargo/`just run`, write artifacts, make binary caches authoritative over JSON receipts, or change existing receipt producers.
+
 [2026-05-21] - DX Receipt Cache Health Classification
 
 ADDED:
