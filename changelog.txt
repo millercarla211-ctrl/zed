@@ -1,3 +1,15 @@
+[2026-05-21] - DX Reduced Context Rail Visibility
+
+ADDED:
+- Added Reduced Context as a real Sources rail set backed by workspace `tools/dx-serializer-rlm/reduced-context` receipts.
+- Added a Serializer/RLM bucket to the right Tool History rail so execution, runner-gate, and reduced-context receipts are visible beside Forge and media history.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 72/100 and move the next target to guided panel actions for the flagship metasearch-to-reduced-context recipe.
+
+NOTES:
+- This rail slice only scans managed workspace receipt files with the existing bounded cache pattern; it does not run serializer/RLM tools, Cargo, local servers, network requests, browser input, or model calls.
+
 [2026-05-21] - DX Serializer/RLM Reduced Context Receipts
 
 ADDED:

@@ -58,6 +58,10 @@ fn scan_tool_history(workspace_roots: &[String]) -> DxToolHistorySnapshot {
             "Media Executions",
             Path::new("tools").join("dx-media").join("executions"),
         ),
+        (
+            "Serializer/RLM",
+            Path::new("tools").join("dx-serializer-rlm"),
+        ),
     ]
     .into_iter()
     .map(|(label, relative_root)| scan_bucket(label, &relative_root, &workspace_roots))

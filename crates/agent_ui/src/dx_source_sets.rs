@@ -36,6 +36,7 @@ pub(crate) struct DxSourceItem {
 pub(crate) enum DxSourceKind {
     WorkspaceRoot,
     MetasearchSourcePack,
+    ReducedContextReceipt,
     MediaOutput,
     ForgeRestorePreview,
 }
@@ -73,6 +74,7 @@ fn scan_source_sets(workspace_roots: &[String]) -> DxSourceSetSnapshot {
     let sets = vec![
         workspace_root_set(&workspace_roots),
         metasearch_source_pack_set(&workspace_roots),
+        reduced_context_set(&workspace_roots),
         media_output_set(&workspace_roots),
         forge_restore_preview_set(&workspace_roots),
     ];
@@ -240,6 +242,48 @@ fn media_sources_from_receipt(receipt: &ReceiptCandidate) -> Vec<DxSourceItem> {
             })
         })
         .collect()
+}
+
+fn reduced_context_set(workspace_roots: &[PathBuf]) -> DxSourceSet {
+    let mut sources = Vec::new();
+    for root in workspace_roots {
+        let receipt_root = root
+            .join("tools")
+            .join("dx-serializer-rlm")
+            .join("reduced-context");
+        for receipt in latest_receipts(root, &receipt_root, 4) {
+            if let Some(source) = reduced_context_from_receipt(&receipt) {
+                sources.push(source);
+            }
+        }
+    }
+    sources.truncate(4);
+
+    DxSourceSet {
+        label: "Reduced Context",
+        status: source_set_status(workspace_roots, &sources, "No reduced-context receipts"),
+        sources,
+    }
+}
+
+fn reduced_context_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSourceItem> {
+    let value = read_receipt_json(&receipt.path)?;
+    let reduced_context = value
+        .get("reduced_context")
+        .or_else(|| value.get("serializer_rlm_reduced_context"))?;
+    let reduction = reduced_context.get("reduction").unwrap_or(&Value::Null);
+    let gate = reduced_context.get("gate").unwrap_or(&Value::Null);
+    let source_count = usize_at(reduction, &["source_count"]).unwrap_or_default();
+    let tokens = usize_at(reduction, &["selected_estimated_tokens"]).unwrap_or_default();
+    let status = string_at(reduction, &["status"]).unwrap_or_else(|| "reduced context".to_string());
+    let reducer = string_at(gate, &["reducer"]).unwrap_or_else(|| "serializer/RLM".to_string());
+
+    Some(DxSourceItem {
+        label: format!("Reduced context: {reducer}"),
+        detail: format!("{source_count} sources - ~{tokens} tokens - {status}"),
+        path: receipt.label.clone(),
+        kind: DxSourceKind::ReducedContextReceipt,
+    })
 }
 
 fn forge_restore_source_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSourceItem> {

@@ -48,7 +48,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Added `list_dx_launch_demo_recipes`, a permissioned read-only Agent tool that lists metasearch-to-context, media-output-to-sources, and Forge-restore-preview-to-sources demo flows with required tool chains, receipt gates, safety notes, and workspace receipt-root status.
 - Added `gate_dx_serializer_rlm_runner`, a permissioned Agent tool that validates serializer/RLM execution plans or receipts, requires explicit runner approval, requires persisted execution receipts by default, separates RLM model-call approval, and can write managed runner-gate receipts without running serializer/RLM code.
 - Added `write_dx_serializer_rlm_reduced_context`, a permissioned Agent tool that consumes runner-gate receipts and context bundles, writes deterministic reduced-context receipts with cited source summaries, and does not run external serializer/RLM crates, Cargo, network, browser input, or model calls.
-- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 70/100; the next highest-value target is surfacing reduced-context receipts in launch rails and guided panel actions before any external reducer runner.
+- Surfaced reduced-context receipts in the launch workspace: the Sources rail now has a Reduced Context set, and the right Tool History rail scans workspace `tools/dx-serializer-rlm` receipts.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 72/100; the next highest-value target is guided panel actions for the flagship metasearch-to-reduced-context recipe before any external reducer runner.
 
 ## Remaining Proof
 
@@ -56,3 +57,4 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - The DX CLI receipt producers remain external to Zed; this slice reads receipt files and reports missing or empty receipt states only.
 - The media runner source slice has rustfmt/diff/conflict validation only so far; Cargo check/test and runtime ffmpeg proof remain deferred under the repo's launch validation rules.
 - The reduced-context writer has formatting/diff/conflict validation only so far; Cargo check/test and runtime Agent proof remain deferred under the repo's launch validation rules.
+- The reduced-context rail slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
