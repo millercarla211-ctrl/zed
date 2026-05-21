@@ -186,6 +186,7 @@ fn build_launch_demo_recipes(
     let focus = clean_optional_text(input.focus);
     let mut recipes = vec![
         metasearch_to_context_recipe(workspace_root.as_ref()),
+        serializer_rlm_external_execution_recipe(workspace_root.as_ref()),
         media_to_sources_recipe(workspace_root.as_ref()),
         forge_restore_to_sources_recipe(workspace_root.as_ref()),
         forge_restore_approval_recipe(workspace_root.as_ref()),
@@ -368,7 +369,54 @@ fn metasearch_to_context_recipe(workspace_root: Option<&PathBuf>) -> DxLaunchDem
             "Execution preview receipt stays dry-run only and reports no external process or model-call execution.",
         ],
         blockers: recipe_blockers(workspace_root),
-        next_action: "Use this as the flagship demo path before wiring the separately approved external serializer/RLM runner.",
+        next_action: "Use this as the flagship demo path before optionally running the separately approved external serializer/RLM executor.",
+    }
+}
+
+fn serializer_rlm_external_execution_recipe(
+    workspace_root: Option<&PathBuf>,
+) -> DxLaunchDemoRecipe {
+    DxLaunchDemoRecipe {
+        id: "serializer-rlm-approved-external-execution",
+        title: "Serializer/RLM Approved External Execution",
+        priority: "optional",
+        status: recipe_status(workspace_root),
+        intent: "Run an already reviewed serializer/RLM execution preview through an explicit no-shell command vector, then persist stdout/stderr previews and hashes as managed execution receipts.",
+        required_tools: vec![
+            "preview_dx_serializer_rlm_reducer_execution",
+            "execute_dx_serializer_rlm_reducer",
+        ],
+        receipt_contracts: vec![
+            "zed.dx.serializer_rlm.execution_preview_receipt.v1",
+            "zed.dx.serializer_rlm.reduced_context_receipt.v1",
+            "zed.dx.serializer_rlm.external_execution_receipt.v1",
+        ],
+        steps: vec![
+            step(
+                1,
+                "preview_dx_serializer_rlm_reducer_execution",
+                "Confirm the dry-run execution preview is ready and reports no prior external execution.",
+                Some("zed.dx.serializer_rlm.execution_preview_receipt.v1"),
+                true,
+                "Preview receipts only; no external process, shell, Cargo, network, or model call execution.",
+            ),
+            step(
+                2,
+                "execute_dx_serializer_rlm_reducer",
+                "Run the approved absolute command vector and feed reduced_context_text to stdin when requested.",
+                Some("zed.dx.serializer_rlm.external_execution_receipt.v1"),
+                true,
+                "Executes only explicit no-shell commands under approved DX serializer/RLM roots and writes managed receipts.",
+            ),
+        ],
+        proof_gates: vec![
+            "Execution preview receipt is ready, dry_run_only, and reports no prior external process.",
+            "Reduced-context receipt is deterministic and contains bounded reduced_context_text.",
+            "Operator supplies an absolute command vector under approved DX serializer/RLM roots.",
+            "Execution receipt records stdout/stderr previews, hashes, exit code, and no shell execution.",
+        ],
+        blockers: recipe_blockers(workspace_root),
+        next_action: "Use only when a reviewed reducer binary exists; otherwise keep the demo on the dry-run preview receipt.",
     }
 }
 
@@ -626,6 +674,12 @@ fn receipt_roots(workspace_root: Option<&Path>) -> Vec<DxLaunchDemoReceiptRoot> 
             root.join("tools")
                 .join("dx-serializer-rlm")
                 .join("execution-previews"),
+        ),
+        (
+            "serializer/RLM external executions",
+            root.join("tools")
+                .join("dx-serializer-rlm")
+                .join("external-executions"),
         ),
         (
             "media executions",

@@ -1,3 +1,18 @@
+[2026-05-21] - DX Serializer RLM External Execution Receipts
+
+ADDED:
+- Added `execute_dx_serializer_rlm_reducer`, a permissioned Agent tool that consumes execution-preview and reduced-context receipts, requires explicit external execution approval, and writes managed external execution receipts.
+- Added no-shell absolute command-vector validation for serializer/RLM reducer execution under approved DX roots, with Cargo/package-manager/script-interpreter blockers and redacted command previews.
+- Added serializer/RLM external execution receipt roots under workspace `tools/dx-serializer-rlm/external-executions` or Zed data fallback.
+- Added an optional launch demo recipe for approved serializer/RLM external execution.
+
+CHANGED:
+- Updated launch, receipt review, and Reducer Guard prompts to recognize the external-execution receipt lane while still stopping before execution unless the operator provides explicit approval and a managed receipt path.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 99/100 and move the remaining gap to governed runtime proof plus future restore-to-target mutation.
+
+NOTES:
+- This slice does not run during implementation. Runtime reducer proof, Cargo checks, full builds, local servers, `just run`, and restore-to-target mutation remain deferred under the launch validation rules.
+
 [2026-05-21] - DX Serializer RLM Execution Preview Receipts
 
 ADDED:

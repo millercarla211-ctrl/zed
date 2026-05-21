@@ -62,7 +62,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Added `import_dx_runtime_proof`, a permissioned Agent tool that captures operator-supplied runtime proof summaries, evidence, blockers, import receipts, and operator status copy receipts under managed runtime-proof roots.
 - Added `capture_dx_forge_restore_approval`, a permissioned Agent tool that captures operator restore approval evidence, target path, rollback status, overwrite posture, blockers, and managed approval receipts under `tools/dx-forge/restore-approvals` without mutating target paths.
 - Added `preview_dx_serializer_rlm_reducer_execution`, a permissioned Agent tool that captures dry-run external reducer execution previews under `tools/dx-serializer-rlm/execution-previews` without running external reducers, Cargo, model calls, shell commands, network, or unmanaged writes.
-- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 98/100; the next highest-value target is the governed external serializer/RLM reducer executor behind explicit approval and receipt-backed safeguards.
+- Added `execute_dx_serializer_rlm_reducer`, a permissioned Agent tool that runs only approved no-shell absolute serializer/RLM reducer command vectors under approved DX roots, feeds deterministic reduced-context text by stdin when requested, captures stdout/stderr previews and hashes, and writes managed external-execution receipts.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 99/100; the remaining launch gap is governed runtime proof plus any future restore-to-target mutation after preview/rollback evidence is ready.
 
 ## Remaining Proof
 
@@ -84,3 +85,4 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - The runtime proof import capture slice has formatting/diff/conflict validation only so far; Cargo check/test and runtime proof remain deferred under the repo's launch validation rules.
 - The restore approval capture slice has formatting/diff/conflict validation only so far; Cargo check/test and restore-to-target runtime proof remain deferred under the repo's launch validation rules.
 - The serializer/RLM execution preview slice has formatting/diff/conflict validation only so far; Cargo check/test and external reducer runtime proof remain deferred under the repo's launch validation rules.
+- The serializer/RLM external execution slice has formatting/diff/conflict validation only so far; Cargo check/test and actual reducer runtime proof remain deferred under the repo's launch validation rules.
