@@ -6113,6 +6113,7 @@ impl AgentPanel {
             deploy_status_receipt_count,
             validation_proof_receipt_count: proof_freshness.receipt_count("Validation"),
             visual_proof_receipt_count: proof_freshness.receipt_count("Visual Proof"),
+            runtime_proof_receipt_count: proof_freshness.receipt_count("Runtime Proof"),
             fresh_proof_receipt_count: proof_freshness.fresh_receipt_count(),
         });
 

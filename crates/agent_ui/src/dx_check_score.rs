@@ -31,6 +31,7 @@ pub(crate) struct DxCheckScoreInput<'a> {
     pub deploy_status_receipt_count: usize,
     pub validation_proof_receipt_count: usize,
     pub visual_proof_receipt_count: usize,
+    pub runtime_proof_receipt_count: usize,
     pub fresh_proof_receipt_count: usize,
 }
 
@@ -104,18 +105,24 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
     }
     let validation_visual_proof_count =
         input.validation_proof_receipt_count + input.visual_proof_receipt_count;
+    let proof_receipt_count = validation_visual_proof_count + input.runtime_proof_receipt_count;
     if input.validation_proof_receipt_count > 0 {
         score += 4;
     }
     if input.visual_proof_receipt_count > 0 {
         score += 4;
     }
+    if input.runtime_proof_receipt_count > 0 {
+        score += 3;
+    } else {
+        blockers.push("No runtime proof receipts yet".to_string());
+    }
     if input.fresh_proof_receipt_count > 0 {
         score += 2;
-    } else if validation_visual_proof_count > 0 {
-        blockers.push("Validation or visual proof receipts are stale".to_string());
+    } else if proof_receipt_count > 0 {
+        blockers.push("Validation, visual, or runtime proof receipts are stale".to_string());
     } else {
-        blockers.push("No validation or visual proof receipts yet".to_string());
+        blockers.push("No validation, visual, or runtime proof receipts yet".to_string());
     }
     let score = score.min(100);
 
@@ -178,13 +185,14 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
             },
             DxCheckScoreItem {
                 label: "Proof Freshness",
-                state: if validation_visual_proof_count == 0 {
-                    "No validation/visual proof".to_string()
+                state: if proof_receipt_count == 0 {
+                    "No validation/visual/runtime proof".to_string()
                 } else {
                     format!(
-                        "{} validation, {} visual, {} fresh",
+                        "{} validation, {} visual, {} runtime, {} fresh",
                         input.validation_proof_receipt_count,
                         input.visual_proof_receipt_count,
+                        input.runtime_proof_receipt_count,
                         input.fresh_proof_receipt_count
                     )
                 },

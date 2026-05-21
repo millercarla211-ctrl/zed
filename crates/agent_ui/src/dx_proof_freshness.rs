@@ -95,6 +95,18 @@ fn scan_proof_freshness(workspace_roots: &[String]) -> DxProofFreshnessSnapshot 
             ],
             &workspace_roots,
         ),
+        proof_bucket(
+            "Runtime Proof",
+            "tools/dx-runtime-proof",
+            &[
+                "tools/dx-runtime-proof",
+                "tools/dx-runtime-proof/imports",
+                "tools/dx-runtime-proof/status",
+                "tools/agent-plugins/runtime-green",
+                "tools/agent-plugins/runtime-status",
+            ],
+            &workspace_roots,
+        ),
     ];
 
     DxProofFreshnessSnapshot { buckets }

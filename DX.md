@@ -58,7 +58,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Added validation and visual proof freshness rows backed by managed workspace proof roots, plus produced-file proof lines for media outputs from execution receipts.
 - Added URL/status deploy receipt buckets plus a Runtime Proof handoff card that drafts the next safe validation plan from Check score, proof freshness, deploy target, and receipt state without running tools.
 - Added Restore Approval and Reducer Guard handoff cards plus sharper source prompts for restore-preview and reduced-context receipt rows.
-- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 90/100; the next highest-value target is governed runtime proof import/status surfaces before any external reducer execution or live restore mutation.
+- Added runtime proof freshness/status buckets for managed runtime proof, import, and runtime-status receipt roots.
+- Advanced the current DX Native Tool Execution/Restore/Panels/Demos set to 92/100; the next highest-value target is runtime proof import receipt capture plus operator status copy before any external reducer execution or live restore mutation.
 
 ## Remaining Proof
 
@@ -76,3 +77,4 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - The proof freshness and produced-file card slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
 - The deploy URL/status and runtime-proof handoff slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
 - The restore approval and reducer guard handoff slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.
+- The runtime proof status bucket slice has formatting/diff/conflict validation only so far; runtime visual proof remains deferred under the repo's launch validation rules.

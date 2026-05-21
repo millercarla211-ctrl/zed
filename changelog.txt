@@ -1,3 +1,15 @@
+[2026-05-21] - DX Runtime Proof Status Buckets
+
+ADDED:
+- Added a Runtime Proof freshness bucket that scans managed runtime proof, runtime proof import, runtime status, and runtime-green receipt roots.
+
+CHANGED:
+- Extended the read-only Check score to include runtime proof receipt counts and stale/missing runtime proof blockers.
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 92/100 and move the next target to runtime proof import receipt capture plus operator status copy.
+
+NOTES:
+- This slice reads managed proof receipts only. It does not run `just run`, Cargo, local servers, browser automation, deploys, shell commands, external serializer/RLM code, model calls, or restore-to-target actions.
+
 [2026-05-21] - DX Restore Approval And Reducer Guard Handoffs
 
 ADDED:
