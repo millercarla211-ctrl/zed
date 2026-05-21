@@ -175,6 +175,7 @@ fn is_receipt_file(path: &Path) -> bool {
 pub(crate) fn render_workspace_chrome(
     center: AnyElement,
     sidebar_actions: AnyElement,
+    guided_cards: AnyElement,
     status: DxLaunchWorkspaceStatus,
     cx: &mut App,
 ) -> AnyElement {
@@ -185,7 +186,7 @@ pub(crate) fn render_workspace_chrome(
         .bg(cx.theme().colors().panel_background)
         .child(render_sources_rail(sidebar_actions, &status, cx))
         .child(div().flex_1().min_w_0().size_full().child(center))
-        .child(render_right_rail(&status, cx))
+        .child(render_right_rail(&status, guided_cards, cx))
         .into_any_element()
 }
 
@@ -213,7 +214,11 @@ fn render_sources_rail(
         .into_any_element()
 }
 
-fn render_right_rail(status: &DxLaunchWorkspaceStatus, cx: &mut App) -> AnyElement {
+fn render_right_rail(
+    status: &DxLaunchWorkspaceStatus,
+    guided_cards: AnyElement,
+    cx: &mut App,
+) -> AnyElement {
     v_flex()
         .id("dx-progress-rail")
         .w(px(244.0))
@@ -230,6 +235,8 @@ fn render_right_rail(status: &DxLaunchWorkspaceStatus, cx: &mut App) -> AnyEleme
             "Background",
             format!("{} tasks", status.background_task_count),
         ))
+        .child(section_title("Guided Proofs", IconName::Sparkle))
+        .child(guided_cards)
         .child(section_title("Git", IconName::GitBranch))
         .child(metric_row(
             "Worktrees",

@@ -104,6 +104,8 @@ const LAST_CREATED_ENTRY_KIND_KEY: &str = "agent_panel__last_created_entry_kind"
 const TERMINAL_AGENT_TELEMETRY_ID: &str = "terminal";
 const DX_LAUNCH_RECIPE_PROMPT: &str = "Run the DX launch metasearch-to-reduced-context recipe for this workspace. First call list_dx_launch_demo_recipes with focus=\"metasearch\". Then, using only permissioned Agent tools and no local servers or builds, guide me through the next safe receipt step: inspect_dx_metasearch, search_dx_metasearch with write_source_pack_receipt=true, prepare_dx_source_attachment, prepare_dx_metasearch_context, plan_dx_serializer_rlm_execution, gate_dx_serializer_rlm_runner, and write_dx_serializer_rlm_reduced_context. Stop before any external serializer/RLM runner or model-call execution unless I explicitly approve it.";
 const DX_RECEIPT_REVIEW_PROMPT: &str = "Inspect the current DX launch receipts for this workspace. Summarize the latest metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, media, and Forge receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, or model calls.";
+const DX_MEDIA_PROOF_PROMPT: &str = "Prepare the DX media proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"media\". Then guide me through the next safe step using permissioned tools only: plan_dx_media_tool, gate_dx_media_tool_runner, execute_dx_media_tool only after an approved runner gate, and prepare_dx_source_attachment for produced files. Do not run local servers, builds, browser input, shell commands, unmanaged file writes, or media execution until I explicitly approve the tool request.";
+const DX_FORGE_PROOF_PROMPT: &str = "Prepare the DX Forge proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"forge\" and inspect_dx_forge_history. Then guide me through the next safe receipt step for safety policy, backup runner gate, backup execution, restore preview, and restore receipt review. Do not mutate target paths, permanently delete files, run local servers, builds, shell commands, browser input, or restore-to-target actions unless I explicitly approve the governed tool request.";
 
 /// Maximum number of idle threads kept in the agent panel's retained list.
 /// Set as a GPUI global to override; otherwise defaults to 5.
@@ -5686,7 +5688,8 @@ impl AgentPanel {
 
         let status = self.dx_launch_workspace_status(cx);
         let sidebar_actions = self.render_dx_launch_sidebar_actions(window, cx);
-        render_workspace_chrome(center, sidebar_actions, status, cx)
+        let guided_cards = self.render_dx_launch_guided_cards(window, cx);
+        render_workspace_chrome(center, sidebar_actions, guided_cards, status, cx)
     }
 
     fn render_dx_launch_sidebar_actions(
@@ -5758,6 +5761,97 @@ impl AgentPanel {
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.insert_dx_launch_prompt(DX_RECEIPT_REVIEW_PROMPT, window, cx);
                 })),
+            )
+            .into_any_element()
+    }
+
+    fn render_dx_launch_guided_cards(
+        &self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let can_create_entries = self.has_open_project(cx);
+
+        v_flex()
+            .gap_1()
+            .child(self.dx_launch_guided_card(
+                "dx-media-proof-card",
+                "dx-media-proof-action",
+                IconName::File,
+                "Media Proof",
+                "Plan, gate, execute, and attach produced media receipts.",
+                "Prepare Media",
+                DX_MEDIA_PROOF_PROMPT,
+                can_create_entries,
+                cx,
+            ))
+            .child(self.dx_launch_guided_card(
+                "dx-forge-proof-card",
+                "dx-forge-proof-action",
+                IconName::Archive,
+                "Forge Proof",
+                "Review safety, backup, and restore-preview receipts.",
+                "Prepare Forge",
+                DX_FORGE_PROOF_PROMPT,
+                can_create_entries,
+                cx,
+            ))
+            .into_any_element()
+    }
+
+    fn dx_launch_guided_card(
+        &self,
+        id: &'static str,
+        action_id: &'static str,
+        icon: IconName,
+        title: &'static str,
+        detail: &'static str,
+        action_label: &'static str,
+        prompt: &'static str,
+        can_create_entries: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .id(id)
+            .gap_1()
+            .rounded_sm()
+            .border_1()
+            .border_color(cx.theme().colors().border_variant)
+            .px_2()
+            .py_1()
+            .child(
+                h_flex()
+                    .gap_1()
+                    .min_w_0()
+                    .items_center()
+                    .child(Icon::new(icon).size(IconSize::XSmall).color(Color::Muted))
+                    .child(
+                        Label::new(title)
+                            .size(LabelSize::XSmall)
+                            .color(Color::Default)
+                            .truncate(),
+                    ),
+            )
+            .child(
+                Label::new(detail)
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
+            .child(
+                Button::new(action_id, action_label)
+                    .full_width()
+                    .label_size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .start_icon(
+                        Icon::new(IconName::PlayOutlined)
+                            .size(IconSize::XSmall)
+                            .color(Color::Muted),
+                    )
+                    .disabled(!can_create_entries)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.insert_dx_launch_prompt(prompt, window, cx);
+                    })),
             )
             .into_any_element()
     }

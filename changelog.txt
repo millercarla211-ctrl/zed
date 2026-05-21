@@ -1,3 +1,16 @@
+[2026-05-21] - DX Guided Proof Cards
+
+ADDED:
+- Added right-rail Media Proof and Forge Proof cards to the DX launch workspace.
+- Media Proof prepares a permission-safe Agent draft for the media plan, runner gate, approved execution, and produced-file source attachment flow.
+- Forge Proof prepares a permission-safe Agent draft for Forge history, safety policy, backup gate, backup execution, restore preview, and restore receipt review.
+
+CHANGED:
+- Updated `PLAN.md`, `todo.txt`, and `DX.md` to mark the current DX Native Tool Execution/Restore/Panels/Demos set at 76/100 and move the next target to richer source attachment affordances plus a read-only Check panel score schema.
+
+NOTES:
+- These cards prepare drafts only; they do not auto-submit prompts, run tools, mutate targets, start servers, run builds, invoke browser input, execute external serializer/RLM code, or make model calls by themselves.
+
 [2026-05-21] - DX Guided Launch Actions
 
 ADDED:
