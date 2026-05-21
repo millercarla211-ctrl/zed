@@ -1,3 +1,16 @@
+[2026-05-22] - DX Receipt Scanner Module Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_receipts.rs` for the DX receipt-root snapshot model, bucket counting, latest receipt labels, and short cache.
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_launch_workspace.rs` to consume the receipt snapshot boundary instead of owning filesystem scanning code inside the GPUI launch workspace view.
+- Updated Agent panel and launch prompt imports to read receipt snapshots from the focused receipt module.
+
+NOTES:
+- This is a source-structure cleanup only; it preserves the existing `G:\Dx\.dx\receipts` behavior, right-rail missing/empty states, token/tool meter slots, Agent panel behavior, Write/Ask modes, model picker, and Web Preview behavior.
+- No Cargo commands, local servers, live CLI commands, browser automation, or `just run` were executed.
+
 [2026-05-22] - DX Sidebar Screen Grid Source Polish
 
 CHANGED:

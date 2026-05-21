@@ -52,10 +52,11 @@ use crate::dx_launch_receipts::launch_receipt_review_snapshot;
 use crate::dx_launch_source_audit::launch_source_audit_snapshot;
 use crate::dx_launch_status::launch_status_snapshot;
 use crate::dx_launch_workspace::{
-    DxLaunchWorkspaceStatus, DxSourceRowControl, receipt_snapshot, render_workspace_chrome,
+    DxLaunchWorkspaceStatus, DxSourceRowControl, render_workspace_chrome,
 };
 use crate::dx_proof_freshness::proof_freshness_snapshot;
 use crate::dx_receipt_history::tool_history_snapshot;
+use crate::dx_receipts::receipt_snapshot;
 use crate::dx_runtime_proof_status::runtime_proof_status_snapshot;
 use crate::dx_source_sets::{DxSourceKind, DxSourceSetSnapshot, source_set_snapshot};
 use crate::dx_www_launch_evidence::www_launch_evidence_snapshot;
