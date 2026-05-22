@@ -1,3 +1,24 @@
+[2026-05-23] - DX-WWW Launch Evidence Status Labels
+
+ADDED:
+- Added `crates/agent_ui/src/dx_www_launch_evidence/evidence_status.rs` as the focused owner for launch evidence packet status labels.
+
+CHANGED:
+- `crates/agent_ui/src/dx_www_launch_evidence.rs` now delegates JSON packet status classification through `evidence_status_label`.
+- DX-WWW launch evidence packets with `passed: true` and non-empty findings now render as `warning` instead of clean `ready`.
+- Packets with missing `passed` and findings still render as `warning`; failed packets stay `blocked`.
+- `script/dx-www-launch-evidence-source.test.ts` now guards the status module, edge-case tests, and small-file boundary.
+
+PASSED:
+- Red/green `node --test script\dx-www-launch-evidence-source.test.ts`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_www_launch_evidence\evidence_status.rs`
+- Adjacent `node --test script\dx-agent-bridge-source.test.ts`
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_www_launch_evidence.rs crates\agent_ui\src\dx_www_launch_evidence\evidence_status.rs`
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, DX-WWW execution, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify warning status rows against real DX-WWW release evidence packets in the governed native Zed proof window.
+
 [2026-05-23] - DX-WWW Launch Evidence Score Labels
 
 ADDED:

@@ -8,9 +8,11 @@ use std::{
 };
 
 mod evidence_labels;
+mod evidence_status;
 mod expected_artifacts;
 
 use evidence_labels::evidence_score_label;
+use evidence_status::evidence_status_label;
 use expected_artifacts::{
     EXPECTED_EVIDENCE_ARTIFACTS, EvidenceFormat, ExpectedWwwEvidenceArtifact,
 };
@@ -271,12 +273,7 @@ fn inspect_expected_artifact(
                 .and_then(Value::as_array)
                 .map(Vec::len)
                 .unwrap_or_default();
-            let status = match passed {
-                Some(true) => "ready",
-                Some(false) => "blocked",
-                None if finding_count > 0 => "warning",
-                None => "ready",
-            };
+            let status = evidence_status_label(passed, finding_count);
             DxWwwLaunchEvidenceArtifact {
                 label: expected.label.to_string(),
                 path: expected.relative_path.to_string(),
