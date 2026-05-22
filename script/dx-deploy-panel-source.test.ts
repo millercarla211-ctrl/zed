@@ -114,6 +114,12 @@ test("launch gate reader prefers launch-specific check receipts", () => {
   assert.match(roots, /dx_hub_root\(\)/);
   assert.match(roots, /\.join\("www"\)/);
   assert.match(roots, /\.join\("receipts"\)\.join\("check"\)/);
+  assert.match(roots, /use std::path::\{Path, PathBuf\};/);
+  assert.match(roots, /fn check_root_key\(path: &Path\) -> String/);
+  assert.match(roots, /let path_key = check_root_key\(&path\);/);
+  assert.match(roots, /check_root_key\(&root\.path\) == path_key/);
+  assert.match(roots, /cfg!\(windows\)/);
+  assert.match(roots, /to_ascii_lowercase\(\)/);
   assert.match(source, /use crate::dx_deploy_check_roots::check_receipt_roots;/);
   assert.match(source, /for root in check_receipt_roots\(workspace_roots\)/);
   assert.match(source, /\["check-launch-latest\.json", "check-latest\.json"\]/);

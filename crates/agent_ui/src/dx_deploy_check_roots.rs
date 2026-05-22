@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::dx_deploy_hub_roots::dx_hub_root;
 
@@ -51,9 +51,29 @@ fn push_check_root(
         return;
     }
 
+    let path_key = check_root_key(&path);
+    if roots
+        .iter()
+        .any(|root| check_root_key(&root.path) == path_key)
+    {
+        return;
+    }
+
     roots.push(DxDeployCheckReceiptRoot {
         path,
         label,
         root_rank,
     });
+}
+
+fn check_root_key(path: &Path) -> String {
+    let mut key = path.to_string_lossy().replace('/', "\\");
+    while key.ends_with('\\') && key.len() > 3 {
+        key.pop();
+    }
+    if cfg!(windows) {
+        key.to_ascii_lowercase()
+    } else {
+        key
+    }
 }
