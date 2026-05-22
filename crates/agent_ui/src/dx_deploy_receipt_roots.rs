@@ -1,7 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::dx_deploy_hub_roots::deploy_hub_receipt_roots;
 use crate::dx_deploy_receipt_rank::DxDeployReceiptSourceKind;
+use crate::dx_deploy_root_key::deploy_root_key;
 
 pub(crate) struct DxDeployReceiptRoot {
     pub path: PathBuf,
@@ -38,10 +39,10 @@ fn push_receipt_root(
         return;
     }
 
-    let path_key = receipt_root_key(&path);
+    let path_key = deploy_root_key(&path);
     if roots
         .iter()
-        .any(|root| receipt_root_key(&root.path) == path_key)
+        .any(|root| deploy_root_key(&root.path) == path_key)
     {
         return;
     }
@@ -51,18 +52,4 @@ fn push_receipt_root(
         label,
         source_kind,
     });
-}
-
-fn receipt_root_key(path: &Path) -> String {
-    let mut key = path.to_string_lossy().replace('/', "\\");
-
-    while key.ends_with('\\') && key.len() > 3 {
-        key.pop();
-    }
-
-    if cfg!(windows) {
-        key.to_ascii_lowercase()
-    } else {
-        key
-    }
 }

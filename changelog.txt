@@ -1,13 +1,15 @@
-[2026-05-23] - DX Deploy Check Receipt Root De-Dupe
+[2026-05-23] - DX Deploy Receipt Root De-Dupe
 
 CHANGED:
-- `crates/agent_ui/src/dx_deploy_check_roots.rs` now normalizes and de-duplicates workspace, DX hub, and DX WWW check receipt roots before launch-gate receipt scanning.
-- `script/dx-deploy-panel-source.test.ts` now guards the normalized check-root key so future edits do not reintroduce duplicate root scans.
+- Added `crates/agent_ui/src/dx_deploy_root_key.rs` as the shared platform-aware de-duplication key for Deploy and Check receipt roots.
+- `crates/agent_ui/src/dx_deploy_check_roots.rs` and `crates/agent_ui/src/dx_deploy_receipt_roots.rs` now use the shared root key before receipt scanning.
+- The shared root key is platform-specific: Windows folds case and slash spelling, while non-Windows keeps case-sensitive paths and trims only trailing `/`.
+- `script/dx-deploy-panel-source.test.ts` now guards the normalized shared root key so future edits do not reintroduce duplicate root scans.
 - `DX.md` and `todo.txt` now record the low-cost Zed consumer posture and the next fixture-backed ordering proof.
 
 PASSED:
-- Red/green `node --test script/dx-deploy-panel-source.test.ts`
-- `rustfmt --edition 2024 crates/agent_ui/src/dx_deploy_check_roots.rs`
+- `node --test script/dx-deploy-panel-source.test.ts`
+- `rustfmt --edition 2024 crates/agent_ui/src/agent_ui.rs crates/agent_ui/src/dx_deploy_check_roots.rs crates/agent_ui/src/dx_deploy_receipt_roots.rs crates/agent_ui/src/dx_deploy_root_key.rs`
 
 NOTES:
 - No Cargo command, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.

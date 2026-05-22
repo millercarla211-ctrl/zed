@@ -40,6 +40,7 @@ test("agent_ui registers the focused deploy modules", () => {
     "dx_deploy_receipt_rank",
     "dx_deploy_receipt_roots",
     "dx_deploy_receipt_summary",
+    "dx_deploy_root_key",
     "dx_deploy_target_detection",
     "dx_deploy_targets",
   ];
@@ -104,9 +105,11 @@ test("deploy launch prompt details stay in a focused module", () => {
 test("launch gate reader prefers launch-specific check receipts", () => {
   const agentUi = read("crates/agent_ui/src/agent_ui.rs");
   const roots = read("crates/agent_ui/src/dx_deploy_check_roots.rs");
+  const rootKey = read("crates/agent_ui/src/dx_deploy_root_key.rs");
   const source = read("crates/agent_ui/src/dx_deploy_launch_gate.rs");
 
   assert.match(agentUi, /^mod dx_deploy_check_roots;$/m);
+  assert.match(agentUi, /^mod dx_deploy_root_key;$/m);
   assert.match(roots, /pub\(crate\) struct DxDeployCheckReceiptRoot/);
   assert.match(roots, /pub root_rank: u8/);
   assert.match(roots, /pub\(crate\) fn check_receipt_roots/);
@@ -114,12 +117,15 @@ test("launch gate reader prefers launch-specific check receipts", () => {
   assert.match(roots, /dx_hub_root\(\)/);
   assert.match(roots, /\.join\("www"\)/);
   assert.match(roots, /\.join\("receipts"\)\.join\("check"\)/);
-  assert.match(roots, /use std::path::\{Path, PathBuf\};/);
-  assert.match(roots, /fn check_root_key\(path: &Path\) -> String/);
-  assert.match(roots, /let path_key = check_root_key\(&path\);/);
-  assert.match(roots, /check_root_key\(&root\.path\) == path_key/);
-  assert.match(roots, /cfg!\(windows\)/);
-  assert.match(roots, /to_ascii_lowercase\(\)/);
+  assert.match(roots, /use crate::dx_deploy_root_key::deploy_root_key;/);
+  assert.match(roots, /let path_key = deploy_root_key\(&path\);/);
+  assert.match(roots, /deploy_root_key\(&root\.path\) == path_key/);
+  assert.match(rootKey, /pub\(crate\) fn deploy_root_key\(path: &Path\) -> String/);
+  assert.match(rootKey, /#\[cfg\(windows\)\]/);
+  assert.match(rootKey, /#\[cfg\(not\(windows\)\)\]/);
+  assert.match(rootKey, /replace\('\/', "\\\\"\)/);
+  assert.match(rootKey, /key\.ends_with\('\/'\)/);
+  assert.match(rootKey, /to_ascii_lowercase\(\)/);
   assert.match(source, /use crate::dx_deploy_check_roots::check_receipt_roots;/);
   assert.match(source, /for root in check_receipt_roots\(workspace_roots\)/);
   assert.match(source, /\["check-launch-latest\.json", "check-latest\.json"\]/);
@@ -137,6 +143,7 @@ test("deploy capability receipt roots stay in a focused module", () => {
 
   assert.match(agentUi, /^mod dx_deploy_hub_roots;$/m);
   assert.match(agentUi, /^mod dx_deploy_receipt_roots;$/m);
+  assert.match(agentUi, /^mod dx_deploy_root_key;$/m);
   assert.match(hubRoots, /DX_HOME_ENV/);
   assert.match(hubRoots, /DX_ROOT_ENV/);
   assert.match(hubRoots, /DX_HUB_ROOT_CANDIDATES/);
@@ -159,12 +166,10 @@ test("deploy capability receipt roots stay in a focused module", () => {
   );
   assert.match(roots, /workspace_roots\.iter\(\)\.take\(4\)/);
   assert.match(roots, /deploy_hub_receipt_roots\(\)/);
-  assert.match(roots, /fn receipt_root_key\(path: &Path\) -> String/);
+  assert.match(roots, /use crate::dx_deploy_root_key::deploy_root_key;/);
   assert.match(roots, /path\.as_os_str\(\)\.is_empty\(\)/);
-  assert.match(roots, /let path_key = receipt_root_key\(&path\);/);
-  assert.match(roots, /receipt_root_key\(&root\.path\) == path_key/);
-  assert.match(roots, /cfg!\(windows\)/);
-  assert.match(roots, /to_ascii_lowercase\(\)/);
+  assert.match(roots, /let path_key = deploy_root_key\(&path\);/);
+  assert.match(roots, /deploy_root_key\(&root\.path\) == path_key/);
   assert.match(
     capabilities,
     /use crate::dx_deploy_receipt_roots::\{DxDeployReceiptRoot, deploy_receipt_roots\};/,
