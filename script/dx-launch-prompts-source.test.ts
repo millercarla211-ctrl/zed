@@ -5,6 +5,41 @@ import test from "node:test";
 const read = (path: string) => readFileSync(path, "utf8");
 const lineCount = (path: string) => read(path).split(/\r?\n/).length;
 
+test("DX launch prompts keep launch context formatting in a focused module", () => {
+  const parent = read("crates/agent_ui/src/dx_launch_prompts.rs");
+  const context = "crates/agent_ui/src/dx_launch_prompts/context.rs";
+
+  assert.ok(existsSync(context), `expected focused launch context module ${context}`);
+  assert.match(parent, /^mod context;$/m);
+  assert.match(parent, /^use context::\{$/m);
+  assert.match(parent, /launch_receipt_review_prompt_context,/);
+  assert.doesNotMatch(parent, /fn launch_status_prompt_context/);
+  assert.doesNotMatch(parent, /fn launch_contract_prompt_context/);
+  assert.doesNotMatch(parent, /fn launch_receipt_review_prompt_context/);
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_prompts.rs") < 230,
+    "dx_launch_prompts.rs should stay a prompt coordinator",
+  );
+});
+
+test("DX launch context module owns receipt and audit summaries", () => {
+  const context = read("crates/agent_ui/src/dx_launch_prompts/context.rs");
+
+  assert.match(context, /pub\(super\) fn launch_status_prompt_context/);
+  assert.match(context, /pub\(super\) fn launch_contract_prompt_context/);
+  assert.match(context, /pub\(super\) fn launch_readiness_prompt_context/);
+  assert.match(context, /pub\(super\) fn launch_audit_prompt_context/);
+  assert.match(context, /pub\(super\) fn launch_www_evidence_prompt_context/);
+  assert.match(context, /pub\(super\) fn launch_source_audit_prompt_context/);
+  assert.match(context, /pub\(super\) fn launch_receipt_review_prompt_context/);
+  assert.match(context, /pub\(super\) fn bounded_join/);
+  assert.match(context, /missing launch receipt directory/);
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_prompts/context.rs") < 380,
+    "launch context module should stay focused",
+  );
+});
+
 test("DX launch prompts keep Forge proof wording in a focused module", () => {
   const parent = read("crates/agent_ui/src/dx_launch_prompts.rs");
   const forge = "crates/agent_ui/src/dx_launch_prompts/forge.rs";

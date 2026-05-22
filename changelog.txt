@@ -1,3 +1,20 @@
+[2026-05-23] - DX Launch Context Prompt Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_prompts/context.rs` as the focused owner for launch status, contract, readiness, audit, DX-WWW evidence, source-audit, receipt-review, and bounded-list summary formatting.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_prompts.rs` now imports context helpers from the focused module and stays as the launch prompt coordinator.
+- `script/dx-launch-prompts-source.test.ts` now guards context prompt ownership alongside Forge, source, and runtime-proof prompt ownership.
+- `DX.md` and `todo.txt` now record the context prompt split and guard.
+
+PASSED:
+- Red/green `node --test script/dx-launch-prompts-source.test.ts`
+- `rustfmt --edition 2024 crates/agent_ui/src/dx_launch_prompts.rs crates/agent_ui/src/dx_launch_prompts/context.rs`
+
+NOTES:
+- No Cargo command, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+
 [2026-05-23] - DX Deploy Root Key Edge Cases
 
 CHANGED:
