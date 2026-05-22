@@ -1,3 +1,17 @@
+[2026-05-23] - DX Launch Workspace Source Split
+
+ADDED:
+- Added `script/dx-launch-workspace-source.test.ts`, a lightweight Node source guard for DX launch workspace rail ownership and file sizing.
+- Added `crates/agent_ui/src/dx_launch_workspace/agents.rs` as the focused owner for DX Agents, social account, automation, agent receipt, provider, and model rail rendering.
+- Added `crates/agent_ui/src/dx_launch_workspace/sources.rs` as the focused owner for source-set, source attachment, source receipt drilldown, and receipt-root rail rendering.
+
+CHANGED:
+- Reduced `crates/agent_ui/src/dx_launch_workspace.rs` from a mixed rail implementation to a coordinator that delegates DX Agents and Sources rail sections to child modules.
+
+NOTES:
+- The red step was recorded with `node --test script/dx-launch-workspace-source.test.ts` failing for the missing focused launch workspace modules. Green verification passed with the same guard at 2/2 subtests and targeted rustfmt. Cargo/editor/runtime proof remains deferred by the no-build lane.
+- Scope was DX-only; no upstream Zed-owned files were refactored in this slice.
+
 [2026-05-23] - DX Studio Source Quality Hardening
 
 ADDED:
