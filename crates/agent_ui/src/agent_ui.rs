@@ -38,6 +38,7 @@ mod dx_deploy_receipt_buckets;
 mod dx_deploy_receipt_extract;
 mod dx_deploy_receipt_files;
 mod dx_deploy_receipt_rank;
+mod dx_deploy_receipt_roots;
 mod dx_deploy_receipt_summary;
 mod dx_deploy_target_detection;
 mod dx_deploy_targets;

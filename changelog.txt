@@ -1,3 +1,16 @@
+[2026-05-23] - DX Deploy Receipt Roots Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_deploy_receipt_roots.rs` as the focused owner for deploy receipt roots.
+
+CHANGED:
+- `crates/agent_ui/src/dx_deploy_capabilities.rs` now consumes workspace plus DX hub/cli/www receipt roots from the focused module instead of owning canonical root constants and duplicate-root filtering.
+- `script/dx-deploy-panel-source.test.ts` now guards the deploy receipt roots split and the status-doc handoff.
+- `DX.md` and `todo.txt` now record the deploy receipt roots ownership boundary.
+
+NOTES:
+- No Cargo command, local server, browser automation, cloud write, live deploy, or broad build ran in this slice.
+
 [2026-05-23] - DX Deploy Canonical Repo Migration
 
 CHANGED:

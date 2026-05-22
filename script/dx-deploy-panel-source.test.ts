@@ -36,6 +36,7 @@ test("agent_ui registers the focused deploy modules", () => {
     "dx_deploy_receipt_extract",
     "dx_deploy_receipt_files",
     "dx_deploy_receipt_rank",
+    "dx_deploy_receipt_roots",
     "dx_deploy_receipt_summary",
     "dx_deploy_target_detection",
     "dx_deploy_targets",
@@ -106,6 +107,32 @@ test("launch gate reader prefers launch-specific check receipts", () => {
   assert.match(source, /\["check-launch-latest\.json", "check-latest\.json"\]/);
   assert.match(source, /file_rank/);
   assert.match(source, /root_rank/);
+});
+
+test("deploy capability receipt roots stay in a focused module", () => {
+  const agentUi = read("crates/agent_ui/src/agent_ui.rs");
+  const roots = read("crates/agent_ui/src/dx_deploy_receipt_roots.rs");
+  const capabilities = read("crates/agent_ui/src/dx_deploy_capabilities.rs");
+
+  assert.match(agentUi, /^mod dx_deploy_receipt_roots;$/m);
+  assert.match(roots, /pub\(crate\) struct DxDeployReceiptRoot/);
+  assert.match(roots, /pub path: PathBuf/);
+  assert.match(roots, /pub label: String/);
+  assert.match(roots, /pub source_kind: DxDeployReceiptSourceKind/);
+  assert.match(
+    roots,
+    /pub\(crate\) fn deploy_receipt_roots\(workspace_roots: &\[PathBuf\]\) -> Vec<DxDeployReceiptRoot>/,
+  );
+  assert.match(roots, /workspace_roots\.iter\(\)\.take\(4\)/);
+  assert.match(roots, /DX_HUB_DEPLOY_RECEIPT_ROOT/);
+  assert.match(roots, /DX_CLI_DEPLOY_RECEIPT_ROOT/);
+  assert.match(roots, /DX_WWW_DEPLOY_RECEIPT_ROOT/);
+  assert.match(
+    capabilities,
+    /use crate::dx_deploy_receipt_roots::\{DxDeployReceiptRoot, deploy_receipt_roots\};/,
+  );
+  assert.doesNotMatch(capabilities, /fn deploy_receipt_roots/);
+  assert.doesNotMatch(capabilities, /const DX_HUB_DEPLOY_RECEIPT_ROOT/);
 });
 
 test("launch gate keeps source-owned blocker provenance", () => {
@@ -433,6 +460,8 @@ test("deploy status docs name the repeatable source guard", () => {
   assert.match(docs, /launch buckets/);
   assert.match(docs, /approval evidence/);
   assert.match(docs, /source runtime and launch evidence/);
+  assert.match(docs, /deploy receipt roots/);
+  assert.match(docs, /workspace plus DX hub\/cli\/www receipt roots/);
   assert.match(docs, /receipt-write/);
   assert.match(docs, /script\/dx-deploy-panel-source\.test\.ts/);
 });

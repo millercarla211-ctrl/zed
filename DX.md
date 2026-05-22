@@ -35,6 +35,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 
 ## Current Worker Update
 
+- Split DX Deploy receipt root ownership: `crates/agent_ui/src/dx_deploy_receipt_roots.rs` now owns the workspace plus DX hub/cli/www receipt roots used by the Deploy capability scanner. `crates/agent_ui/src/dx_deploy_capabilities.rs` no longer carries those canonical root constants or duplicate-root filtering, keeping the capability scanner focused on receipt discovery, ranking, parsing, and provider rows. Exact next action: keep deploy receipt roots aligned with the DX hub contract if deploy receipts move again.
+
 - Migrated the current DX Deploy panel slice from the stale `G:\Zed` checkout into canonical `G:\Dx\zed` only, preserving relative paths for the Deploy launch evidence, quick actions, bucket scores, launch outcome, launch scope, approval evidence, source guard, and status docs. No whole-repo copy, Cargo command, local server, or live deploy ran. Exact next action: continue all Zed/DX editor work from `G:\Dx\zed`.
 
 - Added DX Deploy approval evidence rows: Zed Deploy now reads bounded `source_ready.evidence`, `runtime_approved.evidence`, and `launch_approved.evidence` arrays through `crates/agent_ui/src/dx_deploy_launch_approval_evidence.rs`, renders source runtime and launch evidence rows in the Deploy launch gate, and carries `approval_evidence=` in deploy readiness prompts. This shows which proof signals are present, such as deploy dry-run reviewed, while still keeping missing runtime proof and blocked launch approval honest. Exact next action: compare approval evidence rows against `G:\Dx\.dx\receipts\check\check-launch-latest.json` during the governed proof window.

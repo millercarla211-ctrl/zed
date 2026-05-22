@@ -11,6 +11,7 @@ use crate::dx_deploy_receipt_rank::{
     DxDeployReceiptSourceKind, command_receipt_source_rank, compare_rank_then_newest,
     provider_gate_receipt_source_rank,
 };
+use crate::dx_deploy_receipt_roots::{DxDeployReceiptRoot, deploy_receipt_roots};
 pub(crate) use crate::dx_deploy_receipt_summary::{
     DxDeployCapabilityRow, DxDeployCommandReceiptSummary, DxDeployProviderGateReceiptSummary,
 };
@@ -20,10 +21,6 @@ use crate::dx_deploy_receipt_summary::{
 };
 
 const MAX_DEPLOY_RECEIPT_BYTES: u64 = 256 * 1024;
-const DX_HUB_DEPLOY_RECEIPT_ROOT: &str = r"G:\Dx\.dx\receipts\deploy";
-const DX_CLI_DEPLOY_RECEIPT_ROOT: &str = r"G:\Dx\cli\.dx\receipts\deploy";
-const DX_WWW_DEPLOY_RECEIPT_ROOT: &str = r"G:\Dx\www\.dx\receipts\deploy";
-
 #[derive(Clone, Default)]
 pub(crate) struct DxDeployCapabilityMatrixSnapshot {
     pub root_exists: bool,
@@ -33,12 +30,6 @@ pub(crate) struct DxDeployCapabilityMatrixSnapshot {
     pub status: Option<DxDeployCommandReceiptSummary>,
     pub provider_gate: Option<DxDeployProviderGateReceiptSummary>,
     pub providers: Vec<DxDeployCapabilityRow>,
-}
-
-struct DeployReceiptRoot {
-    path: PathBuf,
-    label: String,
-    source_kind: DxDeployReceiptSourceKind,
 }
 
 #[derive(Clone)]
@@ -124,58 +115,7 @@ pub(crate) fn deploy_capability_matrix_snapshot(
     }
 }
 
-fn deploy_receipt_roots(workspace_roots: &[PathBuf]) -> Vec<DeployReceiptRoot> {
-    let mut roots = Vec::new();
-
-    for root in workspace_roots.iter().take(4) {
-        push_receipt_root(
-            &mut roots,
-            root.join(".dx").join("receipts").join("deploy"),
-            format!("{}\\.dx\\receipts\\deploy", root.display()),
-            DxDeployReceiptSourceKind::Workspace,
-        );
-    }
-
-    push_receipt_root(
-        &mut roots,
-        PathBuf::from(DX_HUB_DEPLOY_RECEIPT_ROOT),
-        DX_HUB_DEPLOY_RECEIPT_ROOT.to_string(),
-        DxDeployReceiptSourceKind::DxHub,
-    );
-    push_receipt_root(
-        &mut roots,
-        PathBuf::from(DX_CLI_DEPLOY_RECEIPT_ROOT),
-        DX_CLI_DEPLOY_RECEIPT_ROOT.to_string(),
-        DxDeployReceiptSourceKind::DxCli,
-    );
-    push_receipt_root(
-        &mut roots,
-        PathBuf::from(DX_WWW_DEPLOY_RECEIPT_ROOT),
-        DX_WWW_DEPLOY_RECEIPT_ROOT.to_string(),
-        DxDeployReceiptSourceKind::DxWww,
-    );
-
-    roots
-}
-
-fn push_receipt_root(
-    roots: &mut Vec<DeployReceiptRoot>,
-    path: PathBuf,
-    label: String,
-    source_kind: DxDeployReceiptSourceKind,
-) {
-    if roots.iter().any(|root| root.path == path) {
-        return;
-    }
-
-    roots.push(DeployReceiptRoot {
-        path,
-        label,
-        source_kind,
-    });
-}
-
-fn receipt_candidates(root: &DeployReceiptRoot) -> Vec<DeployReceiptCandidate> {
+fn receipt_candidates(root: &DxDeployReceiptRoot) -> Vec<DeployReceiptCandidate> {
     let Ok(entries) = fs::read_dir(&root.path) else {
         return Vec::new();
     };
