@@ -1,3 +1,17 @@
+[2026-05-23] - DX Deploy Root Key Edge Cases
+
+CHANGED:
+- `crates/agent_ui/src/dx_deploy_root_key.rs` now collapses repeated Windows path separators after normalizing slash spelling.
+- Windows root-key normalization now preserves drive roots and UNC prefixes while still de-duplicating repeated separators later in the path.
+- Added focused unit tests for mixed slash spelling, repeated separators, drive-root preservation, UNC-prefix preservation, and non-Windows case-sensitive trailing-slash trimming.
+
+PASSED:
+- Red/green direct `rustc --edition=2024 --test crates\agent_ui\src\dx_deploy_root_key.rs`
+- `rustfmt --edition 2024 crates/agent_ui/src/dx_deploy_root_key.rs`
+
+NOTES:
+- No Cargo command, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+
 [2026-05-23] - DX Deploy Receipt Root De-Dupe
 
 CHANGED:
