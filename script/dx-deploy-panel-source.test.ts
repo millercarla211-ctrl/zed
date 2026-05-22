@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 
 const deploySourceDir = "crates/agent_ui/src";
 const read = (path) => readFileSync(path, "utf8");
+const lineCount = (path) => read(path).split(/\r?\n/).length;
 
 const deploySourceFiles = () =>
   readdirSync(deploySourceDir)
@@ -32,11 +33,13 @@ test("agent_ui registers the focused deploy modules", () => {
     "dx_deploy_launch_scope",
     "dx_deploy_local_files",
     "dx_deploy_matrix_rail",
+    "dx_deploy_provider_gate_summary",
     "dx_deploy_prompts",
     "dx_deploy_rail",
     "dx_deploy_rail_ui",
     "dx_deploy_receipt_buckets",
     "dx_deploy_receipt_extract",
+    "dx_deploy_receipt_fields",
     "dx_deploy_receipt_files",
     "dx_deploy_receipt_rank",
     "dx_deploy_receipt_roots",
@@ -53,6 +56,48 @@ test("agent_ui registers the focused deploy modules", () => {
       `${moduleName} should be registered from agent_ui.rs`,
     );
   }
+});
+
+test("deploy receipt parsing stays split by receipt ownership", () => {
+  const agentUi = read("crates/agent_ui/src/agent_ui.rs");
+  const capabilities = read("crates/agent_ui/src/dx_deploy_capabilities.rs");
+  const summary = read("crates/agent_ui/src/dx_deploy_receipt_summary.rs");
+  const providerGate = read("crates/agent_ui/src/dx_deploy_provider_gate_summary.rs");
+  const fields = read("crates/agent_ui/src/dx_deploy_receipt_fields.rs");
+
+  assert.match(agentUi, /^mod dx_deploy_provider_gate_summary;$/m);
+  assert.match(agentUi, /^mod dx_deploy_receipt_fields;$/m);
+  assert.match(
+    capabilities,
+    /pub\(crate\) use crate::dx_deploy_provider_gate_summary::\{/,
+  );
+  assert.match(
+    capabilities,
+    /use crate::dx_deploy_provider_gate_summary::parse_deploy_provider_gate_receipt;/,
+  );
+  assert.match(summary, /use crate::dx_deploy_receipt_fields::\{/);
+  assert.match(providerGate, /use crate::dx_deploy_receipt_fields::\{/);
+  assert.match(providerGate, /pub\(crate\) struct DxDeployProviderGateReceiptSummary/);
+  assert.match(providerGate, /pub\(crate\) fn parse_deploy_provider_gate_receipt/);
+  assert.match(providerGate, /fn provider_gate_quick_fixes/);
+  assert.match(fields, /pub\(crate\) fn string_field/);
+  assert.match(fields, /pub\(crate\) fn usize_field/);
+  assert.match(fields, /pub\(crate\) fn string_array/);
+  assert.doesNotMatch(summary, /struct DxDeployProviderGateReceiptSummary/);
+  assert.doesNotMatch(summary, /fn provider_gate_rows/);
+  assert.doesNotMatch(summary, /fn provider_gate_quick_fixes/);
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_deploy_receipt_summary.rs") < 190,
+    "dx_deploy_receipt_summary.rs should keep provider-gate parsing out",
+  );
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_deploy_provider_gate_summary.rs") < 120,
+    "provider gate summary parsing should stay focused",
+  );
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_deploy_receipt_fields.rs") < 80,
+    "shared receipt field helpers should stay tiny",
+  );
 });
 
 test("deploy prompt ownership stays out of the launch prompt module", () => {
@@ -199,7 +244,7 @@ test("launch gate keeps source-owned blocker provenance", () => {
 });
 
 test("provider gate surfaces dx-deploy quick-fix risk metadata", () => {
-  const summary = read("crates/agent_ui/src/dx_deploy_receipt_summary.rs");
+  const summary = read("crates/agent_ui/src/dx_deploy_provider_gate_summary.rs");
   const rail = read("crates/agent_ui/src/dx_deploy_gate_rail.rs");
 
   assert.match(summary, /pub\(crate\) struct DxDeployProviderGateQuickFix/);

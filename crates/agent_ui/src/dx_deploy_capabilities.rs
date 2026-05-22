@@ -7,18 +7,20 @@ use std::{
     time::SystemTime,
 };
 
+use crate::dx_deploy_provider_gate_summary::parse_deploy_provider_gate_receipt;
+pub(crate) use crate::dx_deploy_provider_gate_summary::{
+    DxDeployProviderGateQuickFix, DxDeployProviderGateReceiptSummary, DxDeployProviderGateRow,
+};
 use crate::dx_deploy_receipt_rank::{
     DxDeployReceiptSourceKind, command_receipt_source_rank, compare_rank_then_newest,
     provider_gate_receipt_source_rank,
 };
 use crate::dx_deploy_receipt_roots::{DxDeployReceiptRoot, deploy_receipt_roots};
 pub(crate) use crate::dx_deploy_receipt_summary::{
-    DxDeployCapabilityRow, DxDeployCommandReceiptSummary, DxDeployProviderGateQuickFix,
-    DxDeployProviderGateReceiptSummary,
+    DxDeployCapabilityRow, DxDeployCommandReceiptSummary,
 };
 use crate::dx_deploy_receipt_summary::{
     deploy_provider_rows_from_value, parse_deploy_command_receipt,
-    parse_deploy_provider_gate_receipt,
 };
 
 const MAX_DEPLOY_RECEIPT_BYTES: u64 = 256 * 1024;

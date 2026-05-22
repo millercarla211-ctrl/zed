@@ -1,3 +1,47 @@
+[2026-05-23] - DX Launch Handoff Split And Status Label Hardening
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/contracts.rs` as the focused owner for Launch Handoff rail rendering.
+- Added `crates/agent_ui/src/dx_launch_workspace/launch_status_labels.rs` as the focused owner for Launch Status receipt text fallback labels.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace.rs` now delegates Launch Handoff rendering through `contracts::launch_contract_state` and is down to 1077 lines under the 1120-line source guard.
+- `crates/agent_ui/src/dx_launch_workspace/launch_status.rs` now trims summary, command, next-action, and redaction text before rendering receipt-provided labels.
+- Blank Launch Status receipt fields now render explicit fallback labels instead of empty rows.
+- `script/dx-launch-workspace-source.test.ts` now guards the Launch Handoff module, Launch Status label module, edge-case tests, and smaller parent source budget.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_launch_workspace\launch_status_labels.rs`
+- Adjacent `node --test script\dx-www-launch-evidence-source.test.ts`
+- Adjacent `node --test script\dx-agent-bridge-source.test.ts`
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_launch_workspace.rs crates\agent_ui\src\dx_launch_workspace\contracts.rs crates\agent_ui\src\dx_launch_workspace\launch_status.rs crates\agent_ui\src\dx_launch_workspace\launch_status_labels.rs crates\agent_ui\src\dx_launch_workspace\binary_cache.rs crates\agent_ui\src\dx_launch_workspace\binary_cache_labels.rs crates\agent_ui\src\dx_launch_workspace\list_labels.rs crates\agent_ui\src\dx_launch_workspace\agents.rs`
+- `git diff --check`
+- Conflict-marker scan on touched files
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, DX-WWW execution, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify Launch Handoff and Launch Status fallback rows against real launch status and handoff receipts in the governed native Zed proof window.
+
+[2026-05-23] - DX Deploy Provider Gate Receipt Summary Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_deploy_provider_gate_summary.rs` as the focused owner for Provider Gate receipt summary structs, rows, quick-fix risk metadata, and parsing.
+- Added `crates/agent_ui/src/dx_deploy_receipt_fields.rs` as the shared owner for deploy receipt JSON field helpers.
+
+CHANGED:
+- `crates/agent_ui/src/dx_deploy_receipt_summary.rs` now owns command receipt summaries and provider capability rows only, reducing the file to 121 lines.
+- `crates/agent_ui/src/dx_deploy_capabilities.rs` now imports Provider Gate parsing from the focused provider-gate module while preserving its existing re-export facade for deploy rails.
+- `script/dx-deploy-panel-source.test.ts` now guards the Provider Gate parsing boundary, shared field helper module, and small-file budgets.
+
+PASSED:
+- Red/green `node --test script\dx-deploy-panel-source.test.ts`
+- `rustfmt --edition 2024 crates\agent_ui\src\agent_ui.rs crates\agent_ui\src\dx_deploy_capabilities.rs crates\agent_ui\src\dx_deploy_receipt_summary.rs crates\agent_ui\src\dx_deploy_provider_gate_summary.rs crates\agent_ui\src\dx_deploy_receipt_fields.rs`
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, DX-WWW execution, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify Provider Gate quick-fix/risk rows against real root `dx deploy` receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Status And Binary Cache Rail Split
 
 ADDED:
