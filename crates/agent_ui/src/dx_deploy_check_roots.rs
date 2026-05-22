@@ -14,7 +14,7 @@ pub(crate) fn check_receipt_roots(workspace_roots: &[PathBuf]) -> Vec<DxDeployCh
     for root in workspace_roots.iter().take(4) {
         push_check_root(
             &mut roots,
-            root.join(".dx").join("receipts").join("check"),
+            check_receipt_path(root),
             format!("{}\\.dx\\receipts\\check", root.display()),
             0,
         );
@@ -23,18 +23,22 @@ pub(crate) fn check_receipt_roots(workspace_roots: &[PathBuf]) -> Vec<DxDeployCh
     let hub_root = dx_hub_root();
     push_check_root(
         &mut roots,
-        hub_root.join(".dx").join("receipts").join("check"),
+        check_receipt_path(&hub_root),
         format!("{}\\.dx\\receipts\\check", hub_root.display()),
         1,
     );
     push_check_root(
         &mut roots,
-        hub_root.join("www").join(".dx").join("receipts").join("check"),
+        check_receipt_path(hub_root.join("www")),
         format!("{}\\www\\.dx\\receipts\\check", hub_root.display()),
         2,
     );
 
     roots
+}
+
+fn check_receipt_path(root: impl Into<PathBuf>) -> PathBuf {
+    root.into().join(".dx").join("receipts").join("check")
 }
 
 fn push_check_root(

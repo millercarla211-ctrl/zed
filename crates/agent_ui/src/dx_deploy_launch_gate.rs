@@ -6,6 +6,7 @@ use std::{
     time::SystemTime,
 };
 
+use crate::dx_deploy_check_roots::check_receipt_roots;
 use crate::dx_deploy_launch_actions::{DxDeployLaunchAction, launch_actions};
 use crate::dx_deploy_launch_approval_evidence::{
     DxDeployLaunchApprovalEvidence, launch_approval_evidence,
@@ -16,7 +17,6 @@ use crate::dx_deploy_launch_evidence::{
 };
 use crate::dx_deploy_launch_outcome::{DxDeployLaunchOutcome, launch_outcome};
 use crate::dx_deploy_launch_scope::{DxDeployLaunchScope, launch_scope};
-use crate::dx_deploy_check_roots::check_receipt_roots;
 
 const MAX_CHECK_RECEIPT_BYTES: u64 = 256 * 1024;
 
@@ -74,12 +74,7 @@ pub(crate) fn deploy_launch_gate_snapshot(
     let mut candidates = Vec::new();
 
     for root in check_receipt_roots(workspace_roots) {
-        push_check_candidates(
-            &mut candidates,
-            root.path,
-            root.label,
-            root.root_rank,
-        );
+        push_check_candidates(&mut candidates, root.path, root.label, root.root_rank);
     }
 
     candidates.sort_by(|left, right| {
