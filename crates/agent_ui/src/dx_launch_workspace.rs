@@ -13,9 +13,7 @@ use crate::dx_launch_receipts::{DxLaunchReceiptReviewSnapshot, DxLaunchReceiptSu
 use crate::dx_launch_source_audit::DxLaunchSourceAuditSnapshot;
 use crate::dx_launch_status::DxLaunchStatusSnapshot;
 use crate::dx_proof_freshness::{DxProofFreshnessBucket, DxProofFreshnessSnapshot};
-use crate::dx_receipt_history::{
-    DxToolHistoryBucket, DxToolHistoryReceiptSummary, DxToolHistorySnapshot,
-};
+use crate::dx_receipt_history::DxToolHistorySnapshot;
 use crate::dx_receipts::DxReceiptSnapshot;
 use crate::dx_runtime_proof_status::{
     DxRuntimeProofPlanSummary, DxRuntimeProofReceiptSummary, DxRuntimeProofStatusSnapshot,
@@ -27,6 +25,7 @@ mod agents;
 mod check;
 mod check_labels;
 mod sources;
+mod tool_history;
 #[derive(Clone)]
 pub(crate) struct DxLaunchWorkspaceStatus {
     pub active_status: SharedString,
@@ -278,7 +277,7 @@ fn render_right_rail(
         .child(section_title("Deploy", IconName::Public))
         .child(deploy_target_state(&status.deploy_targets, cx))
         .child(section_title("Tool History", IconName::Archive))
-        .child(tool_history_state(&status.tool_history, cx))
+        .child(tool_history::tool_history_state(&status.tool_history, cx))
         .child(section_title("Background Tasks", IconName::Clock))
         .child(background_task_state(status.background_task_count, cx))
         .child(section_title("Token And Tool Slots", IconName::Sliders))
@@ -1222,116 +1221,6 @@ fn bounded_items(items: &[String], max: usize, empty: &'static str) -> String {
         values.push(format!("+{} more", items.len() - max));
     }
     values.join(", ")
-}
-
-fn tool_history_state(snapshot: &DxToolHistorySnapshot, cx: &App) -> AnyElement {
-    let mut stack = v_flex().gap_1();
-
-    for (ix, bucket) in snapshot.buckets.iter().enumerate() {
-        stack = stack.child(tool_history_bucket(
-            SharedString::from(format!("dx-tool-history-{ix}")),
-            bucket,
-            cx,
-        ));
-    }
-
-    stack.into_any_element()
-}
-
-fn tool_history_bucket(id: SharedString, bucket: &DxToolHistoryBucket, cx: &App) -> AnyElement {
-    let state = if !bucket.root_exists {
-        format!("Missing: {}", bucket.root_label)
-    } else if bucket.count == 0 {
-        "No receipts".to_string()
-    } else {
-        format!("{} receipts", bucket.count)
-    };
-    let mut stack = v_flex()
-        .id(id)
-        .gap_1()
-        .rounded_sm()
-        .border_1()
-        .border_color(cx.theme().colors().border_variant)
-        .px_2()
-        .py_1()
-        .child(metric_row(bucket.label, state));
-
-    if bucket.root_exists {
-        let bucket_id = bucket.label.to_ascii_lowercase().replace(' ', "-");
-        for (ix, summary) in bucket.latest_summaries.iter().enumerate() {
-            let row_id = format!("{bucket_id}-summary-{ix}");
-            stack = stack.child(tool_history_summary_row(
-                SharedString::from(row_id.clone()),
-                row_id,
-                summary,
-                cx,
-            ));
-        }
-
-        for (ix, label) in bucket.latest.iter().enumerate() {
-            stack = stack.child(source_row(
-                SharedString::from(format!("{bucket_id}-latest-{ix}")),
-                IconName::FileTextOutlined,
-                label.clone(),
-                cx,
-            ));
-        }
-    }
-
-    stack.into_any_element()
-}
-
-fn tool_history_summary_row(
-    id: SharedString,
-    row_id: String,
-    summary: &DxToolHistoryReceiptSummary,
-    cx: &App,
-) -> AnyElement {
-    let mut stack = v_flex()
-        .id(id)
-        .gap_0p5()
-        .min_w_0()
-        .rounded_sm()
-        .px_1()
-        .py_0p5()
-        .bg(cx.theme().colors().element_background)
-        .child(metric_row(summary.headline.clone(), summary.detail.clone()));
-
-    if let Some(target_path) = summary.target_path.as_ref() {
-        stack = stack.child(
-            Label::new(format!("Target {target_path}"))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if let Some(preview_path) = summary.restore_destination_root.as_ref() {
-        stack = stack.child(
-            Label::new(format!("Preview {preview_path}"))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if summary.blocker_count > 0 {
-        stack = stack.child(signal_row(
-            SharedString::from(format!("{row_id}-blockers")),
-            IconName::Warning,
-            Color::Warning,
-            format!("{} blocker(s)", summary.blocker_count),
-        ));
-    }
-
-    stack = stack.child(
-        Label::new(summary.label.clone())
-            .size(LabelSize::XSmall)
-            .color(Color::Muted)
-            .truncate(),
-    );
-
-    stack.into_any_element()
 }
 
 fn proof_freshness_state(snapshot: &DxProofFreshnessSnapshot, cx: &App) -> AnyElement {

@@ -1,3 +1,22 @@
+[2026-05-23] - DX Launch Tool History Rail Split And Check Count Guard
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/tool_history.rs` as the focused owner for Tool History rail rendering.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace.rs` now delegates Forge/Media/Tool History receipt bucket rows through `tool_history::tool_history_state` and stays under the tighter 1720-line source guard.
+- `script/dx-launch-workspace-source.test.ts` now guards the Tool History module and a tighter parent coordinator line budget.
+- `crates/agent_ui/src/dx_launch_workspace/check_labels.rs` now ignores blank checked-path and skipped-check strings when calculating count labels.
+
+PASSED:
+- Red/green `node --test script/dx-launch-workspace-source.test.ts`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_launch_workspace\check_labels.rs`
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_launch_workspace.rs crates\agent_ui\src\dx_launch_workspace\tool_history.rs crates\agent_ui\src\dx_launch_workspace\check_labels.rs`
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify Tool History Forge/Media rows and Check count labels against real receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Check Blank Last-Run Label Guard
 
 FIXED:

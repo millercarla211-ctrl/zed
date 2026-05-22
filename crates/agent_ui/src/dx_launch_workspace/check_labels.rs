@@ -1,5 +1,5 @@
 pub(crate) fn checked_paths_label(paths: &[String]) -> String {
-    match paths.len() {
+    match nonblank_count(paths) {
         0 => "No checked paths in receipt".to_string(),
         1 => "1 path".to_string(),
         count => format!("{count} paths"),
@@ -7,11 +7,18 @@ pub(crate) fn checked_paths_label(paths: &[String]) -> String {
 }
 
 pub(crate) fn skipped_checks_label(skipped: &[String]) -> String {
-    match skipped.len() {
+    match nonblank_count(skipped) {
         0 => "No skipped expensive checks".to_string(),
         1 => "1 skipped".to_string(),
         count => format!("{count} skipped"),
     }
+}
+
+fn nonblank_count(values: &[String]) -> usize {
+    values
+        .iter()
+        .filter(|value| !value.trim().is_empty())
+        .count()
 }
 
 pub(crate) fn check_outcome_label(
@@ -81,15 +88,25 @@ mod tests {
 
     #[test]
     fn path_and_skip_labels_cover_empty_single_and_plural() {
-        assert_eq!(checked_paths_label(&[]), "No checked paths in receipt");
+        let no_paths = "No checked paths in receipt";
+        let no_skips = "No skipped expensive checks";
+
+        assert_eq!(checked_paths_label(&[]), no_paths);
+        assert_eq!(checked_paths_label(&strings(&["", "  "])), no_paths);
         assert_eq!(checked_paths_label(&strings(&["G:/Dx"])), "1 path");
+        assert_eq!(checked_paths_label(&strings(&[" G:/Dx ", ""])), "1 path");
         assert_eq!(
             checked_paths_label(&strings(&["G:/Dx", "G:/Dx/www"])),
             "2 paths"
         );
 
-        assert_eq!(skipped_checks_label(&[]), "No skipped expensive checks");
+        assert_eq!(skipped_checks_label(&[]), no_skips);
+        assert_eq!(skipped_checks_label(&strings(&["", "  "])), no_skips);
         assert_eq!(skipped_checks_label(&strings(&["lighthouse"])), "1 skipped");
+        assert_eq!(
+            skipped_checks_label(&strings(&[" lighthouse ", ""])),
+            "1 skipped"
+        );
         assert_eq!(
             skipped_checks_label(&strings(&["lighthouse", "e2e"])),
             "2 skipped"

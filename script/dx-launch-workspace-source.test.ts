@@ -12,6 +12,7 @@ test("DX launch workspace UI stays split by rail ownership", () => {
     "crates/agent_ui/src/dx_launch_workspace/check.rs",
     "crates/agent_ui/src/dx_launch_workspace/check_labels.rs",
     "crates/agent_ui/src/dx_launch_workspace/sources.rs",
+    "crates/agent_ui/src/dx_launch_workspace/tool_history.rs",
   ];
 
   for (const module of expectedModules) {
@@ -22,8 +23,9 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   assert.match(parent, /^mod check;$/m);
   assert.match(parent, /^mod check_labels;$/m);
   assert.match(parent, /^mod sources;$/m);
+  assert.match(parent, /^mod tool_history;$/m);
   assert.ok(
-    lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 1800,
+    lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 1720,
     "dx_launch_workspace.rs should stay a coordinator instead of owning every rail",
   );
 });
@@ -62,9 +64,27 @@ test("DX launch workspace delegates Check rail rendering", () => {
   assert.match(labels, /pub\(crate\) fn checked_paths_label/);
   assert.match(labels, /pub\(crate\) fn skipped_checks_label/);
   assert.match(labels, /pub\(crate\) fn last_run_label_with_generated_at/);
+  assert.match(labels, /fn nonblank_count/);
+  assert.match(labels, /filter\(\|value\| !value\.trim\(\)\.is_empty\(\)\)/);
   assert.match(labels, /last_run_label_uses_generated_timestamp_when_label_is_blank/);
   assert.match(labels, /last_run_label_trims_nonblank_receipt_labels/);
   assert.match(labels, /Last run Unix ms: \{generated_at\}/);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check.rs") < 190);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check_labels.rs") < 160);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check_labels.rs") < 170);
+});
+
+test("DX launch workspace delegates Tool History rail rendering", () => {
+  const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
+  const toolHistory = read("crates/agent_ui/src/dx_launch_workspace/tool_history.rs");
+
+  assert.match(parent, /tool_history::tool_history_state/);
+  assert.doesNotMatch(parent, /fn tool_history_state/);
+  assert.doesNotMatch(parent, /fn tool_history_bucket/);
+  assert.doesNotMatch(parent, /fn tool_history_summary_row/);
+  assert.match(toolHistory, /pub\(super\) fn tool_history_state/);
+  assert.match(toolHistory, /fn tool_history_bucket/);
+  assert.match(toolHistory, /fn tool_history_summary_row/);
+  assert.match(toolHistory, /DxToolHistoryReceiptSummary/);
+  assert.match(toolHistory, /dx-tool-history-\{ix\}/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/tool_history.rs") < 150);
 });
