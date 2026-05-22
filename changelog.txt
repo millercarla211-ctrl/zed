@@ -1,3 +1,17 @@
+[2026-05-23] - DX Studio Source Quality Hardening
+
+ADDED:
+- Added `crates/web_preview/src/dx_studio/routes.rs` as the focused owner for DX Studio preview targets, default preview URLs, dev-server origin parsing, route derivation, and manifest route target extraction.
+- Added `crates/web_preview/src/dx_studio_source_edit/plan.rs`, `receipt.rs`, and `snapshot.rs` as focused owners for source-edit planning, style/refusal receipt shaping, and trusted source snapshot validation.
+- Added `crates/web_preview/src/dx_studio_source_edit/manifest/selectors.rs` and `manifest/summaries.rs` to keep manifest selector scoring and summary shaping out of the edit-manifest facade.
+
+CHANGED:
+- Tightened `script/dx-source-quality.test.ts` so DX-owned Rust modules must stay under 620 lines and the new focused module boundaries are explicitly guarded.
+- Reduced the DX Studio and source-edit facades without changing Windows WebView2 interactions or upstream Zed-owned files.
+
+NOTES:
+- The red step was recorded with `node --test script/dx-source-quality.test.ts` failing for the missing focused route module before implementation. Green verification passed with the same source-quality guard at 2/2 subtests, the Web Preview platform lifecycle guard at 16/16, and the Deploy panel source guard at 8/8. Cargo/editor/runtime proof remains deferred by the no-build lane.
+
 [2026-05-22] - DX Studio Source Quality Split
 
 ADDED:

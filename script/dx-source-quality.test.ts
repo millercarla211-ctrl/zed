@@ -6,6 +6,7 @@ import test from "node:test";
 const read = (path: string) => readFileSync(path, "utf8");
 const lineCount = (path: string) => read(path).split(/\r?\n/).length;
 const normalizedPath = (path: string) => path.replaceAll("\\", "/");
+const maxOwnedRustLines = 620;
 
 const collectFiles = (root: string, extensions: Set<string>): string[] => {
   if (!existsSync(root)) return [];
@@ -27,6 +28,22 @@ const collectFiles = (root: string, extensions: Set<string>): string[] => {
 };
 
 test("DX Studio source is split into small owned modules", () => {
+  const expectedModules = [
+    "crates/web_preview/src/dx_studio/manifest.rs",
+    "crates/web_preview/src/dx_studio/project.rs",
+    "crates/web_preview/src/dx_studio/routes.rs",
+    "crates/web_preview/src/dx_studio_source_edit/manifest.rs",
+    "crates/web_preview/src/dx_studio_source_edit/manifest/selectors.rs",
+    "crates/web_preview/src/dx_studio_source_edit/manifest/summaries.rs",
+    "crates/web_preview/src/dx_studio_source_edit/manifest_ts.rs",
+    "crates/web_preview/src/dx_studio_source_edit/operations.rs",
+    "crates/web_preview/src/dx_studio_source_edit/paths.rs",
+    "crates/web_preview/src/dx_studio_source_edit/plan.rs",
+    "crates/web_preview/src/dx_studio_source_edit/receipt.rs",
+    "crates/web_preview/src/dx_studio_source_edit/snapshot.rs",
+    "crates/web_preview/src/dx_studio_source_edit/source_ranges.rs",
+    "crates/web_preview/src/dx_studio_source_edit/values.rs",
+  ];
   const rustFiles = [
     "crates/web_preview/src/dx_studio.rs",
     "crates/web_preview/src/dx_studio_bridge.rs",
@@ -34,10 +51,18 @@ test("DX Studio source is split into small owned modules", () => {
     ...collectFiles("crates/web_preview/src/dx_studio", new Set([".rs"])),
     ...collectFiles("crates/web_preview/src/dx_studio_source_edit", new Set([".rs"])),
   ];
+  const normalizedRustFiles = rustFiles.map(normalizedPath);
 
-  assert.ok(rustFiles.length >= 10, "expected DX Studio to stay split by ownership");
+  for (const module of expectedModules) {
+    assert.ok(
+      normalizedRustFiles.includes(module),
+      `expected focused DX module ${module}`,
+    );
+  }
+
+  assert.ok(rustFiles.length >= 15, "expected DX Studio to stay split by ownership");
   for (const file of rustFiles) {
-    assert.ok(lineCount(file) < 800, `${file} is too large`);
+    assert.ok(lineCount(file) < maxOwnedRustLines, `${file} is too large`);
   }
 });
 
