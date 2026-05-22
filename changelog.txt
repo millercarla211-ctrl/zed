@@ -1,3 +1,20 @@
+[2026-05-23] - DX Launch Forge Prompt Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_prompts/forge.rs` as the focused owner for Forge proof, restore approval, and Forge history summary prompt context.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_prompts.rs` now re-exports the existing Forge prompt helpers from the focused module and stays as the launch prompt coordinator.
+- `script/dx-launch-prompts-source.test.ts` now guards Forge prompt ownership alongside source prompt and runtime proof prompt ownership.
+- `DX.md` and `todo.txt` now record the Forge prompt split and guard.
+
+PASSED:
+- `node --test script/dx-launch-prompts-source.test.ts`
+- `rustfmt --edition 2024 --check crates/agent_ui/src/dx_launch_prompts.rs crates/agent_ui/src/dx_launch_prompts/forge.rs`
+
+NOTES:
+- No Cargo command, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy ran in this slice.
+
 [2026-05-23] - DX Launch Source Prompt Split
 
 ADDED:

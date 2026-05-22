@@ -5,6 +5,37 @@ import test from "node:test";
 const read = (path: string) => readFileSync(path, "utf8");
 const lineCount = (path: string) => read(path).split(/\r?\n/).length;
 
+test("DX launch prompts keep Forge proof wording in a focused module", () => {
+  const parent = read("crates/agent_ui/src/dx_launch_prompts.rs");
+  const forge = "crates/agent_ui/src/dx_launch_prompts/forge.rs";
+
+  assert.ok(existsSync(forge), `expected focused Forge prompt module ${forge}`);
+  assert.match(parent, /^mod forge;$/m);
+  assert.match(parent, /^pub\(crate\) use forge::\{forge_proof_prompt, restore_approval_prompt\};$/m);
+  assert.doesNotMatch(parent, /fn forge_proof_prompt/);
+  assert.doesNotMatch(parent, /fn restore_approval_prompt/);
+  assert.doesNotMatch(parent, /fn forge_history_summary_prompt/);
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_prompts.rs") < 560,
+    "dx_launch_prompts.rs should stay a prompt coordinator",
+  );
+});
+
+test("DX launch Forge prompt module owns restore proof context", () => {
+  const forge = read("crates/agent_ui/src/dx_launch_prompts/forge.rs");
+
+  assert.match(forge, /pub\(crate\) fn forge_proof_prompt/);
+  assert.match(forge, /pub\(crate\) fn restore_approval_prompt/);
+  assert.match(forge, /pub\(super\) fn forge_history_prompt_context/);
+  assert.match(forge, /fn forge_history_summary_prompt/);
+  assert.match(forge, /inspect_dx_forge_history/);
+  assert.match(forge, /Do not mutate target paths/);
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_prompts/forge.rs") < 130,
+    "Forge prompt module should stay focused",
+  );
+});
+
 test("DX launch prompts keep source-action wording in a focused module", () => {
   const parent = read("crates/agent_ui/src/dx_launch_prompts.rs");
   const source = "crates/agent_ui/src/dx_launch_prompts/source.rs";
