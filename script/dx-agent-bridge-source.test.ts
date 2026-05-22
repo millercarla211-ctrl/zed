@@ -11,6 +11,7 @@ test("DX Agent bridge stays split by command, runtime, and receipt ownership", (
     "crates/agent_ui/src/dx_agent_bridge/command_safety.rs",
     "crates/agent_ui/src/dx_agent_bridge/command_safety_tests.rs",
     "crates/agent_ui/src/dx_agent_bridge/commands.rs",
+    "crates/agent_ui/src/dx_agent_bridge/local_file_labels.rs",
     "crates/agent_ui/src/dx_agent_bridge/local_files.rs",
     "crates/agent_ui/src/dx_agent_bridge/receipts.rs",
     "crates/agent_ui/src/dx_agent_bridge/runtime.rs",
@@ -22,6 +23,7 @@ test("DX Agent bridge stays split by command, runtime, and receipt ownership", (
 
   assert.match(parent, /^mod command_safety;$/m);
   assert.match(parent, /^mod commands;$/m);
+  assert.match(parent, /^mod local_file_labels;$/m);
   assert.match(parent, /^mod local_files;$/m);
   assert.match(parent, /^mod receipts;$/m);
   assert.match(parent, /^mod runtime;$/m);
@@ -36,6 +38,7 @@ test("DX Agent bridge delegates bridge commands and receipt parsing", () => {
   const safety = read("crates/agent_ui/src/dx_agent_bridge/command_safety.rs");
   const safetyTests = read("crates/agent_ui/src/dx_agent_bridge/command_safety_tests.rs");
   const commands = read("crates/agent_ui/src/dx_agent_bridge/commands.rs");
+  const localFileLabels = read("crates/agent_ui/src/dx_agent_bridge/local_file_labels.rs");
   const localFiles = read("crates/agent_ui/src/dx_agent_bridge/local_files.rs");
   const receipts = read("crates/agent_ui/src/dx_agent_bridge/receipts.rs");
   const runtime = read("crates/agent_ui/src/dx_agent_bridge/runtime.rs");
@@ -66,7 +69,11 @@ test("DX Agent bridge delegates bridge commands and receipt parsing", () => {
   assert.match(localFiles, /pub\(super\) fn read_first_json/);
   assert.match(localFiles, /pub\(super\) fn latest_receipts/);
   assert.match(localFiles, /pub\(super\) fn dx_home_from_receipt_root/);
+  assert.match(localFiles, /receipt_file_label/);
   assert.match(localFiles, /MAX_RECEIPT_BYTES/);
+  assert.match(localFileLabels, /pub\(crate\) fn receipt_file_label/);
+  assert.match(localFileLabels, /eq_ignore_ascii_case\("json"\)/);
+  assert.match(localFileLabels, /receipt_file_label_accepts_uppercase_json_extension/);
   assert.match(receipts, /pub\(super\) fn contract_summary/);
   assert.match(receipts, /pub\(super\) fn receipt_index_summary/);
   assert.match(runtime, /pub\(super\) fn social_accounts/);
@@ -74,6 +81,7 @@ test("DX Agent bridge delegates bridge commands and receipt parsing", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/command_safety.rs") < 120);
   assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/command_safety_tests.rs") < 130);
   assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/commands.rs") < 330);
+  assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/local_file_labels.rs") < 110);
   assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/local_files.rs") < 110);
   assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/receipts.rs") < 560);
   assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/runtime.rs") < 420);

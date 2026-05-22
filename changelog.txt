@@ -1,3 +1,22 @@
+[2026-05-23] - DX Agent Bridge Local Receipt Labels
+
+ADDED:
+- Added `crates/agent_ui/src/dx_agent_bridge/local_file_labels.rs` as the focused owner for latest-receipt file labels.
+
+CHANGED:
+- `crates/agent_ui/src/dx_agent_bridge/local_files.rs` now delegates latest-receipt JSON filtering and root-relative labels through `receipt_file_label`.
+- Receipt labels now accept `.json` extension spelling case-insensitively and continue to reject non-JSON files.
+- `script/dx-agent-bridge-source.test.ts` now guards the local receipt-label module and line budgets.
+
+PASSED:
+- Red/green `node --test script\dx-agent-bridge-source.test.ts`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_agent_bridge\local_file_labels.rs`
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_agent_bridge.rs crates\agent_ui\src\dx_agent_bridge\local_files.rs crates\agent_ui\src\dx_agent_bridge\local_file_labels.rs`
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: add fixture-backed latest-receipt ordering coverage when a governed Cargo/native proof window opens.
+
 [2026-05-23] - DX Agent Bridge Command Label Redaction
 
 CHANGED:

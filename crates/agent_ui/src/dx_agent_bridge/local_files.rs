@@ -8,7 +8,7 @@ use std::{
 
 use serde_json::Value;
 
-use super::MAX_RECEIPT_BYTES;
+use super::{MAX_RECEIPT_BYTES, local_file_labels::receipt_file_label};
 
 pub(super) fn read_json(path: &Path) -> Option<Value> {
     let metadata = path.metadata().ok()?;
@@ -37,18 +37,14 @@ pub(super) fn latest_receipts(root: &Path, root_exists: bool) -> Vec<String> {
         .take(64)
         .filter_map(|entry| {
             let path = entry.path();
-            if !path.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+            if !path.is_file() {
                 return None;
             }
+            let label = receipt_file_label(root, &path)?;
             let modified = path
                 .metadata()
                 .and_then(|metadata| metadata.modified())
                 .unwrap_or(SystemTime::UNIX_EPOCH);
-            let label = path
-                .strip_prefix(root)
-                .unwrap_or(&path)
-                .display()
-                .to_string();
             Some((modified, label))
         })
         .collect::<Vec<_>>();

@@ -16,6 +16,7 @@ const MAX_RECEIPT_BYTES: u64 = 128 * 1024;
 
 mod command_safety;
 mod commands;
+mod local_file_labels;
 mod local_files;
 mod receipts;
 mod runtime;
