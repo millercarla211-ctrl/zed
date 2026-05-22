@@ -344,10 +344,16 @@ pub(super) fn bounded_join(values: &[String], limit: usize, empty: &'static str)
         return empty.to_string();
     }
 
-    values
+    let mut rendered = values
         .iter()
         .take(limit)
         .cloned()
         .collect::<Vec<_>>()
-        .join(", ")
+        .join(", ");
+    let remaining_count = values.len().saturating_sub(limit);
+    if remaining_count > 0 {
+        rendered.push_str(&format!(", +{} more", remaining_count));
+    }
+
+    rendered
 }

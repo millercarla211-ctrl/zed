@@ -33,6 +33,8 @@ test("DX launch context module owns receipt and audit summaries", () => {
   assert.match(context, /pub\(super\) fn launch_source_audit_prompt_context/);
   assert.match(context, /pub\(super\) fn launch_receipt_review_prompt_context/);
   assert.match(context, /pub\(super\) fn bounded_join/);
+  assert.match(context, /remaining_count/);
+  assert.match(context, /\+\{\} more/);
   assert.match(context, /missing launch receipt directory/);
   assert.ok(
     lineCount("crates/agent_ui/src/dx_launch_prompts/context.rs") < 380,
