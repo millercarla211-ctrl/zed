@@ -1,3 +1,20 @@
+[2026-05-23] - DX Launch Source Prompt Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_prompts/source.rs` as the focused owner for source action icons, labels, source receipt review text, and source attachment/review prompt wording.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_prompts.rs` now re-exports the existing source action prompt helpers from the focused module and stays as the launch prompt coordinator.
+- `script/dx-launch-prompts-source.test.ts` now guards both source prompt ownership and runtime proof prompt ownership.
+- `DX.md` and `todo.txt` now record the source prompt split and guard.
+
+PASSED:
+- `node --test script/dx-launch-prompts-source.test.ts`
+- `rustfmt --edition 2024 --check crates/agent_ui/src/dx_launch_prompts.rs crates/agent_ui/src/dx_launch_prompts/source.rs`
+
+NOTES:
+- No Cargo command, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy ran in this slice.
+
 [2026-05-23] - DX Launch Runtime Proof Prompt Split
 
 ADDED:
