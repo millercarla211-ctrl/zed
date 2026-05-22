@@ -1,5 +1,6 @@
 use gpui::{AnyElement, SharedString, prelude::*};
 
+use crate::dx_deploy_launch_action_labels::launch_action_detail_parts;
 use crate::dx_deploy_launch_actions::DxDeployLaunchAction;
 use crate::dx_deploy_rail_ui::{metric_row, muted_label};
 
@@ -28,26 +29,20 @@ pub(crate) fn deploy_launch_action_state(
 }
 
 fn launch_action_row(id: SharedString, action: &DxDeployLaunchAction) -> AnyElement {
-    let mut detail = Vec::new();
-
-    if let Some(action_id) = action.id.as_ref() {
-        detail.push(format!("id {action_id}"));
-    }
-    if let Some(risk_level) = action.risk_level.as_ref() {
-        detail.push(format!("risk {risk_level}"));
-    }
-    if action.requires_user_approval == Some(true) {
-        detail.push("approval required".to_string());
-    }
-    if action.writes_receipts == Some(true) {
-        detail.push("writes receipts".to_string());
-    }
+    let detail = launch_action_detail_parts(
+        action.id.as_deref(),
+        action.risk_level.as_deref(),
+        action.requires_user_approval,
+        action.writes_receipts,
+        action.command.is_some(),
+    )
+    .join(" - ");
 
     let mut stack = v_flex()
         .id(id)
         .gap_0p5()
         .min_w_0()
-        .child(metric_row(action.label.clone(), detail.join(" - ")));
+        .child(metric_row(action.label.clone(), detail));
 
     if let Some(command) = action.command.as_ref() {
         stack = stack.child(muted_label(command.clone()));

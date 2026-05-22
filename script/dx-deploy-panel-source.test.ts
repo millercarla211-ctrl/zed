@@ -18,6 +18,7 @@ test("agent_ui registers the focused deploy modules", () => {
     "dx_deploy_gate_rail",
     "dx_deploy_hub_roots",
     "dx_deploy_launch_actions",
+    "dx_deploy_launch_action_labels",
     "dx_deploy_launch_actions_rail",
     "dx_deploy_launch_approval_evidence",
     "dx_deploy_launch_buckets",
@@ -442,6 +443,7 @@ test("launch gate normalizes dx-check score to a 100-point deploy status", () =>
 
 test("launch gate exposes bounded dx-check quick actions with risk metadata", () => {
   const actions = read("crates/agent_ui/src/dx_deploy_launch_actions.rs");
+  const actionLabels = read("crates/agent_ui/src/dx_deploy_launch_action_labels.rs");
   const reader = read("crates/agent_ui/src/dx_deploy_launch_gate.rs");
   const rail = read("crates/agent_ui/src/dx_deploy_launch_gate_rail.rs");
   const actionRail = read("crates/agent_ui/src/dx_deploy_launch_actions_rail.rs");
@@ -466,10 +468,17 @@ test("launch gate exposes bounded dx-check quick actions with risk metadata", ()
   assert.match(actionRail, /total_count: usize/);
   assert.match(actionRail, /shown of .*available/);
   assert.match(actionRail, /metric_row\(\s*"Actions"/);
-  assert.match(actionRail, /action\.id/);
-  assert.match(actionRail, /action\.risk_level/);
-  assert.match(actionRail, /requires_user_approval/);
-  assert.match(actionRail, /writes_receipts/);
+  assert.match(actionRail, /use crate::dx_deploy_launch_action_labels::launch_action_detail_parts/);
+  assert.match(actionRail, /launch_action_detail_parts\(/);
+  assert.doesNotMatch(actionRail, /let mut detail = Vec::new\(\);/);
+  assert.match(actionLabels, /pub\(crate\) fn launch_action_detail_parts/);
+  assert.match(actionLabels, /fn approval_state_label/);
+  assert.match(actionLabels, /fn receipt_write_state_label/);
+  assert.match(actionLabels, /no approval required/);
+  assert.match(actionLabels, /approval unknown/);
+  assert.match(actionLabels, /read-only/);
+  assert.match(actionLabels, /receipt write unknown/);
+  assert.match(actionLabels, /metadata only/);
   assert.match(prompts, /launch_actions=/);
   assert.match(prompts, /quick_action_count=/);
   assert.match(prompts, /action_id=/);

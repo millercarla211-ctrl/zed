@@ -11,6 +11,8 @@ test("DX launch workspace UI stays split by rail ownership", () => {
     "crates/agent_ui/src/dx_launch_workspace/agents.rs",
     "crates/agent_ui/src/dx_launch_workspace/check.rs",
     "crates/agent_ui/src/dx_launch_workspace/check_labels.rs",
+    "crates/agent_ui/src/dx_launch_workspace/list_labels.rs",
+    "crates/agent_ui/src/dx_launch_workspace/proof.rs",
     "crates/agent_ui/src/dx_launch_workspace/sources.rs",
     "crates/agent_ui/src/dx_launch_workspace/tool_history.rs",
   ];
@@ -22,10 +24,12 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   assert.match(parent, /^mod agents;$/m);
   assert.match(parent, /^mod check;$/m);
   assert.match(parent, /^mod check_labels;$/m);
+  assert.match(parent, /^mod list_labels;$/m);
+  assert.match(parent, /^mod proof;$/m);
   assert.match(parent, /^mod sources;$/m);
   assert.match(parent, /^mod tool_history;$/m);
   assert.ok(
-    lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 1720,
+    lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 1450,
     "dx_launch_workspace.rs should stay a coordinator instead of owning every rail",
   );
 });
@@ -45,6 +49,20 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(sources, /pub\(super\) fn receipt_source_state/);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents.rs") < 1100);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources.rs") < 420);
+});
+
+test("DX launch workspace delegates bounded list labels", () => {
+  const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
+  const listLabels = read("crates/agent_ui/src/dx_launch_workspace/list_labels.rs");
+
+  assert.match(parent, /use (?:self::)?list_labels::bounded_items/);
+  assert.doesNotMatch(parent, /fn bounded_items/);
+  assert.match(listLabels, /pub\(crate\) fn bounded_items/);
+  assert.match(listLabels, /bounded_items_ignores_blank_values/);
+  assert.match(listLabels, /bounded_items_counts_overflow_after_blank_values_are_removed/);
+  assert.match(listLabels, /filter\(\|value\| !value\.trim\(\)\.is_empty\(\)\)/);
+  assert.match(listLabels, /map\(\|value\| value\.trim\(\)\)/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/list_labels.rs") < 100);
 });
 
 test("DX launch workspace delegates Check rail rendering", () => {
@@ -87,4 +105,25 @@ test("DX launch workspace delegates Tool History rail rendering", () => {
   assert.match(toolHistory, /DxToolHistoryReceiptSummary/);
   assert.match(toolHistory, /dx-tool-history-\{ix\}/);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/tool_history.rs") < 150);
+});
+
+test("DX launch workspace delegates Proof rail rendering", () => {
+  const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
+  const proof = read("crates/agent_ui/src/dx_launch_workspace/proof.rs");
+
+  assert.match(parent, /proof::proof_freshness_state/);
+  assert.match(parent, /proof::runtime_proof_status_state/);
+  assert.doesNotMatch(parent, /fn proof_freshness_state/);
+  assert.doesNotMatch(parent, /fn runtime_proof_status_state/);
+  assert.doesNotMatch(parent, /fn runtime_proof_plan_row/);
+  assert.doesNotMatch(parent, /fn runtime_proof_receipt_row/);
+  assert.match(proof, /pub\(super\) fn proof_freshness_state/);
+  assert.match(proof, /pub\(super\) fn runtime_proof_status_state/);
+  assert.match(proof, /fn proof_freshness_bucket_row/);
+  assert.match(proof, /fn runtime_proof_plan_row/);
+  assert.match(proof, /fn runtime_proof_receipt_row/);
+  assert.match(proof, /DxRuntimeProofPlanSummary/);
+  assert.match(proof, /DxRuntimeProofReceiptSummary/);
+  assert.match(proof, /dx-runtime-proof-latest-plan/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof.rs") < 340);
 });

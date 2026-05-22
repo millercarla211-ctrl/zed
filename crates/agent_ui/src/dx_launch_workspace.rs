@@ -12,20 +12,22 @@ use crate::dx_launch_readiness::DxLaunchReadinessSnapshot;
 use crate::dx_launch_receipts::{DxLaunchReceiptReviewSnapshot, DxLaunchReceiptSummary};
 use crate::dx_launch_source_audit::DxLaunchSourceAuditSnapshot;
 use crate::dx_launch_status::DxLaunchStatusSnapshot;
-use crate::dx_proof_freshness::{DxProofFreshnessBucket, DxProofFreshnessSnapshot};
+use crate::dx_proof_freshness::DxProofFreshnessSnapshot;
 use crate::dx_receipt_history::DxToolHistorySnapshot;
 use crate::dx_receipts::DxReceiptSnapshot;
-use crate::dx_runtime_proof_status::{
-    DxRuntimeProofPlanSummary, DxRuntimeProofReceiptSummary, DxRuntimeProofStatusSnapshot,
-};
+use crate::dx_runtime_proof_status::DxRuntimeProofStatusSnapshot;
 use crate::dx_source_sets::DxSourceSetSnapshot;
 use crate::dx_www_launch_evidence::DxWwwLaunchEvidenceSnapshot;
 
 mod agents;
 mod check;
 mod check_labels;
+mod list_labels;
+mod proof;
 mod sources;
 mod tool_history;
+use self::list_labels::bounded_items;
+
 #[derive(Clone)]
 pub(crate) struct DxLaunchWorkspaceStatus {
     pub active_status: SharedString,
@@ -264,9 +266,12 @@ fn render_right_rail(
         .child(section_title("Check", IconName::Check))
         .child(check::check_score_state(&status.check_score, cx))
         .child(section_title("Proof Freshness", IconName::FileTextOutlined))
-        .child(proof_freshness_state(&status.proof_freshness, cx))
+        .child(proof::proof_freshness_state(&status.proof_freshness, cx))
         .child(section_title("Runtime Proof", IconName::Check))
-        .child(runtime_proof_status_state(&status.runtime_proof_status, cx))
+        .child(proof::runtime_proof_status_state(
+            &status.runtime_proof_status,
+            cx,
+        ))
         .child(section_title("Guided Proofs", IconName::Sparkle))
         .child(guided_cards)
         .child(section_title("Git", IconName::GitBranch))
@@ -1209,333 +1214,6 @@ fn launch_receipt_row(
                 .truncate(),
         )
         .into_any_element()
-}
-
-fn bounded_items(items: &[String], max: usize, empty: &'static str) -> String {
-    if items.is_empty() {
-        return empty.to_string();
-    }
-
-    let mut values = items.iter().take(max).cloned().collect::<Vec<_>>();
-    if items.len() > max {
-        values.push(format!("+{} more", items.len() - max));
-    }
-    values.join(", ")
-}
-
-fn proof_freshness_state(snapshot: &DxProofFreshnessSnapshot, cx: &App) -> AnyElement {
-    let mut stack = v_flex().gap_1();
-
-    for (ix, bucket) in snapshot.buckets.iter().enumerate() {
-        stack = stack.child(proof_freshness_bucket_row(
-            SharedString::from(format!("dx-proof-freshness-{ix}")),
-            bucket,
-            cx,
-        ));
-    }
-
-    stack.into_any_element()
-}
-
-fn proof_freshness_bucket_row(
-    id: SharedString,
-    bucket: &DxProofFreshnessBucket,
-    cx: &App,
-) -> AnyElement {
-    let state = if bucket.count == 0 {
-        bucket.status.clone()
-    } else {
-        format!("{} - {}", bucket.count, bucket.status)
-    };
-    let mut stack = v_flex()
-        .id(id)
-        .gap_0p5()
-        .min_w_0()
-        .rounded_sm()
-        .px_1()
-        .py_0p5()
-        .bg(cx.theme().colors().element_background)
-        .child(metric_row(bucket.label, state))
-        .child(
-            Label::new(bucket.description)
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-
-    if !bucket.latest.is_empty() {
-        for label in bucket.latest.iter().take(2) {
-            stack = stack.child(
-                Label::new(label.clone())
-                    .size(LabelSize::XSmall)
-                    .color(Color::Muted)
-                    .truncate(),
-            );
-        }
-    } else if !bucket.root_exists {
-        stack = stack.child(
-            Label::new(bucket.root_label)
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    stack.into_any_element()
-}
-
-fn runtime_proof_status_state(snapshot: &DxRuntimeProofStatusSnapshot, cx: &App) -> AnyElement {
-    let mut stack = v_flex()
-        .gap_1()
-        .child(metric_row("Claim", snapshot.claim_state.clone()))
-        .child(metric_row(
-            "Receipts",
-            format!(
-                "{} plan, {} import, {} status",
-                snapshot.plan_receipt_count,
-                snapshot.import_receipt_count,
-                snapshot.status_receipt_count
-            ),
-        ));
-
-    if snapshot.workspace_root_count == 0 {
-        stack = stack.child(muted_card("No workspace roots", cx));
-    } else if !snapshot.plan_root_exists
-        && !snapshot.import_root_exists
-        && !snapshot.status_root_exists
-    {
-        stack = stack.child(muted_card("No runtime proof receipt roots", cx));
-    }
-
-    if let Some(plan) = snapshot.latest_plan.as_ref() {
-        stack = stack.child(runtime_proof_plan_row(plan, cx));
-    }
-
-    if let Some(receipt) = snapshot.latest_import.as_ref() {
-        stack = stack.child(runtime_proof_receipt_row(
-            "dx-runtime-proof-latest-import",
-            "Import",
-            receipt,
-            cx,
-        ));
-    }
-
-    if let Some(receipt) = snapshot.latest_status.as_ref() {
-        stack = stack.child(runtime_proof_receipt_row(
-            "dx-runtime-proof-latest-status",
-            "Status",
-            receipt,
-            cx,
-        ));
-    }
-
-    for (ix, blocker) in snapshot.blockers.iter().take(2).enumerate() {
-        stack = stack.child(signal_row(
-            SharedString::from(format!("dx-runtime-proof-blocker-{ix}")),
-            IconName::Warning,
-            Color::Warning,
-            blocker.clone(),
-        ));
-    }
-
-    stack.into_any_element()
-}
-
-fn runtime_proof_plan_row(plan: &DxRuntimeProofPlanSummary, cx: &App) -> AnyElement {
-    let requirements = runtime_proof_plan_requirements(plan);
-    let mut stack = v_flex()
-        .id("dx-runtime-proof-latest-plan")
-        .gap_0p5()
-        .min_w_0()
-        .rounded_sm()
-        .px_1()
-        .py_0p5()
-        .bg(cx.theme().colors().element_background)
-        .child(metric_row(
-            "Plan",
-            format!("{} - {} step(s)", plan.status, plan.checklist_step_count),
-        ))
-        .child(
-            Label::new(format!(
-                "{} required - {}",
-                plan.required_step_count, requirements
-            ))
-            .size(LabelSize::XSmall)
-            .color(Color::Muted)
-            .truncate(),
-        )
-        .child(
-            Label::new(plan.label.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-
-    if let Some(command) = plan.expected_final_command.as_ref() {
-        stack = stack.child(
-            Label::new(format!("Command {command}"))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if plan.minimum_evidence_lines_for_pass > 0 || !plan.accepted_evidence_examples.is_empty() {
-        stack = stack.child(
-            Label::new(runtime_proof_plan_evidence_detail(plan))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if plan.blocker_count > 0 {
-        stack = stack.child(
-            Label::new(format!("{} blocker(s)", plan.blocker_count))
-                .size(LabelSize::XSmall)
-                .color(Color::Warning)
-                .truncate(),
-        );
-    } else if let Some(next_action) = plan.next_action.as_ref() {
-        stack = stack.child(
-            Label::new(next_action.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    stack.into_any_element()
-}
-
-fn runtime_proof_plan_evidence_detail(plan: &DxRuntimeProofPlanSummary) -> String {
-    let minimum = if plan.minimum_evidence_lines_for_pass > 0 {
-        format!("{}+ evidence", plan.minimum_evidence_lines_for_pass)
-    } else {
-        "evidence required".to_string()
-    };
-    let examples = if plan.accepted_evidence_examples.is_empty() {
-        "use operator proof lines".to_string()
-    } else {
-        plan.accepted_evidence_examples
-            .iter()
-            .take(2)
-            .cloned()
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-
-    format!("{minimum} - {examples}")
-}
-
-fn runtime_proof_plan_requirements(plan: &DxRuntimeProofPlanSummary) -> String {
-    let mut requirements = Vec::new();
-
-    if plan.requires_clean_git {
-        requirements.push("clean git");
-    }
-    if plan.requires_diff_check {
-        requirements.push("diff check");
-    }
-    if plan.requires_visual_evidence {
-        requirements.push("visual proof");
-    }
-    if plan.requires_import {
-        requirements.push("proof import");
-    }
-
-    if requirements.is_empty() {
-        "no extra requirements".to_string()
-    } else {
-        format!("requires {}", requirements.join(", "))
-    }
-}
-
-fn runtime_proof_receipt_row(
-    id: &'static str,
-    label: &'static str,
-    receipt: &DxRuntimeProofReceiptSummary,
-    cx: &App,
-) -> AnyElement {
-    let state = if receipt.runtime_green_candidate || receipt.can_claim_runtime_green {
-        "Claim-ready".to_string()
-    } else {
-        format!(
-            "{} - {} blocker(s)",
-            receipt.validation_status, receipt.blocker_count
-        )
-    };
-    let mut stack = v_flex()
-        .id(id)
-        .gap_0p5()
-        .min_w_0()
-        .rounded_sm()
-        .px_1()
-        .py_0p5()
-        .bg(cx.theme().colors().element_background)
-        .child(metric_row(label, state))
-        .child(
-            Label::new(format!(
-                "{} evidence - operator {}",
-                receipt.evidence_count, receipt.operator_status
-            ))
-            .size(LabelSize::XSmall)
-            .color(Color::Muted)
-            .truncate(),
-        )
-        .child(
-            Label::new(receipt.label.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-
-    if let Some(headline) = receipt.headline.as_ref() {
-        stack = stack.child(
-            Label::new(headline.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if let Some(summary) = receipt.proof_summary.as_ref() {
-        stack = stack.child(
-            Label::new(format!("Summary {summary}"))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if let Some(command) = receipt.final_command.as_ref() {
-        stack = stack.child(
-            Label::new(format!("Command {command}"))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if let Some(source) = receipt.source.as_ref() {
-        stack = stack.child(
-            Label::new(format!("Source {source}"))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if let Some(evidence) = receipt.evidence_samples.first() {
-        stack = stack.child(
-            Label::new(format!("Evidence {evidence}"))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    stack.into_any_element()
 }
 
 fn yes_no(value: bool) -> &'static str {

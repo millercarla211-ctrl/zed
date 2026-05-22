@@ -1,3 +1,62 @@
+[2026-05-23] - DX Launch Proof Rail Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/proof.rs` as the focused owner for Proof Freshness and Runtime Proof rail rendering.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace.rs` now delegates proof freshness and runtime proof rendering through the focused proof module.
+- Runtime proof plan rows, import/status receipt rows, proof requirements, evidence hints, and blocker badges moved out of the parent launch workspace coordinator.
+- `script/dx-launch-workspace-source.test.ts` now guards the proof module boundary and keeps the parent coordinator under a tighter 1450-line budget.
+
+PASSED:
+- Red/green `node --test script/dx-launch-workspace-source.test.ts`
+- `node --test script/dx-deploy-panel-source.test.ts`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_launch_workspace\list_labels.rs`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_deploy_launch_action_labels.rs`
+- `rustfmt --edition 2024 --check crates/agent_ui/src/agent_ui.rs crates/agent_ui/src/dx_deploy_launch_action_labels.rs crates/agent_ui/src/dx_deploy_launch_actions_rail.rs crates/agent_ui/src/dx_launch_workspace.rs crates/agent_ui/src/dx_launch_workspace/list_labels.rs crates/agent_ui/src/dx_launch_workspace/proof.rs`
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify Proof Freshness and Runtime Proof rows against real runtime-proof receipts in the governed native Zed proof window.
+
+[2026-05-23] - DX Deploy Launch Quick-Action Labels
+
+ADDED:
+- Added `crates/agent_ui/src/dx_deploy_launch_action_labels.rs` as the pure label owner for Deploy launch quick-action detail text.
+
+CHANGED:
+- `crates/agent_ui/src/dx_deploy_launch_actions_rail.rs` now delegates quick-action detail labels to the focused helper instead of building ad hoc GPUI strings.
+- Launch quick-action rows now explicitly show safe `no approval required`, `read-only`, unknown approval/receipt-write states, and `metadata only` when a receipt omits a command.
+- `script/dx-deploy-panel-source.test.ts` now guards the focused helper, rail delegation, and explicit label vocabulary.
+
+PASSED:
+- Red/green `node --test script/dx-deploy-panel-source.test.ts`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_deploy_launch_action_labels.rs`
+- `rustfmt --edition 2024 --check crates/agent_ui/src/agent_ui.rs crates/agent_ui/src/dx_deploy_launch_action_labels.rs crates/agent_ui/src/dx_deploy_launch_actions_rail.rs`
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify Deploy launch quick-action labels against `G:\Dx\.dx\receipts\check\check-launch-latest.json` in the governed native proof window.
+
+[2026-05-23] - DX Launch Bounded List Label Guard
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/list_labels.rs` as the focused owner for compact receipt-list labels.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace.rs` now delegates shared bounded list formatting through `list_labels::bounded_items`.
+- Bounded receipt-list labels now trim visible values, ignore blank/whitespace strings, and compute `+N more` after blank entries are removed.
+- `script/dx-launch-workspace-source.test.ts` now guards the list-label ownership boundary and the direct edge-case tests.
+
+PASSED:
+- Red/green `node --test script/dx-launch-workspace-source.test.ts`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_launch_workspace\list_labels.rs`
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_launch_workspace.rs crates\agent_ui\src\dx_launch_workspace\list_labels.rs`
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify receipt rows with blank values and overflow counts in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Tool History Rail Split And Check Count Guard
 
 ADDED:
