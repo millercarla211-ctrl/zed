@@ -1,22 +1,3 @@
-[2026-05-23] - DX Check Rail Label Edge Coverage
-
-ADDED:
-- Added `crates/agent_ui/src/dx_launch_workspace/check_labels.rs` as the std-only owner for Check rail label formatting.
-
-CHANGED:
-- `crates/agent_ui/src/dx_launch_workspace/check.rs` now imports checked-path, skipped-check, outcome, duration, and last-run labels from the focused label module.
-- `script/dx-launch-workspace-source.test.ts` now guards Check rail label ownership and file-size limits.
-
-PASSED:
-- Red/green `node --test script/dx-launch-workspace-source.test.ts`
-- Red/green direct `rustc --edition=2024 --test crates\agent_ui\src\dx_launch_workspace\check_labels.rs`
-- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_launch_workspace.rs crates\agent_ui\src\dx_launch_workspace\check.rs crates\agent_ui\src\dx_launch_workspace\check_labels.rs`
-
-NOTES:
-- Direct unit tests cover empty/single/plural checked and skipped labels, zero-failure outcome labels, duration boundaries, and last-run generated timestamp de-duplication.
-- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
-- Exact next action: compare native Check rail labels against real `check-latest.json` receipts in the governed proof window.
-
 [2026-05-23] - DX Launch Check Rail Split
 
 ADDED:
@@ -34,6 +15,7 @@ PASSED:
 - `rustfmt --edition 2024 --check crates/agent_ui/src/dx_launch_workspace.rs crates/agent_ui/src/dx_launch_workspace/check.rs crates/agent_ui/src/dx_launch_workspace/check_labels.rs`
 
 NOTES:
+- Direct unit tests cover empty/single/plural checked and skipped labels, zero-failure outcome labels, duration boundaries, and last-run generated timestamp de-duplication.
 - No Cargo command, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
 - Exact next action: verify Check/Deploy/Proof right-rail rows in the governed native Zed proof window.
 
@@ -8099,18 +8081,3 @@ NOTES:
 - Ran `rustfmt --check crates/agent_ui/src/dx_check_panel.rs crates/agent_ui/src/dx_launch_workspace.rs`.
 - Attempted `cargo test -p agent_ui dx_check_panel --lib` twice; both attempts exceeded the timeout on the busy workspace, and Cargo/rustc were allowed to finish or go idle before continuing.
 - Exact next action: rerun the targeted `agent_ui` fixture during an idle Cargo window, then do a governed native launch-rail visual pass.
-[2026-05-23] - DX Launch Workspace Check Rail Split
-
-ADDED:
-- Added `crates/agent_ui/src/dx_launch_workspace/check.rs` as the focused owner for Check rail rendering.
-
-CHANGED:
-- `crates/agent_ui/src/dx_launch_workspace.rs` now delegates Check rail rendering through `check::check_score_state`.
-- `script/dx-launch-workspace-source.test.ts` now guards the Check rail module boundary and tighter parent coordinator size.
-
-PASSED:
-- Red/green `node --test script/dx-launch-workspace-source.test.ts`
-- `rustfmt --edition 2024 --check crates/agent_ui/src/dx_launch_workspace.rs crates/agent_ui/src/dx_launch_workspace/check.rs`
-
-NOTES:
-- No Cargo command, `just run`, local server, browser automation, or live editor runtime proof ran in this slice.
