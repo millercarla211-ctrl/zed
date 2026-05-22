@@ -1,3 +1,26 @@
+[2026-05-23] - DX Check Panel Source Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_check_panel/reader.rs` as the focused owner for bounded dx-check receipt discovery and JSON IO.
+- Added `crates/agent_ui/src/dx_check_panel/parser.rs` as the focused owner for native Zed panel and shared DX-WWW check view-model parsing.
+- Added `script/dx-check-panel-source.test.ts` as the no-build source guard for the Check panel ownership boundary.
+
+CHANGED:
+- `crates/agent_ui/src/dx_check_panel.rs` now stays as a cache/type facade and delegates receipt loading through `reader::read_latest_check_panel`.
+- Check panel parser fixture tests still cover native Zed payloads, unsupported Zed schemas, and DX-WWW view-model fallback behavior after the split.
+- `DX.md` and `todo.txt` now record the Check panel split and governed receipt-comparison follow-up.
+
+PASSED:
+- `node --test script/dx-check-panel-source.test.ts`
+- `node --test script/dx-agent-bridge-source.test.ts`
+- `node --test script/dx-launch-workspace-source.test.ts`
+- `node --test script/dx-source-quality.test.ts`
+- `node --test script/dx-deploy-panel-source.test.ts`
+- `rustfmt --edition 2024 --check crates/agent_ui/src/dx_check_panel.rs crates/agent_ui/src/dx_check_panel/reader.rs crates/agent_ui/src/dx_check_panel/parser.rs`
+
+NOTES:
+- No Cargo command, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy ran in this slice.
+
 [2026-05-23] - DX Deploy Receipt Roots Split
 
 ADDED:
