@@ -9,6 +9,8 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const expectedModules = [
     "crates/agent_ui/src/dx_launch_workspace/agents.rs",
+    "crates/agent_ui/src/dx_launch_workspace/check.rs",
+    "crates/agent_ui/src/dx_launch_workspace/check_labels.rs",
     "crates/agent_ui/src/dx_launch_workspace/sources.rs",
   ];
 
@@ -17,9 +19,11 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   }
 
   assert.match(parent, /^mod agents;$/m);
+  assert.match(parent, /^mod check;$/m);
+  assert.match(parent, /^mod check_labels;$/m);
   assert.match(parent, /^mod sources;$/m);
   assert.ok(
-    lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 2300,
+    lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 1800,
     "dx_launch_workspace.rs should stay a coordinator instead of owning every rail",
   );
 });
@@ -39,4 +43,25 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(sources, /pub\(super\) fn receipt_source_state/);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents.rs") < 1100);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources.rs") < 420);
+});
+
+test("DX launch workspace delegates Check rail rendering", () => {
+  const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
+  const check = read("crates/agent_ui/src/dx_launch_workspace/check.rs");
+  const labels = read("crates/agent_ui/src/dx_launch_workspace/check_labels.rs");
+
+  assert.match(parent, /check::check_score_state/);
+  assert.doesNotMatch(parent, /fn check_score_state/);
+  assert.doesNotMatch(parent, /fn check_outcome_label/);
+  assert.match(check, /use super::check_labels::\{/);
+  assert.match(check, /pub\(super\) fn check_score_state/);
+  assert.doesNotMatch(check, /fn check_outcome_label/);
+  assert.doesNotMatch(check, /fn checked_paths_label/);
+  assert.doesNotMatch(check, /fn skipped_checks_label/);
+  assert.match(labels, /pub\(crate\) fn check_outcome_label/);
+  assert.match(labels, /pub\(crate\) fn checked_paths_label/);
+  assert.match(labels, /pub\(crate\) fn skipped_checks_label/);
+  assert.match(labels, /pub\(crate\) fn last_run_label_with_generated_at/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check.rs") < 190);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check_labels.rs") < 140);
 });
