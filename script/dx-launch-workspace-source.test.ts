@@ -9,8 +9,11 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const expectedModules = [
     "crates/agent_ui/src/dx_launch_workspace/agents.rs",
+    "crates/agent_ui/src/dx_launch_workspace/binary_cache.rs",
+    "crates/agent_ui/src/dx_launch_workspace/binary_cache_labels.rs",
     "crates/agent_ui/src/dx_launch_workspace/check.rs",
     "crates/agent_ui/src/dx_launch_workspace/check_labels.rs",
+    "crates/agent_ui/src/dx_launch_workspace/launch_status.rs",
     "crates/agent_ui/src/dx_launch_workspace/list_labels.rs",
     "crates/agent_ui/src/dx_launch_workspace/proof.rs",
     "crates/agent_ui/src/dx_launch_workspace/proof_labels.rs",
@@ -23,17 +26,61 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   }
 
   assert.match(parent, /^mod agents;$/m);
+  assert.match(parent, /^mod binary_cache;$/m);
+  assert.match(parent, /^mod binary_cache_labels;$/m);
   assert.match(parent, /^mod check;$/m);
   assert.match(parent, /^mod check_labels;$/m);
+  assert.match(parent, /^mod launch_status;$/m);
   assert.match(parent, /^mod list_labels;$/m);
   assert.match(parent, /^mod proof;$/m);
   assert.match(parent, /^mod proof_labels;$/m);
   assert.match(parent, /^mod sources;$/m);
   assert.match(parent, /^mod tool_history;$/m);
   assert.ok(
-    lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 1450,
+    lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 1280,
     "dx_launch_workspace.rs should stay a coordinator instead of owning every rail",
   );
+});
+
+test("DX launch workspace delegates Launch Status rail rendering", () => {
+  const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
+  const launchStatus = read("crates/agent_ui/src/dx_launch_workspace/launch_status.rs");
+
+  assert.match(parent, /launch_status::launch_status_state/);
+  assert.doesNotMatch(parent, /fn launch_status_state/);
+  assert.match(launchStatus, /pub\(super\) fn launch_status_state/);
+  assert.match(launchStatus, /DxLaunchStatusSnapshot/);
+  assert.match(launchStatus, /fn launch_status_warning/);
+  assert.match(launchStatus, /dx-launch-status-redaction-review/);
+  assert.match(launchStatus, /use super::\{metric_row, muted_card, signal_row, yes_no\}/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_status.rs") < 170);
+});
+
+test("DX launch workspace delegates Binary Cache rail rendering", () => {
+  const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
+  const binaryCache = read("crates/agent_ui/src/dx_launch_workspace/binary_cache.rs");
+  const binaryCacheLabels = read(
+    "crates/agent_ui/src/dx_launch_workspace/binary_cache_labels.rs",
+  );
+
+  assert.match(parent, /binary_cache::binary_cache_state/);
+  assert.doesNotMatch(parent, /fn binary_cache_state/);
+  assert.doesNotMatch(parent, /fn binary_cache_row/);
+  assert.match(binaryCache, /use super::binary_cache_labels::\{/);
+  assert.match(binaryCache, /pub\(super\) fn binary_cache_state/);
+  assert.match(binaryCache, /fn binary_cache_row/);
+  assert.match(binaryCache, /DxBinaryCacheSnapshot/);
+  assert.match(binaryCache, /DxBinaryCacheRow/);
+  assert.match(binaryCache, /dx-binary-cache-row-\{ix\}/);
+  assert.match(binaryCacheLabels, /pub\(crate\) fn binary_cache_summary_label/);
+  assert.match(binaryCacheLabels, /pub\(crate\) fn binary_cache_next_action_label/);
+  assert.match(binaryCacheLabels, /pub\(crate\) fn binary_cache_row_detail_label/);
+  assert.match(binaryCacheLabels, /pub\(crate\) fn binary_cache_row_path_label/);
+  assert.match(binaryCacheLabels, /labels_trim_nonblank_receipt_text/);
+  assert.match(binaryCacheLabels, /row_labels_fall_back_for_blank_receipt_fields/);
+  assert.match(binaryCacheLabels, /labels_preserve_nonblank_row_fields/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/binary_cache.rs") < 90);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/binary_cache_labels.rs") < 100);
 });
 
 test("DX launch workspace delegates agents and source rails", () => {
@@ -82,11 +129,14 @@ test("DX launch workspace delegates bounded list labels", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const listLabels = read("crates/agent_ui/src/dx_launch_workspace/list_labels.rs");
 
-  assert.match(parent, /use (?:self::)?list_labels::bounded_items/);
+  assert.match(parent, /use (?:self::)?list_labels::\{bounded_items, yes_no\}/);
   assert.doesNotMatch(parent, /fn bounded_items/);
+  assert.doesNotMatch(parent, /fn yes_no/);
   assert.match(listLabels, /pub\(crate\) fn bounded_items/);
+  assert.match(listLabels, /pub\(crate\) fn yes_no/);
   assert.match(listLabels, /bounded_items_ignores_blank_values/);
   assert.match(listLabels, /bounded_items_counts_overflow_after_blank_values_are_removed/);
+  assert.match(listLabels, /yes_no_labels_boolean_values/);
   assert.match(listLabels, /filter\(\|value\| !value\.trim\(\)\.is_empty\(\)\)/);
   assert.match(listLabels, /map\(\|value\| value\.trim\(\)\)/);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/list_labels.rs") < 100);

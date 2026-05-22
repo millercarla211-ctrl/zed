@@ -6,7 +6,7 @@ use crate::dx_check_score::DxCheckScoreSnapshot;
 use crate::dx_deploy_rail::deploy_target_state;
 use crate::dx_deploy_targets::DxDeployTargetSnapshot;
 use crate::dx_launch_audit::DxLaunchAuditSnapshot;
-use crate::dx_launch_binary_cache::{DxBinaryCacheRow, DxBinaryCacheSnapshot};
+use crate::dx_launch_binary_cache::DxBinaryCacheSnapshot;
 use crate::dx_launch_contracts::DxLaunchContractSnapshot;
 use crate::dx_launch_readiness::DxLaunchReadinessSnapshot;
 use crate::dx_launch_receipts::{DxLaunchReceiptReviewSnapshot, DxLaunchReceiptSummary};
@@ -20,14 +20,17 @@ use crate::dx_source_sets::DxSourceSetSnapshot;
 use crate::dx_www_launch_evidence::DxWwwLaunchEvidenceSnapshot;
 
 mod agents;
+mod binary_cache;
+mod binary_cache_labels;
 mod check;
 mod check_labels;
+mod launch_status;
 mod list_labels;
 mod proof;
 mod proof_labels;
 mod sources;
 mod tool_history;
-use self::list_labels::bounded_items;
+use self::list_labels::{bounded_items, yes_no};
 
 #[derive(Clone)]
 pub(crate) struct DxLaunchWorkspaceStatus {
@@ -237,7 +240,10 @@ fn render_right_rail(
             format!("{} tasks", status.background_task_count),
         ))
         .child(section_title("Launch Status", IconName::Check))
-        .child(launch_status_state(&status.launch_status, cx))
+        .child(launch_status::launch_status_state(
+            &status.launch_status,
+            cx,
+        ))
         .child(section_title("Launch Handoff", IconName::ListTodo))
         .child(launch_contract_state(&status.launch_contracts, cx))
         .child(section_title("Launch Gate", IconName::Check))
@@ -251,7 +257,7 @@ fn render_right_rail(
         .child(section_title("Launch Receipts", IconName::FileTextOutlined))
         .child(launch_receipt_review_state(&status.launch_receipts, cx))
         .child(section_title("Binary Cache", IconName::Sliders))
-        .child(binary_cache_state(&status.binary_cache, cx))
+        .child(binary_cache::binary_cache_state(&status.binary_cache, cx))
         .when(status.agent_bridge.show_in_agent_rail, |this| {
             this.child(section_title("DX Agents", IconName::ZedAgent))
                 .child(agents::dx_agent_bridge_state(&status.agent_bridge, cx))
@@ -288,191 +294,6 @@ fn render_right_rail(
         .child(background_task_state(status.background_task_count, cx))
         .child(section_title("Token And Tool Slots", IconName::Sliders))
         .child(token_meter_slots(&status.receipt_snapshot))
-        .into_any_element()
-}
-
-fn launch_status_state(snapshot: &DxLaunchStatusSnapshot, cx: &App) -> AnyElement {
-    let mut stack = v_flex()
-        .gap_1()
-        .child(metric_row("Status", snapshot.status.clone()))
-        .child(
-            Label::new(snapshot.operator_summary.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        )
-        .child(metric_row(
-            "Agents",
-            format!(
-                "{} / {} connected, {} need setup ({})",
-                snapshot.agents.connected_accounts,
-                snapshot.agents.configured_accounts,
-                snapshot.agents.accounts_needing_connection,
-                snapshot.agents.status
-            ),
-        ))
-        .child(metric_row(
-            "Agent Work",
-            format!(
-                "{} automation(s), {} active task(s), {} QR-ready",
-                snapshot.agents.automation_count,
-                snapshot.agents.active_task_count,
-                snapshot.agents.qr_connect_supported
-            ),
-        ))
-        .child(metric_row(
-            "Tokens",
-            format!(
-                "{} / {} ({})",
-                snapshot.tokens.budget_state,
-                snapshot.tokens.estimated_tokens,
-                snapshot.tokens.status
-            ),
-        ))
-        .child(metric_row(
-            "Budget",
-            format!(
-                "{} soft / {} hard",
-                snapshot.tokens.soft_budget_tokens, snapshot.tokens.hard_budget_tokens
-            ),
-        ))
-        .child(metric_row(
-            "Discovery",
-            format!(
-                "{} / manifest {} / binary {}",
-                snapshot.discovery.status,
-                yes_no(snapshot.discovery.www_manifest_present),
-                yes_no(snapshot.discovery.configured_binary_present)
-            ),
-        ))
-        .child(metric_row(
-            "Templates",
-            snapshot.discovery.templates_command.clone(),
-        ))
-        .child(metric_row(
-            "Packages",
-            snapshot.discovery.packages_command.clone(),
-        ));
-
-    if !snapshot.root_exists {
-        stack = stack.child(muted_card(
-            format!("Missing launch receipts: {}", snapshot.root.display()),
-            cx,
-        ));
-    } else if !snapshot.latest_present {
-        stack = stack.child(muted_card(
-            format!(
-                "Run dx launch status --json to write {}",
-                snapshot.latest_path.display()
-            ),
-            cx,
-        ));
-    } else if !snapshot.schema_valid {
-        stack = stack.child(signal_row(
-            "dx-launch-status-invalid".into(),
-            IconName::Warning,
-            Color::Warning,
-            snapshot
-                .last_error
-                .clone()
-                .unwrap_or_else(|| "Launch status receipt schema is invalid".to_string()),
-        ));
-    } else if snapshot.redaction_requires_review {
-        stack = stack.child(signal_row(
-            "dx-launch-status-redaction-review".into(),
-            IconName::Warning,
-            Color::Warning,
-            "Launch status redaction flags need review".to_string(),
-        ));
-    } else if let Some(error) = snapshot.last_error.as_ref() {
-        stack = stack.child(signal_row(
-            "dx-launch-status-warning".into(),
-            IconName::Warning,
-            Color::Warning,
-            error.clone(),
-        ));
-    } else {
-        stack = stack.child(
-            Label::new(snapshot.next_action.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if snapshot.schema_valid {
-        stack = stack
-            .child(metric_row(
-                "Agent Next",
-                snapshot.agents.next_action.clone(),
-            ))
-            .child(metric_row(
-                "Token Next",
-                snapshot.tokens.next_action.clone(),
-            ))
-            .child(metric_row(
-                "Discovery Next",
-                snapshot.discovery.next_action.clone(),
-            ));
-
-        if !snapshot.redaction_summary.is_empty() {
-            stack = stack.child(
-                Label::new(snapshot.redaction_summary.clone())
-                    .size(LabelSize::XSmall)
-                    .color(Color::Muted)
-                    .truncate(),
-            );
-        }
-    }
-
-    stack.into_any_element()
-}
-
-fn binary_cache_state(snapshot: &DxBinaryCacheSnapshot, cx: &App) -> AnyElement {
-    let mut stack = v_flex()
-        .gap_1()
-        .child(metric_row("Status", snapshot.status.clone()))
-        .child(
-            Label::new(snapshot.operator_summary.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        )
-        .child(metric_row("Next", snapshot.next_action.clone()));
-
-    for (ix, row) in snapshot.rows.iter().take(4).enumerate() {
-        stack = stack.child(binary_cache_row(
-            SharedString::from(format!("dx-binary-cache-row-{ix}")),
-            row,
-            cx,
-        ));
-    }
-
-    stack.into_any_element()
-}
-
-fn binary_cache_row(id: SharedString, row: &DxBinaryCacheRow, cx: &App) -> AnyElement {
-    v_flex()
-        .id(id)
-        .gap_0p5()
-        .min_w_0()
-        .rounded_sm()
-        .px_1()
-        .py_0p5()
-        .bg(cx.theme().colors().element_background)
-        .child(metric_row(row.label.clone(), row.state.clone()))
-        .child(
-            Label::new(row.detail.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        )
-        .child(
-            Label::new(row.path.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        )
         .into_any_element()
 }
 
@@ -1215,10 +1036,6 @@ fn launch_receipt_row(
                 .truncate(),
         )
         .into_any_element()
-}
-
-fn yes_no(value: bool) -> &'static str {
-    if value { "yes" } else { "no" }
 }
 
 fn signal_row(

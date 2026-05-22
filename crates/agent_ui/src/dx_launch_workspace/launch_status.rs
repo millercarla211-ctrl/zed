@@ -1,0 +1,143 @@
+use gpui::{AnyElement, App, SharedString, prelude::*};
+use ui::{Color, IconName, prelude::*};
+
+use crate::dx_launch_status::DxLaunchStatusSnapshot;
+
+use super::{metric_row, muted_card, signal_row, yes_no};
+
+pub(super) fn launch_status_state(snapshot: &DxLaunchStatusSnapshot, cx: &App) -> AnyElement {
+    let mut stack = v_flex()
+        .gap_1()
+        .child(metric_row("Status", snapshot.status.clone()))
+        .child(
+            Label::new(snapshot.operator_summary.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
+        .child(metric_row(
+            "Agents",
+            format!(
+                "{} / {} connected, {} need setup ({})",
+                snapshot.agents.connected_accounts,
+                snapshot.agents.configured_accounts,
+                snapshot.agents.accounts_needing_connection,
+                snapshot.agents.status
+            ),
+        ))
+        .child(metric_row(
+            "Agent Work",
+            format!(
+                "{} automation(s), {} active task(s), {} QR-ready",
+                snapshot.agents.automation_count,
+                snapshot.agents.active_task_count,
+                snapshot.agents.qr_connect_supported
+            ),
+        ))
+        .child(metric_row(
+            "Tokens",
+            format!(
+                "{} / {} ({})",
+                snapshot.tokens.budget_state,
+                snapshot.tokens.estimated_tokens,
+                snapshot.tokens.status
+            ),
+        ))
+        .child(metric_row(
+            "Budget",
+            format!(
+                "{} soft / {} hard",
+                snapshot.tokens.soft_budget_tokens, snapshot.tokens.hard_budget_tokens
+            ),
+        ))
+        .child(metric_row(
+            "Discovery",
+            format!(
+                "{} / manifest {} / binary {}",
+                snapshot.discovery.status,
+                yes_no(snapshot.discovery.www_manifest_present),
+                yes_no(snapshot.discovery.configured_binary_present)
+            ),
+        ))
+        .child(metric_row(
+            "Templates",
+            snapshot.discovery.templates_command.clone(),
+        ))
+        .child(metric_row(
+            "Packages",
+            snapshot.discovery.packages_command.clone(),
+        ));
+
+    if !snapshot.root_exists {
+        stack = stack.child(muted_card(
+            format!("Missing launch receipts: {}", snapshot.root.display()),
+            cx,
+        ));
+    } else if !snapshot.latest_present {
+        stack = stack.child(muted_card(
+            format!(
+                "Run dx launch status --json to write {}",
+                snapshot.latest_path.display()
+            ),
+            cx,
+        ));
+    } else if let Some((id, message)) = launch_status_warning(snapshot) {
+        stack = stack.child(signal_row(id, IconName::Warning, Color::Warning, message));
+    } else {
+        stack = stack.child(
+            Label::new(snapshot.next_action.clone())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        );
+    }
+
+    if snapshot.schema_valid {
+        stack = stack
+            .child(metric_row(
+                "Agent Next",
+                snapshot.agents.next_action.clone(),
+            ))
+            .child(metric_row(
+                "Token Next",
+                snapshot.tokens.next_action.clone(),
+            ))
+            .child(metric_row(
+                "Discovery Next",
+                snapshot.discovery.next_action.clone(),
+            ));
+
+        if !snapshot.redaction_summary.is_empty() {
+            stack = stack.child(
+                Label::new(snapshot.redaction_summary.clone())
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            );
+        }
+    }
+
+    stack.into_any_element()
+}
+
+fn launch_status_warning(snapshot: &DxLaunchStatusSnapshot) -> Option<(SharedString, String)> {
+    if !snapshot.schema_valid {
+        Some((
+            "dx-launch-status-invalid".into(),
+            snapshot
+                .last_error
+                .clone()
+                .unwrap_or_else(|| "Launch status receipt schema is invalid".to_string()),
+        ))
+    } else if snapshot.redaction_requires_review {
+        Some((
+            "dx-launch-status-redaction-review".into(),
+            "Launch status redaction flags need review".to_string(),
+        ))
+    } else {
+        snapshot
+            .last_error
+            .as_ref()
+            .map(|error| ("dx-launch-status-warning".into(), error.clone()))
+    }
+}

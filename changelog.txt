@@ -1,3 +1,33 @@
+[2026-05-23] - DX Launch Status And Binary Cache Rail Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/launch_status.rs` as the focused owner for Launch Status rail rendering.
+- Added `crates/agent_ui/src/dx_launch_workspace/binary_cache.rs` as the focused owner for Binary Cache rail state and row rendering.
+- Added `crates/agent_ui/src/dx_launch_workspace/binary_cache_labels.rs` as the focused owner for Binary Cache summary, next-action, detail, and path fallback labels.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace.rs` now delegates Launch Status rendering through `launch_status::launch_status_state` and is down to 1124 lines under the 1280-line source guard.
+- `crates/agent_ui/src/dx_launch_workspace.rs` now delegates Binary Cache rendering through `binary_cache::binary_cache_state`.
+- `crates/agent_ui/src/dx_launch_workspace/binary_cache.rs` now delegates receipt-provided rail labels through the pure label helper before rendering them.
+- Binary Cache fallback labels now trim nonblank receipt text and replace blank summary, next-action, detail, or path fields with explicit labels.
+- The shared `yes_no` label helper now lives with bounded list labels so the parent launch workspace stays a coordinator after rustfmt.
+- Launch Status warning selection now lives in `launch_status_warning`, keeping invalid schema, redaction review, and warning rows inside the focused module.
+- `script/dx-launch-workspace-source.test.ts` now guards the Launch Status and Binary Cache modules and keeps the parent launch workspace at 1124 lines under a 1280-line source budget.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Executed direct std-only label test harness for `crates\agent_ui\src\dx_launch_workspace\binary_cache_labels.rs`
+- Executed direct std-only label test harness for `crates\agent_ui\src\dx_launch_workspace\list_labels.rs`
+- Adjacent `node --test script\dx-www-launch-evidence-source.test.ts`
+- Adjacent `node --test script\dx-agent-bridge-source.test.ts`
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_launch_workspace.rs crates\agent_ui\src\dx_launch_workspace\launch_status.rs crates\agent_ui\src\dx_launch_workspace\binary_cache.rs crates\agent_ui\src\dx_launch_workspace\binary_cache_labels.rs crates\agent_ui\src\dx_launch_workspace\list_labels.rs crates\agent_ui\src\dx_launch_workspace\agents.rs`
+- `git diff --check`
+- Conflict-marker scan on touched files
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, DX-WWW execution, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify Launch Status and Binary Cache blank/fallback rows against real launch and receipt-cache artifacts in the governed native Zed proof window.
+
 [2026-05-23] - DX-WWW Launch Evidence Status Labels
 
 ADDED:
@@ -14,6 +44,8 @@ PASSED:
 - Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_www_launch_evidence\evidence_status.rs`
 - Adjacent `node --test script\dx-agent-bridge-source.test.ts`
 - `rustfmt --edition 2024 --check crates\agent_ui\src\dx_www_launch_evidence.rs crates\agent_ui\src\dx_www_launch_evidence\evidence_status.rs`
+- `git diff --check`
+- Conflict-marker scan on touched files
 
 NOTES:
 - No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, DX-WWW execution, cloud write, or deploy execution ran in this slice.

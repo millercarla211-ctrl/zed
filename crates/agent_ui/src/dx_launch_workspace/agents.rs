@@ -6,7 +6,8 @@ use crate::dx_agent_bridge::{
     DxAgentSocialAccount, DxAgentSocialActionSummary,
 };
 
-use super::{metric_row, muted_card, signal_row, yes_no};
+use super::list_labels::yes_no;
+use super::{metric_row, muted_card, signal_row};
 
 mod provider_labels;
 mod providers;

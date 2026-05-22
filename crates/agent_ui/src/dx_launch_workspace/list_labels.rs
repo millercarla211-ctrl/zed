@@ -20,6 +20,10 @@ pub(crate) fn bounded_items(items: &[String], max: usize, empty: &'static str) -
     values.join(", ")
 }
 
+pub(crate) fn yes_no(value: bool) -> &'static str {
+    if value { "yes" } else { "no" }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -51,5 +55,11 @@ mod tests {
             bounded_items(&strings(&["alpha", "beta"]), 0, "No rows"),
             "+2 more"
         );
+    }
+
+    #[test]
+    fn yes_no_labels_boolean_values() {
+        assert_eq!(yes_no(true), "yes");
+        assert_eq!(yes_no(false), "no");
     }
 }
