@@ -1,10 +1,7 @@
 use std::{
-    cmp::Ordering,
-    fs::{self, File},
-    io::Read,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Mutex, OnceLock},
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant},
 };
 
 use gpui::App;
@@ -17,9 +14,17 @@ const DEFAULT_PROVIDER_CATALOG_PATH: &str = r"G:\Dx\.dx\catalog\agents\provider-
 const SNAPSHOT_CACHE_TTL: Duration = Duration::from_secs(5);
 const MAX_RECEIPT_BYTES: u64 = 128 * 1024;
 
+mod command_safety;
 mod commands;
+mod local_files;
 mod receipts;
 mod runtime;
+
+use self::command_safety::{
+    bridge_command_label, is_dx_agents_command, is_public_dx_agents_command, is_safe_platform_arg,
+    is_secret_like_arg, public_command_for_runtime, redact_action_scalar,
+};
+use self::local_files::{dx_home_from_receipt_root, latest_receipts, read_first_json, read_json};
 
 pub(crate) use self::commands::{
     DxAgentMetadataCommand, DxAgentPublicCommand, run_dx_agent_metadata_command,
@@ -560,64 +565,6 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
     }
 }
 
-fn read_json(path: &Path) -> Option<Value> {
-    let metadata = path.metadata().ok()?;
-    if metadata.len() > MAX_RECEIPT_BYTES {
-        return None;
-    }
-    let mut file = File::open(path).ok()?;
-    let mut source = String::new();
-    file.read_to_string(&mut source).ok()?;
-    serde_json::from_str(&source).ok()
-}
-
-fn read_first_json(root: &Path, names: &[&str]) -> Option<Value> {
-    names.iter().find_map(|name| read_json(&root.join(name)))
-}
-
-fn latest_receipts(root: &Path, root_exists: bool) -> Vec<String> {
-    if !root_exists {
-        return Vec::new();
-    }
-    let Ok(entries) = fs::read_dir(root) else {
-        return Vec::new();
-    };
-    let mut receipts = entries
-        .flatten()
-        .take(64)
-        .filter_map(|entry| {
-            let path = entry.path();
-            if !path.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("json") {
-                return None;
-            }
-            let modified = path
-                .metadata()
-                .and_then(|metadata| metadata.modified())
-                .unwrap_or(SystemTime::UNIX_EPOCH);
-            let label = path
-                .strip_prefix(root)
-                .unwrap_or(&path)
-                .display()
-                .to_string();
-            Some((modified, label))
-        })
-        .collect::<Vec<_>>();
-    receipts.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(Ordering::Equal));
-    receipts
-        .into_iter()
-        .take(5)
-        .map(|(_, label)| label)
-        .collect()
-}
-
-fn dx_home_from_receipt_root(receipt_root: &Path) -> Option<PathBuf> {
-    receipt_root
-        .ancestors()
-        .find(|path| path.file_name().and_then(|name| name.to_str()) == Some(".dx"))
-        .and_then(Path::parent)
-        .map(Path::to_path_buf)
-}
-
 fn array_field<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Vec<Value>> {
     value_at(value, path)?.as_array()
 }
@@ -628,14 +575,6 @@ fn string_field(value: &Value, path: &[&str]) -> Option<String> {
 
 fn safe_string_field(value: &Value, path: &[&str]) -> Option<String> {
     string_field(value, path).map(|value| redact_action_scalar(&value))
-}
-
-fn redact_action_scalar(value: &str) -> String {
-    if is_secret_like_arg(value) {
-        "<redacted>".to_string()
-    } else {
-        value.to_string()
-    }
 }
 
 fn string_array_field(value: &Value, path: &[&str]) -> Vec<String> {
@@ -676,96 +615,10 @@ fn value_at<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
     path.iter().try_fold(value, |value, key| value.get(*key))
 }
 
-fn is_secret_like_arg(value: &str) -> bool {
-    let lower = value.to_ascii_lowercase();
-    DX_AGENT_SECRET_MARKERS
-        .iter()
-        .any(|marker| lower.contains(marker))
-}
-
-const DX_AGENT_SECRET_MARKERS: &[&str] = &[
-    "sk-",
-    "secret",
-    "token",
-    "password",
-    "passwd",
-    "cookie",
-    "authorization",
-    "bearer ",
-    "api_key",
-    "apikey",
-    "provider_key",
-    "access_key",
-    "access_token",
-    "refresh_token",
-    "private-token",
-    "xoxb-",
-    "xoxp-",
-];
-
-fn public_command_for_runtime(command: &str) -> String {
-    command
-        .strip_prefix("dx-agents agents ")
-        .map(|args| format!("dx agents {args}"))
-        .or_else(|| {
-            command
-                .strip_prefix("dx-agents providers ")
-                .map(|args| format!("dx agents providers {args}"))
-        })
-        .or_else(|| {
-            command
-                .strip_prefix("dx-agents models ")
-                .map(|args| format!("dx agents models {args}"))
-        })
-        .unwrap_or_else(|| command.to_string())
-}
-
-fn is_public_dx_agents_command(command: &str) -> bool {
-    command.starts_with("dx agents ")
-}
-
-fn is_dx_agents_command(command: &str, args: &str) -> bool {
-    command == format!("dx-agents agents {args}") || command == format!("dx agents {args}")
-}
-
-fn is_safe_platform_arg(platform: &str) -> bool {
-    !platform.trim().is_empty()
-        && platform.len() <= 64
-        && !is_secret_like_arg(platform)
-        && platform
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-}
-
-fn bridge_command_label(cli_path: &str, args: &[String]) -> String {
-    let mut parts = Vec::with_capacity(args.len() + 1);
-    parts.push(cli_path.to_string());
-    parts.extend(args.iter().cloned());
-    parts.join(" ")
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{action_error, import_summary, is_secret_like_arg, release_gate};
+    use super::{action_error, import_summary, release_gate};
     use serde_json::json;
-
-    #[test]
-    fn dx_agent_secret_marker_guard_covers_bridge_receipt_scalars() {
-        for value in [
-            "sk-should-not-render",
-            "provider_key",
-            "bearer should-not-render",
-            "authorization header",
-            "private-token-value",
-            "refresh_token",
-            "password",
-        ] {
-            assert!(is_secret_like_arg(value), "{value} should be secret-like");
-        }
-
-        assert!(!is_secret_like_arg("telegram"));
-        assert!(!is_secret_like_arg("dx agents status --json"));
-    }
 
     #[test]
     fn dx_agent_action_error_redaction_flags_drive_review_state() {

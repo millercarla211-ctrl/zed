@@ -1,3 +1,24 @@
+[2026-05-23] - DX Agent Bridge Command Safety And Local Files Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_agent_bridge/command_safety.rs` as the focused owner for DX Agents command redaction and command-label helpers.
+- Added `crates/agent_ui/src/dx_agent_bridge/local_files.rs` as the focused owner for bounded receipt JSON reads, alternate receipt-name lookup, latest receipt labels, and DX_HOME derivation from receipt roots.
+
+CHANGED:
+- `crates/agent_ui/src/dx_agent_bridge.rs` now delegates secret-marker detection, action scalar redaction, legacy public-command mapping, safe platform validation, and bridge command labels through `command_safety`.
+- `crates/agent_ui/src/dx_agent_bridge.rs` now delegates receipt file reads, latest receipt listing, and receipt-root DX_HOME resolution through `local_files`.
+- `script/dx-agent-bridge-source.test.ts` now guards the command-safety and local-files module boundaries plus a tighter parent bridge line cap.
+
+PASSED:
+- Red/green `node --test script/dx-agent-bridge-source.test.ts`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_agent_bridge\command_safety.rs`
+- `rustfmt --edition 2024 --check crates/agent_ui/src/dx_agent_bridge.rs crates/agent_ui/src/dx_agent_bridge/command_safety.rs crates/agent_ui/src/dx_agent_bridge/local_files.rs crates/agent_ui/src/dx_agent_bridge/commands.rs crates/agent_ui/src/dx_agent_bridge/runtime.rs`
+- `git diff --check`
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify DX Agents command redaction, receipt-root discovery, and social platform actions against real action-error/social receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Agent Provider Label Hardening
 
 ADDED:
