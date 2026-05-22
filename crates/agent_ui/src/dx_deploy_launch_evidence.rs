@@ -2,6 +2,7 @@ use serde_json::Value;
 
 #[derive(Clone)]
 pub(crate) struct DxDeployLaunchEvidenceSource {
+    pub id: Option<String>,
     pub label: String,
     pub status: Option<String>,
     pub readiness: Option<String>,
@@ -9,7 +10,9 @@ pub(crate) struct DxDeployLaunchEvidenceSource {
     pub required: bool,
     pub command: Option<String>,
     pub receipt_path: Option<String>,
+    pub generated_at_unix_ms: Option<usize>,
     pub blocker_count: usize,
+    pub blockers: Vec<String>,
     pub next_action: Option<String>,
 }
 
@@ -22,6 +25,7 @@ pub(crate) struct DxDeployLaunchChain {
     pub blocked_source_count: Option<usize>,
     pub missing_source_count: Option<usize>,
     pub blocker_count: usize,
+    pub blockers: Vec<String>,
     pub next_action: Option<String>,
 }
 
@@ -47,20 +51,25 @@ pub(crate) fn launch_chain(receipt: &Value) -> Option<DxDeployLaunchChain> {
         blocked_source_count: usize_field(chain, "blocked_source_count"),
         missing_source_count: usize_field(chain, "missing_source_count"),
         blocker_count: array_len(chain, "blockers"),
+        blockers: string_array(chain, "blockers", 5),
         next_action: string_field(chain, "next_action"),
     })
 }
 
 fn evidence_source(row: &Value) -> Option<DxDeployLaunchEvidenceSource> {
+    let id = string_field(row, "id");
     Some(DxDeployLaunchEvidenceSource {
-        label: string_field(row, "label").or_else(|| string_field(row, "id"))?,
+        id: id.clone(),
+        label: string_field(row, "label").or_else(|| id.clone())?,
         status: string_field(row, "status"),
         readiness: string_field(row, "readiness"),
         approved: bool_field(row, "approved"),
         required: bool_field(row, "required").unwrap_or(false),
         command: string_field(row, "command"),
         receipt_path: string_field(row, "receipt_path"),
+        generated_at_unix_ms: usize_field(row, "generated_at_unix_ms"),
         blocker_count: array_len(row, "blockers"),
+        blockers: string_array(row, "blockers", 3),
         next_action: string_field(row, "next_action"),
     })
 }
@@ -83,6 +92,20 @@ fn usize_field(value: &Value, key: &str) -> Option<usize> {
         .get(key)
         .and_then(Value::as_u64)
         .and_then(|value| usize::try_from(value).ok())
+}
+
+fn string_array(value: &Value, key: &str, limit: usize) -> Vec<String> {
+    value
+        .get(key)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .take(limit)
+        .map(ToOwned::to_owned)
+        .collect()
 }
 
 fn array_len(value: &Value, key: &str) -> usize {

@@ -1,8 +1,16 @@
 use gpui::{AnyElement, App, SharedString, prelude::*};
 use ui::{IconName, prelude::*};
 
+use crate::dx_deploy_launch_actions_rail::deploy_launch_action_state;
+use crate::dx_deploy_launch_approval_evidence::approval_evidence_rows;
+use crate::dx_deploy_launch_buckets::launch_bucket_summary_rows;
 use crate::dx_deploy_launch_evidence_rail::deploy_launch_evidence_state;
 use crate::dx_deploy_launch_gate::{DxDeployLaunchGateNotice, DxDeployLaunchGateSnapshot};
+use crate::dx_deploy_launch_outcome::{
+    launch_duration_label, launch_outcome_summary, skipped_checks_prompt,
+};
+use crate::dx_deploy_launch_scope::{checked_paths_prompt, launch_scope_summary};
+use crate::dx_deploy_launch_score::launch_status_score_label;
 use crate::dx_deploy_rail_ui::{metric_row, muted_card, muted_label, signal_row};
 
 pub(crate) fn deploy_launch_gate_state(
@@ -26,6 +34,40 @@ pub(crate) fn deploy_launch_gate_state(
             "Approvals",
             launch_gate_approval_summary(snapshot),
         ));
+
+    if let Some(status_score) = launch_status_score_label(snapshot) {
+        stack = stack.child(metric_row("Status score", status_score));
+    }
+
+    for bucket in launch_bucket_summary_rows(&snapshot.buckets) {
+        stack = stack.child(metric_row("Bucket", bucket));
+    }
+
+    if let Some(outcome) = launch_outcome_summary(&snapshot.outcome) {
+        stack = stack.child(metric_row("Outcome", outcome));
+    }
+
+    if let Some(duration) = launch_duration_label(&snapshot.outcome) {
+        stack = stack.child(metric_row("Duration", duration));
+    }
+
+    let skipped_checks = skipped_checks_prompt(&snapshot.outcome);
+    if skipped_checks != "none" {
+        stack = stack.child(metric_row("Skipped", skipped_checks));
+    }
+
+    if let Some(scope) = launch_scope_summary(&snapshot.scope) {
+        stack = stack.child(metric_row("Scope", scope));
+    }
+
+    for evidence in approval_evidence_rows(&snapshot.approval_evidence) {
+        stack = stack.child(metric_row("Evidence", evidence));
+    }
+
+    let checked_paths = checked_paths_prompt(&snapshot.scope);
+    if checked_paths != "none" {
+        stack = stack.child(metric_row("Checked", checked_paths));
+    }
 
     if let Some(schema) = snapshot.schema_version.as_ref() {
         stack = stack.child(muted_label(schema.clone()));
@@ -55,11 +97,27 @@ pub(crate) fn deploy_launch_gate_state(
         stack = stack.child(launch_gate_notice_row(
             SharedString::from(format!("dx-deploy-launch-gate-blocker-{ix}")),
             blocker,
+            "Launch blocker",
+        ));
+    }
+
+    for (ix, warning) in snapshot.warnings.iter().take(2).enumerate() {
+        stack = stack.child(launch_gate_notice_row(
+            SharedString::from(format!("dx-deploy-launch-gate-warning-{ix}")),
+            warning,
+            "Launch warning",
         ));
     }
 
     if let Some(next_action) = snapshot.next_action.as_ref() {
         stack = stack.child(muted_label(next_action.clone()));
+    }
+
+    if !snapshot.quick_actions.is_empty() {
+        stack = stack.child(deploy_launch_action_state(
+            &snapshot.quick_actions,
+            snapshot.quick_action_count,
+        ));
     }
 
     stack
@@ -127,17 +185,31 @@ fn approval_state_label(approved: Option<bool>) -> String {
     }
 }
 
-fn launch_gate_notice_row(id: SharedString, notice: &DxDeployLaunchGateNotice) -> AnyElement {
+fn launch_gate_notice_row(
+    id: SharedString,
+    notice: &DxDeployLaunchGateNotice,
+    fallback_label: &'static str,
+) -> AnyElement {
     let label = notice
         .code
         .as_ref()
         .cloned()
-        .unwrap_or_else(|| "Launch blocker".to_string());
+        .unwrap_or_else(|| fallback_label.to_string());
+    let mut detail = vec![notice.message.clone()];
+
+    if let Some(severity) = notice.severity.as_ref() {
+        detail.push(format!("severity {severity}"));
+    }
+
+    if let Some(evidence_path) = notice.evidence_path.as_ref() {
+        detail.push(format!("evidence_path {evidence_path}"));
+    }
+
     let mut stack = v_flex()
         .id(id)
         .gap_0p5()
         .min_w_0()
-        .child(metric_row(label, notice.message.clone()));
+        .child(metric_row(label, detail.join(" - ")));
 
     if let Some(next_action) = notice.next_action.as_ref() {
         stack = stack.child(muted_label(next_action.clone()));

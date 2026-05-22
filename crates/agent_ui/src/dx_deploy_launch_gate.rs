@@ -6,9 +6,16 @@ use std::{
     time::SystemTime,
 };
 
+use crate::dx_deploy_launch_actions::{DxDeployLaunchAction, launch_actions};
+use crate::dx_deploy_launch_approval_evidence::{
+    DxDeployLaunchApprovalEvidence, launch_approval_evidence,
+};
+use crate::dx_deploy_launch_buckets::{DxDeployLaunchBucket, launch_buckets};
 use crate::dx_deploy_launch_evidence::{
     DxDeployLaunchChain, DxDeployLaunchEvidenceSource, launch_chain, launch_evidence_sources,
 };
+use crate::dx_deploy_launch_outcome::{DxDeployLaunchOutcome, launch_outcome};
+use crate::dx_deploy_launch_scope::{DxDeployLaunchScope, launch_scope};
 
 const MAX_CHECK_RECEIPT_BYTES: u64 = 256 * 1024;
 const DX_HUB_CHECK_RECEIPT_ROOT: &str = r"G:\Dx\.dx\receipts\check";
@@ -23,6 +30,11 @@ pub(crate) struct DxDeployLaunchGateSnapshot {
     pub status: Option<String>,
     pub score: Option<usize>,
     pub max_score: Option<usize>,
+    pub score_estimated: Option<bool>,
+    pub outcome: DxDeployLaunchOutcome,
+    pub scope: DxDeployLaunchScope,
+    pub buckets: Vec<DxDeployLaunchBucket>,
+    pub approval_evidence: DxDeployLaunchApprovalEvidence,
     pub source_status: Option<String>,
     pub source_approved: Option<bool>,
     pub runtime_status: Option<String>,
@@ -32,6 +44,9 @@ pub(crate) struct DxDeployLaunchGateSnapshot {
     pub blocker_count: usize,
     pub warning_count: usize,
     pub blockers: Vec<DxDeployLaunchGateNotice>,
+    pub warnings: Vec<DxDeployLaunchGateNotice>,
+    pub quick_actions: Vec<DxDeployLaunchAction>,
+    pub quick_action_count: usize,
     pub evidence_sources: Vec<DxDeployLaunchEvidenceSource>,
     pub chain: Option<DxDeployLaunchChain>,
     pub next_action: Option<String>,
@@ -39,8 +54,10 @@ pub(crate) struct DxDeployLaunchGateSnapshot {
 
 #[derive(Clone)]
 pub(crate) struct DxDeployLaunchGateNotice {
+    pub severity: Option<String>,
     pub code: Option<String>,
     pub message: String,
+    pub evidence_path: Option<String>,
     pub next_action: Option<String>,
 }
 
@@ -137,6 +154,10 @@ fn parse_launch_gate_candidate(
     let source_ready = receipt.get("source_ready");
     let runtime_approved = receipt.get("runtime_approved");
     let launch_approved = receipt.get("launch_approved");
+    let quick_actions = launch_actions(zed.and_then(|value| value.get("quick_fixes")));
+    let quick_action_count = zed
+        .and_then(|value| usize_field(value, "quick_fix_count"))
+        .unwrap_or(quick_actions.len());
 
     Some(DxDeployLaunchGateSnapshot {
         receipt_found: true,
@@ -154,6 +175,13 @@ fn parse_launch_gate_candidate(
         max_score: zed
             .and_then(|value| usize_field(value, "score_max"))
             .or_else(|| usize_field(&receipt, "max_score")),
+        score_estimated: zed
+            .and_then(|value| bool_field(value, "score_estimated"))
+            .or_else(|| bool_field(&receipt, "score_estimated")),
+        outcome: launch_outcome(&receipt),
+        scope: launch_scope(&receipt),
+        buckets: launch_buckets(&receipt),
+        approval_evidence: launch_approval_evidence(&receipt),
         source_status: source_ready.and_then(|value| string_field(value, "status")),
         source_approved: source_ready.and_then(|value| bool_field(value, "approved")),
         runtime_status: runtime_approved.and_then(|value| string_field(value, "status")),
@@ -167,6 +195,9 @@ fn parse_launch_gate_candidate(
             .and_then(|value| usize_field(value, "warning_count"))
             .unwrap_or_else(|| array_len(zed.unwrap_or(&receipt), "warnings")),
         blockers: notice_rows(zed.and_then(|value| value.get("blockers"))),
+        warnings: notice_rows(zed.and_then(|value| value.get("warnings"))),
+        quick_actions,
+        quick_action_count,
         evidence_sources: launch_evidence_sources(&receipt),
         chain: launch_chain(&receipt),
         next_action: first_string_array_item(&receipt, "next_actions")
@@ -182,8 +213,10 @@ fn notice_rows(value: Option<&Value>) -> Vec<DxDeployLaunchGateNotice> {
         .take(3)
         .filter_map(|row| {
             Some(DxDeployLaunchGateNotice {
+                severity: string_field(row, "severity"),
                 code: string_field(row, "code"),
                 message: string_field(row, "message")?,
+                evidence_path: string_field(row, "evidence_path"),
                 next_action: string_field(row, "next_action"),
             })
         })

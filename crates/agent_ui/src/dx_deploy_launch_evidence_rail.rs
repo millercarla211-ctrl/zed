@@ -12,7 +12,7 @@ pub(crate) fn deploy_launch_evidence_state(
     if !sources.is_empty() {
         stack = stack.child(metric_row("Evidence", launch_evidence_summary(sources)));
 
-        for (ix, source) in sources.iter().take(3).enumerate() {
+        for (ix, source) in sources.iter().take(5).enumerate() {
             stack = stack.child(launch_evidence_row(
                 SharedString::from(format!("dx-deploy-launch-evidence-{ix}")),
                 source,
@@ -26,6 +26,18 @@ pub(crate) fn deploy_launch_evidence_state(
         if let Some(next_action) = chain.next_action.as_ref() {
             stack = stack.child(muted_label(next_action.clone()));
         }
+
+        stack = stack.child(launch_chain_blocker_rows(chain));
+    }
+
+    stack.into_any_element()
+}
+
+fn launch_chain_blocker_rows(chain: &DxDeployLaunchChain) -> AnyElement {
+    let mut stack = v_flex().gap_0p5().min_w_0();
+
+    for blocker in chain.blockers.iter().take(5) {
+        stack = stack.child(muted_label(blocker.clone()));
     }
 
     stack.into_any_element()
@@ -94,8 +106,14 @@ fn launch_evidence_row(id: SharedString, source: &DxDeployLaunchEvidenceSource) 
     let mut detail = Vec::new();
 
     detail.push(state);
+    if let Some(source_id) = source.id.as_ref() {
+        detail.push(format!("id {source_id}"));
+    }
     if source.required {
         detail.push("required".to_string());
+    }
+    if let Some(generated_at) = source.generated_at_unix_ms {
+        detail.push(format!("generated_at_unix_ms {generated_at}"));
     }
     if source.blocker_count > 0 {
         detail.push(format!("{} blocker(s)", source.blocker_count));
@@ -115,8 +133,20 @@ fn launch_evidence_row(id: SharedString, source: &DxDeployLaunchEvidenceSource) 
         stack = stack.child(muted_label(receipt_path.clone()));
     }
 
+    stack = stack.child(launch_evidence_source_blocker_rows(source));
+
     if let Some(next_action) = source.next_action.as_ref() {
         stack = stack.child(muted_label(next_action.clone()));
+    }
+
+    stack.into_any_element()
+}
+
+fn launch_evidence_source_blocker_rows(source: &DxDeployLaunchEvidenceSource) -> AnyElement {
+    let mut stack = v_flex().gap_0p5().min_w_0();
+
+    for blocker in source.blockers.iter().take(3) {
+        stack = stack.child(muted_label(blocker.clone()));
     }
 
     stack.into_any_element()
