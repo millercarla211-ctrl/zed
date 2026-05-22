@@ -8,6 +8,7 @@ use crate::dx_agent_bridge::{
 
 use super::{metric_row, muted_card, signal_row, yes_no};
 
+mod provider_labels;
 mod providers;
 pub(super) use providers::dx_agent_provider_state;
 

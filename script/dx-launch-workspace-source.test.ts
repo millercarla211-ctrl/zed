@@ -39,6 +39,9 @@ test("DX launch workspace UI stays split by rail ownership", () => {
 test("DX launch workspace delegates agents and source rails", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const agents = read("crates/agent_ui/src/dx_launch_workspace/agents.rs");
+  const agentProviderLabels = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs",
+  );
   const agentProviders = read("crates/agent_ui/src/dx_launch_workspace/agents/providers.rs");
   const sources = read("crates/agent_ui/src/dx_launch_workspace/sources.rs");
 
@@ -47,6 +50,7 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.doesNotMatch(parent, /fn dx_agent_bridge_state/);
   assert.doesNotMatch(parent, /fn source_set_stack/);
   assert.match(agents, /pub\(super\) fn dx_agent_bridge_state/);
+  assert.match(agents, /^mod provider_labels;$/m);
   assert.match(agents, /^mod providers;$/m);
   assert.match(agents, /pub\(super\) use providers::dx_agent_provider_state/);
   assert.doesNotMatch(agents, /fn dx_agent_provider_row/);
@@ -56,9 +60,19 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentProviders, /fn dx_agent_model_row/);
   assert.match(agentProviders, /DxAgentProvider/);
   assert.match(agentProviders, /DxAgentModel/);
+  assert.match(agentProviders, /use super::provider_labels::\{/);
+  assert.doesNotMatch(agentProviders, /provider\.compatibility\.join/);
+  assert.doesNotMatch(agentProviders, /model\.compatibility\.join/);
+  assert.match(agentProviderLabels, /pub\(crate\) fn provider_state_label/);
+  assert.match(agentProviderLabels, /pub\(crate\) fn model_state_label/);
+  assert.match(agentProviderLabels, /pub\(crate\) fn provider_detail_label/);
+  assert.match(agentProviderLabels, /pub\(crate\) fn model_detail_label/);
+  assert.match(agentProviderLabels, /provider_detail_label_trims_blank_compatibility/);
+  assert.match(agentProviderLabels, /model_detail_label_falls_back_for_blank_ids/);
   assert.match(sources, /pub\(super\) fn source_set_stack/);
   assert.match(sources, /pub\(super\) fn receipt_source_state/);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents.rs") < 900);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs") < 130);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/providers.rs") < 160);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources.rs") < 420);
 });
