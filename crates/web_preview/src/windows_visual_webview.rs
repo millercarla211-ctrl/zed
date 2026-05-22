@@ -32,7 +32,10 @@ use windows::{
 
 use webview2_com::Microsoft::Web::WebView2::Win32::*;
 
-use crate::web_preview_view::{BrowserEvent, WEB_PREVIEW_BRIDGE_SCRIPT, push_browser_event};
+use crate::{
+    dx_studio_bridge::DX_STUDIO_BRIDGE_SCRIPT,
+    web_preview_view::{BrowserEvent, WEB_PREVIEW_BRIDGE_SCRIPT, push_browser_event},
+};
 
 const IPC_SHIM_SCRIPT: &str = r#"Object.defineProperty(window, 'ipc', { value: Object.freeze({ postMessage: s => window.chrome.webview.postMessage(s) }) });"#;
 const DEFAULT_BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection";
@@ -100,6 +103,7 @@ impl WindowsVisualWebView {
         attach_event_handlers(&webview, browser_events)?;
         add_init_script(&webview, IPC_SHIM_SCRIPT)?;
         add_init_script(&webview, WEB_PREVIEW_BRIDGE_SCRIPT)?;
+        add_init_script(&webview, DX_STUDIO_BRIDGE_SCRIPT)?;
 
         unsafe {
             controller.SetZoomFactor(zoom_factor)?;

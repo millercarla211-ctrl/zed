@@ -78,12 +78,11 @@ pub struct DxAgentsSettingsContent {
     ///
     /// Default: true
     pub enabled: Option<bool>,
-    /// The DX Agents runtime CLI executable Zed uses for direct contract,
-    /// receipt-index, and provider/model catalog actions. Public status,
-    /// social, automation, and run actions use the root `dx agents ...`
-    /// bridge.
+    /// The root DX CLI executable Zed uses for explicit `dx agents ... --json`
+    /// bridge actions. The dx-agents runtime remains owned by the public DX
+    /// command surface.
     ///
-    /// Default: dx-agents
+    /// Default: dx
     pub cli_path: Option<String>,
     /// Receipt root used by the CLI bridge. Receipts must be redacted JSON.
     ///

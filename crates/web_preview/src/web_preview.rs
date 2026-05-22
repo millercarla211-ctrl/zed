@@ -10,7 +10,11 @@ pub(crate) mod agent_browser_contracts;
 #[cfg(target_os = "windows")]
 pub mod dx_studio;
 #[cfg(target_os = "windows")]
+pub(crate) mod dx_studio_bridge;
+#[cfg(target_os = "windows")]
 pub(crate) mod dx_studio_session;
+#[cfg(target_os = "windows")]
+pub(crate) mod dx_studio_source_edit;
 #[cfg(target_os = "windows")]
 pub mod web_preview_view;
 #[cfg(target_os = "windows")]
@@ -42,14 +46,27 @@ pub fn init(cx: &mut App) {
     .detach();
 }
 
-#[cfg(all(unix, not(target_os = "macos"), not(target_os = "windows")))]
+#[cfg(all(
+    unix,
+    not(target_os = "linux"),
+    not(target_os = "macos"),
+    not(target_os = "windows")
+))]
 pub use web_preview_linux::init;
+#[cfg(target_os = "linux")]
+pub use web_preview_linux::{OpenPreview, OpenPreviewToTheSide, init, web_preview_view};
 #[cfg(target_os = "macos")]
-pub use web_preview_macos::init;
+pub use web_preview_macos::{OpenPreview, OpenPreviewToTheSide, init, web_preview_view};
 
 #[cfg(not(any(
     target_os = "windows",
+    target_os = "linux",
     target_os = "macos",
-    all(unix, not(target_os = "macos"), not(target_os = "windows"))
+    all(
+        unix,
+        not(target_os = "linux"),
+        not(target_os = "macos"),
+        not(target_os = "windows")
+    )
 )))]
 pub fn init(_: &mut gpui::App) {}

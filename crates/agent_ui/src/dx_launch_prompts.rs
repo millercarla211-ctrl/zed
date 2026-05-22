@@ -1,7 +1,8 @@
 use ui::IconName;
 
 use crate::dx_check_score::DxCheckScoreSnapshot;
-use crate::dx_deploy_targets::{DxDeployReceiptBucket, DxDeployTarget, DxDeployTargetSnapshot};
+use crate::dx_deploy_prompts::{deploy_launch_gate_prompt, deploy_receipt_bucket_prompt};
+use crate::dx_deploy_targets::DxDeployTargetSnapshot;
 use crate::dx_launch_audit::DxLaunchAuditSnapshot;
 use crate::dx_launch_contracts::DxLaunchContractSnapshot;
 use crate::dx_launch_readiness::DxLaunchReadinessSnapshot;
@@ -98,41 +99,6 @@ pub(crate) fn source_action_prompt(source: &DxSourceItem) -> String {
             source.path
         ),
     }
-}
-
-pub(crate) fn deploy_readiness_prompt(
-    target: &DxDeployTarget,
-    snapshot: &DxDeployTargetSnapshot,
-) -> String {
-    let latest = if snapshot.latest_receipts.is_empty() {
-        "No deploy readiness receipts are present yet.".to_string()
-    } else {
-        format!(
-            "Latest deploy readiness receipts: {}.",
-            snapshot.latest_receipts.join(", ")
-        )
-    };
-    let receipt_buckets = snapshot
-        .receipt_buckets
-        .iter()
-        .map(deploy_receipt_bucket_prompt)
-        .collect::<Vec<_>>()
-        .join(", ");
-    let receipt_buckets = if receipt_buckets.is_empty() {
-        "No deploy receipt buckets are tracked yet.".to_string()
-    } else {
-        format!("Deploy receipt buckets: {receipt_buckets}.")
-    };
-
-    format!(
-        "Inspect DX deploy readiness for {platform} target `{label}` at `{path}`. Read existing managed receipts under `tools/dx-deploy` if present; current deploy receipt count is {receipt_count}. {latest} {receipt_buckets} Report env, URL, log, rollback, and permission gaps. Do not deploy, run builds, start local servers, invoke browser automation, mutate files, or call external platform CLIs unless I explicitly approve a governed tool request.",
-        platform = target.platform,
-        label = target.label,
-        path = target.path,
-        receipt_count = snapshot.receipt_count,
-        latest = latest,
-        receipt_buckets = receipt_buckets,
-    )
 }
 
 pub(crate) fn forge_proof_prompt(tool_history: &DxToolHistorySnapshot) -> String {
@@ -450,9 +416,10 @@ pub(crate) fn receipt_review_prompt(
     } else {
         deploy_rows
     };
+    let deploy_launch_gate = deploy_launch_gate_prompt(deploy_targets);
 
     format!(
-        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Launch aggregate: {launch_context}. Launch handoff contracts: {launch_contract_context}. Launch gate readiness: {launch_readiness_context}. Launch CLI audit: {launch_audit_context}. Source audit: {source_audit_context}. DX-WWW evidence: {www_context}. Launch receipt diagnostics: {launch_receipt_context}. Tool history buckets: {tool_buckets}. Forge history context: {forge_history}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Summarize the latest launch status, launch receipt freshness, malformed retained snapshots, handoff packet coverage, schemas/fixtures/smoke/status audit state, source coordination verdict, DX-WWW release/restart/acceptance evidence, import-summary/release-gate/fallback-drill parser states, metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, restore-target plan, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
+        "Inspect the current DX launch receipts for this workspace. {receipt_root}. Receipt buckets: {receipt_buckets}. Latest receipts: {latest_receipts}. Launch aggregate: {launch_context}. Launch handoff contracts: {launch_contract_context}. Launch gate readiness: {launch_readiness_context}. Launch CLI audit: {launch_audit_context}. Source audit: {source_audit_context}. DX-WWW evidence: {www_context}. Launch receipt diagnostics: {launch_receipt_context}. Tool history buckets: {tool_buckets}. Forge history context: {forge_history}. Proof freshness buckets: {proof_rows}. Deploy receipt buckets: {deploy_rows}. Deploy launch gate: {deploy_launch_gate}. Summarize the latest launch status, launch receipt freshness, malformed retained snapshots, handoff packet coverage, schemas/fixtures/smoke/status audit state, source coordination verdict, DX-WWW release/restart/acceptance evidence, import-summary/release-gate/fallback-drill parser states, metasearch, source attachment, serializer/RLM context, execution, runner-gate, reduced-context, execution-preview, external-execution, media, Forge, restore-approval, restore-target plan, runtime-proof plan/import/status, and deploy receipts. Report missing receipt roots gracefully and give the next safe action without running builds, local servers, browser input, external serializer/RLM code, restore-to-target actions, deploys, shell commands, or model calls."
     )
 }
 
@@ -785,40 +752,6 @@ fn launch_receipt_review_prompt_context(snapshot: &DxLaunchReceiptReviewSnapshot
         latest,
         snapshot.next_action
     )
-}
-
-fn deploy_receipt_bucket_prompt(bucket: &DxDeployReceiptBucket) -> String {
-    let mut parts = vec![format!(
-        "{}={} ({})",
-        bucket.label, bucket.count, bucket.status
-    )];
-
-    if let Some(summary) = bucket.latest_summary.as_ref() {
-        let mut latest = vec![
-            format!("latest {}", summary.label),
-            format!("headline {}", summary.headline),
-        ];
-
-        if let Some(status) = summary.status.as_ref() {
-            latest.push(format!("receipt_status {status}"));
-        }
-
-        if let Some(target) = summary.target.as_ref() {
-            latest.push(format!("target {target}"));
-        }
-
-        if let Some(url) = summary.url.as_ref() {
-            latest.push(format!("url {url}"));
-        }
-
-        if summary.blocker_count > 0 {
-            latest.push(format!("blockers {}", summary.blocker_count));
-        }
-
-        parts.push(latest.join(", "));
-    }
-
-    parts.join("; ")
 }
 
 fn runtime_proof_status_prompt_context(snapshot: &DxRuntimeProofStatusSnapshot) -> String {

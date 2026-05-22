@@ -41,7 +41,9 @@ use workspace::{NewWebPreview, Pane, Toast, Workspace, WorkspaceId};
 use crate::agent_browser_contracts::*;
 #[cfg(target_os = "windows")]
 use crate::windows_visual_webview::WindowsVisualWebView;
-use crate::{OpenPreview, OpenPreviewToTheSide, dx_studio, dx_studio_session};
+use crate::{
+    OpenPreview, OpenPreviewToTheSide, dx_studio, dx_studio_session, dx_studio_source_edit,
+};
 
 #[cfg(target_os = "windows")]
 use gpui_windows::window_has_focused_webview;
@@ -701,6 +703,8 @@ pub struct WebPreviewView {
     browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
     deferred_ipc_messages: Vec<String>,
     ipc_flush_scheduled: bool,
+    latest_dx_studio_selection: Option<Value>,
+    latest_dx_studio_edit_receipt: Option<Value>,
     latest_page_diagnostics: Option<Value>,
     latest_runtime_events: Option<Value>,
     latest_dom_snapshot: Option<Value>,
@@ -977,6 +981,8 @@ impl WebPreviewView {
             browser_events,
             deferred_ipc_messages: Vec::new(),
             ipc_flush_scheduled: false,
+            latest_dx_studio_selection: None,
+            latest_dx_studio_edit_receipt: None,
             latest_page_diagnostics: None,
             latest_runtime_events: None,
             latest_dom_snapshot: None,
@@ -1521,6 +1527,8 @@ impl WebPreviewView {
                 "root_path": self.workspace_context.root_path.as_ref().map(|path| path.display().to_string()),
             },
             "dx_studio": dx_studio,
+            "dx_studio_selection": self.latest_dx_studio_selection_summary(),
+            "dx_studio_edit_receipt": self.latest_dx_studio_edit_receipt_summary(),
             "profile_dir": self.workspace_context.profile_dir.display().to_string(),
             "zoom": self.zoom_factor,
             "viewport": self.viewport_mode.snapshot(),
@@ -1631,6 +1639,9 @@ impl WebPreviewView {
                 "copy_session_info": true,
                 "copy_session_json": true,
                 "send_session_to_agent": true,
+                "select_dx_studio_surface": true,
+                "edit_dx_studio_text": true,
+                "edit_dx_studio_surface": true,
                 "copy_page_diagnostics": true,
                 "send_page_diagnostics_to_agent": true,
                 "copy_runtime_events": true,
@@ -1851,6 +1862,41 @@ impl WebPreviewView {
             "ready_state": diagnostics.pointer("/page/document/ready_state").and_then(Value::as_str),
             "counts": diagnostics.pointer("/page/counts").cloned(),
             "dx_studio": diagnostics.pointer("/page/dx_studio").cloned(),
+        }))
+    }
+
+    fn latest_dx_studio_selection_summary(&self) -> Option<Value> {
+        let selection = self.latest_dx_studio_selection.as_ref()?;
+        Some(serde_json::json!({
+            "captured_at": selection.pointer("/selection/timestamp").and_then(Value::as_str),
+            "url": selection.pointer("/selection/url").and_then(Value::as_str),
+            "route": selection.pointer("/selection/route").and_then(Value::as_str),
+            "edit_id": selection.pointer("/selection/edit_id").and_then(Value::as_str),
+            "edit_kind": selection.pointer("/selection/edit_kind").and_then(Value::as_str),
+            "text_marker": selection.pointer("/selection/text_marker").and_then(Value::as_str),
+            "source_file": selection.pointer("/selection/source_file").and_then(Value::as_str),
+            "component": selection.pointer("/selection/component").and_then(Value::as_str),
+            "section": selection.pointer("/selection/section").and_then(Value::as_str),
+            "operations": selection.pointer("/selection/operations").cloned(),
+            "breakpoint": selection.pointer("/selection/breakpoint").cloned(),
+            "source_edit_plan": selection.get("source_edit_plan").cloned(),
+        }))
+    }
+
+    fn latest_dx_studio_edit_receipt_summary(&self) -> Option<Value> {
+        let receipt = self.latest_dx_studio_edit_receipt.as_ref()?;
+        Some(serde_json::json!({
+            "status": receipt.get("status").and_then(Value::as_str),
+            "status_detail": receipt.get("status_detail").and_then(Value::as_str),
+            "operation": receipt.get("operation").and_then(Value::as_str),
+            "source_file": receipt.get("source_file").and_then(Value::as_str),
+            "text_marker": receipt.get("text_marker").and_then(Value::as_str),
+            "edit_id": receipt.get("edit_id").and_then(Value::as_str),
+            "modified_ms": receipt.get("modified_ms").cloned(),
+            "hot_reload": receipt.get("hot_reload").cloned(),
+            "source_edit_plan": receipt.get("source_edit_plan").cloned(),
+            "source_policy": receipt.get("source_policy").cloned(),
+            "style_edit_context": receipt.get("style_edit_context").cloned(),
         }))
     }
 
@@ -20559,6 +20605,111 @@ impl WebPreviewView {
         self.show_toast("Sent web preview session info to the agent panel", cx);
     }
 
+    fn dx_studio_selection_snapshot(&self, payload: &Value, window: &Window) -> Result<Value> {
+        let selection = payload
+            .get("selection")
+            .cloned()
+            .ok_or_else(|| anyhow!("DX Studio selection payload is missing selection"))?;
+        let source_edit_plan = dx_studio_source_edit::source_edit_plan(
+            self.workspace_context.root_path.as_deref(),
+            &selection,
+        );
+
+        Ok(serde_json::json!({
+            "schema": "zed.web_preview.dx_studio_selection_receipt.v1",
+            "session": self.browser_session_snapshot(window),
+            "selection": selection,
+            "source_edit_plan": source_edit_plan,
+        }))
+    }
+
+    fn dx_studio_payload_with_source_snapshot(&self, payload: &Value) -> Value {
+        let mut payload = payload.clone();
+        if let Some(payload) = payload.as_object_mut() {
+            payload.remove("expected_source_snapshot");
+        }
+
+        let Some(latest_selection) = self.latest_dx_studio_selection.as_ref() else {
+            return payload;
+        };
+        if !Self::dx_studio_selection_matches(
+            payload.get("selection"),
+            latest_selection.get("selection"),
+        ) {
+            return payload;
+        }
+
+        let Some(source_snapshot) = latest_selection
+            .pointer("/source_edit_plan/source_snapshot")
+            .cloned()
+        else {
+            return payload;
+        };
+        if let Some(payload) = payload.as_object_mut() {
+            payload.insert("expected_source_snapshot".to_string(), source_snapshot);
+        }
+        payload
+    }
+
+    fn dx_studio_selection_matches(left: Option<&Value>, right: Option<&Value>) -> bool {
+        let (Some(left), Some(right)) = (left, right) else {
+            return false;
+        };
+
+        [
+            "/edit_id",
+            "/text_marker",
+            "/component",
+            "/section",
+            "/insert_slot",
+            "/media_slot",
+            "/reorder_group",
+            "/design_token",
+            "/token_scope",
+            "/style_surface",
+            "/route",
+            "/source_file",
+            "/attributes/data-dx-edit-id",
+            "/attributes/data-dx-editable-text",
+            "/attributes/data-dx-component",
+            "/attributes/data-dx-section",
+            "/attributes/data-dx-editable-section",
+            "/attributes/data-dx-insert-slot",
+            "/attributes/data-dx-media-slot",
+            "/attributes/data-dx-reorder-group",
+            "/attributes/data-dx-design-token",
+            "/attributes/data-dx-token-scope",
+            "/attributes/data-dx-style-surface",
+            "/attributes/data-dx-route",
+            "/attributes/data-dx-source",
+            "/attributes/data-dx-source-file",
+        ]
+        .into_iter()
+        .any(|pointer| {
+            let left = left.pointer(pointer).and_then(Value::as_str);
+            let right = right.pointer(pointer).and_then(Value::as_str);
+            matches!((left, right), (Some(left), Some(right)) if !left.is_empty() && left == right)
+        })
+    }
+
+    fn dx_studio_edit_failure_receipt(&self, payload: &Value, error: &anyhow::Error) -> Value {
+        dx_studio_edit_failure_receipt_for_workspace(
+            self.workspace_context.root_path.as_deref(),
+            payload,
+            error,
+        )
+    }
+
+    fn notify_dx_studio_source_edit(&self, receipt: &Value) {
+        let Ok(receipt_json) = serde_json::to_string(receipt) else {
+            return;
+        };
+        let script = format!(
+            "window.__zedWebPreviewDxStudio && window.__zedWebPreviewDxStudio.afterSourceEdit({receipt_json});"
+        );
+        let _ = self.evaluate_script(&script);
+    }
+
     fn page_diagnostics_snapshot(&self, payload: &Value, window: &Window) -> Value {
         let mut page = payload.clone();
         if let Some(page) = page.as_object_mut() {
@@ -29477,6 +29628,68 @@ impl WebPreviewView {
         }
     }
 
+    fn select_dx_studio_surface(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let script =
+            "window.__zedWebPreviewDxStudio && window.__zedWebPreviewDxStudio.selectSurface();";
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(script))) {
+            Ok(Ok(())) => {
+                self.show_toast(
+                    "Click a DX Web Preview surface to inspect its source contract",
+                    cx,
+                );
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("DX Studio surface selection is unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic(
+                    "DX Studio surface selection crashed before it could start",
+                    cx,
+                );
+            }
+        }
+    }
+
+    fn edit_dx_studio_text(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let script = "window.__zedWebPreviewDxStudio && window.__zedWebPreviewDxStudio.editText();";
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(script))) {
+            Ok(Ok(())) => {
+                self.show_toast("Click a DX text surface to edit the owning source file", cx);
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("DX Studio text editing is unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic(
+                    "DX Studio text editing crashed before it could start",
+                    cx,
+                );
+            }
+        }
+    }
+
+    fn edit_dx_studio_surface(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let script =
+            "window.__zedWebPreviewDxStudio && window.__zedWebPreviewDxStudio.editSurface();";
+        match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(script))) {
+            Ok(Ok(())) => {
+                self.show_toast(
+                    "Click a DX surface to choose a source-backed Studio operation",
+                    cx,
+                );
+            }
+            Ok(Err(error)) => {
+                self.report_action_error("DX Studio surface editing is unavailable", error, cx);
+            }
+            Err(_) => {
+                self.report_action_panic(
+                    "DX Studio surface editing crashed before it could start",
+                    cx,
+                );
+            }
+        }
+    }
+
     fn capture_selected_area_screenshot(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let script = "window.__zedWebPreview && window.__zedWebPreview.captureAreaScreenshot();";
         match catch_unwind(AssertUnwindSafe(|| self.evaluate_script(script))) {
@@ -29813,6 +30026,56 @@ impl WebPreviewView {
                             "Element selector crashed while collecting page data",
                             cx,
                         );
+                    }
+                }
+            }
+            "dx-studio-selection" => {
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let selection = self.dx_studio_selection_snapshot(&payload, window)?;
+                    self.latest_dx_studio_selection = Some(selection);
+                    self.show_toast("Selected DX Studio source surface", cx);
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.show_toast(format!("DX Studio selection refused: {error}"), cx);
+                    }
+                    Err(_) => {
+                        self.report_action_panic(
+                            "DX Studio selection crashed while collecting source metadata",
+                            cx,
+                        );
+                    }
+                }
+            }
+            "dx-studio-edit-request" => {
+                let edit_payload = self.dx_studio_payload_with_source_snapshot(&payload);
+                match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+                    let receipt = dx_studio_source_edit::apply_source_edit(
+                        self.workspace_context.root_path.as_deref(),
+                        &edit_payload,
+                    )?;
+                    self.latest_dx_studio_edit_receipt = Some(receipt.clone());
+                    self.notify_dx_studio_source_edit(&receipt);
+                    self.show_toast("DX Studio updated the source file", cx);
+                    Ok(())
+                })) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        let receipt = self.dx_studio_edit_failure_receipt(&edit_payload, &error);
+                        self.latest_dx_studio_edit_receipt = Some(receipt.clone());
+                        self.notify_dx_studio_source_edit(&receipt);
+                        self.show_toast(format!("DX Studio edit refused: {error}"), cx);
+                    }
+                    Err(_) => {
+                        let receipt = serde_json::json!({
+                            "schema": dx_studio_source_edit::DX_STUDIO_SOURCE_EDIT_RECEIPT_SCHEMA,
+                            "status": "failed",
+                            "error": "DX Studio edit panicked before source write",
+                        });
+                        self.latest_dx_studio_edit_receipt = Some(receipt.clone());
+                        self.notify_dx_studio_source_edit(&receipt);
+                        self.report_action_panic("DX Studio edit crashed before source write", cx);
                     }
                 }
             }
@@ -33126,6 +33389,42 @@ impl WebPreviewView {
                                 }),
                         )
                         .item(
+                            ContextMenuEntry::new("Select DX Studio Surface")
+                                .icon(IconName::Crosshair)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.select_dx_studio_surface(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Edit DX Studio Text")
+                                .icon(IconName::Pencil)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.edit_dx_studio_text(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Edit DX Studio Surface")
+                                .icon(IconName::Sparkle)
+                                .handler({
+                                    let entity = entity.clone();
+                                    move |window, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.edit_dx_studio_surface(window, cx);
+                                        });
+                                    }
+                                }),
+                        )
+                        .item(
                             ContextMenuEntry::new("Open DevTools")
                                 .icon(IconName::Terminal)
                                 .handler({
@@ -34123,6 +34422,8 @@ impl Item for WebPreviewView {
                 browser_events,
                 deferred_ipc_messages: Vec::new(),
                 ipc_flush_scheduled: false,
+                latest_dx_studio_selection: None,
+                latest_dx_studio_edit_receipt: None,
                 latest_page_diagnostics: None,
                 latest_runtime_events: None,
                 latest_dom_snapshot: None,
@@ -37190,7 +37491,8 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
     "data-dx-content-key",
     "data-dx-editable-text",
     "data-dx-media-slot",
-    "data-dx-token-scope"
+    "data-dx-token-scope",
+    "data-dx-style-surface"
   ];
 
   const DX_STUDIO_MARKER_SELECTOR = [
@@ -39275,9 +39577,43 @@ pub(crate) const WEB_PREVIEW_BRIDGE_SCRIPT: &str = r#"
 })();
 "#;
 
+fn dx_studio_edit_failure_receipt_for_workspace(
+    root_path: Option<&Path>,
+    payload: &Value,
+    error: &anyhow::Error,
+) -> Value {
+    let selection = payload.get("selection");
+    let source_edit_plan =
+        selection.map(|selection| dx_studio_source_edit::source_edit_plan(root_path, selection));
+
+    serde_json::json!({
+        "schema": dx_studio_source_edit::DX_STUDIO_SOURCE_EDIT_RECEIPT_SCHEMA,
+        "status": "failed",
+        "status_detail": dx_studio_source_edit::refusal_status_detail(error),
+        "operation": payload.get("operation").and_then(Value::as_str),
+        "edit_id": payload.pointer("/selection/edit_id").and_then(Value::as_str),
+        "text_marker": payload.pointer("/selection/text_marker").and_then(Value::as_str),
+        "source_file": payload.pointer("/selection/source_file").and_then(Value::as_str),
+        "expected_source_snapshot": payload.get("expected_source_snapshot").cloned(),
+        "error": error.to_string(),
+        "source_edit_plan": source_edit_plan,
+        "style_edit_context": dx_studio_source_edit::style_edit_receipt_context(payload, selection, "refused"),
+        "source_policy": {
+            "rollback_attempted_on_write_error": true,
+            "failed_before_confirmed_write": true,
+        },
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{display_title_from_url, normalized_url, slugify};
+    use anyhow::anyhow;
+    use serde_json::{Value, json};
+
+    use super::{
+        display_title_from_url, dx_studio_edit_failure_receipt_for_workspace, normalized_url,
+        slugify,
+    };
 
     #[test]
     fn slugify_strips_extra_separators() {
@@ -39309,5 +39645,84 @@ mod tests {
     #[test]
     fn title_uses_preview_for_blank_page() {
         assert_eq!(display_title_from_url("about:blank"), "Preview");
+    }
+
+    #[test]
+    fn dx_studio_failure_receipt_includes_plan_status_and_style_context() {
+        let payload = json!({
+            "operation": "update_design_token",
+            "selection": {
+                "edit_id": "launch.hero",
+                "source_file": "app/page.tsx",
+                "design_token": "launch-hero-panel",
+                "operations": ["update_design_token"],
+                "style_edit_plan": {
+                    "schema": "zed.web_preview.dx_studio_style_edit_plan.v1",
+                    "status": "token_contract_ready",
+                    "operation": "update_design_token"
+                }
+            },
+            "edit": {
+                "old_token": "launch-hero-panel",
+                "new_token": "launch-hero-soft",
+                "computed_summary": "size 320px x 120px; margin 0px; padding 16px",
+                "style_edit_prefill": {
+                    "schema": "zed.web_preview.dx_studio_style_token_prefill.v1",
+                    "status": "token_contract_ready",
+                    "computed_summary": "size 320px x 120px; margin 0px; padding 16px",
+                    "token_candidates": ["launch-hero-panel", "launch-hero-soft"]
+                }
+            },
+            "expected_source_snapshot": {
+                "source_file": "app/page.tsx",
+                "len": 100
+            }
+        });
+        let error = anyhow!("DX Studio refused stale source file app/page.tsx");
+
+        let receipt = dx_studio_edit_failure_receipt_for_workspace(None, &payload, &error);
+
+        assert_eq!(
+            receipt.pointer("/schema").and_then(Value::as_str),
+            Some("zed.web_preview.dx_studio_source_edit_receipt.v1")
+        );
+        assert_eq!(
+            receipt.pointer("/status").and_then(Value::as_str),
+            Some("failed")
+        );
+        assert_eq!(
+            receipt.pointer("/status_detail").and_then(Value::as_str),
+            Some("stale_source")
+        );
+        assert_eq!(
+            receipt
+                .pointer("/source_edit_plan/schema")
+                .and_then(Value::as_str),
+            Some("zed.web_preview.dx_studio_source_edit_plan.v1")
+        );
+        assert_eq!(
+            receipt
+                .pointer("/style_edit_context/outcome")
+                .and_then(Value::as_str),
+            Some("refused")
+        );
+        assert_eq!(
+            receipt
+                .pointer("/style_edit_context/plan_status")
+                .and_then(Value::as_str),
+            Some("token_contract_ready")
+        );
+        assert_eq!(
+            receipt
+                .pointer("/style_edit_context/declared_style_contract_used")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            receipt
+                .pointer("/source_policy/failed_before_confirmed_write")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
     }
 }

@@ -33,6 +33,7 @@ impl CapabilityGranter {
             .any(|capability| match capability {
                 ExtensionCapability::ProcessExec(capability) => {
                     capability.allows(desired_command, desired_args)
+                        && !is_global_process_exec_grant(capability)
                 }
                 _ => false,
             });
@@ -51,7 +52,9 @@ impl CapabilityGranter {
             .granted_capabilities
             .iter()
             .any(|capability| match capability {
-                ExtensionCapability::DownloadFile(capability) => capability.allows(desired_url),
+                ExtensionCapability::DownloadFile(capability) => {
+                    capability.allows(desired_url) && !is_global_download_file_grant(capability)
+                }
                 _ => false,
             });
 
@@ -70,7 +73,7 @@ impl CapabilityGranter {
             .iter()
             .any(|capability| match capability {
                 ExtensionCapability::NpmInstallPackage(capability) => {
-                    capability.allows(package_name)
+                    capability.allows(package_name) && !is_global_npm_install_grant(capability)
                 }
                 _ => false,
             });
@@ -83,11 +86,25 @@ impl CapabilityGranter {
     }
 }
 
+fn is_global_process_exec_grant(capability: &extension::ProcessExecCapability) -> bool {
+    capability.command.trim() == "*" && capability.args.iter().any(|arg| arg.trim() == "**")
+}
+
+fn is_global_download_file_grant(capability: &extension::DownloadFileCapability) -> bool {
+    capability.host.trim() == "*" && capability.path.iter().any(|path| path.trim() == "**")
+}
+
+fn is_global_npm_install_grant(capability: &extension::NpmInstallPackageCapability) -> bool {
+    capability.package.trim() == "*"
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
-    use extension::{ProcessExecCapability, SchemaVersion};
+    use extension::{
+        DownloadFileCapability, NpmInstallPackageCapability, ProcessExecCapability, SchemaVersion,
+    };
 
     use super::*;
 
@@ -141,7 +158,8 @@ mod tests {
         );
         assert!(granter.grant_exec("ls", &["-la"]).is_ok());
 
-        // It succeeds when the extension host has a wildcard capability.
+        // It rejects a global wildcard capability so extensions cannot inherit
+        // blanket shell access from the host defaults.
         let granter = CapabilityGranter::new(
             vec![ExtensionCapability::ProcessExec(ProcessExecCapability {
                 command: "*".to_string(),
@@ -149,6 +167,63 @@ mod tests {
             })],
             manifest,
         );
-        assert!(granter.grant_exec("ls", &["-la"]).is_ok());
+        assert!(granter.grant_exec("ls", &["-la"]).is_err());
+    }
+
+    #[test]
+    fn test_rejects_global_download_file_grant() {
+        let granter = CapabilityGranter::new(
+            vec![ExtensionCapability::DownloadFile(DownloadFileCapability {
+                host: "*".to_string(),
+                path: vec!["**".to_string()],
+            })],
+            Arc::new(extension_manifest()),
+        );
+
+        assert!(
+            granter
+                .grant_download_file(&"https://github.com/zed-industries/zed".parse().unwrap())
+                .is_err()
+        );
+
+        let granter = CapabilityGranter::new(
+            vec![ExtensionCapability::DownloadFile(DownloadFileCapability {
+                host: "github.com".to_string(),
+                path: vec!["**".to_string()],
+            })],
+            Arc::new(extension_manifest()),
+        );
+
+        assert!(
+            granter
+                .grant_download_file(&"https://github.com/zed-industries/zed".parse().unwrap())
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn test_rejects_global_npm_install_grant() {
+        let package_name = "@zed-industries/vscode-langservers-extracted";
+        let granter = CapabilityGranter::new(
+            vec![ExtensionCapability::NpmInstallPackage(
+                NpmInstallPackageCapability {
+                    package: "*".to_string(),
+                },
+            )],
+            Arc::new(extension_manifest()),
+        );
+
+        assert!(granter.grant_npm_install_package(package_name).is_err());
+
+        let granter = CapabilityGranter::new(
+            vec![ExtensionCapability::NpmInstallPackage(
+                NpmInstallPackageCapability {
+                    package: package_name.to_string(),
+                },
+            )],
+            Arc::new(extension_manifest()),
+        );
+
+        assert!(granter.grant_npm_install_package(package_name).is_ok());
     }
 }

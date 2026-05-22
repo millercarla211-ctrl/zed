@@ -5,15 +5,14 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Output},
     sync::{Mutex, OnceLock},
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{Context as _, Result, anyhow};
 use gpui::App;
-use serde_json::Value;
+use serde_json::{Value, json};
 use settings::SettingsStore;
 
-const DEFAULT_DX_AGENTS_CLI: &str = "dx-agents";
 const DEFAULT_DX_CLI: &str = "dx";
 const DEFAULT_AGENT_RECEIPT_ROOT: &str = r"G:\Dx\.dx\receipts\agents";
 const DEFAULT_PROVIDER_CATALOG_PATH: &str = r"G:\Dx\.dx\catalog\agents\provider-model-catalog.rkyv";
@@ -43,6 +42,8 @@ pub(crate) struct DxAgentBridgeSnapshot {
     pub contract_summary: DxAgentContractSummary,
     pub import_summary: DxAgentImportSummary,
     pub release_gate: DxAgentReleaseGateSummary,
+    pub action_error: DxAgentActionErrorSummary,
+    pub receipt_inbox: DxAgentReceiptInboxSummary,
     pub receipt_index: DxAgentReceiptIndexSummary,
     pub receipts: Vec<DxAgentReceipt>,
     pub latest_receipts: Vec<String>,
@@ -56,6 +57,7 @@ pub(crate) struct DxConnectedAccountsSummary {
     pub configured: usize,
     pub connected: usize,
     pub needs_connection: usize,
+    pub needs_auth: usize,
     pub qr_connect_supported: usize,
 }
 
@@ -164,6 +166,26 @@ pub(crate) struct DxAgentContractSummary {
     pub receipt_notes: Vec<String>,
 }
 
+#[derive(Clone, Default)]
+pub(crate) struct DxAgentRecoveryControlCounts {
+    pub required_intent_count: usize,
+    pub action_count: usize,
+    pub check_count: usize,
+}
+
+impl DxAgentRecoveryControlCounts {
+    pub(crate) fn label(&self) -> String {
+        if self.required_intent_count == 0 && self.action_count == 0 && self.check_count == 0 {
+            "counts unavailable".to_string()
+        } else {
+            format!(
+                "{} intent(s) / {} action(s) / {} check(s)",
+                self.required_intent_count, self.action_count, self.check_count
+            )
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct DxAgentImportSummary {
     pub present: bool,
@@ -173,10 +195,10 @@ pub(crate) struct DxAgentImportSummary {
     pub release_gate_warning_count: usize,
     pub release_gate_failed_count: usize,
     pub action_map_status: String,
-    pub action_count: usize,
     pub no_command_fanout: bool,
     pub recovery_controls_status: String,
     pub recovery_render_first: String,
+    pub recovery_counts: DxAgentRecoveryControlCounts,
     pub recovery_states: Vec<String>,
     pub recovery_fixture_count: usize,
     pub freshness_state: String,
@@ -207,6 +229,7 @@ pub(crate) struct DxAgentReleaseGateSummary {
     pub no_command_fanout: bool,
     pub recovery_controls_status: String,
     pub recovery_render_first: String,
+    pub recovery_counts: DxAgentRecoveryControlCounts,
     pub recovery_fixture_count: usize,
     pub next_action: String,
     pub warning_reasons: Vec<String>,
@@ -218,12 +241,40 @@ pub(crate) struct DxAgentReleaseGateSummary {
 pub(crate) struct DxAgentReceiptIndexSummary {
     pub present: bool,
     pub status: String,
+    pub receipt_root_present: Option<bool>,
     pub receipt_count: usize,
     pub returned_receipt_count: usize,
     pub active_task_count: usize,
     pub latest_receipt_path: Option<String>,
     pub last_error: Option<String>,
     pub next_action: String,
+}
+
+#[derive(Clone)]
+pub(crate) struct DxAgentReceiptInboxSummary {
+    pub present: bool,
+    pub status: String,
+    pub receipt_dir_present: Option<bool>,
+    pub receipt_count: usize,
+    pub latest_count: usize,
+    pub malformed_count: usize,
+    pub missing_latest_count: usize,
+    pub stale_count: usize,
+    pub expired_count: usize,
+    pub last_error: Option<String>,
+    pub next_action: String,
+}
+
+#[derive(Clone)]
+pub(crate) struct DxAgentActionErrorSummary {
+    pub present: bool,
+    pub status: String,
+    pub command: String,
+    pub error: Option<String>,
+    pub generated_at: String,
+    pub next_action: String,
+    pub redaction_summary: String,
+    pub redaction_requires_review: bool,
 }
 
 #[derive(Clone)]
@@ -234,6 +285,7 @@ pub(crate) struct DxAgentReceipt {
     pub command: String,
     pub generated_at: String,
     pub task_id: String,
+    pub task_state: String,
     pub status: String,
     pub active_task: bool,
     pub safe_to_render: bool,
@@ -243,6 +295,15 @@ pub(crate) struct DxAgentReceipt {
     pub modified_at: String,
     pub last_error: Option<String>,
     pub next_action: String,
+    pub provider_status: Option<String>,
+    pub model_status: Option<String>,
+    pub duration_state: Option<String>,
+    pub retry_supported: Option<bool>,
+    pub cancel_supported: Option<bool>,
+    pub social_connected: Option<usize>,
+    pub social_needs_auth: Option<usize>,
+    pub automation_enabled: Option<usize>,
+    pub automation_warning: Option<usize>,
 }
 
 static SNAPSHOT_CACHE: OnceLock<Mutex<Option<(Instant, String, DxAgentBridgeSnapshot)>>> =
@@ -289,6 +350,10 @@ pub(crate) fn dx_agent_receipt_root(cx: &App) -> PathBuf {
 pub(crate) fn dx_agent_cli_actions_allowed(cx: &App) -> bool {
     let settings = dx_agent_settings(cx);
     settings.enabled && settings.cli_actions_allowed
+}
+
+pub(crate) fn dx_agent_cli_path(cx: &App) -> String {
+    dx_agent_settings(cx).cli_path
 }
 
 #[derive(Clone)]
@@ -343,6 +408,7 @@ impl DxAgentPublicCommand {
 pub(crate) enum DxAgentMetadataCommand {
     ImportSummary,
     ReleaseGate,
+    ReceiptsInbox,
 }
 
 impl DxAgentMetadataCommand {
@@ -350,6 +416,7 @@ impl DxAgentMetadataCommand {
         match self {
             Self::ImportSummary => dx_agents_args(&["import-summary"]),
             Self::ReleaseGate => dx_agents_args(&["release-gate"]),
+            Self::ReceiptsInbox => dx_agents_args(&["receipts"]),
         }
     }
 
@@ -357,6 +424,7 @@ impl DxAgentMetadataCommand {
         match self {
             Self::ImportSummary => "import-summary-latest.json",
             Self::ReleaseGate => "release-gate-latest.json",
+            Self::ReceiptsInbox => "receipts-inbox-latest.json",
         }
     }
 
@@ -364,35 +432,55 @@ impl DxAgentMetadataCommand {
         match self {
             Self::ImportSummary => "dx.agents.zed.import_summary.v1",
             Self::ReleaseGate => "dx.agents.zed.release_gate.v1",
+            Self::ReceiptsInbox => "dx.agents.zed.receipts.v1",
         }
     }
 }
 
 pub(crate) fn run_dx_agent_public_command(
     command: DxAgentPublicCommand,
+    cli_path: String,
     dx_home: Option<PathBuf>,
+    receipt_root: PathBuf,
 ) -> Result<()> {
     if !command.is_safe() {
         return Err(anyhow!("unsupported DX Agents public bridge command"));
     }
 
     let args = command.args();
-    run_bridge_command(DEFAULT_DX_CLI.to_string(), args, dx_home)?;
+    let command_label = bridge_command_label(&cli_path, &args);
+    if let Err(error) = run_bridge_command(cli_path, args, dx_home) {
+        let _ = write_action_error_receipt(&receipt_root, &command_label, &error);
+        clear_snapshot_cache();
+        return Err(error);
+    }
+    clear_action_error_receipt(&receipt_root);
     clear_snapshot_cache();
     Ok(())
 }
 
 pub(crate) fn run_dx_agent_metadata_command(
     command: DxAgentMetadataCommand,
+    cli_path: String,
     dx_home: Option<PathBuf>,
     receipt_root: PathBuf,
 ) -> Result<()> {
-    let output = run_bridge_command(DEFAULT_DX_CLI.to_string(), command.args(), dx_home)?;
+    let args = command.args();
+    let command_label = bridge_command_label(&cli_path, &args);
+    let output = match run_bridge_command(cli_path, args, dx_home) {
+        Ok(output) => output,
+        Err(error) => {
+            let _ = write_action_error_receipt(&receipt_root, &command_label, &error);
+            clear_snapshot_cache();
+            return Err(error);
+        }
+    };
     write_json_receipt(
         &receipt_root.join(command.receipt_filename()),
         &output.stdout,
         command.expected_schema(),
     )?;
+    clear_action_error_receipt(&receipt_root);
     clear_snapshot_cache();
     Ok(())
 }
@@ -487,6 +575,59 @@ fn write_json_receipt(path: &Path, stdout: &[u8], expected_schema: &str) -> Resu
     Ok(())
 }
 
+fn write_action_error_receipt(
+    receipt_root: &Path,
+    command: &str,
+    error: &anyhow::Error,
+) -> Result<()> {
+    let path = receipt_root.join("action-error-latest.json");
+    let parent = path
+        .parent()
+        .ok_or_else(|| anyhow!("DX Agents action error receipt path has no parent"))?;
+    fs::create_dir_all(parent).with_context(|| {
+        format!(
+            "failed to create DX Agents action error receipt directory `{}`",
+            parent.display()
+        )
+    })?;
+
+    let generated_at_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default();
+    let value = json!({
+        "schema_version": "dx.agents.zed.action_error.v1",
+        "command": redact_action_scalar(command),
+        "status": "missing_config",
+        "generated_at": generated_at_ms.to_string(),
+        "generated_at_ms": generated_at_ms,
+        "error": redact_action_scalar(&error.to_string()),
+        "next_action": "review_dx_agents_cli_path_or_receipt_root",
+        "redaction": {
+            "exports_secret_values": false,
+            "exports_provider_credentials": false,
+            "exports_receipt_bodies": false
+        }
+    });
+    let mut bytes =
+        serde_json::to_vec_pretty(&value).context("failed to serialize DX Agents action error")?;
+    bytes.push(b'\n');
+    fs::write(&path, bytes).with_context(|| {
+        format!(
+            "failed to write DX Agents action error receipt `{}`",
+            path.display()
+        )
+    })?;
+    Ok(())
+}
+
+fn clear_action_error_receipt(receipt_root: &Path) {
+    let path = receipt_root.join("action-error-latest.json");
+    if path.is_file() {
+        let _ = fs::remove_file(path);
+    }
+}
+
 fn clear_snapshot_cache() {
     if let Some(cache) = SNAPSHOT_CACHE.get() {
         if let Ok(mut cache) = cache.lock() {
@@ -522,7 +663,7 @@ fn dx_agent_settings(cx: &App) -> DxAgentSettingsSnapshot {
         cli_path: settings
             .and_then(|settings| settings.cli_path.clone())
             .filter(|path| !path.trim().is_empty())
-            .unwrap_or_else(|| DEFAULT_DX_AGENTS_CLI.to_string()),
+            .unwrap_or_else(|| DEFAULT_DX_CLI.to_string()),
         receipt_root: settings
             .and_then(|settings| settings.receipt_root.clone())
             .filter(|path| !path.trim().is_empty())
@@ -561,6 +702,14 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
     let release_gate_value = read_first_json(
         &settings.receipt_root,
         &["release-gate-latest.json", "release_gate-latest.json"],
+    );
+    let action_error_value = read_first_json(
+        &settings.receipt_root,
+        &["action-error-latest.json", "action_error-latest.json"],
+    );
+    let receipt_inbox_value = read_first_json(
+        &settings.receipt_root,
+        &["receipts-inbox-latest.json", "receipts_inbox-latest.json"],
     );
 
     let status = status_value
@@ -655,6 +804,8 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
         contract_summary: contract_summary(contract_value.as_ref(), root_exists),
         import_summary: import_summary(import_summary_value.as_ref(), root_exists),
         release_gate: release_gate(release_gate_value.as_ref(), root_exists),
+        action_error: action_error(action_error_value.as_ref()),
+        receipt_inbox: receipt_inbox(receipt_inbox_value.as_ref(), root_exists),
         receipt_index,
         receipts,
         latest_receipts: latest_receipts(&settings.receipt_root, root_exists),
@@ -664,11 +815,13 @@ fn read_bridge_snapshot(settings: DxAgentSettingsSnapshot) -> DxAgentBridgeSnaps
 }
 
 fn connected_accounts_summary(value: &Value) -> DxConnectedAccountsSummary {
+    let needs_connection = usize_field(value, &["needs_connection"]).unwrap_or_default();
     DxConnectedAccountsSummary {
         supported: usize_field(value, &["supported"]).unwrap_or_default(),
         configured: usize_field(value, &["configured"]).unwrap_or_default(),
         connected: usize_field(value, &["connected"]).unwrap_or_default(),
-        needs_connection: usize_field(value, &["needs_connection"]).unwrap_or_default(),
+        needs_connection,
+        needs_auth: usize_field(value, &["needs_auth"]).unwrap_or(needs_connection),
         qr_connect_supported: usize_field(value, &["qr_connect_supported"]).unwrap_or_default(),
     }
 }
@@ -1023,10 +1176,22 @@ fn contract_summary(value: Option<&Value>, root_exists: bool) -> DxAgentContract
     let exports_tool_payloads = redaction
         .and_then(|value| bool_field(value, &["exports_tool_payloads"]))
         .unwrap_or(false);
+    let exports_task_payloads = redaction
+        .and_then(|value| bool_field(value, &["exports_task_payloads"]))
+        .unwrap_or(false);
+    let exports_transcripts = redaction
+        .and_then(|value| bool_field(value, &["exports_transcripts"]))
+        .unwrap_or(false);
+    let exports_provider_credentials = redaction
+        .and_then(|value| bool_field(value, &["exports_provider_credentials"]))
+        .unwrap_or(false);
     let redaction_requires_review = exports_secret_values
         || exports_account_targets
         || exports_automation_bodies
-        || exports_tool_payloads;
+        || exports_tool_payloads
+        || exports_task_payloads
+        || exports_transcripts
+        || exports_provider_credentials;
     let redaction_summary = if redaction_requires_review {
         "review required".to_string()
     } else if redaction.is_some() {
@@ -1094,6 +1259,7 @@ fn import_summary(value: Option<&Value>, root_exists: bool) -> DxAgentImportSumm
     let release_gate = value.and_then(|value| value.get("release_gate"));
     let action_map = value.and_then(|value| value.get("action_map"));
     let recovery_controls = value.and_then(|value| value.get("recovery_controls"));
+    let recovery_counts = recovery_control_counts(recovery_controls, action_map);
     let freshness_policy = value.and_then(|value| value.get("freshness_policy"));
     let status = value
         .and_then(|value| string_field(value, &["status"]))
@@ -1129,9 +1295,6 @@ fn import_summary(value: Option<&Value>, root_exists: bool) -> DxAgentImportSumm
         action_map_status: action_map
             .and_then(|value| string_field(value, &["status"]))
             .unwrap_or_else(|| "unknown".to_string()),
-        action_count: action_map
-            .and_then(|value| usize_field(value, &["action_count"]))
-            .unwrap_or_default(),
         no_command_fanout: value
             .and_then(|value| bool_field(value, &["no_command_fanout"]))
             .or_else(|| action_map.and_then(|value| bool_field(value, &["no_command_fanout"])))
@@ -1145,6 +1308,7 @@ fn import_summary(value: Option<&Value>, root_exists: bool) -> DxAgentImportSumm
         recovery_render_first: recovery_controls
             .and_then(|value| string_field(value, &["render_first"]))
             .unwrap_or_else(|| "unknown".to_string()),
+        recovery_counts,
         recovery_states: recovery_controls
             .map(|value| string_array_field(value, &["states"]))
             .unwrap_or_default(),
@@ -1169,6 +1333,7 @@ fn import_summary(value: Option<&Value>, root_exists: bool) -> DxAgentImportSumm
 
 fn release_gate(value: Option<&Value>, root_exists: bool) -> DxAgentReleaseGateSummary {
     let recovery_controls = value.and_then(|value| value.get("recovery_controls"));
+    let recovery_counts = recovery_control_counts(recovery_controls, None);
     let status = value
         .and_then(|value| string_field(value, &["status"]))
         .unwrap_or_else(|| {
@@ -1240,6 +1405,7 @@ fn release_gate(value: Option<&Value>, root_exists: bool) -> DxAgentReleaseGateS
         recovery_render_first: recovery_controls
             .and_then(|value| string_field(value, &["render_first"]))
             .unwrap_or_else(|| "unknown".to_string()),
+        recovery_counts,
         recovery_fixture_count: recovery_controls
             .and_then(|value| usize_field(value, &["fixture_count"]))
             .unwrap_or_default(),
@@ -1251,6 +1417,28 @@ fn release_gate(value: Option<&Value>, root_exists: bool) -> DxAgentReleaseGateS
             .map(|value| string_array_field(value, &["blocking_reasons"]))
             .unwrap_or_default(),
         acceptance_rows: release_gate_acceptance_rows(value),
+    }
+}
+
+fn recovery_control_counts(
+    recovery_controls: Option<&Value>,
+    fallback_action_map: Option<&Value>,
+) -> DxAgentRecoveryControlCounts {
+    DxAgentRecoveryControlCounts {
+        required_intent_count: recovery_controls
+            .and_then(|value| usize_field(value, &["required_intent_count"]))
+            .or_else(|| {
+                fallback_action_map.and_then(|value| usize_field(value, &["required_intent_count"]))
+            })
+            .unwrap_or_default(),
+        action_count: recovery_controls
+            .and_then(|value| usize_field(value, &["action_count"]))
+            .or_else(|| fallback_action_map.and_then(|value| usize_field(value, &["action_count"])))
+            .unwrap_or_default(),
+        check_count: recovery_controls
+            .and_then(|value| usize_field(value, &["check_count"]))
+            .or_else(|| fallback_action_map.and_then(|value| usize_field(value, &["check_count"])))
+            .unwrap_or_default(),
     }
 }
 
@@ -1270,20 +1458,116 @@ fn release_gate_acceptance_rows(value: Option<&Value>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn receipt_index_summary(value: Option<&Value>, root_exists: bool) -> DxAgentReceiptIndexSummary {
+fn receipt_inbox(value: Option<&Value>, root_exists: bool) -> DxAgentReceiptInboxSummary {
+    let receipt_dir_present = value.and_then(|value| bool_field(value, &["receipt_dir_present"]));
     let status = value
         .and_then(|value| string_field(value, &["status"]))
         .unwrap_or_else(|| {
-            if root_exists {
+            if receipt_dir_present == Some(false) || !root_exists {
+                "missing_config".to_string()
+            } else {
+                "waiting_for_receipt_inbox".to_string()
+            }
+        });
+    let status = if receipt_dir_present == Some(false) {
+        "missing_config".to_string()
+    } else {
+        status
+    };
+
+    DxAgentReceiptInboxSummary {
+        present: value.is_some(),
+        status,
+        receipt_dir_present,
+        receipt_count: value
+            .and_then(|value| usize_field(value, &["receipt_count"]))
+            .unwrap_or_default(),
+        latest_count: value
+            .and_then(|value| usize_field(value, &["latest_count"]))
+            .unwrap_or_default(),
+        malformed_count: value
+            .and_then(|value| usize_field(value, &["malformed_count"]))
+            .unwrap_or_default(),
+        missing_latest_count: value
+            .and_then(|value| usize_field(value, &["missing_latest_count"]))
+            .unwrap_or_default(),
+        stale_count: value
+            .and_then(|value| usize_field(value, &["stale_count"]))
+            .unwrap_or_default(),
+        expired_count: value
+            .and_then(|value| usize_field(value, &["expired_count"]))
+            .unwrap_or_default(),
+        last_error: value.and_then(|value| safe_string_field(value, &["last_error"])),
+        next_action: value
+            .and_then(|value| safe_string_field(value, &["next_action"]))
+            .unwrap_or_else(|| "dx agents receipts --json".to_string()),
+    }
+}
+
+fn action_error(value: Option<&Value>) -> DxAgentActionErrorSummary {
+    let redaction = value.and_then(|value| value.get("redaction"));
+    let exports_secret_values = redaction
+        .and_then(|value| bool_field(value, &["exports_secret_values"]))
+        .unwrap_or(value.is_some());
+    let exports_provider_credentials = redaction
+        .and_then(|value| bool_field(value, &["exports_provider_credentials"]))
+        .unwrap_or(value.is_some());
+    let exports_receipt_bodies = redaction
+        .and_then(|value| bool_field(value, &["exports_receipt_bodies"]))
+        .unwrap_or(value.is_some());
+    let redaction_requires_review =
+        exports_secret_values || exports_provider_credentials || exports_receipt_bodies;
+    let redaction_summary = if value.is_none() {
+        "No failed DX Agents action".to_string()
+    } else if redaction_requires_review {
+        "Action-error receipt redaction requires review".to_string()
+    } else {
+        "Action-error receipt is redacted metadata only".to_string()
+    };
+
+    DxAgentActionErrorSummary {
+        present: value.is_some(),
+        status: value
+            .and_then(|value| safe_string_field(value, &["status"]))
+            .unwrap_or_else(|| "ready".to_string()),
+        command: value
+            .and_then(|value| safe_string_field(value, &["command"]))
+            .unwrap_or_default(),
+        error: value.and_then(|value| safe_string_field(value, &["error"])),
+        generated_at: value
+            .and_then(|value| safe_string_field(value, &["generated_at"]))
+            .unwrap_or_default(),
+        next_action: value
+            .and_then(|value| safe_string_field(value, &["next_action"]))
+            .unwrap_or_else(|| "dx agents status --json".to_string()),
+        redaction_summary,
+        redaction_requires_review,
+    }
+}
+
+fn receipt_index_summary(value: Option<&Value>, root_exists: bool) -> DxAgentReceiptIndexSummary {
+    let receipt_root_present = value.and_then(|value| bool_field(value, &["receipt_root_present"]));
+    let status = value
+        .and_then(|value| string_field(value, &["status"]))
+        .unwrap_or_else(|| {
+            if receipt_root_present == Some(false) {
+                "missing_config".to_string()
+            } else if root_exists {
                 "waiting_for_receipts_list".to_string()
             } else {
                 "missing_receipt_root".to_string()
             }
         });
+    let status = if receipt_root_present == Some(false) {
+        "missing_config".to_string()
+    } else {
+        status
+    };
 
     DxAgentReceiptIndexSummary {
         present: value.is_some(),
         status,
+        receipt_root_present,
         receipt_count: value
             .and_then(|value| usize_field(value, &["receipt_count"]))
             .unwrap_or_default(),
@@ -1333,6 +1617,11 @@ fn receipt_row(value: &Value) -> Option<DxAgentReceipt> {
         } else {
             String::new()
         },
+        task_state: if safe_to_render {
+            safe_string_field(value, &["task_state"]).unwrap_or_default()
+        } else {
+            String::new()
+        },
         status: safe_string_field(value, &["status"]).unwrap_or_else(|| "unknown".to_string()),
         active_task: bool_field(value, &["active_task"]).unwrap_or(false),
         safe_to_render,
@@ -1342,6 +1631,15 @@ fn receipt_row(value: &Value) -> Option<DxAgentReceipt> {
         modified_at: safe_string_field(value, &["modified_at"]).unwrap_or_default(),
         last_error,
         next_action,
+        provider_status: safe_string_field(value, &["provider_status"]),
+        model_status: safe_string_field(value, &["model_status"]),
+        duration_state: safe_string_field(value, &["duration_state"]),
+        retry_supported: bool_field(value, &["retry_supported"]),
+        cancel_supported: bool_field(value, &["cancel_supported"]),
+        social_connected: usize_field(value, &["social_connected"]),
+        social_needs_auth: usize_field(value, &["social_needs_auth"]),
+        automation_enabled: usize_field(value, &["automation_enabled"]),
+        automation_warning: usize_field(value, &["automation_warning"]),
     })
 }
 
@@ -1412,13 +1710,15 @@ fn string_field(value: &Value, path: &[&str]) -> Option<String> {
 }
 
 fn safe_string_field(value: &Value, path: &[&str]) -> Option<String> {
-    string_field(value, path).map(|value| {
-        if is_secret_like_arg(&value) {
-            "<redacted>".to_string()
-        } else {
-            value
-        }
-    })
+    string_field(value, path).map(|value| redact_action_scalar(&value))
+}
+
+fn redact_action_scalar(value: &str) -> String {
+    if is_secret_like_arg(value) {
+        "<redacted>".to_string()
+    } else {
+        value.to_string()
+    }
 }
 
 fn string_array_field(value: &Value, path: &[&str]) -> Vec<String> {
@@ -1461,13 +1761,30 @@ fn value_at<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
 
 fn is_secret_like_arg(value: &str) -> bool {
     let lower = value.to_ascii_lowercase();
-    lower.contains("token")
-        || lower.contains("secret")
-        || lower.contains("api_key")
-        || lower.contains("apikey")
-        || lower.contains("password")
-        || lower.contains("cookie")
+    DX_AGENT_SECRET_MARKERS
+        .iter()
+        .any(|marker| lower.contains(marker))
 }
+
+const DX_AGENT_SECRET_MARKERS: &[&str] = &[
+    "sk-",
+    "secret",
+    "token",
+    "password",
+    "passwd",
+    "cookie",
+    "authorization",
+    "bearer ",
+    "api_key",
+    "apikey",
+    "provider_key",
+    "access_key",
+    "access_token",
+    "refresh_token",
+    "private-token",
+    "xoxb-",
+    "xoxp-",
+];
 
 fn public_command_for_runtime(command: &str) -> String {
     command
@@ -1508,4 +1825,142 @@ fn bridge_command_label(cli_path: &str, args: &[String]) -> String {
     parts.push(cli_path.to_string());
     parts.extend(args.iter().cloned());
     parts.join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{action_error, import_summary, is_secret_like_arg, release_gate};
+    use serde_json::json;
+
+    #[test]
+    fn dx_agent_secret_marker_guard_covers_bridge_receipt_scalars() {
+        for value in [
+            "sk-should-not-render",
+            "provider_key",
+            "bearer should-not-render",
+            "authorization header",
+            "private-token-value",
+            "refresh_token",
+            "password",
+        ] {
+            assert!(is_secret_like_arg(value), "{value} should be secret-like");
+        }
+
+        assert!(!is_secret_like_arg("telegram"));
+        assert!(!is_secret_like_arg("dx agents status --json"));
+    }
+
+    #[test]
+    fn dx_agent_action_error_redaction_flags_drive_review_state() {
+        let safe = json!({
+            "schema_version": "dx.agents.zed.action_error.v1",
+            "command": "dx agents status --json",
+            "status": "missing_config",
+            "error": "failed to run dx agents status --json",
+            "generated_at": "1779310640000",
+            "next_action": "review_dx_agents_cli_path_or_receipt_root",
+            "redaction": {
+                "exports_secret_values": false,
+                "exports_provider_credentials": false,
+                "exports_receipt_bodies": false
+            }
+        });
+        let safe_summary = action_error(Some(&safe));
+        assert!(safe_summary.present);
+        assert!(!safe_summary.redaction_requires_review);
+        assert_eq!(
+            safe_summary.redaction_summary,
+            "Action-error receipt is redacted metadata only"
+        );
+
+        let unsafe_packet = json!({
+            "schema_version": "dx.agents.zed.action_error.v1",
+            "command": "dx agents status --json",
+            "status": "missing_config",
+            "redaction": {
+                "exports_secret_values": true,
+                "exports_provider_credentials": false,
+                "exports_receipt_bodies": false
+            }
+        });
+        let unsafe_summary = action_error(Some(&unsafe_packet));
+        assert!(unsafe_summary.redaction_requires_review);
+        assert_eq!(
+            unsafe_summary.redaction_summary,
+            "Action-error receipt redaction requires review"
+        );
+    }
+
+    #[test]
+    fn dx_agent_import_summary_uses_flat_recovery_control_counts() {
+        let packet = json!({
+            "status": "ready",
+            "release_gate": {
+                "status": "ready",
+                "warning_count": 0,
+                "failed_count": 0
+            },
+            "action_map": {
+                "status": "ready",
+                "action_count": 99,
+                "required_intent_count": 88,
+                "check_count": 77,
+                "no_command_fanout": true
+            },
+            "recovery_controls": {
+                "status": "ready",
+                "render_first": "agent_bridge_recovery_controls",
+                "fixture_count": 3,
+                "action_count": 10,
+                "required_intent_count": 6,
+                "check_count": 5,
+                "no_command_fanout": true
+            },
+            "freshness_policy": {
+                "latest_freshness_state": "fresh"
+            }
+        });
+
+        let summary = import_summary(Some(&packet), true);
+
+        assert_eq!(summary.recovery_counts.required_intent_count, 6);
+        assert_eq!(summary.recovery_counts.action_count, 10);
+        assert_eq!(summary.recovery_counts.check_count, 5);
+        assert_eq!(
+            summary.recovery_counts.label(),
+            "6 intent(s) / 10 action(s) / 5 check(s)"
+        );
+    }
+
+    #[test]
+    fn dx_agent_release_gate_uses_flat_recovery_control_counts() {
+        let packet = json!({
+            "status": "ready",
+            "acceptance_count": 10,
+            "passed_count": 10,
+            "warning_count": 0,
+            "failed_count": 0,
+            "action_map_status": "ready",
+            "no_command_fanout": true,
+            "recovery_controls": {
+                "status": "ready",
+                "render_first": "agent_bridge_recovery_controls",
+                "fixture_count": 3,
+                "action_count": 10,
+                "required_intent_count": 6,
+                "check_count": 5,
+                "no_command_fanout": true
+            }
+        });
+
+        let summary = release_gate(Some(&packet), true);
+
+        assert_eq!(summary.recovery_counts.required_intent_count, 6);
+        assert_eq!(summary.recovery_counts.action_count, 10);
+        assert_eq!(summary.recovery_counts.check_count, 5);
+        assert_eq!(
+            summary.recovery_counts.label(),
+            "6 intent(s) / 10 action(s) / 5 check(s)"
+        );
+    }
 }

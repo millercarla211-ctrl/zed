@@ -6,9 +6,8 @@ use crate::dx_agent_bridge::{
     DxAgentRowAction, DxAgentSocialAccount, DxAgentSocialActionSummary,
 };
 use crate::dx_check_score::DxCheckScoreSnapshot;
-use crate::dx_deploy_targets::{
-    DxDeployReceiptBucket, DxDeployReceiptSummary, DxDeployTarget, DxDeployTargetSnapshot,
-};
+use crate::dx_deploy_rail::deploy_target_state;
+use crate::dx_deploy_targets::DxDeployTargetSnapshot;
 use crate::dx_launch_audit::DxLaunchAuditSnapshot;
 use crate::dx_launch_binary_cache::{DxBinaryCacheRow, DxBinaryCacheSnapshot};
 use crate::dx_launch_contracts::DxLaunchContractSnapshot;
@@ -103,6 +102,8 @@ fn render_sources_rail(
         .bg(cx.theme().colors().tab_bar_background)
         .child(section_title("Workspace", IconName::Library))
         .child(sidebar_actions)
+        .child(section_title("AI Workspace", IconName::ZedAgent))
+        .child(workspace_mode_state(status, cx))
         .child(section_title("Sources", IconName::Book))
         .child(source_set_stack(
             &status.source_sets,
@@ -118,6 +119,99 @@ fn render_sources_rail(
         ))
         .child(section_title("Receipts", IconName::FileTextOutlined))
         .child(receipt_source_state(&status.receipt_snapshot, cx))
+        .into_any_element()
+}
+
+fn workspace_mode_state(status: &DxLaunchWorkspaceStatus, cx: &App) -> AnyElement {
+    let source_summary = status.source_sets.attachment_summary();
+    let agent_state = if status.agent_bridge.enabled {
+        status.agent_bridge.status.clone()
+    } else {
+        "disabled".to_string()
+    };
+
+    v_flex()
+        .gap_1()
+        .child(workspace_mode_row(
+            "Chat",
+            IconName::NewThread,
+            status.active_status.clone(),
+            "Current Agent panel conversation state",
+            cx,
+        ))
+        .child(workspace_mode_row(
+            "Tasks",
+            IconName::Clock,
+            format!("{} retained", status.background_task_count),
+            "Background Agent work visible in the right rail",
+            cx,
+        ))
+        .child(workspace_mode_row(
+            "Sources",
+            IconName::Book,
+            format!("{} total", status.source_sets.total_sources),
+            format!(
+                "{} attach-ready, {} managed receipt(s)",
+                source_summary.attachable_sources, source_summary.managed_receipts
+            ),
+            cx,
+        ))
+        .child(workspace_mode_row(
+            "Agent",
+            IconName::ZedAgent,
+            agent_state,
+            format!(
+                "{} automation(s), {} active task(s)",
+                status.agent_bridge.automation_count, status.agent_bridge.active_task_count
+            ),
+            cx,
+        ))
+        .into_any_element()
+}
+
+fn workspace_mode_row(
+    label: &'static str,
+    icon: IconName,
+    state: impl Into<SharedString>,
+    detail: impl Into<SharedString>,
+    cx: &App,
+) -> AnyElement {
+    v_flex()
+        .min_w_0()
+        .gap_0p5()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().element_background)
+        .child(
+            h_flex()
+                .justify_between()
+                .gap_2()
+                .min_w_0()
+                .child(
+                    h_flex()
+                        .gap_1()
+                        .min_w_0()
+                        .child(Icon::new(icon).size(IconSize::XSmall).color(Color::Muted))
+                        .child(
+                            Label::new(label)
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted),
+                        ),
+                )
+                .child(
+                    Label::new(state.into())
+                        .size(LabelSize::XSmall)
+                        .color(Color::Default)
+                        .truncate(),
+                ),
+        )
+        .child(
+            Label::new(detail.into())
+                .size(LabelSize::XSmall)
+                .color(Color::Muted)
+                .truncate(),
+        )
         .into_any_element()
 }
 
@@ -163,6 +257,8 @@ fn render_right_rail(
                 .child(dx_agent_bridge_state(&status.agent_bridge, cx))
                 .child(section_title("Social Accounts", IconName::Link))
                 .child(dx_agent_social_state(&status.agent_bridge, cx))
+                .child(section_title("Automations", IconName::ListTodo))
+                .child(dx_agent_automation_state(&status.agent_bridge, cx))
                 .child(section_title("Agent Receipts", IconName::FileTextOutlined))
                 .child(dx_agent_receipt_state(&status.agent_bridge, cx))
                 .child(section_title("Agent Providers", IconName::Sliders))
@@ -1197,16 +1293,18 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
         .child(metric_row(
             "Action Map",
             format!(
-                "{} / {} action(s)",
-                snapshot.import_summary.action_map_status, snapshot.import_summary.action_count
+                "{} / {}",
+                snapshot.import_summary.action_map_status,
+                snapshot.import_summary.recovery_counts.label()
             ),
         ))
         .child(metric_row(
             "Recovery",
             format!(
-                "{} / {} fixture(s)",
+                "{} / {} fixture(s) / {}",
                 snapshot.import_summary.recovery_controls_status,
-                snapshot.import_summary.recovery_fixture_count
+                snapshot.import_summary.recovery_fixture_count,
+                snapshot.import_summary.recovery_counts.label()
             ),
         ))
         .child(metric_row(
@@ -1215,6 +1313,14 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
                 "none".to_string()
             } else {
                 "review".to_string()
+            },
+        ))
+        .child(metric_row(
+            "Last Action",
+            if snapshot.action_error.present {
+                snapshot.action_error.status.clone()
+            } else {
+                "ready".to_string()
             },
         ))
         .child(metric_row("Gate", snapshot.release_gate.status.clone()))
@@ -1256,15 +1362,20 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
         ))
         .child(metric_row(
             "Gate Action",
-            snapshot.release_gate.action_map_status.clone(),
+            format!(
+                "{} / {}",
+                snapshot.release_gate.action_map_status,
+                snapshot.release_gate.recovery_counts.label()
+            ),
         ))
         .child(metric_row(
             "Gate Recovery",
             format!(
-                "{} via {}, {} fixture(s)",
+                "{} via {}, {} fixture(s), {}",
                 snapshot.release_gate.recovery_controls_status,
                 snapshot.release_gate.recovery_render_first,
-                snapshot.release_gate.recovery_fixture_count
+                snapshot.release_gate.recovery_fixture_count,
+                snapshot.release_gate.recovery_counts.label()
             ),
         ))
         .child(metric_row(
@@ -1289,6 +1400,18 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
 
     if !snapshot.enabled {
         stack = stack.child(muted_card("Disabled in Zed settings", cx));
+    } else if snapshot.action_error.present {
+        let error = snapshot
+            .action_error
+            .error
+            .clone()
+            .unwrap_or_else(|| "DX Agents action failed".to_string());
+        stack = stack.child(signal_row(
+            "dx-agent-action-error".into(),
+            IconName::Warning,
+            Color::Warning,
+            format!("Last DX Agents action failed: {error}"),
+        ));
     } else if !snapshot.root_exists {
         stack = stack.child(muted_card(
             format!("Missing receipts: {}", snapshot.receipt_root.display()),
@@ -1306,6 +1429,20 @@ fn dx_agent_bridge_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
 
     if let Some(receipt) = snapshot.latest_receipts.first() {
         stack = stack.child(metric_row("Latest", receipt.clone()));
+    }
+    if snapshot.action_error.present && !snapshot.action_error.command.is_empty() {
+        stack = stack.child(metric_row(
+            "Failed Command",
+            snapshot.action_error.command.clone(),
+        ));
+    }
+    if snapshot.action_error.redaction_requires_review {
+        stack = stack.child(signal_row(
+            "dx-agent-action-error-redaction".into(),
+            IconName::Warning,
+            Color::Warning,
+            snapshot.action_error.redaction_summary.clone(),
+        ));
     }
     if let Some(command) = snapshot.contract_summary.commands.first() {
         stack = stack.child(metric_row("Command", command.clone()));
@@ -1409,11 +1546,8 @@ fn dx_agent_social_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
             snapshot.connected_accounts_summary.supported.to_string(),
         ))
         .child(metric_row(
-            "Needs",
-            snapshot
-                .connected_accounts_summary
-                .needs_connection
-                .to_string(),
+            "Needs auth",
+            snapshot.connected_accounts_summary.needs_auth.to_string(),
         ))
         .child(metric_row(
             "QR-ready",
@@ -1451,9 +1585,23 @@ fn dx_agent_social_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyEleme
         ));
     }
 
-    if !snapshot.automations.is_empty() {
-        stack = stack.child(section_title("Automations", IconName::ListTodo));
-        for (ix, automation) in snapshot.automations.iter().take(2).enumerate() {
+    stack.into_any_element()
+}
+
+fn dx_agent_automation_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyElement {
+    let mut stack = v_flex()
+        .gap_1()
+        .child(metric_row("Count", snapshot.automation_count.to_string()))
+        .child(metric_row("Active", snapshot.active_task_count.to_string()))
+        .child(metric_row(
+            "Command",
+            "dx agents automate list --json".to_string(),
+        ));
+
+    if snapshot.automations.is_empty() {
+        stack = stack.child(muted_card("Run automation list receipt", cx));
+    } else {
+        for (ix, automation) in snapshot.automations.iter().take(3).enumerate() {
             stack = stack.child(dx_agent_automation_row(
                 SharedString::from(format!("dx-agent-automation-{ix}")),
                 automation,
@@ -1667,6 +1815,7 @@ fn dx_agent_automation_row(
 
 fn dx_agent_receipt_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyElement {
     let index = &snapshot.receipt_index;
+    let inbox = &snapshot.receipt_inbox;
     let redacted_count = snapshot
         .receipts
         .iter()
@@ -1681,12 +1830,44 @@ fn dx_agent_receipt_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyElem
         .gap_1()
         .child(metric_row("Index", index.status.clone()))
         .child(metric_row(
+            "Root",
+            dx_agent_receipt_root_state(index.receipt_root_present, snapshot.root_exists),
+        ))
+        .child(metric_row("Inbox", inbox.status.clone()))
+        .child(metric_row(
             "Returned",
             format!("{} / {}", index.returned_receipt_count, index.receipt_count),
         ))
         .child(metric_row("Active", index.active_task_count.to_string()))
         .child(metric_row("Redacted", redacted_count.to_string()))
         .child(metric_row("Unsafe", unsafe_count.to_string()));
+
+    if index.receipt_root_present == Some(false) {
+        stack = stack.child(signal_row(
+            "dx-agent-receipt-root-missing".into(),
+            IconName::Warning,
+            Color::Warning,
+            "DX Agents receipt root was missing before the latest receipt refresh.".to_string(),
+        ));
+    }
+    if inbox.receipt_dir_present == Some(false) {
+        stack = stack.child(signal_row(
+            "dx-agent-receipt-inbox-root-missing".into(),
+            IconName::Warning,
+            Color::Warning,
+            "DX Agents receipt inbox reports a missing receipt directory.".to_string(),
+        ));
+    } else if inbox.malformed_count > 0 {
+        stack = stack.child(signal_row(
+            "dx-agent-receipt-inbox-malformed".into(),
+            IconName::Warning,
+            Color::Warning,
+            format!(
+                "DX Agents receipt inbox found {} malformed receipt(s).",
+                inbox.malformed_count
+            ),
+        ));
+    }
 
     if !index.present {
         stack = stack.child(muted_card("Run dx agents receipts list --json", cx));
@@ -1721,6 +1902,18 @@ fn dx_agent_receipt_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyElem
     }
 
     stack
+        .when(inbox.present, |this| {
+            this.child(metric_row(
+                "Inbox review",
+                format!(
+                    "{} latest, {} missing, {} stale, {} expired",
+                    inbox.latest_count,
+                    inbox.missing_latest_count,
+                    inbox.stale_count,
+                    inbox.expired_count
+                ),
+            ))
+        })
         .child(
             Label::new(index.next_action.clone())
                 .size(LabelSize::XSmall)
@@ -1728,6 +1921,15 @@ fn dx_agent_receipt_state(snapshot: &DxAgentBridgeSnapshot, cx: &App) -> AnyElem
                 .truncate(),
         )
         .into_any_element()
+}
+
+fn dx_agent_receipt_root_state(receipt_root_present: Option<bool>, root_exists: bool) -> String {
+    match receipt_root_present {
+        Some(true) => "present".to_string(),
+        Some(false) => "missing before refresh".to_string(),
+        None if root_exists => "present".to_string(),
+        None => "missing".to_string(),
+    }
 }
 
 fn dx_agent_receipt_row(id: SharedString, receipt: &DxAgentReceipt, cx: &App) -> AnyElement {
@@ -1748,6 +1950,41 @@ fn dx_agent_receipt_row(id: SharedString, receipt: &DxAgentReceipt, cx: &App) ->
             receipt.kind, receipt.command, receipt.size_bytes
         )
     };
+    let provider_model = match (
+        receipt.provider_status.as_deref(),
+        receipt.model_status.as_deref(),
+    ) {
+        (Some(provider), Some(model)) => Some(format!("Provider {provider}, model {model}")),
+        (Some(provider), None) => Some(format!("Provider {provider}")),
+        (None, Some(model)) => Some(format!("Model {model}")),
+        (None, None) => None,
+    };
+    let actions = match (receipt.retry_supported, receipt.cancel_supported) {
+        (Some(retry), Some(cancel)) => Some(format!(
+            "Retry {}, cancel {}",
+            yes_no(retry),
+            yes_no(cancel)
+        )),
+        (Some(retry), None) => Some(format!("Retry {}", yes_no(retry))),
+        (None, Some(cancel)) => Some(format!("Cancel {}", yes_no(cancel))),
+        (None, None) => None,
+    };
+    let social_status = match (receipt.social_connected, receipt.social_needs_auth) {
+        (Some(connected), Some(needs_auth)) => Some(format!(
+            "Social connected {connected}, needs auth {needs_auth}"
+        )),
+        (Some(connected), None) => Some(format!("Social connected {connected}")),
+        (None, Some(needs_auth)) => Some(format!("Social needs auth {needs_auth}")),
+        (None, None) => None,
+    };
+    let automation_status = match (receipt.automation_enabled, receipt.automation_warning) {
+        (Some(enabled), Some(warning)) => {
+            Some(format!("Automations enabled {enabled}, warning {warning}"))
+        }
+        (Some(enabled), None) => Some(format!("Automations enabled {enabled}")),
+        (None, Some(warning)) => Some(format!("Automation warnings {warning}")),
+        (None, None) => None,
+    };
 
     v_flex()
         .id(id)
@@ -1764,6 +2001,54 @@ fn dx_agent_receipt_row(id: SharedString, receipt: &DxAgentReceipt, cx: &App) ->
                 .color(Color::Muted)
                 .truncate(),
         )
+        .when(!receipt.task_state.is_empty(), |this| {
+            this.child(
+                Label::new(format!("Task: {}", receipt.task_state))
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
+        })
+        .when_some(receipt.duration_state.as_ref(), |this, duration| {
+            this.child(
+                Label::new(format!("Duration: {duration}"))
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
+        })
+        .when_some(provider_model, |this, provider_model| {
+            this.child(
+                Label::new(provider_model)
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
+        })
+        .when_some(actions, |this, actions| {
+            this.child(
+                Label::new(actions)
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
+        })
+        .when_some(social_status, |this, social_status| {
+            this.child(
+                Label::new(social_status)
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
+        })
+        .when_some(automation_status, |this, automation_status| {
+            this.child(
+                Label::new(automation_status)
+                    .size(LabelSize::XSmall)
+                    .color(Color::Muted)
+                    .truncate(),
+            )
+        })
         .when(!receipt.schema_version.is_empty(), |this| {
             this.child(
                 Label::new(receipt.schema_version.clone())
@@ -2285,151 +2570,6 @@ fn tool_history_summary_row(
     stack.into_any_element()
 }
 
-fn deploy_target_state(snapshot: &DxDeployTargetSnapshot, cx: &App) -> AnyElement {
-    if snapshot.workspace_root_count == 0 {
-        return muted_card("No workspace", cx);
-    }
-
-    let mut stack = v_flex()
-        .gap_1()
-        .child(metric_row("Targets", snapshot.targets.len().to_string()))
-        .child(metric_row(
-            "Deploy receipts",
-            snapshot.receipt_count.to_string(),
-        ))
-        .child(deploy_receipt_bucket_stack(snapshot, cx));
-
-    for (ix, target) in snapshot.targets.iter().take(3).enumerate() {
-        stack = stack.child(deploy_target_row(
-            SharedString::from(format!("dx-deploy-target-{ix}")),
-            target,
-            cx,
-        ));
-    }
-
-    if snapshot.targets.is_empty() {
-        stack = stack.child(muted_card("No deploy target config", cx));
-    }
-
-    if snapshot.receipt_root_exists {
-        for (ix, label) in snapshot.latest_receipts.iter().take(2).enumerate() {
-            stack = stack.child(source_row(
-                SharedString::from(format!("dx-deploy-receipt-{ix}")),
-                IconName::FileTextOutlined,
-                label.clone(),
-                cx,
-            ));
-        }
-    }
-
-    stack.into_any_element()
-}
-
-fn deploy_receipt_bucket_stack(snapshot: &DxDeployTargetSnapshot, cx: &App) -> AnyElement {
-    let mut stack = v_flex().gap_1().child(metric_row(
-        "Proof buckets",
-        format!("{} tracked", snapshot.receipt_buckets.len()),
-    ));
-
-    for (ix, bucket) in snapshot.receipt_buckets.iter().enumerate() {
-        stack = stack.child(deploy_receipt_bucket_row(
-            SharedString::from(format!("dx-deploy-receipt-bucket-{ix}")),
-            bucket,
-            cx,
-        ));
-    }
-
-    stack.into_any_element()
-}
-
-fn deploy_receipt_bucket_row(
-    id: SharedString,
-    bucket: &DxDeployReceiptBucket,
-    cx: &App,
-) -> AnyElement {
-    let state = if bucket.count == 0 {
-        bucket.status.clone()
-    } else {
-        format!("{} - {}", bucket.count, bucket.status)
-    };
-    let mut stack = v_flex()
-        .id(id)
-        .gap_0p5()
-        .min_w_0()
-        .rounded_sm()
-        .px_1()
-        .py_0p5()
-        .bg(cx.theme().colors().element_background)
-        .child(metric_row(bucket.label, state));
-
-    if !bucket.root_exists {
-        stack = stack.child(
-            Label::new(bucket.root_label)
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    } else {
-        if let Some(summary) = bucket.latest_summary.as_ref() {
-            stack = stack
-                .child(
-                    Label::new(summary.headline.clone())
-                        .size(LabelSize::XSmall)
-                        .color(Color::Default)
-                        .truncate(),
-                )
-                .child(
-                    Label::new(deploy_receipt_summary_detail(summary))
-                        .size(LabelSize::XSmall)
-                        .color(Color::Muted)
-                        .truncate(),
-                );
-
-            if summary.blocker_count > 0 {
-                stack = stack.child(signal_row(
-                    SharedString::from(format!("dx-deploy-{}-blockers", bucket.label)),
-                    IconName::Warning,
-                    Color::Warning,
-                    format!("{} blocker(s)", summary.blocker_count),
-                ));
-            }
-        }
-
-        if let Some(label) = bucket.latest.first() {
-            stack = stack.child(
-                Label::new(label.clone())
-                    .size(LabelSize::XSmall)
-                    .color(Color::Muted)
-                    .truncate(),
-            );
-        }
-    }
-
-    stack.into_any_element()
-}
-
-fn deploy_receipt_summary_detail(summary: &DxDeployReceiptSummary) -> String {
-    let mut details = Vec::new();
-
-    if let Some(status) = summary.status.as_ref() {
-        details.push(format!("Status {status}"));
-    }
-
-    if let Some(target) = summary.target.as_ref() {
-        details.push(format!("Target {target}"));
-    }
-
-    if let Some(url) = summary.url.as_ref() {
-        details.push(url.clone());
-    }
-
-    if details.is_empty() {
-        summary.label.clone()
-    } else {
-        details.join(" - ")
-    }
-}
-
 fn proof_freshness_state(snapshot: &DxProofFreshnessSnapshot, cx: &App) -> AnyElement {
     let mut stack = v_flex().gap_1();
 
@@ -2745,71 +2885,217 @@ fn runtime_proof_receipt_row(
     stack.into_any_element()
 }
 
-fn deploy_target_row(id: SharedString, target: &DxDeployTarget, cx: &App) -> AnyElement {
-    v_flex()
-        .id(id)
-        .gap_0p5()
-        .min_w_0()
-        .rounded_sm()
-        .px_1()
-        .py_0p5()
-        .bg(cx.theme().colors().element_background)
-        .child(
-            h_flex()
-                .gap_1()
-                .min_w_0()
-                .items_center()
-                .child(
-                    Icon::new(deploy_platform_icon(target.platform))
-                        .size(IconSize::XSmall)
-                        .color(Color::Muted),
-                )
-                .child(
-                    Label::new(target.label.clone())
-                        .size(LabelSize::XSmall)
-                        .color(Color::Default)
-                        .truncate(),
-                ),
-        )
-        .child(
-            Label::new(target.detail.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        )
-        .child(
-            Label::new(target.path.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        )
-        .into_any_element()
-}
-
-fn deploy_platform_icon(platform: &str) -> IconName {
-    match platform {
-        "Vercel" => IconName::AiVercel,
-        "Cloudflare" => IconName::Server,
-        "Docker" => IconName::Box,
-        _ => IconName::Public,
-    }
-}
-
 fn yes_no(value: bool) -> &'static str {
     if value { "yes" } else { "no" }
 }
 
+fn checked_paths_label(paths: &[String]) -> String {
+    match paths.len() {
+        0 => "No checked paths in receipt".to_string(),
+        1 => "1 path".to_string(),
+        count => format!("{count} paths"),
+    }
+}
+
+fn skipped_checks_label(skipped: &[String]) -> String {
+    match skipped.len() {
+        0 => "No skipped expensive checks".to_string(),
+        1 => "1 skipped".to_string(),
+        count => format!("{count} skipped"),
+    }
+}
+
+fn check_outcome_label(
+    pass_count: Option<u32>,
+    fail_count: Option<u32>,
+    warn_count: Option<u32>,
+    skipped_count: Option<u32>,
+) -> String {
+    let mut parts = Vec::new();
+    if let Some(count) = pass_count {
+        parts.push(format!("{count} pass"));
+    }
+    if let Some(count) = fail_count {
+        parts.push(format!("{count} fail"));
+    }
+    if let Some(count) = warn_count {
+        parts.push(format!("{count} warn"));
+    }
+    if let Some(count) = skipped_count {
+        parts.push(format!("{count} skipped"));
+    }
+
+    if parts.is_empty() {
+        "No outcome counts in receipt".to_string()
+    } else {
+        parts.join(" / ")
+    }
+}
+
+fn check_duration_label(duration_ms: Option<u64>) -> String {
+    match duration_ms {
+        Some(0) => "0 ms".to_string(),
+        Some(value) if value < 1_000 => format!("{value} ms"),
+        Some(value) => format!("{:.1} s", value as f64 / 1_000.0),
+        None => "No duration in receipt".to_string(),
+    }
+}
+
 fn check_score_state(snapshot: &DxCheckScoreSnapshot, cx: &App) -> AnyElement {
+    let panel = &snapshot.panel;
+    let last_run_label = if let Some(generated_at) = panel.generated_at_unix_ms {
+        let generated_at = generated_at.to_string();
+        if panel.last_run_label.contains(&generated_at) {
+            panel.last_run_label.clone()
+        } else {
+            format!("{} ({generated_at})", panel.last_run_label)
+        }
+    } else {
+        panel.last_run_label.clone()
+    };
     let mut stack = v_flex()
         .gap_1()
-        .child(metric_row("Score", format!("{}/100", snapshot.score)))
-        .child(metric_row("State", snapshot.state));
+        .child(metric_row("Panel", panel.title.clone()))
+        .child(metric_row("Schema", panel.source_schema.clone()))
+        .child(metric_row("Receipt", panel.status.clone()))
+        .child(metric_row(
+            "Outcome",
+            check_outcome_label(
+                panel.pass_count,
+                panel.fail_count,
+                panel.warn_count,
+                panel.skipped_count,
+            ),
+        ))
+        .child(metric_row(
+            "Duration",
+            check_duration_label(panel.duration_ms),
+        ))
+        .child(metric_row(
+            "Checked",
+            checked_paths_label(&panel.checked_paths),
+        ))
+        .child(metric_row(
+            "Skipped",
+            skipped_checks_label(&panel.skipped_expensive_checks),
+        ))
+        .child(metric_row("Score", panel.score_label()))
+        .child(metric_row("Profile", panel.weight_profile.clone()))
+        .child(metric_row(
+            "Config",
+            format!(
+                "{} / {}",
+                panel.scoring_config_status,
+                if panel.scoring_config_applies_to_score {
+                    "applied"
+                } else {
+                    "not applied"
+                }
+            ),
+        ))
+        .child(metric_row("Scoring", panel.scoring_config_summary.clone()))
+        .child(metric_row("Last Run", last_run_label))
+        .child(metric_row("Refresh", panel.refresh_command.clone()));
 
-    for item in snapshot.items.iter().take(6) {
+    if let Some(detail_command) = panel.detail_command.as_ref() {
+        stack = stack.child(metric_row("Details", detail_command.clone()));
+    }
+
+    for (ix, checked_path) in panel.checked_paths.iter().take(2).enumerate() {
+        stack = stack.child(metric_row(format!("Path {}", ix + 1), checked_path.clone()));
+    }
+
+    for (ix, skipped) in panel.skipped_expensive_checks.iter().take(2).enumerate() {
+        stack = stack.child(metric_row(format!("Skip {}", ix + 1), skipped.clone()));
+    }
+
+    if !panel.receipt_present {
+        stack = stack.child(muted_card(
+            format!("Missing receipt: {}", panel.receipt_path.display()),
+            cx,
+        ));
+    } else if let Some(error) = panel.receipt_error.as_ref() {
+        stack = stack.child(signal_row(
+            "dx-check-panel-error".into(),
+            IconName::Warning,
+            Color::Warning,
+            error.clone(),
+        ));
+    }
+
+    for section in panel.sections.iter().take(5) {
+        let score = match (section.score, section.max_score) {
+            (Some(score), Some(max_score)) => {
+                let estimated = if section.estimated { " est" } else { "" };
+                format!(
+                    "{score}/{max_score} {status}{estimated}",
+                    status = section.status
+                )
+            }
+            _ => section.status.clone(),
+        };
+        stack = stack.child(metric_row(section.title.clone(), score));
+    }
+
+    for (ix, blocker) in panel.blockers.iter().take(2).enumerate() {
+        stack = stack.child(signal_row(
+            SharedString::from(format!("dx-check-panel-blocker-{ix}")),
+            IconName::Warning,
+            Color::Warning,
+            format!("{}: {}", blocker.code, blocker.message),
+        ));
+    }
+
+    for (ix, warning) in panel.warnings.iter().take(2).enumerate() {
+        stack = stack.child(signal_row(
+            SharedString::from(format!("dx-check-panel-warning-{ix}")),
+            IconName::Warning,
+            Color::Warning,
+            format!("{}: {}", warning.code, warning.message),
+        ));
+        if let Some(next_action) = warning.next_action.as_ref() {
+            stack = stack.child(metric_row(
+                format!("Warn next {}", ix + 1),
+                next_action.clone(),
+            ));
+        }
+    }
+
+    for (ix, fix) in panel.quick_fixes.iter().take(2).enumerate() {
+        let approval = if fix.requires_user_approval {
+            "approval required"
+        } else {
+            "no approval"
+        };
+        let writes_receipts = if fix.writes_receipts {
+            "writes receipts"
+        } else {
+            "no receipt write"
+        };
+        let mut detail = format!(
+            "{} - risk: {}; {}; {}",
+            fix.next_action, fix.risk_level, approval, writes_receipts
+        );
+        if let Some(command) = fix.command.as_ref() {
+            detail.push_str(&format!(" - {command}"));
+        }
+        stack = stack
+            .child(metric_row(format!("Fix {}", ix + 1), fix.label.clone()))
+            .child(metric_row(format!("Fix next {}", ix + 1), detail));
+    }
+
+    stack = stack
+        .child(metric_row("Next", panel.next_action.clone()))
+        .child(metric_row(
+            "Rail score",
+            format!("{}/100 {}", snapshot.score, snapshot.state),
+        ));
+
+    for item in snapshot.items.iter().take(4) {
         stack = stack.child(metric_row(item.label, item.state.clone()));
     }
 
-    for (ix, blocker) in snapshot.blockers.iter().take(2).enumerate() {
+    for (ix, blocker) in snapshot.blockers.iter().take(1).enumerate() {
         stack = stack.child(source_row(
             SharedString::from(format!("dx-check-blocker-{ix}")),
             IconName::ListTodo,

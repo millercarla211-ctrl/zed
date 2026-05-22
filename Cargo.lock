@@ -385,6 +385,7 @@ dependencies = [
  "component",
  "context_server",
  "db",
+ "dx_catalog",
  "editor",
  "eval_utils",
  "extension",
@@ -5256,16 +5257,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
-name = "dx_catalog"
-version = "0.1.0"
-dependencies = [
- "memmap2",
- "rkyv",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5332,6 +5323,16 @@ dependencies = [
  "libc",
  "winapi",
  "wio",
+]
+
+[[package]]
+name = "dx_catalog"
+version = "0.1.0"
+dependencies = [
+ "memmap2",
+ "rkyv",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -12445,12 +12446,14 @@ dependencies = [
  "fs",
  "fuzzy",
  "gpui",
+ "language_model",
  "menu",
  "notifications",
  "picker",
  "project",
  "schemars 1.0.4",
  "serde",
+ "serde_json",
  "settings",
  "telemetry",
  "theme",
@@ -12458,6 +12461,7 @@ dependencies = [
  "ui",
  "util",
  "vim_mode_setting",
+ "web_preview",
  "workspace",
  "zed_actions",
  "zlog",

@@ -29,6 +29,9 @@ pub fn init(cx: &mut App) {
             return;
         };
         web_preview_view::WebPreviewView::register(workspace, window, cx);
+        cx.defer_in(window, |workspace, window, cx| {
+            web_preview_view::WebPreviewView::ensure_startup_preview(workspace, window, cx);
+        });
     })
     .detach();
 }

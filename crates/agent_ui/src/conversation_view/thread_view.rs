@@ -3386,13 +3386,13 @@ impl ThreadView {
                 .label_size(LabelSize::Small)
                 .color(Color::Muted)
                 .start_icon(
-                    Icon::new(IconName::Sparkle)
+                    Icon::new(IconName::ZedAgent)
                         .size(IconSize::XSmall)
                         .color(Color::Muted),
                 )
                 .tooltip(move |_window, cx| {
                     Tooltip::for_action_in(
-                        "Open Agent Profile",
+                        "Open Agent Profile and DX Agents controls",
                         &ToggleProfileSelector,
                         &focus_handle,
                         cx,

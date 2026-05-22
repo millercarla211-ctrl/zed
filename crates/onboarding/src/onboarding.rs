@@ -19,7 +19,7 @@ use ui::{
     WithScrollbar as _, prelude::*, rems_from_px,
 };
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use web_preview::web_preview_view::WebPreviewView;
 pub use workspace::welcome::ShowWelcome;
 use workspace::welcome::WelcomePage;
@@ -231,7 +231,7 @@ struct Onboarding {
     user_store: Entity<UserStore>,
     scroll_handle: ScrollHandle,
     dx_preview_targets: DxLaunchPreviewTargets,
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
     dx_web_preview: Option<Entity<WebPreviewView>>,
     _settings_subscription: Subscription,
 }
@@ -291,7 +291,7 @@ impl Onboarding {
                 scroll_handle: ScrollHandle::new(),
                 user_store: workspace.user_store().clone(),
                 dx_preview_targets,
-                #[cfg(target_os = "windows")]
+                #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
                 dx_web_preview: None,
                 _settings_subscription: cx
                     .observe_global::<SettingsStore>(move |_, cx| cx.notify()),
@@ -349,19 +349,19 @@ impl Onboarding {
         cx: &mut Context<Self>,
     ) {
         self.dx_preview_targets.primary = target.clone();
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
         {
             let preview = self.ensure_dx_web_preview(window, cx);
             preview.update(cx, |preview, cx| {
                 preview.load_onboarding_url(&target.url, window, cx);
             });
         }
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
         let _ = window;
         cx.notify();
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
     fn ensure_dx_web_preview(
         &mut self,
         window: &mut Window,
@@ -386,14 +386,14 @@ impl Onboarding {
         preview
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
     fn deactivate_dx_web_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(preview) = self.dx_web_preview.as_ref() {
             preview.update(cx, |preview, cx| preview.deactivated(window, cx));
         }
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
     fn render_web_preview_canvas(
         &mut self,
         window: &mut Window,
@@ -403,7 +403,7 @@ impl Onboarding {
         div().size_full().child(preview).into_any_element()
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     fn render_web_preview_canvas(&mut self, _: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         div()
             .size_full()
@@ -412,11 +412,9 @@ impl Onboarding {
             .justify_center()
             .bg(cx.theme().colors().surface_background)
             .child(
-                Label::new(
-                    "DX onboarding Web Preview is available in the Windows Web Preview runtime.",
-                )
-                .size(LabelSize::Small)
-                .color(Color::Muted),
+                Label::new("DX onboarding Web Preview is available on supported desktop runtimes.")
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
             )
             .into_any_element()
     }
@@ -906,16 +904,16 @@ impl Item for Onboarding {
     }
 
     fn deactivated(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
         self.deactivate_dx_web_preview(window, cx);
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
         let _ = (window, cx);
     }
 
     fn workspace_deactivated(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
         self.deactivate_dx_web_preview(window, cx);
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
         let _ = (window, cx);
     }
 
@@ -931,7 +929,7 @@ impl Item for Onboarding {
             scroll_handle: ScrollHandle::new(),
             focus_handle: cx.focus_handle(),
             dx_preview_targets: self.dx_preview_targets.clone(),
-            #[cfg(target_os = "windows")]
+            #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
             dx_web_preview: None,
             _settings_subscription: cx.observe_global::<SettingsStore>(move |_, cx| cx.notify()),
         })))

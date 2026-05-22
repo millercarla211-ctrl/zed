@@ -1,3 +1,380 @@
+[2026-05-22] - DX Deploy Launch Evidence Rows
+
+ADDED:
+- Added `crates/agent_ui/src/dx_deploy_launch_evidence.rs` as the focused parser for `dx check launch --json` `launch_evidence_sources`.
+
+CHANGED:
+- Updated the Deploy launch-gate snapshot and rail so code-runner, web metrics, web probe, E2E, and deploy dry-run evidence rows appear beside source/runtime/launch approval status.
+- Extended `script/dx-deploy-panel-source.test.ts` to guard the evidence-source parser, launch-gate reader hook, rail rendering helpers, and docs.
+- Recorded the refreshed receipt state in `DX.md` and `todo.txt`: 5 launch evidence sources, 1 ready deploy dry-run source, 4 missing runtime proof sources, and `245/500` launch score with source/runtime/launch approvals still false.
+
+NOTES:
+- The red step was recorded with `node --test script/dx-deploy-panel-source.test.ts` failing for the missing `dx_deploy_launch_evidence` module and docs. Green verification passed with the same targeted Node guard at 8/8 subtests. No Cargo check/build/test, local server, editor runtime, browser automation, cloud provider command, or live deploy ran in this slice.
+
+[2026-05-22] - DX Deploy Panel Source Guard
+
+ADDED:
+- Added `script/dx-deploy-panel-source.test.ts`, a lightweight Node source guard for native Deploy rail module registration, deploy prompt ownership, dry-run and launch-approval wording, launch-gate receipt precedence, Deploy rail render order, deploy source file sizing, and status-doc coverage.
+
+NOTES:
+- The red step was recorded with `node --test script/dx-deploy-panel-source.test.ts` failing before the guard file existed. Green verification passed with the same targeted Node test at 7/7 subtests. No Cargo check/build/test, local server, editor runtime, browser automation, cloud provider command, or live deploy is required for this guard.
+
+[2026-05-22] - Cross-OS Web Preview Pane Tab Controls
+
+CHANGED:
+- Updated `crates/web_preview_macos/src/web_preview_view.rs` and `crates/web_preview_linux/src/web_preview_view.rs` so Web Preview navigation/actions render through pane tab-bar controls instead of the old in-body toolbar.
+- Added macOS/Linux tab-bar controls for back, forward, reload, new preview, bookmark, extensions, and more actions while keeping the tab title/click-to-edit URL behavior in the tab content.
+- Converted the macOS/Linux extensions and more controls into pane-tab popover menus, preserved screenshot/inspect/devtools/clear-cache actions, kept extension folder access available, and removed the old direct toolbar helper plus zoom toolbar icons from those platform views.
+- Extended `script/web-preview-platform-lifecycle.test.ts` to guard that macOS/Linux use pane tab controls, expose extensions/more popovers, keep the important menu actions, and do not reintroduce `web-preview-toolbar`, direct zoom toolbar IDs, or the old toolbar helper in the preview body.
+
+NOTES:
+- Verification run: first confirmed the new pane-tab-control guard failed against the old macOS/Linux in-body toolbar, then passed after the platform view patch. The lightweight guard now passes with `node --test script/web-preview-platform-lifecycle.test.ts` at 16/16 subtests after rustfmt.
+- Skipped by request: `just run`, Cargo build/check/test/clippy, local servers, and live macOS/Linux runtime proof. Windows WebView2 interaction files were intentionally not edited.
+
+[2026-05-22] - DX Deploy Prompt Ownership Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_deploy_prompts.rs` as the focused owner for deploy readiness handoffs, deploy receipt bucket summaries, canonical deploy capability summaries, and dx-check launch-gate prompt summaries.
+
+CHANGED:
+- Updated `crates/agent_ui/src/agent_panel.rs` to import `deploy_readiness_prompt` from the deploy prompt module directly.
+- Updated `crates/agent_ui/src/dx_launch_prompts.rs` to import only the deploy prompt helpers needed for receipt review instead of owning deploy-specific helper implementations.
+
+NOTES:
+- `dx_launch_prompts.rs` dropped from 1158 to 969 lines; the focused deploy prompt module is 191 lines.
+- Verification run: red/green deploy prompt extraction source guard and targeted rustfmt. Full Cargo/editor runtime proof remains deferred by launch-lane policy.
+
+[2026-05-22] - Cross-OS Web Preview Browser Tab Parity
+
+CHANGED:
+- Updated `crates/web_preview_macos/src/web_preview_view.rs` and `crates/web_preview_linux/src/web_preview_view.rs` so their `Item` surfaces identify as `WorkspaceScreenKind::Browser`, render the current page title directly in the tab, expose the URL editor from the selected tab on single click, and confirm tab URL edits through the existing navigation path.
+- Extended `script/web-preview-platform-lifecycle.test.ts` to guard browser-tab parity on both macOS and Linux alongside the existing lifecycle, action-export, supported-desktop caller, onboarding, and native-host contracts.
+
+NOTES:
+- Verification run: first confirmed the new browser-tab source guard failed for the missing macOS/Linux behavior, then passed after the platform view patch. Final lightweight verification passed with `node --test script/web-preview-platform-lifecycle.test.ts` at 16/16 subtests, targeted `rustfmt --edition 2024 --check`, targeted diff-whitespace, and targeted conflict-marker scans.
+- Skipped by request: `just run`, Cargo build/check/test/clippy, local servers, and live macOS/Linux runtime proof. Windows WebView2 interaction files were intentionally not edited.
+
+[2026-05-22] - Cross-OS Web Preview Lifecycle Support
+
+ADDED:
+- Added `script/web-preview-platform-lifecycle.test.ts`, a lightweight Node source guard that verifies the Windows WebView2 path stays isolated while macOS and Linux platform crates expose matching Web Preview lifecycle wiring, action exports, platform view exports, supported-desktop preview callers, supported-desktop manifest deps, onboarding preview wiring/canvas rendering, browser-tab parity, and native-host contracts.
+
+CHANGED:
+- Updated `crates/web_preview/src/web_preview.rs` so macOS and Linux re-export their platform `OpenPreview`, `OpenPreviewToTheSide`, `init`, and `web_preview_view` symbols from the top-level Web Preview crate.
+- Updated `crates/web_preview_macos/src/lib.rs` and `crates/web_preview_linux/src/lib.rs` to defer through a platform `WebPreviewView::ensure_startup_preview` hook after registering Web Preview actions.
+- Added no-op `ensure_startup_preview` hooks plus public URL/onboarding preview helpers to `crates/web_preview_macos/src/web_preview_view.rs` and `crates/web_preview_linux/src/web_preview_view.rs`, matching the current Windows startup and preview-entry contracts without eagerly opening or altering preview behavior.
+- Updated font, media, shadcn UI, sidebar browser-grid, and onboarding preview entry points so supported desktop platforms route preview URLs through native Web Preview; the external-browser fallback now stays limited to unsupported platforms.
+- Updated `crates/sidebar/Cargo.toml` and `crates/onboarding/Cargo.toml` so their `web_preview` dependency is enabled on Windows, macOS, and Linux instead of Windows only.
+- Updated the DX onboarding Web Preview canvas so macOS and Linux render the same native preview entity instead of the old Windows-only fallback panel, and made the unsupported-platform fallback copy platform-neutral.
+
+NOTES:
+- Verification run: confirmed the new Node guard failed before the platform hook/action-export/callsite/manifest patches and passed after them, then verified `node --test script/web-preview-platform-lifecycle.test.ts` with 16 passing subtests, ran targeted `rustfmt --edition 2024 --check` on the touched Web Preview Rust files, and passed targeted diff-whitespace plus conflict-marker scans.
+- Source-level macOS/Linux Web Preview status is 100/100 under this no-build lane. Physical runtime proof on real macOS/Linux remains deferred because Cargo build/check/test and `just run` were skipped by request. Windows WebView2 interaction files were intentionally not edited.
+
+[2026-05-22] - DX Deploy Launch Gate Receipt Card
+
+ADDED:
+- Added `crates/agent_ui/src/dx_deploy_launch_gate.rs` to read bounded `check-launch-latest.json` / `check-latest.json` receipts from workspace, hub, and DX-WWW check receipt roots for deploy-context launch approval.
+- Added `crates/agent_ui/src/dx_deploy_launch_gate_rail.rs` to render score, source/runtime/launch approvals, blockers, warnings, next action, and receipt source in the Deploy rail.
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_deploy_targets.rs` so deploy snapshots carry the dx-check launch gate beside deploy plan/status/provider receipts.
+- Updated `crates/agent_ui/src/dx_deploy_rail.rs` so deploy readiness explains the aggregate launch gate before provider dry-run rows.
+
+NOTES:
+- The reader prefers `check-launch-latest.json` over generic `check-latest.json` for the same root and then falls back through canonical DX roots.
+- Verification run: red/green deploy launch-gate source guard and targeted rustfmt. Full Cargo/editor runtime proof remains deferred by launch-lane policy.
+
+[2026-05-22] - DX Deploy Target And Receipt Ownership Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_deploy_local_files.rs` for bounded local JSON/path helpers shared by deploy scanners.
+- Added `crates/agent_ui/src/dx_deploy_target_detection.rs` as the focused deploy config/link detector.
+- Added `crates/agent_ui/src/dx_deploy_receipt_buckets.rs` as the focused owner for older `tools/dx-deploy` receipt bucket state.
+- Added `crates/agent_ui/src/dx_deploy_receipt_files.rs` as the focused receipt filesystem walker.
+- Added `crates/agent_ui/src/dx_deploy_receipt_extract.rs` as the focused bucket receipt headline/status extractor.
+
+CHANGED:
+- Reduced `crates/agent_ui/src/dx_deploy_targets.rs` to a cached deploy snapshot orchestrator while preserving its exported domain types for existing panel and prompt call sites.
+
+NOTES:
+- Current deploy module sizes: `dx_deploy_targets.rs` 94 lines, `dx_deploy_target_detection.rs` 111 lines, `dx_deploy_receipt_buckets.rs` 187 lines, `dx_deploy_receipt_extract.rs` 139 lines, `dx_deploy_receipt_files.rs` 136 lines, and `dx_deploy_local_files.rs` 41 lines.
+- Verification run: red/green deploy-target/receipt ownership source guard and targeted `rustfmt --edition 2024`. Full Cargo/editor runtime proof remains deferred by launch-lane policy.
+
+[2026-05-22] - DX Deploy Matrix Rail Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_deploy_matrix_rail.rs` as the focused owner for deploy plan/status command rows and provider capability matrix rows.
+- Added `crates/agent_ui/src/dx_deploy_rail_ui.rs` as shared compact rail helper ownership for metric, muted, source, and signal rows.
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_deploy_rail.rs` so it is the top-level Deploy rail coordinator plus receipt bucket and target rows, instead of also owning matrix/provider rendering.
+- Updated `crates/agent_ui/src/dx_deploy_gate_rail.rs` to reuse the shared compact rail helpers.
+
+NOTES:
+- The top-level Deploy rail is now 182 lines. The matrix rail is 230 lines, shared rail UI is 83 lines, and the provider gate rail is 118 lines.
+- Verification run: red/green deploy rail split guard and `rustfmt --edition 2024 --check` on touched Rust files. Full Cargo/editor runtime proof remains deferred by launch-lane policy.
+
+[2026-05-22] - DX Deploy Receipt Parser Extraction
+
+ADDED:
+- Added `crates/agent_ui/src/dx_deploy_receipt_summary.rs` as the focused owner for deploy command summaries, provider-gate summaries, provider capability rows, and bounded JSON parsing helpers.
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_deploy_capabilities.rs` so it only scans, ranks, reads, and aggregates deploy receipt files while delegating receipt shape parsing to the summary module.
+
+NOTES:
+- The deploy capability scanner is now 295 lines, with receipt parsing isolated in a 246-line module.
+- Verification run: red/green parser-extraction source guard and `rustfmt --edition 2024 --check` on touched Rust files. Full Cargo/editor runtime proof remains deferred by launch-lane policy.
+
+[2026-05-22] - DX Deploy Receipt Precedence
+
+ADDED:
+- Added `crates/agent_ui/src/dx_deploy_receipt_rank.rs` as a focused deploy receipt source-priority module.
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_deploy_capabilities.rs` so plan/status/provider-matrix receipts prefer workspace evidence, then `G:\Dx\www`, then hub/CLI fallbacks, while provider promotion gates prefer the canonical hub receipt before workspace fallbacks.
+
+NOTES:
+- This keeps the Deploy rail stable when both DX-WWW ready static deploy receipts and hub-level blocked promotion receipts exist at the same time.
+- Verification run: red/green receipt-precedence source guard and `rustfmt --edition 2024 --check` on touched Rust files. Full Cargo/editor runtime proof remains deferred by launch-lane policy.
+
+[2026-05-22] - DX Deploy Provider Gate Rail
+
+ADDED:
+- Added provider dry-run gate receipt parsing to `crates/agent_ui/src/dx_deploy_capabilities.rs`, including `deploy_ready`, `deploy_ran`, blocker/warning counts, `zed.panel_kind`, Zed handoff rows, quick-fix counts, and next action from receipts such as `G:\Dx\.dx\receipts\deploy\deploy-vercel-latest.json`.
+
+CHANGED:
+- Added `crates/agent_ui/src/dx_deploy_gate_rail.rs` as the focused provider-gate renderer, keeping gate rows out of the broader deploy plan/status/provider rail.
+- Updated `crates/agent_ui/src/dx_deploy_rail.rs` so the Deploy rail renders the provider gate before plan/status/provider matrix rows, keeping Vercel promotion honestly blocked until the DX check launch gate is green.
+
+NOTES:
+- Verification run: red/green provider-gate source guard, red/green deploy-gate split guard, and `rustfmt --edition 2024 --check` on touched Rust files. Full Cargo/editor runtime proof remains deferred by launch-lane policy.
+- Current Zed Deploy panel source/config status remains 100/100. Governed native Zed visual/runtime proof remains intentionally outside this lightweight lane.
+
+[2026-05-22] - DX Deploy Rail Modularization And Root CLI Proof
+
+CHANGED:
+- Extracted Deploy rail rendering from `crates/agent_ui/src/dx_launch_workspace.rs` into focused `crates/agent_ui/src/dx_deploy_rail.rs`, keeping deploy UI rows, provider summaries, receipt buckets, and deploy target cards out of the large launch workspace chrome file.
+- Registered `dx_deploy_rail` in `crates/agent_ui/src/agent_ui.rs` and kept `dx_launch_workspace.rs` responsible only for composing the right rail.
+
+NOTES:
+- Verified the installed public root CLI path from `G:\Dx\www`: `G:\Dx\bin\dx.exe deploy status --json --compact` refreshed `G:\Dx\www\.dx\receipts\deploy\deploy-status-latest.json` with `status=ready`, `latest_plan_status=ready`, `dry_run=true`, `deploy_ran=false`, 6 providers, 6 ready dry-run plans, and 0 blocked plans.
+- Refreshed the hub-level Vercel dry-run gate from `G:\Dx`: `G:\Dx\bin\dx.exe deploy vercel --dry-run --json --compact` wrote `G:\Dx\.dx\receipts\deploy\deploy-vercel-latest.json` with `dry_run=true`, `deploy_ran=false`, and `status=blocked` until launch approval is green.
+- Current Zed Deploy panel source/config status is 100/100. Governed native Zed visual/runtime proof remains intentionally outside this lightweight lane.
+
+[2026-05-22] - DX Deploy Right Rail Capability Matrix
+
+ADDED:
+- Added `crates/agent_ui/src/dx_deploy_capabilities.rs` as a focused reader for canonical `.dx\receipts\deploy` plan, status, and provider capability matrix receipts.
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_deploy_targets.rs` so the existing deploy snapshot includes canonical DX deploy receipts alongside legacy `tools/dx-deploy` buckets.
+- Updated `crates/agent_ui/src/dx_launch_workspace.rs` so the right-side Deploy rail renders plan/status receipts, dry-run state, provider capability rows, provider counts, credential hints, and latest canonical deploy receipt paths.
+- Updated `crates/agent_ui/src/dx_launch_prompts.rs` so deploy review drafts point to `.dx\receipts\deploy` first and explicitly avoid inferring live deploy success from dry-run receipts.
+- Updated `crates/agent_ui/src/dx_receipts.rs` so Deploy is counted as a first-class hub receipt bucket.
+
+NOTES:
+- Configured live DX-WWW dry-run deploy receipts with `G:\Dx\cli\target\debug\dx.exe deploy plan --json --compact` and `G:\Dx\cli\target\debug\dx.exe deploy status --json --compact` from `G:\Dx\www`. Receipts written: `deploy-plan-latest.json`, `deploy-status-latest.json`, retained snapshots, and `provider-capability-matrix.json`.
+- The DX-WWW deploy receipts report `status=ready`, `dry_run=true`, `deploy_ran=false`, 6 providers, 6 ready dry-run plans, and 0 blocked plans. No cloud writes, provider CLIs, credential reads, builds, servers, Cargo checks/builds/tests, or `just run` ran.
+- Verification run: red/green deploy-capability source guard, `rustfmt --edition 2024 --check` on touched Rust files, and source inspection. Superseded by the later root CLI proof above: the installed public `G:\Dx\bin\dx.exe deploy status --json --compact` path now works from `G:\Dx\www`.
+
+[2026-05-22] - DX Agents Recovery-Control Count Consumption
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_agent_bridge.rs` so import-summary and release-gate parsing carry typed flat recovery-control counts from `required_intent_count`, `action_count`, and `check_count`.
+- Updated `crates/agent_ui/src/agent_configuration.rs` and `crates/agent_ui/src/dx_launch_workspace.rs` so Agent Configuration and the launch rail render those compact counts directly instead of relying on action-map detail parsing.
+
+NOTES:
+- Verification run: red source guard for missing flat counter parsing, `rustfmt --edition 2024 --check`, source guards, targeted `git diff --check`, and conflict-marker scan.
+- Skipped by lane constraint: Cargo tests/builds, local servers, browser/WebView runtime proof, editor launch, package installs, deploys, and `just run`.
+- Exact next action: in the governed proof window, refresh `dx agents import-summary --json` and `dx agents release-gate --json`, then verify Zed shows the flat `6 intent / 10 action / 5 check` counts from receipts without opening action-map detail.
+
+[2026-05-22] - DX Studio Reorder Direction Refusal
+
+CHANGED:
+- Updated `crates/web_preview/src/dx_studio_bridge.rs` so the reorder prompt trims input and accepts only `up` or `down` before sending a source-edit request.
+- Added a local `reorder direction refused` selected-surface status for typos, whitespace-only values, and unexpected prompt text.
+
+NOTES:
+- Verification run: red source guard for the missing invalid-direction guard, green source guard after wiring, injected bridge JavaScript parse, and `rustfmt --edition 2024 --check`.
+- Skipped by lane constraint: Cargo tests/builds, local servers, browser/WebView runtime proof, editor launch, package installs, deploys, and `just run`.
+- Exact next action: add a compact guard for blank/whitespace operation-picker answers so an empty edit-operation prompt restores the previous receipt-backed state instead of silently selecting operation 0.
+
+[2026-05-22] - DX Studio Value Prompt Cancellation Preservation
+
+CHANGED:
+- Updated `crates/web_preview/src/dx_studio_bridge.rs` so text, token, replacement-token, and reorder-direction prompt cancellation/no-op paths redraw the selected DX Studio surface with receipt-backed status.
+- Kept those cancellation paths non-mutating: they do not post source-edit requests or fabricate edit receipts.
+
+NOTES:
+- Verification run: red source guard for missing value-prompt cancellation branches, green source guard after wiring, injected bridge JavaScript parse, and `rustfmt --edition 2024 --check`.
+- Skipped by lane constraint: Cargo tests/builds, local servers, browser/WebView runtime proof, editor launch, package installs, and `just run`.
+- Exact next action: add a compact guard for invalid reorder direction values so unexpected prompt text is refused locally without posting an edit request.
+
+[2026-05-22] - DX Studio Cancelled Prompt State Preservation
+
+CHANGED:
+- Updated `crates/web_preview/src/dx_studio_bridge.rs` so DX Studio hover capture snapshots the active selection, status label, source-edit receipt, and hot-reload panel state before opening ambiguous target prompts.
+- Restored the previous overlay/receipt state when target selection or Escape is cancelled, and redrew receipt-backed status when the ambiguous operation picker is cancelled.
+
+NOTES:
+- Verification run: red source guard for the missing cancelled-prompt state-preservation contract, green source guard after wiring, injected bridge JavaScript parse, and `rustfmt --edition 2024 --check`.
+- Skipped by lane constraint: Cargo tests/builds, local servers, browser/WebView runtime proof, editor launch, package installs, and `just run`.
+- Exact next action: add a compact guard for cancelled text/token/reorder value prompts so value-entry cancellation also returns to receipt-backed selection state without posting an edit request.
+
+[2026-05-22] - DX Check Outcome And Duration Visibility
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_check_panel.rs` so native dx-check snapshots carry bounded `pass_count`, `fail_count`, `warn_count`, `skipped_count`, and `duration_ms` from the native Zed panel payload, the shared DX-WWW view model payload, or the top-level dx-check receipt contract.
+- Updated `crates/agent_ui/src/dx_launch_workspace.rs` so the Check rail renders compact `Outcome` and `Duration` rows before checked-path and skipped-expensive-check detail.
+
+NOTES:
+- Verification run: red source guard for the missing outcome-count snapshot contract, `rustfmt --edition 2024 --check`, source guards for parser/test/rail markers, fixture outcome smoke, targeted conflict-marker search, and targeted `git diff --check`.
+- Skipped by lane constraint: Cargo tests/builds, local servers, browser/WebView runtime proof, editor launch, package installs, and running `dx check`.
+- Exact next action: during governed runtime proof, compare the native Zed `Outcome` and `Duration` rows with a real workspace `check-latest.json`, including a receipt where `fail_count > 0`.
+
+[2026-05-22] - DX Check Skipped Check Visibility
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_check_panel.rs` so native dx-check snapshots carry bounded `skipped_expensive_checks` from the native Zed panel payload, the shared DX-WWW view model payload, or the top-level dx-check receipt contract.
+- Updated `crates/agent_ui/src/dx_launch_workspace.rs` so the Check rail renders a compact `Skipped` count and the first two skipped expensive checks, keeping Lighthouse/CDP/E2E/lint/format skips visible without running expensive tools.
+
+NOTES:
+- Verification run: red source guard for the missing skipped-check snapshot contract, `rustfmt --edition 2024 --check`, source guard for parser/test/rail markers, targeted conflict-marker search, and targeted `git diff --check`.
+- Skipped by lane constraint: Cargo tests/builds, local servers, browser/WebView runtime proof, editor launch, package installs, and running `dx check`.
+- Exact next action: during governed runtime proof, compare the native Zed `Skipped` row with a real workspace `check-latest.json` and verify skipped expensive checks are never presented as passed.
+
+[2026-05-22] - DX Check Checked Path Visibility
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_check_panel.rs` so native dx-check snapshots carry bounded `checked_paths` from the native Zed panel payload, the shared DX-WWW view model payload, or the top-level dx-check receipt contract.
+- Updated `crates/agent_ui/src/dx_launch_workspace.rs` so the Check rail renders a compact `Checked` count and the first two checked paths, keeping receipt scope visible without dumping large reports.
+
+NOTES:
+- Verification run: red source guard for the missing checked-path snapshot contract, `rustfmt --edition 2024 --check`, source guard for parser/test/rail markers, targeted conflict-marker search, and targeted `git diff --check`.
+- Skipped by lane constraint: Cargo tests/builds, local servers, browser/WebView runtime proof, editor launch, package installs, and running `dx check`.
+- Exact next action: during governed runtime proof, compare the native Zed `Checked` row with a real workspace `check-latest.json` and verify the canonical `G:\Dx` fallback is distinguishable from workspace-local receipts.
+
+[2026-05-22] - DX Check Last-Run Label Parity
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_check_panel.rs` so native dx-check snapshots expose `last_run_label`, prefer the shared DX-WWW `view_model.last_run_label`, and synthesize an honest fallback from `generated_at_unix_ms` or the missing-receipt state.
+- Updated `crates/agent_ui/src/dx_launch_workspace.rs` so the Check rail renders a `Last Run` row from the shared label instead of a raw generated timestamp-only row.
+
+NOTES:
+- Verification run: red source guard for the missing snapshot contract, `rustfmt --edition 2024 --check`, source guard for parser/test/rail markers, targeted conflict-marker search, and targeted `git diff --check`.
+- Skipped by lane constraint: Cargo tests/builds, local servers, browser/WebView runtime proof, editor launch, package installs, and running `dx check`.
+- Exact next action: during governed runtime proof, compare the native Zed `Last Run` row with website `/check` for the same receipt and verify native `dx.check.zed_panel.v1` receipts still show the generated-time fallback.
+
+[2026-05-22] - DX Check Fallback Warning Visibility
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_check_panel.rs` so native Zed Check rail fallback from missing or unsupported `dx.check.zed_panel.v1` to shared `dx.www.check_panel_view_model.v1` inserts a `zed-panel-fallback-view-model` warning before the receipt's own warning rows.
+- Kept fallback rendering non-blocking and score-honest: the warning explains the compatibility path, while score fields still come only from the receipt/view model.
+
+NOTES:
+- Verification run: `rustfmt --edition 2024 --check`, targeted `git diff --check`, targeted conflict-marker search, a source guard for the fallback warning wiring, and a PowerShell shape smoke for `G:\Dx\cli\fixtures\dx-check\panel-malformed-schema.receipt.json`.
+- Skipped by lane constraint: Cargo tests/builds, local servers, browser/WebView runtime proof, editor launch, package installs, and running `dx check`.
+- Exact next action: during governed runtime proof, confirm the fallback warning appears once for unsupported-Zed receipts and does not appear for current native `dx.check.zed_panel.v1` receipts.
+
+[2026-05-22] - DX Check DX-WWW View Model Fallback
+
+CHANGED:
+- Updated `crates/agent_ui/src/dx_check_panel.rs` so the native Zed Check rail still prefers `dx.check.zed_panel.v1` but can also render the shared `dx.www.check_panel_view_model.v1` contract from dx-check receipts.
+- Mapped DX-WWW `score_meter`, `bucket_rows`, `blocker_rows`, `warning_rows`, `quick_fix_rows`, `primary_action`, `secondary_action`, and `scoring_config` into the same native check snapshot without claiming scores when the view model is scoreless or malformed.
+- Added the source schema to the rail so operators can see whether the native panel came from the Zed-specific payload or the shared DX-WWW view model.
+
+NOTES:
+- Verification run: `rustfmt --edition 2024 --check`, targeted `git diff --check`, targeted conflict-marker search, a PowerShell shape smoke for `G:\Dx\cli\fixtures\dx-check\panel-ready-warning.receipt.json`, and a source guard for the view-model fallback markers.
+- Skipped by lane constraint: Cargo tests/builds, local servers, browser/WebView runtime proof, editor launch, package installs, and running `dx check`.
+- Exact next action: use one governed `check-latest.json` receipt to compare native Zed rail rows against the website `/check` panel and tune the compact rail from screenshot evidence.
+
+[2026-05-22] - DX Check Native Receipt Panel
+
+ADDED:
+- Added `crates/agent_ui/src/dx_check_panel.rs`, a bounded native reader for `dx.check.zed_panel.v1` check receipts from workspace `.dx\receipts\check\check-latest.json` with the canonical `G:\Dx` fallback.
+- Added parser coverage for detected-but-not-applied scoring config and unsupported Zed panel schemas so malformed receipts do not claim green scores.
+
+CHANGED:
+- The DX launch right rail Check section now renders the real dx-check panel contract first: 500-point score, receipt state, scoring config status, bucket sections, warnings, blockers, quick fixes, refresh/detail commands, and the next action. The older local 100-point rail score remains as secondary Zed workspace context.
+
+NOTES:
+- Verification run: `rustfmt --edition 2024`, `rustfmt --edition 2024 --check`, targeted `git diff --check`, and targeted conflict-marker search on touched Zed files.
+- Skipped by lane constraint: Cargo tests/builds, local servers, browser/WebView runtime proof, editor launch, package installs, and running `dx check`.
+- Exact next action: in the governed proof window, create a real `check-latest.json` receipt with `dx check --json`, open the native Zed Check rail, and tune density/status coloring from screenshot evidence.
+
+[2026-05-22] - DX Studio Source-Backed Web Preview Editing
+
+ADDED:
+- Added `crates/web_preview/src/dx_studio_bridge.rs`, a WebView2 initialization bridge for DX Studio selection overlays, nearest editable `data-dx-*` surface extraction, parent/root hierarchy overlays, breakpoint status, editable-operation metadata, selection preservation, and DX hot-reload version polling.
+- Added `crates/web_preview/src/dx_studio_source_edit.rs`, a guarded source-edit module that resolves source-owned files from DX selection metadata, refuses generated/runtime paths without explicit manifest permission, refuses ambiguous/stale text markers, and applies direct `update_text_content` edits to the owning source literal with rollback-on-write-error behavior.
+- Added focused DX Studio source-edit submodules under `crates/web_preview/src/dx_studio_source_edit/` for path policy, marker range lookup, value extraction, operation routing, text edits, token edits, reorder moves, insert-template edits, and shared safety guards.
+- Added `crates/web_preview/src/dx_studio_source_edit/manifest.rs`, a focused manifest-enrichment module that maps selected `data-dx-*` surfaces to matching `public/preview-manifest.json` / `dx.studio.launch_edit_contract.v1` source contracts before planning or applying source edits.
+- Added `crates/web_preview/src/dx_studio_source_edit/manifest_ts.rs`, a source-level DX-WWW TypeScript edit-contract reader for `launchStudioEditOperations`, `launchStudioEditableSurfaces`, and `launchStudioEditContract` exports.
+
+CHANGED:
+- DX Agents GPUI bridge status docs now record that the installed root `dx` public bridge is live-validated for status, social list, automate list, snapshot, run, receipts, receipts list, contract audit, provider/model list, release gate, and import summary, while editor visual proof remains deferred.
+- `crates/agent_ui/src/dx_agent_bridge.rs`, `crates/agent_ui/src/dx_launch_workspace.rs`, and `crates/agent_ui/src/agent_configuration.rs` now consume the DX Agents `receipt_root_present` contract field so missing receipt storage is rendered as missing-config in GPUI instead of being inferred only from local directory state.
+- `crates/agent_ui/src/dx_agent_bridge.rs`, `crates/agent_ui/src/dx_launch_workspace.rs`, and `crates/agent_ui/src/agent_configuration.rs` now expose the metadata-only `dx agents receipts --json` inbox review beside the runtime receipt-index refresh, caching `receipts-inbox-latest.json` and rendering missing/malformed/stale/expired receipt counts without opening receipt bodies.
+- `agent.dx_agents.cli_path` now defaults to the root `dx` executable, and Zed GPUI actions use that configured path for the public `dx agents ... --json` bridge instead of hardcoding `dx` while displaying a separate `dx-agents` setting.
+- Failed DX Agents GPUI bridge actions now write a redacted `action-error-latest.json` receipt and surface the last failure in Agent Configuration plus the DX launch rail, so missing CLI/path/runtime launch failures are visible without exposing raw stderr secrets.
+- DX Agents action-error receipts now carry parsed redaction posture into Agent Configuration and the DX launch rail, warning if a stale or malformed action-error packet claims to export secrets, provider credentials, or receipt bodies.
+- DX Agents receipt rows now carry social connected/needs-auth and automation enabled/warning counters from the runtime-owned receipt index into the launch rail without reading run receipt bodies.
+- DX Agents connected account summaries now prefer the runtime `needs_auth` field and fall back to `needs_connection`, keeping older receipts readable while making auth-needed state explicit in the Social Accounts rail.
+- DX Agents task-state hardening landed in the runtime/CLI receipt contracts: unknown non-redacted run `task_state` values now surface as unsafe or malformed metadata, which the existing Agent receipt rail renders through its review warning path.
+- DX Agents contract-audit receipts are now classified by the runtime and CLI receipt indexes, letting the Agent receipt rail distinguish bridge audit evidence from generic cached metadata rows.
+- `crates/web_preview/src/dx_studio.rs` now treats `.dx/` and `public/preview-manifest.json` as strong DX-WWW project signals and reads object-shaped route maps in addition to route arrays.
+- `crates/web_preview/src/dx_studio.rs` and the Web Preview page diagnostics now include `data-dx-style-surface` in the DX Studio marker set for dx-style surface inspection.
+- `crates/web_preview/src/dx_studio_session.rs` now exposes manifest index counts for source selection, editable surfaces, edit operations, readiness, and Forge receipts so route/source/package surfaces are inspectable from Web Preview session JSON.
+- `crates/web_preview/src/windows_visual_webview.rs` now installs the DX Studio bridge after the existing Web Preview bridge without changing generic Web Preview behavior.
+- `crates/web_preview/src/web_preview_view.rs` now stores DX Studio selection/edit receipts, exposes them in session snapshots, adds More-menu actions for selecting DX Studio surfaces and editing DX Studio text, handles WebView IPC edit requests, and forwards source-edit receipts back to the overlay for hot-reload/refresh status.
+- `crates/web_preview/src/dx_studio_bridge.rs` now also exposes a general Edit DX Studio Surface action, captures `data-dx-source-file`, insert slot, reorder group, design token, token scope, media slot, class tokens, and responsive class tokens, and captures a pre-write hot-reload version baseline before requesting a source mutation.
+- `crates/web_preview/src/dx_studio_bridge.rs` now separates detected read-only responsive tokens from editable responsive props, and only marks responsive class tokens editable when the selected surface declares `update_design_token`.
+- `crates/web_preview/src/dx_studio_bridge.rs` now renders structured source-edit refusal status from receipts, so template-required/stale/ambiguous/readonly/generated/runtime failures are visible in the overlay instead of a generic failure label.
+- `crates/web_preview/src/dx_studio_source_edit.rs` now acts as a small facade over focused source-edit modules while preserving the existing Web Preview IPC/source-edit behavior.
+- `crates/web_preview/src/dx_studio_source_edit.rs` now includes marker requirements, source-template readiness, and structured refusal classification in source-edit plans/receipts.
+- `crates/web_preview/src/dx_studio_source_edit.rs` now enriches selected DOM surfaces with JSON-manifest or TypeScript-contract declared source files, materialized files, operation IDs, package IDs, edit-contract summaries, and operation contract metadata before computing source-edit readiness or applying writes.
+- `crates/web_preview/src/dx_studio_source_edit.rs` now includes manifest ambiguity metadata in source-edit plans and refuses writes when multiple JSON/TypeScript contract surfaces match the selected DOM marker with equal strength.
+- `crates/web_preview/src/dx_studio_source_edit.rs` now includes source file length/modified-time snapshots in source-edit plans and refuses writes when the owning file changes after selection.
+- `crates/web_preview/src/web_preview_view.rs` now attaches the current source-edit plan to failed DX Studio edit receipts before sending them back to the WebView overlay.
+- `crates/web_preview/src/web_preview_view.rs` now injects the latest matching selection's source freshness snapshot into edit requests so stale token/reorder writes can be refused before file mutation.
+- `crates/web_preview/src/dx_studio_source_edit/operations.rs` now keeps operation readiness/routing separate from text, token, reorder, insert, and safety helper implementations, avoiding a single large transformer file.
+- `crates/web_preview/src/dx_studio_source_edit/operations/token.rs` now treats responsive class token changes as responsive layout edits and refuses breakpoint-prefix changes such as `md:` to `lg:` so Zed does not rewrite layout across breakpoints.
+- `crates/web_preview/src/dx_studio_source_edit.rs` now implements guarded `update_design_token` token/class replacement and `move_reorder_section` group moves against source-owned files through the split operation modules, while keeping `insert_component` and `insert_icon_media` gated on manifest-declared source snippets/templates.
+- `crates/web_preview/src/dx_studio_source_edit/operations.rs` and `operations/insert.rs` now treat manifest-carried source snippets/templates as real insert/media readiness, while still refusing insert/media writes when the matched DX-WWW contract does not provide a safe template.
+- `crates/web_preview/src/web_preview_view.rs` now exposes the Edit DX Studio Surface action in the Web Preview More menu and session capability metadata.
+
+NOTES:
+- Real write support now covers direct source-literal `update_text_content`, source-token/class-token `update_design_token`, and source-range `move_reorder_section` within declared reorder groups. Insert component and icon/media writes are wired but refuse unless a manifest provides a safe source snippet/template.
+- Responsive layout edits are intentionally modeled as declared `update_design_token` class-token edits until DX-WWW adds a separate operation; Zed now preserves breakpoint prefixes and reports read-only responsive tokens separately from editable props.
+- Insert/media operations remain real contract plumbing but still refuse writes without a manifest source snippet/template; the refusal receipt now says that explicitly and carries the source-edit plan for review.
+- Source freshness is guarded by best-effort metadata snapshots from the latest matching selection; if the owning file changes before the edit request reaches Rust, Zed refuses instead of writing stale source.
+- DX-WWW inspection showed the generated `examples/conversion-proof/public/preview-manifest.json` and source `examples/launch-template/dx-studio-edit-contract.ts` carry the real `dx.studio.launch_edit_contract.v1` surface and operation contract, but current insert/media operations still do not publish snippets/templates, so Zed keeps those writes refused instead of fabricating UI.
+- Verification run: `rustfmt --edition 2024`, `rustfmt --edition 2024 --check`, targeted `git diff --check`, targeted conflict-marker search, ASCII scan on new bridge/edit files, and a Node parse check of the injected DX Studio bridge script.
+- No Cargo commands, local servers, browser/WebView runtime testing, DX-WWW CLI execution, or `just run` were executed.
+
+[2026-05-22] - DX Launch UX Manifest Polish
+
+ADDED:
+- Added a DX Studio manifest parser regression test for object-shaped route sources, Forge packages, and `data-dx` marker rows in `crates/web_preview/src/dx_studio.rs`.
+- Added DX Agents run-receipt row support for task lifecycle state, duration state, provider/model readiness, and safe retry/cancel posture from metadata-only `dx agents run --json` receipts.
+
+CHANGED:
+- Updated `crates/web_preview/src/dx_studio.rs` so DX-WWW preview manifests can expose route rows from `routes`, preview route arrays, or page arrays, and can report source/package/asset/marker surfaces from string or object rows.
+- Updated `crates/web_preview/src/dx_studio_session.rs` so Web Preview session metadata includes parsed default/target preview routes with source file, Forge package, asset, marker, and hot-reload counts.
+- Updated `crates/onboarding/src/dx_launch_onboarding.rs` so first-run DX onboarding honors manifest-declared static preview file paths before falling back to conventional `public`, `out`, and `dist` route files.
+- Updated `crates/agent_ui/src/dx_launch_workspace.rs` with a source-backed Chat/Tasks/Sources/Agent organization block in the left rail and dedicated DX Agents Automations visibility in the right rail.
+- Updated `crates/agent_ui/src/dx_agent_bridge.rs` and `crates/agent_ui/src/dx_launch_workspace.rs` so Agent receipt rows can render hardened background-task metadata, including redacted `task_state`, without reading raw receipt payloads or secrets.
+- Updated `crates/agent_ui/src/dx_agent_bridge.rs` so receipt metadata and row-action labels redact bearer headers, authorization labels, bare `sk-` values, provider-key labels, password markers, private-token strings, and OAuth token names before GPUI rendering.
+- Updated the DX Agents bridge-contract reader so redaction review also triggers on exported task payloads, transcripts, or provider credentials when those machine-readable flags are present.
+- Updated the Agent action next to Write/Ask to use the Zed Agent icon and a DX Agents controls tooltip while preserving the existing profile-selector action.
+
+NOTES:
+- Preserves existing Zed Write, Ask, Agent, provider/model picker, Web Preview, media preview, screen dock, and DX receipt behavior.
+- Verification run: `rustfmt --edition 2024` on touched Rust files, `rustfmt --edition 2024 --check` on touched Rust files, conflict-marker search on touched Rust files, and targeted `git diff --check` on touched Rust files.
+- No Cargo commands, local servers, live CLI commands, provider calls, browser automation, or `just run` were executed.
+
 [2026-05-22] - DX Studio Edit Contract Parser Hardening
 
 CHANGED:
@@ -6949,7 +7326,7 @@ FIXED:
 NOTES:
 - Synced upstream `main` into local `main`, pushed the fork `main`, merged upstream changes into `dev`, and resolved conflicts in `Cargo.lock`, `crates/sidebar/src/sidebar.rs`, and `crates/title_bar/src/title_bar.rs` before starting the feature slice.
 - Verification used `rustfmt`, `git diff --check`, touched-file conflict-marker searches, and the requested locked `just run`.
-- G-drive crate inspection found `G:\Dx\dx-agents\crates\zeroclaw-providers` as the strongest provider/auth/router source, while `G:\Workspaces\flow\providers` is currently a staging shell with no main source files outside integrations/cache output.
+- G-drive crate inspection found `G:\Dx\agent\crates\zeroclaw-providers` as the strongest provider/auth/router source, while `G:\Workspaces\flow\providers` is currently a staging shell with no main source files outside integrations/cache output.
 - The documentation-only vision backup intentionally did not rerun `just run` because the screens are already confirmed visible and no runtime source changed.
 
 [2026-05-11] - WebPreview Keyboard Ownership and Editor Speed Fix
@@ -7032,3 +7409,271 @@ CHANGED:
 NOTES:
 - Ran `rustfmt` on the touched icon, media, and UI panel files.
 - Ran `git diff --check -- crates\media_panel\src\media_panel.rs crates\shadcn_ui_panel\src\shadcn_ui_panel.rs`; no whitespace errors were reported.
+
+[2026-05-22] - Secure Extension Capability Defaults
+
+CHANGED:
+- `assets/settings/default.json` now grants only scoped default extension install access for GitHub downloads and the bundled Zed HTML language-server npm package instead of blanket shell, download, and npm access.
+- `crates/extension_host/src/capability_granter.rs` now rejects global wildcard host grants for `process:exec`, `download_file`, and `npm:install` even if they appear in configured host capabilities.
+- `PLAN.md` now records the secure extension runtime posture as a launch-visible DX/Zed advantage.
+
+NOTES:
+- Ran `rustfmt` and `rustfmt --edition 2024 --check` on `crates/extension_host/src/capability_granter.rs`.
+- Scanned bundled extension use of `zed::download_file`, `zed::npm_install_package`, and extension `process::Command`; the normal bundled install paths remain covered by scoped GitHub download and Zed HTML language-server npm grants, while shell execution was only found in the test extension path.
+- Ran `git diff --check` on the touched files; only existing LF/CRLF checkout warnings were reported.
+
+[2026-05-22] - DX Studio Web Preview Source Ownership Hardening
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_source_edit/paths.rs` now ranks source-owned candidates from manifest `sourceFile`, `data-dx-source-file`, source metadata, hierarchy metadata, and matching edit contracts before generated/runtime/materialized preview files.
+- Materialized preview fallback paths are treated like generated/runtime writes unless no source-owned candidate resolves and the DX-WWW manifest explicitly allows generated edits.
+
+NOTES:
+- Verification remains source-level only under the current launch-lane rule: no Cargo, no `just run`, no local servers, and no live WebView runtime proof in this pass.
+
+[2026-05-22] - DX Studio Web Preview Overlay Stability
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_bridge.rs` now re-resolves the selected `data-dx-edit-id`, text marker, or selector after Web Preview scroll/resize and redraws the selected, parent, and route/root dashed overlays from fresh DOM rectangles.
+
+NOTES:
+- Ran `rustfmt --edition 2024 --check` on `crates/web_preview/src/dx_studio_bridge.rs`.
+- Parsed the injected bridge JavaScript with Node from the Rust raw string.
+- Runtime WebView proof remains deferred under the no-server/no-`just run` launch-lane rule.
+
+[2026-05-22] - DX Studio Source Operation Readiness Guard
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_source_edit.rs` now refuses source writes when an operation is declared but the selected surface is missing the required text marker, design-token/class token, reorder group, insert slot, media slot, or manifest source template.
+- Source-edit plans and successful receipts now carry `data-dx-edit-kind` so target inspection can distinguish route, section, proof-card, package-row, dashboard-workflow, and related DX-WWW surfaces without treating edit kind alone as write permission.
+- Refusal details now preserve missing-marker causes such as `requires_declared_text_marker`, `requires_token_or_class_marker`, `requires_reorder_group_marker`, `requires_insert_slot_marker`, and `requires_media_slot_marker`.
+
+NOTES:
+- Ran `rustfmt --edition 2024 --check` on the touched Web Preview source-edit files.
+- Runtime WebView proof, Cargo checks, local servers, and `just run` remain deferred by the current launch-lane rule.
+
+[2026-05-22] - DX Studio Source Policy Evidence
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_source_edit/paths.rs` now exposes a source-policy snapshot for resolved edit targets, including source kind, generated/runtime status, materialized fallback status, manifest-generated-edit permission, and policy allow/refuse state.
+- `crates/web_preview/src/dx_studio_source_edit.rs` now includes that source-policy snapshot in source-edit plans and successful source-edit receipts, with stale-source and rollback evidence added to write receipts.
+
+NOTES:
+- Ran `rustfmt --edition 2024 --check` on the touched Web Preview source-edit files.
+- Runtime WebView proof, Cargo checks, local servers, and `just run` remain deferred by the current launch-lane rule.
+
+[2026-05-22] - DX Studio Source Snapshot Trust Boundary
+
+CHANGED:
+- `crates/web_preview/src/web_preview_view.rs` now removes any page-supplied `expected_source_snapshot` from DX Studio edit IPC payloads before attaching the trusted source snapshot captured in Zed's latest matching selection receipt.
+
+NOTES:
+- Ran `rustfmt --edition 2024 --check` on the touched Web Preview file.
+- Runtime WebView proof, Cargo checks, local servers, and `just run` remain deferred by the current launch-lane rule.
+
+[2026-05-22] - DX Studio Stale-Write Identity Guard
+
+CHANGED:
+- `crates/web_preview/src/web_preview_view.rs` now matches latest DX Studio selections across stable insert/media/reorder/token/component/section markers as well as text/edit/source markers before attaching a trusted source snapshot.
+- `crates/web_preview/src/dx_studio_source_edit.rs` now refuses source writes without a trusted Zed source snapshot and refuses snapshots whose source-file identity does not match the resolved write target.
+
+NOTES:
+- Ran `rustfmt --edition 2024 --check` on the touched Web Preview source-edit and view files.
+- Runtime WebView proof, Cargo checks, local servers, and `just run` remain deferred by the current launch-lane rule.
+
+[2026-05-22] - DX Studio Non-Text Selection Restore
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_bridge.rs` now persists insert slot, media slot, reorder group, design token, token scope, style surface, component, section, route, and source-file markers for hot-reload selection restoration.
+- The DX Studio bridge now reselects non-text surfaces from those stable `data-dx-*` markers after reload instead of relying only on `data-dx-edit-id` and `data-dx-editable-text`.
+
+NOTES:
+- Added and ran a lightweight Node source guard that failed before this patch and now confirms non-text restore marker coverage.
+- Runtime WebView proof, Cargo checks, local servers, and `just run` remain deferred by the current launch-lane rule.
+
+[2026-05-22] - DX Studio Source Marker Project Detection
+
+CHANGED:
+- `crates/web_preview/src/dx_studio.rs` now treats bounded source-folder `data-dx-route`, `data-dx-source`, `data-dx-source-file`, `data-dx-component`, `data-dx-section`, `data-dx-edit-id`, `data-dx-edit-ops`, and `data-dx-hot-reload-target` markers as DX-WWW project evidence.
+- The scan is capped by file count and file size and skips generated dependency/build folders, preserving normal Web Preview behavior for non-DX projects.
+
+NOTES:
+- Added and ran a lightweight Node source guard that failed before this patch and now confirms Rust-side source marker detection wiring.
+- Runtime WebView proof, Cargo checks, local servers, and `just run` remain deferred by the current launch-lane rule.
+
+[2026-05-22] - DX Studio Computed Style Metrics
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_bridge.rs` now captures real DOM-computed style metrics for selected DX Studio surfaces, including size, margin, padding, border width, layout, typography, and visual values.
+- The DX Studio overlay panel now renders those computed values and shows a missing-state row if computed style is unavailable, while keeping actual style mutation gated by declared dx-style/source contracts.
+
+NOTES:
+- Added and ran a lightweight Node source guard that failed before this patch and now confirms computed style metrics are captured and rendered by the bridge.
+- Parsed the injected DX Studio bridge JavaScript with Node from the Rust raw string.
+- Runtime WebView proof, Cargo checks, local servers, and `just run` remain deferred by the current launch-lane rule.
+
+[2026-05-22] - DX Studio Style Edit Planning
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_bridge.rs` now adds a `zed.web_preview.dx_studio_style_edit_plan.v1` selection payload derived from real `data-dx-*` token/style markers, declared `update_design_token` operations, responsive class tokens, breakpoint metadata, and DOM-computed style values.
+- `crates/web_preview/src/dx_studio_source_edit.rs` now carries `style_metrics` and `style_edit_plan` through the Rust source-edit plan so future dx-style/token edits can use the same source-backed readiness evidence as the overlay.
+- `DX.md` and `todo.txt` now record that computed CSS is visible but remains read-only unless the selected DX-WWW surface declares the proper dx-style/source contract.
+
+NOTES:
+- Added and ran a lightweight Node source guard that failed before the patch and now confirms the style-edit plan bridge/source-edit wiring.
+- Parsed the injected DX Studio bridge JavaScript with Node from the Rust raw string.
+- Ran `rustfmt --edition 2024 --check` on the touched Web Preview Rust files.
+- Runtime WebView proof, Cargo checks, local servers, browser automation, and `just run` remain deferred by the current launch-lane rule.
+- Exact next action: wire `style_edit_plan` into a guarded token-edit prompt/prefill path so a declared dx-style contract can propose a safe source token change without writing inline styles.
+
+[2026-05-22] - DX Studio Style Token Prefill
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_bridge.rs` now uses `style_edit_plan` to prefill `update_design_token` prompts with source-backed token candidates and a computed style summary for size, margin, padding, display, and background.
+- The token edit request now includes `style_edit_plan`, `style_edit_prefill`, and `computed_summary` metadata so Rust receipts can explain which DX-WWW/dx-style contract informed the attempted source edit.
+- `DX.md` and `todo.txt` now record that the prompt prefill is wired while Rust-side marker/source-policy validation remains authoritative.
+
+NOTES:
+- Added and ran a lightweight Node source guard that failed before the patch and now confirms style-token prefill prompt/payload wiring.
+- Parsed the injected DX Studio bridge JavaScript with Node from the Rust raw string.
+- Ran `rustfmt --edition 2024 --check` on the touched bridge file.
+- Runtime WebView proof, Cargo checks, local servers, browser automation, and `just run` remain deferred by the current launch-lane rule.
+- Exact next action: add receipt-side surfacing for `style_edit_prefill` in successful/refused token writes so the overlay can show whether a dx-style source edit used declared token evidence or fell back to Rust refusal.
+
+[2026-05-22] - DX Studio Style Token Receipt Context
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_source_edit.rs` now builds `zed.web_preview.dx_studio_style_edit_receipt_context.v1` metadata for token edit attempts, carrying prefill status, declared-contract evidence, computed style summary, token candidates, and the no-inline-style policy.
+- `crates/web_preview/src/dx_studio_source_edit.rs` now includes that style context in successful source-edit receipts, and `crates/web_preview/src/web_preview_view.rs` includes it in refusal receipts plus the compact session receipt summary.
+- `crates/web_preview/src/dx_studio_bridge.rs` now reads receipt-side style context when rendering source-edit status text, so the overlay can distinguish declared dx-style token evidence from Rust-side refusal.
+- `DX.md` and `todo.txt` now record that receipt-side style context is wired while live WebView proof remains deferred.
+
+NOTES:
+- Added and ran a lightweight Node source guard that failed before the patch and now confirms success/refusal receipt context plus overlay status wiring.
+- Parsed the injected DX Studio bridge JavaScript with Node from the Rust raw string.
+- Ran `rustfmt --edition 2024 --check` on the touched Web Preview Rust files.
+- Runtime WebView proof, Cargo checks, local servers, browser automation, and `just run` remain deferred by the current launch-lane rule.
+- Exact next action: add a bounded source-level receipt shape test for token-edit success/refusal context once a tiny fixture path can exercise `apply_source_edit` without running broad Cargo checks.
+
+[2026-05-22] - DX Studio Style Context Receipt Tests
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_source_edit.rs` now has focused unit fixtures for `style_edit_receipt_context`, covering declared token-contract success context, missing-contract refusal context, and unrelated non-style edits returning no style context.
+- `DX.md` and `todo.txt` now record the receipt-shape coverage and keep live WebView/Cargo proof deferred under the current launch-lane rule.
+
+NOTES:
+- Confirmed the guard failed before the fixtures and passed after they were added.
+- Ran a lightweight Node source guard for the receipt test names and style-contract status coverage.
+- Ran `rustfmt --edition 2024 --check` on `crates/web_preview/src/dx_studio_source_edit.rs`.
+- Skipped Cargo tests/checks, local servers, browser automation, and `just run` because this lane is source-level only until the governed validation window.
+- Exact next action: extend the tiny source-level guard to verify `apply_source_edit` success/refusal receipt shape through a filesystem fixture once a safe temporary DX-WWW root fixture is available without broad Cargo execution.
+
+[2026-05-22] - DX Studio Apply Source Edit Receipt Fixtures
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_source_edit.rs` now has temporary DX-WWW root fixtures that exercise `apply_source_edit` through a real source-owned `update_design_token` write against a `data-dx-design-token` marker.
+- The fixture asserts the source-edit receipt carries `source_updated`, token edit details, style-edit receipt context, source-owned policy evidence, and hot-reload target/baseline metadata.
+- A paired stale-snapshot fixture verifies the trusted source snapshot guard refuses the edit, maps to `stale_source`, keeps the style-refusal context available, and leaves the source file unchanged.
+- `DX.md` and `todo.txt` now record this closer-to-runtime receipt coverage while live WebView/Cargo proof remains deferred.
+
+NOTES:
+- Confirmed a lightweight Node source guard failed before the fixture tests and passed after they were added.
+- Ran `rustfmt --edition 2024` and `rustfmt --edition 2024 --check` on `crates/web_preview/src/dx_studio_source_edit.rs`.
+- Skipped Cargo tests/checks, local servers, browser automation, and `just run` under the current lightweight launch-lane rule.
+- Exact next action: add a tiny source-level guard for `web_preview_view.rs` refusal receipt assembly so stale `apply_source_edit` errors are proven to surface `status_detail`, `source_edit_plan`, and `style_edit_context` together before live WebView proof.
+
+[2026-05-22] - DX Studio Web Preview Refusal Receipt Assembly
+
+CHANGED:
+- `crates/web_preview/src/web_preview_view.rs` now builds DX Studio source-edit failure receipts through a focused helper that keeps `status_detail`, `source_edit_plan`, `style_edit_context`, expected source snapshot, and rollback/refusal policy in one receipt payload.
+- The DX Studio compact edit receipt summary now exposes `status_detail`, `source_edit_plan`, and `source_policy` alongside existing hot-reload and style-edit context metadata so Agent/session diagnostics can inspect the same refusal bundle as the overlay.
+- Added a local fixture test for stale `update_design_token` refusal receipt assembly with token-contract style context and source-edit plan metadata.
+- `DX.md` and `todo.txt` now record this Web Preview-side refusal receipt coverage while live WebView/Cargo proof remains deferred.
+
+NOTES:
+- Confirmed lightweight Node source guards failed before the helper/summary changes and passed after them.
+- Ran `rustfmt --edition 2024` and `rustfmt --edition 2024 --check` on `crates/web_preview/src/web_preview_view.rs`.
+- Skipped Cargo tests/checks, local servers, browser automation, and `just run` under the current lightweight launch-lane rule.
+- Exact next action: add a source-level guard for the WebView bridge `afterSourceEdit` renderer so failed receipts visibly distinguish stale source, missing token contract, and source-updated style contexts before live WebView proof.
+
+[2026-05-22] - DX Studio Bridge Receipt Status Labels
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_bridge.rs` now classifies `afterSourceEdit` receipts into explicit overlay/status text for stale-source refusal, missing dx-style token-contract refusal, and source-updated style context.
+- The bridge still reads real receipt fields (`status`, `status_detail`, `operation`, and `style_edit_context`) and keeps hot-reload polling limited to successful `source_updated` receipts.
+- `DX.md` and `todo.txt` now record the source-level bridge renderer guard and the remaining live WebView proof gap.
+
+NOTES:
+- Confirmed a lightweight Node source guard failed before the helper and passed after the bridge renderer labels were added.
+- Parsed the injected DX Studio bridge JavaScript with Node from the Rust raw string.
+- Ran `rustfmt --edition 2024 --check` on `crates/web_preview/src/dx_studio_bridge.rs`.
+- Skipped Cargo tests/checks, local servers, browser automation, package installs, and `just run` under the lightweight launch-lane rule.
+- Exact next action: render source-policy and rollback/refusal metadata in the bottom DX Studio bridge panel with a tiny source guard before the governed live WebView proof.
+
+[2026-05-22] - DX Studio Bridge Policy Receipt Rows
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_bridge.rs` now merges receipt-level `source_policy` with nested `source_edit_plan.source_policy` before rendering the DX Studio bottom panel.
+- The panel can now show source kind, policy allow/refuse state, generated/runtime or materialized fallback state, manifest generated-edit permission, failed-before-confirmed-write, rollback guard, trusted source snapshot requirement, and stale snapshot refusal from real receipt metadata.
+- `DX.md` and `todo.txt` now record this source-level bridge policy row coverage and the remaining live WebView proof gap.
+
+NOTES:
+- Confirmed a lightweight Node source guard failed before the policy row helpers and passed after the bridge panel rendering was added.
+- Parsed the injected DX Studio bridge JavaScript with Node from the Rust raw string.
+- Ran `rustfmt --edition 2024 --check` on `crates/web_preview/src/dx_studio_bridge.rs`.
+- Skipped Cargo tests/checks, local servers, browser automation, package installs, and `just run` under the lightweight launch-lane rule.
+- Exact next action: add a compact bridge guard for source-updated-refresh-needed/no-version hot-reload states so successful source edits without DX-WWW version polling show an honest panel row before live WebView proof.
+
+[2026-05-22] - DX Studio Bridge Hot Reload Status Rows
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_bridge.rs` now tracks hot-reload polling state in the WebView bridge and clears stale reload state before each new source edit or receipt.
+- The bottom DX Studio panel now renders compact rows for hot-reload polling, version endpoint unavailable, version poll timeout, version poll failure, and hot-reload-seen states from the actual `/_dx/hot-reload/version` polling path.
+- `DX.md` and `todo.txt` now record this source-level bridge hot-reload visibility and the remaining live WebView proof gap.
+
+NOTES:
+- Confirmed a lightweight Node source guard failed before the hot-reload status helpers and passed after the bridge panel rendering was added.
+- Parsed the injected DX Studio bridge JavaScript with Node from the Rust raw string.
+- Ran `rustfmt --edition 2024 --check` on `crates/web_preview/src/dx_studio_bridge.rs`.
+- Skipped Cargo tests/checks, local servers, browser automation, package installs, and `just run` under the lightweight launch-lane rule.
+- Exact next action: add a tiny guard that failed/non-source-updated edit receipts clear previous hot-reload panel state while preserving refusal policy/style context before governed live WebView proof.
+
+[2026-05-22] - DX Studio Bridge Failed Receipt Reload Clearing
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_bridge.rs` now routes every source-edit receipt through a focused `renderSourceEditReceipt` helper before hot-reload polling.
+- Failed or otherwise non-`source_updated` receipts now explicitly clear stale hot-reload panel state while keeping `lastReceipt` available so refusal policy and style-context rows render from the current receipt.
+- Successful `source_updated` receipts still proceed into the existing DX-WWW hot-reload version polling path after the selected overlay has been redrawn.
+- `DX.md` and `todo.txt` now record this source-level bridge guard and the remaining live WebView proof gap.
+
+NOTES:
+- Confirmed a lightweight Node source guard failed before the receipt-render helper and passed after the helper was added.
+- Parsed the injected DX Studio bridge JavaScript with Node from the Rust raw string.
+- Ran `rustfmt --edition 2024 --check` on `crates/web_preview/src/dx_studio_bridge.rs`.
+- Skipped Cargo tests/checks, local servers, browser automation, package installs, and `just run` under the lightweight launch-lane rule.
+- Exact next action: add a compact source guard for selection-restore status so failed receipts keep the selected dashed overlay attached without showing a misleading "selection restored" success state.
+
+[2026-05-22] - DX Studio Bridge Selection Restore Status
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_bridge.rs` now restores selected DX Studio surfaces with status text derived from the current source-edit receipt.
+- Failed, stale, and refused edit receipts keep their real refusal label on the dashed overlay after delayed reselection, while successful `source_updated` reloads can still show `selection restored`.
+- `DX.md` and `todo.txt` now record this source-level bridge guard and the remaining live WebView proof gap.
+
+NOTES:
+- Confirmed a lightweight Node source guard failed before the restore-status helper and passed after the helper was added.
+- Parsed the injected DX Studio bridge JavaScript with Node from the Rust raw string.
+- Ran `rustfmt --edition 2024 --check` on `crates/web_preview/src/dx_studio_bridge.rs`.
+- Skipped Cargo tests/checks, local servers, browser automation, package installs, and `just run` under the lightweight launch-lane rule.
+- Exact next action: add a compact guard for cancelled ambiguous target/operation prompts so cancelling a target choice preserves the current overlay and receipt state without creating a fake edit outcome.
+
+[2026-05-22] - dx-check Quick-Fix Risk Metadata
+
+CHANGED:
+- `crates/agent_ui/src/dx_check_panel.rs` now reads dx-check quick-fix risk metadata and derives safe defaults from command shape for older receipts.
+- `crates/agent_ui/src/dx_launch_workspace.rs` now renders risk level, approval requirement, and receipt-write state beside each dx-check quick fix in the native launch rail.
+
+NOTES:
+- Ran `rustfmt --check crates/agent_ui/src/dx_check_panel.rs crates/agent_ui/src/dx_launch_workspace.rs`.
+- Attempted `cargo test -p agent_ui dx_check_panel --lib` twice; both attempts exceeded the timeout on the busy workspace, and Cargo/rustc were allowed to finish or go idle before continuing.
+- Exact next action: rerun the targeted `agent_ui` fixture during an idle Cargo window, then do a governed native launch-rail visual pass.

@@ -52,7 +52,7 @@ use crate::{
     dx_agent_bridge::{
         DxAgentBridgeSnapshot, DxAgentMetadataCommand, DxAgentPublicCommand, DxAgentReceipt,
         DxAgentRowAction, DxAgentSocialActionSummary, dx_agent_bridge_snapshot,
-        dx_agent_cli_actions_allowed, dx_agent_dx_home, dx_agent_receipt_root,
+        dx_agent_cli_actions_allowed, dx_agent_cli_path, dx_agent_dx_home, dx_agent_receipt_root,
         run_dx_agent_metadata_command, run_dx_agent_public_command,
     },
 };
@@ -342,6 +342,18 @@ impl AgentConfiguration {
                     })),
             )
             .child(
+                Button::new("dx-agents-receipt-inbox", "Inbox")
+                    .style(ButtonStyle::Outlined)
+                    .label_size(LabelSize::Small)
+                    .disabled(!actions_allowed)
+                    .on_click(cx.listener(|this, _, _window, cx| {
+                        this.run_dx_agents_metadata_action(
+                            DxAgentMetadataCommand::ReceiptsInbox,
+                            cx,
+                        );
+                    })),
+            )
+            .child(
                 Button::new("dx-agents-receipts", "Receipts")
                     .style(ButtonStyle::Outlined)
                     .label_size(LabelSize::Small)
@@ -383,18 +395,21 @@ impl AgentConfiguration {
         snapshot: &DxAgentBridgeSnapshot,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let status = if !snapshot.enabled || !snapshot.root_exists {
+        let status = if !snapshot.enabled || !snapshot.root_exists || snapshot.action_error.present
+        {
             AiSettingItemStatus::Stopped
         } else if snapshot.last_error.is_some() || snapshot.status == "warning" {
             AiSettingItemStatus::Starting
         } else {
             AiSettingItemStatus::Running
         };
-        let detail = if let Some(error) = snapshot.last_error.as_ref() {
+        let detail = if let Some(error) = snapshot.action_error.error.as_ref() {
+            format!("Last action failed: {error}")
+        } else if let Some(error) = snapshot.last_error.as_ref() {
             error.clone()
         } else {
             format!(
-                "{} task(s), {} automation(s), receipts {}, cli dx public + {} runtime",
+                "{} task(s), {} automation(s), receipts {}, cli {}",
                 snapshot.active_task_count,
                 snapshot.automation_count,
                 if snapshot.root_exists {
@@ -406,7 +421,7 @@ impl AgentConfiguration {
             )
         };
 
-        AiSettingItem::new(
+        let item = AiSettingItem::new(
             "dx-agents-bridge",
             "DX Agents Runtime",
             status,
@@ -428,7 +443,24 @@ impl AgentConfiguration {
                         this.run_dx_agents_public_action(DxAgentPublicCommand::Run, cx);
                     })),
             )
-        })
+        });
+
+        v_flex()
+            .gap_1()
+            .child(item)
+            .when(snapshot.action_error.present, |this| {
+                this.child(
+                    Label::new(format!(
+                        "Action: {}; at {}; next: {}; redaction: {}",
+                        snapshot.action_error.command,
+                        snapshot.action_error.generated_at,
+                        snapshot.action_error.next_action,
+                        snapshot.action_error.redaction_summary
+                    ))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+                )
+            })
     }
 
     fn render_dx_agents_contract_item(
@@ -525,10 +557,10 @@ impl AgentConfiguration {
                     .color(Color::Muted),
             )
             .detail_label(format!(
-                "release {}, action map {}, {} action(s), freshness {}",
+                "release {}, action map {}, {}, freshness {}",
                 summary.release_gate_status,
                 summary.action_map_status,
-                summary.action_count,
+                summary.recovery_counts.label(),
                 summary.freshness_state
             )),
         );
@@ -567,8 +599,11 @@ impl AgentConfiguration {
             };
             stack = stack.child(
                 Label::new(format!(
-                    "Recovery: {} via {}, states {}",
-                    summary.recovery_controls_status, summary.recovery_render_first, states
+                    "Recovery: {} via {}, {}, states {}",
+                    summary.recovery_controls_status,
+                    summary.recovery_render_first,
+                    summary.recovery_counts.label(),
+                    states
                 ))
                 .size(LabelSize::Small)
                 .color(Color::Muted),
@@ -662,9 +697,10 @@ impl AgentConfiguration {
             );
             stack = stack.child(
                 Label::new(format!(
-                    "Recovery: {} via {}, {} fixture(s), retained overflow {}",
+                    "Recovery: {} via {}, {}, {} fixture(s), retained overflow {}",
                     summary.recovery_controls_status,
                     summary.recovery_render_first,
+                    summary.recovery_counts.label(),
                     summary.recovery_fixture_count,
                     summary.retained_run_overflow_count
                 ))
@@ -953,6 +989,7 @@ impl AgentConfiguration {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let index = &snapshot.receipt_index;
+        let inbox = &snapshot.receipt_inbox;
         let unsafe_count = snapshot
             .receipts
             .iter()
@@ -963,7 +1000,17 @@ impl AgentConfiguration {
             .iter()
             .filter(|receipt| receipt.metadata_redacted)
             .count();
-        let status = if !index.present || index.last_error.is_some() || unsafe_count > 0 {
+        let receipt_root_missing = index.receipt_root_present == Some(false);
+        let inbox_missing = inbox.receipt_dir_present == Some(false);
+        let status = if !index.present
+            || receipt_root_missing
+            || index.status == "missing_config"
+            || inbox_missing
+            || inbox.status == "missing_config"
+            || inbox.malformed_count > 0
+            || index.last_error.is_some()
+            || unsafe_count > 0
+        {
             AiSettingItemStatus::Stopped
         } else if index.status == "warning" || index.active_task_count > 0 {
             AiSettingItemStatus::Starting
@@ -982,14 +1029,27 @@ impl AgentConfiguration {
                 .color(Color::Muted),
         )
         .detail_label(format!(
-            "{} returned / {} known, {} active, {} redacted",
+            "{} returned / {} known, {} active, {} redacted, root {}",
             index.returned_receipt_count,
             index.receipt_count,
             index.active_task_count,
-            redacted_count
+            redacted_count,
+            Self::dx_agent_receipt_root_state(index.receipt_root_present, snapshot.root_exists)
         ));
 
         if snapshot.enabled && snapshot.cli_actions_allowed {
+            index_item = index_item.action(
+                IconButton::new("dx-agents-receipt-inbox", IconName::FileTextOutlined)
+                    .icon_color(Color::Muted)
+                    .icon_size(IconSize::Small)
+                    .tooltip(Tooltip::text("Review cached DX Agents receipt inbox"))
+                    .on_click(cx.listener(|this, _, _window, cx| {
+                        this.run_dx_agents_metadata_action(
+                            DxAgentMetadataCommand::ReceiptsInbox,
+                            cx,
+                        );
+                    })),
+            );
             index_item = index_item.action(
                 IconButton::new("dx-agents-receipts-list", IconName::RotateCw)
                     .icon_color(Color::Muted)
@@ -1005,6 +1065,21 @@ impl AgentConfiguration {
             .gap_1()
             .child(Label::new("Background Receipts").size(LabelSize::Small))
             .child(index_item);
+
+        if receipt_root_missing {
+            stack = stack.child(
+                Label::new("Receipt root was missing before the latest receipt refresh.")
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        }
+        if inbox_missing {
+            stack = stack.child(
+                Label::new("Receipt inbox reports the agent receipt directory is missing.")
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
+        }
 
         if !index.present {
             stack = stack.child(
@@ -1032,6 +1107,28 @@ impl AgentConfiguration {
                     .color(Color::Muted),
             );
         }
+        if inbox.present {
+            stack = stack.child(
+                Label::new(format!(
+                    "Inbox: {}, {} latest, {} missing, {} malformed, {} stale, {} expired",
+                    inbox.status,
+                    inbox.latest_count,
+                    inbox.missing_latest_count,
+                    inbox.malformed_count,
+                    inbox.stale_count,
+                    inbox.expired_count
+                ))
+                .size(LabelSize::Small)
+                .color(Color::Muted),
+            );
+            if let Some(error) = inbox.last_error.as_ref() {
+                stack = stack.child(
+                    Label::new(format!("Inbox error: {error}"))
+                        .size(LabelSize::Small)
+                        .color(Color::Muted),
+                );
+            }
+        }
 
         if snapshot.receipts.is_empty() {
             stack = stack.child(
@@ -1046,6 +1143,18 @@ impl AgentConfiguration {
         }
 
         stack.into_any_element()
+    }
+
+    fn dx_agent_receipt_root_state(
+        receipt_root_present: Option<bool>,
+        root_exists: bool,
+    ) -> &'static str {
+        match receipt_root_present {
+            Some(true) => "present",
+            Some(false) => "missing",
+            None if root_exists => "present",
+            None => "missing",
+        }
     }
 
     fn render_dx_agents_receipt_row(&self, receipt: &DxAgentReceipt) -> impl IntoElement {
@@ -1351,9 +1460,12 @@ impl AgentConfiguration {
             return;
         }
 
+        let cli_path = dx_agent_cli_path(cx);
         let dx_home = dx_agent_dx_home(cx);
-        let task =
-            cx.background_spawn(async move { run_dx_agent_public_command(command, dx_home) });
+        let receipt_root = dx_agent_receipt_root(cx);
+        let task = cx.background_spawn(async move {
+            run_dx_agent_public_command(command, cli_path, dx_home, receipt_root)
+        });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             this.update(cx, |_this, cx| {
@@ -1376,10 +1488,11 @@ impl AgentConfiguration {
             return;
         }
 
+        let cli_path = dx_agent_cli_path(cx);
         let dx_home = dx_agent_dx_home(cx);
         let receipt_root = dx_agent_receipt_root(cx);
         let task = cx.background_spawn(async move {
-            run_dx_agent_metadata_command(command, dx_home, receipt_root)
+            run_dx_agent_metadata_command(command, cli_path, dx_home, receipt_root)
         });
         cx.spawn(async move |this, cx| {
             let result = task.await;

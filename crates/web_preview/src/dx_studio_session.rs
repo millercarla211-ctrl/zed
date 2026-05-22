@@ -15,11 +15,20 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
         .iter()
         .map(|path| manifest_candidate_snapshot(path))
         .collect::<Vec<_>>();
+    let preview_targets = dx_studio::preview_targets(root_path);
+    let default_preview_target =
+        dx_studio::default_preview_target(root_path).map(|target| preview_target_snapshot(&target));
+    let preview_targets = preview_targets
+        .iter()
+        .take(6)
+        .map(preview_target_snapshot)
+        .collect::<Vec<_>>();
     let edit_candidates = contract
         .edit_manifest_candidates
         .iter()
         .map(|path| manifest_candidate_snapshot(path))
         .collect::<Vec<_>>();
+    let manifest_indexes = manifest_index_snapshot(&contract.manifest_candidates);
     let has_edit_candidate = contract
         .edit_manifest_candidates
         .iter()
@@ -101,7 +110,10 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
         "preview_manifest": {
             "schema": contract.schema,
             "default_preview_url": contract.default_preview_url,
+            "default_target": default_preview_target,
+            "targets": preview_targets,
             "candidates": preview_candidates,
+            "indexes": manifest_indexes,
         },
         "studio_edit_manifest": {
             "schema": dx_studio::DX_STUDIO_EDIT_MANIFEST_SCHEMA,
@@ -152,6 +164,22 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
     }))
 }
 
+fn preview_target_snapshot(target: &dx_studio::DxStudioPreviewTarget) -> Value {
+    serde_json::json!({
+        "route": target.route.as_str(),
+        "url": target.url.as_str(),
+        "source_files": &target.source_files,
+        "forge_packages": &target.forge_packages,
+        "assets": &target.assets,
+        "data_dx_markers": &target.data_dx_markers,
+        "hot_reload_target": target.hot_reload_target.as_str(),
+        "hot_reload_version_endpoint": target.hot_reload_version_endpoint.as_str(),
+        "source_file_count": target.source_files.len(),
+        "forge_package_count": target.forge_packages.len(),
+        "data_dx_marker_count": target.data_dx_markers.len(),
+    })
+}
+
 fn manifest_candidate_snapshot(path: &Path) -> Value {
     let metadata = fs::metadata(path).ok();
     let modified_ms = metadata
@@ -166,6 +194,74 @@ fn manifest_candidate_snapshot(path: &Path) -> Value {
         "modified_ms": modified_ms,
         "extension": path.extension().and_then(|extension| extension.to_str()),
     })
+}
+
+fn manifest_index_snapshot(candidates: &[std::path::PathBuf]) -> Value {
+    for candidate in candidates {
+        if candidate
+            .extension()
+            .and_then(|extension| extension.to_str())
+            != Some("json")
+        {
+            continue;
+        }
+
+        let Ok(contents) = fs::read_to_string(candidate) else {
+            continue;
+        };
+        let Ok(manifest) = serde_json::from_str::<Value>(&contents) else {
+            continue;
+        };
+
+        return serde_json::json!({
+            "source": path_string(candidate),
+            "source_selection_count": count_index_items(&manifest, &[
+                "/source_selection_index",
+                "/sourceSelectionIndex",
+            ]),
+            "editable_surface_count": count_index_items(&manifest, &[
+                "/editable_surface_index",
+                "/editableSurfaceIndex",
+                "/studio_edit_contract/surfaces",
+                "/studio_edit_contract/editableSurfaces",
+                "/editContract/surfaces",
+                "/editContract/editableSurfaces",
+            ]),
+            "edit_operation_count": count_index_items(&manifest, &[
+                "/edit_operation_index",
+                "/editOperationIndex",
+                "/studio_edit_contract/operations",
+                "/editContract/operations",
+            ]),
+            "route_readiness_count": count_index_items(&manifest, &[
+                "/route_readiness_index",
+                "/routeReadinessIndex",
+            ]),
+            "forge_readiness_count": count_index_items(&manifest, &[
+                "/forge_readiness_index",
+                "/forgeReadinessIndex",
+            ]),
+            "forge_receipt_count": count_index_items(&manifest, &[
+                "/forge_receipt_index",
+                "/forgeReceiptIndex",
+            ]),
+        });
+    }
+
+    Value::Null
+}
+
+fn count_index_items(manifest: &Value, pointers: &[&str]) -> usize {
+    pointers
+        .iter()
+        .filter_map(|pointer| manifest.pointer(pointer))
+        .find_map(|value| {
+            value
+                .as_array()
+                .map(Vec::len)
+                .or_else(|| value.as_object().map(|object| object.len()))
+        })
+        .unwrap_or(0)
 }
 
 fn path_string(path: impl AsRef<Path>) -> String {

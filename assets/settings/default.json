@@ -1106,9 +1106,9 @@
     "dx_agents": {
       // Whether to render DX Agents bridge status in the Agent UI.
       "enabled": true,
-      // DX Agents runtime CLI used for direct contract, receipt-index, and provider/model catalog actions.
-      // Public status, social, automation, and run controls call the root `dx agents ...` bridge.
-      "cli_path": "dx-agents",
+      // Root DX CLI used for explicit `dx agents ... --json` bridge actions.
+      // The dx-agents runtime remains CLI-owned behind the public DX command surface.
+      "cli_path": "dx",
       // Redacted agent receipt root written by dx-agents.
       "receipt_root": "G:\\Dx\\.dx\\receipts\\agents",
       // Generated rkyv/memmap catalog used for fast provider/model discovery.
@@ -2064,11 +2064,15 @@
   },
   // The capabilities granted to extensions.
   //
-  // This list can be customized to restrict what extensions are able to do.
+  // DX secure default: keep bundled language-server installation paths working,
+  // but do not grant blanket shell, download, or npm access. Add explicit scoped
+  // grants in user settings when an extension needs more access.
   "granted_extension_capabilities": [
-    { "kind": "process:exec", "command": "*", "args": ["**"] },
-    { "kind": "download_file", "host": "*", "path": ["**"] },
-    { "kind": "npm:install", "package": "*" },
+    { "kind": "download_file", "host": "github.com", "path": ["**"] },
+    {
+      "kind": "npm:install",
+      "package": "@zed-industries/vscode-langservers-extracted",
+    },
   ],
   // Controls how completions are processed for this language.
   "completions": {

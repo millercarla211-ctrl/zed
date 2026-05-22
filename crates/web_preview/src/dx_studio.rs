@@ -17,6 +17,8 @@ pub const DX_FORGE_PACKAGES_COMMAND: &str = "dx forge packages --json";
 pub const DX_HOT_RELOAD_VERSION_ENDPOINT: &str = "/_dx/hot-reload/version";
 pub const DX_DEFAULT_DEV_HOST: &str = "127.0.0.1";
 pub const DX_DEFAULT_DEV_PORT: u16 = 3000;
+const MAX_DX_MARKER_SCAN_FILES: usize = 80;
+const MAX_DX_MARKER_SCAN_BYTES: u64 = 256 * 1024;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DxStudioCommands {
@@ -90,6 +92,19 @@ pub fn manifest_contract(root: &Path) -> DxStudioManifestContract {
     }
 }
 
+pub fn preview_targets(root: &Path) -> Vec<DxStudioPreviewTarget> {
+    if detect_project(root).is_none() {
+        return Vec::new();
+    }
+
+    read_preview_manifest_routes(root)
+}
+
+pub fn default_preview_target(root: &Path) -> Option<DxStudioPreviewTarget> {
+    detect_project(root)?;
+    read_preview_manifest_target(root)
+}
+
 pub fn detect_project(root: &Path) -> Option<DxStudioProjectDetection> {
     if !root.is_dir() {
         return None;
@@ -101,8 +116,10 @@ pub fn detect_project(root: &Path) -> Option<DxStudioProjectDetection> {
     let legacy_toml = root.join("dx.config.toml");
     let app_dir = root.join("app");
     let components_dir = root.join("components");
+    let dx_dir = root.join(".dx");
     let forge_dir = root.join(".dx").join("forge");
     let visible_forge_dir = root.join("forge");
+    let public_preview_manifest = root.join("public").join("preview-manifest.json");
     let launch_template = root.join("examples").join("launch-template");
     let node_modules = root.join("node_modules");
 
@@ -114,6 +131,16 @@ pub fn detect_project(root: &Path) -> Option<DxStudioProjectDetection> {
     if legacy_toml.is_file() {
         confidence = confidence.saturating_add(20);
         reasons.push("legacy dx.config.toml fallback".to_string());
+    }
+
+    if dx_dir.is_dir() {
+        confidence = confidence.saturating_add(35);
+        reasons.push(".dx project metadata".to_string());
+    }
+
+    if public_preview_manifest.is_file() {
+        confidence = confidence.saturating_add(45);
+        reasons.push("public preview-manifest.json".to_string());
     }
 
     if app_dir.is_dir() {
@@ -134,6 +161,11 @@ pub fn detect_project(root: &Path) -> Option<DxStudioProjectDetection> {
     if launch_template.is_dir() {
         confidence = confidence.saturating_add(20);
         reasons.push("DX launch template sources".to_string());
+    }
+
+    if contains_dx_marker_in_project_sources(root) {
+        confidence = confidence.saturating_add(45);
+        reasons.push("source data-dx markers".to_string());
     }
 
     let cargo_toml = root.join("Cargo.toml");
@@ -158,6 +190,111 @@ pub fn detect_project(root: &Path) -> Option<DxStudioProjectDetection> {
         legacy_toml_present: legacy_toml.is_file(),
         node_modules_present: node_modules.exists(),
     })
+}
+
+fn contains_dx_marker_in_project_sources(root: &Path) -> bool {
+    let mut files_left = MAX_DX_MARKER_SCAN_FILES;
+    for source_root in [
+        root.join("app"),
+        root.join("pages"),
+        root.join("components"),
+        root.join("src"),
+        root.join("examples").join("launch-template"),
+    ] {
+        if files_left == 0 {
+            return false;
+        }
+
+        if source_root.is_file() {
+            if dx_marker_source_file_contains_marker(&source_root) {
+                return true;
+            }
+        } else if source_root.is_dir()
+            && dx_marker_source_dir_contains_marker(&source_root, &mut files_left)
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn dx_marker_source_dir_contains_marker(root: &Path, files_left: &mut usize) -> bool {
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if file_type.is_dir() {
+                if !should_skip_dx_marker_scan_dir(&path) {
+                    stack.push(path);
+                }
+            } else if file_type.is_file() && is_dx_marker_source_file(&path) {
+                if *files_left == 0 {
+                    return false;
+                }
+                *files_left -= 1;
+                if dx_marker_source_file_contains_marker(&path) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
+fn should_skip_dx_marker_scan_dir(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            matches!(
+                name,
+                ".git" | ".next" | ".turbo" | "build" | "dist" | "node_modules" | "out" | "target"
+            )
+        })
+}
+
+fn is_dx_marker_source_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            matches!(
+                extension,
+                "astro" | "html" | "js" | "jsx" | "mdx" | "svelte" | "ts" | "tsx" | "vue"
+            )
+        })
+}
+
+fn dx_marker_source_file_contains_marker(path: &Path) -> bool {
+    if fs::metadata(path)
+        .map(|metadata| metadata.len() > MAX_DX_MARKER_SCAN_BYTES)
+        .unwrap_or(true)
+    {
+        return false;
+    }
+
+    fs::read_to_string(path)
+        .map(|contents| {
+            [
+                "data-dx-route",
+                "data-dx-source",
+                "data-dx-source-file",
+                "data-dx-component",
+                "data-dx-section",
+                "data-dx-edit-id",
+                "data-dx-edit-ops",
+                "data-dx-hot-reload-target",
+            ]
+            .into_iter()
+            .any(|marker| contents.contains(marker))
+        })
+        .unwrap_or(false)
 }
 
 pub fn manifest_candidates(root: &Path) -> Vec<PathBuf> {
@@ -214,7 +351,7 @@ pub fn edit_operation_ids() -> [&'static str; 5] {
     ]
 }
 
-pub fn edit_marker_attributes() -> [&'static str; 14] {
+pub fn edit_marker_attributes() -> [&'static str; 15] {
     [
         "data-dx-edit-target",
         "data-dx-edit-id",
@@ -230,6 +367,7 @@ pub fn edit_marker_attributes() -> [&'static str; 14] {
         "data-dx-editable-text",
         "data-dx-media-slot",
         "data-dx-token-scope",
+        "data-dx-style-surface",
     ]
 }
 
@@ -285,14 +423,17 @@ pub fn edit_contract_summary(root: &Path) -> Option<DxStudioEditContractSummary>
             route: string_for_keys(contract, &["route", "route_path", "routePath"]),
             operation_ids: unique_strings(operation_ids),
             marker_attributes: unique_strings(marker_attributes),
-            surface_count: array_len_for_keys(contract, &["surfaces", "editable_surfaces"])
-                .or_else(|| {
-                    array_len_for_keys(
-                        &manifest,
-                        &["editable_surface_index", "editableSurfaceIndex"],
-                    )
-                })
-                .unwrap_or(0),
+            surface_count: array_len_for_keys(
+                contract,
+                &["surfaces", "editable_surfaces", "editableSurfaces"],
+            )
+            .or_else(|| {
+                array_len_for_keys(
+                    &manifest,
+                    &["editable_surface_index", "editableSurfaceIndex"],
+                )
+            })
+            .unwrap_or(0),
             writes_files: bool_for_keys(contract, &["writes_files", "writesFiles"])
                 .or_else(|| {
                     operation_bool_any(contract, "operations", &["writes_files", "writesFiles"])
@@ -359,7 +500,7 @@ pub fn drag_to_preview_attributes() -> [&'static str; 6] {
 
 pub fn default_preview_url(root: &Path) -> Option<String> {
     detect_project(root)?;
-    if let Some(target) = read_preview_manifest_target(root) {
+    if let Some(target) = default_preview_target(root) {
         return Some(target.url);
     }
 
@@ -512,11 +653,8 @@ fn read_preview_manifest_routes(root: &Path) -> Vec<DxStudioPreviewTarget> {
                 let Ok(manifest) = serde_json::from_str::<Value>(&contents) else {
                     continue;
                 };
-                manifest
-                    .get("routes")
-                    .and_then(Value::as_array)
+                route_values_from_manifest(&manifest)
                     .into_iter()
-                    .flatten()
                     .filter_map(|route| route_from_manifest_value(route, &origin))
                     .collect::<Vec<_>>()
             }
@@ -569,10 +707,50 @@ fn route_from_manifest_value(value: &Value, origin: &str) -> Option<DxStudioPrev
     Some(DxStudioPreviewTarget {
         route,
         url,
-        source_files: string_values_for_keys(value, &["source_files", "sourceFiles", "sourceFile"]),
-        forge_packages: string_values_for_keys(value, &["forge_packages", "forgePackages"]),
-        assets: string_values_for_keys(value, &["assets"]),
-        data_dx_markers: string_values_for_keys(value, &["data_dx_markers", "dataDxMarkers"]),
+        source_files: string_values_for_keys(
+            value,
+            &[
+                "source_files",
+                "sourceFiles",
+                "source_file",
+                "sourceFile",
+                "source",
+                "sources",
+                "files",
+                "source_path",
+                "sourcePath",
+            ],
+        ),
+        forge_packages: string_values_for_keys(
+            value,
+            &[
+                "forge_packages",
+                "forgePackages",
+                "forge_package",
+                "forgePackage",
+                "packages",
+                "package",
+                "package_name",
+                "packageName",
+            ],
+        ),
+        assets: string_values_for_keys(
+            value,
+            &["assets", "asset", "media", "media_slots", "mediaSlots"],
+        ),
+        data_dx_markers: string_values_for_keys(
+            value,
+            &[
+                "data_dx_markers",
+                "dataDxMarkers",
+                "data_dx_marker",
+                "dataDxMarker",
+                "marker_attributes",
+                "markerAttributes",
+                "markers",
+                "marker",
+            ],
+        ),
         hot_reload_target,
         hot_reload_version_endpoint,
     })
@@ -627,6 +805,29 @@ fn edit_contract_value(manifest: &Value) -> Option<&Value> {
         })
 }
 
+fn route_values_from_manifest(manifest: &Value) -> Vec<&Value> {
+    for candidate in [
+        manifest.get("routes"),
+        manifest.get("preview_routes"),
+        manifest.get("previewRoutes"),
+        manifest.pointer("/preview/routes"),
+        manifest.pointer("/previewRoutes"),
+        manifest.get("pages"),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Some(routes) = candidate.as_array() {
+            return routes.iter().collect();
+        }
+        if let Some(routes) = candidate.as_object() {
+            return routes.values().collect();
+        }
+    }
+
+    Vec::new()
+}
+
 fn string_values_for_keys(value: &Value, keys: &[&str]) -> Vec<String> {
     let mut values = Vec::new();
     for key in keys {
@@ -641,12 +842,40 @@ fn push_string_values(value: &Value, values: &mut Vec<String>) {
     if let Some(value) = value.as_str() {
         values.push(value.to_string());
     } else if let Some(array) = value.as_array() {
-        values.extend(
-            array
-                .iter()
-                .filter_map(Value::as_str)
-                .map(ToString::to_string),
-        );
+        for item in array {
+            push_string_values(item, values);
+        }
+    } else if let Some(object) = value.as_object() {
+        for key in [
+            "path",
+            "file",
+            "source",
+            "source_file",
+            "sourceFile",
+            "source_path",
+            "sourcePath",
+            "name",
+            "id",
+            "package",
+            "package_name",
+            "packageName",
+            "attribute",
+            "marker",
+            "value",
+        ] {
+            if let Some(value) = object.get(key).and_then(Value::as_str) {
+                values.push(value.to_string());
+            }
+        }
+
+        if let Some(selector) = object.get("selector").and_then(Value::as_str) {
+            let markers = markers_from_selector(selector);
+            if markers.is_empty() {
+                values.push(selector.to_string());
+            } else {
+                values.extend(markers);
+            }
+        }
     }
 }
 
@@ -863,6 +1092,46 @@ mod tests {
         assert_eq!(
             extract_dx_route_marker("<main data-dx-route=\"/launch\"></main>"),
             Some("/launch".to_string())
+        );
+    }
+
+    #[test]
+    fn manifest_route_extracts_object_sources_packages_and_markers() {
+        let route = serde_json::json!({
+            "route": "/launch",
+            "preview": {
+                "url": "http://127.0.0.1:3001/launch",
+                "hotReloadTarget": "/launch"
+            },
+            "sources": [
+                { "path": "app/launch/page.tsx" },
+                { "sourceFile": "components/launch/dashboard.tsx" }
+            ],
+            "forgePackages": [
+                { "name": "dx/ui/button" },
+                { "package": "dx/icon/search" }
+            ],
+            "dataDxMarkers": [
+                { "attribute": "data-dx-route" },
+                { "selector": "[data-dx-source]" }
+            ]
+        });
+
+        let target = route_from_manifest_value(&route, "http://127.0.0.1:3000").unwrap();
+
+        assert_eq!(target.route, "/launch");
+        assert_eq!(target.url, "http://127.0.0.1:3001/launch");
+        assert_eq!(
+            target.source_files,
+            vec!["app/launch/page.tsx", "components/launch/dashboard.tsx"]
+        );
+        assert_eq!(
+            target.forge_packages,
+            vec!["dx/ui/button", "dx/icon/search"]
+        );
+        assert_eq!(
+            target.data_dx_markers,
+            vec!["data-dx-route", "data-dx-source"]
         );
     }
 }

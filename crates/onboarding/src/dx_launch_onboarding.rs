@@ -329,7 +329,9 @@ fn dx_www_manifest_static_target(root: &Path) -> Option<DxLaunchPreviewTarget> {
     let manifest = dx_www_preview_manifest(root)?;
     let route = preferred_preview_manifest_route(&manifest)?;
     let route_path = string_for_keys(route, &["route"]).unwrap_or("/");
-    let preview_file = route_static_preview_candidates(root, route_path)
+    let preview_file = route_declared_preview_files(root, route)
+        .into_iter()
+        .chain(route_static_preview_candidates(root, route_path))
         .into_iter()
         .chain(generic_static_preview_candidate_paths(root))
         .find(|path| path.is_file())?;
@@ -546,6 +548,59 @@ fn manifest_preview_detail(
     }
 
     detail
+}
+
+fn route_declared_preview_files(root: &Path, route: &Value) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    for key in [
+        "preview_file",
+        "previewFile",
+        "static_file",
+        "staticFile",
+        "html_file",
+        "htmlFile",
+        "file",
+        "path",
+    ] {
+        if let Some(path) = route.get(key).and_then(Value::as_str) {
+            push_preview_file(root, path, &mut files);
+        }
+    }
+
+    if let Some(preview) = route.get("preview") {
+        for key in [
+            "file",
+            "path",
+            "static_file",
+            "staticFile",
+            "html_file",
+            "htmlFile",
+        ] {
+            if let Some(path) = preview.get(key).and_then(Value::as_str) {
+                push_preview_file(root, path, &mut files);
+            }
+        }
+    }
+
+    files
+}
+
+fn push_preview_file(root: &Path, raw: &str, files: &mut Vec<PathBuf>) {
+    let raw = raw.trim();
+    if raw.is_empty() || has_url_scheme(raw) {
+        return;
+    }
+
+    let path = PathBuf::from(raw);
+    let path = if path.is_absolute() {
+        path
+    } else {
+        root.join(path)
+    };
+
+    if !files.iter().any(|existing| same_path(existing, &path)) {
+        files.push(path);
+    }
 }
 
 fn string_for_keys<'a>(value: &'a Value, keys: &[&str]) -> Option<&'a str> {

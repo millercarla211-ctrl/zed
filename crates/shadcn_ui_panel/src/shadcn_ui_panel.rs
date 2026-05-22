@@ -29,7 +29,7 @@ use workspace::{
 
 mod registry_directory;
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use web_preview::web_preview_view::WebPreviewView;
 
 actions!(
@@ -832,7 +832,7 @@ impl ShadcnUiPanel {
     fn preview_item(&mut self, item: CatalogItem, window: &mut Window, cx: &mut Context<Self>) {
         let preview_url =
             local_preview_url_for_item(&item).unwrap_or_else(|| preview_url_for_item(&item));
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
         {
             let Some(workspace) = self.workspace.upgrade() else {
                 self.status = Some("No active workspace".into());
@@ -845,7 +845,7 @@ impl ShadcnUiPanel {
             });
         }
 
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
         {
             cx.open_url(&preview_url);
         }

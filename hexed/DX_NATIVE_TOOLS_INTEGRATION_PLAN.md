@@ -61,7 +61,7 @@ The long-term product should include these major lanes:
 - `G:\Workspaces\flow\rlm`: embeddable long-context reduction runtime for search, summarization, and agent context preparation.
 - `G:\Workspaces\flow\src\provider_catalog`: starter plan types for local registry, models.dev, LiteLLM-style normalization, and native provider scanning.
 - `G:\Workspaces\flow\src\forge_bridge`: starter plan types for code, audio, video, image, 3D, documents, datasets, and multi-remote sync.
-- `G:\Dx\dx-agents\crates\zeroclaw-providers`: stronger provider implementation source with auth profiles, OAuth/token storage, OpenAI-compatible providers, Codex, Claude Code, Gemini, Qwen, OpenRouter, Ollama, llama.cpp, models.dev lookup, routing, and reliability wrappers.
+- `G:\Dx\agent\crates\zeroclaw-providers`: stronger provider implementation source with auth profiles, OAuth/token storage, OpenAI-compatible providers, Codex, Claude Code, Gemini, Qwen, OpenRouter, Ollama, llama.cpp, models.dev lookup, routing, and reliability wrappers.
 
 ## Architecture Rule
 

@@ -28,7 +28,7 @@ use workspace::{
 
 mod google_fonts;
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use web_preview::web_preview_view::WebPreviewView;
 
 actions!(
@@ -657,7 +657,7 @@ impl FontPanel {
             return;
         };
 
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
         {
             let Some(workspace) = self.workspace.upgrade() else {
                 self.status = Some("No active workspace".into());
@@ -670,7 +670,7 @@ impl FontPanel {
             });
         }
 
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
         {
             cx.open_url(&preview_url);
         }

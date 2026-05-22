@@ -1,17 +1,22 @@
-use serde_json::Value;
 use std::{
-    cmp::Ordering,
-    fs::{self, File},
-    io::Read,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Mutex, OnceLock},
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant},
+};
+
+use crate::{
+    dx_deploy_capabilities::{DxDeployCapabilityMatrixSnapshot, deploy_capability_matrix_snapshot},
+    dx_deploy_launch_gate::{DxDeployLaunchGateSnapshot, deploy_launch_gate_snapshot},
+    dx_deploy_receipt_buckets::scan_deploy_receipts,
+    dx_deploy_target_detection::scan_deploy_targets_for_roots,
+};
+
+pub(crate) use crate::{
+    dx_deploy_receipt_buckets::{DxDeployReceiptBucket, DxDeployReceiptSummary},
+    dx_deploy_target_detection::DxDeployTarget,
 };
 
 const DEPLOY_TARGET_CACHE_TTL: Duration = Duration::from_secs(5);
-const MAX_CONFIG_BYTES: u64 = 64 * 1024;
-const FRESH_RECEIPT_WINDOW: Duration = Duration::from_secs(24 * 60 * 60);
-const STALE_RECEIPT_WINDOW: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 #[derive(Clone)]
 pub(crate) struct DxDeployTargetSnapshot {
@@ -21,48 +26,8 @@ pub(crate) struct DxDeployTargetSnapshot {
     pub receipt_count: usize,
     pub latest_receipts: Vec<String>,
     pub receipt_buckets: Vec<DxDeployReceiptBucket>,
-}
-
-#[derive(Clone)]
-pub(crate) struct DxDeployTarget {
-    pub label: String,
-    pub platform: &'static str,
-    pub detail: String,
-    pub path: String,
-}
-
-#[derive(Clone)]
-pub(crate) struct DxDeployReceiptBucket {
-    pub label: &'static str,
-    pub root_label: &'static str,
-    pub root_exists: bool,
-    pub count: usize,
-    pub status: String,
-    pub latest: Vec<String>,
-    pub latest_summary: Option<DxDeployReceiptSummary>,
-}
-
-#[derive(Clone)]
-pub(crate) struct DxDeployReceiptSummary {
-    pub label: String,
-    pub headline: String,
-    pub status: Option<String>,
-    pub url: Option<String>,
-    pub target: Option<String>,
-    pub blocker_count: usize,
-}
-
-struct DeployReceiptCandidate {
-    modified: SystemTime,
-    label: String,
-    path: PathBuf,
-}
-
-struct DeployReceiptBucketSpec {
-    label: &'static str,
-    root_label: &'static str,
-    children: &'static [&'static str],
-    include_legacy_direct: bool,
+    pub capability_matrix: DxDeployCapabilityMatrixSnapshot,
+    pub launch_gate: DxDeployLaunchGateSnapshot,
 }
 
 impl DxDeployTargetSnapshot {
@@ -92,565 +57,42 @@ pub(crate) fn deploy_target_snapshot(workspace_roots: &[String]) -> DxDeployTarg
             }
         }
 
-        let snapshot = scan_deploy_targets(workspace_roots);
+        let snapshot = scan_deploy_snapshot(workspace_roots);
         *cache = Some((now, workspace_roots.to_vec(), snapshot.clone()));
         return snapshot;
     }
 
-    scan_deploy_targets(workspace_roots)
+    scan_deploy_snapshot(workspace_roots)
 }
 
-fn scan_deploy_targets(workspace_roots: &[String]) -> DxDeployTargetSnapshot {
+fn scan_deploy_snapshot(workspace_roots: &[String]) -> DxDeployTargetSnapshot {
     let workspace_roots = workspace_roots
         .iter()
         .take(4)
         .map(PathBuf::from)
         .collect::<Vec<_>>();
-    let mut targets = Vec::new();
-
-    for root in &workspace_roots {
-        push_vercel_project_target(root, &mut targets);
-        push_file_target(
-            root,
-            &["vercel.json"],
-            "Vercel",
-            "Vercel config",
-            "Project-level Vercel configuration",
-            &mut targets,
-        );
-        push_file_target(
-            root,
-            &["netlify.toml"],
-            "Netlify",
-            "Netlify site",
-            "Netlify build and deploy configuration",
-            &mut targets,
-        );
-        push_file_target(
-            root,
-            &["wrangler.toml"],
-            "Cloudflare",
-            "Cloudflare Worker",
-            "Wrangler deploy configuration",
-            &mut targets,
-        );
-        push_file_target(
-            root,
-            &["fly.toml"],
-            "Fly.io",
-            "Fly app",
-            "Fly deploy configuration",
-            &mut targets,
-        );
-        push_file_target(
-            root,
-            &["Dockerfile"],
-            "Docker",
-            "Container image",
-            "Dockerfile build target",
-            &mut targets,
-        );
-    }
-
-    targets.truncate(6);
+    let targets = scan_deploy_targets_for_roots(&workspace_roots);
     let (receipt_root_exists, receipt_count, latest_receipts, receipt_buckets) =
         scan_deploy_receipts(&workspace_roots);
+    let capability_matrix = deploy_capability_matrix_snapshot(&workspace_roots);
+    let launch_gate = deploy_launch_gate_snapshot(&workspace_roots);
+    let mut latest_receipts = latest_receipts;
+
+    for label in &capability_matrix.latest_receipts {
+        if !latest_receipts.contains(label) {
+            latest_receipts.push(label.clone());
+        }
+    }
+    latest_receipts.truncate(4);
 
     DxDeployTargetSnapshot {
         targets,
         workspace_root_count: workspace_roots.len(),
-        receipt_root_exists,
-        receipt_count,
+        receipt_root_exists: receipt_root_exists || capability_matrix.root_exists,
+        receipt_count: receipt_count + capability_matrix.receipt_count,
         latest_receipts,
         receipt_buckets,
+        capability_matrix,
+        launch_gate,
     }
-}
-
-fn scan_deploy_receipts(
-    workspace_roots: &[PathBuf],
-) -> (bool, usize, Vec<String>, Vec<DxDeployReceiptBucket>) {
-    let mut root_exists = false;
-    let mut count = 0;
-    let mut latest = Vec::new();
-
-    for root in workspace_roots {
-        let receipt_root = root.join("tools").join("dx-deploy");
-        if receipt_root.is_dir() {
-            root_exists = true;
-        }
-        count += count_receipt_files(&receipt_root);
-        latest.extend(latest_receipt_candidates(root, &receipt_root, 4));
-    }
-
-    latest.sort_by(|left, right| {
-        right
-            .modified
-            .partial_cmp(&left.modified)
-            .unwrap_or(Ordering::Equal)
-    });
-    latest.truncate(4);
-
-    (
-        root_exists,
-        count,
-        latest
-            .into_iter()
-            .map(|candidate| candidate.label)
-            .collect(),
-        deploy_receipt_buckets(workspace_roots),
-    )
-}
-
-fn deploy_receipt_buckets(workspace_roots: &[PathBuf]) -> Vec<DxDeployReceiptBucket> {
-    [
-        DeployReceiptBucketSpec {
-            label: "Readiness",
-            root_label: "tools/dx-deploy/readiness",
-            children: &["readiness"],
-            include_legacy_direct: true,
-        },
-        DeployReceiptBucketSpec {
-            label: "Env",
-            root_label: "tools/dx-deploy/env",
-            children: &["env"],
-            include_legacy_direct: false,
-        },
-        DeployReceiptBucketSpec {
-            label: "Logs",
-            root_label: "tools/dx-deploy/logs",
-            children: &["logs"],
-            include_legacy_direct: false,
-        },
-        DeployReceiptBucketSpec {
-            label: "Rollback",
-            root_label: "tools/dx-deploy/rollback",
-            children: &["rollback"],
-            include_legacy_direct: false,
-        },
-        DeployReceiptBucketSpec {
-            label: "URLs",
-            root_label: "tools/dx-deploy/urls",
-            children: &["urls", "url", "previews", "preview"],
-            include_legacy_direct: false,
-        },
-        DeployReceiptBucketSpec {
-            label: "Status",
-            root_label: "tools/dx-deploy/status",
-            children: &["status", "releases", "release"],
-            include_legacy_direct: false,
-        },
-    ]
-    .into_iter()
-    .map(|spec| deploy_receipt_bucket(workspace_roots, spec))
-    .collect()
-}
-
-fn deploy_receipt_bucket(
-    workspace_roots: &[PathBuf],
-    spec: DeployReceiptBucketSpec,
-) -> DxDeployReceiptBucket {
-    let mut root_exists = false;
-    let mut count = 0;
-    let mut latest = Vec::new();
-
-    for root in workspace_roots {
-        for child in spec.children {
-            let receipt_root = root.join("tools").join("dx-deploy").join(child);
-            if receipt_root.is_dir() {
-                root_exists = true;
-            }
-            count += count_receipt_files(&receipt_root);
-            latest.extend(latest_receipt_candidates(root, &receipt_root, 2));
-        }
-
-        if spec.include_legacy_direct {
-            let legacy_root = root.join("tools").join("dx-deploy");
-            if legacy_root.is_dir() {
-                root_exists = true;
-            }
-            count += count_direct_receipt_files(&legacy_root);
-            latest.extend(latest_direct_receipt_candidates(root, &legacy_root, 2));
-        }
-    }
-
-    latest.sort_by(|left, right| {
-        right
-            .modified
-            .partial_cmp(&left.modified)
-            .unwrap_or(Ordering::Equal)
-    });
-    latest.truncate(2);
-    let newest = latest.first().map(|candidate| candidate.modified);
-    let latest_summary = latest
-        .first()
-        .and_then(|candidate| deploy_receipt_summary(candidate, spec.label));
-
-    DxDeployReceiptBucket {
-        label: spec.label,
-        root_label: spec.root_label,
-        root_exists,
-        count,
-        status: receipt_bucket_status(root_exists, count, newest),
-        latest: latest
-            .into_iter()
-            .map(|candidate| candidate.label)
-            .collect(),
-        latest_summary,
-    }
-}
-
-fn receipt_bucket_status(root_exists: bool, count: usize, newest: Option<SystemTime>) -> String {
-    if !root_exists {
-        return "Missing".to_string();
-    }
-
-    if count == 0 {
-        return "No receipts".to_string();
-    }
-
-    let Some(newest) = newest else {
-        return "No timestamp".to_string();
-    };
-
-    match SystemTime::now().duration_since(newest) {
-        Ok(age) if age <= FRESH_RECEIPT_WINDOW => "Fresh".to_string(),
-        Ok(age) if age <= STALE_RECEIPT_WINDOW => "Stale".to_string(),
-        Ok(_) => "Old".to_string(),
-        Err(_) => "Fresh".to_string(),
-    }
-}
-
-fn push_vercel_project_target(root: &Path, targets: &mut Vec<DxDeployTarget>) {
-    let path = root.join(".vercel").join("project.json");
-    if !path.is_file() {
-        return;
-    }
-
-    let detail = read_json(&path)
-        .and_then(|value| {
-            let project_id = value.get("projectId").and_then(Value::as_str)?;
-            let org_id = value
-                .get("orgId")
-                .and_then(Value::as_str)
-                .unwrap_or("unknown org");
-            Some(format!("{project_id} - {org_id}"))
-        })
-        .unwrap_or_else(|| "Linked Vercel project".to_string());
-
-    targets.push(DxDeployTarget {
-        label: format!("Vercel: {}", display_name(root)),
-        platform: "Vercel",
-        detail,
-        path: relative_label(root, &path),
-    });
-}
-
-fn push_file_target(
-    root: &Path,
-    relative_path: &[&str],
-    platform: &'static str,
-    label: &'static str,
-    detail: &'static str,
-    targets: &mut Vec<DxDeployTarget>,
-) {
-    let path = relative_path
-        .iter()
-        .fold(root.to_path_buf(), |path, segment| path.join(segment));
-    if !path.is_file() {
-        return;
-    }
-
-    targets.push(DxDeployTarget {
-        label: format!("{label}: {}", display_name(root)),
-        platform,
-        detail: detail.to_string(),
-        path: relative_label(root, &path),
-    });
-}
-
-fn read_json(path: &Path) -> Option<Value> {
-    let mut file = File::open(path).ok()?;
-    let mut buffer = Vec::new();
-    file.by_ref()
-        .take(MAX_CONFIG_BYTES)
-        .read_to_end(&mut buffer)
-        .ok()?;
-    serde_json::from_slice(&buffer).ok()
-}
-
-fn count_receipt_files(path: &Path) -> usize {
-    let Ok(entries) = fs::read_dir(path) else {
-        return 0;
-    };
-
-    entries
-        .flatten()
-        .take(128)
-        .map(|entry| {
-            let path = entry.path();
-            if path.is_file() && is_receipt_file(&path) {
-                1
-            } else if path.is_dir() {
-                fs::read_dir(path)
-                    .map(|entries| {
-                        entries
-                            .flatten()
-                            .take(64)
-                            .filter(|entry| {
-                                let path = entry.path();
-                                path.is_file() && is_receipt_file(&path)
-                            })
-                            .count()
-                    })
-                    .unwrap_or_default()
-            } else {
-                0
-            }
-        })
-        .sum()
-}
-
-fn count_direct_receipt_files(path: &Path) -> usize {
-    let Ok(entries) = fs::read_dir(path) else {
-        return 0;
-    };
-
-    entries
-        .flatten()
-        .take(128)
-        .filter(|entry| {
-            let path = entry.path();
-            path.is_file() && is_receipt_file(&path)
-        })
-        .count()
-}
-
-fn latest_receipt_candidates(
-    workspace_root: &Path,
-    receipt_root: &Path,
-    limit: usize,
-) -> Vec<DeployReceiptCandidate> {
-    let Ok(entries) = fs::read_dir(receipt_root) else {
-        return Vec::new();
-    };
-
-    let mut receipts = Vec::new();
-    for entry in entries.flatten().take(64) {
-        let path = entry.path();
-        if path.is_file() {
-            push_receipt_candidate(workspace_root, &path, &mut receipts);
-        } else if let Ok(children) = fs::read_dir(&path) {
-            for child in children.flatten().take(64) {
-                push_receipt_candidate(workspace_root, &child.path(), &mut receipts);
-            }
-        }
-    }
-
-    receipts.sort_by(|left, right| {
-        right
-            .modified
-            .partial_cmp(&left.modified)
-            .unwrap_or(Ordering::Equal)
-    });
-    receipts.truncate(limit);
-    receipts
-}
-
-fn latest_direct_receipt_candidates(
-    workspace_root: &Path,
-    receipt_root: &Path,
-    limit: usize,
-) -> Vec<DeployReceiptCandidate> {
-    let Ok(entries) = fs::read_dir(receipt_root) else {
-        return Vec::new();
-    };
-
-    let mut receipts = Vec::new();
-    for entry in entries.flatten().take(64) {
-        push_receipt_candidate(workspace_root, &entry.path(), &mut receipts);
-    }
-
-    receipts.sort_by(|left, right| {
-        right
-            .modified
-            .partial_cmp(&left.modified)
-            .unwrap_or(Ordering::Equal)
-    });
-    receipts.truncate(limit);
-    receipts
-}
-
-fn push_receipt_candidate(
-    workspace_root: &Path,
-    path: &Path,
-    receipts: &mut Vec<DeployReceiptCandidate>,
-) {
-    if !path.is_file() || !is_receipt_file(path) {
-        return;
-    }
-
-    let modified = path
-        .metadata()
-        .and_then(|metadata| metadata.modified())
-        .unwrap_or(SystemTime::UNIX_EPOCH);
-    let label = relative_label(workspace_root, path);
-    receipts.push(DeployReceiptCandidate {
-        modified,
-        label,
-        path: path.to_path_buf(),
-    });
-}
-
-fn deploy_receipt_summary(
-    candidate: &DeployReceiptCandidate,
-    bucket_label: &'static str,
-) -> Option<DxDeployReceiptSummary> {
-    let value = read_json(&candidate.path)?;
-    let status = first_string_for_keys(
-        &value,
-        &[
-            "status",
-            "state",
-            "result",
-            "conclusion",
-            "deployment_status",
-        ],
-    );
-    let headline = first_string_for_keys(
-        &value,
-        &["headline", "summary", "message", "title", "next_action"],
-    )
-    .or_else(|| status.clone())
-    .unwrap_or_else(|| format!("{bucket_label} receipt"));
-    let url = first_url(&value);
-    let target = first_string_for_keys(
-        &value,
-        &["target", "platform", "environment", "deployment", "project"],
-    );
-    let blocker_count = count_named_arrays(&value, &["blockers", "errors"]);
-
-    Some(DxDeployReceiptSummary {
-        label: candidate.label.clone(),
-        headline,
-        status,
-        url,
-        target,
-        blocker_count,
-    })
-}
-
-fn first_string_for_keys(value: &Value, keys: &[&str]) -> Option<String> {
-    first_string_for_keys_inner(value, keys, 0)
-}
-
-fn first_string_for_keys_inner(value: &Value, keys: &[&str], depth: usize) -> Option<String> {
-    if depth > 6 {
-        return None;
-    }
-
-    match value {
-        Value::Object(map) => {
-            for key in keys {
-                if let Some(value) = map.get(*key).and_then(Value::as_str) {
-                    let value = value.trim();
-                    if !value.is_empty() {
-                        return Some(value.to_string());
-                    }
-                }
-            }
-
-            map.values()
-                .take(64)
-                .find_map(|value| first_string_for_keys_inner(value, keys, depth + 1))
-        }
-        Value::Array(values) => values
-            .iter()
-            .take(64)
-            .find_map(|value| first_string_for_keys_inner(value, keys, depth + 1)),
-        _ => None,
-    }
-}
-
-fn first_url(value: &Value) -> Option<String> {
-    first_url_inner(value, 0)
-}
-
-fn first_url_inner(value: &Value, depth: usize) -> Option<String> {
-    if depth > 6 {
-        return None;
-    }
-
-    match value {
-        Value::String(value) => {
-            let value = value.trim();
-            if value.starts_with("https://") || value.starts_with("http://") {
-                Some(value.to_string())
-            } else {
-                None
-            }
-        }
-        Value::Object(map) => map
-            .values()
-            .take(64)
-            .find_map(|value| first_url_inner(value, depth + 1)),
-        Value::Array(values) => values
-            .iter()
-            .take(64)
-            .find_map(|value| first_url_inner(value, depth + 1)),
-        _ => None,
-    }
-}
-
-fn count_named_arrays(value: &Value, keys: &[&str]) -> usize {
-    count_named_arrays_inner(value, keys, 0)
-}
-
-fn count_named_arrays_inner(value: &Value, keys: &[&str], depth: usize) -> usize {
-    if depth > 6 {
-        return 0;
-    }
-
-    match value {
-        Value::Object(map) => {
-            let direct = keys
-                .iter()
-                .filter_map(|key| map.get(*key).and_then(Value::as_array))
-                .map(Vec::len)
-                .sum::<usize>();
-            direct
-                + map
-                    .values()
-                    .take(64)
-                    .map(|value| count_named_arrays_inner(value, keys, depth + 1))
-                    .sum::<usize>()
-        }
-        Value::Array(values) => values
-            .iter()
-            .take(64)
-            .map(|value| count_named_arrays_inner(value, keys, depth + 1))
-            .sum(),
-        _ => 0,
-    }
-}
-
-fn is_receipt_file(path: &Path) -> bool {
-    matches!(
-        path.extension().and_then(|extension| extension.to_str()),
-        Some("json" | "jsonl" | "receipt")
-    )
-}
-
-fn relative_label(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .unwrap_or(path)
-        .display()
-        .to_string()
-}
-
-fn display_name(path: &Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| path.display().to_string())
 }

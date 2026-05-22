@@ -27,7 +27,7 @@ use workspace::{
     dock::{DockPosition, Panel, PanelEvent},
 };
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use web_preview::web_preview_view::WebPreviewView;
 
 actions!(
@@ -1039,7 +1039,7 @@ impl MediaPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
         {
             let Some(workspace) = self.workspace.upgrade() else {
                 self.status = Some("No active workspace".into());
@@ -1052,7 +1052,7 @@ impl MediaPanel {
             });
         }
 
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
         {
             cx.open_url(&preview_url);
         }

@@ -55,6 +55,7 @@ fn scan_receipts_root() -> DxReceiptSnapshot {
         ("Forge", "forge"),
         ("Sources", "metasearch"),
         ("Media", "media"),
+        ("Deploy", "deploy"),
         ("RLM", "rlm"),
         ("Serializer", "serializer"),
     ]

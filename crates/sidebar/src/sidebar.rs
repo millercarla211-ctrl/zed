@@ -71,7 +71,7 @@ use workspace::{
     notifications::NotificationId, sidebar_side_context_menu,
 };
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use web_preview::web_preview_view::WebPreviewView;
 
 use zed_actions::OpenRecent;
@@ -7332,14 +7332,16 @@ impl Sidebar {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        #[cfg(target_os = "windows")]
-        if let Some(workspace) = self.active_workspace(cx) {
-            workspace.update(cx, |workspace, cx| {
-                WebPreviewView::open_url_in_active_pane(workspace, url, window, cx);
-            });
+        #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+        {
+            if let Some(workspace) = self.active_workspace(cx) {
+                workspace.update(cx, |workspace, cx| {
+                    WebPreviewView::open_url_in_active_pane(workspace, url, window, cx);
+                });
+            }
         }
 
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
         {
             let _ = (url, window, cx);
         }

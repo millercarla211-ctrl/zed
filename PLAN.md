@@ -4,7 +4,7 @@ Date: 2026-05-21
 Launch target: 2026-05-22
 Primary repo: `G:\Zed`
 Canonical DX hub: `G:\Dx`
-Supporting DX tools: `G:\Dx\www`, `G:\Dx\cli`, `G:\Dx\dx-agents`, `G:\WWW`, `G:\Workspaces\flow`
+Supporting DX tools: `G:\Dx\www`, `G:\Dx\cli`, `G:\Dx\agent`, `G:\WWW`, `G:\Workspaces\flow`
 
 ## Current Launch Plan Snapshot
 
@@ -64,6 +64,99 @@ For first launch routing, DX should prefer the strongest approved remote provide
 The onboarding must make the security posture part of the product trust story: DX can discover setup readiness, but the user stays in control of credential import and model execution.
 
 The sprint should be split across parallel Codex Desktop GPT-5.5 Extra High chats. Each worker should write real code first, inspect the obvious integration errors by reading, and only run lightweight checks at coherent milestones. Repeated full builds are not allowed during the sprint because the product needs more implementation time than rebuild time.
+
+### Secure Extension Runtime Posture
+
+DX/Zed should make extension security a launch-visible advantage. The editor already has a stronger baseline than VS Code-style Node extension execution because Zed extensions run through the WASM/WIT extension host, and privileged operations flow through explicit host capabilities instead of receiving unrestricted process access by default.
+
+The current secure-by-default extension stance is:
+
+- Extensions do not inherit blanket `process:exec * **` shell execution from the default host settings.
+- Extensions do not inherit blanket `download_file * **` network download access from the default host settings.
+- Extensions do not inherit blanket `npm:install *` package-install access from the default host settings.
+- Global wildcard host grants for `process:exec`, `download_file`, and `npm:install` are rejected by the extension host capability granter even if they appear in configured host capabilities.
+- Default install support remains scoped for normal bundled extension paths: GitHub release downloads and the bundled Zed HTML language-server npm package.
+
+The launch claim should be clear and honest: DX/Zed extensions are WASM-hosted, capability-gated, and no longer receive blanket shell/download/npm power by default. That does not mean every extension risk is solved forever, but it is a real security improvement that helps distinguish DX from editor ecosystems where extensions commonly run as broad local Node processes.
+
+### DX-WWW Public Framework Strategy
+
+The public DX-WWW story should be simple and developer-familiar:
+
+> React-familiar web framework, Rust-powered runtime, Forge packages, no dependency black hole, fast static deploys.
+
+Keep these as the launch wedge:
+
+- `dx-forge` for source-owned packages, provenance, receipts, and rollback-aware safety.
+- `dx-check` for project quality, structure, lint/format state, visual checks, and launch-readiness scoring.
+- No template-local `node_modules` for the official DX-WWW launch path.
+- Rust/Axum dev server and hot reload as the runtime advantage.
+- Receipts as the durable trust layer between DX-WWW, Zed, Forge, Check, Deploy, Agents, and runtime proof.
+- Static export and Vercel deployment bridge as the launch deployment story.
+- Receipt-backed AI cost compression as a business wedge: DX should show estimated money saved from serializer compaction, RLM-style context reduction, local/open-model routing, and provider selection instead of only showing raw token counts.
+
+Make `.tsx` and a React-shaped `app/` directory the public default. That is what developers already understand, and it lets DX meet them where they are. Do not introduce `.pg` or `.cp` in new launch work; those are legacy experiment surfaces only for now, while the current product path is `.tsx`.
+
+Do not lead the launch with "multi-language components" or "zero hydration" claims. Those can become powerful later, but they should not be the first promise until they have hard runtime proof. The first promise is speed, safety, fewer dependency traps, and editor-connected creation.
+
+The public CLI should be reduced to 5-7 obvious commands:
+
+- `dx new`
+- `dx dev`
+- `dx add`
+- `dx check`
+- `dx forge`
+- `dx deploy`
+- `dx status`
+
+The many launch-evidence and receipt commands are valuable internally, but they should remain expert/debug subcommands or Zed-openable handoff files. Public DX should feel obvious, not like a command encyclopedia.
+
+### DX Icons And dx-style Correction
+
+DX should not market SVGL or an external icon set as the launch icon system. The correct product story is that DX Icons already gives the stack access to large icon packs through the `icon` CLI and the `dx/icon/search` Forge package. DX-WWW source should use `<dx-icon name="pack:name" />` syntax, validate exact icon names through `icon search`, `icon export`, `icon download`, `icon logo`, and `icon packs`, and expose icon choices to future Web Preview / Studio editing through source markers and receipts.
+
+dx-style should be the public styling lane for DX-WWW: a Tailwind-like developer experience backed by DX-owned scanning, theme tokens, generated CSS, and dx-check validation. For launch, generate normal CSS only. Binary style output is deprecated for now and should not be generated, documented, or pitched until the CSS-first path is mature and a separate measured style lane is re-approved. The dev cycle should be `dx dev` watching `.tsx`, `.jsx`, style tokens, and Forge package styles; `dx-style` generating CSS; `dx-check` catching hardcoded colors, missing tokens, missing generated CSS, and route/style mismatches; and `dx forge` recording package/style/icon receipts.
+
+dx-check should also grow a Rust-owned web performance lane. The public goal is Lighthouse-compatible mobile and desktop reporting across Performance, Accessibility, Best Practices, SEO, and a 400-point total, but without making DX depend on a random npm package. Use Rust Chrome DevTools Protocol metrics for the native path, and allow governed import of official Lighthouse JSON when exact Lighthouse parity is required.
+
+### AI Cost Compression Selling Point
+
+DX should turn token efficiency into a money story. The launch copy, AI panel, Check panel, and generated receipts should make it obvious that every saved token is saved spend, faster local iteration, and less dependency on expensive hosted frontier calls.
+
+The selling point is:
+
+- DX is cost-aware by default. It should be positioned against OpenClaw, OpenCode, Claude Code, Codex-style agent workflows, and other AI coding tools as the system that does not throw the biggest paid model at every small task.
+- Tokens are money. DX should make reckless context stuffing feel outdated by showing visible token budgets, model-route decisions, and receipt-backed savings before and after agent work.
+- The launch line is: "DX uses AI smartly, not blindly." It routes small tasks to small/local/free models plus strong native tools, and escalates to premium frontier models only when the value justifies the spend.
+- The meme line is allowed for launch copy: "DX does not call an elephant to deal with an ant."
+- dx-serializer should target at least 70% token reduction on verbose JSON/tool/schema/conversation payloads when the format is suitable, with receipts showing original token estimate, serialized token estimate, saved tokens, and estimated dollar savings.
+- RLM-style reduction should be positioned as "up to 90% context savings" only when a receipt can prove the workload avoided raw context stuffing through recursive search, chunking, reduction, and citation-preserving summaries.
+- Local/open model routing should show a separate cost-saving lane: MIT Sloan reported open models can cost far less than closed models and that optimal substitution could reduce average AI spend by more than 70%, so DX should make "use the right model for the right task" visible in routing.
+- Zed/DX AI meters should show `prompt_tokens`, `output_tokens`, `tool_tokens`, `saved_by_serializer_estimate`, `saved_by_rlm_estimate`, `local_model_savings_estimate`, `remote_provider_cost_estimate`, and `total_estimated_savings`.
+- Public claims must say "up to" and be receipt-backed. The demo can be bold about money saved, but each screenshot should have a local receipt path or benchmark note behind it.
+
+This matters because the most likely durable AI future is not blind frontier-model usage for every click. It is smart model routing, compressed context, strong tools, local-first execution where practical, and user-visible cost control. DX should make that future feel obvious.
+
+### Latest WWW Live QA Truth
+
+Latest governed live QA on `http://127.0.0.1:3001/launch` moved the template from "dummy shell" to "usable proof shell", but it is not yet the strongest launch demo.
+
+Current live template truth:
+
+- `/launch` works, does not leak `{children}`, and has 37 `data-dx` markers.
+- Theme, font, scrollbar, mobile no-horizontal-overflow, no local `node_modules`, route smoke, and favicon are working.
+- Auth/session, payment, Zod/form validation, Zustand state, TanStack Query refresh, local tRPC proof, docs preview, AI route, WASM add proof, automations readiness, and DX Studio markers are visible or interactive at some level.
+- Many integrations are still honest adapter boundaries: OAuth/Better Auth provider, real Stripe checkout session, full Motion/Framer parity, strong 3D pixel proof, Fumadocs renderer, n8n execution, hosted DB/realtime, app-owned wasm-bindgen module, and model streaming need more work.
+
+Live website score is 72/100. The next highest-value WWW change is not another package-card page. The launch page should become a real dashboard product template:
+
+- login/sign-up page and signed-in dashboard state,
+- settings form that changes dashboard content,
+- payment/plan action with a safe Stripe-shaped checkout path,
+- state/query/forms/validation/i18n visibly used by the dashboard workflow,
+- docs/content and 3D/animation as real panels in the app, not isolated proof cards,
+- DX Studio markers that map dashboard sections, tokens, text, icon/media, and reorder operations back to source-owned files,
+- Vercel static export and deployment support kept as a first-class DX-WWW capability.
 
 ### Canonical Folder Strategy
 
@@ -199,7 +292,7 @@ Implementation:
 2. Extract only useful token-budget/live-prune concepts into a clean DX token module or CLI contract.
 3. Add receipt output under G:\Dx\.dx\receipts\tokens with JSON first if fastest, and rkyv/memmap2 where already easy and isolated.
 4. Define simple CLI surfaces such as dx token estimate --json, dx token budget --json, and dx token prune --json if the DX CLI structure supports it.
-5. Prepare Zed-facing fields: prompt_tokens, output_tokens, tool_tokens, saved_by_rlm_estimate, saved_by_serializer_estimate, source_pack_bytes.
+5. Prepare Zed-facing fields: prompt_tokens, output_tokens, tool_tokens, saved_by_rlm_estimate, saved_by_serializer_estimate, local_model_savings_estimate, remote_provider_cost_estimate, total_estimated_savings, and source_pack_bytes.
 6. Keep this practical for tomorrow's demo. Do not rewrite all Zed JSON parsing.
 
 Checks:
@@ -212,7 +305,7 @@ Checks:
 #### Chat C Prompt: DX Agents + Zed GPUI Bridge
 
 ```text
-You are Codex GPT-5.5 Extra High working as the DX Agents integration worker. Work in G:\Dx\dx-agents, G:\Dx\cli, and G:\Zed. Write real code first. Use lightweight checks only after coherent changes.
+You are Codex GPT-5.5 Extra High working as the DX Agents integration worker. Work in G:\Dx\agent, G:\Dx\cli, and G:\Zed. Write real code first. Use lightweight checks only after coherent changes.
 
 Goal: connect the ZeroClaw-derived dx-agents runtime to Zed's GPUI. The agent stays CLI-first, but Zed gets a professional GUI bridge.
 
@@ -420,7 +513,7 @@ Purpose: zero-copy provider/model catalog.
 Inputs:
 
 - Flow local model roles and local runtime data.
-- `G:\Dx\dx-agents\crates\zeroclaw-providers`.
+- `G:\Dx\agent\crates\zeroclaw-providers`.
 - models.dev metadata.
 - LiteLLM-style provider aliases.
 - OpenRouter/Ollama-compatible public model lists where available.

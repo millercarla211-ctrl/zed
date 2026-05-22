@@ -1,8 +1,10 @@
+use crate::dx_check_panel::{DxCheckPanelSnapshot, dx_check_panel_snapshot};
 use crate::dx_receipt_history::DxToolHistorySnapshot;
 use crate::dx_source_sets::DxSourceSetSnapshot;
 
 #[derive(Clone)]
 pub(crate) struct DxCheckScoreSnapshot {
+    pub panel: DxCheckPanelSnapshot,
     pub score: u8,
     pub state: &'static str,
     pub items: Vec<DxCheckScoreItem>,
@@ -16,6 +18,7 @@ pub(crate) struct DxCheckScoreItem {
 }
 
 pub(crate) struct DxCheckScoreInput<'a> {
+    pub workspace_roots: &'a [String],
     pub receipt_root_exists: bool,
     pub receipt_file_count: usize,
     pub source_sets: &'a DxSourceSetSnapshot,
@@ -39,6 +42,7 @@ pub(crate) struct DxCheckScoreInput<'a> {
 }
 
 pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScoreSnapshot {
+    let panel = dx_check_panel_snapshot(input.workspace_roots);
     let attachment = input.source_sets.attachment_summary();
     let tool_receipt_count = input
         .tool_history
@@ -148,6 +152,7 @@ pub(crate) fn check_score_snapshot(input: DxCheckScoreInput<'_>) -> DxCheckScore
     };
 
     DxCheckScoreSnapshot {
+        panel,
         score,
         state,
         items: vec![

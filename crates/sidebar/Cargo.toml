@@ -50,7 +50,7 @@ vim_mode_setting.workspace = true
 workspace.workspace = true
 zed_actions.workspace = true
 
-[target.'cfg(target_os = "windows")'.dependencies]
+[target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
 web_preview.workspace = true
 
 [dev-dependencies]

@@ -7785,7 +7785,7 @@ fn ai_page(cx: &App) -> SettingsPage {
             }),
             SettingsPageItem::SettingItem(SettingItem {
                 title: "CLI Path",
-                description: "DX Agents executable used when Zed runs an explicit bridge action.",
+                description: "Root DX executable used when Zed runs an explicit dx agents bridge action.",
                 field: Box::new(SettingField {
                     json_path: Some("agent.dx_agents.cli_path"),
                     pick: |settings_content| {
