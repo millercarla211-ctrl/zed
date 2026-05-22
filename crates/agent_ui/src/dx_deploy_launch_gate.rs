@@ -6,7 +6,9 @@ use std::{
     time::SystemTime,
 };
 
-use crate::dx_deploy_launch_evidence::{DxDeployLaunchEvidenceSource, launch_evidence_sources};
+use crate::dx_deploy_launch_evidence::{
+    DxDeployLaunchChain, DxDeployLaunchEvidenceSource, launch_chain, launch_evidence_sources,
+};
 
 const MAX_CHECK_RECEIPT_BYTES: u64 = 256 * 1024;
 const DX_HUB_CHECK_RECEIPT_ROOT: &str = r"G:\Dx\.dx\receipts\check";
@@ -31,6 +33,7 @@ pub(crate) struct DxDeployLaunchGateSnapshot {
     pub warning_count: usize,
     pub blockers: Vec<DxDeployLaunchGateNotice>,
     pub evidence_sources: Vec<DxDeployLaunchEvidenceSource>,
+    pub chain: Option<DxDeployLaunchChain>,
     pub next_action: Option<String>,
 }
 
@@ -165,6 +168,7 @@ fn parse_launch_gate_candidate(
             .unwrap_or_else(|| array_len(zed.unwrap_or(&receipt), "warnings")),
         blockers: notice_rows(zed.and_then(|value| value.get("blockers"))),
         evidence_sources: launch_evidence_sources(&receipt),
+        chain: launch_chain(&receipt),
         next_action: first_string_array_item(&receipt, "next_actions")
             .or_else(|| launch_approved.and_then(|value| string_field(value, "next_action"))),
     })

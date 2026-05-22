@@ -2,14 +2,16 @@
 
 ADDED:
 - Added `crates/agent_ui/src/dx_deploy_launch_evidence.rs` as the focused parser for `dx check launch --json` `launch_evidence_sources`.
+- Added `crates/agent_ui/src/dx_deploy_launch_evidence_rail.rs` as the focused renderer for launch evidence and `launch_chain` rows.
 
 CHANGED:
 - Updated the Deploy launch-gate snapshot and rail so code-runner, web metrics, web probe, E2E, and deploy dry-run evidence rows appear beside source/runtime/launch approval status.
+- Updated deploy readiness prompts so agent handoffs include the same launch evidence-source and launch-chain summary as the rail.
 - Extended `script/dx-deploy-panel-source.test.ts` to guard the evidence-source parser, launch-gate reader hook, rail rendering helpers, and docs.
 - Recorded the refreshed receipt state in `DX.md` and `todo.txt`: 5 launch evidence sources, 1 ready deploy dry-run source, 4 missing runtime proof sources, and `245/500` launch score with source/runtime/launch approvals still false.
 
 NOTES:
-- The red step was recorded with `node --test script/dx-deploy-panel-source.test.ts` failing for the missing `dx_deploy_launch_evidence` module and docs. Green verification passed with the same targeted Node guard at 8/8 subtests. No Cargo check/build/test, local server, editor runtime, browser automation, cloud provider command, or live deploy ran in this slice.
+- The red steps were recorded with `node --test script/dx-deploy-panel-source.test.ts` failing first for the missing `dx_deploy_launch_evidence` contract and then for the missing `dx_deploy_launch_evidence_rail` / `launch_chain` split. Green verification passed with the same targeted Node guard at 8/8 subtests. No Cargo check/build/test, local server, editor runtime, browser automation, cloud provider command, or live deploy ran in this slice.
 
 [2026-05-22] - DX Deploy Panel Source Guard
 

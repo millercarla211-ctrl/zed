@@ -18,6 +18,7 @@ mod dx_check_score;
 mod dx_deploy_capabilities;
 mod dx_deploy_gate_rail;
 mod dx_deploy_launch_evidence;
+mod dx_deploy_launch_evidence_rail;
 mod dx_deploy_launch_gate;
 mod dx_deploy_launch_gate_rail;
 mod dx_deploy_local_files;

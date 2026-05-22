@@ -16,6 +16,7 @@ test("agent_ui registers the focused deploy modules", () => {
     "dx_deploy_capabilities",
     "dx_deploy_gate_rail",
     "dx_deploy_launch_evidence",
+    "dx_deploy_launch_evidence_rail",
     "dx_deploy_launch_gate",
     "dx_deploy_launch_gate_rail",
     "dx_deploy_local_files",
@@ -80,13 +81,23 @@ test("launch gate exposes dx-check evidence-source rows", () => {
   const parser = read("crates/agent_ui/src/dx_deploy_launch_evidence.rs");
   const reader = read("crates/agent_ui/src/dx_deploy_launch_gate.rs");
   const rail = read("crates/agent_ui/src/dx_deploy_launch_gate_rail.rs");
+  const evidenceRail = read("crates/agent_ui/src/dx_deploy_launch_evidence_rail.rs");
+  const prompts = read("crates/agent_ui/src/dx_deploy_prompts.rs");
 
   assert.match(parser, /DxDeployLaunchEvidenceSource/);
+  assert.match(parser, /DxDeployLaunchChain/);
   assert.match(parser, /launch_evidence_sources/);
+  assert.match(parser, /launch_chain/);
+  assert.match(parser, /required_source_count/);
   assert.match(parser, /blocker_count/);
   assert.match(reader, /launch_evidence_sources\(&receipt\)/);
-  assert.match(rail, /launch_evidence_summary/);
-  assert.match(rail, /launch_evidence_row/);
+  assert.match(reader, /launch_chain\(&receipt\)/);
+  assert.match(rail, /deploy_launch_evidence_state/);
+  assert.match(evidenceRail, /launch_evidence_summary/);
+  assert.match(evidenceRail, /launch_evidence_row/);
+  assert.match(evidenceRail, /launch_chain_summary/);
+  assert.match(prompts, /launch_evidence_prompt/);
+  assert.match(prompts, /evidence_sources=/);
 });
 
 test("deploy rail renders launch approval before provider dry-run rows", () => {
