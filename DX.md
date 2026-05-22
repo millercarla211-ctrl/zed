@@ -11,8 +11,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 
 - `G:\Dx\WORKER_PROMPTS.md`
 - `G:\Dx\DX.md`
-- `G:\Zed\AGENTS.md`
-- `G:\Zed\PLAN.md`
+- `G:\Dx\zed\AGENTS.md`
+- `G:\Dx\zed\PLAN.md`
 
 ## Hard Rules
 
