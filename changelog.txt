@@ -1,3 +1,19 @@
+[2026-05-22] - DX Studio Source Quality Split
+
+ADDED:
+- Added `script/dx-source-quality.test.ts`, a lightweight Node source guard for DX Studio file sizing and focused browser bridge fragment ownership.
+- Added `crates/web_preview/src/dx_studio/project.rs` as the focused owner for DX project detection and bounded source marker scanning.
+- Added `crates/web_preview/src/dx_studio/manifest.rs` as the focused owner for manifest/edit-contract candidate discovery and edit-contract summary parsing.
+- Added focused injected-browser-script fragments under `crates/web_preview/src/dx_studio_bridge/`.
+
+CHANGED:
+- Reduced `crates/web_preview/src/dx_studio.rs` by moving project detection and manifest ownership into submodules while preserving the public DX Studio API.
+- Replaced the single large inline raw bridge script in `crates/web_preview/src/dx_studio_bridge.rs` with `concat!(include_str!(...))` over focused fragments.
+
+NOTES:
+- The red step was recorded with `node --test script/dx-source-quality.test.ts` failing on the oversized `dx_studio.rs` file and inline bridge script. Green verification passed with the same targeted guard at 2/2 subtests. Cargo/editor/runtime proof remains deferred.
+- Scope was DX-only; no upstream Zed-owned files were refactored in this slice.
+
 [2026-05-22] - DX Deploy Launch Evidence Rows
 
 ADDED:
