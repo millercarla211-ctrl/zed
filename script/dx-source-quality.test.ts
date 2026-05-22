@@ -93,3 +93,17 @@ test("DX Studio bridge is assembled from focused browser-script fragments", () =
   const combinedScript = fragments.map((fragment) => read(fragment)).join("");
   assert.doesNotThrow(() => new Function(combinedScript));
 });
+
+test("DX Studio bridge refuses blank operation picker answers", () => {
+  const capture = read("crates/web_preview/src/dx_studio_bridge/capture.ts");
+
+  assert.match(capture, /const rawOperationAnswer = answer\.trim\(\);/);
+  assert.match(
+    capture,
+    /if \(!rawOperationAnswer\) \{\s+restoreBridgeStateAfterPromptCancel\(\);\s+return;\s+\}/,
+  );
+  assert.ok(capture.includes("if (!/^\\d+$/.test(rawOperationAnswer)) {"));
+  assert.match(capture, /drawSelection\(selection, "operation refused"\);/);
+  assert.match(capture, /const index = Number\.parseInt\(rawOperationAnswer, 10\);/);
+  assert.doesNotMatch(capture, /Number\.parseInt\(answer \|\| "0", 10\)/);
+});

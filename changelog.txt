@@ -1,3 +1,17 @@
+[2026-05-23] - DX Studio Operation Picker Blank Guard
+
+FIXED:
+- `crates/web_preview/src/dx_studio_bridge/capture.ts` now restores the previous receipt-backed selection state when the edit-operation prompt returns a blank or whitespace-only answer.
+- Malformed operation prompt text is now refused instead of being partially parsed as operation index `0`.
+- `script/dx-source-quality.test.ts` now guards the operation-picker cancellation path and still parses the assembled DX Studio bridge script.
+- `DX.md` and `todo.txt` now record the completed blank operation-picker guard.
+
+PASSED:
+- `node --test script/dx-source-quality.test.ts`
+
+NOTES:
+- No Cargo command, `just run`, local server, browser automation, live WebView runtime, cloud write, or deploy execution ran in this slice.
+
 [2026-05-23] - DX Launch Context Prompt Split
 
 ADDED:

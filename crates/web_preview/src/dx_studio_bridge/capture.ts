@@ -129,7 +129,16 @@
           restoreBridgeStateAfterPromptCancel();
           return;
         }
-        const index = Number.parseInt(answer || "0", 10);
+        const rawOperationAnswer = answer.trim();
+        if (!rawOperationAnswer) {
+          restoreBridgeStateAfterPromptCancel();
+          return;
+        }
+        if (!/^\d+$/.test(rawOperationAnswer)) {
+          drawSelection(selection, "operation refused");
+          return;
+        }
+        const index = Number.parseInt(rawOperationAnswer, 10);
         if (!Number.isFinite(index) || index < 0 || index >= operations.length) {
           drawSelection(selection, "operation refused");
           return;
@@ -294,4 +303,3 @@
     document.addEventListener("keydown", keydown, true);
     state.cleanup = cleanup;
   };
-
