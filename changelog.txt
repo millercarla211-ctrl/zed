@@ -1,3 +1,17 @@
+[2026-05-23] - DX Studio Operation Picker Safe Index Guard
+
+FIXED:
+- `crates/web_preview/src/dx_studio_bridge/capture.ts` now rejects operation-picker indexes that parse to unsafe JavaScript integers.
+- Oversized digit strings now stay on the `operation refused` path instead of depending on rounded `parseInt` output.
+- `script/dx-source-quality.test.ts` guards the safe-index requirement alongside blank and malformed operation-picker answers.
+
+PASSED:
+- Red/green `node --test script/dx-source-quality.test.ts`
+
+NOTES:
+- No Cargo command, `just run`, local server, browser automation, live WebView runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify the operation picker refusal labels and receipt-backed overlay preservation in the governed native Web Preview proof window.
+
 [2026-05-23] - DX Studio Operation Picker Blank Guard
 
 FIXED:

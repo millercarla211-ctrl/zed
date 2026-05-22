@@ -105,5 +105,6 @@ test("DX Studio bridge refuses blank operation picker answers", () => {
   assert.ok(capture.includes("if (!/^\\d+$/.test(rawOperationAnswer)) {"));
   assert.match(capture, /drawSelection\(selection, "operation refused"\);/);
   assert.match(capture, /const index = Number\.parseInt\(rawOperationAnswer, 10\);/);
+  assert.match(capture, /!Number\.isSafeInteger\(index\)/);
   assert.doesNotMatch(capture, /Number\.parseInt\(answer \|\| "0", 10\)/);
 });

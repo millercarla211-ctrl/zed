@@ -139,7 +139,7 @@
           return;
         }
         const index = Number.parseInt(rawOperationAnswer, 10);
-        if (!Number.isFinite(index) || index < 0 || index >= operations.length) {
+        if (!Number.isSafeInteger(index) || index < 0 || index >= operations.length) {
           drawSelection(selection, "operation refused");
           return;
         }
