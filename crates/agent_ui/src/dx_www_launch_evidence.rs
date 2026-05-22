@@ -7,8 +7,10 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+mod evidence_labels;
 mod expected_artifacts;
 
+use evidence_labels::evidence_score_label;
 use expected_artifacts::{
     EXPECTED_EVIDENCE_ARTIFACTS, EvidenceFormat, ExpectedWwwEvidenceArtifact,
 };
@@ -335,10 +337,7 @@ fn packet_schema(packet: &Value) -> String {
 }
 
 fn evidence_row_summary(row: &DxWwwLaunchEvidenceArtifact) -> String {
-    let score = row
-        .score
-        .map(|score| format!("{score}/100"))
-        .unwrap_or_else(|| row.schema.clone());
+    let score = evidence_score_label(row.score, &row.schema);
     let findings = if row.finding_count == 0 {
         "no findings".to_string()
     } else {

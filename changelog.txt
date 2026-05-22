@@ -1,3 +1,24 @@
+[2026-05-23] - DX-WWW Launch Evidence Score Labels
+
+ADDED:
+- Added `crates/agent_ui/src/dx_www_launch_evidence/evidence_labels.rs` as the focused owner for launch evidence score/schema labels.
+
+CHANGED:
+- `crates/agent_ui/src/dx_www_launch_evidence.rs` now delegates row score labels through `evidence_score_label`.
+- Evidence row summaries now reject scores above 100 as `invalid score N` and fall back to trimmed schema text or `unknown` for scoreless rows.
+- `script/dx-www-launch-evidence-source.test.ts` now guards the evidence label module and pure edge-case tests.
+
+PASSED:
+- Red/green `node --test script\dx-www-launch-evidence-source.test.ts`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_www_launch_evidence\evidence_labels.rs`
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_www_launch_evidence.rs crates\agent_ui\src\dx_www_launch_evidence\evidence_labels.rs`
+- `git diff --check`
+- Conflict-marker scan on touched files
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify score/schema labels against real DX-WWW evidence packets in the governed native Zed proof window.
+
 [2026-05-23] - DX-WWW Launch Evidence Catalog Split
 
 ADDED:
