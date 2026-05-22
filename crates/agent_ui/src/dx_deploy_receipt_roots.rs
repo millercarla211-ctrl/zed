@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::dx_deploy_receipt_rank::DxDeployReceiptSourceKind;
 
@@ -52,7 +52,15 @@ fn push_receipt_root(
     label: String,
     source_kind: DxDeployReceiptSourceKind,
 ) {
-    if roots.iter().any(|root| root.path == path) {
+    if path.as_os_str().is_empty() {
+        return;
+    }
+
+    let path_key = receipt_root_key(&path);
+    if roots
+        .iter()
+        .any(|root| receipt_root_key(&root.path) == path_key)
+    {
         return;
     }
 
@@ -61,4 +69,18 @@ fn push_receipt_root(
         label,
         source_kind,
     });
+}
+
+fn receipt_root_key(path: &Path) -> String {
+    let mut key = path.to_string_lossy().replace('/', "\\");
+
+    while key.ends_with('\\') && key.len() > 3 {
+        key.pop();
+    }
+
+    if cfg!(windows) {
+        key.to_ascii_lowercase()
+    } else {
+        key
+    }
 }

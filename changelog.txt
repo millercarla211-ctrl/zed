@@ -5,8 +5,12 @@ ADDED:
 
 CHANGED:
 - `crates/agent_ui/src/dx_deploy_capabilities.rs` now consumes workspace plus DX hub/cli/www receipt roots from the focused module instead of owning canonical root constants and duplicate-root filtering.
+- Deploy receipt root discovery now skips empty roots and normalizes duplicate Windows path spellings before scanning receipt folders without lowercasing non-Windows paths.
 - `script/dx-deploy-panel-source.test.ts` now guards the deploy receipt roots split and the status-doc handoff.
 - `DX.md` and `todo.txt` now record the deploy receipt roots ownership boundary.
+
+PASSED:
+- `node --test script/dx-deploy-panel-source.test.ts`
 
 NOTES:
 - No Cargo command, local server, browser automation, cloud write, live deploy, or broad build ran in this slice.

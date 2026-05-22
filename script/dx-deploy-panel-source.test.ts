@@ -127,6 +127,12 @@ test("deploy capability receipt roots stay in a focused module", () => {
   assert.match(roots, /DX_HUB_DEPLOY_RECEIPT_ROOT/);
   assert.match(roots, /DX_CLI_DEPLOY_RECEIPT_ROOT/);
   assert.match(roots, /DX_WWW_DEPLOY_RECEIPT_ROOT/);
+  assert.match(roots, /fn receipt_root_key\(path: &Path\) -> String/);
+  assert.match(roots, /path\.as_os_str\(\)\.is_empty\(\)/);
+  assert.match(roots, /let path_key = receipt_root_key\(&path\);/);
+  assert.match(roots, /receipt_root_key\(&root\.path\) == path_key/);
+  assert.match(roots, /cfg!\(windows\)/);
+  assert.match(roots, /to_ascii_lowercase\(\)/);
   assert.match(
     capabilities,
     /use crate::dx_deploy_receipt_roots::\{DxDeployReceiptRoot, deploy_receipt_roots\};/,
