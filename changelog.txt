@@ -1,3 +1,18 @@
+[2026-05-23] - DX Agent Bridge Source Split
+
+ADDED:
+- Added `script/dx-agent-bridge-source.test.ts`, a lightweight Node source guard for DX Agent bridge command/runtime/receipt ownership and file sizing.
+- Added `crates/agent_ui/src/dx_agent_bridge/commands.rs` as the focused owner for safe public/metadata command execution, metadata receipt writing, and action-error receipt writing.
+- Added `crates/agent_ui/src/dx_agent_bridge/runtime.rs` as the focused owner for social account, automation, provider, model, and catalog parsing.
+- Added `crates/agent_ui/src/dx_agent_bridge/receipts.rs` as the focused owner for contract, import-summary, release-gate, receipt-inbox, action-error, receipt-index, and receipt-row parsing.
+
+CHANGED:
+- Reduced `crates/agent_ui/src/dx_agent_bridge.rs` from a mixed command/parser/snapshot implementation to a type and snapshot coordinator that re-exports the public command API.
+
+NOTES:
+- The red step was recorded with `node --test script/dx-agent-bridge-source.test.ts` failing for the missing focused bridge modules. Green verification passed with the same guard at 2/2 subtests and targeted rustfmt. Cargo/editor/runtime proof remains deferred by the no-build lane.
+- Scope was DX-only; no upstream Zed-owned files were refactored in this slice.
+
 [2026-05-23] - DX Launch Workspace Source Split
 
 ADDED:
