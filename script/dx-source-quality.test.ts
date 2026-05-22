@@ -108,3 +108,17 @@ test("DX Studio bridge refuses blank operation picker answers", () => {
   assert.match(capture, /!Number\.isSafeInteger\(index\)/);
   assert.doesNotMatch(capture, /Number\.parseInt\(answer \|\| "0", 10\)/);
 });
+
+test("DX Studio bridge refuses blank target picker answers", () => {
+  const selection = read("crates/web_preview/src/dx_studio_bridge/selection.ts");
+
+  assert.match(selection, /const rawTargetAnswer = answer\.trim\(\);/);
+  assert.match(
+    selection,
+    /if \(!rawTargetAnswer\) return null;/,
+  );
+  assert.ok(selection.includes("if (!/^\\d+$/.test(rawTargetAnswer)) return null;"));
+  assert.match(selection, /const index = Number\.parseInt\(rawTargetAnswer, 10\);/);
+  assert.match(selection, /!Number\.isSafeInteger\(index\)/);
+  assert.doesNotMatch(selection, /Number\.parseInt\(answer \|\| "0", 10\)/);
+});

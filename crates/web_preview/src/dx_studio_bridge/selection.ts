@@ -69,8 +69,11 @@
     const labels = choices.map(targetLabel).join("\n");
     const answer = window.prompt(`Choose DX Studio target:\n${labels}`, "0");
     if (answer == null) return null;
-    const index = Number.parseInt(answer || "0", 10);
-    if (!Number.isFinite(index) || index < 0 || index >= choices.length) return null;
+    const rawTargetAnswer = answer.trim();
+    if (!rawTargetAnswer) return null;
+    if (!/^\d+$/.test(rawTargetAnswer)) return null;
+    const index = Number.parseInt(rawTargetAnswer, 10);
+    if (!Number.isSafeInteger(index) || index < 0 || index >= choices.length) return null;
     return choices[index];
   };
 
@@ -148,4 +151,3 @@
       }
     };
   };
-

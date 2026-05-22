@@ -1,3 +1,18 @@
+[2026-05-23] - DX Studio Target Picker Safe Index Guard
+
+FIXED:
+- `crates/web_preview/src/dx_studio_bridge/selection.ts` now trims ambiguous target-prompt answers before parsing.
+- Blank or whitespace-only target-prompt answers now cancel target selection instead of silently selecting target `0`.
+- Non-digit and unsafe numeric target answers now refuse locally before selecting a source surface.
+- `script/dx-source-quality.test.ts` guards the target-picker path alongside operation-picker safety.
+
+PASSED:
+- Red/green `node --test script/dx-source-quality.test.ts`
+
+NOTES:
+- No Cargo command, `just run`, local server, browser automation, live WebView runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify ambiguous target prompt cancellation and refusal labels in the governed native Web Preview proof window.
+
 [2026-05-23] - DX Studio Operation Picker Safe Index Guard
 
 FIXED:
