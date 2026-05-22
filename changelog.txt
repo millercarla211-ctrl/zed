@@ -1,3 +1,19 @@
+[2026-05-23] - DX Check Blank Last-Run Label Guard
+
+FIXED:
+- `crates/agent_ui/src/dx_launch_workspace/check_labels.rs` now trims receipt-provided last-run labels.
+- Blank last-run labels with a generated timestamp now render as `Last run Unix ms: <timestamp>` instead of ` (timestamp)`.
+- Blank last-run labels without a generated timestamp now render as `Never`.
+
+PASSED:
+- Red/green direct `rustc --edition=2024 --test crates\agent_ui\src\dx_launch_workspace\check_labels.rs`
+- `node --test script/dx-launch-workspace-source.test.ts`
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_launch_workspace.rs crates\agent_ui\src\dx_launch_workspace\check.rs crates\agent_ui\src\dx_launch_workspace\check_labels.rs`
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify blank and generated-time Check rail labels against real `check-latest.json` receipts in the governed proof window.
+
 [2026-05-23] - DX Launch Check Rail Split
 
 ADDED:
@@ -15,7 +31,7 @@ PASSED:
 - `rustfmt --edition 2024 --check crates/agent_ui/src/dx_launch_workspace.rs crates/agent_ui/src/dx_launch_workspace/check.rs crates/agent_ui/src/dx_launch_workspace/check_labels.rs`
 
 NOTES:
-- Direct unit tests cover empty/single/plural checked and skipped labels, zero-failure outcome labels, duration boundaries, and last-run generated timestamp de-duplication.
+- Direct unit tests cover empty/single/plural checked and skipped labels, zero-failure outcome labels, duration boundaries, last-run generated timestamp de-duplication, and blank last-run fallback.
 - No Cargo command, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
 - Exact next action: verify Check/Deploy/Proof right-rail rows in the governed native Zed proof window.
 

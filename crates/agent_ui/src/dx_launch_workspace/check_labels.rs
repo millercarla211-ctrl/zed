@@ -54,15 +54,20 @@ pub(crate) fn last_run_label_with_generated_at(
     last_run_label: &str,
     generated_at_unix_ms: Option<u64>,
 ) -> String {
+    let label = last_run_label.trim();
     if let Some(generated_at) = generated_at_unix_ms {
         let generated_at = generated_at.to_string();
-        if last_run_label.contains(&generated_at) {
-            last_run_label.to_string()
+        if label.is_empty() {
+            format!("Last run Unix ms: {generated_at}")
+        } else if label.contains(&generated_at) {
+            label.to_string()
         } else {
-            format!("{last_run_label} ({generated_at})")
+            format!("{label} ({generated_at})")
         }
+    } else if label.is_empty() {
+        "Never".to_string()
     } else {
-        last_run_label.to_string()
+        label.to_string()
     }
 }
 
@@ -124,6 +129,22 @@ mod tests {
             last_run_label_with_generated_at("2 minutes ago", Some(1_779_400_000_000)),
             "2 minutes ago (1779400000000)"
         );
-        assert_eq!(last_run_label_with_generated_at("Never", None), "Never");
+    }
+
+    #[test]
+    fn last_run_label_uses_generated_timestamp_when_label_is_blank() {
+        assert_eq!(
+            last_run_label_with_generated_at("   ", Some(1_779_400_000_000)),
+            "Last run Unix ms: 1779400000000"
+        );
+        assert_eq!(last_run_label_with_generated_at("   ", None), "Never");
+    }
+
+    #[test]
+    fn last_run_label_trims_nonblank_receipt_labels() {
+        assert_eq!(
+            last_run_label_with_generated_at("  2 minutes ago  ", None),
+            "2 minutes ago"
+        );
     }
 }

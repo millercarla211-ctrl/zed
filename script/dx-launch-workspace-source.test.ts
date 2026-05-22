@@ -62,6 +62,9 @@ test("DX launch workspace delegates Check rail rendering", () => {
   assert.match(labels, /pub\(crate\) fn checked_paths_label/);
   assert.match(labels, /pub\(crate\) fn skipped_checks_label/);
   assert.match(labels, /pub\(crate\) fn last_run_label_with_generated_at/);
+  assert.match(labels, /last_run_label_uses_generated_timestamp_when_label_is_blank/);
+  assert.match(labels, /last_run_label_trims_nonblank_receipt_labels/);
+  assert.match(labels, /Last run Unix ms: \{generated_at\}/);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check.rs") < 190);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check_labels.rs") < 140);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check_labels.rs") < 160);
 });
