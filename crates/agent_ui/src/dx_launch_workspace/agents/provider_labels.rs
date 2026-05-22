@@ -47,13 +47,22 @@ pub(crate) fn model_detail_label(provider_id: &str, id: &str, compatibility: &[S
 }
 
 fn compatibility_label(compatibility: &[String]) -> String {
-    compatibility
+    let values = compatibility
         .iter()
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    let shown = values
+        .iter()
         .take(3)
+        .copied()
         .collect::<Vec<_>>()
-        .join(", ")
+        .join(", ");
+
+    match values.len().saturating_sub(3) {
+        0 => shown,
+        hidden => format!("{shown} (+{hidden} more)"),
+    }
 }
 
 fn nonblank_or(value: &str, fallback: &'static str) -> String {
@@ -119,6 +128,17 @@ mod tests {
         assert_eq!(
             model_detail_label(" ", "", &strings(&["", "  "])),
             "unknown-provider / unknown-model"
+        );
+    }
+
+    #[test]
+    fn detail_labels_disclose_compatibility_overflow() {
+        assert_eq!(
+            provider_detail_label(
+                "openai",
+                &strings(&["chat", "tools", "vision", "local", ""])
+            ),
+            "openai - chat, tools, vision (+1 more)"
         );
     }
 }
