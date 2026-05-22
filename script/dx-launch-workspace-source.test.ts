@@ -13,6 +13,7 @@ test("DX launch workspace UI stays split by rail ownership", () => {
     "crates/agent_ui/src/dx_launch_workspace/check_labels.rs",
     "crates/agent_ui/src/dx_launch_workspace/list_labels.rs",
     "crates/agent_ui/src/dx_launch_workspace/proof.rs",
+    "crates/agent_ui/src/dx_launch_workspace/proof_labels.rs",
     "crates/agent_ui/src/dx_launch_workspace/sources.rs",
     "crates/agent_ui/src/dx_launch_workspace/tool_history.rs",
   ];
@@ -26,6 +27,7 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   assert.match(parent, /^mod check_labels;$/m);
   assert.match(parent, /^mod list_labels;$/m);
   assert.match(parent, /^mod proof;$/m);
+  assert.match(parent, /^mod proof_labels;$/m);
   assert.match(parent, /^mod sources;$/m);
   assert.match(parent, /^mod tool_history;$/m);
   assert.ok(
@@ -37,6 +39,7 @@ test("DX launch workspace UI stays split by rail ownership", () => {
 test("DX launch workspace delegates agents and source rails", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const agents = read("crates/agent_ui/src/dx_launch_workspace/agents.rs");
+  const agentProviders = read("crates/agent_ui/src/dx_launch_workspace/agents/providers.rs");
   const sources = read("crates/agent_ui/src/dx_launch_workspace/sources.rs");
 
   assert.match(parent, /agents::dx_agent_bridge_state/);
@@ -44,10 +47,19 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.doesNotMatch(parent, /fn dx_agent_bridge_state/);
   assert.doesNotMatch(parent, /fn source_set_stack/);
   assert.match(agents, /pub\(super\) fn dx_agent_bridge_state/);
-  assert.match(agents, /pub\(super\) fn dx_agent_provider_state/);
+  assert.match(agents, /^mod providers;$/m);
+  assert.match(agents, /pub\(super\) use providers::dx_agent_provider_state/);
+  assert.doesNotMatch(agents, /fn dx_agent_provider_row/);
+  assert.doesNotMatch(agents, /fn dx_agent_model_row/);
+  assert.match(agentProviders, /pub\(in super::super\) fn dx_agent_provider_state/);
+  assert.match(agentProviders, /fn dx_agent_provider_row/);
+  assert.match(agentProviders, /fn dx_agent_model_row/);
+  assert.match(agentProviders, /DxAgentProvider/);
+  assert.match(agentProviders, /DxAgentModel/);
   assert.match(sources, /pub\(super\) fn source_set_stack/);
   assert.match(sources, /pub\(super\) fn receipt_source_state/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents.rs") < 1100);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents.rs") < 900);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/providers.rs") < 160);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources.rs") < 420);
 });
 
@@ -110,6 +122,7 @@ test("DX launch workspace delegates Tool History rail rendering", () => {
 test("DX launch workspace delegates Proof rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const proof = read("crates/agent_ui/src/dx_launch_workspace/proof.rs");
+  const proofLabels = read("crates/agent_ui/src/dx_launch_workspace/proof_labels.rs");
 
   assert.match(parent, /proof::proof_freshness_state/);
   assert.match(parent, /proof::runtime_proof_status_state/);
@@ -125,5 +138,14 @@ test("DX launch workspace delegates Proof rail rendering", () => {
   assert.match(proof, /DxRuntimeProofPlanSummary/);
   assert.match(proof, /DxRuntimeProofReceiptSummary/);
   assert.match(proof, /dx-runtime-proof-latest-plan/);
+  assert.match(proof, /use super::proof_labels::\{/);
+  assert.doesNotMatch(proof, /fn runtime_proof_plan_evidence_detail/);
+  assert.doesNotMatch(proof, /fn runtime_proof_plan_requirements/);
+  assert.match(proofLabels, /pub\(crate\) fn runtime_proof_evidence_detail/);
+  assert.match(proofLabels, /pub\(crate\) fn runtime_proof_requirements_label/);
+  assert.match(proofLabels, /pub\(crate\) fn runtime_proof_receipt_state_label/);
+  assert.match(proofLabels, /runtime_proof_evidence_detail_ignores_blank_examples/);
+  assert.match(proofLabels, /runtime_proof_receipt_state_label_handles_blank_validation_status/);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof.rs") < 340);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof_labels.rs") < 120);
 });

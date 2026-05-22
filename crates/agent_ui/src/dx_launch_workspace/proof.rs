@@ -6,6 +6,10 @@ use crate::dx_runtime_proof_status::{
     DxRuntimeProofPlanSummary, DxRuntimeProofReceiptSummary, DxRuntimeProofStatusSnapshot,
 };
 
+use super::proof_labels::{
+    runtime_proof_evidence_detail, runtime_proof_receipt_state_label,
+    runtime_proof_requirements_label,
+};
 use super::{metric_row, muted_card, signal_row};
 
 pub(super) fn proof_freshness_state(snapshot: &DxProofFreshnessSnapshot, cx: &App) -> AnyElement {
@@ -130,7 +134,12 @@ pub(super) fn runtime_proof_status_state(
 }
 
 fn runtime_proof_plan_row(plan: &DxRuntimeProofPlanSummary, cx: &App) -> AnyElement {
-    let requirements = runtime_proof_plan_requirements(plan);
+    let requirements = runtime_proof_requirements_label(
+        plan.requires_clean_git,
+        plan.requires_diff_check,
+        plan.requires_visual_evidence,
+        plan.requires_import,
+    );
     let mut stack = v_flex()
         .id("dx-runtime-proof-latest-plan")
         .gap_0p5()
@@ -170,10 +179,13 @@ fn runtime_proof_plan_row(plan: &DxRuntimeProofPlanSummary, cx: &App) -> AnyElem
 
     if plan.minimum_evidence_lines_for_pass > 0 || !plan.accepted_evidence_examples.is_empty() {
         stack = stack.child(
-            Label::new(runtime_proof_plan_evidence_detail(plan))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
+            Label::new(runtime_proof_evidence_detail(
+                plan.minimum_evidence_lines_for_pass,
+                &plan.accepted_evidence_examples,
+            ))
+            .size(LabelSize::XSmall)
+            .color(Color::Muted)
+            .truncate(),
         );
     }
 
@@ -196,63 +208,18 @@ fn runtime_proof_plan_row(plan: &DxRuntimeProofPlanSummary, cx: &App) -> AnyElem
     stack.into_any_element()
 }
 
-fn runtime_proof_plan_evidence_detail(plan: &DxRuntimeProofPlanSummary) -> String {
-    let minimum = if plan.minimum_evidence_lines_for_pass > 0 {
-        format!("{}+ evidence", plan.minimum_evidence_lines_for_pass)
-    } else {
-        "evidence required".to_string()
-    };
-    let examples = if plan.accepted_evidence_examples.is_empty() {
-        "use operator proof lines".to_string()
-    } else {
-        plan.accepted_evidence_examples
-            .iter()
-            .take(2)
-            .cloned()
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-
-    format!("{minimum} - {examples}")
-}
-
-fn runtime_proof_plan_requirements(plan: &DxRuntimeProofPlanSummary) -> String {
-    let mut requirements = Vec::new();
-
-    if plan.requires_clean_git {
-        requirements.push("clean git");
-    }
-    if plan.requires_diff_check {
-        requirements.push("diff check");
-    }
-    if plan.requires_visual_evidence {
-        requirements.push("visual proof");
-    }
-    if plan.requires_import {
-        requirements.push("proof import");
-    }
-
-    if requirements.is_empty() {
-        "no extra requirements".to_string()
-    } else {
-        format!("requires {}", requirements.join(", "))
-    }
-}
-
 fn runtime_proof_receipt_row(
     id: &'static str,
     label: &'static str,
     receipt: &DxRuntimeProofReceiptSummary,
     cx: &App,
 ) -> AnyElement {
-    let state = if receipt.runtime_green_candidate || receipt.can_claim_runtime_green {
-        "Claim-ready".to_string()
-    } else {
-        format!(
-            "{} - {} blocker(s)",
-            receipt.validation_status, receipt.blocker_count
-        )
-    };
+    let state = runtime_proof_receipt_state_label(
+        receipt.runtime_green_candidate,
+        receipt.can_claim_runtime_green,
+        &receipt.validation_status,
+        receipt.blocker_count,
+    );
     let mut stack = v_flex()
         .id(id)
         .gap_0p5()

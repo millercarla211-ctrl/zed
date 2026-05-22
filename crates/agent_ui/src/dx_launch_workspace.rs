@@ -24,6 +24,7 @@ mod check;
 mod check_labels;
 mod list_labels;
 mod proof;
+mod proof_labels;
 mod sources;
 mod tool_history;
 use self::list_labels::bounded_items;

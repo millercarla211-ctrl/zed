@@ -1,3 +1,27 @@
+[2026-05-23] - DX Launch Agent Provider And Proof Label Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/providers.rs` as the focused owner for Agent provider and model rail rows.
+- Added `crates/agent_ui/src/dx_launch_workspace/proof_labels.rs` as the pure label owner for runtime-proof evidence, requirement, and receipt-state text.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/agents.rs` now re-exports `providers::dx_agent_provider_state` and no longer owns provider/model row rendering.
+- `crates/agent_ui/src/dx_launch_workspace/proof.rs` now delegates evidence detail, requirement, and receipt-state labels through `proof_labels`.
+- `script/dx-launch-workspace-source.test.ts` now guards the new Agent provider and Proof label boundaries plus smaller source caps.
+
+PASSED:
+- Red/green `node --test script/dx-launch-workspace-source.test.ts`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_launch_workspace\proof_labels.rs`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_launch_workspace\list_labels.rs`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_launch_workspace\check_labels.rs`
+- `node --test script\dx-deploy-panel-source.test.ts`
+- `rustfmt --edition 2024 --check crates/agent_ui/src/dx_launch_workspace.rs crates/agent_ui/src/dx_launch_workspace/agents.rs crates/agent_ui/src/dx_launch_workspace/agents/providers.rs crates/agent_ui/src/dx_launch_workspace/proof.rs crates/agent_ui/src/dx_launch_workspace/proof_labels.rs`
+- `git diff --check`
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify Agent provider/model rows and Runtime Proof labels against real DX Agents/runtime-proof receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Proof Rail Split
 
 ADDED:
