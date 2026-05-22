@@ -1,3 +1,21 @@
+[2026-05-23] - DX Agent Bridge Command Label Redaction
+
+CHANGED:
+- `crates/agent_ui/src/dx_agent_bridge/command_safety.rs` now redacts secret-like command arguments before building bridge command labels, including `--token`, `sk-*`, `--api-key=value`, and the value following secret flag arguments.
+- `crates/agent_ui/src/dx_agent_bridge/command_safety_tests.rs` keeps the focused command-label unit coverage out of the production helper.
+- `script/dx-agent-bridge-source.test.ts` now guards the redacted-label edge case, split test module, and small-file budgets.
+
+PASSED:
+- Red/green direct `rustc --edition=2024 --test crates\agent_ui\src\dx_agent_bridge\command_safety.rs`
+- `node --test script\dx-agent-bridge-source.test.ts`
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_agent_bridge\command_safety.rs crates\agent_ui\src\dx_agent_bridge\command_safety_tests.rs`
+- `git diff --check`
+- Conflict-marker scan on touched files
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify redacted bridge command labels against real failed DX Agents action receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Agent Bridge Command Safety And Local Files Split
 
 ADDED:
