@@ -1,3 +1,17 @@
+[2026-05-23] - DX Deploy Handoff Quick Fix Metadata
+
+CHANGED:
+- `crates/agent_ui/src/dx_deploy_check_roots.rs` now owns launch-check receipt roots for workspace plus DX hub/www paths through the shared `DX_HOME`, `DX_ROOT`, `D:\Dx`, and `G:\Dx` hub discovery contract.
+- `crates/agent_ui/src/dx_deploy_receipt_summary.rs` now preserves `dx.deploy.zed_handoff.v1` quick-fix command, risk level, approval requirement, and receipt-write metadata from root `dx deploy` receipts.
+- `crates/agent_ui/src/dx_deploy_gate_rail.rs` now renders those dx-deploy quick fixes as metadata-only operator guidance instead of reducing them to a count.
+- `DX.md` and `todo.txt` now record that deploy proof stays owned by `dx deploy`, while `dx_deploy_check_roots.rs` owns launch-check receipt roots separately.
+
+PASSED:
+- `node --test script/dx-deploy-panel-source.test.ts`
+
+NOTES:
+- No Cargo command, local server, browser automation, cloud write, live deploy, or broad build ran in this slice.
+
 [2026-05-23] - DX Check Panel Source Split
 
 ADDED:

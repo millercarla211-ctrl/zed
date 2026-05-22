@@ -1,7 +1,9 @@
 use gpui::{AnyElement, App, SharedString, prelude::*};
 use ui::{IconName, prelude::*};
 
-use crate::dx_deploy_capabilities::{DxDeployProviderGateReceiptSummary, DxDeployProviderGateRow};
+use crate::dx_deploy_capabilities::{
+    DxDeployProviderGateQuickFix, DxDeployProviderGateReceiptSummary, DxDeployProviderGateRow,
+};
 use crate::dx_deploy_rail_ui::{metric_row, muted_label, signal_row};
 
 pub(crate) fn deploy_provider_gate_state(
@@ -51,11 +53,8 @@ pub(crate) fn deploy_provider_gate_state(
         stack = stack.child(deploy_provider_gate_row(row, cx));
     }
 
-    if receipt.quick_fix_count > 0 {
-        stack = stack.child(metric_row(
-            "Quick fixes",
-            format!("{} receipt action(s)", receipt.quick_fix_count),
-        ));
+    for quick_fix in receipt.quick_fixes.iter().take(3) {
+        stack = stack.child(deploy_provider_gate_quick_fix(quick_fix, cx));
     }
 
     if let Some(next_action) = receipt.next_action.as_ref() {
@@ -63,6 +62,44 @@ pub(crate) fn deploy_provider_gate_state(
     }
 
     stack.into_any_element()
+}
+
+fn deploy_provider_gate_quick_fix(
+    quick_fix: &DxDeployProviderGateQuickFix,
+    cx: &App,
+) -> AnyElement {
+    v_flex()
+        .id(SharedString::from(format!(
+            "dx-deploy-gate-quick-fix-{}",
+            quick_fix.id
+        )))
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().editor_background)
+        .child(metric_row(
+            quick_fix.label.clone(),
+            quick_fix.risk_level.clone(),
+        ))
+        .child(muted_label(deploy_quick_fix_detail(quick_fix)))
+        .into_any_element()
+}
+
+fn deploy_quick_fix_detail(quick_fix: &DxDeployProviderGateQuickFix) -> String {
+    let approval = if quick_fix.requires_user_approval {
+        "requires approval"
+    } else {
+        "no approval required"
+    };
+    let receipt_write = if quick_fix.writes_receipts {
+        "writes receipt"
+    } else {
+        "read-only"
+    };
+
+    format!("{} - {} - {}", quick_fix.command, approval, receipt_write)
 }
 
 fn deploy_provider_gate_status(receipt: &DxDeployProviderGateReceiptSummary) -> String {

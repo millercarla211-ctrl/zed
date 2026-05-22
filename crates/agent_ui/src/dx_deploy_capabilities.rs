@@ -13,7 +13,8 @@ use crate::dx_deploy_receipt_rank::{
 };
 use crate::dx_deploy_receipt_roots::{DxDeployReceiptRoot, deploy_receipt_roots};
 pub(crate) use crate::dx_deploy_receipt_summary::{
-    DxDeployCapabilityRow, DxDeployCommandReceiptSummary, DxDeployProviderGateReceiptSummary,
+    DxDeployCapabilityRow, DxDeployCommandReceiptSummary, DxDeployProviderGateQuickFix,
+    DxDeployProviderGateReceiptSummary,
 };
 use crate::dx_deploy_receipt_summary::{
     deploy_provider_rows_from_value, parse_deploy_command_receipt,

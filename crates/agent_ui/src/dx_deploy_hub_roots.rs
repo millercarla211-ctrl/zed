@@ -12,8 +12,12 @@ pub(crate) struct DxDeployHubReceiptRoot {
     pub source_kind: DxDeployReceiptSourceKind,
 }
 
+pub(crate) fn dx_hub_root() -> PathBuf {
+    configured_dx_hub_root()
+}
+
 pub(crate) fn deploy_hub_receipt_roots() -> Vec<DxDeployHubReceiptRoot> {
-    let hub_root = configured_dx_hub_root();
+    let hub_root = dx_hub_root();
 
     vec![
         hub_receipt_root(&hub_root),

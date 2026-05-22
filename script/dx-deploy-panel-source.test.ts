@@ -14,6 +14,7 @@ test("agent_ui registers the focused deploy modules", () => {
   const source = read("crates/agent_ui/src/agent_ui.rs");
   const modules = [
     "dx_deploy_capabilities",
+    "dx_deploy_check_roots",
     "dx_deploy_gate_rail",
     "dx_deploy_hub_roots",
     "dx_deploy_launch_actions",
@@ -101,13 +102,25 @@ test("deploy launch prompt details stay in a focused module", () => {
 });
 
 test("launch gate reader prefers launch-specific check receipts", () => {
+  const agentUi = read("crates/agent_ui/src/agent_ui.rs");
+  const roots = read("crates/agent_ui/src/dx_deploy_check_roots.rs");
   const source = read("crates/agent_ui/src/dx_deploy_launch_gate.rs");
 
-  assert.match(source, /DX_HUB_CHECK_RECEIPT_ROOT/);
-  assert.match(source, /DX_WWW_CHECK_RECEIPT_ROOT/);
+  assert.match(agentUi, /^mod dx_deploy_check_roots;$/m);
+  assert.match(roots, /pub\(crate\) struct DxDeployCheckReceiptRoot/);
+  assert.match(roots, /pub root_rank: u8/);
+  assert.match(roots, /pub\(crate\) fn check_receipt_roots/);
+  assert.match(roots, /workspace_roots\.iter\(\)\.take\(4\)/);
+  assert.match(roots, /dx_hub_root\(\)/);
+  assert.match(roots, /\.join\("www"\)/);
+  assert.match(roots, /\.join\("receipts"\)\.join\("check"\)/);
+  assert.match(source, /use crate::dx_deploy_check_roots::check_receipt_roots;/);
+  assert.match(source, /for root in check_receipt_roots\(workspace_roots\)/);
   assert.match(source, /\["check-launch-latest\.json", "check-latest\.json"\]/);
   assert.match(source, /file_rank/);
   assert.match(source, /root_rank/);
+  assert.doesNotMatch(source, /const DX_HUB_CHECK_RECEIPT_ROOT/);
+  assert.doesNotMatch(source, /const DX_WWW_CHECK_RECEIPT_ROOT/);
 });
 
 test("deploy capability receipt roots stay in a focused module", () => {
@@ -171,6 +184,30 @@ test("launch gate keeps source-owned blocker provenance", () => {
   assert.match(prompts, /blocker\.evidence_path/);
   assert.match(prompts, /severity=/);
   assert.match(prompts, /evidence_path=/);
+});
+
+test("provider gate surfaces dx-deploy quick-fix risk metadata", () => {
+  const summary = read("crates/agent_ui/src/dx_deploy_receipt_summary.rs");
+  const rail = read("crates/agent_ui/src/dx_deploy_gate_rail.rs");
+
+  assert.match(summary, /pub\(crate\) struct DxDeployProviderGateQuickFix/);
+  assert.match(summary, /pub quick_fixes: Vec<DxDeployProviderGateQuickFix>/);
+  assert.match(summary, /pub command: String/);
+  assert.match(summary, /pub risk_level: String/);
+  assert.match(summary, /pub requires_user_approval: bool/);
+  assert.match(summary, /pub writes_receipts: bool/);
+  assert.match(summary, /let quick_fixes = provider_gate_quick_fixes\(zed\);/);
+  assert.match(summary, /quick_fix_count: quick_fixes\.len\(\)/);
+  assert.match(summary, /quick_fixes,/);
+  assert.match(summary, /fn provider_gate_quick_fixes\(zed: Option<&Value>\) -> Vec<DxDeployProviderGateQuickFix>/);
+  assert.match(summary, /string_field\(value, "risk_level"\)/);
+  assert.match(summary, /value\s*\.get\("requires_user_approval"\)\s*\.and_then\(Value::as_bool\)/);
+  assert.match(summary, /value\s*\.get\("writes_receipts"\)\s*\.and_then\(Value::as_bool\)/);
+  assert.match(rail, /receipt\.quick_fixes\.iter\(\)\.take\(3\)/);
+  assert.match(rail, /dx-deploy-gate-quick-fix-\{\}/);
+  assert.match(rail, /quick_fix\.risk_level/);
+  assert.match(rail, /requires approval/);
+  assert.match(rail, /writes receipt/);
 });
 
 test("launch gate keeps warning provenance visible", () => {
@@ -482,6 +519,8 @@ test("deploy status docs name the repeatable source guard", () => {
   assert.match(docs, /source runtime and launch evidence/);
   assert.match(docs, /deploy receipt roots/);
   assert.match(docs, /dx_deploy_hub_roots\.rs/);
+  assert.match(docs, /dx_deploy_check_roots\.rs/);
+  assert.match(docs, /launch-check receipt roots/);
   assert.match(docs, /DX_HOME/);
   assert.match(docs, /D:\\Dx/);
   assert.match(docs, /workspace plus DX hub\/cli\/www receipt roots/);

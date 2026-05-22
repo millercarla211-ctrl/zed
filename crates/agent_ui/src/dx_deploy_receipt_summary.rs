@@ -36,6 +36,7 @@ pub(crate) struct DxDeployProviderGateReceiptSummary {
     pub next_action: Option<String>,
     pub rows: Vec<DxDeployProviderGateRow>,
     pub quick_fix_count: usize,
+    pub quick_fixes: Vec<DxDeployProviderGateQuickFix>,
 }
 
 #[derive(Clone)]
@@ -44,6 +45,16 @@ pub(crate) struct DxDeployProviderGateRow {
     pub label: String,
     pub status: String,
     pub detail: Option<String>,
+}
+
+#[derive(Clone)]
+pub(crate) struct DxDeployProviderGateQuickFix {
+    pub id: String,
+    pub label: String,
+    pub command: String,
+    pub risk_level: String,
+    pub requires_user_approval: bool,
+    pub writes_receipts: bool,
 }
 
 #[derive(Clone)]
@@ -89,6 +100,7 @@ pub(crate) fn parse_deploy_provider_gate_receipt(
     value: &Value,
 ) -> Option<DxDeployProviderGateReceiptSummary> {
     let zed = value.get("zed");
+    let quick_fixes = provider_gate_quick_fixes(zed);
 
     Some(DxDeployProviderGateReceiptSummary {
         label,
@@ -110,7 +122,8 @@ pub(crate) fn parse_deploy_provider_gate_receipt(
                 .and_then(|launch| string_field(launch, "next_action"))
         }),
         rows: provider_gate_rows(value),
-        quick_fix_count: zed.map_or(0, |zed| array_len(zed, "quick_fixes")),
+        quick_fix_count: quick_fixes.len(),
+        quick_fixes,
     })
 }
 
@@ -147,6 +160,33 @@ fn provider_gate_row_from_value(value: &Value) -> Option<DxDeployProviderGateRow
         label: string_field(value, "label").unwrap_or_else(|| "Deploy gate".to_string()),
         status: string_field(value, "status").unwrap_or_else(|| "unknown".to_string()),
         detail: string_field(value, "detail"),
+    })
+}
+
+fn provider_gate_quick_fixes(zed: Option<&Value>) -> Vec<DxDeployProviderGateQuickFix> {
+    zed.and_then(|zed| zed.get("quick_fixes"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .take(6)
+        .filter_map(provider_gate_quick_fix_from_value)
+        .collect()
+}
+
+fn provider_gate_quick_fix_from_value(value: &Value) -> Option<DxDeployProviderGateQuickFix> {
+    Some(DxDeployProviderGateQuickFix {
+        id: string_field(value, "id")?,
+        label: string_field(value, "label").unwrap_or_else(|| "Deploy quick fix".to_string()),
+        command: string_field(value, "command")?,
+        risk_level: string_field(value, "risk_level").unwrap_or_else(|| "unknown".to_string()),
+        requires_user_approval: value
+            .get("requires_user_approval")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        writes_receipts: value
+            .get("writes_receipts")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     })
 }
 
