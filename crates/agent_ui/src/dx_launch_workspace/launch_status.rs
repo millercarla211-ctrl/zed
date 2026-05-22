@@ -3,6 +3,10 @@ use ui::{Color, IconName, prelude::*};
 
 use crate::dx_launch_status::DxLaunchStatusSnapshot;
 
+use super::launch_status_labels::{
+    launch_status_command_label, launch_status_next_action_label, launch_status_optional_summary,
+    launch_status_summary_label,
+};
 use super::{metric_row, muted_card, signal_row, yes_no};
 
 pub(super) fn launch_status_state(snapshot: &DxLaunchStatusSnapshot, cx: &App) -> AnyElement {
@@ -10,7 +14,7 @@ pub(super) fn launch_status_state(snapshot: &DxLaunchStatusSnapshot, cx: &App) -
         .gap_1()
         .child(metric_row("Status", snapshot.status.clone()))
         .child(
-            Label::new(snapshot.operator_summary.clone())
+            Label::new(launch_status_summary_label(&snapshot.operator_summary))
                 .size(LabelSize::XSmall)
                 .color(Color::Muted)
                 .truncate(),
@@ -61,11 +65,14 @@ pub(super) fn launch_status_state(snapshot: &DxLaunchStatusSnapshot, cx: &App) -
         ))
         .child(metric_row(
             "Templates",
-            snapshot.discovery.templates_command.clone(),
+            launch_status_command_label(
+                &snapshot.discovery.templates_command,
+                "No template command",
+            ),
         ))
         .child(metric_row(
             "Packages",
-            snapshot.discovery.packages_command.clone(),
+            launch_status_command_label(&snapshot.discovery.packages_command, "No package command"),
         ));
 
     if !snapshot.root_exists {
@@ -85,7 +92,7 @@ pub(super) fn launch_status_state(snapshot: &DxLaunchStatusSnapshot, cx: &App) -
         stack = stack.child(signal_row(id, IconName::Warning, Color::Warning, message));
     } else {
         stack = stack.child(
-            Label::new(snapshot.next_action.clone())
+            Label::new(launch_status_next_action_label(&snapshot.next_action))
                 .size(LabelSize::XSmall)
                 .color(Color::Muted)
                 .truncate(),
@@ -96,20 +103,21 @@ pub(super) fn launch_status_state(snapshot: &DxLaunchStatusSnapshot, cx: &App) -
         stack = stack
             .child(metric_row(
                 "Agent Next",
-                snapshot.agents.next_action.clone(),
+                launch_status_next_action_label(&snapshot.agents.next_action),
             ))
             .child(metric_row(
                 "Token Next",
-                snapshot.tokens.next_action.clone(),
+                launch_status_next_action_label(&snapshot.tokens.next_action),
             ))
             .child(metric_row(
                 "Discovery Next",
-                snapshot.discovery.next_action.clone(),
+                launch_status_next_action_label(&snapshot.discovery.next_action),
             ));
 
-        if !snapshot.redaction_summary.is_empty() {
+        if let Some(redaction_summary) = launch_status_optional_summary(&snapshot.redaction_summary)
+        {
             stack = stack.child(
-                Label::new(snapshot.redaction_summary.clone())
+                Label::new(redaction_summary)
                     .size(LabelSize::XSmall)
                     .color(Color::Muted)
                     .truncate(),

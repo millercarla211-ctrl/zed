@@ -13,7 +13,9 @@ test("DX launch workspace UI stays split by rail ownership", () => {
     "crates/agent_ui/src/dx_launch_workspace/binary_cache_labels.rs",
     "crates/agent_ui/src/dx_launch_workspace/check.rs",
     "crates/agent_ui/src/dx_launch_workspace/check_labels.rs",
+    "crates/agent_ui/src/dx_launch_workspace/contracts.rs",
     "crates/agent_ui/src/dx_launch_workspace/launch_status.rs",
+    "crates/agent_ui/src/dx_launch_workspace/launch_status_labels.rs",
     "crates/agent_ui/src/dx_launch_workspace/list_labels.rs",
     "crates/agent_ui/src/dx_launch_workspace/proof.rs",
     "crates/agent_ui/src/dx_launch_workspace/proof_labels.rs",
@@ -30,21 +32,39 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   assert.match(parent, /^mod binary_cache_labels;$/m);
   assert.match(parent, /^mod check;$/m);
   assert.match(parent, /^mod check_labels;$/m);
+  assert.match(parent, /^mod contracts;$/m);
   assert.match(parent, /^mod launch_status;$/m);
+  assert.match(parent, /^mod launch_status_labels;$/m);
   assert.match(parent, /^mod list_labels;$/m);
   assert.match(parent, /^mod proof;$/m);
   assert.match(parent, /^mod proof_labels;$/m);
   assert.match(parent, /^mod sources;$/m);
   assert.match(parent, /^mod tool_history;$/m);
   assert.ok(
-    lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 1280,
+    lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 1120,
     "dx_launch_workspace.rs should stay a coordinator instead of owning every rail",
   );
+});
+
+test("DX launch workspace delegates Launch Handoff rail rendering", () => {
+  const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
+  const contracts = read("crates/agent_ui/src/dx_launch_workspace/contracts.rs");
+
+  assert.match(parent, /contracts::launch_contract_state/);
+  assert.doesNotMatch(parent, /fn launch_contract_state/);
+  assert.match(contracts, /pub\(super\) fn launch_contract_state/);
+  assert.match(contracts, /DxLaunchContractSnapshot/);
+  assert.match(contracts, /dx-launch-contract-fanout-review/);
+  assert.match(contracts, /use super::\{bounded_items, metric_row, muted_card, signal_row\}/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/contracts.rs") < 150);
 });
 
 test("DX launch workspace delegates Launch Status rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const launchStatus = read("crates/agent_ui/src/dx_launch_workspace/launch_status.rs");
+  const launchStatusLabels = read(
+    "crates/agent_ui/src/dx_launch_workspace/launch_status_labels.rs",
+  );
 
   assert.match(parent, /launch_status::launch_status_state/);
   assert.doesNotMatch(parent, /fn launch_status_state/);
@@ -52,8 +72,19 @@ test("DX launch workspace delegates Launch Status rail rendering", () => {
   assert.match(launchStatus, /DxLaunchStatusSnapshot/);
   assert.match(launchStatus, /fn launch_status_warning/);
   assert.match(launchStatus, /dx-launch-status-redaction-review/);
+  assert.match(launchStatus, /use super::launch_status_labels::\{/);
   assert.match(launchStatus, /use super::\{metric_row, muted_card, signal_row, yes_no\}/);
+  assert.doesNotMatch(launchStatus, /snapshot\.operator_summary\.clone\(\)/);
+  assert.doesNotMatch(launchStatus, /snapshot\.redaction_summary\.is_empty\(\)/);
+  assert.match(launchStatusLabels, /pub\(crate\) fn launch_status_summary_label/);
+  assert.match(launchStatusLabels, /pub\(crate\) fn launch_status_next_action_label/);
+  assert.match(launchStatusLabels, /pub\(crate\) fn launch_status_command_label/);
+  assert.match(launchStatusLabels, /pub\(crate\) fn launch_status_optional_summary/);
+  assert.match(launchStatusLabels, /launch_status_labels_trim_nonblank_receipt_text/);
+  assert.match(launchStatusLabels, /launch_status_labels_fall_back_for_blank_receipt_text/);
+  assert.match(launchStatusLabels, /launch_status_optional_summary_ignores_blank_text/);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_status.rs") < 170);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_status_labels.rs") < 110);
 });
 
 test("DX launch workspace delegates Binary Cache rail rendering", () => {
