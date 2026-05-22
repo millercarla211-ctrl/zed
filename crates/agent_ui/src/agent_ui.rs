@@ -17,6 +17,7 @@ mod dx_check_panel;
 mod dx_check_score;
 mod dx_deploy_capabilities;
 mod dx_deploy_gate_rail;
+mod dx_deploy_hub_roots;
 mod dx_deploy_launch_actions;
 mod dx_deploy_launch_actions_rail;
 mod dx_deploy_launch_approval_evidence;

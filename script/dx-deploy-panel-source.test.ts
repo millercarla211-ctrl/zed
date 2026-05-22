@@ -15,6 +15,7 @@ test("agent_ui registers the focused deploy modules", () => {
   const modules = [
     "dx_deploy_capabilities",
     "dx_deploy_gate_rail",
+    "dx_deploy_hub_roots",
     "dx_deploy_launch_actions",
     "dx_deploy_launch_actions_rail",
     "dx_deploy_launch_approval_evidence",
@@ -112,9 +113,23 @@ test("launch gate reader prefers launch-specific check receipts", () => {
 test("deploy capability receipt roots stay in a focused module", () => {
   const agentUi = read("crates/agent_ui/src/agent_ui.rs");
   const roots = read("crates/agent_ui/src/dx_deploy_receipt_roots.rs");
+  const hubRoots = read("crates/agent_ui/src/dx_deploy_hub_roots.rs");
   const capabilities = read("crates/agent_ui/src/dx_deploy_capabilities.rs");
 
+  assert.match(agentUi, /^mod dx_deploy_hub_roots;$/m);
   assert.match(agentUi, /^mod dx_deploy_receipt_roots;$/m);
+  assert.match(hubRoots, /DX_HOME_ENV/);
+  assert.match(hubRoots, /DX_ROOT_ENV/);
+  assert.match(hubRoots, /DX_HUB_ROOT_CANDIDATES/);
+  assert.match(hubRoots, /r"D:\\Dx"/);
+  assert.match(hubRoots, /r"G:\\Dx"/);
+  assert.match(hubRoots, /pub\(crate\) fn deploy_hub_receipt_roots/);
+  assert.match(hubRoots, /fn configured_dx_hub_root/);
+  assert.match(hubRoots, /std::env::var_os/);
+  assert.match(hubRoots, /\.exists\(\)/);
+  assert.match(hubRoots, /DxDeployReceiptSourceKind::DxHub/);
+  assert.match(hubRoots, /DxDeployReceiptSourceKind::DxCli/);
+  assert.match(hubRoots, /DxDeployReceiptSourceKind::DxWww/);
   assert.match(roots, /pub\(crate\) struct DxDeployReceiptRoot/);
   assert.match(roots, /pub path: PathBuf/);
   assert.match(roots, /pub label: String/);
@@ -124,9 +139,7 @@ test("deploy capability receipt roots stay in a focused module", () => {
     /pub\(crate\) fn deploy_receipt_roots\(workspace_roots: &\[PathBuf\]\) -> Vec<DxDeployReceiptRoot>/,
   );
   assert.match(roots, /workspace_roots\.iter\(\)\.take\(4\)/);
-  assert.match(roots, /DX_HUB_DEPLOY_RECEIPT_ROOT/);
-  assert.match(roots, /DX_CLI_DEPLOY_RECEIPT_ROOT/);
-  assert.match(roots, /DX_WWW_DEPLOY_RECEIPT_ROOT/);
+  assert.match(roots, /deploy_hub_receipt_roots\(\)/);
   assert.match(roots, /fn receipt_root_key\(path: &Path\) -> String/);
   assert.match(roots, /path\.as_os_str\(\)\.is_empty\(\)/);
   assert.match(roots, /let path_key = receipt_root_key\(&path\);/);
@@ -139,6 +152,7 @@ test("deploy capability receipt roots stay in a focused module", () => {
   );
   assert.doesNotMatch(capabilities, /fn deploy_receipt_roots/);
   assert.doesNotMatch(capabilities, /const DX_HUB_DEPLOY_RECEIPT_ROOT/);
+  assert.doesNotMatch(roots, /const DX_HUB_DEPLOY_RECEIPT_ROOT/);
 });
 
 test("launch gate keeps source-owned blocker provenance", () => {
@@ -467,6 +481,9 @@ test("deploy status docs name the repeatable source guard", () => {
   assert.match(docs, /approval evidence/);
   assert.match(docs, /source runtime and launch evidence/);
   assert.match(docs, /deploy receipt roots/);
+  assert.match(docs, /dx_deploy_hub_roots\.rs/);
+  assert.match(docs, /DX_HOME/);
+  assert.match(docs, /D:\\Dx/);
   assert.match(docs, /workspace plus DX hub\/cli\/www receipt roots/);
   assert.match(docs, /receipt-write/);
   assert.match(docs, /script\/dx-deploy-panel-source\.test\.ts/);

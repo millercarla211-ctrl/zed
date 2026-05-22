@@ -1,10 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use crate::dx_deploy_hub_roots::deploy_hub_receipt_roots;
 use crate::dx_deploy_receipt_rank::DxDeployReceiptSourceKind;
-
-const DX_HUB_DEPLOY_RECEIPT_ROOT: &str = r"G:\Dx\.dx\receipts\deploy";
-const DX_CLI_DEPLOY_RECEIPT_ROOT: &str = r"G:\Dx\cli\.dx\receipts\deploy";
-const DX_WWW_DEPLOY_RECEIPT_ROOT: &str = r"G:\Dx\www\.dx\receipts\deploy";
 
 pub(crate) struct DxDeployReceiptRoot {
     pub path: PathBuf,
@@ -24,24 +21,9 @@ pub(crate) fn deploy_receipt_roots(workspace_roots: &[PathBuf]) -> Vec<DxDeployR
         );
     }
 
-    push_receipt_root(
-        &mut roots,
-        PathBuf::from(DX_HUB_DEPLOY_RECEIPT_ROOT),
-        DX_HUB_DEPLOY_RECEIPT_ROOT.to_string(),
-        DxDeployReceiptSourceKind::DxHub,
-    );
-    push_receipt_root(
-        &mut roots,
-        PathBuf::from(DX_CLI_DEPLOY_RECEIPT_ROOT),
-        DX_CLI_DEPLOY_RECEIPT_ROOT.to_string(),
-        DxDeployReceiptSourceKind::DxCli,
-    );
-    push_receipt_root(
-        &mut roots,
-        PathBuf::from(DX_WWW_DEPLOY_RECEIPT_ROOT),
-        DX_WWW_DEPLOY_RECEIPT_ROOT.to_string(),
-        DxDeployReceiptSourceKind::DxWww,
-    );
+    for root in deploy_hub_receipt_roots() {
+        push_receipt_root(&mut roots, root.path, root.label, root.source_kind);
+    }
 
     roots
 }
