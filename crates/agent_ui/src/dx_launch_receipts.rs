@@ -1,10 +1,15 @@
-use serde_json::Value;
+mod fields;
+mod freshness;
+mod paths;
+mod receipt_io;
+mod summary;
+
+use self::freshness::launch_receipt_operator_summary;
+use self::paths::{launch_snapshot_paths, now_ms};
 use std::{
-    fs::{self, File},
-    io::Read,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Mutex, OnceLock},
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 
 const DX_LAUNCH_RECEIPT_ROOT: &str = r"G:\Dx\.dx\receipts\launch";
@@ -15,7 +20,6 @@ const DX_LAUNCH_STATUS_PREFIX: &str = "launch-status-";
 const DX_LAUNCH_STATUS_COMMAND: &str = "dx launch status --json";
 const DX_LAUNCH_STATUS_SCHEMA: &str = "dx.launch.status.v1";
 const LAUNCH_RECEIPTS_CACHE_TTL: Duration = Duration::from_secs(5);
-const MAX_RECEIPT_BYTES: u64 = 128 * 1024;
 const RECEIPT_STALE_AFTER_MS: u64 = 300_000;
 const RECEIPT_EXPIRED_AFTER_MS: u64 = 1_800_000;
 
@@ -218,177 +222,4 @@ fn empty_snapshot(
         last_error: None,
         next_action: next_action.to_string(),
     }
-}
-
-impl DxLaunchReceiptSummary {
-    fn from_path(kind: &str, path: &Path, now_ms: u64) -> Self {
-        match read_json_receipt(path) {
-            Ok(value) => {
-                let generated_at_ms =
-                    u64_field(&value, "generated_at_ms").or_else(|| receipt_order_ms(path));
-                let age_ms = generated_at_ms.map(|generated| now_ms.saturating_sub(generated));
-
-                Self {
-                    kind: kind.to_string(),
-                    file_name: file_name(path),
-                    receipt_path: path.display().to_string(),
-                    schema_version: optional_string_field(&value, "schema_version"),
-                    status: optional_string_field(&value, "status"),
-                    generated_at_ms,
-                    age_ms,
-                    freshness_state: freshness_state(false, age_ms).to_string(),
-                    malformed: false,
-                    last_error: optional_string_field(&value, "last_error"),
-                    next_action: optional_string_field(&value, "next_action"),
-                }
-            }
-            Err(error) => {
-                let generated_at_ms = receipt_order_ms(path);
-                let age_ms = generated_at_ms.map(|generated| now_ms.saturating_sub(generated));
-
-                Self {
-                    kind: kind.to_string(),
-                    file_name: file_name(path),
-                    receipt_path: path.display().to_string(),
-                    schema_version: None,
-                    status: None,
-                    generated_at_ms,
-                    age_ms,
-                    freshness_state: freshness_state(true, age_ms).to_string(),
-                    malformed: true,
-                    last_error: Some(error),
-                    next_action: Some("repair_or_prune_malformed_launch_receipt".to_string()),
-                }
-            }
-        }
-    }
-
-    pub(crate) fn display_state(&self) -> String {
-        let status = self.status.as_deref().unwrap_or("unknown");
-        let schema = self.schema_version.as_deref().unwrap_or("missing schema");
-        format!("{} / {status} / {schema}", self.freshness_state)
-    }
-
-    pub(crate) fn schema_matches_launch_status(&self) -> bool {
-        self.schema_version.as_deref() == Some(DX_LAUNCH_STATUS_SCHEMA)
-    }
-}
-
-fn launch_snapshot_paths(root: &Path) -> Vec<PathBuf> {
-    let Ok(entries) = fs::read_dir(root) else {
-        return Vec::new();
-    };
-
-    entries
-        .flatten()
-        .take(128)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.is_file()
-                && path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .is_some_and(|name| {
-                        name.starts_with(DX_LAUNCH_STATUS_PREFIX) && name.ends_with(".json")
-                    })
-        })
-        .collect()
-}
-
-fn read_json_receipt(path: &Path) -> Result<Value, String> {
-    let metadata = path
-        .metadata()
-        .map_err(|error| format!("Unable to inspect launch receipt metadata: {error}"))?;
-    if metadata.len() > MAX_RECEIPT_BYTES {
-        return Err(format!(
-            "Launch receipt metadata is too large to render safely: {} bytes",
-            metadata.len()
-        ));
-    }
-
-    let mut contents = String::new();
-    File::open(path)
-        .and_then(|mut file| file.read_to_string(&mut contents))
-        .map_err(|error| format!("Unable to read launch receipt metadata: {error}"))?;
-    serde_json::from_str(&contents)
-        .map_err(|error| format!("Unable to parse launch receipt metadata: {error}"))
-}
-
-fn launch_receipt_operator_summary(
-    status: &str,
-    malformed_count: usize,
-    latest_present: bool,
-    snapshot_count: usize,
-    latest_freshness: Option<&str>,
-) -> String {
-    if status == "ready" {
-        return format!(
-            "Launch receipts ready: latest present, {snapshot_count} snapshots retained."
-        );
-    }
-
-    if malformed_count > 0 {
-        return format!(
-            "Launch receipts warning: {malformed_count} malformed, latest_present={latest_present}."
-        );
-    }
-
-    if let Some(freshness) = latest_freshness {
-        return format!("Launch receipts warning: latest freshness={freshness}.");
-    }
-
-    "Launch receipts warning: review cached launch status metadata before handoff.".to_string()
-}
-
-fn freshness_state(malformed: bool, age_ms: Option<u64>) -> &'static str {
-    if malformed {
-        return "malformed";
-    }
-
-    match age_ms {
-        Some(age_ms) if age_ms > RECEIPT_EXPIRED_AFTER_MS => "expired",
-        Some(age_ms) if age_ms > RECEIPT_STALE_AFTER_MS => "stale",
-        Some(_) => "fresh",
-        None => "unknown",
-    }
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis().min(u64::MAX as u128) as u64)
-        .unwrap_or_default()
-}
-
-fn receipt_order_ms(path: &Path) -> Option<u64> {
-    path.file_stem()
-        .and_then(|stem| stem.to_str())
-        .and_then(|stem| stem.strip_prefix(DX_LAUNCH_STATUS_PREFIX))
-        .and_then(|suffix| suffix.parse::<u64>().ok())
-}
-
-fn file_name(path: &Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("unknown")
-        .to_string()
-}
-
-fn u64_field(value: &Value, field: &str) -> Option<u64> {
-    value.get(field).and_then(Value::as_u64)
-}
-
-fn optional_string_field(value: &Value, field: &str) -> Option<String> {
-    value
-        .get(field)
-        .and_then(Value::as_str)
-        .map(render_safe_string)
-}
-
-fn render_safe_string(value: &str) -> String {
-    let mut bounded = value.chars().take(180).collect::<String>();
-    if value.chars().count() > 180 {
-        bounded.push_str("...");
-    }
-    bounded
 }

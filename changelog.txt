@@ -1,3 +1,25 @@
+[2026-05-23] - DX Launch Receipts Helper Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_receipts/fields.rs` for bounded launch receipt field extraction.
+- Added `crates/agent_ui/src/dx_launch_receipts/freshness.rs` for launch receipt freshness state and operator-summary wording.
+- Added `crates/agent_ui/src/dx_launch_receipts/paths.rs` for launch receipt path discovery and timestamp helpers.
+- Added `crates/agent_ui/src/dx_launch_receipts/receipt_io.rs` for bounded launch receipt JSON reads.
+- Added `crates/agent_ui/src/dx_launch_receipts/summary.rs` for `DxLaunchReceiptSummary` parsing, display state, and schema checks.
+- Added `script/dx-launch-receipts-source.test.ts` as the no-build source guard for Launch Receipts ownership and file budgets.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_receipts.rs` now stays focused on cache, receipt-root scan orchestration, aggregate counts, warning status, and public snapshot fields at 226 lines.
+
+PASSED:
+- Red/green `node --test script\dx-launch-receipts-source.test.ts`
+- Adjacent launch prompts/workspace/status/contract/audit/readiness guards
+- Targeted rustfmt check
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify Launch Receipt latest/snapshot freshness, malformed retained rows, and stale/expired warning copy against real `G:\Dx\.dx\receipts\launch` receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Status Helper Split
 
 ADDED:
