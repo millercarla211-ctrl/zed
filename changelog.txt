@@ -1,3 +1,24 @@
+[2026-05-23] - DX Runtime Proof Row Submodule Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/plan.rs` as the focused latest runtime proof plan row renderer.
+- Added `crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/receipt.rs` as the focused runtime proof import/status receipt row renderer.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows.rs` is now a 5-line coordinator that registers and re-exports the plan and receipt row modules.
+- `script/dx-launch-workspace-source.test.ts` now guards Runtime Proof row submodule registration, parent re-exports, plan/receipt helper ownership, proof label usage, and plan/receipt file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Adjacent agent bridge, deploy panel, and source-set guards.
+- Targeted rustfmt check.
+- Line-count budgets for the runtime row coordinator, plan row module, and receipt row module.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Runtime Proof plan/import/status rows against real runtime proof receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Agent Bridge Summary Split
 
 ADDED:
