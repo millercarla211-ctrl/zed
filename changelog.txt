@@ -1,3 +1,23 @@
+[2026-05-23] - DX Agent Bridge Gate Recovery Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/gate/recovery.rs` for release-gate action-map, recovery-control, and command-fanout rows.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/gate.rs` now delegates release-gate recovery rows through the focused helper while preserving the existing row order and staying focused on gate metrics plus receipt-index rows at 58 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards nested recovery module registration, gate-shell delegation, recovery/fanout ownership, and tighter gate/recovery budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Full lightweight source guard set: `node --test script\dx-launch-workspace-source.test.ts script\dx-launch-audit-source.test.ts script\dx-launch-audit-fixtures.test.ts script\dx-launch-source-audit-source.test.ts script\dx-launch-status-source.test.ts script\dx-launch-receipts-source.test.ts script\dx-agent-bridge-source.test.ts script\dx-deploy-panel-source.test.ts script\dx-source-sets-source.test.ts`
+- Targeted `rustfmt --edition 2024 --check` on the touched Rust files.
+- Line-count budgets for the gate shell and recovery helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Agent bridge gate recovery rows against real DX Agents release-gate action-map, recovery-control, fanout, and receipt-index receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Agent Receipt Summary Footer Split
 
 ADDED:

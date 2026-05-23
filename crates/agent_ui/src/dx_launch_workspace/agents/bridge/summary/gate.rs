@@ -2,10 +2,13 @@ use gpui::AnyElement;
 
 use crate::dx_agent_bridge::DxAgentBridgeSnapshot;
 
+use self::recovery::dx_agent_bridge_gate_recovery_rows;
 use super::super::super::super::metric_row;
 
+mod recovery;
+
 pub(super) fn dx_agent_bridge_gate_rows(snapshot: &DxAgentBridgeSnapshot) -> Vec<AnyElement> {
-    vec![
+    let mut rows = vec![
         metric_row("Gate", snapshot.release_gate.status.clone()),
         metric_row(
             "Acceptance",
@@ -43,32 +46,9 @@ pub(super) fn dx_agent_bridge_gate_rows(snapshot: &DxAgentBridgeSnapshot) -> Vec
                 snapshot.release_gate.retained_run_overflow_count
             ),
         ),
-        metric_row(
-            "Gate Action",
-            format!(
-                "{} / {}",
-                snapshot.release_gate.action_map_status,
-                snapshot.release_gate.recovery_counts.label()
-            ),
-        ),
-        metric_row(
-            "Gate Recovery",
-            format!(
-                "{} via {}, {} fixture(s), {}",
-                snapshot.release_gate.recovery_controls_status,
-                snapshot.release_gate.recovery_render_first,
-                snapshot.release_gate.recovery_fixture_count,
-                snapshot.release_gate.recovery_counts.label()
-            ),
-        ),
-        metric_row(
-            "Gate Fanout",
-            if snapshot.release_gate.no_command_fanout {
-                "none".to_string()
-            } else {
-                "review".to_string()
-            },
-        ),
+    ];
+    rows.extend(dx_agent_bridge_gate_recovery_rows(snapshot));
+    rows.extend([
         metric_row("Receipt Index", snapshot.receipt_index.status.clone()),
         metric_row(
             "Receipt Rows",
@@ -77,5 +57,6 @@ pub(super) fn dx_agent_bridge_gate_rows(snapshot: &DxAgentBridgeSnapshot) -> Vec
                 snapshot.receipt_index.returned_receipt_count, snapshot.receipt_index.receipt_count
             ),
         ),
-    ]
+    ]);
+    rows
 }

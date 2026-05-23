@@ -512,6 +512,9 @@ test("DX launch workspace delegates agents and source rails", () => {
   const agentBridgeSummaryGate = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/gate.rs",
   );
+  const agentBridgeSummaryGateRecovery = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/gate/recovery.rs",
+  );
   const agentBridgeSummaryImport = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/import.rs",
   );
@@ -695,10 +698,26 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentBridgeSummaryImport, /import_summary\.no_command_fanout/);
   assert.match(agentBridgeSummaryImport, /action_error\.present/);
   assert.match(agentBridgeSummaryGate, /pub\(super\) fn dx_agent_bridge_gate_rows/);
+  assert.match(agentBridgeSummaryGate, /^mod recovery;$/m);
+  assert.match(agentBridgeSummaryGate, /use self::recovery::dx_agent_bridge_gate_recovery_rows/);
   assert.match(agentBridgeSummaryGate, /metric_row\("Gate"/);
-  assert.match(agentBridgeSummaryGate, /metric_row\(\s*"Gate Recovery"/);
   assert.match(agentBridgeSummaryGate, /receipt_index\.returned_receipt_count/);
-  assert.match(agentBridgeSummaryGate, /release_gate\.no_command_fanout/);
+  assert.match(agentBridgeSummaryGate, /rows\.extend\(dx_agent_bridge_gate_recovery_rows\(snapshot\)\)/);
+  assert.doesNotMatch(agentBridgeSummaryGate, /metric_row\(\s*"Gate Action"/);
+  assert.doesNotMatch(agentBridgeSummaryGate, /metric_row\(\s*"Gate Recovery"/);
+  assert.doesNotMatch(agentBridgeSummaryGate, /metric_row\(\s*"Gate Fanout"/);
+  assert.doesNotMatch(agentBridgeSummaryGate, /release_gate\.recovery_counts\.label\(\)/);
+  assert.doesNotMatch(agentBridgeSummaryGate, /release_gate\.no_command_fanout/);
+  assert.match(
+    agentBridgeSummaryGateRecovery,
+    /pub\(super\) fn dx_agent_bridge_gate_recovery_rows/,
+  );
+  assert.match(agentBridgeSummaryGateRecovery, /metric_row\(\s*"Gate Action"/);
+  assert.match(agentBridgeSummaryGateRecovery, /metric_row\(\s*"Gate Recovery"/);
+  assert.match(agentBridgeSummaryGateRecovery, /metric_row\(\s*"Gate Fanout"/);
+  assert.match(agentBridgeSummaryGateRecovery, /release_gate\.recovery_counts\.label\(\)/);
+  assert.match(agentBridgeSummaryGateRecovery, /release_gate\.no_command_fanout/);
+  assert.match(agentBridgeSummaryGateRecovery, /use super::super::super::super::super::metric_row/);
   assert.match(agentProviders, /pub\(in super::super\) fn dx_agent_provider_state/);
   assert.match(agentProviders, /^mod rows;$/m);
   assert.match(agentProviders, /use self::rows::\{dx_agent_model_row, dx_agent_provider_row\}/);
@@ -951,7 +970,11 @@ test("DX launch workspace delegates agents and source rails", () => {
     lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/import.rs") < 60,
   );
   assert.ok(
-    lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/gate.rs") < 85,
+    lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/gate.rs") < 65,
+  );
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/gate/recovery.rs") <
+      55,
   );
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs") < 20);
   assert.ok(
