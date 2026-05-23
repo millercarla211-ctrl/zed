@@ -1,3 +1,22 @@
+[2026-05-23] - DX Launch Audit Warning Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/audit/warnings.rs` for first-issue, redaction-review, and command-fanout warning selection.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/audit.rs` now delegates launch-audit warning selection through the focused helper and stays focused on rail metrics, missing-state cards, and next-action fallback at 112 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards Launch Audit warning module registration, parent delegation, warning ownership, warning IDs, and Launch Audit/warning file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Launch Audit rail shell and warning module.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Launch Audit warning rows against real `G:\Dx\cli\fixtures\launch-examples` audit packets in the governed native Zed proof window.
+
 [2026-05-23] - DX Source Audit Warning Split
 
 ADDED:

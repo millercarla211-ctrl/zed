@@ -3,7 +3,10 @@ use ui::{Color, IconName, prelude::*};
 
 use crate::dx_launch_audit::DxLaunchAuditSnapshot;
 
+use self::warnings::launch_audit_warning;
 use super::{bounded_items, metric_row, muted_card, signal_row};
+
+mod warnings;
 
 pub(super) fn launch_audit_state(snapshot: &DxLaunchAuditSnapshot, cx: &App) -> AnyElement {
     let command_rows = bounded_items(&snapshot.command_rows, 3, "No command rows");
@@ -94,27 +97,8 @@ pub(super) fn launch_audit_state(snapshot: &DxLaunchAuditSnapshot, cx: &App) -> 
         }
     }
 
-    if let Some(issue) = snapshot.first_issue.as_ref() {
-        stack = stack.child(signal_row(
-            "dx-launch-audit-warning".into(),
-            IconName::Warning,
-            Color::Warning,
-            issue.clone(),
-        ));
-    } else if snapshot.redaction_requires_review {
-        stack = stack.child(signal_row(
-            "dx-launch-audit-redaction-review".into(),
-            IconName::Warning,
-            Color::Warning,
-            "Launch audit redaction flags need review.".to_string(),
-        ));
-    } else if snapshot.command_fanout_count > 0 {
-        stack = stack.child(signal_row(
-            "dx-launch-audit-fanout-review".into(),
-            IconName::Warning,
-            Color::Warning,
-            "Launch audit reports command fanout; keep final handoff blocked.".to_string(),
-        ));
+    if let Some((id, message)) = launch_audit_warning(snapshot) {
+        stack = stack.child(signal_row(id, IconName::Warning, Color::Warning, message));
     } else {
         stack = stack.child(
             Label::new(snapshot.next_action.clone())

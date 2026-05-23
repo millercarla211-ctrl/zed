@@ -104,16 +104,31 @@ test("DX launch workspace delegates WWW Evidence rail rendering", () => {
 test("DX launch workspace delegates Launch Audit rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const audit = read("crates/agent_ui/src/dx_launch_workspace/audit.rs");
+  const auditWarnings = read("crates/agent_ui/src/dx_launch_workspace/audit/warnings.rs");
 
   assert.match(parent, /audit::launch_audit_state/);
   assert.doesNotMatch(parent, /fn launch_audit_state/);
+  assert.match(audit, /^mod warnings;$/m);
+  assert.match(audit, /use self::warnings::launch_audit_warning/);
   assert.match(audit, /pub\(super\) fn launch_audit_state/);
   assert.match(audit, /DxLaunchAuditSnapshot/);
-  assert.match(audit, /dx-launch-audit-warning/);
-  assert.match(audit, /dx-launch-audit-redaction-review/);
-  assert.match(audit, /dx-launch-audit-fanout-review/);
+  assert.doesNotMatch(audit, /first_issue/);
+  assert.doesNotMatch(audit, /redaction_requires_review/);
+  assert.doesNotMatch(audit, /dx-launch-audit-warning/);
+  assert.doesNotMatch(audit, /dx-launch-audit-redaction-review/);
+  assert.doesNotMatch(audit, /dx-launch-audit-fanout-review/);
+  assert.match(auditWarnings, /pub\(super\) fn launch_audit_warning/);
+  assert.match(auditWarnings, /DxLaunchAuditSnapshot/);
+  assert.match(auditWarnings, /SharedString/);
+  assert.match(auditWarnings, /first_issue/);
+  assert.match(auditWarnings, /redaction_requires_review/);
+  assert.match(auditWarnings, /command_fanout_count/);
+  assert.match(auditWarnings, /dx-launch-audit-warning/);
+  assert.match(auditWarnings, /dx-launch-audit-redaction-review/);
+  assert.match(auditWarnings, /dx-launch-audit-fanout-review/);
   assert.match(audit, /use super::\{bounded_items, metric_row, muted_card, signal_row\}/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/audit.rs") < 150);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/audit.rs") < 115);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/audit/warnings.rs") < 45);
 });
 
 test("DX launch workspace delegates Source Audit rail rendering", () => {
