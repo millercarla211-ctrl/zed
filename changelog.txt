@@ -1,3 +1,25 @@
+[2026-05-23] - DX Launch Readiness Rail Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/readiness.rs` as the focused owner for Launch Gate/readiness rail rendering.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace.rs` now delegates Launch Gate/readiness rendering through `readiness::launch_readiness_state` and stays under the tighter 1000-line source guard.
+- `script/dx-launch-workspace-source.test.ts` now guards the readiness module, parent delegation, and readiness file budget.
+
+PASSED:
+- `node --test script\dx-launch-workspace-source.test.ts`
+- Adjacent `node --test script\dx-deploy-panel-source.test.ts`
+- Adjacent `node --test script\dx-www-launch-evidence-source.test.ts`
+- Adjacent `node --test script\dx-agent-bridge-source.test.ts`
+- Targeted rustfmt check
+- `git diff --check`
+- Conflict-marker scan on touched files
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, DX-WWW execution, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify Launch Gate/readiness import-summary, release-gate, fallback, and fanout rows against real launch readiness receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Deploy Source Guard Split
 
 ADDED:

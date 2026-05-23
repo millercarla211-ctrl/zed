@@ -19,6 +19,7 @@ test("DX launch workspace UI stays split by rail ownership", () => {
     "crates/agent_ui/src/dx_launch_workspace/list_labels.rs",
     "crates/agent_ui/src/dx_launch_workspace/proof.rs",
     "crates/agent_ui/src/dx_launch_workspace/proof_labels.rs",
+    "crates/agent_ui/src/dx_launch_workspace/readiness.rs",
     "crates/agent_ui/src/dx_launch_workspace/sources.rs",
     "crates/agent_ui/src/dx_launch_workspace/tool_history.rs",
   ];
@@ -38,10 +39,11 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   assert.match(parent, /^mod list_labels;$/m);
   assert.match(parent, /^mod proof;$/m);
   assert.match(parent, /^mod proof_labels;$/m);
+  assert.match(parent, /^mod readiness;$/m);
   assert.match(parent, /^mod sources;$/m);
   assert.match(parent, /^mod tool_history;$/m);
   assert.ok(
-    lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 1120,
+    lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 1000,
     "dx_launch_workspace.rs should stay a coordinator instead of owning every rail",
   );
 });
@@ -85,6 +87,20 @@ test("DX launch workspace delegates Launch Status rail rendering", () => {
   assert.match(launchStatusLabels, /launch_status_optional_summary_ignores_blank_text/);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_status.rs") < 170);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_status_labels.rs") < 110);
+});
+
+test("DX launch workspace delegates Launch Gate rail rendering", () => {
+  const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
+  const readiness = read("crates/agent_ui/src/dx_launch_workspace/readiness.rs");
+
+  assert.match(parent, /readiness::launch_readiness_state/);
+  assert.doesNotMatch(parent, /fn launch_readiness_state/);
+  assert.match(readiness, /pub\(super\) fn launch_readiness_state/);
+  assert.match(readiness, /DxLaunchReadinessSnapshot/);
+  assert.match(readiness, /dx-launch-readiness-fanout-review/);
+  assert.match(readiness, /snapshot\.examples\.iter\(\)\.take\(3\)/);
+  assert.match(readiness, /use super::\{bounded_items, metric_row, muted_card, signal_row\}/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/readiness.rs") < 150);
 });
 
 test("DX launch workspace delegates Binary Cache rail rendering", () => {
