@@ -24,6 +24,7 @@ test("DX launch workspace UI stays split by rail ownership", () => {
     "crates/agent_ui/src/dx_launch_workspace/source_audit.rs",
     "crates/agent_ui/src/dx_launch_workspace/sources.rs",
     "crates/agent_ui/src/dx_launch_workspace/tool_history.rs",
+    "crates/agent_ui/src/dx_launch_workspace/www_evidence.rs",
   ];
 
   for (const module of expectedModules) {
@@ -46,10 +47,25 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   assert.match(parent, /^mod source_audit;$/m);
   assert.match(parent, /^mod sources;$/m);
   assert.match(parent, /^mod tool_history;$/m);
+  assert.match(parent, /^mod www_evidence;$/m);
   assert.ok(
     lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 1000,
     "dx_launch_workspace.rs should stay a coordinator instead of owning every rail",
   );
+});
+
+test("DX launch workspace delegates WWW Evidence rail rendering", () => {
+  const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
+  const wwwEvidence = read("crates/agent_ui/src/dx_launch_workspace/www_evidence.rs");
+
+  assert.match(parent, /www_evidence::www_launch_evidence_state/);
+  assert.doesNotMatch(parent, /fn www_launch_evidence_state/);
+  assert.match(wwwEvidence, /pub\(super\) fn www_launch_evidence_state/);
+  assert.match(wwwEvidence, /DxWwwLaunchEvidenceSnapshot/);
+  assert.match(wwwEvidence, /dx-www-evidence-warning/);
+  assert.match(wwwEvidence, /dx-www-evidence-partial/);
+  assert.match(wwwEvidence, /use super::\{bounded_items, metric_row, muted_card, signal_row\}/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/www_evidence.rs") < 130);
 });
 
 test("DX launch workspace delegates Launch Audit rail rendering", () => {
