@@ -300,6 +300,9 @@ test("DX launch workspace delegates Launch Status rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const launchStatus = read("crates/agent_ui/src/dx_launch_workspace/launch_status.rs");
   const launchStatusRows = read("crates/agent_ui/src/dx_launch_workspace/launch_status/rows.rs");
+  const launchStatusSummary = read(
+    "crates/agent_ui/src/dx_launch_workspace/launch_status/summary.rs",
+  );
   const launchStatusStatus = read(
     "crates/agent_ui/src/dx_launch_workspace/launch_status/status.rs",
   );
@@ -313,13 +316,19 @@ test("DX launch workspace delegates Launch Status rail rendering", () => {
   assert.match(parent, /launch_status::launch_status_state/);
   assert.doesNotMatch(parent, /fn launch_status_state/);
   assert.match(launchStatus, /^mod rows;$/m);
+  assert.match(launchStatus, /^mod summary;$/m);
   assert.match(launchStatus, /^mod status;$/m);
   assert.match(launchStatus, /^mod warnings;$/m);
   assert.match(launchStatus, /use self::rows::launch_status_valid_detail_rows/);
+  assert.match(launchStatus, /use self::summary::launch_status_summary_rows/);
   assert.match(launchStatus, /use self::status::launch_status_status_rows/);
   assert.match(launchStatus, /pub\(super\) fn launch_status_state/);
   assert.match(launchStatus, /DxLaunchStatusSnapshot/);
+  assert.match(launchStatus, /children\(launch_status_summary_rows\(snapshot\)\)/);
   assert.match(launchStatus, /children\(launch_status_status_rows\(snapshot, cx\)\)/);
+  assert.doesNotMatch(launchStatus, /connected_accounts/);
+  assert.doesNotMatch(launchStatus, /templates_command/);
+  assert.doesNotMatch(launchStatus, /hard_budget_tokens/);
   assert.doesNotMatch(launchStatus, /fn launch_status_warning/);
   assert.doesNotMatch(launchStatus, /launch_status_warning\(snapshot\)/);
   assert.doesNotMatch(launchStatus, /redaction_requires_review/);
@@ -335,6 +344,14 @@ test("DX launch workspace delegates Launch Status rail rendering", () => {
   assert.match(launchStatusRows, /Discovery Next/);
   assert.match(launchStatusRows, /launch_status_optional_summary/);
   assert.match(launchStatusRows, /launch_status_next_action_label/);
+  assert.match(launchStatusSummary, /pub\(super\) fn launch_status_summary_rows/);
+  assert.match(launchStatusSummary, /DxLaunchStatusSnapshot/);
+  assert.match(launchStatusSummary, /connected_accounts/);
+  assert.match(launchStatusSummary, /templates_command/);
+  assert.match(launchStatusSummary, /hard_budget_tokens/);
+  assert.match(launchStatusSummary, /launch_status_summary_label/);
+  assert.match(launchStatusSummary, /launch_status_command_label/);
+  assert.match(launchStatusSummary, /use super::super::\{metric_row, yes_no\}/);
   assert.match(launchStatusStatus, /pub\(super\) fn launch_status_status_rows/);
   assert.match(launchStatusStatus, /DxLaunchStatusSnapshot/);
   assert.match(launchStatusStatus, /Missing launch receipts/);
@@ -350,8 +367,8 @@ test("DX launch workspace delegates Launch Status rail rendering", () => {
   assert.match(launchStatusWarnings, /dx-launch-status-invalid/);
   assert.match(launchStatusWarnings, /dx-launch-status-redaction-review/);
   assert.match(launchStatusWarnings, /dx-launch-status-warning/);
-  assert.match(launchStatus, /use super::launch_status_labels::\{/);
-  assert.match(launchStatus, /use super::\{metric_row, yes_no\}/);
+  assert.doesNotMatch(launchStatus, /use super::launch_status_labels::\{/);
+  assert.doesNotMatch(launchStatus, /use super::\{metric_row, yes_no\}/);
   assert.doesNotMatch(launchStatus, /snapshot\.operator_summary\.clone\(\)/);
   assert.doesNotMatch(launchStatus, /snapshot\.redaction_summary\.is_empty\(\)/);
   assert.match(launchStatusLabels, /pub\(crate\) fn launch_status_summary_label/);
@@ -361,8 +378,9 @@ test("DX launch workspace delegates Launch Status rail rendering", () => {
   assert.match(launchStatusLabels, /launch_status_labels_trim_nonblank_receipt_text/);
   assert.match(launchStatusLabels, /launch_status_labels_fall_back_for_blank_receipt_text/);
   assert.match(launchStatusLabels, /launch_status_optional_summary_ignores_blank_text/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_status.rs") < 90);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_status.rs") < 50);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_status/rows.rs") < 60);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_status/summary.rs") < 85);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_status/status.rs") < 65);
   assert.ok(
     lineCount("crates/agent_ui/src/dx_launch_workspace/launch_status/warnings.rs") < 45,
