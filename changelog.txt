@@ -1,3 +1,22 @@
+[2026-05-23] - DX Launch Status Status Row Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/launch_status/status.rs` for Launch Status missing-root, missing-latest, warning, and next-action rows.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/launch_status.rs` now delegates status row rendering through the focused helper and stays focused on summary metrics and schema-valid detail rows at 87 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards status module registration, shell delegation, warning/next-action ownership, and tighter Launch Status/status budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Launch Status shell and status helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Launch Status missing/latest/warning rows against real `G:\Dx\.dx\receipts\launch\status-latest.json` receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Audit Status Row Split
 
 ADDED:

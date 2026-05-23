@@ -1,16 +1,15 @@
 use gpui::{AnyElement, App, prelude::*};
-use ui::{Color, IconName, prelude::*};
+use ui::{Color, prelude::*};
 
 use crate::dx_launch_status::DxLaunchStatusSnapshot;
 
 use self::rows::launch_status_valid_detail_rows;
-use self::warnings::launch_status_warning;
-use super::launch_status_labels::{
-    launch_status_command_label, launch_status_next_action_label, launch_status_summary_label,
-};
-use super::{metric_row, muted_card, signal_row, yes_no};
+use self::status::launch_status_status_rows;
+use super::launch_status_labels::{launch_status_command_label, launch_status_summary_label};
+use super::{metric_row, yes_no};
 
 mod rows;
+mod status;
 mod warnings;
 
 pub(super) fn launch_status_state(snapshot: &DxLaunchStatusSnapshot, cx: &App) -> AnyElement {
@@ -77,31 +76,8 @@ pub(super) fn launch_status_state(snapshot: &DxLaunchStatusSnapshot, cx: &App) -
         .child(metric_row(
             "Packages",
             launch_status_command_label(&snapshot.discovery.packages_command, "No package command"),
-        ));
-
-    if !snapshot.root_exists {
-        stack = stack.child(muted_card(
-            format!("Missing launch receipts: {}", snapshot.root.display()),
-            cx,
-        ));
-    } else if !snapshot.latest_present {
-        stack = stack.child(muted_card(
-            format!(
-                "Run dx launch status --json to write {}",
-                snapshot.latest_path.display()
-            ),
-            cx,
-        ));
-    } else if let Some((id, message)) = launch_status_warning(snapshot) {
-        stack = stack.child(signal_row(id, IconName::Warning, Color::Warning, message));
-    } else {
-        stack = stack.child(
-            Label::new(launch_status_next_action_label(&snapshot.next_action))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
+        ))
+        .children(launch_status_status_rows(snapshot, cx));
 
     if snapshot.schema_valid {
         stack = stack.children(launch_status_valid_detail_rows(snapshot));
