@@ -1,3 +1,24 @@
+[2026-05-23] - DX Proof Freshness Rail Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/proof/freshness.rs` as the focused Proof freshness bucket renderer.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/proof.rs` now delegates Proof freshness rendering through `freshness::proof_freshness_state` and stays focused on runtime proof status at 235 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards Proof freshness module registration, parent delegation, row helper ownership, and proof/proof-freshness file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Adjacent agent bridge, deploy panel, and source-set guards.
+- Targeted rustfmt check.
+- `git diff --check`.
+- Conflict-marker scan on touched files.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Proof freshness rows against real DX proof freshness receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Agent Bridge Rail Split
 
 ADDED:

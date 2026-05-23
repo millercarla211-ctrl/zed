@@ -372,6 +372,7 @@ test("DX launch workspace delegates Tool History rail rendering", () => {
 test("DX launch workspace delegates Proof rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const proof = read("crates/agent_ui/src/dx_launch_workspace/proof.rs");
+  const proofFreshness = read("crates/agent_ui/src/dx_launch_workspace/proof/freshness.rs");
   const proofLabels = read("crates/agent_ui/src/dx_launch_workspace/proof_labels.rs");
 
   assert.match(parent, /proof::proof_freshness_state/);
@@ -380,11 +381,17 @@ test("DX launch workspace delegates Proof rail rendering", () => {
   assert.doesNotMatch(parent, /fn runtime_proof_status_state/);
   assert.doesNotMatch(parent, /fn runtime_proof_plan_row/);
   assert.doesNotMatch(parent, /fn runtime_proof_receipt_row/);
-  assert.match(proof, /pub\(super\) fn proof_freshness_state/);
+  assert.match(proof, /^mod freshness;$/m);
+  assert.match(proof, /pub\(super\) use freshness::proof_freshness_state/);
   assert.match(proof, /pub\(super\) fn runtime_proof_status_state/);
-  assert.match(proof, /fn proof_freshness_bucket_row/);
+  assert.doesNotMatch(proof, /fn proof_freshness_bucket_row/);
   assert.match(proof, /fn runtime_proof_plan_row/);
   assert.match(proof, /fn runtime_proof_receipt_row/);
+  assert.match(proofFreshness, /pub\(in super::super\) fn proof_freshness_state/);
+  assert.match(proofFreshness, /fn proof_freshness_bucket_row/);
+  assert.match(proofFreshness, /DxProofFreshnessBucket/);
+  assert.match(proofFreshness, /dx-proof-freshness-\{ix\}/);
+  assert.match(proofFreshness, /use super::super::metric_row/);
   assert.match(proof, /DxRuntimeProofPlanSummary/);
   assert.match(proof, /DxRuntimeProofReceiptSummary/);
   assert.match(proof, /dx-runtime-proof-latest-plan/);
@@ -396,6 +403,7 @@ test("DX launch workspace delegates Proof rail rendering", () => {
   assert.match(proofLabels, /pub\(crate\) fn runtime_proof_receipt_state_label/);
   assert.match(proofLabels, /runtime_proof_evidence_detail_ignores_blank_examples/);
   assert.match(proofLabels, /runtime_proof_receipt_state_label_handles_blank_validation_status/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof.rs") < 340);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof.rs") < 250);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof/freshness.rs") < 80);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof_labels.rs") < 120);
 });
