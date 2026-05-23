@@ -1,3 +1,27 @@
+[2026-05-23] - DX Agent Activity Rail Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/actions.rs` for shared DX Agent row action labels.
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/automations.rs` for automation summary and row rendering.
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/social.rs` for social account summary and row rendering.
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/social_actions.rs` for connect/disconnect receipt row rendering.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/agents.rs` now delegates social and automation rail rendering through focused modules and stays on the bridge summary coordinator at 330 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards Agent action/social/social-action/automation module registration, helper ownership, and file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Adjacent agent bridge, deploy panel, and source-set guards.
+- Targeted rustfmt check.
+- `git diff --check`.
+- Conflict-marker scan on touched files.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Agent social/action/automation rail rows against real DX Agents receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Agent Receipts Rail Split
 
 ADDED:

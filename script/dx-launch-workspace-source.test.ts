@@ -204,27 +204,54 @@ test("DX launch workspace delegates Binary Cache rail rendering", () => {
 test("DX launch workspace delegates agents and source rails", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const agents = read("crates/agent_ui/src/dx_launch_workspace/agents.rs");
+  const agentActions = read("crates/agent_ui/src/dx_launch_workspace/agents/actions.rs");
+  const agentAutomations = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/automations.rs",
+  );
   const agentProviderLabels = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs",
   );
   const agentProviders = read("crates/agent_ui/src/dx_launch_workspace/agents/providers.rs");
   const agentReceipts = read("crates/agent_ui/src/dx_launch_workspace/agents/receipts.rs");
+  const agentSocial = read("crates/agent_ui/src/dx_launch_workspace/agents/social.rs");
+  const agentSocialActions = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/social_actions.rs",
+  );
   const sources = read("crates/agent_ui/src/dx_launch_workspace/sources.rs");
 
   assert.match(parent, /agents::dx_agent_bridge_state/);
+  assert.match(parent, /agents::dx_agent_social_state/);
+  assert.match(parent, /agents::dx_agent_automation_state/);
   assert.match(parent, /sources::source_set_stack/);
   assert.doesNotMatch(parent, /fn dx_agent_bridge_state/);
   assert.doesNotMatch(parent, /fn source_set_stack/);
   assert.match(agents, /pub\(super\) fn dx_agent_bridge_state/);
+  assert.match(agents, /^mod actions;$/m);
+  assert.match(agents, /^mod automations;$/m);
   assert.match(agents, /^mod provider_labels;$/m);
   assert.match(agents, /^mod providers;$/m);
   assert.match(agents, /^mod receipts;$/m);
+  assert.match(agents, /^mod social;$/m);
+  assert.match(agents, /^mod social_actions;$/m);
+  assert.match(agents, /pub\(super\) use automations::dx_agent_automation_state/);
   assert.match(agents, /pub\(super\) use providers::dx_agent_provider_state/);
   assert.match(agents, /pub\(super\) use receipts::dx_agent_receipt_state/);
+  assert.match(agents, /pub\(super\) use social::dx_agent_social_state/);
+  assert.doesNotMatch(agents, /fn dx_agent_action_line/);
+  assert.doesNotMatch(agents, /fn dx_agent_automation_row/);
   assert.doesNotMatch(agents, /fn dx_agent_provider_row/);
   assert.doesNotMatch(agents, /fn dx_agent_model_row/);
   assert.doesNotMatch(agents, /fn dx_agent_receipt_row/);
   assert.doesNotMatch(agents, /fn dx_agent_receipt_root_state/);
+  assert.doesNotMatch(agents, /fn dx_agent_social_action_row/);
+  assert.doesNotMatch(agents, /fn dx_agent_social_row/);
+  assert.match(agentActions, /pub\(super\) fn dx_agent_action_line/);
+  assert.match(agentActions, /DxAgentRowAction/);
+  assert.match(agentAutomations, /pub\(in super::super\) fn dx_agent_automation_state/);
+  assert.match(agentAutomations, /fn dx_agent_automation_row/);
+  assert.match(agentAutomations, /DxAgentAutomation/);
+  assert.match(agentAutomations, /dx-agent-automation-\{ix\}/);
+  assert.match(agentAutomations, /use super::actions::dx_agent_action_line/);
   assert.match(agentProviders, /pub\(in super::super\) fn dx_agent_provider_state/);
   assert.match(agentProviders, /fn dx_agent_provider_row/);
   assert.match(agentProviders, /fn dx_agent_model_row/);
@@ -248,12 +275,26 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentReceipts, /dx-agent-receipt-unsafe-row/);
   assert.match(agentReceipts, /use super::super::\{metric_row, muted_card, signal_row\}/);
   assert.match(agentReceipts, /use super::super::list_labels::yes_no/);
+  assert.match(agentSocial, /pub\(in super::super\) fn dx_agent_social_state/);
+  assert.match(agentSocial, /fn dx_agent_social_row/);
+  assert.match(agentSocial, /DxAgentSocialAccount/);
+  assert.match(agentSocial, /dx-agent-social-connect-receipt/);
+  assert.match(agentSocial, /use super::actions::dx_agent_action_line/);
+  assert.match(agentSocial, /use super::social_actions::dx_agent_social_action_row/);
+  assert.match(agentSocialActions, /pub\(super\) fn dx_agent_social_action_row/);
+  assert.match(agentSocialActions, /DxAgentSocialActionSummary/);
+  assert.match(agentSocialActions, /connect_supported/);
+  assert.match(agentSocialActions, /manual_revoke_required/);
   assert.match(sources, /pub\(super\) fn source_set_stack/);
   assert.match(sources, /pub\(super\) fn receipt_source_state/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents.rs") < 650);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents.rs") < 360);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/actions.rs") < 60);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/automations.rs") < 100);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs") < 150);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/providers.rs") < 160);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts.rs") < 300);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/social.rs") < 120);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/social_actions.rs") < 90);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources.rs") < 420);
 });
 
