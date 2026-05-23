@@ -3,7 +3,10 @@ use ui::{Color, IconName, prelude::*};
 
 use crate::dx_launch_source_audit::DxLaunchSourceAuditSnapshot;
 
+use self::warnings::launch_source_audit_warning;
 use super::{bounded_items, metric_row, muted_card, signal_row, yes_no};
+
+mod warnings;
 
 pub(super) fn launch_source_audit_state(
     snapshot: &DxLaunchSourceAuditSnapshot,
@@ -120,34 +123,8 @@ pub(super) fn launch_source_audit_state(
         ));
     }
 
-    if let Some(issue) = snapshot.first_issue.as_ref() {
-        stack = stack.child(signal_row(
-            "dx-source-audit-warning".into(),
-            IconName::Warning,
-            Color::Warning,
-            issue.clone(),
-        ));
-    } else if snapshot.risk_review_count > 0 {
-        stack = stack.child(signal_row(
-            "dx-source-audit-risk".into(),
-            IconName::Warning,
-            Color::Warning,
-            "Source audit is blocked by risk-review state in another launch repo.".to_string(),
-        ));
-    } else if !snapshot.template_trust_passed {
-        stack = stack.child(signal_row(
-            "dx-source-audit-template-trust".into(),
-            IconName::Warning,
-            Color::Warning,
-            "Template trust scan is not passing.".to_string(),
-        ));
-    } else if !snapshot.dx_studio_passed {
-        stack = stack.child(signal_row(
-            "dx-source-audit-www-qa".into(),
-            IconName::Warning,
-            Color::Warning,
-            "DX Studio WWW QA receipt is not passing.".to_string(),
-        ));
+    if let Some((id, message)) = launch_source_audit_warning(snapshot) {
+        stack = stack.child(signal_row(id, IconName::Warning, Color::Warning, message));
     }
 
     stack.into_any_element()

@@ -1,3 +1,22 @@
+[2026-05-23] - DX Source Audit Warning Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/source_audit/warnings.rs` for first-issue, risk-review, template-trust, and DX Studio QA warning selection.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/source_audit.rs` now delegates source-audit warning selection through the focused helper and stays focused on rail metrics, missing-state cards, and invalid-schema warning orchestration at 131 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards Source Audit warning module registration, parent delegation, warning ownership, warning IDs, and Source Audit/warning file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Source Audit rail shell and warning module.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Source Audit warning rows against real `G:\Dx\.dx\audit\launch-source\latest.json` and DX Studio QA receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Status Row Warning Split
 
 ADDED:

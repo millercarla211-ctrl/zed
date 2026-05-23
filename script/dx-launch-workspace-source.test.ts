@@ -119,16 +119,36 @@ test("DX launch workspace delegates Launch Audit rail rendering", () => {
 test("DX launch workspace delegates Source Audit rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const sourceAudit = read("crates/agent_ui/src/dx_launch_workspace/source_audit.rs");
+  const sourceAuditWarnings = read(
+    "crates/agent_ui/src/dx_launch_workspace/source_audit/warnings.rs",
+  );
 
   assert.match(parent, /source_audit::launch_source_audit_state/);
   assert.doesNotMatch(parent, /fn launch_source_audit_state/);
+  assert.match(sourceAudit, /^mod warnings;$/m);
+  assert.match(sourceAudit, /use self::warnings::launch_source_audit_warning/);
   assert.match(sourceAudit, /pub\(super\) fn launch_source_audit_state/);
   assert.match(sourceAudit, /DxLaunchSourceAuditSnapshot/);
   assert.match(sourceAudit, /dx-source-audit-invalid/);
-  assert.match(sourceAudit, /dx-source-audit-template-trust/);
-  assert.match(sourceAudit, /dx-source-audit-www-qa/);
+  assert.doesNotMatch(sourceAudit, /first_issue/);
+  assert.doesNotMatch(sourceAudit, /dx-source-audit-template-trust/);
+  assert.doesNotMatch(sourceAudit, /dx-source-audit-www-qa/);
+  assert.match(sourceAuditWarnings, /pub\(super\) fn launch_source_audit_warning/);
+  assert.match(sourceAuditWarnings, /DxLaunchSourceAuditSnapshot/);
+  assert.match(sourceAuditWarnings, /SharedString/);
+  assert.match(sourceAuditWarnings, /first_issue/);
+  assert.match(sourceAuditWarnings, /risk_review_count/);
+  assert.match(sourceAuditWarnings, /template_trust_passed/);
+  assert.match(sourceAuditWarnings, /dx_studio_passed/);
+  assert.match(sourceAuditWarnings, /dx-source-audit-warning/);
+  assert.match(sourceAuditWarnings, /dx-source-audit-risk/);
+  assert.match(sourceAuditWarnings, /dx-source-audit-template-trust/);
+  assert.match(sourceAuditWarnings, /dx-source-audit-www-qa/);
   assert.match(sourceAudit, /use super::\{bounded_items, metric_row, muted_card, signal_row, yes_no\}/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/source_audit.rs") < 170);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/source_audit.rs") < 135);
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_workspace/source_audit/warnings.rs") < 60,
+  );
 });
 
 test("DX launch workspace delegates Launch Handoff rail rendering", () => {
