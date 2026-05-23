@@ -1,3 +1,22 @@
+[2026-05-23] - DX Sources Receipt State Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/sources/receipts.rs` for Sources receipt-root state, receipt totals, latest receipt rows, and `latest-receipt-*` row IDs.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/sources.rs` now re-exports the focused receipt helper and stays focused on source-set orchestration, attachment summary, and source-row control matching at 121 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards the receipt module boundary, parent re-export, receipt row ID ownership, receipt snapshot ownership, and tighter Sources/receipt file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Sources coordinator and receipt helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Sources receipt rows against real DX receipt roots and latest receipt labels in the governed native Zed proof window.
+
 [2026-05-23] - DX Agent Bridge Review Split
 
 ADDED:

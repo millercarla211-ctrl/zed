@@ -1,12 +1,13 @@
 use gpui::{AnyElement, App, SharedString, prelude::*};
-use ui::{IconName, prelude::*};
+use ui::prelude::*;
 
-use crate::dx_receipts::DxReceiptSnapshot;
 use crate::dx_source_sets::{DxSourceAttachmentSummary, DxSourceSet, DxSourceSetSnapshot};
 
+pub(super) use self::receipts::receipt_source_state;
 use self::rows::source_item_row;
-use super::{DxSourceRowControl, metric_row, muted_card, source_row};
+use super::{DxSourceRowControl, metric_row, muted_card};
 
+mod receipts;
 mod rows;
 
 pub(super) fn source_set_stack(
@@ -117,37 +118,4 @@ fn take_source_row_control(
         .iter()
         .position(|control| control.source_path == source_path)
         .map(|index| source_row_controls.remove(index).element)
-}
-
-pub(super) fn receipt_source_state(snapshot: &DxReceiptSnapshot, cx: &mut App) -> AnyElement {
-    if !snapshot.root_exists {
-        return muted_card(
-            format!("Receipts not found: {}", snapshot.root.display()),
-            cx,
-        );
-    }
-
-    let total = snapshot
-        .buckets
-        .iter()
-        .map(|bucket| bucket.count)
-        .sum::<usize>();
-    let mut stack = v_flex()
-        .gap_1()
-        .child(metric_row("Receipt files", total.to_string()));
-
-    if snapshot.latest.is_empty() {
-        stack = stack.child(muted_card("Waiting for first DX receipt", cx));
-    } else {
-        for (ix, label) in snapshot.latest.iter().enumerate() {
-            stack = stack.child(source_row(
-                SharedString::from(format!("latest-receipt-{ix}")),
-                IconName::FileTextOutlined,
-                label.clone(),
-                cx,
-            ));
-        }
-    }
-
-    stack.into_any_element()
 }
