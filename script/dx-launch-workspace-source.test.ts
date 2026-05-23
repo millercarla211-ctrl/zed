@@ -17,6 +17,7 @@ test("DX launch workspace UI stays split by rail ownership", () => {
     "crates/agent_ui/src/dx_launch_workspace/contracts.rs",
     "crates/agent_ui/src/dx_launch_workspace/launch_status.rs",
     "crates/agent_ui/src/dx_launch_workspace/launch_status_labels.rs",
+    "crates/agent_ui/src/dx_launch_workspace/launch_receipts.rs",
     "crates/agent_ui/src/dx_launch_workspace/list_labels.rs",
     "crates/agent_ui/src/dx_launch_workspace/proof.rs",
     "crates/agent_ui/src/dx_launch_workspace/proof_labels.rs",
@@ -40,6 +41,7 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   assert.match(parent, /^mod contracts;$/m);
   assert.match(parent, /^mod launch_status;$/m);
   assert.match(parent, /^mod launch_status_labels;$/m);
+  assert.match(parent, /^mod launch_receipts;$/m);
   assert.match(parent, /^mod list_labels;$/m);
   assert.match(parent, /^mod proof;$/m);
   assert.match(parent, /^mod proof_labels;$/m);
@@ -52,6 +54,25 @@ test("DX launch workspace UI stays split by rail ownership", () => {
     lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 1000,
     "dx_launch_workspace.rs should stay a coordinator instead of owning every rail",
   );
+});
+
+test("DX launch workspace delegates Launch Receipts rail rendering", () => {
+  const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
+  const launchReceipts = read("crates/agent_ui/src/dx_launch_workspace/launch_receipts.rs");
+
+  assert.match(parent, /launch_receipts::launch_receipt_review_state/);
+  assert.doesNotMatch(parent, /fn launch_receipt_review_state/);
+  assert.doesNotMatch(parent, /fn launch_receipt_row/);
+  assert.match(launchReceipts, /pub\(super\) fn launch_receipt_review_state/);
+  assert.match(launchReceipts, /fn launch_receipt_row/);
+  assert.match(launchReceipts, /DxLaunchReceiptReviewSnapshot/);
+  assert.match(launchReceipts, /DxLaunchReceiptSummary/);
+  assert.match(launchReceipts, /dx-launch-receipt-latest-malformed/);
+  assert.match(launchReceipts, /dx-launch-receipt-latest-stale/);
+  assert.match(launchReceipts, /dx-launch-receipt-schema-review/);
+  assert.match(launchReceipts, /dx-launch-receipt-warning/);
+  assert.match(launchReceipts, /use super::\{metric_row, muted_card, signal_row\}/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_receipts.rs") < 170);
 });
 
 test("DX launch workspace delegates WWW Evidence rail rendering", () => {

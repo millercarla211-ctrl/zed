@@ -1,3 +1,24 @@
+[2026-05-23] - DX Launch Receipts Rail Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/launch_receipts.rs` as the focused Launch Receipts right-rail renderer.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace.rs` now delegates Launch Receipts rail rendering through `launch_receipts::launch_receipt_review_state` and stays focused on workspace composition at 464 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards Launch Receipts module registration, parent delegation, warning IDs, row helper ownership, and the Launch Receipts rail file budget.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Adjacent launch receipts, launch status, launch prompts, and deploy panel guards
+- Targeted rustfmt check
+- `git diff --check`
+- Conflict-marker scan on touched files
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Launch Receipts rail rows against real `G:\Dx\.dx\receipts\launch` receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX-WWW Evidence Rail Split
 
 ADDED:
