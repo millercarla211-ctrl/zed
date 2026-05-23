@@ -1,3 +1,25 @@
+[2026-05-23] - DX Runtime Proof Status Helper Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_runtime_proof_status/receipts.rs` for bounded runtime-proof receipt counting, discovery, and JSON reads.
+- Added `crates/agent_ui/src/dx_runtime_proof_status/fields.rs` for runtime-proof JSON field extraction and compact text helpers.
+- Added `crates/agent_ui/src/dx_runtime_proof_status/summaries.rs` for runtime-proof plan/import/status receipt parsers.
+- Added `script/dx-runtime-proof-status-source.test.ts` as the no-build source guard for Runtime Proof Status ownership and file budgets.
+
+CHANGED:
+- `crates/agent_ui/src/dx_runtime_proof_status.rs` now stays focused on cache, workspace scan, claim-state assembly, and public snapshot types at 264 lines.
+
+PASSED:
+- Red/green `node --test script\dx-runtime-proof-status-source.test.ts`
+- Adjacent `node --test script\dx-launch-workspace-source.test.ts`
+- Adjacent `node --test script\dx-launch-prompts-source.test.ts`
+- Adjacent `node --test script\dx-agent-bridge-source.test.ts`
+- Targeted rustfmt check
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify Runtime Proof plan/import/status rows against real `tools/dx-runtime-proof` receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Source Sets Helper Split
 
 ADDED:
