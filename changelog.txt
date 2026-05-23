@@ -1,3 +1,18 @@
+[2026-05-23] - DX Deploy Source Guard Split
+
+ADDED:
+- Added `script/dx-deploy-source-guard.ts` as the shared helper for deploy source guard reads, line counts, deploy source discovery, and deploy guard discovery.
+- Added `script/dx-deploy-receipts-source.test.ts` for deploy receipt parser ownership, deploy receipt root ownership, and provider-gate quick-fix risk metadata checks.
+- Added `script/dx-deploy-launch-gate-source.test.ts` for launch-check receipt roots, launch notice parsing, blocker/warning provenance, status-score, and launch quick-action checks.
+- Added `script/dx-deploy-launch-evidence-source.test.ts` for launch outcome, scope, bucket, approval-evidence, and evidence-source checks.
+
+CHANGED:
+- `script/dx-deploy-panel-source.test.ts` now stays focused on panel registration, prompt ownership, rail ordering, deploy Rust source budgets, deploy guard source budgets, and docs coverage.
+- `DX.md` and `todo.txt` now document the focused `.ts` deploy guard ownership so future assertions do not regrow one giant panel guard.
+
+NOTES:
+- Confirmed the red step with `node --test script/dx-deploy-panel-source.test.ts` failing for missing focused deploy guard files. No Cargo check/build/test/clippy, local server, browser automation, live editor runtime, cloud command, live deploy, or `just run` ran in this slice.
+
 [2026-05-23] - DX Deploy Launch Notice Parsing Split
 
 ADDED:
