@@ -497,6 +497,12 @@ test("DX launch workspace delegates agents and source rails", () => {
   const agentBridgeReview = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/bridge/review.rs",
   );
+  const agentBridgeReviewNextAction = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/bridge/review/next_action.rs",
+  );
+  const agentBridgeReviewWarnings = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/bridge/review/warnings.rs",
+  );
   const agentBridgeSummary = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary.rs",
   );
@@ -623,17 +629,34 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentBridge, /use super::super::\{metric_row, muted_card, signal_row\}/);
   assert.match(agentBridgeReview, /pub\(super\) fn dx_agent_bridge_review_row/);
   assert.match(agentBridgeReview, /DxAgentBridgeSnapshot/);
-  assert.match(agentBridgeReview, /dx-agent-action-error-redaction/);
-  assert.match(agentBridgeReview, /dx-agent-release-gate-blocker/);
-  assert.match(agentBridgeReview, /dx-agent-release-gate-fanout-review/);
-  assert.match(agentBridgeReview, /dx-agent-release-gate-warning/);
-  assert.match(agentBridgeReview, /dx-agent-import-summary-blocker/);
-  assert.match(agentBridgeReview, /dx-agent-import-summary-fanout-review/);
-  assert.match(agentBridgeReview, /dx-agent-import-summary-warning/);
-  assert.match(agentBridgeReview, /dx-agent-contract-redaction-review/);
-  assert.match(agentBridgeReview, /dx-agent-bridge-error/);
-  assert.match(agentBridgeReview, /snapshot\.release_gate\.next_action/);
-  assert.match(agentBridgeReview, /use super::super::super::signal_row/);
+  assert.match(agentBridgeReview, /^mod next_action;$/m);
+  assert.match(agentBridgeReview, /^mod warnings;$/m);
+  assert.match(agentBridgeReview, /use self::next_action::dx_agent_bridge_next_action/);
+  assert.match(agentBridgeReview, /use self::warnings::dx_agent_bridge_warning_row/);
+  assert.match(agentBridgeReview, /dx_agent_bridge_warning_row\(snapshot\)/);
+  assert.match(agentBridgeReview, /dx_agent_bridge_next_action\(snapshot\)/);
+  assert.doesNotMatch(agentBridgeReview, /dx-agent-action-error-redaction/);
+  assert.doesNotMatch(agentBridgeReview, /dx-agent-release-gate-blocker/);
+  assert.doesNotMatch(agentBridgeReview, /snapshot\.release_gate\.next_action/);
+  assert.doesNotMatch(agentBridgeReview, /signal_row/);
+  assert.match(agentBridgeReviewNextAction, /pub\(super\) fn dx_agent_bridge_next_action/);
+  assert.match(agentBridgeReviewNextAction, /DxAgentBridgeSnapshot/);
+  assert.match(agentBridgeReviewNextAction, /snapshot\.release_gate\.next_action/);
+  assert.match(agentBridgeReviewNextAction, /snapshot\.import_summary\.next_action/);
+  assert.match(agentBridgeReviewNextAction, /snapshot\.contract_summary\.next_action/);
+  assert.match(agentBridgeReviewWarnings, /pub\(super\) fn dx_agent_bridge_warning_row/);
+  assert.match(agentBridgeReviewWarnings, /Option<AnyElement>/);
+  assert.match(agentBridgeReviewWarnings, /DxAgentBridgeSnapshot/);
+  assert.match(agentBridgeReviewWarnings, /dx-agent-action-error-redaction/);
+  assert.match(agentBridgeReviewWarnings, /dx-agent-release-gate-blocker/);
+  assert.match(agentBridgeReviewWarnings, /dx-agent-release-gate-fanout-review/);
+  assert.match(agentBridgeReviewWarnings, /dx-agent-release-gate-warning/);
+  assert.match(agentBridgeReviewWarnings, /dx-agent-import-summary-blocker/);
+  assert.match(agentBridgeReviewWarnings, /dx-agent-import-summary-fanout-review/);
+  assert.match(agentBridgeReviewWarnings, /dx-agent-import-summary-warning/);
+  assert.match(agentBridgeReviewWarnings, /dx-agent-contract-redaction-review/);
+  assert.match(agentBridgeReviewWarnings, /dx-agent-bridge-error/);
+  assert.match(agentBridgeReviewWarnings, /use super::super::super::super::signal_row/);
   assert.match(agentBridgeSummary, /pub\(super\) fn dx_agent_bridge_summary_rows/);
   assert.match(agentBridgeSummary, /Vec<AnyElement>/);
   assert.match(agentBridgeSummary, /DxAgentBridgeSnapshot/);
@@ -853,7 +876,14 @@ test("DX launch workspace delegates agents and source rails", () => {
     lineCount("crates/agent_ui/src/dx_launch_workspace/agents/automations/rows.rs") < 70,
   );
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge.rs") < 105);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/review.rs") < 105);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/review.rs") < 35);
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/review/next_action.rs") <
+      30,
+  );
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/review/warnings.rs") < 80,
+  );
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary.rs") < 35);
   assert.ok(
     lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/overview.rs") < 55,

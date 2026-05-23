@@ -1,3 +1,23 @@
+[2026-05-23] - DX Agent Bridge Review Helper Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/bridge/review/warnings.rs` for Agent bridge review warning rows.
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/bridge/review/next_action.rs` for Agent bridge review next-action fallback selection.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/agents/bridge/review.rs` now delegates warning and next-action selection through focused helpers and stays focused on final review-row composition at 22 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards helper module registration, review-shell delegation, warning ID ownership, next-action ownership, and tighter bridge-review helper budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the bridge review shell, warnings helper, and next-action helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Agent bridge review helper rows against real DX Agents action-error, contract, import-summary, release-gate, and receipt-index receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Agent Automation Row Split
 
 ADDED:
