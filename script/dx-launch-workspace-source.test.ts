@@ -374,6 +374,7 @@ test("DX launch workspace delegates bounded list labels", () => {
 test("DX launch workspace delegates Check rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const check = read("crates/agent_ui/src/dx_launch_workspace/check.rs");
+  const checkRows = read("crates/agent_ui/src/dx_launch_workspace/check/rows.rs");
   const labels = read("crates/agent_ui/src/dx_launch_workspace/check_labels.rs");
   const labelCounts = read("crates/agent_ui/src/dx_launch_workspace/check_labels/counts.rs");
   const labelRun = read("crates/agent_ui/src/dx_launch_workspace/check_labels/run.rs");
@@ -382,11 +383,27 @@ test("DX launch workspace delegates Check rail rendering", () => {
   assert.match(parent, /check::check_score_state/);
   assert.doesNotMatch(parent, /fn check_score_state/);
   assert.doesNotMatch(parent, /fn check_outcome_label/);
+  assert.match(check, /^mod rows;$/m);
+  assert.match(check, /use self::rows::\{/);
   assert.match(check, /use super::check_labels::\{/);
   assert.match(check, /pub\(super\) fn check_score_state/);
   assert.doesNotMatch(check, /fn check_outcome_label/);
   assert.doesNotMatch(check, /fn checked_paths_label/);
   assert.doesNotMatch(check, /fn skipped_checks_label/);
+  assert.doesNotMatch(check, /requires_user_approval/);
+  assert.doesNotMatch(check, /section\.estimated/);
+  assert.match(checkRows, /pub\(super\) fn check_section_row/);
+  assert.match(checkRows, /DxCheckPanelSection/);
+  assert.match(checkRows, /section\.estimated/);
+  assert.match(checkRows, /pub\(super\) fn check_blocker_row/);
+  assert.match(checkRows, /dx-check-panel-blocker-\{ix\}/);
+  assert.match(checkRows, /pub\(super\) fn check_warning_rows/);
+  assert.match(checkRows, /dx-check-panel-warning-\{ix\}/);
+  assert.match(checkRows, /Warn next/);
+  assert.match(checkRows, /pub\(super\) fn check_quick_fix_rows/);
+  assert.match(checkRows, /DxCheckPanelQuickFix/);
+  assert.match(checkRows, /requires_user_approval/);
+  assert.match(checkRows, /writes_receipts/);
   assert.match(labels, /#\[path = "check_labels\/counts\.rs"\]\s*mod counts;/);
   assert.match(labels, /#\[path = "check_labels\/run\.rs"\]\s*mod run;/);
   assert.match(labels, /pub\(crate\) use counts::\{/);
@@ -408,7 +425,8 @@ test("DX launch workspace delegates Check rail rendering", () => {
   assert.match(labelTests, /last_run_label_uses_generated_timestamp_when_label_is_blank/);
   assert.match(labelTests, /last_run_label_trims_nonblank_receipt_labels/);
   assert.match(labelTests, /path_and_skip_labels_cover_empty_single_and_plural/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check.rs") < 190);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check.rs") < 130);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check/rows.rs") < 110);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check_labels.rs") < 15);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check_labels/counts.rs") < 55);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check_labels/run.rs") < 45);

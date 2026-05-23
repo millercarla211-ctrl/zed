@@ -1,6 +1,7 @@
 use gpui::{AnyElement, App, SharedString, prelude::*};
 use ui::{IconName, prelude::*};
 
+use self::rows::{check_blocker_row, check_quick_fix_rows, check_section_row, check_warning_rows};
 use crate::dx_check_score::DxCheckScoreSnapshot;
 
 use super::check_labels::{
@@ -8,6 +9,8 @@ use super::check_labels::{
     last_run_label_with_generated_at, skipped_checks_label,
 };
 use super::{metric_row, muted_card, signal_row, source_row};
+
+mod rows;
 
 pub(super) fn check_score_state(snapshot: &DxCheckScoreSnapshot, cx: &App) -> AnyElement {
     let panel = &snapshot.panel;
@@ -84,64 +87,19 @@ pub(super) fn check_score_state(snapshot: &DxCheckScoreSnapshot, cx: &App) -> An
     }
 
     for section in panel.sections.iter().take(5) {
-        let score = match (section.score, section.max_score) {
-            (Some(score), Some(max_score)) => {
-                let estimated = if section.estimated { " est" } else { "" };
-                format!(
-                    "{score}/{max_score} {status}{estimated}",
-                    status = section.status
-                )
-            }
-            _ => section.status.clone(),
-        };
-        stack = stack.child(metric_row(section.title.clone(), score));
+        stack = stack.child(check_section_row(section));
     }
 
     for (ix, blocker) in panel.blockers.iter().take(2).enumerate() {
-        stack = stack.child(signal_row(
-            SharedString::from(format!("dx-check-panel-blocker-{ix}")),
-            IconName::Warning,
-            Color::Warning,
-            format!("{}: {}", blocker.code, blocker.message),
-        ));
+        stack = stack.child(check_blocker_row(ix, blocker));
     }
 
     for (ix, warning) in panel.warnings.iter().take(2).enumerate() {
-        stack = stack.child(signal_row(
-            SharedString::from(format!("dx-check-panel-warning-{ix}")),
-            IconName::Warning,
-            Color::Warning,
-            format!("{}: {}", warning.code, warning.message),
-        ));
-        if let Some(next_action) = warning.next_action.as_ref() {
-            stack = stack.child(metric_row(
-                format!("Warn next {}", ix + 1),
-                next_action.clone(),
-            ));
-        }
+        stack = stack.children(check_warning_rows(ix, warning));
     }
 
     for (ix, fix) in panel.quick_fixes.iter().take(2).enumerate() {
-        let approval = if fix.requires_user_approval {
-            "approval required"
-        } else {
-            "no approval"
-        };
-        let writes_receipts = if fix.writes_receipts {
-            "writes receipts"
-        } else {
-            "no receipt write"
-        };
-        let mut detail = format!(
-            "{} - risk: {}; {}; {}",
-            fix.next_action, fix.risk_level, approval, writes_receipts
-        );
-        if let Some(command) = fix.command.as_ref() {
-            detail.push_str(&format!(" - {command}"));
-        }
-        stack = stack
-            .child(metric_row(format!("Fix {}", ix + 1), fix.label.clone()))
-            .child(metric_row(format!("Fix next {}", ix + 1), detail));
+        stack = stack.children(check_quick_fix_rows(ix, fix));
     }
 
     stack = stack
