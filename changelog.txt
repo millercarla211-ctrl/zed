@@ -1,3 +1,24 @@
+[2026-05-23] - DX Agent Receipt Row Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/receipts/rows.rs` as the focused Agent receipt detail row renderer.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/agents/receipts.rs` now delegates receipt detail rows through `rows::dx_agent_receipt_row` and stays focused on receipt index/inbox state, root status, warnings, and inbox review summary at 131 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards Agent receipt row module registration, parent delegation, row helper ownership, retry/social/automation label ownership, and receipt/receipt-row file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Adjacent agent bridge, deploy panel, and source-set guards.
+- Targeted rustfmt check.
+- `git diff --check`.
+- Conflict-marker scan on touched files.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Agent receipt rows against real DX Agents receipt-index and inbox receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Sources Row Split
 
 ADDED:
