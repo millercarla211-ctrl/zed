@@ -1,3 +1,22 @@
+[2026-05-23] - DX Source Audit Summary Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/source_audit/summary.rs` for Source Audit summary metric and bounded-row rendering.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/source_audit.rs` now delegates summary, status, and warning ownership through focused helpers and stays focused on rail composition at 29 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards summary module registration, shell delegation, metric ownership, and tighter Source Audit shell/summary budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Source Audit shell and summary helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Source Audit summary rows against real latest source-audit, markdown, and DX Studio QA receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Runtime Proof Plan Detail Split
 
 ADDED:
