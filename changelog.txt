@@ -1,3 +1,23 @@
+[2026-05-23] - DX Tool History Summary Row Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/tool_history/summary_rows.rs` for Tool History receipt summary cards.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/tool_history.rs` now registers summary rows beside the bucket row helper.
+- `crates/agent_ui/src/dx_launch_workspace/tool_history/rows.rs` now delegates target path, restore preview path, blocker warning, and receipt label summary cards through the focused helper and stays focused on bucket-card state plus latest receipt source rows at 54 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards summary-row module registration, bucket-helper delegation, receipt-summary ownership, and tighter Tool History row/summary budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Tool History bucket row helper and summary row helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Tool History summary cards against real Forge/media/serializer/RLM receipt history in the governed native Zed proof window.
+
 [2026-05-23] - DX Agent Social Row Split
 
 ADDED:

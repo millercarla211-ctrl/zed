@@ -897,12 +897,16 @@ test("DX launch workspace delegates Tool History rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const toolHistory = read("crates/agent_ui/src/dx_launch_workspace/tool_history.rs");
   const toolHistoryRows = read("crates/agent_ui/src/dx_launch_workspace/tool_history/rows.rs");
+  const toolHistorySummaryRows = read(
+    "crates/agent_ui/src/dx_launch_workspace/tool_history/summary_rows.rs",
+  );
 
   assert.match(parent, /tool_history::tool_history_state/);
   assert.doesNotMatch(parent, /fn tool_history_state/);
   assert.doesNotMatch(parent, /fn tool_history_bucket/);
   assert.doesNotMatch(parent, /fn tool_history_summary_row/);
   assert.match(toolHistory, /^mod rows;$/m);
+  assert.match(toolHistory, /^mod summary_rows;$/m);
   assert.match(toolHistory, /use self::rows::tool_history_bucket/);
   assert.match(toolHistory, /pub\(super\) fn tool_history_state/);
   assert.doesNotMatch(toolHistory, /fn tool_history_bucket/);
@@ -910,15 +914,24 @@ test("DX launch workspace delegates Tool History rail rendering", () => {
   assert.doesNotMatch(toolHistory, /DxToolHistoryReceiptSummary/);
   assert.match(toolHistory, /dx-tool-history-\{ix\}/);
   assert.match(toolHistoryRows, /pub\(super\) fn tool_history_bucket/);
-  assert.match(toolHistoryRows, /fn tool_history_summary_row/);
-  assert.match(toolHistoryRows, /DxToolHistoryReceiptSummary/);
+  assert.match(toolHistoryRows, /use super::summary_rows::tool_history_summary_row/);
+  assert.doesNotMatch(toolHistoryRows, /fn tool_history_summary_row/);
+  assert.doesNotMatch(toolHistoryRows, /DxToolHistoryReceiptSummary/);
   assert.match(toolHistoryRows, /bucket\.latest_summaries/);
-  assert.match(toolHistoryRows, /target_path/);
-  assert.match(toolHistoryRows, /restore_destination_root/);
-  assert.match(toolHistoryRows, /blocker_count/);
+  assert.doesNotMatch(toolHistoryRows, /target_path/);
+  assert.doesNotMatch(toolHistoryRows, /restore_destination_root/);
+  assert.doesNotMatch(toolHistoryRows, /blocker_count/);
   assert.match(toolHistoryRows, /source_row/);
+  assert.match(toolHistorySummaryRows, /pub\(super\) fn tool_history_summary_row/);
+  assert.match(toolHistorySummaryRows, /DxToolHistoryReceiptSummary/);
+  assert.match(toolHistorySummaryRows, /target_path/);
+  assert.match(toolHistorySummaryRows, /restore_destination_root/);
+  assert.match(toolHistorySummaryRows, /blocker_count/);
+  assert.match(toolHistorySummaryRows, /signal_row/);
+  assert.match(toolHistorySummaryRows, /row_id/);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/tool_history.rs") < 35);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/tool_history/rows.rs") < 115);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/tool_history/rows.rs") < 70);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/tool_history/summary_rows.rs") < 70);
 });
 
 test("DX launch workspace delegates Proof rail rendering", () => {

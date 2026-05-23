@@ -5,6 +5,7 @@ use self::rows::tool_history_bucket;
 use crate::dx_receipt_history::DxToolHistorySnapshot;
 
 mod rows;
+mod summary_rows;
 
 pub(super) fn tool_history_state(snapshot: &DxToolHistorySnapshot, cx: &App) -> AnyElement {
     let mut stack = v_flex().gap_1();
