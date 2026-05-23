@@ -204,14 +204,33 @@ test("DX launch workspace delegates Source Audit rail rendering", () => {
 test("DX launch workspace delegates Launch Handoff rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const contracts = read("crates/agent_ui/src/dx_launch_workspace/contracts.rs");
+  const contractStatus = read("crates/agent_ui/src/dx_launch_workspace/contracts/status.rs");
 
   assert.match(parent, /contracts::launch_contract_state/);
   assert.doesNotMatch(parent, /fn launch_contract_state/);
+  assert.match(contracts, /^mod status;$/m);
+  assert.match(contracts, /use self::status::launch_contract_status_rows/);
   assert.match(contracts, /pub\(super\) fn launch_contract_state/);
   assert.match(contracts, /DxLaunchContractSnapshot/);
-  assert.match(contracts, /dx-launch-contract-fanout-review/);
-  assert.match(contracts, /use super::\{bounded_items, metric_row, muted_card, signal_row\}/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/contracts.rs") < 150);
+  assert.doesNotMatch(contracts, /dx-launch-contract-fanout-review/);
+  assert.doesNotMatch(contracts, /dx-launch-contract-redaction-review/);
+  assert.doesNotMatch(contracts, /dx-launch-contract-warning/);
+  assert.doesNotMatch(contracts, /Missing import manifest/);
+  assert.doesNotMatch(contracts, /redaction_requires_review/);
+  assert.doesNotMatch(contracts, /snapshot\.first_action/);
+  assert.match(contracts, /children\(launch_contract_status_rows\(snapshot, cx\)\)/);
+  assert.match(contracts, /use super::\{bounded_items, metric_row\}/);
+  assert.match(contractStatus, /pub\(super\) fn launch_contract_status_rows/);
+  assert.match(contractStatus, /DxLaunchContractSnapshot/);
+  assert.match(contractStatus, /Missing import manifest/);
+  assert.match(contractStatus, /Missing handoff packet/);
+  assert.match(contractStatus, /dx-launch-contract-warning/);
+  assert.match(contractStatus, /dx-launch-contract-redaction-review/);
+  assert.match(contractStatus, /dx-launch-contract-fanout-review/);
+  assert.match(contractStatus, /snapshot\.first_action/);
+  assert.match(contractStatus, /use super::super::\{metric_row, muted_card, signal_row\}/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/contracts.rs") < 80);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/contracts/status.rs") < 80);
 });
 
 test("DX launch workspace delegates Launch Status rail rendering", () => {

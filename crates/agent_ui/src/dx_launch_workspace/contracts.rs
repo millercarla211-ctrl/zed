@@ -1,9 +1,12 @@
 use gpui::{AnyElement, App, prelude::*};
-use ui::{Color, IconName, prelude::*};
+use ui::{Color, prelude::*};
 
 use crate::dx_launch_contracts::DxLaunchContractSnapshot;
 
-use super::{bounded_items, metric_row, muted_card, signal_row};
+use self::status::launch_contract_status_rows;
+use super::{bounded_items, metric_row};
+
+mod status;
 
 pub(super) fn launch_contract_state(snapshot: &DxLaunchContractSnapshot, cx: &App) -> AnyElement {
     let first_packet = bounded_items(&snapshot.first_packets, 3, "No packet commands");
@@ -60,58 +63,7 @@ pub(super) fn launch_contract_state(snapshot: &DxLaunchContractSnapshot, cx: &Ap
         .child(metric_row("Details", details))
         .child(metric_row("First Packets", first_packet));
 
-    if !snapshot.manifest_present {
-        stack = stack.child(muted_card(
-            format!(
-                "Missing import manifest: {}",
-                snapshot.manifest_path.display()
-            ),
-            cx,
-        ));
-    }
-    if !snapshot.handoff_present {
-        stack = stack.child(muted_card(
-            format!(
-                "Missing handoff packet: {}",
-                snapshot.handoff_path.display()
-            ),
-            cx,
-        ));
-    }
-
-    if let Some(error) = snapshot.last_error.as_ref() {
-        stack = stack.child(signal_row(
-            "dx-launch-contract-warning".into(),
-            IconName::Warning,
-            Color::Warning,
-            error.clone(),
-        ));
-    } else if snapshot.redaction_requires_review {
-        stack = stack.child(signal_row(
-            "dx-launch-contract-redaction-review".into(),
-            IconName::Warning,
-            Color::Warning,
-            "Launch handoff redaction flags need review.".to_string(),
-        ));
-    } else if !snapshot.no_command_fanout {
-        stack = stack.child(signal_row(
-            "dx-launch-contract-fanout-review".into(),
-            IconName::Warning,
-            Color::Warning,
-            "Launch handoff reports command fanout; keep GPUI import blocked.".to_string(),
-        ));
-    } else {
-        stack = stack.child(
-            Label::new(snapshot.next_action.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if let Some(action) = snapshot.first_action.as_ref() {
-        stack = stack.child(metric_row("First Action", action.clone()));
-    }
+    stack = stack.children(launch_contract_status_rows(snapshot, cx));
 
     stack.into_any_element()
 }
