@@ -1,3 +1,25 @@
+[2026-05-23] - DX Runtime Proof Label Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/proof_labels/evidence.rs` for runtime proof evidence and requirement labels.
+- Added `crates/agent_ui/src/dx_launch_workspace/proof_labels/receipt.rs` for runtime proof receipt-state labels.
+- Added `crates/agent_ui/src/dx_launch_workspace/proof_labels_tests.rs` for direct pure-label coverage.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/proof_labels.rs` is now a small facade over focused proof-label helpers.
+- `script/dx-launch-workspace-source.test.ts` now guards proof-label facade wiring, helper ownership, test ownership, and tighter file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_launch_workspace\proof_labels.rs`
+- Targeted rustfmt check.
+- Line-count budgets for the proof-label facade, evidence helper, receipt helper, and test module.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Runtime Proof labels against real runtime proof plan/import/status receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Handoff Contract Status Split
 
 ADDED:
