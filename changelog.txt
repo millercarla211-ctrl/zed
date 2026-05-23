@@ -1,3 +1,24 @@
+[2026-05-23] - DX Sources Row Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/sources/rows.rs` as the focused Sources rail source item and receipt drilldown row renderer.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/sources.rs` now delegates source item rows through `rows::source_item_row` and stays focused on source-set orchestration, attachment summary, source-row control matching, and receipt-source state at 155 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards source row module registration, parent delegation, row helper ownership, icon mapping, signal row IDs, and source/source-row file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Adjacent agent bridge, deploy panel, and source-set guards.
+- Targeted rustfmt check.
+- `git diff --check`.
+- Conflict-marker scan on touched files.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Sources rail rows against real workspace/source-pack/media/restore receipt inputs in the governed native Zed proof window.
+
 [2026-05-23] - DX Runtime Proof Row Split
 
 ADDED:

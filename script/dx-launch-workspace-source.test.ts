@@ -219,6 +219,7 @@ test("DX launch workspace delegates agents and source rails", () => {
     "crates/agent_ui/src/dx_launch_workspace/agents/social_actions.rs",
   );
   const sources = read("crates/agent_ui/src/dx_launch_workspace/sources.rs");
+  const sourceRows = read("crates/agent_ui/src/dx_launch_workspace/sources/rows.rs");
 
   assert.match(parent, /agents::dx_agent_bridge_state/);
   assert.match(parent, /agents::dx_agent_social_state/);
@@ -298,6 +299,18 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentSocialActions, /manual_revoke_required/);
   assert.match(sources, /pub\(super\) fn source_set_stack/);
   assert.match(sources, /pub\(super\) fn receipt_source_state/);
+  assert.match(sources, /^mod rows;$/m);
+  assert.match(sources, /use self::rows::source_item_row/);
+  assert.doesNotMatch(sources, /fn source_item_row/);
+  assert.doesNotMatch(sources, /fn source_receipt_drilldown_row/);
+  assert.doesNotMatch(sources, /fn source_kind_icon/);
+  assert.match(sourceRows, /pub\(super\) fn source_item_row/);
+  assert.match(sourceRows, /fn source_receipt_drilldown_row/);
+  assert.match(sourceRows, /fn source_kind_icon/);
+  assert.match(sourceRows, /DxSourceKind::ForgeRestorePreview/);
+  assert.match(sourceRows, /source-proof-\{\}-\{ix\}/);
+  assert.match(sourceRows, /source-warning-\{\}-\{ix\}/);
+  assert.match(sourceRows, /use super::super::\{metric_row, signal_row\}/);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents.rs") < 40);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/actions.rs") < 60);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/automations.rs") < 100);
@@ -307,7 +320,8 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts.rs") < 300);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/social.rs") < 120);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/social_actions.rs") < 90);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources.rs") < 420);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources.rs") < 190);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources/rows.rs") < 170);
 });
 
 test("DX launch workspace delegates bounded list labels", () => {
