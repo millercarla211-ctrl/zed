@@ -1,3 +1,28 @@
+[2026-05-23] - DX Receipt History Helper Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_receipt_history/buckets.rs` for Tool History bucket scanning.
+- Added `crates/agent_ui/src/dx_receipt_history/receipt_files.rs` for bounded receipt counting and latest-label discovery.
+- Added `crates/agent_ui/src/dx_receipt_history/receipt_io.rs` for bounded receipt JSON reads.
+- Added `crates/agent_ui/src/dx_receipt_history/fields.rs` for shared JSON field extraction.
+- Added `crates/agent_ui/src/dx_receipt_history/forge_history.rs` for Forge receipt summary assembly.
+- Added `crates/agent_ui/src/dx_receipt_history/forge_receipt_fields.rs` for Forge receipt kind, status, path, readiness, evidence, and blocker parsing.
+- Added `script/dx-receipt-history-source.test.ts` as the no-build source guard for receipt-history ownership and file budgets.
+
+CHANGED:
+- `crates/agent_ui/src/dx_receipt_history.rs` now stays focused on cache and public Tool History snapshot types at 65 lines.
+
+PASSED:
+- Red/green `node --test script\dx-receipt-history-source.test.ts`
+- Adjacent launch workspace/prompts, agent bridge, deploy panel/receipt, and source-set guards
+- Targeted rustfmt check
+- `git diff --check`
+- Conflict-marker scan on touched files
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Tool History rows against real Forge/media/serializer receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Binary Cache Helper Split
 
 ADDED:
