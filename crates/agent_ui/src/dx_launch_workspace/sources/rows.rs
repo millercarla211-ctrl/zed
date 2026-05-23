@@ -1,11 +1,11 @@
 use gpui::{AnyElement, App, SharedString, prelude::*};
-use ui::{Color, IconName, prelude::*};
+use ui::{Color, prelude::*};
 
 use crate::dx_source_sets::DxSourceItem;
 
-use super::super::signal_row;
-use super::drilldowns::source_receipt_drilldown_row;
+use super::drilldowns::source_receipt_drilldown_rows;
 use super::kinds::source_kind_icon;
+use super::signals::source_signal_rows;
 
 pub(super) fn source_item_row(
     id: SharedString,
@@ -55,31 +55,8 @@ pub(super) fn source_item_row(
         stack = stack.child(source_row_control);
     }
 
-    for (ix, receipt) in source.receipt_drilldowns.iter().take(2).enumerate() {
-        stack = stack.child(source_receipt_drilldown_row(
-            SharedString::from(format!("source-receipt-{}-{ix}", source.path)),
-            receipt,
-            cx,
-        ));
-    }
-
-    for (ix, proof) in source.proofs.iter().take(2).enumerate() {
-        stack = stack.child(signal_row(
-            SharedString::from(format!("source-proof-{}-{ix}", source.path)),
-            IconName::Check,
-            Color::Success,
-            proof.clone(),
-        ));
-    }
-
-    for (ix, warning) in source.warnings.iter().take(2).enumerate() {
-        stack = stack.child(signal_row(
-            SharedString::from(format!("source-warning-{}-{ix}", source.path)),
-            IconName::Warning,
-            Color::Warning,
-            warning.clone(),
-        ));
-    }
-
-    stack.into_any_element()
+    stack
+        .children(source_receipt_drilldown_rows(source, cx))
+        .children(source_signal_rows(source))
+        .into_any_element()
 }

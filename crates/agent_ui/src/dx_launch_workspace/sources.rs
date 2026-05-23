@@ -13,6 +13,7 @@ mod drilldowns;
 mod kinds;
 mod receipts;
 mod rows;
+mod signals;
 
 pub(super) fn source_set_stack(
     snapshot: &DxSourceSetSnapshot,

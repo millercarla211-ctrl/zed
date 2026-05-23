@@ -563,6 +563,7 @@ test("DX launch workspace delegates agents and source rails", () => {
   );
   const sourceReceipts = read("crates/agent_ui/src/dx_launch_workspace/sources/receipts.rs");
   const sourceRows = read("crates/agent_ui/src/dx_launch_workspace/sources/rows.rs");
+  const sourceSignals = read("crates/agent_ui/src/dx_launch_workspace/sources/signals.rs");
   const sourceDrilldowns = read(
     "crates/agent_ui/src/dx_launch_workspace/sources/drilldowns.rs",
   );
@@ -826,6 +827,7 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(sources, /^mod kinds;$/m);
   assert.match(sources, /^mod receipts;$/m);
   assert.match(sources, /^mod rows;$/m);
+  assert.match(sources, /^mod signals;$/m);
   assert.match(sources, /pub\(super\) use self::attachments::source_attachment_state/);
   assert.match(sources, /pub\(super\) use self::receipts::receipt_source_state/);
   assert.match(sources, /use self::rows::source_item_row/);
@@ -852,17 +854,34 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(sourceReceipts, /IconName::FileTextOutlined/);
   assert.match(sourceReceipts, /Receipts not found/);
   assert.match(sourceReceipts, /use super::super::\{metric_row, muted_card, source_row\}/);
-  assert.match(sourceRows, /use super::drilldowns::source_receipt_drilldown_row/);
+  assert.match(sourceRows, /use super::drilldowns::source_receipt_drilldown_rows/);
   assert.match(sourceRows, /use super::kinds::source_kind_icon/);
+  assert.match(sourceRows, /use super::signals::source_signal_rows/);
   assert.match(sourceRows, /pub\(super\) fn source_item_row/);
+  assert.match(sourceRows, /children\(source_signal_rows\(source\)\)/);
   assert.doesNotMatch(sourceRows, /fn source_receipt_drilldown_row/);
+  assert.doesNotMatch(sourceRows, /source_receipt_drilldown_row\(/);
   assert.doesNotMatch(sourceRows, /fn source_kind_icon/);
   assert.doesNotMatch(sourceRows, /DxSourceKind::ForgeRestorePreview/);
-  assert.match(sourceRows, /source-proof-\{\}-\{ix\}/);
-  assert.match(sourceRows, /source-warning-\{\}-\{ix\}/);
-  assert.match(sourceRows, /use super::super::signal_row/);
+  assert.doesNotMatch(sourceRows, /source-proof-\{\}-\{ix\}/);
+  assert.doesNotMatch(sourceRows, /source-warning-\{\}-\{ix\}/);
+  assert.doesNotMatch(sourceRows, /use super::super::signal_row/);
+  assert.doesNotMatch(sourceRows, /signal_row\(/);
+  assert.doesNotMatch(sourceRows, /IconName::Check/);
+  assert.doesNotMatch(sourceRows, /IconName::Warning/);
+  assert.match(sourceSignals, /pub\(super\) fn source_signal_rows/);
+  assert.match(sourceSignals, /Vec<AnyElement>/);
+  assert.match(sourceSignals, /DxSourceItem/);
+  assert.match(sourceSignals, /source-proof-\{\}-\{ix\}/);
+  assert.match(sourceSignals, /source-warning-\{\}-\{ix\}/);
+  assert.match(sourceSignals, /IconName::Check/);
+  assert.match(sourceSignals, /IconName::Warning/);
+  assert.match(sourceSignals, /use super::super::signal_row/);
   assert.match(sourceDrilldowns, /pub\(super\) fn source_receipt_drilldown_row/);
+  assert.match(sourceDrilldowns, /pub\(super\) fn source_receipt_drilldown_rows/);
+  assert.match(sourceDrilldowns, /DxSourceItem/);
   assert.match(sourceDrilldowns, /DxSourceReceiptDrilldown/);
+  assert.match(sourceDrilldowns, /source-receipt-\{\}-\{ix\}/);
   assert.match(sourceDrilldowns, /source-receipt-label/);
   assert.match(sourceDrilldowns, /IconName::FileTextOutlined/);
   assert.match(sourceDrilldowns, /editor_background/);
@@ -923,8 +942,9 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources.rs") < 95);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources/attachments.rs") < 60);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources/receipts.rs") < 55);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources/rows.rs") < 90);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources/drilldowns.rs") < 45);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources/rows.rs") < 65);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources/signals.rs") < 50);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources/drilldowns.rs") < 65);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources/kinds.rs") < 25);
 });
 

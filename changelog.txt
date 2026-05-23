@@ -1,3 +1,23 @@
+[2026-05-23] - DX Sources Row Detail Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/sources/signals.rs` for bounded source proof and warning signal rows.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/sources/drilldowns.rs` now owns bounded source receipt drilldown row collection beside the individual drilldown card renderer.
+- `crates/agent_ui/src/dx_launch_workspace/sources/rows.rs` now delegates receipt drilldowns plus proof/warning signals through focused helpers and stays focused on source row shell layout at 62 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards signal module registration, row-shell delegation, source proof/warning ID ownership, drilldown collection ownership, and tighter Sources row/signal/drilldown budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Sources row shell, signal helper, and drilldown helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Sources row detail rendering against real source-pack, media, reduced-context, receipt, and restore-preview rows in the governed native Zed proof window.
+
 [2026-05-23] - DX Agent Bridge Review Helper Split
 
 ADDED:

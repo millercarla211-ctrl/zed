@@ -1,9 +1,25 @@
 use gpui::{AnyElement, App, SharedString, prelude::*};
 use ui::{Color, IconName, prelude::*};
 
-use crate::dx_source_sets::DxSourceReceiptDrilldown;
+use crate::dx_source_sets::{DxSourceItem, DxSourceReceiptDrilldown};
 
 use super::super::signal_row;
+
+pub(super) fn source_receipt_drilldown_rows(source: &DxSourceItem, cx: &App) -> Vec<AnyElement> {
+    source
+        .receipt_drilldowns
+        .iter()
+        .take(2)
+        .enumerate()
+        .map(|(ix, receipt)| {
+            source_receipt_drilldown_row(
+                SharedString::from(format!("source-receipt-{}-{ix}", source.path)),
+                receipt,
+                cx,
+            )
+        })
+        .collect()
+}
 
 pub(super) fn source_receipt_drilldown_row(
     id: SharedString,
