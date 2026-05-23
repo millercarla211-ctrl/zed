@@ -454,6 +454,9 @@ test("DX launch workspace delegates agents and source rails", () => {
     "crates/agent_ui/src/dx_launch_workspace/agents/receipts/status.rs",
   );
   const agentSocial = read("crates/agent_ui/src/dx_launch_workspace/agents/social.rs");
+  const agentSocialRows = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/social/rows.rs",
+  );
   const agentSocialActions = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/social_actions.rs",
   );
@@ -676,11 +679,21 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentReceiptStatus, /dx-agent-receipt-unsafe-row/);
   assert.match(agentReceiptStatus, /use super::super::super::signal_row/);
   assert.match(agentSocial, /pub\(in super::super\) fn dx_agent_social_state/);
-  assert.match(agentSocial, /fn dx_agent_social_row/);
-  assert.match(agentSocial, /DxAgentSocialAccount/);
+  assert.match(agentSocial, /^mod rows;$/m);
+  assert.match(agentSocial, /use self::rows::dx_agent_social_row/);
+  assert.doesNotMatch(agentSocial, /fn dx_agent_social_row/);
+  assert.doesNotMatch(agentSocial, /DxAgentSocialAccount/);
+  assert.doesNotMatch(agentSocial, /use super::actions::dx_agent_action_line/);
   assert.match(agentSocial, /dx-agent-social-connect-receipt/);
-  assert.match(agentSocial, /use super::actions::dx_agent_action_line/);
   assert.match(agentSocial, /use super::social_actions::dx_agent_social_action_row/);
+  assert.match(agentSocialRows, /pub\(super\) fn dx_agent_social_row/);
+  assert.match(agentSocialRows, /DxAgentSocialAccount/);
+  assert.match(agentSocialRows, /dx_agent_action_line/);
+  assert.match(agentSocialRows, /Connected/);
+  assert.match(agentSocialRows, /QR ready/);
+  assert.match(agentSocialRows, /account\.next_action/);
+  assert.match(agentSocialRows, /use super::super::actions::dx_agent_action_line/);
+  assert.match(agentSocialRows, /use super::super::super::metric_row/);
   assert.match(agentSocialActions, /pub\(super\) fn dx_agent_social_action_row/);
   assert.match(agentSocialActions, /DxAgentSocialActionSummary/);
   assert.match(agentSocialActions, /connect_supported/);
@@ -772,7 +785,8 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts/row_details.rs") < 95);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts/rows.rs") < 55);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts/status.rs") < 80);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/social.rs") < 120);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/social.rs") < 70);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/social/rows.rs") < 70);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/social_actions.rs") < 90);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources.rs") < 95);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources/attachments.rs") < 60);
