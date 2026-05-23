@@ -3,9 +3,11 @@ use ui::{Color, IconName, prelude::*};
 
 use crate::dx_launch_audit::DxLaunchAuditSnapshot;
 
+use self::status::launch_audit_status_rows;
 use self::warnings::launch_audit_warning;
-use super::{bounded_items, metric_row, muted_card, signal_row};
+use super::{bounded_items, metric_row, signal_row};
 
+mod status;
 mod warnings;
 
 pub(super) fn launch_audit_state(snapshot: &DxLaunchAuditSnapshot, cx: &App) -> AnyElement {
@@ -70,32 +72,8 @@ pub(super) fn launch_audit_state(snapshot: &DxLaunchAuditSnapshot, cx: &App) -> 
         ))
         .child(metric_row("Commands", command_rows))
         .child(metric_row("Fixtures", fixture_rows))
-        .child(metric_row("Smoke Rows", smoke_rows));
-
-    if !snapshot.root_exists {
-        stack = stack.child(muted_card(
-            format!("Missing launch example root: {}", snapshot.root.display()),
-            cx,
-        ));
-    }
-
-    for (present, path, label) in [
-        (snapshot.schemas_present, &snapshot.schemas_path, "schemas"),
-        (
-            snapshot.fixtures_present,
-            &snapshot.fixtures_path,
-            "fixtures",
-        ),
-        (snapshot.smoke_present, &snapshot.smoke_path, "smoke"),
-        (snapshot.status_present, &snapshot.status_path, "status"),
-    ] {
-        if !present {
-            stack = stack.child(muted_card(
-                format!("Missing {label}: {}", path.display()),
-                cx,
-            ));
-        }
-    }
+        .child(metric_row("Smoke Rows", smoke_rows))
+        .children(launch_audit_status_rows(snapshot, cx));
 
     if let Some((id, message)) = launch_audit_warning(snapshot) {
         stack = stack.child(signal_row(id, IconName::Warning, Color::Warning, message));

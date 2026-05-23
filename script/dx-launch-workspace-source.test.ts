@@ -124,19 +124,38 @@ test("DX launch workspace delegates WWW Evidence rail rendering", () => {
 test("DX launch workspace delegates Launch Audit rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const audit = read("crates/agent_ui/src/dx_launch_workspace/audit.rs");
+  const auditStatus = read("crates/agent_ui/src/dx_launch_workspace/audit/status.rs");
   const auditWarnings = read("crates/agent_ui/src/dx_launch_workspace/audit/warnings.rs");
 
   assert.match(parent, /audit::launch_audit_state/);
   assert.doesNotMatch(parent, /fn launch_audit_state/);
+  assert.match(audit, /^mod status;$/m);
   assert.match(audit, /^mod warnings;$/m);
+  assert.match(audit, /use self::status::launch_audit_status_rows/);
   assert.match(audit, /use self::warnings::launch_audit_warning/);
   assert.match(audit, /pub\(super\) fn launch_audit_state/);
   assert.match(audit, /DxLaunchAuditSnapshot/);
+  assert.match(audit, /children\(launch_audit_status_rows\(snapshot, cx\)\)/);
+  assert.doesNotMatch(audit, /Missing launch example root/);
+  assert.doesNotMatch(audit, /Missing \{label\}/);
+  assert.doesNotMatch(audit, /schemas_path/);
+  assert.doesNotMatch(audit, /fixtures_path/);
+  assert.doesNotMatch(audit, /smoke_path/);
+  assert.doesNotMatch(audit, /status_path/);
   assert.doesNotMatch(audit, /first_issue/);
   assert.doesNotMatch(audit, /redaction_requires_review/);
   assert.doesNotMatch(audit, /dx-launch-audit-warning/);
   assert.doesNotMatch(audit, /dx-launch-audit-redaction-review/);
   assert.doesNotMatch(audit, /dx-launch-audit-fanout-review/);
+  assert.match(auditStatus, /pub\(super\) fn launch_audit_status_rows/);
+  assert.match(auditStatus, /DxLaunchAuditSnapshot/);
+  assert.match(auditStatus, /Missing launch example root/);
+  assert.match(auditStatus, /Missing \{label\}/);
+  assert.match(auditStatus, /schemas_path/);
+  assert.match(auditStatus, /fixtures_path/);
+  assert.match(auditStatus, /smoke_path/);
+  assert.match(auditStatus, /status_path/);
+  assert.match(auditStatus, /use super::super::muted_card/);
   assert.match(auditWarnings, /pub\(super\) fn launch_audit_warning/);
   assert.match(auditWarnings, /DxLaunchAuditSnapshot/);
   assert.match(auditWarnings, /SharedString/);
@@ -146,8 +165,9 @@ test("DX launch workspace delegates Launch Audit rail rendering", () => {
   assert.match(auditWarnings, /dx-launch-audit-warning/);
   assert.match(auditWarnings, /dx-launch-audit-redaction-review/);
   assert.match(auditWarnings, /dx-launch-audit-fanout-review/);
-  assert.match(audit, /use super::\{bounded_items, metric_row, muted_card, signal_row\}/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/audit.rs") < 115);
+  assert.match(audit, /use super::\{bounded_items, metric_row, signal_row\}/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/audit.rs") < 95);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/audit/status.rs") < 55);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/audit/warnings.rs") < 45);
 });
 
