@@ -59,12 +59,17 @@ test("DX launch workspace UI stays split by rail ownership", () => {
 test("DX launch workspace delegates Launch Receipts rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const launchReceipts = read("crates/agent_ui/src/dx_launch_workspace/launch_receipts.rs");
+  const launchReceiptRows = read(
+    "crates/agent_ui/src/dx_launch_workspace/launch_receipts/rows.rs",
+  );
 
   assert.match(parent, /launch_receipts::launch_receipt_review_state/);
   assert.doesNotMatch(parent, /fn launch_receipt_review_state/);
   assert.doesNotMatch(parent, /fn launch_receipt_row/);
+  assert.match(launchReceipts, /^mod rows;$/m);
+  assert.match(launchReceipts, /use self::rows::launch_receipt_row/);
   assert.match(launchReceipts, /pub\(super\) fn launch_receipt_review_state/);
-  assert.match(launchReceipts, /fn launch_receipt_row/);
+  assert.doesNotMatch(launchReceipts, /fn launch_receipt_row/);
   assert.match(launchReceipts, /DxLaunchReceiptReviewSnapshot/);
   assert.match(launchReceipts, /DxLaunchReceiptSummary/);
   assert.match(launchReceipts, /dx-launch-receipt-latest-malformed/);
@@ -72,7 +77,14 @@ test("DX launch workspace delegates Launch Receipts rail rendering", () => {
   assert.match(launchReceipts, /dx-launch-receipt-schema-review/);
   assert.match(launchReceipts, /dx-launch-receipt-warning/);
   assert.match(launchReceipts, /use super::\{metric_row, muted_card, signal_row\}/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_receipts.rs") < 170);
+  assert.match(launchReceiptRows, /pub\(super\) fn launch_receipt_row/);
+  assert.match(launchReceiptRows, /DxLaunchReceiptSummary/);
+  assert.match(launchReceiptRows, /dx-launch-receipt-\{\}-\{\}/);
+  assert.match(launchReceiptRows, /review_launch_receipt_metadata/);
+  assert.match(launchReceiptRows, /receipt\.display_state\(\)/);
+  assert.match(launchReceiptRows, /cx\.theme\(\)\.colors\(\)\.element_background/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_receipts.rs") < 125);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_receipts/rows.rs") < 80);
 });
 
 test("DX launch workspace delegates WWW Evidence rail rendering", () => {
