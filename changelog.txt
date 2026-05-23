@@ -1,3 +1,24 @@
+[2026-05-23] - DX Runtime Proof Row Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows.rs` as the focused runtime proof plan and receipt row renderer.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/proof.rs` now delegates latest runtime proof plan and import/status receipt rows through `runtime_rows` and stays focused on the runtime proof status shell at 71 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards runtime row module registration, parent delegation, row helper ownership, proof/proof-runtime file budgets, and proof label ownership.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Adjacent agent bridge, deploy panel, and source-set guards.
+- Targeted rustfmt check.
+- `git diff --check`.
+- Conflict-marker scan on touched files.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Runtime Proof status rows against real runtime proof plan/import/status receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Proof Freshness Rail Split
 
 ADDED:
