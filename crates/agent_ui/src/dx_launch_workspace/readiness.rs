@@ -1,9 +1,13 @@
 use gpui::{AnyElement, App, prelude::*};
-use ui::{Color, IconName, prelude::*};
+use ui::{Color, prelude::*};
 
 use crate::dx_launch_readiness::DxLaunchReadinessSnapshot;
 
-use super::{bounded_items, metric_row, muted_card, signal_row};
+use self::{examples::launch_readiness_example_rows, warnings::launch_readiness_warning};
+use super::{bounded_items, metric_row, muted_card};
+
+mod examples;
+mod warnings;
 
 pub(super) fn launch_readiness_state(snapshot: &DxLaunchReadinessSnapshot, cx: &App) -> AnyElement {
     let freshness = bounded_items(&snapshot.freshness_states, 4, "No cached states");
@@ -81,27 +85,8 @@ pub(super) fn launch_readiness_state(snapshot: &DxLaunchReadinessSnapshot, cx: &
         ));
     }
 
-    if let Some(issue) = snapshot.first_issue.as_ref() {
-        stack = stack.child(signal_row(
-            "dx-launch-readiness-warning".into(),
-            IconName::Warning,
-            Color::Warning,
-            issue.clone(),
-        ));
-    } else if snapshot.redaction_requires_review {
-        stack = stack.child(signal_row(
-            "dx-launch-readiness-redaction-review".into(),
-            IconName::Warning,
-            Color::Warning,
-            "Launch readiness redaction flags need review.".to_string(),
-        ));
-    } else if !snapshot.no_command_fanout {
-        stack = stack.child(signal_row(
-            "dx-launch-readiness-fanout-review".into(),
-            IconName::Warning,
-            Color::Warning,
-            "Launch readiness packets report command fanout; keep import blocked.".to_string(),
-        ));
+    if let Some(warning) = launch_readiness_warning(snapshot) {
+        stack = stack.child(warning);
     } else {
         stack = stack.child(
             Label::new(snapshot.next_action.clone())
@@ -111,15 +96,8 @@ pub(super) fn launch_readiness_state(snapshot: &DxLaunchReadinessSnapshot, cx: &
         );
     }
 
-    for (ix, example) in snapshot.examples.iter().take(3).enumerate() {
-        stack = stack.child(metric_row(
-            format!("Example {}", ix + 1),
-            format!("{}: {} ({})", example.label, example.status, example.detail),
-        ));
-
-        if let Some(next_action) = example.next_action.as_ref() {
-            stack = stack.child(metric_row(format!("Next {}", ix + 1), next_action.clone()));
-        }
+    for row in launch_readiness_example_rows(snapshot) {
+        stack = stack.child(row);
     }
 
     stack.into_any_element()

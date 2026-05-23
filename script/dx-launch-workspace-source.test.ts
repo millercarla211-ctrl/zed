@@ -236,15 +236,42 @@ test("DX launch workspace delegates Launch Status rail rendering", () => {
 test("DX launch workspace delegates Launch Gate rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const readiness = read("crates/agent_ui/src/dx_launch_workspace/readiness.rs");
+  const readinessExamples = read("crates/agent_ui/src/dx_launch_workspace/readiness/examples.rs");
+  const readinessWarnings = read("crates/agent_ui/src/dx_launch_workspace/readiness/warnings.rs");
 
   assert.match(parent, /readiness::launch_readiness_state/);
   assert.doesNotMatch(parent, /fn launch_readiness_state/);
+  assert.match(readiness, /^mod examples;$/m);
+  assert.match(readiness, /^mod warnings;$/m);
+  assert.match(
+    readiness,
+    /use self::\{examples::launch_readiness_example_rows, warnings::launch_readiness_warning\}/,
+  );
   assert.match(readiness, /pub\(super\) fn launch_readiness_state/);
   assert.match(readiness, /DxLaunchReadinessSnapshot/);
-  assert.match(readiness, /dx-launch-readiness-fanout-review/);
-  assert.match(readiness, /snapshot\.examples\.iter\(\)\.take\(3\)/);
-  assert.match(readiness, /use super::\{bounded_items, metric_row, muted_card, signal_row\}/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/readiness.rs") < 150);
+  assert.doesNotMatch(readiness, /dx-launch-readiness-warning/);
+  assert.doesNotMatch(readiness, /dx-launch-readiness-redaction-review/);
+  assert.doesNotMatch(readiness, /dx-launch-readiness-fanout-review/);
+  assert.doesNotMatch(readiness, /snapshot\.examples\.iter\(\)\.take\(3\)/);
+  assert.match(readiness, /use super::\{bounded_items, metric_row, muted_card\}/);
+  assert.match(readinessExamples, /pub\(super\) fn launch_readiness_example_rows/);
+  assert.match(readinessExamples, /DxLaunchReadinessSnapshot/);
+  assert.match(readinessExamples, /snapshot\.examples\.iter\(\)\.take\(3\)/);
+  assert.match(readinessExamples, /Example \{\}/);
+  assert.match(readinessExamples, /Next \{\}/);
+  assert.match(readinessExamples, /use super::super::metric_row/);
+  assert.match(readinessWarnings, /pub\(super\) fn launch_readiness_warning/);
+  assert.match(readinessWarnings, /DxLaunchReadinessSnapshot/);
+  assert.match(readinessWarnings, /snapshot\.first_issue/);
+  assert.match(readinessWarnings, /redaction_requires_review/);
+  assert.match(readinessWarnings, /no_command_fanout/);
+  assert.match(readinessWarnings, /dx-launch-readiness-warning/);
+  assert.match(readinessWarnings, /dx-launch-readiness-redaction-review/);
+  assert.match(readinessWarnings, /dx-launch-readiness-fanout-review/);
+  assert.match(readinessWarnings, /use super::super::signal_row/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/readiness.rs") < 110);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/readiness/examples.rs") < 35);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/readiness/warnings.rs") < 45);
 });
 
 test("DX launch workspace delegates Binary Cache rail rendering", () => {
