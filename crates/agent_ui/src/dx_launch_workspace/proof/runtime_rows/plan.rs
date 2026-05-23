@@ -4,9 +4,8 @@ use ui::{Color, prelude::*};
 use crate::dx_runtime_proof_status::DxRuntimeProofPlanSummary;
 
 use super::super::super::metric_row;
-use super::super::super::proof_labels::{
-    runtime_proof_evidence_detail, runtime_proof_requirements_label,
-};
+use super::super::super::proof_labels::runtime_proof_requirements_label;
+use super::plan_details::runtime_proof_plan_detail_rows;
 
 pub(in super::super) fn runtime_proof_plan_row(
     plan: &DxRuntimeProofPlanSummary,
@@ -44,44 +43,8 @@ pub(in super::super) fn runtime_proof_plan_row(
                 .size(LabelSize::XSmall)
                 .color(Color::Muted)
                 .truncate(),
-        );
-
-    if let Some(command) = plan.expected_final_command.as_ref() {
-        stack = stack.child(
-            Label::new(format!("Command {command}"))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if plan.minimum_evidence_lines_for_pass > 0 || !plan.accepted_evidence_examples.is_empty() {
-        stack = stack.child(
-            Label::new(runtime_proof_evidence_detail(
-                plan.minimum_evidence_lines_for_pass,
-                &plan.accepted_evidence_examples,
-            ))
-            .size(LabelSize::XSmall)
-            .color(Color::Muted)
-            .truncate(),
-        );
-    }
-
-    if plan.blocker_count > 0 {
-        stack = stack.child(
-            Label::new(format!("{} blocker(s)", plan.blocker_count))
-                .size(LabelSize::XSmall)
-                .color(Color::Warning)
-                .truncate(),
-        );
-    } else if let Some(next_action) = plan.next_action.as_ref() {
-        stack = stack.child(
-            Label::new(next_action.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
+        )
+        .children(runtime_proof_plan_detail_rows(plan));
 
     stack.into_any_element()
 }

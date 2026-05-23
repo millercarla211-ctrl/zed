@@ -1,4 +1,5 @@
 mod plan;
+mod plan_details;
 mod receipt;
 mod receipt_details;
 

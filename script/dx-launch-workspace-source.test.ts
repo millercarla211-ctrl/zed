@@ -977,6 +977,9 @@ test("DX launch workspace delegates Proof rail rendering", () => {
   const proofRuntimePlanRows = read(
     "crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/plan.rs",
   );
+  const proofRuntimePlanDetails = read(
+    "crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/plan_details.rs",
+  );
   const proofRuntimeReceiptRows = read(
     "crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/receipt.rs",
   );
@@ -1004,6 +1007,7 @@ test("DX launch workspace delegates Proof rail rendering", () => {
   assert.match(proofFreshness, /dx-proof-freshness-\{ix\}/);
   assert.match(proofFreshness, /use super::super::metric_row/);
   assert.match(proofRuntimeRows, /^mod plan;$/m);
+  assert.match(proofRuntimeRows, /^mod plan_details;$/m);
   assert.match(proofRuntimeRows, /^mod receipt;$/m);
   assert.match(proofRuntimeRows, /^mod receipt_details;$/m);
   assert.match(proofRuntimeRows, /pub\(super\) use plan::runtime_proof_plan_row/);
@@ -1013,9 +1017,17 @@ test("DX launch workspace delegates Proof rail rendering", () => {
   assert.match(proofRuntimePlanRows, /pub\(in super::super\) fn runtime_proof_plan_row/);
   assert.match(proofRuntimePlanRows, /DxRuntimeProofPlanSummary/);
   assert.match(proofRuntimePlanRows, /dx-runtime-proof-latest-plan/);
-  assert.match(proofRuntimePlanRows, /runtime_proof_evidence_detail/);
+  assert.match(proofRuntimePlanRows, /use super::plan_details::runtime_proof_plan_detail_rows/);
+  assert.match(proofRuntimePlanRows, /children\(runtime_proof_plan_detail_rows\(plan\)\)/);
+  assert.doesNotMatch(proofRuntimePlanRows, /runtime_proof_evidence_detail/);
   assert.match(proofRuntimePlanRows, /runtime_proof_requirements_label/);
-  assert.match(proofRuntimePlanRows, /minimum_evidence_lines_for_pass/);
+  assert.doesNotMatch(proofRuntimePlanRows, /minimum_evidence_lines_for_pass/);
+  assert.doesNotMatch(proofRuntimePlanRows, /expected_final_command/);
+  assert.match(proofRuntimePlanDetails, /pub\(super\) fn runtime_proof_plan_detail_rows/);
+  assert.match(proofRuntimePlanDetails, /DxRuntimeProofPlanSummary/);
+  assert.match(proofRuntimePlanDetails, /runtime_proof_evidence_detail/);
+  assert.match(proofRuntimePlanDetails, /minimum_evidence_lines_for_pass/);
+  assert.match(proofRuntimePlanDetails, /expected_final_command/);
   assert.match(proofRuntimeReceiptRows, /pub\(in super::super\) fn runtime_proof_receipt_row/);
   assert.match(proofRuntimeReceiptRows, /DxRuntimeProofReceiptSummary/);
   assert.match(proofRuntimeReceiptRows, /runtime_proof_receipt_state_label/);
@@ -1055,7 +1067,8 @@ test("DX launch workspace delegates Proof rail rendering", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof.rs") < 90);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof/freshness.rs") < 80);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows.rs") < 30);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/plan.rs") < 95);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/plan.rs") < 65);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/plan_details.rs") < 75);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/receipt.rs") < 60);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/receipt_details.rs") < 75);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof_labels.rs") < 20);

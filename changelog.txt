@@ -1,3 +1,23 @@
+[2026-05-23] - DX Runtime Proof Plan Detail Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/plan_details.rs` for optional Runtime Proof plan detail rows.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows.rs` now registers the plan-detail helper beside plan, receipt, and receipt-detail row modules.
+- `crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/plan.rs` now delegates expected final command, evidence requirement, blocker, and next-action rows through the focused helper and stays focused on the plan card shell at 50 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards plan-detail module registration, shell delegation, optional-detail ownership, and tighter plan/detail budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Runtime Proof plan shell and plan-detail helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Runtime Proof plan detail rows against real runtime proof plan receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Runtime Proof Receipt Detail Split
 
 ADDED:
