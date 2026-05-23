@@ -110,15 +110,30 @@ test("DX launch workspace delegates Launch Receipts rail rendering", () => {
 test("DX launch workspace delegates WWW Evidence rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const wwwEvidence = read("crates/agent_ui/src/dx_launch_workspace/www_evidence.rs");
+  const wwwEvidenceStatus = read("crates/agent_ui/src/dx_launch_workspace/www_evidence/status.rs");
+  const wwwEvidenceWarnings = read("crates/agent_ui/src/dx_launch_workspace/www_evidence/warnings.rs");
 
   assert.match(parent, /www_evidence::www_launch_evidence_state/);
   assert.doesNotMatch(parent, /fn www_launch_evidence_state/);
+  assert.match(wwwEvidence, /^mod status;$/m);
+  assert.match(wwwEvidence, /^mod warnings;$/m);
+  assert.match(wwwEvidence, /use self::status::www_launch_evidence_status_rows/);
+  assert.match(wwwEvidence, /use self::warnings::www_launch_evidence_warning/);
   assert.match(wwwEvidence, /pub\(super\) fn www_launch_evidence_state/);
   assert.match(wwwEvidence, /DxWwwLaunchEvidenceSnapshot/);
-  assert.match(wwwEvidence, /dx-www-evidence-warning/);
-  assert.match(wwwEvidence, /dx-www-evidence-partial/);
-  assert.match(wwwEvidence, /use super::\{bounded_items, metric_row, muted_card, signal_row\}/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/www_evidence.rs") < 130);
+  assert.match(wwwEvidence, /children\(www_launch_evidence_status_rows\(snapshot, cx\)\)/);
+  assert.match(wwwEvidence, /www_launch_evidence_warning\(snapshot\)/);
+  assert.doesNotMatch(wwwEvidence, /Missing DX-WWW project/);
+  assert.doesNotMatch(wwwEvidence, /DX-WWW release evidence is partial/);
+  assert.match(wwwEvidenceStatus, /Missing DX-WWW project/);
+  assert.match(wwwEvidenceStatus, /No release evidence root yet/);
+  assert.match(wwwEvidenceWarnings, /dx-www-evidence-warning/);
+  assert.match(wwwEvidenceWarnings, /dx-www-evidence-partial/);
+  assert.match(wwwEvidence, /use super::signal_row/);
+  assert.match(wwwEvidenceStatus, /use super::super::\{bounded_items, metric_row, muted_card\}/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/www_evidence.rs") < 65);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/www_evidence/status.rs") < 85);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/www_evidence/warnings.rs") < 35);
 });
 
 test("DX launch workspace delegates Launch Audit rail rendering", () => {
