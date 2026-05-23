@@ -1,3 +1,22 @@
+[2026-05-23] - DX Sources Attachment State Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/sources/attachments.rs` for Sources attachment readiness, workspace-root and managed-receipt metrics, produced-media rows, restore-preview rows, and the no-attach-ready source prompt.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/sources.rs` now re-exports the focused attachment helper beside receipt state and stays focused on source-set orchestration and source-row control matching at 80 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards attachment module registration, parent re-export, attachment summary ownership, and tighter Sources/attachment file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Sources coordinator and attachment helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Sources attachment summary rows against real source-pack, media, and restore receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Sources Receipt State Split
 
 ADDED:
