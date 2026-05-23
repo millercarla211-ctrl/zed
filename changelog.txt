@@ -1,3 +1,28 @@
+[2026-05-23] - DX Launch Source Audit Helper Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_source_audit/snapshot.rs` for the public source-audit snapshot type.
+- Added `crates/agent_ui/src/dx_launch_source_audit/paths.rs` for source-audit receipt path discovery.
+- Added `crates/agent_ui/src/dx_launch_source_audit/packet_io.rs` for bounded source-audit JSON reads and schema extraction.
+- Added `crates/agent_ui/src/dx_launch_source_audit/fields.rs` for source-audit JSON scalar extraction.
+- Added `crates/agent_ui/src/dx_launch_source_audit/rows.rs` for repo and worker-output delta row formatting.
+- Added `crates/agent_ui/src/dx_launch_source_audit/status.rs` for source-audit status and operator-summary decisions.
+- Added `script/dx-launch-source-audit-source.test.ts` as the no-build source guard for source-audit ownership and file budgets.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_source_audit.rs` now stays focused on cache and source-audit snapshot assembly at 216 lines.
+
+PASSED:
+- Red/green `node --test script\dx-launch-source-audit-source.test.ts`
+- Adjacent launch workspace/prompts/audit/readiness, source-set, and receipt-history guards
+- Targeted rustfmt check
+- `git diff --check`
+- Conflict-marker scan on touched files
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Source Audit rows against real `G:\Dx\.dx\audit\launch-source\latest.json` and rerun the source-audit helper in the governed native Zed proof window.
+
 [2026-05-23] - DX Receipt History Helper Split
 
 ADDED:
