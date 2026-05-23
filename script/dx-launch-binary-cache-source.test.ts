@@ -1,0 +1,82 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import test from "node:test";
+
+const read = (path: string) => readFileSync(path, "utf8");
+const lineCount = (path: string) => read(path).split(/\r?\n/).length;
+
+test("DX launch binary cache keeps artifacts, meters, paths, rows, states, and summaries focused", () => {
+  const parentPath = "crates/agent_ui/src/dx_launch_binary_cache.rs";
+  const artifactsPath = "crates/agent_ui/src/dx_launch_binary_cache/artifacts.rs";
+  const metersPath = "crates/agent_ui/src/dx_launch_binary_cache/meters.rs";
+  const pathsPath = "crates/agent_ui/src/dx_launch_binary_cache/paths.rs";
+  const rowsPath = "crates/agent_ui/src/dx_launch_binary_cache/rows.rs";
+  const statesPath = "crates/agent_ui/src/dx_launch_binary_cache/states.rs";
+  const summaryPath = "crates/agent_ui/src/dx_launch_binary_cache/summary.rs";
+
+  assert.ok(existsSync(artifactsPath), "missing focused binary-cache artifact module");
+  assert.ok(existsSync(metersPath), "missing focused binary-cache meter module");
+  assert.ok(existsSync(pathsPath), "missing focused binary-cache path module");
+  assert.ok(existsSync(rowsPath), "missing focused binary-cache row module");
+  assert.ok(existsSync(statesPath), "missing focused binary-cache state module");
+  assert.ok(existsSync(summaryPath), "missing focused binary-cache summary module");
+
+  const parent = read(parentPath);
+  const artifacts = read(artifactsPath);
+  const meters = read(metersPath);
+  const paths = read(pathsPath);
+  const rows = read(rowsPath);
+  const states = read(statesPath);
+  const summary = read(summaryPath);
+
+  assert.match(parent, /^mod artifacts;$/m);
+  assert.match(parent, /^mod meters;$/m);
+  assert.match(parent, /^mod paths;$/m);
+  assert.match(parent, /^mod rows;$/m);
+  assert.match(parent, /^mod states;$/m);
+  assert.match(parent, /^mod summary;$/m);
+  assert.match(parent, /use self::artifacts::\{ReceiptCacheArtifactState, read_receipt_cache_artifact_state\};/);
+  assert.match(parent, /use self::paths::\{launch_receipt_cache_path, receipt_cache_artifact_path\};/);
+  assert.match(parent, /use self::rows::\{launch_receipts_row, metering_row, provider_catalog_row, receipt_index_row\};/);
+  assert.match(parent, /use self::summary::\{[^}]*binary_cache_next_action[^}]*binary_cache_operator_summary[^}]*binary_cache_status[^}]*\};/s);
+  assert.doesNotMatch(parent, /fn read_receipt_cache_artifact_state\(/);
+  assert.doesNotMatch(parent, /fn receipt_cache_artifact_row\(/);
+  assert.doesNotMatch(parent, /fn metering_row_from_artifact\(/);
+  assert.doesNotMatch(parent, /fn combined_meter_health\(/);
+  assert.doesNotMatch(parent, /fn kind_summary_detail\(/);
+  assert.doesNotMatch(parent, /fn cache_health_state\(/);
+  assert.doesNotMatch(parent, /fn binary_cache_state_from_artifact\(/);
+  assert.doesNotMatch(parent, /fn binary_cache_state_needs_attention\(/);
+  assert.doesNotMatch(parent, /fn artifact_row\(/);
+  assert.doesNotMatch(parent, /fn provider_catalog_state\(/);
+  assert.doesNotMatch(parent, /fn env_path\(/);
+  assert.doesNotMatch(parent, /fn yes_no\(/);
+  assert.match(artifacts, /pub\(super\) enum ReceiptCacheArtifactState/);
+  assert.match(artifacts, /pub\(super\) fn read_receipt_cache_artifact_state/);
+  assert.match(meters, /pub\(super\) fn kind_summary_detail/);
+  assert.match(meters, /pub\(super\) fn metering_row_from_artifact/);
+  assert.match(meters, /fn combined_meter_health/);
+  assert.match(paths, /pub\(super\) fn launch_receipt_cache_path/);
+  assert.match(paths, /pub\(super\) fn receipt_cache_artifact_path/);
+  assert.match(paths, /fn env_path/);
+  assert.match(rows, /pub\(super\) fn provider_catalog_row/);
+  assert.match(rows, /pub\(super\) fn launch_receipts_row/);
+  assert.match(rows, /pub\(super\) fn receipt_index_row/);
+  assert.match(rows, /pub\(super\) fn metering_row/);
+  assert.match(rows, /fn receipt_cache_artifact_row/);
+  assert.match(states, /pub\(super\) fn cache_health_state/);
+  assert.match(states, /pub\(super\) fn binary_cache_state_from_artifact/);
+  assert.match(states, /pub\(super\) fn binary_cache_state_needs_attention/);
+  assert.match(states, /pub\(super\) fn provider_catalog_state/);
+  assert.match(summary, /pub\(super\) fn binary_cache_status/);
+  assert.match(summary, /pub\(super\) fn binary_cache_operator_summary/);
+  assert.match(summary, /pub\(super\) fn binary_cache_next_action/);
+
+  assert.ok(lineCount(parentPath) < 170, "dx_launch_binary_cache.rs should stay focused on snapshot assembly");
+  assert.ok(lineCount(artifactsPath) < 35, "binary-cache artifact module should stay small");
+  assert.ok(lineCount(metersPath) < 90, "binary-cache meter module should stay small");
+  assert.ok(lineCount(pathsPath) < 45, "binary-cache path module should stay small");
+  assert.ok(lineCount(rowsPath) < 190, "binary-cache row module should stay small");
+  assert.ok(lineCount(statesPath) < 65, "binary-cache state module should stay small");
+  assert.ok(lineCount(summaryPath) < 75, "binary-cache summary module should stay small");
+});

@@ -1,3 +1,28 @@
+[2026-05-23] - DX Launch Binary Cache Helper Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_binary_cache/artifacts.rs` for metadata receipt-cache artifact reads.
+- Added `crates/agent_ui/src/dx_launch_binary_cache/meters.rs` for token/RLM/serializer health aggregation and detail formatting.
+- Added `crates/agent_ui/src/dx_launch_binary_cache/paths.rs` for env/default artifact path resolution.
+- Added `crates/agent_ui/src/dx_launch_binary_cache/rows.rs` for provider, launch receipt, receipt index, and meter row construction.
+- Added `crates/agent_ui/src/dx_launch_binary_cache/states.rs` for cache health/status label mapping.
+- Added `crates/agent_ui/src/dx_launch_binary_cache/summary.rs` for binary-cache status, operator-summary, and next-action rollups.
+- Added `script/dx-launch-binary-cache-source.test.ts` as the no-build source guard for binary-cache ownership and file budgets.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_binary_cache.rs` now stays focused on snapshot assembly and public snapshot fields at 78 lines.
+
+PASSED:
+- Red/green `node --test script\dx-launch-binary-cache-source.test.ts`
+- Adjacent launch workspace/prompts/receipts/status/contract/audit/readiness source guards
+- Targeted rustfmt check
+- `git diff --check`
+- Conflict-marker scan on touched files
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Binary Cache rail rows against real receipt-cache artifacts and fallback JSON receipt states in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Receipts Helper Split
 
 ADDED:
