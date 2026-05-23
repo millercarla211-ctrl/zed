@@ -285,6 +285,18 @@ test("DX launch workspace delegates agents and source rails", () => {
   const agentBridgeSummary = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary.rs",
   );
+  const agentBridgeSummaryContract = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/contract.rs",
+  );
+  const agentBridgeSummaryGate = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/gate.rs",
+  );
+  const agentBridgeSummaryImport = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/import.rs",
+  );
+  const agentBridgeSummaryOverview = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/overview.rs",
+  );
   const agentProviderLabels = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs",
   );
@@ -362,12 +374,38 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentBridgeSummary, /pub\(super\) fn dx_agent_bridge_summary_rows/);
   assert.match(agentBridgeSummary, /Vec<AnyElement>/);
   assert.match(agentBridgeSummary, /DxAgentBridgeSnapshot/);
-  assert.match(agentBridgeSummary, /metric_row\("Bridge"/);
-  assert.match(agentBridgeSummary, /metric_row\(\s*"Gate Recovery"/);
-  assert.match(agentBridgeSummary, /receipt_index\.returned_receipt_count/);
-  assert.match(agentBridgeSummary, /recovery_counts\.label\(\)/);
-  assert.match(agentBridgeSummary, /no_command_fanout/);
-  assert.match(agentBridgeSummary, /use super::super::super::metric_row/);
+  assert.match(agentBridgeSummary, /^mod contract;$/m);
+  assert.match(agentBridgeSummary, /^mod gate;$/m);
+  assert.match(agentBridgeSummary, /^mod import;$/m);
+  assert.match(agentBridgeSummary, /^mod overview;$/m);
+  assert.match(agentBridgeSummary, /dx_agent_bridge_overview_rows\(snapshot\)/);
+  assert.match(agentBridgeSummary, /dx_agent_bridge_contract_rows\(snapshot\)/);
+  assert.match(agentBridgeSummary, /dx_agent_bridge_import_rows\(snapshot\)/);
+  assert.match(agentBridgeSummary, /dx_agent_bridge_gate_rows\(snapshot\)/);
+  assert.doesNotMatch(agentBridgeSummary, /metric_row\("Bridge"/);
+  assert.doesNotMatch(agentBridgeSummary, /metric_row\(\s*"Gate Recovery"/);
+  assert.doesNotMatch(agentBridgeSummary, /receipt_index\.returned_receipt_count/);
+  assert.doesNotMatch(agentBridgeSummary, /recovery_counts\.label\(\)/);
+  assert.doesNotMatch(agentBridgeSummary, /no_command_fanout/);
+  assert.match(agentBridgeSummaryOverview, /pub\(super\) fn dx_agent_bridge_overview_rows/);
+  assert.match(agentBridgeSummaryOverview, /metric_row\("Bridge"/);
+  assert.match(agentBridgeSummaryOverview, /connected_accounts_summary\.connected/);
+  assert.match(agentBridgeSummaryOverview, /catalog\.present/);
+  assert.match(agentBridgeSummaryContract, /pub\(super\) fn dx_agent_bridge_contract_rows/);
+  assert.match(agentBridgeSummaryContract, /metric_row\("Contract"/);
+  assert.match(agentBridgeSummaryContract, /provider_catalog_receipt_count/);
+  assert.doesNotMatch(agentBridgeSummaryContract, /import_summary\.release_gate_status/);
+  assert.match(agentBridgeSummaryImport, /pub\(super\) fn dx_agent_bridge_import_rows/);
+  assert.match(agentBridgeSummaryImport, /metric_row\("Import"/);
+  assert.match(agentBridgeSummaryImport, /import_summary\.release_gate_status/);
+  assert.match(agentBridgeSummaryImport, /recovery_counts\.label\(\)/);
+  assert.match(agentBridgeSummaryImport, /import_summary\.no_command_fanout/);
+  assert.match(agentBridgeSummaryImport, /action_error\.present/);
+  assert.match(agentBridgeSummaryGate, /pub\(super\) fn dx_agent_bridge_gate_rows/);
+  assert.match(agentBridgeSummaryGate, /metric_row\("Gate"/);
+  assert.match(agentBridgeSummaryGate, /metric_row\(\s*"Gate Recovery"/);
+  assert.match(agentBridgeSummaryGate, /receipt_index\.returned_receipt_count/);
+  assert.match(agentBridgeSummaryGate, /release_gate\.no_command_fanout/);
   assert.match(agentProviders, /pub\(in super::super\) fn dx_agent_provider_state/);
   assert.match(agentProviders, /fn dx_agent_provider_row/);
   assert.match(agentProviders, /fn dx_agent_model_row/);
@@ -442,7 +480,19 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/actions.rs") < 60);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/automations.rs") < 100);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge.rs") < 220);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary.rs") < 180);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary.rs") < 35);
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/overview.rs") < 55,
+  );
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/contract.rs") < 45,
+  );
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/import.rs") < 60,
+  );
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/gate.rs") < 85,
+  );
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs") < 20);
   assert.ok(
     lineCount("crates/agent_ui/src/dx_launch_workspace/agents/provider_labels/detail.rs") < 55,

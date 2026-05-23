@@ -1,3 +1,25 @@
+[2026-05-23] - DX Agent Bridge Summary Section Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/overview.rs` for Bridge/CLI/account/task/catalog summary rows.
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/contract.rs` for contract, command, receipt, catalog, and redaction summary rows.
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/import.rs` for import, release, action-map, recovery, command-fanout, and last-action summary rows.
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary/gate.rs` for release-gate, retention, action, recovery, fanout, and receipt-index summary rows.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary.rs` is now a 21-line coordinator over the focused summary section modules.
+- `script/dx-launch-workspace-source.test.ts` now guards summary section module registration, parent delegation, section ownership, and tighter file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the bridge summary coordinator and overview/contract/import/gate modules.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Agent bridge summary rows against real DX Agents contract/import/release-gate/receipt-index receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Agent Provider Label Split
 
 ADDED:
