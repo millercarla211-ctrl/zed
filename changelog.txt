@@ -1,3 +1,26 @@
+[2026-05-23] - DX Check Label Facade Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/check_labels/counts.rs` for checked-path, skipped-check, nonblank-count, and outcome-count labels.
+- Added `crates/agent_ui/src/dx_launch_workspace/check_labels/run.rs` for duration and last-run/generated-at labels.
+- Added `crates/agent_ui/src/dx_launch_workspace/check_labels_tests.rs` for the focused direct Check label unit tests.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/check_labels.rs` is now a 10-line facade that registers and re-exports the focused Check label modules.
+- `script/dx-launch-workspace-source.test.ts` now guards the Check label facade, production submodules, test-module split, direct label ownership, and file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Direct `rustc --edition=2024 --test` Check label tests.
+- Adjacent agent bridge, deploy panel, and source-set guards.
+- Targeted rustfmt check.
+- Line-count budgets for the Check label facade, count labels, run labels, and test module.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Check rail labels against real `check-latest.json` receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Runtime Proof Row Submodule Split
 
 ADDED:

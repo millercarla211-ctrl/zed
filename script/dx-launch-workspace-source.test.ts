@@ -375,6 +375,9 @@ test("DX launch workspace delegates Check rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const check = read("crates/agent_ui/src/dx_launch_workspace/check.rs");
   const labels = read("crates/agent_ui/src/dx_launch_workspace/check_labels.rs");
+  const labelCounts = read("crates/agent_ui/src/dx_launch_workspace/check_labels/counts.rs");
+  const labelRun = read("crates/agent_ui/src/dx_launch_workspace/check_labels/run.rs");
+  const labelTests = read("crates/agent_ui/src/dx_launch_workspace/check_labels_tests.rs");
 
   assert.match(parent, /check::check_score_state/);
   assert.doesNotMatch(parent, /fn check_score_state/);
@@ -384,17 +387,32 @@ test("DX launch workspace delegates Check rail rendering", () => {
   assert.doesNotMatch(check, /fn check_outcome_label/);
   assert.doesNotMatch(check, /fn checked_paths_label/);
   assert.doesNotMatch(check, /fn skipped_checks_label/);
-  assert.match(labels, /pub\(crate\) fn check_outcome_label/);
-  assert.match(labels, /pub\(crate\) fn checked_paths_label/);
-  assert.match(labels, /pub\(crate\) fn skipped_checks_label/);
-  assert.match(labels, /pub\(crate\) fn last_run_label_with_generated_at/);
-  assert.match(labels, /fn nonblank_count/);
-  assert.match(labels, /filter\(\|value\| !value\.trim\(\)\.is_empty\(\)\)/);
-  assert.match(labels, /last_run_label_uses_generated_timestamp_when_label_is_blank/);
-  assert.match(labels, /last_run_label_trims_nonblank_receipt_labels/);
-  assert.match(labels, /Last run Unix ms: \{generated_at\}/);
+  assert.match(labels, /#\[path = "check_labels\/counts\.rs"\]\s*mod counts;/);
+  assert.match(labels, /#\[path = "check_labels\/run\.rs"\]\s*mod run;/);
+  assert.match(labels, /pub\(crate\) use counts::\{/);
+  assert.match(labels, /pub\(crate\) use run::\{/);
+  assert.match(labels, /#\[cfg\(test\)\]\s*mod check_labels_tests;/);
+  assert.doesNotMatch(labels, /fn nonblank_count/);
+  assert.doesNotMatch(labels, /pub\(crate\) fn check_outcome_label/);
+  assert.match(labelCounts, /pub\(crate\) fn check_outcome_label/);
+  assert.match(labelCounts, /pub\(crate\) fn checked_paths_label/);
+  assert.match(labelCounts, /pub\(crate\) fn skipped_checks_label/);
+  assert.match(labelCounts, /fn nonblank_count/);
+  assert.match(labelCounts, /filter\(\|value\| !value\.trim\(\)\.is_empty\(\)\)/);
+  assert.match(labelRun, /pub\(crate\) fn check_duration_label/);
+  assert.match(labelRun, /pub\(crate\) fn last_run_label_with_generated_at/);
+  assert.match(labelRun, /Last run Unix ms: \{generated_at\}/);
+  assert.doesNotMatch(labels, /mod tests/);
+  assert.doesNotMatch(labels, /#\[test\]/);
+  assert.match(labelTests, /use super::\*/);
+  assert.match(labelTests, /last_run_label_uses_generated_timestamp_when_label_is_blank/);
+  assert.match(labelTests, /last_run_label_trims_nonblank_receipt_labels/);
+  assert.match(labelTests, /path_and_skip_labels_cover_empty_single_and_plural/);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check.rs") < 190);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check_labels.rs") < 170);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check_labels.rs") < 15);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check_labels/counts.rs") < 55);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check_labels/run.rs") < 45);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/check_labels_tests.rs") < 120);
 });
 
 test("DX launch workspace delegates Tool History rail rendering", () => {
