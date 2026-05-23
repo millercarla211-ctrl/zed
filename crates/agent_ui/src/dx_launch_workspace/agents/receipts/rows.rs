@@ -3,66 +3,23 @@ use ui::{Color, prelude::*};
 
 use crate::dx_agent_bridge::DxAgentReceipt;
 
-use super::super::super::list_labels::yes_no;
 use super::super::super::metric_row;
+use super::labels::{
+    receipt_action_label, receipt_automation_label, receipt_detail_label,
+    receipt_provider_model_label, receipt_social_label, receipt_state_label,
+};
 
 pub(super) fn dx_agent_receipt_row(
     id: SharedString,
     receipt: &DxAgentReceipt,
     cx: &App,
 ) -> AnyElement {
-    let state = if !receipt.safe_to_render {
-        "Unsafe".to_string()
-    } else if receipt.active_task {
-        "Active".to_string()
-    } else if receipt.metadata_redacted {
-        format!("{} / redacted", receipt.status)
-    } else {
-        receipt.status.clone()
-    };
-    let detail = if receipt.command.is_empty() {
-        format!("{} - {} bytes", receipt.kind, receipt.size_bytes)
-    } else {
-        format!(
-            "{} - {} - {} bytes",
-            receipt.kind, receipt.command, receipt.size_bytes
-        )
-    };
-    let provider_model = match (
-        receipt.provider_status.as_deref(),
-        receipt.model_status.as_deref(),
-    ) {
-        (Some(provider), Some(model)) => Some(format!("Provider {provider}, model {model}")),
-        (Some(provider), None) => Some(format!("Provider {provider}")),
-        (None, Some(model)) => Some(format!("Model {model}")),
-        (None, None) => None,
-    };
-    let actions = match (receipt.retry_supported, receipt.cancel_supported) {
-        (Some(retry), Some(cancel)) => Some(format!(
-            "Retry {}, cancel {}",
-            yes_no(retry),
-            yes_no(cancel)
-        )),
-        (Some(retry), None) => Some(format!("Retry {}", yes_no(retry))),
-        (None, Some(cancel)) => Some(format!("Cancel {}", yes_no(cancel))),
-        (None, None) => None,
-    };
-    let social_status = match (receipt.social_connected, receipt.social_needs_auth) {
-        (Some(connected), Some(needs_auth)) => Some(format!(
-            "Social connected {connected}, needs auth {needs_auth}"
-        )),
-        (Some(connected), None) => Some(format!("Social connected {connected}")),
-        (None, Some(needs_auth)) => Some(format!("Social needs auth {needs_auth}")),
-        (None, None) => None,
-    };
-    let automation_status = match (receipt.automation_enabled, receipt.automation_warning) {
-        (Some(enabled), Some(warning)) => {
-            Some(format!("Automations enabled {enabled}, warning {warning}"))
-        }
-        (Some(enabled), None) => Some(format!("Automations enabled {enabled}")),
-        (None, Some(warning)) => Some(format!("Automation warnings {warning}")),
-        (None, None) => None,
-    };
+    let state = receipt_state_label(receipt);
+    let detail = receipt_detail_label(receipt);
+    let provider_model = receipt_provider_model_label(receipt);
+    let actions = receipt_action_label(receipt);
+    let social_status = receipt_social_label(receipt);
+    let automation_status = receipt_automation_label(receipt);
 
     v_flex()
         .id(id)

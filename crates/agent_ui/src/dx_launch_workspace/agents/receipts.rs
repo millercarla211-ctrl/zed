@@ -6,6 +6,7 @@ use crate::dx_agent_bridge::DxAgentBridgeSnapshot;
 use self::rows::dx_agent_receipt_row;
 use super::super::{metric_row, muted_card, signal_row};
 
+mod labels;
 mod rows;
 
 pub(in super::super) fn dx_agent_receipt_state(
