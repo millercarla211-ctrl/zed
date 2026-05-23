@@ -5,7 +5,8 @@ use crate::dx_deploy_launch_actions_rail::deploy_launch_action_state;
 use crate::dx_deploy_launch_approval_evidence::approval_evidence_rows;
 use crate::dx_deploy_launch_buckets::launch_bucket_summary_rows;
 use crate::dx_deploy_launch_evidence_rail::deploy_launch_evidence_state;
-use crate::dx_deploy_launch_gate::{DxDeployLaunchGateNotice, DxDeployLaunchGateSnapshot};
+use crate::dx_deploy_launch_gate::DxDeployLaunchGateSnapshot;
+use crate::dx_deploy_launch_notices::DxDeployLaunchGateNotice;
 use crate::dx_deploy_launch_outcome::{
     launch_duration_label, launch_outcome_summary, skipped_checks_prompt,
 };

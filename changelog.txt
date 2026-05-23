@@ -1,3 +1,22 @@
+[2026-05-23] - DX Deploy Launch Notice Parsing Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_deploy_launch_notices.rs` as the focused owner for launch blocker/warning notice structs and bounded parsing.
+
+CHANGED:
+- `crates/agent_ui/src/dx_deploy_launch_gate.rs` now delegates launch blocker/warning notice parsing through `dx_deploy_launch_notices` and reuses shared deploy receipt field helpers, reducing the file to 195 lines.
+- `crates/agent_ui/src/dx_deploy_receipt_fields.rs` now also owns shared boolean field extraction for deploy receipt parsers.
+- `crates/agent_ui/src/dx_deploy_launch_gate_rail.rs` now imports the launch notice type from the focused notice module.
+- `script/dx-deploy-panel-source.test.ts` now guards the launch notice module, shared boolean helper, and smaller launch-gate source budget.
+
+PASSED:
+- Red/green `node --test script\dx-deploy-panel-source.test.ts`
+- `rustfmt --edition 2024 crates\agent_ui\src\agent_ui.rs crates\agent_ui\src\dx_deploy_launch_gate.rs crates\agent_ui\src\dx_deploy_launch_gate_rail.rs crates\agent_ui\src\dx_deploy_launch_notices.rs crates\agent_ui\src\dx_deploy_receipt_fields.rs`
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, DX-WWW execution, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify launch blocker/warning severity and evidence-path rows against real root `dx check` launch receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Handoff Split And Status Label Hardening
 
 ADDED:

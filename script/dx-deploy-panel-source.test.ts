@@ -27,6 +27,7 @@ test("agent_ui registers the focused deploy modules", () => {
     "dx_deploy_launch_evidence_rail",
     "dx_deploy_launch_gate",
     "dx_deploy_launch_gate_rail",
+    "dx_deploy_launch_notices",
     "dx_deploy_launch_outcome",
     "dx_deploy_launch_prompts",
     "dx_deploy_launch_score",
@@ -181,6 +182,43 @@ test("launch gate reader prefers launch-specific check receipts", () => {
   assert.doesNotMatch(source, /const DX_WWW_CHECK_RECEIPT_ROOT/);
 });
 
+test("launch gate notice parsing stays in a focused module", () => {
+  const agentUi = read("crates/agent_ui/src/agent_ui.rs");
+  const reader = read("crates/agent_ui/src/dx_deploy_launch_gate.rs");
+  const notices = read("crates/agent_ui/src/dx_deploy_launch_notices.rs");
+  const fields = read("crates/agent_ui/src/dx_deploy_receipt_fields.rs");
+
+  assert.match(agentUi, /^mod dx_deploy_launch_notices;$/m);
+  assert.match(
+    reader,
+    /use crate::dx_deploy_launch_notices::\{DxDeployLaunchGateNotice, notice_rows\};/,
+  );
+  assert.match(
+    reader,
+    /use crate::dx_deploy_receipt_fields::\{\s*array_len, bool_field, first_string_array_item, string_field, usize_field,\s*\};/s,
+  );
+  assert.match(notices, /pub\(crate\) struct DxDeployLaunchGateNotice/);
+  assert.match(notices, /pub\(crate\) fn notice_rows/);
+  assert.match(notices, /\.take\(3\)/);
+  assert.match(notices, /severity: string_field\(row, "severity"\)/);
+  assert.match(notices, /evidence_path: string_field\(row, "evidence_path"\)/);
+  assert.match(fields, /pub\(crate\) fn bool_field/);
+  assert.doesNotMatch(reader, /fn notice_rows/);
+  assert.doesNotMatch(reader, /fn string_field/);
+  assert.doesNotMatch(reader, /fn bool_field/);
+  assert.doesNotMatch(reader, /fn usize_field/);
+  assert.doesNotMatch(reader, /fn array_len/);
+  assert.doesNotMatch(reader, /fn first_string_array_item/);
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_deploy_launch_gate.rs") < 220,
+    "dx_deploy_launch_gate.rs should stay focused on selecting and assembling launch receipts",
+  );
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_deploy_launch_notices.rs") < 60,
+    "launch notice parsing should stay compact",
+  );
+});
+
 test("deploy capability receipt roots stay in a focused module", () => {
   const agentUi = read("crates/agent_ui/src/agent_ui.rs");
   const roots = read("crates/agent_ui/src/dx_deploy_receipt_roots.rs");
@@ -226,14 +264,14 @@ test("deploy capability receipt roots stay in a focused module", () => {
 });
 
 test("launch gate keeps source-owned blocker provenance", () => {
-  const reader = read("crates/agent_ui/src/dx_deploy_launch_gate.rs");
+  const notices = read("crates/agent_ui/src/dx_deploy_launch_notices.rs");
   const rail = read("crates/agent_ui/src/dx_deploy_launch_gate_rail.rs");
   const prompts = read("crates/agent_ui/src/dx_deploy_launch_prompts.rs");
 
-  assert.match(reader, /pub severity: Option<String>/);
-  assert.match(reader, /pub evidence_path: Option<String>/);
-  assert.match(reader, /severity: string_field\(row, "severity"\)/);
-  assert.match(reader, /evidence_path: string_field\(row, "evidence_path"\)/);
+  assert.match(notices, /pub severity: Option<String>/);
+  assert.match(notices, /pub evidence_path: Option<String>/);
+  assert.match(notices, /severity: string_field\(row, "severity"\)/);
+  assert.match(notices, /evidence_path: string_field\(row, "evidence_path"\)/);
   assert.match(rail, /notice\.severity/);
   assert.match(rail, /notice\.evidence_path/);
   assert.match(rail, /evidence_path/);

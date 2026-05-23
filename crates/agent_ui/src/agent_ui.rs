@@ -28,6 +28,7 @@ mod dx_deploy_launch_evidence;
 mod dx_deploy_launch_evidence_rail;
 mod dx_deploy_launch_gate;
 mod dx_deploy_launch_gate_rail;
+mod dx_deploy_launch_notices;
 mod dx_deploy_launch_outcome;
 mod dx_deploy_launch_prompts;
 mod dx_deploy_launch_scope;

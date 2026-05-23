@@ -15,8 +15,12 @@ use crate::dx_deploy_launch_buckets::{DxDeployLaunchBucket, launch_buckets};
 use crate::dx_deploy_launch_evidence::{
     DxDeployLaunchChain, DxDeployLaunchEvidenceSource, launch_chain, launch_evidence_sources,
 };
+use crate::dx_deploy_launch_notices::{DxDeployLaunchGateNotice, notice_rows};
 use crate::dx_deploy_launch_outcome::{DxDeployLaunchOutcome, launch_outcome};
 use crate::dx_deploy_launch_scope::{DxDeployLaunchScope, launch_scope};
+use crate::dx_deploy_receipt_fields::{
+    array_len, bool_field, first_string_array_item, string_field, usize_field,
+};
 
 const MAX_CHECK_RECEIPT_BYTES: u64 = 256 * 1024;
 
@@ -48,15 +52,6 @@ pub(crate) struct DxDeployLaunchGateSnapshot {
     pub quick_action_count: usize,
     pub evidence_sources: Vec<DxDeployLaunchEvidenceSource>,
     pub chain: Option<DxDeployLaunchChain>,
-    pub next_action: Option<String>,
-}
-
-#[derive(Clone)]
-pub(crate) struct DxDeployLaunchGateNotice {
-    pub severity: Option<String>,
-    pub code: Option<String>,
-    pub message: String,
-    pub evidence_path: Option<String>,
     pub next_action: Option<String>,
 }
 
@@ -186,24 +181,6 @@ fn parse_launch_gate_candidate(
     })
 }
 
-fn notice_rows(value: Option<&Value>) -> Vec<DxDeployLaunchGateNotice> {
-    value
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .take(3)
-        .filter_map(|row| {
-            Some(DxDeployLaunchGateNotice {
-                severity: string_field(row, "severity"),
-                code: string_field(row, "code"),
-                message: string_field(row, "message")?,
-                evidence_path: string_field(row, "evidence_path"),
-                next_action: string_field(row, "next_action"),
-            })
-        })
-        .collect()
-}
-
 fn read_json(path: &Path) -> Option<Value> {
     let mut file = File::open(path).ok()?;
     let mut buffer = Vec::new();
@@ -215,44 +192,4 @@ fn read_limited(file: &mut File, buffer: &mut Vec<u8>) -> Result<usize> {
     file.by_ref()
         .take(MAX_CHECK_RECEIPT_BYTES)
         .read_to_end(buffer)
-}
-
-fn string_field(value: &Value, key: &str) -> Option<String> {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-}
-
-fn bool_field(value: &Value, key: &str) -> Option<bool> {
-    value.get(key).and_then(Value::as_bool)
-}
-
-fn usize_field(value: &Value, key: &str) -> Option<usize> {
-    value
-        .get(key)
-        .and_then(Value::as_u64)
-        .and_then(|value| usize::try_from(value).ok())
-}
-
-fn array_len(value: &Value, key: &str) -> usize {
-    value
-        .get(key)
-        .and_then(Value::as_array)
-        .map(Vec::len)
-        .unwrap_or_default()
-}
-
-fn first_string_array_item(value: &Value, key: &str) -> Option<String> {
-    value
-        .get(key)
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(str::trim)
-        .find(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
 }

@@ -16,6 +16,10 @@ pub(crate) fn usize_field(value: &Value, key: &str) -> Option<usize> {
         .and_then(|value| usize::try_from(value).ok())
 }
 
+pub(crate) fn bool_field(value: &Value, key: &str) -> Option<bool> {
+    value.get(key).and_then(Value::as_bool)
+}
+
 pub(crate) fn array_len(value: &Value, key: &str) -> usize {
     value
         .get(key)
