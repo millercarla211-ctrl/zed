@@ -980,6 +980,9 @@ test("DX launch workspace delegates Proof rail rendering", () => {
   const proofRuntimeReceiptRows = read(
     "crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/receipt.rs",
   );
+  const proofRuntimeReceiptDetails = read(
+    "crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/receipt_details.rs",
+  );
 
   assert.match(parent, /proof::proof_freshness_state/);
   assert.match(parent, /proof::runtime_proof_status_state/);
@@ -1002,6 +1005,7 @@ test("DX launch workspace delegates Proof rail rendering", () => {
   assert.match(proofFreshness, /use super::super::metric_row/);
   assert.match(proofRuntimeRows, /^mod plan;$/m);
   assert.match(proofRuntimeRows, /^mod receipt;$/m);
+  assert.match(proofRuntimeRows, /^mod receipt_details;$/m);
   assert.match(proofRuntimeRows, /pub\(super\) use plan::runtime_proof_plan_row/);
   assert.match(proofRuntimeRows, /pub\(super\) use receipt::runtime_proof_receipt_row/);
   assert.doesNotMatch(proofRuntimeRows, /fn runtime_proof_plan_row/);
@@ -1015,8 +1019,15 @@ test("DX launch workspace delegates Proof rail rendering", () => {
   assert.match(proofRuntimeReceiptRows, /pub\(in super::super\) fn runtime_proof_receipt_row/);
   assert.match(proofRuntimeReceiptRows, /DxRuntimeProofReceiptSummary/);
   assert.match(proofRuntimeReceiptRows, /runtime_proof_receipt_state_label/);
-  assert.match(proofRuntimeReceiptRows, /evidence_samples\.first/);
-  assert.match(proofRuntimeReceiptRows, /final_command/);
+  assert.match(proofRuntimeReceiptRows, /use super::receipt_details::runtime_proof_receipt_detail_rows/);
+  assert.match(proofRuntimeReceiptRows, /children\(runtime_proof_receipt_detail_rows\(receipt\)\)/);
+  assert.doesNotMatch(proofRuntimeReceiptRows, /evidence_samples\.first/);
+  assert.doesNotMatch(proofRuntimeReceiptRows, /final_command/);
+  assert.match(proofRuntimeReceiptDetails, /pub\(super\) fn runtime_proof_receipt_detail_rows/);
+  assert.match(proofRuntimeReceiptDetails, /DxRuntimeProofReceiptSummary/);
+  assert.match(proofRuntimeReceiptDetails, /evidence_samples\.first/);
+  assert.match(proofRuntimeReceiptDetails, /final_command/);
+  assert.match(proofRuntimeReceiptDetails, /Summary \{summary\}/);
   assert.doesNotMatch(proof, /fn runtime_proof_plan_evidence_detail/);
   assert.doesNotMatch(proof, /fn runtime_proof_plan_requirements/);
   assert.match(proofLabels, /#\[path = "proof_labels\/evidence\.rs"\]\s*mod evidence;/);
@@ -1045,7 +1056,8 @@ test("DX launch workspace delegates Proof rail rendering", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof/freshness.rs") < 80);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows.rs") < 30);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/plan.rs") < 95);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/receipt.rs") < 95);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/receipt.rs") < 60);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof/runtime_rows/receipt_details.rs") < 75);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof_labels.rs") < 20);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof_labels/evidence.rs") < 60);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/proof_labels/receipt.rs") < 35);

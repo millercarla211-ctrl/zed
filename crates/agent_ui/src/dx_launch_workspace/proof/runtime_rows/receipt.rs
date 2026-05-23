@@ -5,6 +5,7 @@ use crate::dx_runtime_proof_status::DxRuntimeProofReceiptSummary;
 
 use super::super::super::metric_row;
 use super::super::super::proof_labels::runtime_proof_receipt_state_label;
+use super::receipt_details::runtime_proof_receipt_detail_rows;
 
 pub(in super::super) fn runtime_proof_receipt_row(
     id: &'static str,
@@ -41,52 +42,8 @@ pub(in super::super) fn runtime_proof_receipt_row(
                 .size(LabelSize::XSmall)
                 .color(Color::Muted)
                 .truncate(),
-        );
-
-    if let Some(headline) = receipt.headline.as_ref() {
-        stack = stack.child(
-            Label::new(headline.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if let Some(summary) = receipt.proof_summary.as_ref() {
-        stack = stack.child(
-            Label::new(format!("Summary {summary}"))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if let Some(command) = receipt.final_command.as_ref() {
-        stack = stack.child(
-            Label::new(format!("Command {command}"))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if let Some(source) = receipt.source.as_ref() {
-        stack = stack.child(
-            Label::new(format!("Source {source}"))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
-
-    if let Some(evidence) = receipt.evidence_samples.first() {
-        stack = stack.child(
-            Label::new(format!("Evidence {evidence}"))
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
+        )
+        .children(runtime_proof_receipt_detail_rows(receipt));
 
     stack.into_any_element()
 }
