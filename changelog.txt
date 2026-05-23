@@ -1,3 +1,23 @@
+[2026-05-23] - DX Sources Row Helper Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/sources/drilldowns.rs` for source receipt drilldown card rendering.
+- Added `crates/agent_ui/src/dx_launch_workspace/sources/kinds.rs` for source-kind icon policy.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/sources/rows.rs` now delegates receipt drilldowns and icon mapping through focused helpers and stays focused on the source item row shell, source row controls, proof rows, and warning rows at 85 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards Sources drilldown/kind module registration, row delegation, helper ownership, and tighter Sources row/drilldown/kind file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Sources row, drilldown, and kind helpers.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Sources row receipt drilldowns and source-kind icons against real source-pack, media, reduced-context, receipt, and restore-preview rows in the governed native Zed proof window.
+
 [2026-05-23] - DX Check Summary Split
 
 ADDED:

@@ -9,6 +9,8 @@ use self::rows::source_item_row;
 use super::{DxSourceRowControl, metric_row, muted_card};
 
 mod attachments;
+mod drilldowns;
+mod kinds;
 mod receipts;
 mod rows;
 

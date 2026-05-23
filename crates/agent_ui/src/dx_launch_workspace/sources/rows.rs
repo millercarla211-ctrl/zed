@@ -1,9 +1,11 @@
 use gpui::{AnyElement, App, SharedString, prelude::*};
 use ui::{Color, IconName, prelude::*};
 
-use crate::dx_source_sets::{DxSourceItem, DxSourceKind, DxSourceReceiptDrilldown};
+use crate::dx_source_sets::DxSourceItem;
 
-use super::super::{metric_row, signal_row};
+use super::super::signal_row;
+use super::drilldowns::source_receipt_drilldown_row;
+use super::kinds::source_kind_icon;
 
 pub(super) fn source_item_row(
     id: SharedString,
@@ -80,44 +82,4 @@ pub(super) fn source_item_row(
     }
 
     stack.into_any_element()
-}
-
-fn source_receipt_drilldown_row(
-    id: SharedString,
-    receipt: &DxSourceReceiptDrilldown,
-    cx: &App,
-) -> AnyElement {
-    let label_id = SharedString::from(format!("source-receipt-label-{}", receipt.detail));
-
-    v_flex()
-        .id(id)
-        .gap_0p5()
-        .min_w_0()
-        .rounded_sm()
-        .px_1()
-        .py_0p5()
-        .bg(cx.theme().colors().editor_background)
-        .child(signal_row(
-            label_id,
-            IconName::FileTextOutlined,
-            Color::Muted,
-            receipt.label.clone(),
-        ))
-        .child(
-            Label::new(receipt.detail.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        )
-        .into_any_element()
-}
-
-fn source_kind_icon(kind: DxSourceKind) -> IconName {
-    match kind {
-        DxSourceKind::WorkspaceRoot => IconName::Folder,
-        DxSourceKind::MetasearchSourcePack => IconName::FileTextOutlined,
-        DxSourceKind::ReducedContextReceipt => IconName::FileTextOutlined,
-        DxSourceKind::MediaOutput => IconName::File,
-        DxSourceKind::ForgeRestorePreview => IconName::Archive,
-    }
 }
