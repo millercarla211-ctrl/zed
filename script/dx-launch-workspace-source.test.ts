@@ -208,6 +208,7 @@ test("DX launch workspace delegates agents and source rails", () => {
     "crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs",
   );
   const agentProviders = read("crates/agent_ui/src/dx_launch_workspace/agents/providers.rs");
+  const agentReceipts = read("crates/agent_ui/src/dx_launch_workspace/agents/receipts.rs");
   const sources = read("crates/agent_ui/src/dx_launch_workspace/sources.rs");
 
   assert.match(parent, /agents::dx_agent_bridge_state/);
@@ -217,9 +218,13 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agents, /pub\(super\) fn dx_agent_bridge_state/);
   assert.match(agents, /^mod provider_labels;$/m);
   assert.match(agents, /^mod providers;$/m);
+  assert.match(agents, /^mod receipts;$/m);
   assert.match(agents, /pub\(super\) use providers::dx_agent_provider_state/);
+  assert.match(agents, /pub\(super\) use receipts::dx_agent_receipt_state/);
   assert.doesNotMatch(agents, /fn dx_agent_provider_row/);
   assert.doesNotMatch(agents, /fn dx_agent_model_row/);
+  assert.doesNotMatch(agents, /fn dx_agent_receipt_row/);
+  assert.doesNotMatch(agents, /fn dx_agent_receipt_root_state/);
   assert.match(agentProviders, /pub\(in super::super\) fn dx_agent_provider_state/);
   assert.match(agentProviders, /fn dx_agent_provider_row/);
   assert.match(agentProviders, /fn dx_agent_model_row/);
@@ -235,11 +240,20 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentProviderLabels, /provider_detail_label_trims_blank_compatibility/);
   assert.match(agentProviderLabels, /model_detail_label_falls_back_for_blank_ids/);
   assert.match(agentProviderLabels, /detail_labels_disclose_compatibility_overflow/);
+  assert.match(agentReceipts, /pub\(in super::super\) fn dx_agent_receipt_state/);
+  assert.match(agentReceipts, /fn dx_agent_receipt_root_state/);
+  assert.match(agentReceipts, /fn dx_agent_receipt_row/);
+  assert.match(agentReceipts, /DxAgentReceipt/);
+  assert.match(agentReceipts, /dx-agent-receipt-inbox-malformed/);
+  assert.match(agentReceipts, /dx-agent-receipt-unsafe-row/);
+  assert.match(agentReceipts, /use super::super::\{metric_row, muted_card, signal_row\}/);
+  assert.match(agentReceipts, /use super::super::list_labels::yes_no/);
   assert.match(sources, /pub\(super\) fn source_set_stack/);
   assert.match(sources, /pub\(super\) fn receipt_source_state/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents.rs") < 900);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents.rs") < 650);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs") < 150);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/providers.rs") < 160);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts.rs") < 300);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/sources.rs") < 420);
 });
 
