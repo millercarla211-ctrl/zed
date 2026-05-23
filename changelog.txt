@@ -1,3 +1,27 @@
+[2026-05-23] - DX Launch Audit Helper Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_audit/packet_fields.rs` for packet field helpers.
+- Added `crates/agent_ui/src/dx_launch_audit/packets.rs` for bounded launch-audit packet reads and schema validation.
+- Added `crates/agent_ui/src/dx_launch_audit/review.rs` for command-fanout and redaction review policy.
+- Added `crates/agent_ui/src/dx_launch_audit/status_summaries.rs` for Agents, Tokens, and Discovery status summaries.
+- Added `script/dx-launch-audit-source.test.ts` as the no-build source guard for Launch Audit ownership and file budgets.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_audit.rs` now stays focused on cache, packet presence, audit status assembly, and public snapshot fields at 329 lines.
+
+PASSED:
+- Red/green `node --test script\dx-launch-audit-source.test.ts`
+- Adjacent `node --test script\dx-launch-workspace-source.test.ts`
+- Adjacent `node --test script\dx-launch-prompts-source.test.ts`
+- Adjacent `node --test script\dx-agent-bridge-source.test.ts`
+- Adjacent `node --test script\dx-runtime-proof-status-source.test.ts`
+- Targeted rustfmt check
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify Launch Audit schemas/fixtures/smoke/status rows against real `G:\Dx\cli\fixtures\launch-examples` packets in the governed native Zed proof window.
+
 [2026-05-23] - DX Runtime Proof Status Helper Split
 
 ADDED:

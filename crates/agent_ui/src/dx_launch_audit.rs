@@ -1,7 +1,16 @@
+mod packet_fields;
+mod packets;
+mod review;
+mod status_summaries;
+
+use self::packet_fields::{array_len, bool_field, bool_label, string_field, usize_field};
+use self::packets::read_checked_packet;
+use self::review::{command_fanout_count, redaction_requires_review};
+use self::status_summaries::{
+    status_agent_summary, status_discovery_summary, status_token_summary,
+};
 use serde_json::Value;
 use std::{
-    fs::File,
-    io::Read,
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
     time::{Duration, Instant},
@@ -18,7 +27,6 @@ const SMOKE_SCHEMA: &str = "dx.launch.smoke.v1";
 const STATUS_SCHEMA: &str = "dx.launch.status.v1";
 const DX_LAUNCH_SCHEMAS_COMMAND: &str = "dx launch schemas --json";
 const LAUNCH_AUDIT_CACHE_TTL: Duration = Duration::from_secs(5);
-const MAX_PACKET_BYTES: u64 = 256 * 1024;
 
 #[derive(Clone)]
 pub(crate) struct DxLaunchAuditSnapshot {
@@ -317,141 +325,4 @@ fn collect_packet_issue(
     } else if let Err(error) = packet {
         issues.push(error.clone());
     }
-}
-
-fn status_agent_summary(packet: Option<&Value>) -> String {
-    let Some(agent) = packet.and_then(|value| value.get("agents")) else {
-        return "missing".to_string();
-    };
-
-    format!(
-        "{} / {} connected",
-        usize_field(agent, "connected_accounts_connected").unwrap_or_default(),
-        usize_field(agent, "connected_accounts_configured").unwrap_or_default()
-    )
-}
-
-fn status_token_summary(packet: Option<&Value>) -> String {
-    let Some(tokens) = packet.and_then(|value| value.get("tokens")) else {
-        return "missing".to_string();
-    };
-
-    format!(
-        "{} / {} tokens",
-        string_field(tokens, "budget_state").unwrap_or("unknown"),
-        usize_field(tokens, "estimated_tokens").unwrap_or_default()
-    )
-}
-
-fn status_discovery_summary(packet: Option<&Value>) -> String {
-    let Some(discovery) = packet.and_then(|value| value.get("discovery")) else {
-        return "missing".to_string();
-    };
-
-    format!(
-        "{} / manifest {} / binary {}",
-        string_field(discovery, "status").unwrap_or("unknown"),
-        bool_label(bool_field(discovery, "www_manifest_present")),
-        bool_label(bool_field(discovery, "configured_binary_present"))
-    )
-}
-
-fn read_checked_packet(path: &Path, expected_schema: &str) -> Result<Value, String> {
-    let packet = read_json_packet(path)?;
-    let schema = string_field(&packet, "schema_version").unwrap_or("missing");
-    if schema != expected_schema {
-        return Err(format!(
-            "{} uses schema {schema}, expected {expected_schema}",
-            path.display()
-        ));
-    }
-    Ok(packet)
-}
-
-fn read_json_packet(path: &Path) -> Result<Value, String> {
-    let metadata = path
-        .metadata()
-        .map_err(|error| format!("Unable to inspect launch audit packet: {error}"))?;
-    if metadata.len() > MAX_PACKET_BYTES {
-        return Err(format!(
-            "Launch audit packet is too large to render safely: {} bytes",
-            metadata.len()
-        ));
-    }
-
-    let mut contents = String::new();
-    File::open(path)
-        .and_then(|mut file| file.read_to_string(&mut contents))
-        .map_err(|error| format!("Unable to read launch audit packet: {error}"))?;
-    serde_json::from_str(&contents)
-        .map_err(|error| format!("Unable to parse launch audit packet: {error}"))
-}
-
-fn string_field<'a>(value: &'a Value, field: &str) -> Option<&'a str> {
-    value.get(field).and_then(Value::as_str)
-}
-
-fn usize_field(value: &Value, field: &str) -> Option<usize> {
-    value
-        .get(field)
-        .and_then(Value::as_u64)
-        .and_then(|value| value.try_into().ok())
-}
-
-fn bool_field(value: &Value, field: &str) -> bool {
-    value.get(field).and_then(Value::as_bool).unwrap_or(false)
-}
-
-fn array_len(value: &Value, field: &str) -> usize {
-    value
-        .get(field)
-        .and_then(Value::as_array)
-        .map(Vec::len)
-        .unwrap_or_default()
-}
-
-fn bool_label(value: bool) -> &'static str {
-    if value { "yes" } else { "no" }
-}
-
-fn command_fanout_count(value: &Value) -> usize {
-    match value {
-        Value::Array(items) => items.iter().map(command_fanout_count).sum(),
-        Value::Object(object) => {
-            let here = if object
-                .get("command_fanout")
-                .and_then(Value::as_bool)
-                .unwrap_or(false)
-            {
-                1
-            } else {
-                0
-            };
-            here + object.values().map(command_fanout_count).sum::<usize>()
-        }
-        _ => 0,
-    }
-}
-
-fn redaction_requires_review(value: &Value) -> bool {
-    let Some(redaction) = value.get("redaction") else {
-        return true;
-    };
-
-    [
-        "exports_source_file_contents",
-        "exports_source_file_paths",
-        "exports_secret_values",
-        "exports_receipt_bodies",
-        "exports_prompts",
-        "exports_transcripts",
-        "exports_command_payloads",
-    ]
-    .into_iter()
-    .any(|field| {
-        redaction
-            .get(field)
-            .and_then(Value::as_bool)
-            .unwrap_or(true)
-    })
 }
