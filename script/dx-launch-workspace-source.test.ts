@@ -392,21 +392,27 @@ test("DX launch workspace delegates Launch Gate rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const readiness = read("crates/agent_ui/src/dx_launch_workspace/readiness.rs");
   const readinessExamples = read("crates/agent_ui/src/dx_launch_workspace/readiness/examples.rs");
+  const readinessSummary = read("crates/agent_ui/src/dx_launch_workspace/readiness/summary.rs");
   const readinessStatus = read("crates/agent_ui/src/dx_launch_workspace/readiness/status.rs");
   const readinessWarnings = read("crates/agent_ui/src/dx_launch_workspace/readiness/warnings.rs");
 
   assert.match(parent, /readiness::launch_readiness_state/);
   assert.doesNotMatch(parent, /fn launch_readiness_state/);
   assert.match(readiness, /^mod examples;$/m);
+  assert.match(readiness, /^mod summary;$/m);
   assert.match(readiness, /^mod status;$/m);
   assert.match(readiness, /^mod warnings;$/m);
   assert.match(
     readiness,
-    /use self::\{examples::launch_readiness_example_rows, status::launch_readiness_status_row\}/,
+    /use self::\{\s*examples::launch_readiness_example_rows,\s*status::launch_readiness_status_row,\s*summary::launch_readiness_summary_rows,\s*\}/s,
   );
   assert.match(readiness, /pub\(super\) fn launch_readiness_state/);
   assert.match(readiness, /DxLaunchReadinessSnapshot/);
+  assert.match(readiness, /children\(launch_readiness_summary_rows\(snapshot\)\)/);
   assert.match(readiness, /child\(launch_readiness_status_row\(snapshot, cx\)\)/);
+  assert.doesNotMatch(readiness, /import_summary_count/);
+  assert.doesNotMatch(readiness, /recovery_commands/);
+  assert.doesNotMatch(readiness, /command_fanout_count/);
   assert.doesNotMatch(readiness, /launch_readiness_warning\(snapshot\)/);
   assert.doesNotMatch(readiness, /Missing source-owned launch examples/);
   assert.doesNotMatch(readiness, /snapshot\.next_action\.clone\(\)/);
@@ -414,13 +420,19 @@ test("DX launch workspace delegates Launch Gate rail rendering", () => {
   assert.doesNotMatch(readiness, /dx-launch-readiness-redaction-review/);
   assert.doesNotMatch(readiness, /dx-launch-readiness-fanout-review/);
   assert.doesNotMatch(readiness, /snapshot\.examples\.iter\(\)\.take\(3\)/);
-  assert.match(readiness, /use super::\{bounded_items, metric_row\}/);
+  assert.doesNotMatch(readiness, /use super::\{bounded_items, metric_row\}/);
   assert.match(readinessExamples, /pub\(super\) fn launch_readiness_example_rows/);
   assert.match(readinessExamples, /DxLaunchReadinessSnapshot/);
   assert.match(readinessExamples, /snapshot\.examples\.iter\(\)\.take\(3\)/);
   assert.match(readinessExamples, /Example \{\}/);
   assert.match(readinessExamples, /Next \{\}/);
   assert.match(readinessExamples, /use super::super::metric_row/);
+  assert.match(readinessSummary, /pub\(super\) fn launch_readiness_summary_rows/);
+  assert.match(readinessSummary, /DxLaunchReadinessSnapshot/);
+  assert.match(readinessSummary, /import_summary_count/);
+  assert.match(readinessSummary, /recovery_commands/);
+  assert.match(readinessSummary, /command_fanout_count/);
+  assert.match(readinessSummary, /use super::super::\{bounded_items, metric_row\}/);
   assert.match(readinessStatus, /pub\(super\) fn launch_readiness_status_row/);
   assert.match(readinessStatus, /DxLaunchReadinessSnapshot/);
   assert.match(readinessStatus, /launch_readiness_warning\(snapshot\)/);
@@ -437,8 +449,9 @@ test("DX launch workspace delegates Launch Gate rail rendering", () => {
   assert.match(readinessWarnings, /dx-launch-readiness-redaction-review/);
   assert.match(readinessWarnings, /dx-launch-readiness-fanout-review/);
   assert.match(readinessWarnings, /use super::super::signal_row/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/readiness.rs") < 90);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/readiness.rs") < 45);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/readiness/examples.rs") < 35);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/readiness/summary.rs") < 85);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/readiness/status.rs") < 50);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/readiness/warnings.rs") < 45);
 });
