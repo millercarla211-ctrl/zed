@@ -1,3 +1,22 @@
+[2026-05-23] - DX Agent Provider Row Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/providers/rows.rs` for Agent provider and model row rendering.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/agents/providers.rs` now delegates provider/model row rendering through the focused helper and stays focused on catalog/provider/model summary state, hidden-managed-provider state, source-hash state, regeneration prompt, and stable row IDs at 69 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards provider row module registration, parent delegation, row ID ownership, row helper label ownership, and tighter provider file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Agent provider coordinator and row helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Agent provider/model rows against real provider catalog receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Gate Warning And Example Split
 
 ADDED:
