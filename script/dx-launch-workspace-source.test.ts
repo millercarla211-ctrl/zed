@@ -62,29 +62,49 @@ test("DX launch workspace delegates Launch Receipts rail rendering", () => {
   const launchReceiptRows = read(
     "crates/agent_ui/src/dx_launch_workspace/launch_receipts/rows.rs",
   );
+  const launchReceiptStatus = read(
+    "crates/agent_ui/src/dx_launch_workspace/launch_receipts/status.rs",
+  );
 
   assert.match(parent, /launch_receipts::launch_receipt_review_state/);
   assert.doesNotMatch(parent, /fn launch_receipt_review_state/);
   assert.doesNotMatch(parent, /fn launch_receipt_row/);
   assert.match(launchReceipts, /^mod rows;$/m);
-  assert.match(launchReceipts, /use self::rows::launch_receipt_row/);
+  assert.match(launchReceipts, /^mod status;$/m);
+  assert.doesNotMatch(launchReceipts, /use self::rows::launch_receipt_row/);
+  assert.match(launchReceipts, /use self::status::launch_receipt_status_rows/);
   assert.match(launchReceipts, /pub\(super\) fn launch_receipt_review_state/);
   assert.doesNotMatch(launchReceipts, /fn launch_receipt_row/);
   assert.match(launchReceipts, /DxLaunchReceiptReviewSnapshot/);
-  assert.match(launchReceipts, /DxLaunchReceiptSummary/);
-  assert.match(launchReceipts, /dx-launch-receipt-latest-malformed/);
-  assert.match(launchReceipts, /dx-launch-receipt-latest-stale/);
-  assert.match(launchReceipts, /dx-launch-receipt-schema-review/);
-  assert.match(launchReceipts, /dx-launch-receipt-warning/);
-  assert.match(launchReceipts, /use super::\{metric_row, muted_card, signal_row\}/);
+  assert.doesNotMatch(launchReceipts, /DxLaunchReceiptSummary/);
+  assert.doesNotMatch(launchReceipts, /dx-launch-receipt-latest-malformed/);
+  assert.doesNotMatch(launchReceipts, /dx-launch-receipt-latest-stale/);
+  assert.doesNotMatch(launchReceipts, /dx-launch-receipt-schema-review/);
+  assert.doesNotMatch(launchReceipts, /dx-launch-receipt-warning/);
+  assert.doesNotMatch(launchReceipts, /Missing launch receipt directory/);
+  assert.doesNotMatch(launchReceipts, /latest\.malformed/);
+  assert.doesNotMatch(launchReceipts, /snapshot\.snapshots\.first/);
+  assert.match(launchReceipts, /children\(launch_receipt_status_rows\(snapshot, cx\)\)/);
+  assert.match(launchReceipts, /use super::metric_row/);
   assert.match(launchReceiptRows, /pub\(super\) fn launch_receipt_row/);
   assert.match(launchReceiptRows, /DxLaunchReceiptSummary/);
   assert.match(launchReceiptRows, /dx-launch-receipt-\{\}-\{\}/);
   assert.match(launchReceiptRows, /review_launch_receipt_metadata/);
   assert.match(launchReceiptRows, /receipt\.display_state\(\)/);
   assert.match(launchReceiptRows, /cx\.theme\(\)\.colors\(\)\.element_background/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_receipts.rs") < 125);
+  assert.match(launchReceiptStatus, /pub\(super\) fn launch_receipt_status_rows/);
+  assert.match(launchReceiptStatus, /DxLaunchReceiptReviewSnapshot/);
+  assert.match(launchReceiptStatus, /use super::rows::launch_receipt_row/);
+  assert.match(launchReceiptStatus, /Missing launch receipt directory/);
+  assert.match(launchReceiptStatus, /No cached launch latest receipt/);
+  assert.match(launchReceiptStatus, /dx-launch-receipt-latest-malformed/);
+  assert.match(launchReceiptStatus, /dx-launch-receipt-latest-stale/);
+  assert.match(launchReceiptStatus, /dx-launch-receipt-schema-review/);
+  assert.match(launchReceiptStatus, /dx-launch-receipt-warning/);
+  assert.match(launchReceiptStatus, /snapshot\.snapshots\.first/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_receipts.rs") < 75);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_receipts/rows.rs") < 80);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/launch_receipts/status.rs") < 95);
 });
 
 test("DX launch workspace delegates WWW Evidence rail rendering", () => {
