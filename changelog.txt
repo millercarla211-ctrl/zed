@@ -1,3 +1,22 @@
+[2026-05-23] - DX Source Audit Status Row Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/source_audit/status.rs` for Source Audit missing-root, missing-latest, invalid-schema, missing-markdown, and missing-DX-Studio-QA status rows.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/source_audit.rs` now delegates status rows through the focused helper and stays focused on Source Audit summary metrics, bounded row labels, warning selection, and rail composition at 90 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards status module registration, parent delegation, status row ownership, invalid-schema row ownership, and tighter Source Audit/status file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Source Audit coordinator and status helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Source Audit status rows against real latest source-audit, markdown, and DX Studio QA receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Agent Receipt Status Split
 
 ADDED:

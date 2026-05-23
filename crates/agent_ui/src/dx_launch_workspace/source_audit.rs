@@ -3,9 +3,11 @@ use ui::{Color, IconName, prelude::*};
 
 use crate::dx_launch_source_audit::DxLaunchSourceAuditSnapshot;
 
+use self::status::launch_source_audit_status_rows;
 use self::warnings::launch_source_audit_warning;
-use super::{bounded_items, metric_row, muted_card, signal_row, yes_no};
+use super::{bounded_items, metric_row, signal_row, yes_no};
 
+mod status;
 mod warnings;
 
 pub(super) fn launch_source_audit_state(
@@ -78,50 +80,7 @@ pub(super) fn launch_source_audit_state(
         .child(metric_row("Blockers", blockers))
         .child(metric_row("Next", snapshot.next_target.clone()));
 
-    if !snapshot.root_exists {
-        stack = stack.child(muted_card(
-            format!("Missing source audit root: {}", snapshot.root.display()),
-            cx,
-        ));
-    } else if !snapshot.latest_present {
-        stack = stack.child(muted_card(
-            format!(
-                "No source audit latest receipt at {}",
-                snapshot.latest_path.display()
-            ),
-            cx,
-        ));
-    } else if !snapshot.schema_valid {
-        stack = stack.child(signal_row(
-            "dx-source-audit-invalid".into(),
-            IconName::Warning,
-            Color::Warning,
-            snapshot
-                .last_error
-                .clone()
-                .unwrap_or_else(|| "Source audit receipt schema is not valid.".to_string()),
-        ));
-    }
-
-    if !snapshot.markdown_present {
-        stack = stack.child(muted_card(
-            format!(
-                "Missing source audit markdown summary: {}",
-                snapshot.markdown_path.display()
-            ),
-            cx,
-        ));
-    }
-
-    if !snapshot.dx_studio_qa_present {
-        stack = stack.child(muted_card(
-            format!(
-                "Missing DX Studio QA receipt: {}",
-                snapshot.dx_studio_qa_path.display()
-            ),
-            cx,
-        ));
-    }
+    stack = stack.children(launch_source_audit_status_rows(snapshot, cx));
 
     if let Some((id, message)) = launch_source_audit_warning(snapshot) {
         stack = stack.child(signal_row(id, IconName::Warning, Color::Warning, message));

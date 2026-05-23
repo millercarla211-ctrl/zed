@@ -134,20 +134,34 @@ test("DX launch workspace delegates Launch Audit rail rendering", () => {
 test("DX launch workspace delegates Source Audit rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const sourceAudit = read("crates/agent_ui/src/dx_launch_workspace/source_audit.rs");
+  const sourceAuditStatus = read("crates/agent_ui/src/dx_launch_workspace/source_audit/status.rs");
   const sourceAuditWarnings = read(
     "crates/agent_ui/src/dx_launch_workspace/source_audit/warnings.rs",
   );
 
   assert.match(parent, /source_audit::launch_source_audit_state/);
   assert.doesNotMatch(parent, /fn launch_source_audit_state/);
+  assert.match(sourceAudit, /^mod status;$/m);
   assert.match(sourceAudit, /^mod warnings;$/m);
+  assert.match(sourceAudit, /use self::status::launch_source_audit_status_rows/);
   assert.match(sourceAudit, /use self::warnings::launch_source_audit_warning/);
   assert.match(sourceAudit, /pub\(super\) fn launch_source_audit_state/);
   assert.match(sourceAudit, /DxLaunchSourceAuditSnapshot/);
-  assert.match(sourceAudit, /dx-source-audit-invalid/);
+  assert.doesNotMatch(sourceAudit, /dx-source-audit-invalid/);
+  assert.doesNotMatch(sourceAudit, /Missing source audit root/);
+  assert.doesNotMatch(sourceAudit, /Missing source audit markdown summary/);
+  assert.match(sourceAudit, /children\(launch_source_audit_status_rows\(snapshot, cx\)\)/);
   assert.doesNotMatch(sourceAudit, /first_issue/);
   assert.doesNotMatch(sourceAudit, /dx-source-audit-template-trust/);
   assert.doesNotMatch(sourceAudit, /dx-source-audit-www-qa/);
+  assert.match(sourceAuditStatus, /pub\(super\) fn launch_source_audit_status_rows/);
+  assert.match(sourceAuditStatus, /DxLaunchSourceAuditSnapshot/);
+  assert.match(sourceAuditStatus, /Missing source audit root/);
+  assert.match(sourceAuditStatus, /No source audit latest receipt/);
+  assert.match(sourceAuditStatus, /dx-source-audit-invalid/);
+  assert.match(sourceAuditStatus, /Missing source audit markdown summary/);
+  assert.match(sourceAuditStatus, /Missing DX Studio QA receipt/);
+  assert.match(sourceAuditStatus, /use super::super::\{muted_card, signal_row\}/);
   assert.match(sourceAuditWarnings, /pub\(super\) fn launch_source_audit_warning/);
   assert.match(sourceAuditWarnings, /DxLaunchSourceAuditSnapshot/);
   assert.match(sourceAuditWarnings, /SharedString/);
@@ -159,8 +173,9 @@ test("DX launch workspace delegates Source Audit rail rendering", () => {
   assert.match(sourceAuditWarnings, /dx-source-audit-risk/);
   assert.match(sourceAuditWarnings, /dx-source-audit-template-trust/);
   assert.match(sourceAuditWarnings, /dx-source-audit-www-qa/);
-  assert.match(sourceAudit, /use super::\{bounded_items, metric_row, muted_card, signal_row, yes_no\}/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/source_audit.rs") < 135);
+  assert.match(sourceAudit, /use super::\{bounded_items, metric_row, signal_row, yes_no\}/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/source_audit.rs") < 100);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/source_audit/status.rs") < 70);
   assert.ok(
     lineCount("crates/agent_ui/src/dx_launch_workspace/source_audit/warnings.rs") < 60,
   );
