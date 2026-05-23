@@ -1,3 +1,27 @@
+[2026-05-23] - DX Launch Readiness Helper Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_readiness/packet_fields.rs` for launch-readiness JSON field helpers.
+- Added `crates/agent_ui/src/dx_launch_readiness/packets.rs` for bounded launch-readiness packet reads and schema validation.
+- Added `crates/agent_ui/src/dx_launch_readiness/review.rs` for command-fanout and redaction review policy.
+- Added `crates/agent_ui/src/dx_launch_readiness/examples.rs` for recovery-command and balanced example curation.
+- Added `crates/agent_ui/src/dx_launch_readiness/status_counts.rs` for readiness status-count formatting.
+- Added `script/dx-launch-readiness-source.test.ts` as the no-build source guard for Launch Readiness ownership and file budgets.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_readiness.rs` now stays focused on cache, example discovery, snapshot assembly, and public snapshot fields at 304 lines.
+
+PASSED:
+- Red/green `node --test script\dx-launch-readiness-source.test.ts`
+- Adjacent `node --test script\dx-launch-workspace-source.test.ts script\dx-launch-prompts-source.test.ts script\dx-launch-audit-source.test.ts script\dx-agent-bridge-source.test.ts`
+- Targeted rustfmt check
+- `git diff --check`
+- Conflict-marker scan on touched files
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify Launch Readiness import-summary, release-gate, fallback-drill, fanout, redaction-review, and recovery-command rows against real `G:\Dx\cli\fixtures\launch-examples` packets in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Audit Helper Split
 
 ADDED:

@@ -1,8 +1,18 @@
+mod examples;
+mod packet_fields;
+mod packets;
+mod review;
+mod status_counts;
+
+use self::examples::{balanced_examples, push_recovery_commands, push_unique};
+use self::packet_fields::{
+    bool_field, packet_status, pointer_string, pointer_usize, string_field, usize_field,
+};
+use self::packets::read_checked_packet;
+use self::review::{command_fanout_count, redaction_requires_review};
 use serde_json::Value;
 use std::{
-    fs::File,
-    io::Read,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Mutex, OnceLock},
     time::{Duration, Instant},
 };
@@ -15,7 +25,6 @@ const DX_LAUNCH_IMPORT_SUMMARY_COMMAND: &str = "dx launch import-summary --json"
 const DX_LAUNCH_RELEASE_GATE_COMMAND: &str = "dx launch release-gate --json";
 const DX_LAUNCH_FALLBACK_DRILL_COMMAND: &str = "dx launch fallback-drill --json";
 const LAUNCH_READINESS_CACHE_TTL: Duration = Duration::from_secs(5);
-const MAX_PACKET_BYTES: u64 = 256 * 1024;
 
 const IMPORT_SUMMARY_FILES: &[&str] = &[
     "import-summary-ready.json",
@@ -291,169 +300,4 @@ fn record_packet_safety(packet: &Value, snapshot: &mut DxLaunchReadinessSnapshot
     snapshot.no_command_fanout =
         snapshot.no_command_fanout && bool_field(packet, "no_command_fanout") && fanout == 0;
     snapshot.redaction_requires_review |= redaction_requires_review(packet);
-}
-
-fn read_checked_packet(path: &Path, expected_schema: &str) -> Result<Value, String> {
-    let packet = read_json_packet(path)?;
-    let schema = string_field(&packet, "schema_version").unwrap_or("missing");
-    if schema != expected_schema {
-        return Err(format!(
-            "{} uses schema {schema}, expected {expected_schema}",
-            path.display()
-        ));
-    }
-    Ok(packet)
-}
-
-fn read_json_packet(path: &Path) -> Result<Value, String> {
-    let metadata = path
-        .metadata()
-        .map_err(|error| format!("Unable to inspect launch readiness packet: {error}"))?;
-    if metadata.len() > MAX_PACKET_BYTES {
-        return Err(format!(
-            "Launch readiness packet is too large to render safely: {} bytes",
-            metadata.len()
-        ));
-    }
-
-    let mut contents = String::new();
-    File::open(path)
-        .and_then(|mut file| file.read_to_string(&mut contents))
-        .map_err(|error| format!("Unable to read launch readiness packet: {error}"))?;
-    serde_json::from_str(&contents)
-        .map_err(|error| format!("Unable to parse launch readiness packet: {error}"))
-}
-
-fn packet_status(packet: &Value) -> String {
-    string_field(packet, "status")
-        .unwrap_or("unknown")
-        .to_string()
-}
-
-impl DxLaunchReadinessStatusCounts {
-    fn record(&mut self, status: &str) {
-        match status {
-            "ready" => self.ready += 1,
-            "warning" => self.warning += 1,
-            "blocked" => self.blocked += 1,
-            _ => self.unknown += 1,
-        }
-    }
-
-    pub(crate) fn summary(&self) -> String {
-        format!(
-            "{} ready / {} warning / {} blocked",
-            self.ready, self.warning, self.blocked
-        )
-    }
-}
-
-fn string_field<'a>(value: &'a Value, field: &str) -> Option<&'a str> {
-    value.get(field).and_then(Value::as_str)
-}
-
-fn usize_field(value: &Value, field: &str) -> Option<usize> {
-    value
-        .get(field)
-        .and_then(Value::as_u64)
-        .and_then(|value| value.try_into().ok())
-}
-
-fn bool_field(value: &Value, field: &str) -> bool {
-    value.get(field).and_then(Value::as_bool).unwrap_or(false)
-}
-
-fn pointer_string<'a>(value: &'a Value, pointer: &str) -> Option<&'a str> {
-    value.pointer(pointer).and_then(Value::as_str)
-}
-
-fn pointer_usize(value: &Value, pointer: &str) -> Option<usize> {
-    value
-        .pointer(pointer)
-        .and_then(Value::as_u64)
-        .and_then(|value| value.try_into().ok())
-}
-
-fn push_recovery_commands(packet: &Value, snapshot: &mut DxLaunchReadinessSnapshot) {
-    let Some(commands) = packet.get("recovery_commands").and_then(Value::as_object) else {
-        return;
-    };
-
-    for command in commands.values().filter_map(Value::as_str) {
-        push_unique(&mut snapshot.recovery_commands, command.to_string());
-    }
-}
-
-fn push_unique(values: &mut Vec<String>, value: String) {
-    if !values.iter().any(|existing| existing == &value) {
-        values.push(value);
-    }
-}
-
-fn balanced_examples(examples: &[DxLaunchReadinessExample]) -> Vec<DxLaunchReadinessExample> {
-    let mut balanced = Vec::new();
-    for prefix in ["Import ", "Gate ", "Fallback "] {
-        if let Some(example) = examples
-            .iter()
-            .find(|example| example.label.starts_with(prefix))
-        {
-            balanced.push(example.clone());
-        }
-    }
-
-    for example in examples {
-        if balanced.len() >= 6 {
-            break;
-        }
-        if !balanced
-            .iter()
-            .any(|existing| existing.label == example.label)
-        {
-            balanced.push(example.clone());
-        }
-    }
-
-    balanced
-}
-
-fn command_fanout_count(value: &Value) -> usize {
-    match value {
-        Value::Array(items) => items.iter().map(command_fanout_count).sum(),
-        Value::Object(object) => {
-            let here = if object
-                .get("command_fanout")
-                .and_then(Value::as_bool)
-                .unwrap_or(false)
-            {
-                1
-            } else {
-                0
-            };
-            here + object.values().map(command_fanout_count).sum::<usize>()
-        }
-        _ => 0,
-    }
-}
-
-fn redaction_requires_review(value: &Value) -> bool {
-    let Some(redaction) = value.get("redaction") else {
-        return true;
-    };
-
-    [
-        "exports_source_file_contents",
-        "exports_source_file_paths",
-        "exports_secret_values",
-        "exports_receipt_bodies",
-        "exports_prompts",
-        "exports_transcripts",
-        "exports_command_payloads",
-    ]
-    .into_iter()
-    .any(|field| {
-        redaction
-            .get(field)
-            .and_then(Value::as_bool)
-            .unwrap_or(true)
-    })
 }
