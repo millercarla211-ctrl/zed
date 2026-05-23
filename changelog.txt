@@ -1,3 +1,23 @@
+[2026-05-23] - DX Agent Receipt Summary Footer Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/receipts/summary.rs` for receipt counts, summary rows, and latest-receipt eligibility.
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/receipts/footer.rs` for inbox review and next-action footer rows.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/agents/receipts.rs` now delegates summary, warning, row, latest, and footer ownership through focused helpers and stays focused on receipt rail composition plus missing/renderable states at 54 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards summary/footer module registration, shell delegation, count ownership, inbox footer ownership, latest-row ownership, and tighter receipt shell/summary/footer budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the receipt shell, summary helper, and footer helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Agent receipt summary/footer rows against real DX Agents receipt-index and inbox receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Sources Row Detail Split
 
 ADDED:

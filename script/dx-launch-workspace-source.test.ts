@@ -550,6 +550,12 @@ test("DX launch workspace delegates agents and source rails", () => {
   const agentReceiptStatus = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/receipts/status.rs",
   );
+  const agentReceiptFooter = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/receipts/footer.rs",
+  );
+  const agentReceiptSummary = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/receipts/summary.rs",
+  );
   const agentSocial = read("crates/agent_ui/src/dx_launch_workspace/agents/social.rs");
   const agentSocialRows = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/social/rows.rs",
@@ -737,21 +743,40 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentProviderLabelTests, /detail_labels_disclose_compatibility_overflow/);
   assert.match(agentReceipts, /pub\(in super::super\) fn dx_agent_receipt_state/);
   assert.match(agentReceipts, /^mod labels;$/m);
+  assert.match(agentReceipts, /^mod footer;$/m);
   assert.match(agentReceipts, /^mod row_details;$/m);
   assert.match(agentReceipts, /^mod rows;$/m);
   assert.match(agentReceipts, /^mod status;$/m);
+  assert.match(agentReceipts, /^mod summary;$/m);
+  assert.match(agentReceipts, /use self::footer::dx_agent_receipt_footer_rows/);
   assert.match(agentReceipts, /use self::rows::dx_agent_receipt_row/);
-  assert.match(
-    agentReceipts,
-    /use self::status::\{dx_agent_receipt_root_state, dx_agent_receipt_warning_rows\}/,
-  );
+  assert.match(agentReceipts, /use self::status::dx_agent_receipt_warning_rows/);
+  assert.match(agentReceipts, /use self::summary::\{/);
   assert.doesNotMatch(agentReceipts, /fn dx_agent_receipt_root_state/);
   assert.doesNotMatch(agentReceipts, /fn dx_agent_receipt_row/);
   assert.doesNotMatch(agentReceipts, /DxAgentReceipt/);
+  assert.doesNotMatch(agentReceipts, /filter\(\|receipt\| receipt\.metadata_redacted\)/);
+  assert.doesNotMatch(agentReceipts, /filter\(\|receipt\| !receipt\.safe_to_render\)/);
+  assert.doesNotMatch(agentReceipts, /metric_row\("Index"/);
+  assert.doesNotMatch(agentReceipts, /metric_row\("Inbox"/);
+  assert.doesNotMatch(agentReceipts, /Inbox review/);
+  assert.doesNotMatch(agentReceipts, /Label::new\(index\.next_action/);
   assert.doesNotMatch(agentReceipts, /dx-agent-receipt-inbox-malformed/);
   assert.doesNotMatch(agentReceipts, /dx-agent-receipt-unsafe-row/);
-  assert.match(agentReceipts, /children\(dx_agent_receipt_warning_rows\(snapshot, unsafe_count\)\)/);
-  assert.match(agentReceipts, /use super::super::\{metric_row, muted_card\}/);
+  assert.match(agentReceipts, /let counts = dx_agent_receipt_counts\(snapshot\)/);
+  assert.match(agentReceipts, /children\(dx_agent_receipt_summary_rows\(snapshot, &counts\)\)/);
+  assert.match(
+    agentReceipts,
+    /children\(dx_agent_receipt_warning_rows\(snapshot, counts\.unsafe_count\)\)/,
+  );
+  assert.match(agentReceipts, /dx_agent_receipt_latest_row\(snapshot, &counts\)/);
+  assert.match(agentReceipts, /children\(dx_agent_receipt_footer_rows\(snapshot\)\)/);
+  assert.match(agentReceipts, /use super::super::muted_card/);
+  assert.match(agentReceiptFooter, /pub\(super\) fn dx_agent_receipt_footer_rows/);
+  assert.match(agentReceiptFooter, /DxAgentBridgeSnapshot/);
+  assert.match(agentReceiptFooter, /Inbox review/);
+  assert.match(agentReceiptFooter, /Label::new\(index\.next_action\.clone\(\)\)/);
+  assert.match(agentReceiptFooter, /use super::super::super::metric_row/);
   assert.match(agentReceiptLabels, /pub\(super\) fn receipt_state_label/);
   assert.match(agentReceiptLabels, /pub\(super\) fn receipt_detail_label/);
   assert.match(agentReceiptLabels, /pub\(super\) fn receipt_provider_model_label/);
@@ -801,6 +826,18 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentReceiptStatus, /dx-agent-receipt-index-error/);
   assert.match(agentReceiptStatus, /dx-agent-receipt-unsafe-row/);
   assert.match(agentReceiptStatus, /use super::super::super::signal_row/);
+  assert.match(agentReceiptSummary, /pub\(super\) struct DxAgentReceiptCounts/);
+  assert.match(agentReceiptSummary, /pub\(super\) fn dx_agent_receipt_counts/);
+  assert.match(agentReceiptSummary, /pub\(super\) fn dx_agent_receipt_summary_rows/);
+  assert.match(agentReceiptSummary, /pub\(super\) fn dx_agent_receipt_latest_row/);
+  assert.match(agentReceiptSummary, /filter\(\|receipt\| receipt\.metadata_redacted\)/);
+  assert.match(agentReceiptSummary, /filter\(\|receipt\| !receipt\.safe_to_render\)/);
+  assert.match(agentReceiptSummary, /metric_row\("Index"/);
+  assert.match(agentReceiptSummary, /metric_row\("Inbox"/);
+  assert.doesNotMatch(agentReceiptSummary, /Inbox review/);
+  assert.doesNotMatch(agentReceiptSummary, /Label::new\(index\.next_action\.clone\(\)\)/);
+  assert.match(agentReceiptSummary, /dx_agent_receipt_root_state/);
+  assert.match(agentReceiptSummary, /use super::super::super::metric_row/);
   assert.match(agentSocial, /pub\(in super::super\) fn dx_agent_social_state/);
   assert.match(agentSocial, /^mod rows;$/m);
   assert.match(agentSocial, /use self::rows::dx_agent_social_row/);
@@ -931,11 +968,13 @@ test("DX launch workspace delegates agents and source rails", () => {
   );
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/providers.rs") < 90);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/providers/rows.rs") < 75);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts.rs") < 105);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts.rs") < 75);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts/footer.rs") < 45);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts/labels.rs") < 95);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts/row_details.rs") < 95);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts/rows.rs") < 55);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts/status.rs") < 80);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts/summary.rs") < 75);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/social.rs") < 70);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/social/rows.rs") < 70);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/social_actions.rs") < 90);
