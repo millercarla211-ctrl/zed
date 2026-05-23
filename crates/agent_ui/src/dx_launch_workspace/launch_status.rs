@@ -1,13 +1,17 @@
-use gpui::{AnyElement, App, SharedString, prelude::*};
+use gpui::{AnyElement, App, prelude::*};
 use ui::{Color, IconName, prelude::*};
 
 use crate::dx_launch_status::DxLaunchStatusSnapshot;
 
+use self::rows::launch_status_valid_detail_rows;
+use self::warnings::launch_status_warning;
 use super::launch_status_labels::{
-    launch_status_command_label, launch_status_next_action_label, launch_status_optional_summary,
-    launch_status_summary_label,
+    launch_status_command_label, launch_status_next_action_label, launch_status_summary_label,
 };
 use super::{metric_row, muted_card, signal_row, yes_no};
+
+mod rows;
+mod warnings;
 
 pub(super) fn launch_status_state(snapshot: &DxLaunchStatusSnapshot, cx: &App) -> AnyElement {
     let mut stack = v_flex()
@@ -100,52 +104,8 @@ pub(super) fn launch_status_state(snapshot: &DxLaunchStatusSnapshot, cx: &App) -
     }
 
     if snapshot.schema_valid {
-        stack = stack
-            .child(metric_row(
-                "Agent Next",
-                launch_status_next_action_label(&snapshot.agents.next_action),
-            ))
-            .child(metric_row(
-                "Token Next",
-                launch_status_next_action_label(&snapshot.tokens.next_action),
-            ))
-            .child(metric_row(
-                "Discovery Next",
-                launch_status_next_action_label(&snapshot.discovery.next_action),
-            ));
-
-        if let Some(redaction_summary) = launch_status_optional_summary(&snapshot.redaction_summary)
-        {
-            stack = stack.child(
-                Label::new(redaction_summary)
-                    .size(LabelSize::XSmall)
-                    .color(Color::Muted)
-                    .truncate(),
-            );
-        }
+        stack = stack.children(launch_status_valid_detail_rows(snapshot));
     }
 
     stack.into_any_element()
-}
-
-fn launch_status_warning(snapshot: &DxLaunchStatusSnapshot) -> Option<(SharedString, String)> {
-    if !snapshot.schema_valid {
-        Some((
-            "dx-launch-status-invalid".into(),
-            snapshot
-                .last_error
-                .clone()
-                .unwrap_or_else(|| "Launch status receipt schema is invalid".to_string()),
-        ))
-    } else if snapshot.redaction_requires_review {
-        Some((
-            "dx-launch-status-redaction-review".into(),
-            "Launch status redaction flags need review".to_string(),
-        ))
-    } else {
-        snapshot
-            .last_error
-            .as_ref()
-            .map(|error| ("dx-launch-status-warning".into(), error.clone()))
-    }
 }

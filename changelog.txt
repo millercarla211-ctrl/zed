@@ -1,3 +1,23 @@
+[2026-05-23] - DX Launch Status Row Warning Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/launch_status/rows.rs` for schema-valid Agent/Token/Discovery next-action rows and redaction-summary detail labels.
+- Added `crates/agent_ui/src/dx_launch_workspace/launch_status/warnings.rs` for invalid-schema, redaction-review, and launch-status warning selection.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/launch_status.rs` now delegates detail rows and warning selection through focused helpers and stays focused on the Launch Status rail shell at 111 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards Launch Status row/warning module registration, parent delegation, helper ownership, warning IDs, and Launch Status/row/warning file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Launch Status rail shell, row module, and warning module.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Launch Status warning and schema-valid detail rows against real `G:\Dx\.dx\receipts\launch\status-latest.json` receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Receipts Row Split
 
 ADDED:
