@@ -1,8 +1,15 @@
+mod fields;
+mod receipts;
+mod review;
+mod summaries;
+
+use self::fields::string_field;
+use self::receipts::read_json_receipt;
+use self::review::redaction_requires_review;
+use self::summaries::{agents_summary, discovery_summary, tokens_summary};
 use serde_json::Value;
 use std::{
-    fs::File,
-    io::Read,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Mutex, OnceLock},
     time::{Duration, Instant},
 };
@@ -12,7 +19,6 @@ const DX_LAUNCH_STATUS_LATEST: &str = "status-latest.json";
 const DX_LAUNCH_STATUS_SCHEMA: &str = "dx.launch.status.v1";
 const DX_LAUNCH_STATUS_COMMAND: &str = "dx launch status --json";
 const LAUNCH_STATUS_CACHE_TTL: Duration = Duration::from_secs(5);
-const MAX_RECEIPT_BYTES: u64 = 128 * 1024;
 
 #[derive(Clone)]
 pub(crate) struct DxLaunchStatusSnapshot {
@@ -194,160 +200,4 @@ fn invalid_snapshot(
         redaction_requires_review: true,
         redaction_summary: "Launch status receipt could not be validated.".to_string(),
     }
-}
-
-impl DxLaunchAgentsSummary {
-    fn empty() -> Self {
-        Self {
-            status: "unknown".to_string(),
-            configured_accounts: 0,
-            connected_accounts: 0,
-            accounts_needing_connection: 0,
-            qr_connect_supported: 0,
-            automation_count: 0,
-            active_task_count: 0,
-            next_action: "run_launch_status".to_string(),
-        }
-    }
-}
-
-impl DxLaunchTokensSummary {
-    fn empty() -> Self {
-        Self {
-            status: "unknown".to_string(),
-            budget_state: "unknown".to_string(),
-            estimated_tokens: 0,
-            soft_budget_tokens: 0,
-            hard_budget_tokens: 0,
-            next_action: "run_launch_status".to_string(),
-        }
-    }
-}
-
-impl DxLaunchDiscoverySummary {
-    fn empty() -> Self {
-        Self {
-            status: "unknown".to_string(),
-            templates_command: "dx www templates --json".to_string(),
-            packages_command: "dx forge packages --json".to_string(),
-            www_manifest_present: false,
-            configured_binary_present: false,
-            next_action: "run_launch_status".to_string(),
-        }
-    }
-}
-
-fn agents_summary(value: &Value) -> DxLaunchAgentsSummary {
-    DxLaunchAgentsSummary {
-        status: pointer_string(value, "/agents/status", "unknown"),
-        configured_accounts: pointer_usize(value, "/agents/connected_accounts_configured"),
-        connected_accounts: pointer_usize(value, "/agents/connected_accounts_connected"),
-        accounts_needing_connection: pointer_usize(
-            value,
-            "/agents/connected_accounts_needs_connection",
-        ),
-        qr_connect_supported: pointer_usize(value, "/agents/qr_connect_supported"),
-        automation_count: pointer_usize(value, "/agents/automation_count"),
-        active_task_count: pointer_usize(value, "/agents/active_task_count"),
-        next_action: pointer_string(value, "/agents/next_action", "review_agent_status"),
-    }
-}
-
-fn tokens_summary(value: &Value) -> DxLaunchTokensSummary {
-    DxLaunchTokensSummary {
-        status: pointer_string(value, "/tokens/status", "unknown"),
-        budget_state: pointer_string(value, "/tokens/budget_state", "unknown"),
-        estimated_tokens: pointer_u64(value, "/tokens/estimated_tokens"),
-        soft_budget_tokens: pointer_u64(value, "/tokens/soft_budget_tokens"),
-        hard_budget_tokens: pointer_u64(value, "/tokens/hard_budget_tokens"),
-        next_action: pointer_string(value, "/tokens/next_action", "review_token_budget"),
-    }
-}
-
-fn discovery_summary(value: &Value) -> DxLaunchDiscoverySummary {
-    DxLaunchDiscoverySummary {
-        status: pointer_string(value, "/discovery/status", "unknown"),
-        templates_command: pointer_string(
-            value,
-            "/discovery/templates_command",
-            "dx www templates --json",
-        ),
-        packages_command: pointer_string(
-            value,
-            "/discovery/packages_command",
-            "dx forge packages --json",
-        ),
-        www_manifest_present: pointer_bool(value, "/discovery/www_manifest_present"),
-        configured_binary_present: pointer_bool(value, "/discovery/configured_binary_present"),
-        next_action: pointer_string(value, "/discovery/next_action", "review_discovery_bridge"),
-    }
-}
-
-fn read_json_receipt(path: &Path) -> Result<Value, String> {
-    let metadata = path
-        .metadata()
-        .map_err(|error| format!("Unable to inspect launch status receipt: {error}"))?;
-    if metadata.len() > MAX_RECEIPT_BYTES {
-        return Err(format!(
-            "Launch status receipt is too large to render safely: {} bytes",
-            metadata.len()
-        ));
-    }
-
-    let mut contents = String::new();
-    File::open(path)
-        .and_then(|mut file| file.read_to_string(&mut contents))
-        .map_err(|error| format!("Unable to read launch status receipt: {error}"))?;
-    serde_json::from_str(&contents)
-        .map_err(|error| format!("Unable to parse launch status receipt: {error}"))
-}
-
-fn redaction_requires_review(value: &Value) -> bool {
-    let Some(redaction) = value.get("redaction") else {
-        return true;
-    };
-
-    [
-        "exports_source_file_contents",
-        "exports_source_file_paths",
-        "exports_secret_values",
-        "exports_receipt_bodies",
-        "exports_prompts",
-        "exports_transcripts",
-        "exports_command_payloads",
-    ]
-    .into_iter()
-    .any(|field| {
-        redaction
-            .get(field)
-            .and_then(Value::as_bool)
-            .unwrap_or(true)
-    })
-}
-
-fn string_field<'a>(value: &'a Value, field: &str) -> Option<&'a str> {
-    value.get(field).and_then(Value::as_str)
-}
-
-fn pointer_string(value: &Value, pointer: &str, fallback: &str) -> String {
-    value
-        .pointer(pointer)
-        .and_then(Value::as_str)
-        .unwrap_or(fallback)
-        .to_string()
-}
-
-fn pointer_bool(value: &Value, pointer: &str) -> bool {
-    value
-        .pointer(pointer)
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-}
-
-fn pointer_u64(value: &Value, pointer: &str) -> u64 {
-    value.pointer(pointer).and_then(Value::as_u64).unwrap_or(0)
-}
-
-fn pointer_usize(value: &Value, pointer: &str) -> usize {
-    pointer_u64(value, pointer).try_into().unwrap_or(usize::MAX)
 }

@@ -1,3 +1,24 @@
+[2026-05-23] - DX Launch Status Helper Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_status/fields.rs` for launch-status JSON field and pointer helpers.
+- Added `crates/agent_ui/src/dx_launch_status/receipts.rs` for bounded launch-status receipt reads.
+- Added `crates/agent_ui/src/dx_launch_status/review.rs` for launch-status redaction review policy.
+- Added `crates/agent_ui/src/dx_launch_status/summaries.rs` for Agents, Tokens, and Discovery summary parsing plus empty states.
+- Added `script/dx-launch-status-source.test.ts` as the no-build source guard for Launch Status ownership and file budgets.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_status.rs` now stays focused on cache, latest-receipt validation, snapshot assembly, and public snapshot fields at 204 lines.
+
+PASSED:
+- Red/green `node --test script\dx-launch-status-source.test.ts`
+- Adjacent launch workspace/prompts/contract/audit/readiness guards
+- Targeted rustfmt check
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify Launch Status latest-receipt rows, redaction review, Agents, Tokens, and Discovery summaries against real `G:\Dx\.dx\receipts\launch\status-latest.json` in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Contract Helper Split And Fixture Guard
 
 ADDED:
