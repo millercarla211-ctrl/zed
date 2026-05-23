@@ -288,6 +288,18 @@ test("DX launch workspace delegates agents and source rails", () => {
   const agentProviderLabels = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs",
   );
+  const agentProviderDetailLabels = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/provider_labels/detail.rs",
+  );
+  const agentProviderStateLabels = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/provider_labels/state.rs",
+  );
+  const agentProviderTextLabels = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/provider_labels/text.rs",
+  );
+  const agentProviderLabelTests = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/provider_labels_tests.rs",
+  );
   const agentProviders = read("crates/agent_ui/src/dx_launch_workspace/agents/providers.rs");
   const agentReceipts = read("crates/agent_ui/src/dx_launch_workspace/agents/receipts.rs");
   const agentReceiptRows = read(
@@ -364,13 +376,27 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentProviders, /use super::provider_labels::\{/);
   assert.doesNotMatch(agentProviders, /provider\.compatibility\.join/);
   assert.doesNotMatch(agentProviders, /model\.compatibility\.join/);
-  assert.match(agentProviderLabels, /pub\(crate\) fn provider_state_label/);
-  assert.match(agentProviderLabels, /pub\(crate\) fn model_state_label/);
-  assert.match(agentProviderLabels, /pub\(crate\) fn provider_detail_label/);
-  assert.match(agentProviderLabels, /pub\(crate\) fn model_detail_label/);
-  assert.match(agentProviderLabels, /provider_detail_label_trims_blank_compatibility/);
-  assert.match(agentProviderLabels, /model_detail_label_falls_back_for_blank_ids/);
-  assert.match(agentProviderLabels, /detail_labels_disclose_compatibility_overflow/);
+  assert.match(agentProviderLabels, /#\[path = "provider_labels\/detail\.rs"\]/);
+  assert.match(agentProviderLabels, /#\[path = "provider_labels\/state\.rs"\]/);
+  assert.match(agentProviderLabels, /#\[path = "provider_labels\/text\.rs"\]/);
+  assert.match(agentProviderLabels, /#\[path = "provider_labels_tests\.rs"\]/);
+  assert.match(agentProviderLabels, /pub\(crate\) use self::detail::\{/);
+  assert.match(agentProviderLabels, /pub\(crate\) use self::state::\{/);
+  assert.doesNotMatch(agentProviderLabels, /fn provider_state_label/);
+  assert.doesNotMatch(agentProviderLabels, /fn provider_detail_label/);
+  assert.match(agentProviderDetailLabels, /pub\(crate\) fn provider_detail_label/);
+  assert.match(agentProviderDetailLabels, /pub\(crate\) fn model_detail_label/);
+  assert.match(agentProviderDetailLabels, /fn compatibility_label/);
+  assert.match(agentProviderDetailLabels, /use super::text::nonblank_or/);
+  assert.doesNotMatch(agentProviderDetailLabels, /provider_state_label/);
+  assert.match(agentProviderStateLabels, /pub\(crate\) fn provider_state_label/);
+  assert.match(agentProviderStateLabels, /pub\(crate\) fn model_state_label/);
+  assert.match(agentProviderStateLabels, /use super::text::nonblank_or/);
+  assert.doesNotMatch(agentProviderStateLabels, /provider_detail_label/);
+  assert.match(agentProviderTextLabels, /pub\(super\) fn nonblank_or/);
+  assert.match(agentProviderLabelTests, /provider_detail_label_trims_blank_compatibility/);
+  assert.match(agentProviderLabelTests, /model_detail_label_falls_back_for_blank_ids/);
+  assert.match(agentProviderLabelTests, /detail_labels_disclose_compatibility_overflow/);
   assert.match(agentReceipts, /pub\(in super::super\) fn dx_agent_receipt_state/);
   assert.match(agentReceipts, /^mod rows;$/m);
   assert.match(agentReceipts, /use self::rows::dx_agent_receipt_row/);
@@ -417,7 +443,19 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/automations.rs") < 100);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge.rs") < 220);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/summary.rs") < 180);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs") < 150);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs") < 20);
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_workspace/agents/provider_labels/detail.rs") < 55,
+  );
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_workspace/agents/provider_labels/state.rs") < 30,
+  );
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_workspace/agents/provider_labels/text.rs") < 15,
+  );
+  assert.ok(
+    lineCount("crates/agent_ui/src/dx_launch_workspace/agents/provider_labels_tests.rs") < 90,
+  );
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/providers.rs") < 160);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts.rs") < 150);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts/rows.rs") < 180);

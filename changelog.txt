@@ -1,3 +1,26 @@
+[2026-05-23] - DX Agent Provider Label Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/provider_labels/detail.rs` for provider/model detail labels and compatibility overflow text.
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/provider_labels/state.rs` for provider/model state priority labels.
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/provider_labels/text.rs` for shared blank-string fallback text.
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/provider_labels_tests.rs` for the direct pure-label unit tests.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs` is now a 13-line facade that re-exports the focused label helpers.
+- `script/dx-launch-workspace-source.test.ts` now guards provider label facade wiring, detail/state/text/test ownership, and tighter file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Direct `rustc --edition=2024 --test crates\agent_ui\src\dx_launch_workspace\agents\provider_labels.rs`
+- Targeted rustfmt check.
+- Line-count budgets for the provider label facade, detail/state/text modules, and tests.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Agent provider/model labels against real provider catalog receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Audit Warning Split
 
 ADDED:
