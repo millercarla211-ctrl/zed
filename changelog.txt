@@ -1,3 +1,26 @@
+[2026-05-23] - DX Source Sets Helper Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_source_sets/receipts.rs` for bounded receipt discovery and JSON reads.
+- Added `crates/agent_ui/src/dx_source_sets/receipt_fields.rs` for shared JSON field extraction.
+- Added `crates/agent_ui/src/dx_source_sets/formatting.rs` for compact labels, status text, byte formatting, and hash display.
+- Added `crates/agent_ui/src/dx_source_sets/restore.rs` for Forge restore warning classification.
+- Added `script/dx-source-sets-source.test.ts` as the no-build source guard for Source Sets ownership and file budgets.
+
+CHANGED:
+- `crates/agent_ui/src/dx_source_sets.rs` now stays focused on source-set snapshot assembly and receipt-to-source conversion at 408 lines.
+
+PASSED:
+- Red/green `node --test script\dx-source-sets-source.test.ts`
+- Adjacent `node --test script\dx-launch-workspace-source.test.ts`
+- Adjacent `node --test script\dx-deploy-panel-source.test.ts`
+- Adjacent `node --test script\dx-agent-bridge-source.test.ts`
+- Targeted rustfmt check
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify Sources rail workspace, metasearch, reduced-context, media output, and Forge restore rows against real receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Readiness Rail Split
 
 ADDED:

@@ -1,15 +1,20 @@
+mod formatting;
+mod receipt_fields;
+mod receipts;
+mod restore;
+
+use self::formatting::{display_name, format_bytes, short_hash, source_set_status};
+use self::receipt_fields::{array_strings_at, bool_at, string_at, u64_at, usize_at};
+use self::receipts::{ReceiptCandidate, latest_receipts, read_receipt_json};
+use self::restore::forge_restore_warnings;
 use serde_json::Value;
 use std::{
-    cmp::Ordering,
-    fs::{self, File},
-    io::Read,
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant},
 };
 
 const SOURCE_SET_CACHE_TTL: Duration = Duration::from_secs(5);
-const MAX_RECEIPT_BYTES: u64 = 1024 * 1024;
 
 #[derive(Clone)]
 pub(crate) struct DxSourceSetSnapshot {
@@ -213,20 +218,6 @@ fn forge_restore_preview_set(workspace_roots: &[PathBuf]) -> DxSourceSet {
     }
 }
 
-fn source_set_status(
-    workspace_roots: &[PathBuf],
-    sources: &[DxSourceItem],
-    empty_label: &'static str,
-) -> String {
-    if workspace_roots.is_empty() {
-        "No workspace".to_string()
-    } else if sources.is_empty() {
-        empty_label.to_string()
-    } else {
-        format!("{} source(s)", sources.len())
-    }
-}
-
 fn metasearch_source_from_receipt(receipt: &ReceiptCandidate) -> Option<DxSourceItem> {
     let value = read_receipt_json(&receipt.path)?;
     let source_pack = value.get("source_pack").or_else(|| {
@@ -413,169 +404,4 @@ fn receipt_drilldown(label: &'static str, receipt: &ReceiptCandidate) -> DxSourc
         label: label.to_string(),
         detail: format!("{} - {size}", receipt.label),
     }
-}
-
-fn forge_restore_warnings(value: &Value) -> Vec<String> {
-    let restore = value.get("restore").or_else(|| {
-        value
-            .get("restore_execution")
-            .and_then(|value| value.get("restore"))
-    });
-    let Some(restore) = restore else {
-        return vec!["Restore receipt has no restore summary".to_string()];
-    };
-
-    let mut warnings = array_strings_at(restore, &["blockers"]);
-    if bool_at(restore, &["target_mutation_applied"]).unwrap_or_default() {
-        warnings.push("Receipt reports target mutation".to_string());
-    }
-    if bool_at(restore, &["overwrote_existing_files"]).unwrap_or_default() {
-        warnings.push("Receipt reports overwritten files".to_string());
-    }
-    if bool_at(restore, &["ran_shell"]).unwrap_or_default()
-        || bool_at(restore, &["ran_external_process"]).unwrap_or_default()
-    {
-        warnings.push("Receipt reports external execution".to_string());
-    }
-    if !bool_at(restore, &["restore_ready"]).unwrap_or_default() {
-        let status = string_at(restore, &["status"]).unwrap_or_else(|| "not ready".to_string());
-        warnings.push(format!("Restore preview status: {status}"));
-    }
-
-    warnings.truncate(3);
-    warnings
-}
-
-#[derive(Clone)]
-struct ReceiptCandidate {
-    path: PathBuf,
-    label: String,
-    modified: SystemTime,
-}
-
-fn latest_receipts(
-    workspace_root: &Path,
-    receipt_root: &Path,
-    limit: usize,
-) -> Vec<ReceiptCandidate> {
-    let Ok(entries) = fs::read_dir(receipt_root) else {
-        return Vec::new();
-    };
-
-    let mut receipts = Vec::new();
-    for entry in entries.flatten().take(128) {
-        let path = entry.path();
-        if path.is_file() && is_receipt_file(&path) {
-            let modified = path
-                .metadata()
-                .and_then(|metadata| metadata.modified())
-                .unwrap_or(SystemTime::UNIX_EPOCH);
-            let label = path
-                .strip_prefix(workspace_root)
-                .unwrap_or(path.as_path())
-                .display()
-                .to_string();
-            receipts.push(ReceiptCandidate {
-                path,
-                label,
-                modified,
-            });
-        }
-    }
-
-    receipts.sort_by(|left, right| {
-        right
-            .modified
-            .partial_cmp(&left.modified)
-            .unwrap_or(Ordering::Equal)
-    });
-    receipts.truncate(limit);
-    receipts
-}
-
-fn read_receipt_json(path: &Path) -> Option<Value> {
-    let mut file = File::open(path).ok()?;
-    let mut buffer = Vec::new();
-    file.by_ref()
-        .take(MAX_RECEIPT_BYTES)
-        .read_to_end(&mut buffer)
-        .ok()?;
-    serde_json::from_slice(&buffer).ok()
-}
-
-fn value_at<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
-    let mut current = value;
-    for segment in path {
-        current = current.get(*segment)?;
-    }
-    Some(current)
-}
-
-fn string_at(value: &Value, path: &[&str]) -> Option<String> {
-    value_at(value, path)
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned)
-}
-
-fn bool_at(value: &Value, path: &[&str]) -> Option<bool> {
-    value_at(value, path).and_then(Value::as_bool)
-}
-
-fn array_strings_at(value: &Value, path: &[&str]) -> Vec<String> {
-    value_at(value, path)
-        .and_then(Value::as_array)
-        .map(|values| {
-            values
-                .iter()
-                .filter_map(Value::as_str)
-                .map(ToOwned::to_owned)
-                .take(4)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn usize_at(value: &Value, path: &[&str]) -> Option<usize> {
-    value_at(value, path)
-        .and_then(Value::as_u64)
-        .and_then(|value| usize::try_from(value).ok())
-}
-
-fn u64_at(value: &Value, path: &[&str]) -> Option<u64> {
-    value_at(value, path).and_then(Value::as_u64)
-}
-
-fn display_name(path: &Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| path.display().to_string())
-}
-
-fn short_hash(hash: &str) -> String {
-    hash.chars().take(12).collect()
-}
-
-fn format_bytes(bytes: u64) -> String {
-    const KIB: u64 = 1024;
-    const MIB: u64 = KIB * 1024;
-    const GIB: u64 = MIB * 1024;
-
-    if bytes >= GIB {
-        format!("{:.1} GiB", bytes as f64 / GIB as f64)
-    } else if bytes >= MIB {
-        format!("{:.1} MiB", bytes as f64 / MIB as f64)
-    } else if bytes >= KIB {
-        format!("{:.1} KiB", bytes as f64 / KIB as f64)
-    } else {
-        format!("{bytes} B")
-    }
-}
-
-fn is_receipt_file(path: &Path) -> bool {
-    matches!(
-        path.extension().and_then(|extension| extension.to_str()),
-        Some("json" | "jsonl" | "receipt")
-    )
 }
