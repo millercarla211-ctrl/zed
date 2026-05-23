@@ -1,3 +1,24 @@
+[2026-05-23] - DX Agent Bridge Rail Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/bridge.rs` as the focused Agent bridge summary renderer.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/agents.rs` is now a 13-line module index that re-exports focused bridge, provider, receipt, social, and automation rails.
+- `script/dx-launch-workspace-source.test.ts` now guards Agent bridge module registration, parent delegation, warning IDs, helper ownership, and the tiny Agent module budget.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Adjacent agent bridge, deploy panel, and source-set guards.
+- Targeted rustfmt check.
+- `git diff --check`.
+- Conflict-marker scan on touched files.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Agent bridge summary rows against real DX Agents contract, import-summary, release-gate, and action-error receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Agent Activity Rail Split
 
 ADDED:

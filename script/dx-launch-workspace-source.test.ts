@@ -208,6 +208,7 @@ test("DX launch workspace delegates agents and source rails", () => {
   const agentAutomations = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/automations.rs",
   );
+  const agentBridge = read("crates/agent_ui/src/dx_launch_workspace/agents/bridge.rs");
   const agentProviderLabels = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs",
   );
@@ -225,20 +226,22 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(parent, /sources::source_set_stack/);
   assert.doesNotMatch(parent, /fn dx_agent_bridge_state/);
   assert.doesNotMatch(parent, /fn source_set_stack/);
-  assert.match(agents, /pub\(super\) fn dx_agent_bridge_state/);
   assert.match(agents, /^mod actions;$/m);
   assert.match(agents, /^mod automations;$/m);
+  assert.match(agents, /^mod bridge;$/m);
   assert.match(agents, /^mod provider_labels;$/m);
   assert.match(agents, /^mod providers;$/m);
   assert.match(agents, /^mod receipts;$/m);
   assert.match(agents, /^mod social;$/m);
   assert.match(agents, /^mod social_actions;$/m);
   assert.match(agents, /pub\(super\) use automations::dx_agent_automation_state/);
+  assert.match(agents, /pub\(super\) use bridge::dx_agent_bridge_state/);
   assert.match(agents, /pub\(super\) use providers::dx_agent_provider_state/);
   assert.match(agents, /pub\(super\) use receipts::dx_agent_receipt_state/);
   assert.match(agents, /pub\(super\) use social::dx_agent_social_state/);
   assert.doesNotMatch(agents, /fn dx_agent_action_line/);
   assert.doesNotMatch(agents, /fn dx_agent_automation_row/);
+  assert.doesNotMatch(agents, /fn dx_agent_bridge_state/);
   assert.doesNotMatch(agents, /fn dx_agent_provider_row/);
   assert.doesNotMatch(agents, /fn dx_agent_model_row/);
   assert.doesNotMatch(agents, /fn dx_agent_receipt_row/);
@@ -252,6 +255,14 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentAutomations, /DxAgentAutomation/);
   assert.match(agentAutomations, /dx-agent-automation-\{ix\}/);
   assert.match(agentAutomations, /use super::actions::dx_agent_action_line/);
+  assert.match(agentBridge, /pub\(in super::super\) fn dx_agent_bridge_state/);
+  assert.match(agentBridge, /DxAgentBridgeSnapshot/);
+  assert.match(agentBridge, /dx-agent-action-error/);
+  assert.match(agentBridge, /dx-agent-release-gate-blocker/);
+  assert.match(agentBridge, /dx-agent-import-summary-fanout-review/);
+  assert.match(agentBridge, /dx-agent-contract-redaction-review/);
+  assert.match(agentBridge, /dx-agent-bridge-error/);
+  assert.match(agentBridge, /use super::super::\{metric_row, muted_card, signal_row\}/);
   assert.match(agentProviders, /pub\(in super::super\) fn dx_agent_provider_state/);
   assert.match(agentProviders, /fn dx_agent_provider_row/);
   assert.match(agentProviders, /fn dx_agent_model_row/);
@@ -287,9 +298,10 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentSocialActions, /manual_revoke_required/);
   assert.match(sources, /pub\(super\) fn source_set_stack/);
   assert.match(sources, /pub\(super\) fn receipt_source_state/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents.rs") < 360);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents.rs") < 40);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/actions.rs") < 60);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/automations.rs") < 100);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge.rs") < 340);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/provider_labels.rs") < 150);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/providers.rs") < 160);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts.rs") < 300);
