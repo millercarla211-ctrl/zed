@@ -1,8 +1,15 @@
+mod fields;
+mod packets;
+mod review;
+
+use self::fields::{
+    array_len, bool_field, pointer_string, pointer_string_array, string_field, usize_field,
+};
+use self::packets::read_json_packet;
+use self::review::redaction_requires_review;
 use serde_json::Value;
 use std::{
-    fs::File,
-    io::Read,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Mutex, OnceLock},
     time::{Duration, Instant},
 };
@@ -15,7 +22,6 @@ const HANDOFF_SCHEMA: &str = "dx.launch.handoff.v1";
 const DX_LAUNCH_IMPORT_MANIFEST_COMMAND: &str = "dx launch import-manifest --json";
 const DX_LAUNCH_HANDOFF_COMMAND: &str = "dx launch handoff --json";
 const LAUNCH_CONTRACT_CACHE_TTL: Duration = Duration::from_secs(5);
-const MAX_PACKET_BYTES: u64 = 256 * 1024;
 
 #[derive(Clone)]
 pub(crate) struct DxLaunchContractSnapshot {
@@ -238,90 +244,4 @@ fn scan_launch_contracts() -> DxLaunchContractSnapshot {
         next_action: next_action.to_string(),
         redaction_requires_review,
     }
-}
-
-fn read_json_packet(path: &Path) -> Result<Value, String> {
-    let metadata = path
-        .metadata()
-        .map_err(|error| format!("Unable to inspect launch contract packet: {error}"))?;
-    if metadata.len() > MAX_PACKET_BYTES {
-        return Err(format!(
-            "Launch contract packet is too large to render safely: {} bytes",
-            metadata.len()
-        ));
-    }
-
-    let mut contents = String::new();
-    File::open(path)
-        .and_then(|mut file| file.read_to_string(&mut contents))
-        .map_err(|error| format!("Unable to read launch contract packet: {error}"))?;
-    serde_json::from_str(&contents)
-        .map_err(|error| format!("Unable to parse launch contract packet: {error}"))
-}
-
-fn string_field<'a>(value: &'a Value, field: &str) -> Option<&'a str> {
-    value.get(field).and_then(Value::as_str)
-}
-
-fn usize_field(value: &Value, field: &str) -> Option<usize> {
-    value
-        .get(field)
-        .and_then(Value::as_u64)
-        .and_then(|value| value.try_into().ok())
-}
-
-fn bool_field(value: &Value, field: &str) -> bool {
-    value.get(field).and_then(Value::as_bool).unwrap_or(false)
-}
-
-fn array_len(value: &Value, field: &str) -> usize {
-    value
-        .get(field)
-        .and_then(Value::as_array)
-        .map(Vec::len)
-        .unwrap_or_default()
-}
-
-fn pointer_string<'a>(value: Option<&'a Value>, pointer: &str) -> Option<&'a str> {
-    value
-        .and_then(|value| value.pointer(pointer))
-        .and_then(Value::as_str)
-}
-
-fn pointer_string_array(value: Option<&Value>, pointer: &str) -> Vec<String> {
-    value
-        .and_then(|value| value.pointer(pointer))
-        .and_then(Value::as_array)
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(Value::as_str)
-                .take(8)
-                .map(ToString::to_string)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn redaction_requires_review(value: &Value) -> bool {
-    let Some(redaction) = value.get("redaction") else {
-        return true;
-    };
-
-    [
-        "exports_source_file_contents",
-        "exports_source_file_paths",
-        "exports_secret_values",
-        "exports_receipt_bodies",
-        "exports_prompts",
-        "exports_transcripts",
-        "exports_command_payloads",
-    ]
-    .into_iter()
-    .any(|field| {
-        redaction
-            .get(field)
-            .and_then(Value::as_bool)
-            .unwrap_or(true)
-    })
 }

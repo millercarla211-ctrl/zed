@@ -1,3 +1,28 @@
+[2026-05-23] - DX Launch Contract Helper Split And Fixture Guard
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_contracts/fields.rs` for launch-contract JSON field helpers.
+- Added `crates/agent_ui/src/dx_launch_contracts/packets.rs` for bounded launch-contract packet reads.
+- Added `crates/agent_ui/src/dx_launch_contracts/review.rs` for launch-contract redaction review policy.
+- Added `script/dx-launch-contracts-source.test.ts` as the no-build source guard for Launch Contract ownership and file budgets.
+- Added `script/dx-launch-contracts-fixtures.test.ts` as the no-build guard for the real DX launch handoff/import-manifest packets.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_contracts.rs` now stays focused on cache, import-manifest/handoff scan, snapshot assembly, and public snapshot fields at 248 lines.
+- The fixture guard validates `G:\Dx\cli\fixtures\launch-examples\import-manifest.json` and `handoff.json` for schemas, ready state, nonblank next actions, metadata-only redaction, zero nested command fanout, packet call order, required commands, polling policy, cached receipt path, and action-map safety.
+
+PASSED:
+- Red/green `node --test script\dx-launch-contracts-source.test.ts`
+- Red/green `node --test script\dx-launch-contracts-fixtures.test.ts`
+- Adjacent launch workspace/prompts/audit/readiness guards
+- Targeted rustfmt check
+- `git diff --check`
+- Conflict-marker scan on touched files
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Launch Handoff rows and import-manifest packet rows against these real fixtures in the governed Zed proof window.
+
 [2026-05-23] - DX Launch Audit Fixture Guard
 
 ADDED:
