@@ -9,6 +9,7 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const expectedModules = [
     "crates/agent_ui/src/dx_launch_workspace/agents.rs",
+    "crates/agent_ui/src/dx_launch_workspace/audit.rs",
     "crates/agent_ui/src/dx_launch_workspace/binary_cache.rs",
     "crates/agent_ui/src/dx_launch_workspace/binary_cache_labels.rs",
     "crates/agent_ui/src/dx_launch_workspace/check.rs",
@@ -30,6 +31,7 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   }
 
   assert.match(parent, /^mod agents;$/m);
+  assert.match(parent, /^mod audit;$/m);
   assert.match(parent, /^mod binary_cache;$/m);
   assert.match(parent, /^mod binary_cache_labels;$/m);
   assert.match(parent, /^mod check;$/m);
@@ -48,6 +50,21 @@ test("DX launch workspace UI stays split by rail ownership", () => {
     lineCount("crates/agent_ui/src/dx_launch_workspace.rs") < 1000,
     "dx_launch_workspace.rs should stay a coordinator instead of owning every rail",
   );
+});
+
+test("DX launch workspace delegates Launch Audit rail rendering", () => {
+  const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
+  const audit = read("crates/agent_ui/src/dx_launch_workspace/audit.rs");
+
+  assert.match(parent, /audit::launch_audit_state/);
+  assert.doesNotMatch(parent, /fn launch_audit_state/);
+  assert.match(audit, /pub\(super\) fn launch_audit_state/);
+  assert.match(audit, /DxLaunchAuditSnapshot/);
+  assert.match(audit, /dx-launch-audit-warning/);
+  assert.match(audit, /dx-launch-audit-redaction-review/);
+  assert.match(audit, /dx-launch-audit-fanout-review/);
+  assert.match(audit, /use super::\{bounded_items, metric_row, muted_card, signal_row\}/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/audit.rs") < 150);
 });
 
 test("DX launch workspace delegates Source Audit rail rendering", () => {

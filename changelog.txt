@@ -1,3 +1,24 @@
+[2026-05-23] - DX Launch Audit Rail Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/audit.rs` as the focused Launch Audit right-rail renderer.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace.rs` now delegates Launch Audit rail rendering through `audit::launch_audit_state` and stays focused on workspace composition at 699 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards Launch Audit module registration, parent delegation, warning IDs, and the Launch Audit rail file budget.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Adjacent launch audit source/fixture, launch prompts, source-audit, and deploy panel guards
+- Targeted rustfmt check
+- `git diff --check`
+- Conflict-marker scan on touched files
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Launch Audit rail rows against real `G:\Dx\cli\fixtures\launch-examples` packets in the governed native Zed proof window.
+
 [2026-05-23] - DX Launch Source Audit Rail Split
 
 ADDED:
