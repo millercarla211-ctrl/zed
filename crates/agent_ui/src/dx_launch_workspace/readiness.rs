@@ -1,12 +1,12 @@
 use gpui::{AnyElement, App, prelude::*};
-use ui::{Color, prelude::*};
 
 use crate::dx_launch_readiness::DxLaunchReadinessSnapshot;
 
-use self::{examples::launch_readiness_example_rows, warnings::launch_readiness_warning};
-use super::{bounded_items, metric_row, muted_card};
+use self::{examples::launch_readiness_example_rows, status::launch_readiness_status_row};
+use super::{bounded_items, metric_row};
 
 mod examples;
+mod status;
 mod warnings;
 
 pub(super) fn launch_readiness_state(snapshot: &DxLaunchReadinessSnapshot, cx: &App) -> AnyElement {
@@ -75,26 +75,7 @@ pub(super) fn launch_readiness_state(snapshot: &DxLaunchReadinessSnapshot, cx: &
         ))
         .child(metric_row("Recovery", recovery));
 
-    if !snapshot.root_exists {
-        stack = stack.child(muted_card(
-            format!(
-                "Missing source-owned launch examples: {}",
-                snapshot.root.display()
-            ),
-            cx,
-        ));
-    }
-
-    if let Some(warning) = launch_readiness_warning(snapshot) {
-        stack = stack.child(warning);
-    } else {
-        stack = stack.child(
-            Label::new(snapshot.next_action.clone())
-                .size(LabelSize::XSmall)
-                .color(Color::Muted)
-                .truncate(),
-        );
-    }
+    stack = stack.child(launch_readiness_status_row(snapshot, cx));
 
     for row in launch_readiness_example_rows(snapshot) {
         stack = stack.child(row);

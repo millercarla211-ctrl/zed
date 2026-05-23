@@ -1,3 +1,22 @@
+[2026-05-23] - DX Launch Gate Status Row Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/readiness/status.rs` for Launch Gate missing-root, warning, and next-action rows.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/readiness.rs` now delegates status row rendering through the focused helper and stays focused on Launch Gate metrics, bounded freshness/fallback/recovery rows, and example rows at 85 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards status module registration, shell delegation, missing-root/warning/next-action ownership, and tighter readiness/status budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Launch Gate shell and status helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Launch Gate status rows against real import-summary, release-gate, and fallback-drill packets in the governed native Zed proof window.
+
 [2026-05-23] - DX Tool History Summary Row Split
 
 ADDED:
