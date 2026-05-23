@@ -494,6 +494,9 @@ test("DX launch workspace delegates agents and source rails", () => {
     "crates/agent_ui/src/dx_launch_workspace/agents/automations/rows.rs",
   );
   const agentBridge = read("crates/agent_ui/src/dx_launch_workspace/agents/bridge.rs");
+  const agentBridgeDetails = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/bridge/details.rs",
+  );
   const agentBridgeReview = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/bridge/review.rs",
   );
@@ -623,20 +626,44 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentAutomationRows, /use super::super::super::metric_row/);
   assert.match(agentBridge, /pub\(in super::super\) fn dx_agent_bridge_state/);
   assert.match(agentBridge, /DxAgentBridgeSnapshot/);
+  assert.match(agentBridge, /^mod details;$/m);
   assert.match(agentBridge, /^mod review;$/m);
   assert.match(agentBridge, /^mod summary;$/m);
+  assert.match(agentBridge, /use self::details::dx_agent_bridge_detail_rows/);
   assert.match(agentBridge, /use self::review::dx_agent_bridge_review_row/);
   assert.match(agentBridge, /use self::summary::dx_agent_bridge_summary_rows/);
   assert.match(agentBridge, /children\(dx_agent_bridge_summary_rows\(snapshot\)\)/);
+  assert.match(agentBridge, /children\(dx_agent_bridge_detail_rows\(snapshot\)\)/);
   assert.match(agentBridge, /child\(dx_agent_bridge_review_row\(snapshot\)\)/);
   assert.doesNotMatch(agentBridge, /recovery_counts\.label/);
+  assert.doesNotMatch(agentBridge, /metric_row\(/);
+  assert.doesNotMatch(agentBridge, /Failed Command/);
+  assert.doesNotMatch(agentBridge, /Catalog Regen/);
+  assert.doesNotMatch(agentBridge, /Import Command/);
+  assert.doesNotMatch(agentBridge, /Gate Row/);
+  assert.doesNotMatch(agentBridge, /dx-agent-action-error-redaction/);
   assert.match(agentBridge, /dx-agent-action-error/);
   assert.doesNotMatch(agentBridge, /dx-agent-release-gate-blocker/);
   assert.doesNotMatch(agentBridge, /dx-agent-import-summary-fanout-review/);
   assert.doesNotMatch(agentBridge, /dx-agent-contract-redaction-review/);
   assert.doesNotMatch(agentBridge, /dx-agent-bridge-error/);
   assert.doesNotMatch(agentBridge, /snapshot\.last_error/);
-  assert.match(agentBridge, /use super::super::\{metric_row, muted_card, signal_row\}/);
+  assert.match(agentBridge, /use super::super::\{muted_card, signal_row\}/);
+  assert.match(agentBridgeDetails, /pub\(super\) fn dx_agent_bridge_detail_rows/);
+  assert.match(agentBridgeDetails, /Vec<AnyElement>/);
+  assert.match(agentBridgeDetails, /DxAgentBridgeSnapshot/);
+  assert.match(agentBridgeDetails, /metric_row\("Latest"/);
+  assert.match(agentBridgeDetails, /metric_row\(\s*"Failed Command"/);
+  assert.match(agentBridgeDetails, /metric_row\(\s*"Catalog Regen"/);
+  assert.match(agentBridgeDetails, /metric_row\(\s*"Import Command"/);
+  assert.match(agentBridgeDetails, /metric_row\(\s*"Gate Row"/);
+  assert.match(agentBridgeDetails, /dx-agent-action-error-redaction/);
+  assert.match(agentBridgeDetails, /signal_row/);
+  assert.match(agentBridgeDetails, /Color::Warning/);
+  assert.match(agentBridgeDetails, /latest_receipts\.first\(\)/);
+  assert.match(agentBridgeDetails, /contract_summary\.commands\.first\(\)/);
+  assert.match(agentBridgeDetails, /release_gate\.acceptance_rows\.first\(\)/);
+  assert.match(agentBridgeDetails, /use super::super::super::\{metric_row, signal_row\}/);
   assert.match(agentBridgeReview, /pub\(super\) fn dx_agent_bridge_review_row/);
   assert.match(agentBridgeReview, /DxAgentBridgeSnapshot/);
   assert.match(agentBridgeReview, /^mod next_action;$/m);
@@ -950,7 +977,8 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.ok(
     lineCount("crates/agent_ui/src/dx_launch_workspace/agents/automations/rows.rs") < 70,
   );
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge.rs") < 105);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge.rs") < 70);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/details.rs") < 60);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/review.rs") < 35);
   assert.ok(
     lineCount("crates/agent_ui/src/dx_launch_workspace/agents/bridge/review/next_action.rs") <

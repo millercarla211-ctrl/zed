@@ -1,3 +1,23 @@
+[2026-05-23] - DX Agent Bridge Detail Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/bridge/details.rs` for Agent bridge latest-receipt, failed-command, redaction, contract, import, and gate detail rows.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/agents/bridge.rs` now delegates detail rows through the focused helper while preserving the existing display order and staying focused on the bridge rail shell at 49 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards detail module registration, shell delegation, detail row ownership, redaction detail ownership, and tighter bridge/detail budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Full lightweight source guard set: `node --test script\dx-launch-workspace-source.test.ts script\dx-launch-audit-source.test.ts script\dx-launch-audit-fixtures.test.ts script\dx-launch-source-audit-source.test.ts script\dx-launch-status-source.test.ts script\dx-launch-receipts-source.test.ts script\dx-agent-bridge-source.test.ts script\dx-deploy-panel-source.test.ts script\dx-source-sets-source.test.ts`
+- Targeted `rustfmt --edition 2024 --check` on the touched Rust files.
+- Line-count budgets for the bridge shell and detail helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Agent bridge detail rows against real DX Agents latest receipt, action-error, contract, import-summary, and release-gate receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Agent Bridge Gate Recovery Split
 
 ADDED:
