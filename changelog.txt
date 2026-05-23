@@ -1,3 +1,22 @@
+[2026-05-23] - DX Check Summary Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/check/summary.rs` for Check rail summary metric rows, label formatting, scoring-config state, detail-command rows, and bounded checked/skipped path samples.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/check.rs` now delegates Check summary rows through the focused helper and stays focused on receipt state, sections, blockers, warnings, quick fixes, rail score, and top-level blocker composition at 68 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards summary module registration, shell delegation, summary label ownership, path/skip sample ownership, and tighter Check/summary file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Check shell, summary helper, and row helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Check summary rows against a real `check-latest.json` receipt in the governed native Zed proof window.
+
 [2026-05-23] - DX Source Audit Status Row Split
 
 ADDED:
