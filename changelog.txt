@@ -1,3 +1,22 @@
+[2026-05-23] - DX Agent Receipt Status Split
+
+ADDED:
+- Added `crates/agent_ui/src/dx_launch_workspace/agents/receipts/status.rs` for Agent receipt root-state labels and warning rows.
+
+CHANGED:
+- `crates/agent_ui/src/dx_launch_workspace/agents/receipts.rs` now delegates receipt root-missing, inbox-root-missing, inbox-malformed, index-error, and unsafe-row warning selection through the focused status helper and stays focused on receipt index/inbox metrics, missing CLI prompt, latest receipt row, renderable receipt rows, inbox review summary, and next-action text at 89 lines.
+- `script/dx-launch-workspace-source.test.ts` now guards status module registration, parent delegation, status row ID ownership, root-state ownership, and tighter receipt/status file budgets.
+- Updated `DX.md` and `todo.txt` with the exact source-only status and next proof action.
+
+PASSED:
+- Red/green `node --test script\dx-launch-workspace-source.test.ts`
+- Targeted rustfmt check.
+- Line-count budgets for the Agent receipt coordinator and status helper.
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, live editor runtime, provider call, cloud write, or deploy execution ran in this slice.
+- Exact next action: verify native Agent receipt warning/status rows against real DX Agents receipt-index and inbox receipts in the governed native Zed proof window.
+
 [2026-05-23] - DX Agent Provider Row Split
 
 ADDED:

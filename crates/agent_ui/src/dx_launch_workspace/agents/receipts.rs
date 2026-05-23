@@ -1,13 +1,15 @@
 use gpui::{AnyElement, App, SharedString, prelude::*};
-use ui::{Color, IconName, prelude::*};
+use ui::{Color, prelude::*};
 
 use crate::dx_agent_bridge::DxAgentBridgeSnapshot;
 
 use self::rows::dx_agent_receipt_row;
-use super::super::{metric_row, muted_card, signal_row};
+use self::status::{dx_agent_receipt_root_state, dx_agent_receipt_warning_rows};
+use super::super::{metric_row, muted_card};
 
 mod labels;
 mod rows;
+mod status;
 
 pub(in super::super) fn dx_agent_receipt_state(
     snapshot: &DxAgentBridgeSnapshot,
@@ -41,50 +43,14 @@ pub(in super::super) fn dx_agent_receipt_state(
         .child(metric_row("Redacted", redacted_count.to_string()))
         .child(metric_row("Unsafe", unsafe_count.to_string()));
 
-    if index.receipt_root_present == Some(false) {
-        stack = stack.child(signal_row(
-            "dx-agent-receipt-root-missing".into(),
-            IconName::Warning,
-            Color::Warning,
-            "DX Agents receipt root was missing before the latest receipt refresh.".to_string(),
-        ));
-    }
-    if inbox.receipt_dir_present == Some(false) {
-        stack = stack.child(signal_row(
-            "dx-agent-receipt-inbox-root-missing".into(),
-            IconName::Warning,
-            Color::Warning,
-            "DX Agents receipt inbox reports a missing receipt directory.".to_string(),
-        ));
-    } else if inbox.malformed_count > 0 {
-        stack = stack.child(signal_row(
-            "dx-agent-receipt-inbox-malformed".into(),
-            IconName::Warning,
-            Color::Warning,
-            format!(
-                "DX Agents receipt inbox found {} malformed receipt(s).",
-                inbox.malformed_count
-            ),
-        ));
-    }
+    stack = stack.children(dx_agent_receipt_warning_rows(snapshot, unsafe_count));
 
     if !index.present {
         stack = stack.child(muted_card("Run dx agents receipts list --json", cx));
-    } else if let Some(error) = index.last_error.as_ref() {
-        stack = stack.child(signal_row(
-            "dx-agent-receipt-index-error".into(),
-            IconName::Warning,
-            Color::Warning,
-            format!("DX Agents receipt index error: {error}"),
-        ));
-    } else if unsafe_count > 0 {
-        stack = stack.child(signal_row(
-            "dx-agent-receipt-unsafe-row".into(),
-            IconName::Warning,
-            Color::Warning,
-            "DX Agents receipt index contains rows that are not safe to render.".to_string(),
-        ));
-    } else if let Some(path) = index.latest_receipt_path.as_ref() {
+    } else if index.last_error.is_none()
+        && unsafe_count == 0
+        && let Some(path) = index.latest_receipt_path.as_ref()
+    {
         stack = stack.child(metric_row("Latest", path.clone()));
     }
 
@@ -120,13 +86,4 @@ pub(in super::super) fn dx_agent_receipt_state(
                 .truncate(),
         )
         .into_any_element()
-}
-
-fn dx_agent_receipt_root_state(receipt_root_present: Option<bool>, root_exists: bool) -> String {
-    match receipt_root_present {
-        Some(true) => "present".to_string(),
-        Some(false) => "missing before refresh".to_string(),
-        None if root_exists => "present".to_string(),
-        None => "missing".to_string(),
-    }
 }
