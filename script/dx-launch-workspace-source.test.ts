@@ -778,17 +778,29 @@ test("DX launch workspace delegates Check rail rendering", () => {
 test("DX launch workspace delegates Tool History rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const toolHistory = read("crates/agent_ui/src/dx_launch_workspace/tool_history.rs");
+  const toolHistoryRows = read("crates/agent_ui/src/dx_launch_workspace/tool_history/rows.rs");
 
   assert.match(parent, /tool_history::tool_history_state/);
   assert.doesNotMatch(parent, /fn tool_history_state/);
   assert.doesNotMatch(parent, /fn tool_history_bucket/);
   assert.doesNotMatch(parent, /fn tool_history_summary_row/);
+  assert.match(toolHistory, /^mod rows;$/m);
+  assert.match(toolHistory, /use self::rows::tool_history_bucket/);
   assert.match(toolHistory, /pub\(super\) fn tool_history_state/);
-  assert.match(toolHistory, /fn tool_history_bucket/);
-  assert.match(toolHistory, /fn tool_history_summary_row/);
-  assert.match(toolHistory, /DxToolHistoryReceiptSummary/);
+  assert.doesNotMatch(toolHistory, /fn tool_history_bucket/);
+  assert.doesNotMatch(toolHistory, /fn tool_history_summary_row/);
+  assert.doesNotMatch(toolHistory, /DxToolHistoryReceiptSummary/);
   assert.match(toolHistory, /dx-tool-history-\{ix\}/);
-  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/tool_history.rs") < 150);
+  assert.match(toolHistoryRows, /pub\(super\) fn tool_history_bucket/);
+  assert.match(toolHistoryRows, /fn tool_history_summary_row/);
+  assert.match(toolHistoryRows, /DxToolHistoryReceiptSummary/);
+  assert.match(toolHistoryRows, /bucket\.latest_summaries/);
+  assert.match(toolHistoryRows, /target_path/);
+  assert.match(toolHistoryRows, /restore_destination_root/);
+  assert.match(toolHistoryRows, /blocker_count/);
+  assert.match(toolHistoryRows, /source_row/);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/tool_history.rs") < 35);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/tool_history/rows.rs") < 115);
 });
 
 test("DX launch workspace delegates Proof rail rendering", () => {
