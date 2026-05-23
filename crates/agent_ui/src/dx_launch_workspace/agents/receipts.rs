@@ -8,6 +8,7 @@ use self::status::{dx_agent_receipt_root_state, dx_agent_receipt_warning_rows};
 use super::super::{metric_row, muted_card};
 
 mod labels;
+mod row_details;
 mod rows;
 mod status;
 
