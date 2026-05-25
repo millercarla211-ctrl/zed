@@ -1,8 +1,10 @@
+mod dx_editor_toolchain;
 mod formatting;
 mod receipt_fields;
 mod receipts;
 mod restore;
 
+use self::dx_editor_toolchain::dx_editor_toolchain_set;
 use self::formatting::{display_name, format_bytes, short_hash, source_set_status};
 use self::receipt_fields::{array_strings_at, bool_at, string_at, u64_at, usize_at};
 use self::receipts::{ReceiptCandidate, latest_receipts, read_receipt_json};
@@ -50,6 +52,9 @@ impl DxSourceSetSnapshot {
                     summary.restore_previews += 1;
                     summary.attachable_sources += 1;
                 }
+                DxSourceKind::DxToolchainConfig => {
+                    summary.attachable_sources += 1;
+                }
             }
         }
 
@@ -88,6 +93,7 @@ pub(crate) enum DxSourceKind {
     ReducedContextReceipt,
     MediaOutput,
     ForgeRestorePreview,
+    DxToolchainConfig,
 }
 
 static SOURCE_SET_CACHE: OnceLock<Mutex<Option<(Instant, Vec<String>, DxSourceSetSnapshot)>>> =
@@ -122,6 +128,7 @@ fn scan_source_sets(workspace_roots: &[String]) -> DxSourceSetSnapshot {
         .collect::<Vec<_>>();
     let sets = vec![
         workspace_root_set(&workspace_roots),
+        dx_editor_toolchain_set(&workspace_roots),
         metasearch_source_pack_set(&workspace_roots),
         reduced_context_set(&workspace_roots),
         media_output_set(&workspace_roots),

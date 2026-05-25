@@ -9,5 +9,6 @@ pub(super) fn source_kind_icon(kind: DxSourceKind) -> IconName {
         DxSourceKind::ReducedContextReceipt => IconName::FileTextOutlined,
         DxSourceKind::MediaOutput => IconName::File,
         DxSourceKind::ForgeRestorePreview => IconName::Archive,
+        DxSourceKind::DxToolchainConfig => IconName::Settings,
     }
 }

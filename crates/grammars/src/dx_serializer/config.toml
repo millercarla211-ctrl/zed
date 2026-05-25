@@ -1,0 +1,18 @@
+name = "DX Serializer"
+code_fence_block_name = "dx"
+grammar = "bash"
+path_suffixes = ["sr"]
+line_comments = ["// ", "# "]
+modeline_aliases = ["dx", "dx-serializer", "sr"]
+autoclose_before = "])"
+tab_size = 3
+word_characters = ["-", "_", ".", "/", "@"]
+completion_query_characters = ["-", "_", ".", "/", "@"]
+increase_indent_pattern = "^\\s*[A-Za-z_][A-Za-z0-9_.-]*(\\[[^\\]]+\\])?\\(\\s*$"
+decrease_indent_pattern = "^\\s*\\)\\s*$"
+
+brackets = [
+    { start = "(", end = ")", close = true, surround = true, newline = true },
+    { start = "[", end = "]", close = true, surround = true, newline = false },
+    { start = "\"", end = "\"", close = true, surround = true, newline = false, not_in = ["comment", "string"] },
+]

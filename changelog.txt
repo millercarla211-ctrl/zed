@@ -1,3 +1,20 @@
+[2026-05-25] - DX Serializer Language Defaults
+
+ADDED:
+- Added `crates/grammars/src/dx_serializer/config.toml` for the built-in DX Serializer language, using 3-space indentation and `.sr` text suffixes.
+- Added `crates/grammars/src/dx_serializer/highlights.scm` and `brackets.scm` for source-level highlighting and bracket pairing.
+- Added a DX Config source set in the DX launch workspace rail so workspaces with an extensionless `dx` file surface their serializer cache, `.sr` inputs, `.tsx` `className` -> `dx style build`, `.tsx` `<icon ...>` -> `dx icons sync`, `dx`/`.sr` -> `dx serializer`, 500-point check/lighthouse config, and `.dx/www/output` expectation without running the tools automatically.
+
+CHANGED:
+- `crates/languages/src/lib.rs` now registers `dx_serializer` as a built-in language.
+- `assets/settings/default.json` now maps extensionless `dx` and `sr` files to `DX Serializer` by default.
+- The DX Serializer grammar now treats `.sr` as the text suffix and relies on the default file-type mapping for the extensionless `dx` config file, keeping `.machine` output out of text highlighting.
+
+NOTES:
+- This is a Zed-native language registration using the existing tree-sitter language path; it does not require an external language server.
+- No check, test, build, format, `just run`, local server, or live editor runtime proof ran because the user explicitly forbade code-editor test/run commands.
+- Exact next action: when verification is allowed, run the smallest Zed language-loading proof or open `dx` plus `.sr` in the fork to confirm the visible color scopes.
+
 [2026-05-23] - DX Agent Bridge Detail Split
 
 ADDED:

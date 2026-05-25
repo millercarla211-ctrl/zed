@@ -2030,6 +2030,7 @@
   // }
   //
   "file_types": {
+    "DX Serializer": ["**/dx", "sr"],
     "JSONC": [
       "**/.zed/*.json",
       "**/.vscode/**/*.json",
