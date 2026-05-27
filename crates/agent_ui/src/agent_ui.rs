@@ -19,6 +19,7 @@ mod dx_deploy_capabilities;
 mod dx_deploy_check_roots;
 mod dx_deploy_gate_rail;
 mod dx_deploy_hub_roots;
+mod dx_deploy_invalid_receipts;
 mod dx_deploy_launch_action_labels;
 mod dx_deploy_launch_actions;
 mod dx_deploy_launch_actions_rail;

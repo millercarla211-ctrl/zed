@@ -1,9 +1,65 @@
+[2026-05-28] - Six-Agent Source Production Hardening
+
+ADDED:
+- Added `crates/agent_ui/src/dx_deploy_invalid_receipts.rs` for bounded dx-deploy receipt JSON reads and invalid-receipt diagnostics.
+- Added `script\dx-windows-reliability-source.test.ts` for Windows scanner/minidump source-guard coverage.
+
+CHANGED:
+- Deploy capability rails and prompts now surface malformed deploy plan/status/provider-gate/matrix receipts instead of collapsing them into missing state.
+- DX Studio session snapshots now expose per-manifest candidate read/parse/schema/edit-contract status, invalid candidate counts, skipped preview-index candidates, and TypeScript edit-contract summary loading.
+- Sidebar and Call now consume cached/event-carried active workspace handles in additional reentrant update paths instead of re-reading `MultiWorkspace`.
+- Windows scanner and minidump handling now keep expected system-entry metadata failures and local/dev missing-commit upload skips quiet while preserving non-dev warnings.
+- `DX.md` and `todo.txt` now describe this pass as source-verified only and keep runtime proof gated on explicit `just run` authorization.
+
+PASSED:
+- `node --test script\dx-windows-reliability-source.test.ts script\dx-source-quality.test.ts script\dx-deploy-receipts-source.test.ts script\dx-deploy-panel-source.test.ts script\dx-workspace-reentrant-source.test.ts script\dx-deploy-launch-gate-source.test.ts script\dx-deploy-launch-evidence-source.test.ts`
+- `rustfmt --edition 2024 --check --config skip_children=true crates\agent_ui\src\agent_ui.rs`
+- `rustfmt --edition 2024 --check` on the edited Rust files
+- Conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Skipped Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof by direct instruction.
+
+[2026-05-28] - DX Studio Manifest Candidate Visibility
+
+ADDED:
+- `script/dx-source-quality.test.ts` now guards that the DX Studio session exposes invalid/unreadable/malformed manifest candidates instead of silently skipping them.
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_session.rs` now records per-candidate read, parse, schema, candidate, and edit-contract status for DX Studio preview/edit manifests.
+- `crates/web_preview/src/dx_studio/manifest.rs` now reuses the existing TypeScript edit-contract parser so the DX Studio session summary does not report stale inactive state when `dx-studio-edit-contract.ts` is the active source contract.
+- The DX Studio session snapshot now includes invalid candidate counts and candidate details for preview and edit manifests.
+- Preview manifest index selection now reports skipped unreadable or malformed JSON candidates while still preserving the loaded fallback index when one exists.
+
+PASSED:
+- `node --test script\dx-source-quality.test.ts`
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_studio_session.rs crates\web_preview\src\dx_studio\manifest.rs crates\web_preview\src\dx_studio_source_edit.rs crates\web_preview\src\dx_studio_source_edit\manifest_ts.rs`
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, commit, or push ran in this Worker 2 slice.
+- Exact next action: compare the session JSON against real malformed/unreadable DX Studio manifest candidates in a governed native Web Preview proof window.
+
+[2026-05-28] - DX Windows Reliability Source Guard
+
+ADDED:
+- Added `script\dx-windows-reliability-source.test.ts` as a DX Windows reliability source guard for Windows scanner metadata handling, expected protected/locked system entries, missing-commit minidump logging, remote minidump upload endpoint gating, and the handoff docs that name the guard.
+
+CHANGED:
+- `DX.md` and `todo.txt` now name the repeatable reliability guard and keep the production-readiness pass explicitly no-Cargo/no-`just run`.
+
+PASSED:
+- `node --test script\dx-windows-reliability-source.test.ts`
+
+NOTES:
+- Skipped Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof by direct production-readiness lane instruction.
+
 [2026-05-28] - Release Hygiene No-Just-Run Audit
 
 CHANGED:
 - `AGENTS.md` now treats `just run` as the default full-validation command only when the current user prompt explicitly opens that window.
 - `DX.md` now marks the 2026-05-22 launch target as historical and records that current production readiness is source-audited only until governed runtime proof opens.
-- `todo.txt` now records this no-Cargo/no-`just run` release-hygiene audit and its next handoff action.
+- `todo.txt` now records this no-Cargo/no-`just run` release-hygiene audit and keeps its next handoff action source-only until commit/push or runtime proof is explicitly authorized.
 - `justfile` now carries an agent-facing note that source-only passes must not invoke recipes that wrap Cargo unless the prompt allows them.
 - `crates/zed/src/reliability.rs` now checks for a configured minidump endpoint before requesting remote crash files, so remote dumps are not consumed when local dev upload is disabled.
 

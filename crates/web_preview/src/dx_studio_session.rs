@@ -15,6 +15,7 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
         .iter()
         .map(|path| manifest_candidate_snapshot(path))
         .collect::<Vec<_>>();
+    let preview_invalid_candidates = candidate_issue_snapshots(&preview_candidates, false);
     let preview_targets = dx_studio::preview_targets(root_path);
     let default_preview_target =
         dx_studio::default_preview_target(root_path).map(|target| preview_target_snapshot(&target));
@@ -28,6 +29,7 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
         .iter()
         .map(|path| manifest_candidate_snapshot(path))
         .collect::<Vec<_>>();
+    let edit_invalid_candidates = candidate_issue_snapshots(&edit_candidates, true);
     let manifest_indexes = manifest_index_snapshot(&contract.manifest_candidates);
     let has_edit_candidate = contract
         .edit_manifest_candidates
@@ -113,12 +115,16 @@ pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
             "default_target": default_preview_target,
             "targets": preview_targets,
             "candidates": preview_candidates,
+            "invalid_candidate_count": preview_invalid_candidates.len(),
+            "invalid_candidates": preview_invalid_candidates,
             "indexes": manifest_indexes,
         },
         "studio_edit_manifest": {
             "schema": dx_studio::DX_STUDIO_EDIT_MANIFEST_SCHEMA,
             "status": edit_contract_status,
             "candidates": edit_candidates,
+            "invalid_candidate_count": edit_invalid_candidates.len(),
+            "invalid_candidates": edit_invalid_candidates,
             "command": Value::Null,
             "source_owned_operation_contract": {
                 "schema": dx_studio::DX_STUDIO_LAUNCH_EDIT_CONTRACT_SCHEMA,
@@ -186,17 +192,91 @@ fn manifest_candidate_snapshot(path: &Path) -> Value {
         .as_ref()
         .and_then(|metadata| metadata.modified().ok())
         .and_then(system_time_ms);
+    let extension = path.extension().and_then(|extension| extension.to_str());
+    let mut read_status = if metadata.is_some() {
+        "not_read"
+    } else {
+        "missing"
+    };
+    let mut parse_status = None;
+    let mut candidate_status = if metadata.is_some() {
+        "not_checked"
+    } else {
+        "missing"
+    };
+    let mut edit_contract_status = None;
+    let mut schema = None;
+
+    if metadata
+        .as_ref()
+        .is_some_and(|metadata| !metadata.is_file())
+    {
+        read_status = "not_file";
+        candidate_status = "not_file";
+        parse_status = Some("not_parsed");
+    } else if metadata.is_some() {
+        match fs::read_to_string(path) {
+            Ok(contents) => {
+                read_status = "readable";
+                match extension {
+                    Some("json") => match serde_json::from_str::<Value>(&contents) {
+                        Ok(manifest) => {
+                            parse_status = Some("valid_json");
+                            schema = manifest_schema(&manifest);
+                            if manifest_has_edit_contract(&manifest) {
+                                candidate_status = "loaded_edit_contract";
+                                edit_contract_status = Some("loaded_edit_contract");
+                            } else {
+                                candidate_status = "loaded_manifest";
+                                edit_contract_status = Some("missing_edit_contract");
+                            }
+                        }
+                        Err(_) => {
+                            parse_status = Some("malformed_json");
+                            candidate_status = "malformed_json";
+                        }
+                    },
+                    Some("ts" | "tsx") => {
+                        parse_status = Some("typescript_source");
+                        if contents.contains(dx_studio::DX_STUDIO_LAUNCH_EDIT_CONTRACT_SCHEMA) {
+                            candidate_status = "loaded_edit_contract";
+                            edit_contract_status = Some("loaded_edit_contract");
+                        } else {
+                            candidate_status = "readable_source";
+                        }
+                    }
+                    _ => {
+                        parse_status = Some("not_json");
+                        candidate_status = "readable_source";
+                    }
+                }
+            }
+            Err(_) => {
+                read_status = "unreadable";
+                parse_status = Some("not_parsed");
+                candidate_status = "unreadable";
+            }
+        }
+    }
 
     serde_json::json!({
         "path": path_string(path),
         "exists": metadata.is_some(),
+        "is_file": metadata.as_ref().map(|metadata| metadata.is_file()),
         "bytes": metadata.as_ref().map(|metadata| metadata.len()),
         "modified_ms": modified_ms,
-        "extension": path.extension().and_then(|extension| extension.to_str()),
+        "extension": extension,
+        "schema": schema,
+        "read_status": read_status,
+        "parse_status": parse_status,
+        "candidate_status": candidate_status,
+        "edit_contract_status": edit_contract_status,
     })
 }
 
 fn manifest_index_snapshot(candidates: &[std::path::PathBuf]) -> Value {
+    let mut skipped_candidates = Vec::new();
+
     for candidate in candidates {
         if candidate
             .extension()
@@ -206,15 +286,32 @@ fn manifest_index_snapshot(candidates: &[std::path::PathBuf]) -> Value {
             continue;
         }
 
-        let Ok(contents) = fs::read_to_string(candidate) else {
-            continue;
+        let contents = match fs::read_to_string(candidate) {
+            Ok(contents) => contents,
+            Err(_) => {
+                if candidate.exists() {
+                    skipped_candidates
+                        .push(skipped_manifest_index_candidate(candidate, "unreadable"));
+                }
+                continue;
+            }
         };
-        let Ok(manifest) = serde_json::from_str::<Value>(&contents) else {
-            continue;
+        let manifest = match serde_json::from_str::<Value>(&contents) {
+            Ok(manifest) => manifest,
+            Err(_) => {
+                skipped_candidates.push(skipped_manifest_index_candidate(
+                    candidate,
+                    "malformed_json",
+                ));
+                continue;
+            }
         };
 
         return serde_json::json!({
             "source": path_string(candidate),
+            "status": "loaded_manifest_index",
+            "skipped_candidate_count": skipped_candidates.len(),
+            "skipped_candidates": skipped_candidates,
             "source_selection_count": count_index_items(&manifest, &[
                 "/source_selection_index",
                 "/sourceSelectionIndex",
@@ -248,7 +345,67 @@ fn manifest_index_snapshot(candidates: &[std::path::PathBuf]) -> Value {
         });
     }
 
-    Value::Null
+    if skipped_candidates.is_empty() {
+        Value::Null
+    } else {
+        serde_json::json!({
+            "source": Value::Null,
+            "status": "no_valid_manifest_index",
+            "skipped_candidate_count": skipped_candidates.len(),
+            "skipped_candidates": skipped_candidates,
+        })
+    }
+}
+
+fn candidate_issue_snapshots(
+    candidates: &[Value],
+    include_missing_edit_contract: bool,
+) -> Vec<Value> {
+    candidates
+        .iter()
+        .filter(|candidate| candidate_has_issue(candidate, include_missing_edit_contract))
+        .cloned()
+        .collect()
+}
+
+fn candidate_has_issue(candidate: &Value, include_missing_edit_contract: bool) -> bool {
+    let candidate_status = candidate
+        .get("candidate_status")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if matches!(
+        candidate_status,
+        "unreadable" | "malformed_json" | "not_file"
+    ) {
+        return true;
+    }
+
+    include_missing_edit_contract
+        && candidate
+            .get("edit_contract_status")
+            .and_then(Value::as_str)
+            == Some("missing_edit_contract")
+}
+
+fn skipped_manifest_index_candidate(path: &Path, status: &str) -> Value {
+    serde_json::json!({
+        "path": path_string(path),
+        "candidate_status": status,
+    })
+}
+
+fn manifest_schema(manifest: &Value) -> Option<String> {
+    ["/schema", "/schema_version", "/schemaVersion"]
+        .iter()
+        .find_map(|pointer| manifest.pointer(pointer).and_then(Value::as_str))
+        .map(ToString::to_string)
+}
+
+fn manifest_has_edit_contract(manifest: &Value) -> bool {
+    manifest.get("studio_edit_contract").is_some()
+        || manifest.get("editContract").is_some()
+        || manifest_schema(manifest).as_deref()
+            == Some(dx_studio::DX_STUDIO_LAUNCH_EDIT_CONTRACT_SCHEMA)
 }
 
 fn count_index_items(manifest: &Value, pointers: &[&str]) -> usize {

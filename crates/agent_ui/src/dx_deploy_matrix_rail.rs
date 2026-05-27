@@ -5,6 +5,7 @@ use crate::dx_deploy_capabilities::{
     DxDeployCapabilityMatrixSnapshot, DxDeployCapabilityRow, DxDeployCommandReceiptSummary,
 };
 use crate::dx_deploy_gate_rail::deploy_provider_gate_state;
+use crate::dx_deploy_invalid_receipts::DxDeployInvalidReceipt;
 use crate::dx_deploy_rail_ui::{metric_row, muted_card, muted_label, signal_row, source_row};
 
 pub(crate) fn deploy_capability_matrix_state(
@@ -22,6 +23,14 @@ pub(crate) fn deploy_capability_matrix_state(
             snapshot.receipt_count.to_string(),
         ))
         .child(metric_row("Providers", deploy_provider_summary(snapshot)));
+
+    for (ix, receipt) in snapshot.invalid_receipts.iter().take(3).enumerate() {
+        stack = stack.child(invalid_deploy_receipt_row(
+            SharedString::from(format!("dx-deploy-invalid-receipt-{ix}")),
+            receipt,
+            cx,
+        ));
+    }
 
     if let Some(provider_gate) = snapshot.provider_gate.as_ref() {
         stack = stack.child(deploy_provider_gate_state(provider_gate, cx));
@@ -67,6 +76,30 @@ pub(crate) fn deploy_capability_matrix_state(
     }
 
     stack.into_any_element()
+}
+
+fn invalid_deploy_receipt_row(
+    id: SharedString,
+    receipt: &DxDeployInvalidReceipt,
+    cx: &App,
+) -> AnyElement {
+    v_flex()
+        .id(id)
+        .gap_0p5()
+        .min_w_0()
+        .rounded_sm()
+        .px_1()
+        .py_0p5()
+        .bg(cx.theme().colors().element_background)
+        .child(signal_row(
+            SharedString::from("dx-deploy-invalid-receipt"),
+            IconName::Warning,
+            Color::Warning,
+            "Invalid deploy receipt",
+        ))
+        .child(muted_label(receipt.label.clone()))
+        .child(muted_label(receipt.detail.clone()))
+        .into_any_element()
 }
 
 fn deploy_command_receipt_row(

@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::dx_studio;
 
 mod manifest;
-mod manifest_ts;
+pub(crate) mod manifest_ts;
 mod operations;
 mod paths;
 mod plan;

@@ -113,6 +113,23 @@ test("Sidebar active workspace helpers use the cached event payload", () => {
   assert.doesNotMatch(activeWorkspaceHelper, /self\.multi_workspace\.upgrade\(\)/);
   assert.doesNotMatch(activeWorkspaceHelper, /multi_workspace\.read\(cx\)\.workspace\(\)/);
 
+  const rebuildContents = sliceBetween(
+    source,
+    "fn rebuild_contents(&mut self",
+    "fn update_entries(&mut self",
+  );
+  assert.match(rebuildContents, /let active_workspace = self\.active_workspace\(cx\);/);
+  assert.doesNotMatch(rebuildContents, /mw\.workspace\(\)/);
+  assert.doesNotMatch(rebuildContents, /multi_workspace\.read\(cx\)\.workspace\(\)/);
+
+  const restoreWorktreeError = sliceBetween(
+    source,
+    'log::error!("Failed to restore worktree: {error:#}");',
+    "return anyhow::Ok(());",
+  );
+  assert.match(restoreWorktreeError, /this\.active_workspace\(cx\)/);
+  assert.doesNotMatch(restoreWorktreeError, /multi_workspace\.read\(cx\)\.workspace\(\)/);
+
   const showArchive = sliceBetween(
     source,
     "fn show_archive(&mut self",
@@ -128,7 +145,7 @@ test("Call integration consumes active workspace events without re-reading them"
 
   assert.match(
     source,
-    /MultiWorkspaceEvent::ActiveWorkspaceChanged \{\s+active_workspace, \.\.\s+\} => active_workspace\.upgrade\(\),/,
+    /MultiWorkspaceEvent::ActiveWorkspaceChanged \{\s+active_workspace, \.\.\s+\}\s+\|\s+MultiWorkspaceEvent::WorkspaceRemoved \{\s+active_workspace, \.\.\s+\} => active_workspace\.upgrade\(\),/,
   );
   assert.match(source, /Some\(multi_workspace\.workspace\(\)\.clone\(\)\)/);
   assert.doesNotMatch(source, /multi_workspace\.workspace\(\)\.read\(cx\)\.project\(\)/);

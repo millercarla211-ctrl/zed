@@ -1,12 +1,13 @@
-use serde_json::Value;
 use std::{
     cmp::Ordering,
-    fs::{self, File},
-    io::Read,
+    fs,
     path::{Path, PathBuf},
     time::SystemTime,
 };
 
+use crate::dx_deploy_invalid_receipts::{
+    DxDeployInvalidReceipt, note_invalid_receipt, read_deploy_receipt_json,
+};
 use crate::dx_deploy_provider_gate_summary::parse_deploy_provider_gate_receipt;
 pub(crate) use crate::dx_deploy_provider_gate_summary::{
     DxDeployProviderGateQuickFix, DxDeployProviderGateReceiptSummary, DxDeployProviderGateRow,
@@ -23,12 +24,12 @@ use crate::dx_deploy_receipt_summary::{
     deploy_provider_rows_from_value, parse_deploy_command_receipt,
 };
 
-const MAX_DEPLOY_RECEIPT_BYTES: u64 = 256 * 1024;
 #[derive(Clone, Default)]
 pub(crate) struct DxDeployCapabilityMatrixSnapshot {
     pub root_exists: bool,
     pub receipt_count: usize,
     pub latest_receipts: Vec<String>,
+    pub invalid_receipts: Vec<DxDeployInvalidReceipt>,
     pub plan: Option<DxDeployCommandReceiptSummary>,
     pub status: Option<DxDeployCommandReceiptSummary>,
     pub provider_gate: Option<DxDeployProviderGateReceiptSummary>,
@@ -54,6 +55,7 @@ pub(crate) fn deploy_capability_matrix_snapshot(
     let mut status_receipts = Vec::new();
     let mut provider_gate_receipts = Vec::new();
     let mut matrix_receipts = Vec::new();
+    let mut invalid_receipts = Vec::new();
 
     for root in roots {
         if root.path.is_dir() {
@@ -91,16 +93,18 @@ pub(crate) fn deploy_capability_matrix_snapshot(
     sort_provider_gate_receipts(&mut provider_gate_receipts);
     sort_command_receipts(&mut matrix_receipts);
 
-    let plan = plan_receipts.first().and_then(parse_command_receipt);
-    let status = status_receipts.first().and_then(parse_command_receipt);
+    let plan = plan_receipts
+        .first()
+        .and_then(|candidate| parse_command_receipt(candidate, &mut invalid_receipts));
+    let status = status_receipts
+        .first()
+        .and_then(|candidate| parse_command_receipt(candidate, &mut invalid_receipts));
     let provider_gate = provider_gate_receipts
         .first()
-        .and_then(parse_provider_gate_receipt);
-    let providers = status_receipts
-        .first()
-        .and_then(parse_provider_rows)
-        .or_else(|| plan_receipts.first().and_then(parse_provider_rows))
-        .or_else(|| matrix_receipts.first().and_then(parse_provider_rows))
+        .and_then(|candidate| parse_provider_gate_receipt(candidate, &mut invalid_receipts));
+    let providers = parse_first_provider_rows(&status_receipts, &mut invalid_receipts)
+        .or_else(|| parse_first_provider_rows(&plan_receipts, &mut invalid_receipts))
+        .or_else(|| parse_first_provider_rows(&matrix_receipts, &mut invalid_receipts))
         .unwrap_or_default();
 
     DxDeployCapabilityMatrixSnapshot {
@@ -111,6 +115,7 @@ pub(crate) fn deploy_capability_matrix_snapshot(
             .take(4)
             .map(|candidate| candidate.label)
             .collect(),
+        invalid_receipts,
         plan,
         status,
         provider_gate,
@@ -153,32 +158,53 @@ fn receipt_candidates(root: &DxDeployReceiptRoot) -> Vec<DeployReceiptCandidate>
 
 fn parse_command_receipt(
     candidate: &DeployReceiptCandidate,
+    invalid_receipts: &mut Vec<DxDeployInvalidReceipt>,
 ) -> Option<DxDeployCommandReceiptSummary> {
-    let value = read_json(&candidate.path)?;
+    let value = match read_deploy_receipt_json(&candidate.path) {
+        Ok(value) => value,
+        Err(error) => {
+            note_invalid_receipt(invalid_receipts, &candidate.label, error);
+            return None;
+        }
+    };
     parse_deploy_command_receipt(candidate.label.clone(), &value)
 }
 
-fn parse_provider_rows(candidate: &DeployReceiptCandidate) -> Option<Vec<DxDeployCapabilityRow>> {
-    let value = read_json(&candidate.path)?;
+fn parse_first_provider_rows(
+    candidates: &[DeployReceiptCandidate],
+    invalid_receipts: &mut Vec<DxDeployInvalidReceipt>,
+) -> Option<Vec<DxDeployCapabilityRow>> {
+    let candidate = candidates.first()?;
+    parse_provider_rows(candidate, invalid_receipts)
+}
+
+fn parse_provider_rows(
+    candidate: &DeployReceiptCandidate,
+    invalid_receipts: &mut Vec<DxDeployInvalidReceipt>,
+) -> Option<Vec<DxDeployCapabilityRow>> {
+    let value = match read_deploy_receipt_json(&candidate.path) {
+        Ok(value) => value,
+        Err(error) => {
+            note_invalid_receipt(invalid_receipts, &candidate.label, error);
+            return None;
+        }
+    };
     let rows = deploy_provider_rows_from_value(&value);
     if rows.is_empty() { None } else { Some(rows) }
 }
 
 fn parse_provider_gate_receipt(
     candidate: &DeployReceiptCandidate,
+    invalid_receipts: &mut Vec<DxDeployInvalidReceipt>,
 ) -> Option<DxDeployProviderGateReceiptSummary> {
-    let value = read_json(&candidate.path)?;
+    let value = match read_deploy_receipt_json(&candidate.path) {
+        Ok(value) => value,
+        Err(error) => {
+            note_invalid_receipt(invalid_receipts, &candidate.label, error);
+            return None;
+        }
+    };
     parse_deploy_provider_gate_receipt(candidate.label.clone(), &value)
-}
-
-fn read_json(path: &Path) -> Option<Value> {
-    let mut file = File::open(path).ok()?;
-    let mut buffer = Vec::new();
-    file.by_ref()
-        .take(MAX_DEPLOY_RECEIPT_BYTES)
-        .read_to_end(&mut buffer)
-        .ok()?;
-    serde_json::from_slice(&buffer).ok()
 }
 
 fn sort_newest_first(candidates: &mut [DeployReceiptCandidate]) {

@@ -1616,7 +1616,7 @@ impl Sidebar {
         };
         let mw = multi_workspace.read(cx);
         let workspaces: Vec<_> = mw.workspaces().cloned().collect();
-        let active_workspace = Some(mw.workspace().clone());
+        let active_workspace = self.active_workspace(cx);
 
         let agent_server_store = workspaces
             .first()
@@ -4100,8 +4100,7 @@ impl Sidebar {
                                         .ok();
                                 }
 
-                                if let Some(multi_workspace) = this.multi_workspace.upgrade() {
-                                    let workspace = multi_workspace.read(cx).workspace().clone();
+                                if let Some(workspace) = this.active_workspace(cx) {
                                     workspace.update(cx, |workspace, cx| {
                                         struct RestoreWorktreeErrorToast;
                                         workspace.show_toast(

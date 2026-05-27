@@ -112,3 +112,25 @@ test("provider gate surfaces dx-deploy quick-fix risk metadata", () => {
   assert.match(rail, /requires approval/);
   assert.match(rail, /writes receipt/);
 });
+
+test("deploy capability matrix surfaces malformed latest receipts", () => {
+  const agentUi = read("crates/agent_ui/src/agent_ui.rs");
+  const capabilities = read("crates/agent_ui/src/dx_deploy_capabilities.rs");
+  const invalidReceipts = read("crates/agent_ui/src/dx_deploy_invalid_receipts.rs");
+  const rail = read("crates/agent_ui/src/dx_deploy_matrix_rail.rs");
+  const prompts = read("crates/agent_ui/src/dx_deploy_prompts.rs");
+
+  assert.match(agentUi, /^mod dx_deploy_invalid_receipts;$/m);
+  assert.match(capabilities, /use crate::dx_deploy_invalid_receipts::\{/);
+  assert.match(invalidReceipts, /pub\(crate\) struct DxDeployInvalidReceipt/);
+  assert.match(capabilities, /pub invalid_receipts: Vec<DxDeployInvalidReceipt>/);
+  assert.match(invalidReceipts, /read_deploy_receipt_json\(path: &Path\) -> Result<Value, String>/);
+  assert.match(invalidReceipts, /Unable to parse dx-deploy receipt/);
+  assert.match(invalidReceipts, /MAX_INVALID_DEPLOY_RECEIPTS/);
+  assert.match(invalidReceipts, /note_invalid_receipt\(/);
+  assert.match(capabilities, /note_invalid_receipt\(invalid_receipts, &candidate\.label, error\)/);
+  assert.doesNotMatch(invalidReceipts, /serde_json::from_slice\(&buffer\)\.ok\(\)/);
+  assert.match(rail, /snapshot\.invalid_receipts\.iter\(\)\.take\(3\)/);
+  assert.match(rail, /Invalid deploy receipt/);
+  assert.match(prompts, /invalid deploy receipt/);
+});

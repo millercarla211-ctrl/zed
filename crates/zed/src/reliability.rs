@@ -261,14 +261,26 @@ pub async fn upload_previous_minidumps(client: Arc<Client>) -> anyhow::Result<()
     Ok(())
 }
 
+fn has_missing_minidump_commit_sha(commit_sha: &str) -> bool {
+    matches!(commit_sha, "no sha" | "no_sha")
+}
+
+fn log_missing_minidump_commit_sha(metadata: &crashes::CrashInfo) {
+    if metadata.init.release_channel.eq_ignore_ascii_case("dev") {
+        log::debug!("No commit sha set; skipping dev minidump upload");
+    } else {
+        log::warn!("No commit sha set, skipping minidump upload");
+    }
+}
+
 async fn upload_minidump(
     client: Arc<Client>,
     endpoint: &str,
     minidump: Vec<u8>,
     metadata: &crashes::CrashInfo,
 ) -> Result<()> {
-    if metadata.init.commit_sha == "no sha" {
-        log::warn!("No commit sha set, skipping minidump upload");
+    if has_missing_minidump_commit_sha(&metadata.init.commit_sha) {
+        log_missing_minidump_commit_sha(metadata);
         return Ok(());
     }
     let mut form = Form::new()

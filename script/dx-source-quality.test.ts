@@ -122,3 +122,35 @@ test("DX Studio bridge refuses blank target picker answers", () => {
   assert.match(selection, /!Number\.isSafeInteger\(index\)/);
   assert.doesNotMatch(selection, /Number\.parseInt\(answer \|\| "0", 10\)/);
 });
+
+test("DX Studio session surfaces invalid manifest candidates", () => {
+  const session = read("crates/web_preview/src/dx_studio_session.rs");
+
+  assert.match(session, /fn manifest_candidate_snapshot\(path: &Path\) -> Value/);
+  assert.match(session, /"candidate_status":/);
+  assert.match(session, /"read_status":/);
+  assert.match(session, /"parse_status":/);
+  assert.match(session, /"invalid_candidate_count":/);
+  assert.match(session, /"invalid_candidates":/);
+  assert.match(session, /"skipped_candidates":/);
+  assert.match(session, /"malformed_json"/);
+  assert.match(session, /"unreadable"/);
+  assert.match(session, /"missing_edit_contract"/);
+  assert.match(session, /"loaded_edit_contract"/);
+});
+
+test("DX Studio session summary can load TypeScript edit contracts", () => {
+  const manifest = read("crates/web_preview/src/dx_studio/manifest.rs");
+  const manifestTs = read("crates/web_preview/src/dx_studio_source_edit/manifest_ts.rs");
+
+  assert.match(manifest, /edit_contract_from_typescript/);
+  assert.match(manifest, /Some\("ts" \| "tsx"\)/);
+  assert.doesNotMatch(
+    manifest,
+    /!= Some\("json"\)\s*\{\s*continue;\s*\}/,
+  );
+  assert.match(
+    manifestTs,
+    /pub\(crate\) fn edit_contract_from_typescript\(contents: &str\) -> Option<Value>/,
+  );
+});

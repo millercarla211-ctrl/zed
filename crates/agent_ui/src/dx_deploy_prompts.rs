@@ -118,8 +118,22 @@ fn deploy_capability_matrix_prompt(snapshot: &DxDeployTargetSnapshot) -> String 
         .and_then(|receipt| receipt.status.as_ref())
         .map(|status| format!("status {status}"))
         .unwrap_or_else(|| "status missing".to_string());
+    let invalid = if matrix.invalid_receipts.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " invalid deploy receipt(s): {}.",
+            matrix
+                .invalid_receipts
+                .iter()
+                .take(3)
+                .map(|receipt| format!("{} ({})", receipt.label, receipt.detail))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
 
     format!(
-        "Canonical deploy receipts: {plan}, {status}, {providers}; no live deploy should be inferred from dry-run receipts."
+        "Canonical deploy receipts: {plan}, {status}, {providers};{invalid} no live deploy should be inferred from dry-run receipts."
     )
 }

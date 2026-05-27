@@ -43,6 +43,9 @@ pub fn init(client: Arc<Client>, user_store: Entity<UserStore>, cx: &mut App) {
                 let workspace = match event {
                     MultiWorkspaceEvent::ActiveWorkspaceChanged {
                         active_workspace, ..
+                    }
+                    | MultiWorkspaceEvent::WorkspaceRemoved {
+                        active_workspace, ..
                     } => active_workspace.upgrade(),
                     _ => {
                         if window.is_window_active() {

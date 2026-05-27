@@ -4800,7 +4800,7 @@ impl BackgroundScanner {
         {
             let snapshot = &self.state.lock().await.snapshot;
             if self.settings.is_path_excluded(&job.path) {
-                log::error!("skipping excluded directory {:?}", job.path);
+                log::debug!("skipping excluded directory {:?}", job.path);
                 return Ok(());
             }
             log::trace!("scanning directory {:?}", job.path);
@@ -5857,10 +5857,14 @@ fn should_ignore_windows_scan_metadata_error(path: &Path, err: &anyhow::Error) -
     };
 
     match io_error.raw_os_error() {
-        Some(5) => is_windows_protected_system_entry(file_name),
-        Some(32) => is_windows_locked_system_entry(file_name),
+        Some(5) | Some(32) => is_windows_expected_system_entry(file_name),
         _ => false,
     }
+}
+
+#[cfg(target_os = "windows")]
+fn is_windows_expected_system_entry(file_name: &str) -> bool {
+    is_windows_protected_system_entry(file_name) || is_windows_locked_system_entry(file_name)
 }
 
 #[cfg(target_os = "windows")]

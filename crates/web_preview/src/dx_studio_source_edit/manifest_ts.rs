@@ -2,7 +2,7 @@ use serde_json::{Map, Value};
 
 use crate::dx_studio;
 
-pub(super) fn edit_contract_from_typescript(contents: &str) -> Option<Value> {
+pub(crate) fn edit_contract_from_typescript(contents: &str) -> Option<Value> {
     if !contents.contains(dx_studio::DX_STUDIO_LAUNCH_EDIT_CONTRACT_SCHEMA) {
         return None;
     }

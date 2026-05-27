@@ -16,6 +16,7 @@ test("agent_ui registers the focused deploy modules", () => {
     "dx_deploy_check_roots",
     "dx_deploy_gate_rail",
     "dx_deploy_hub_roots",
+    "dx_deploy_invalid_receipts",
     "dx_deploy_launch_actions",
     "dx_deploy_launch_action_labels",
     "dx_deploy_launch_actions_rail",
