@@ -553,6 +553,9 @@ test("DX launch workspace delegates agents and source rails", () => {
   const agentReceiptRowDetails = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/receipts/row_details.rs",
   );
+  const agentReceiptText = read(
+    "crates/agent_ui/src/dx_launch_workspace/agents/receipts/text.rs",
+  );
   const agentReceiptStatus = read(
     "crates/agent_ui/src/dx_launch_workspace/agents/receipts/status.rs",
   );
@@ -794,6 +797,7 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentReceipts, /^mod rows;$/m);
   assert.match(agentReceipts, /^mod status;$/m);
   assert.match(agentReceipts, /^mod summary;$/m);
+  assert.match(agentReceipts, /^mod text;$/m);
   assert.match(agentReceipts, /use self::footer::dx_agent_receipt_footer_rows/);
   assert.match(agentReceipts, /use self::rows::dx_agent_receipt_row/);
   assert.match(agentReceipts, /use self::status::dx_agent_receipt_warning_rows/);
@@ -821,14 +825,19 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentReceiptFooter, /pub\(super\) fn dx_agent_receipt_footer_rows/);
   assert.match(agentReceiptFooter, /DxAgentBridgeSnapshot/);
   assert.match(agentReceiptFooter, /Inbox review/);
-  assert.match(agentReceiptFooter, /Label::new\(index\.next_action\.clone\(\)\)/);
+  assert.match(agentReceiptFooter, /receipt_next_action_label\(&index\.next_action\)/);
+  assert.match(agentReceiptFooter, /use super::labels::receipt_next_action_label/);
   assert.match(agentReceiptFooter, /use super::super::super::metric_row/);
+  assert.match(agentReceiptLabels, /pub\(super\) fn receipt_display_id/);
   assert.match(agentReceiptLabels, /pub\(super\) fn receipt_state_label/);
   assert.match(agentReceiptLabels, /pub\(super\) fn receipt_detail_label/);
   assert.match(agentReceiptLabels, /pub\(super\) fn receipt_provider_model_label/);
   assert.match(agentReceiptLabels, /pub\(super\) fn receipt_action_label/);
   assert.match(agentReceiptLabels, /pub\(super\) fn receipt_social_label/);
   assert.match(agentReceiptLabels, /pub\(super\) fn receipt_automation_label/);
+  assert.match(agentReceiptLabels, /pub\(super\) fn receipt_next_action_label/);
+  assert.match(agentReceiptLabels, /use super::text::\{receipt_label_text, receipt_optional_label, receipt_status_text\}/);
+  assert.match(agentReceiptLabels, /Receipt details withheld by safe_to_render=false/);
   assert.match(agentReceiptLabels, /metadata_redacted/);
   assert.match(agentReceiptLabels, /retry_supported/);
   assert.match(agentReceiptLabels, /social_needs_auth/);
@@ -836,10 +845,10 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentReceiptLabels, /use super::super::super::list_labels::yes_no/);
   assert.match(agentReceiptRows, /pub\(super\) fn dx_agent_receipt_row/);
   assert.match(agentReceiptRows, /DxAgentReceipt/);
-  assert.match(agentReceiptRows, /use super::labels::receipt_state_label/);
+  assert.match(agentReceiptRows, /use super::labels::\{receipt_display_id, receipt_state_label\}/);
   assert.match(agentReceiptRows, /use super::row_details::dx_agent_receipt_detail_rows/);
+  assert.match(agentReceiptRows, /metric_row\(receipt_display_id\(receipt\), state\)/);
   assert.match(agentReceiptRows, /children\(dx_agent_receipt_detail_rows\(receipt\)\)/);
-  assert.doesNotMatch(agentReceiptRows, /use super::labels::\{/);
   assert.doesNotMatch(agentReceiptRows, /receipt_detail_label/);
   assert.doesNotMatch(agentReceiptRows, /receipt_provider_model_label/);
   assert.doesNotMatch(agentReceiptRows, /receipt_action_label/);
@@ -859,6 +868,10 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentReceiptRowDetails, /receipt_action_label/);
   assert.match(agentReceiptRowDetails, /receipt_social_label/);
   assert.match(agentReceiptRowDetails, /receipt_automation_label/);
+  assert.match(agentReceiptRowDetails, /receipt_optional_label/);
+  assert.match(agentReceiptRowDetails, /use super::text::receipt_optional_label/);
+  assert.match(agentReceiptRowDetails, /if !receipt\.safe_to_render/);
+  assert.match(agentReceiptRowDetails, /return rows/);
   assert.match(agentReceiptRowDetails, /last_error/);
   assert.match(agentReceiptRowDetails, /next_action/);
   assert.match(agentReceiptRowDetails, /schema_version/);
@@ -871,6 +884,8 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentReceiptStatus, /dx-agent-receipt-inbox-malformed/);
   assert.match(agentReceiptStatus, /dx-agent-receipt-index-error/);
   assert.match(agentReceiptStatus, /dx-agent-receipt-unsafe-row/);
+  assert.match(agentReceiptStatus, /receipt_optional_label/);
+  assert.match(agentReceiptStatus, /use super::text::receipt_optional_label/);
   assert.match(agentReceiptStatus, /use super::super::super::signal_row/);
   assert.match(agentReceiptSummary, /pub\(super\) struct DxAgentReceiptCounts/);
   assert.match(agentReceiptSummary, /pub\(super\) fn dx_agent_receipt_counts/);
@@ -880,10 +895,17 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.match(agentReceiptSummary, /filter\(\|receipt\| !receipt\.safe_to_render\)/);
   assert.match(agentReceiptSummary, /metric_row\("Index"/);
   assert.match(agentReceiptSummary, /metric_row\("Inbox"/);
+  assert.match(agentReceiptSummary, /receipt_status_text\(&index\.status\)/);
+  assert.match(agentReceiptSummary, /receipt_status_text\(&inbox\.status\)/);
+  assert.match(agentReceiptSummary, /use super::text::receipt_status_text/);
   assert.doesNotMatch(agentReceiptSummary, /Inbox review/);
   assert.doesNotMatch(agentReceiptSummary, /Label::new\(index\.next_action\.clone\(\)\)/);
   assert.match(agentReceiptSummary, /dx_agent_receipt_root_state/);
   assert.match(agentReceiptSummary, /use super::super::super::metric_row/);
+  assert.match(agentReceiptText, /pub\(super\) fn receipt_optional_label/);
+  assert.match(agentReceiptText, /pub\(super\) fn receipt_status_text/);
+  assert.match(agentReceiptText, /pub\(super\) fn receipt_label_text/);
+  assert.match(agentReceiptText, /split_whitespace\(\)\.collect::<Vec<_>>\(\)\.join\(" "\)/);
   assert.match(agentSocial, /pub\(in super::super\) fn dx_agent_social_state/);
   assert.match(agentSocial, /^mod rows;$/m);
   assert.match(agentSocial, /use self::rows::dx_agent_social_row/);
@@ -1026,6 +1048,7 @@ test("DX launch workspace delegates agents and source rails", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts/rows.rs") < 55);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts/status.rs") < 80);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts/summary.rs") < 75);
+  assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/receipts/text.rs") < 25);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/social.rs") < 70);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/social/rows.rs") < 70);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/agents/social_actions.rs") < 90);

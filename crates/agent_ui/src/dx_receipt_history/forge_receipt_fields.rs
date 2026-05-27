@@ -1,4 +1,4 @@
-use super::fields::{bool_field, string_field, usize_field};
+use super::fields::{bool_field, safe_string_field, string_field, usize_field};
 use serde_json::Value;
 
 pub(super) fn forge_history_kind(schema: &str, value: &Value) -> Option<&'static str> {
@@ -32,28 +32,28 @@ pub(super) fn forge_history_headline(kind: &str) -> &'static str {
 }
 
 pub(super) fn forge_history_status(value: &Value) -> Option<String> {
-    string_field(value, &["restore_target_plan", "validation", "status"])
-        .or_else(|| string_field(value, &["restore_approval", "validation", "status"]))
-        .or_else(|| string_field(value, &["status"]))
-        .or_else(|| string_field(value, &["restore_execution", "restore", "status"]))
-        .or_else(|| string_field(value, &["backup_execution", "execution", "status"]))
-        .or_else(|| string_field(value, &["runner_gate", "validation", "status"]))
-        .or_else(|| string_field(value, &["forge_safety_policy", "policy", "status"]))
+    safe_string_field(value, &["restore_target_plan", "validation", "status"])
+        .or_else(|| safe_string_field(value, &["restore_approval", "validation", "status"]))
+        .or_else(|| safe_string_field(value, &["status"]))
+        .or_else(|| safe_string_field(value, &["restore_execution", "restore", "status"]))
+        .or_else(|| safe_string_field(value, &["backup_execution", "execution", "status"]))
+        .or_else(|| safe_string_field(value, &["runner_gate", "validation", "status"]))
+        .or_else(|| safe_string_field(value, &["forge_safety_policy", "policy", "status"]))
 }
 
 pub(super) fn forge_history_target_path(value: &Value) -> Option<String> {
-    string_field(value, &["restore_target_plan", "request", "target_path"])
-        .or_else(|| string_field(value, &["restore_approval", "request", "target_path"]))
-        .or_else(|| string_field(value, &["restore_execution", "backup", "target_path"]))
-        .or_else(|| string_field(value, &["backup_execution", "gate", "target_path"]))
-        .or_else(|| string_field(value, &["runner_gate", "policy", "target_path"]))
-        .or_else(|| string_field(value, &["forge_safety_policy", "policy", "target_path"]))
+    safe_string_field(value, &["restore_target_plan", "request", "target_path"])
+        .or_else(|| safe_string_field(value, &["restore_approval", "request", "target_path"]))
+        .or_else(|| safe_string_field(value, &["restore_execution", "backup", "target_path"]))
+        .or_else(|| safe_string_field(value, &["backup_execution", "gate", "target_path"]))
+        .or_else(|| safe_string_field(value, &["runner_gate", "policy", "target_path"]))
+        .or_else(|| safe_string_field(value, &["forge_safety_policy", "policy", "target_path"]))
 }
 
 pub(super) fn forge_history_restore_destination_root(value: &Value) -> Option<String> {
-    string_field(value, &["restore_destination_root"])
+    safe_string_field(value, &["restore_destination_root"])
         .or_else(|| {
-            string_field(
+            safe_string_field(
                 value,
                 &[
                     "restore_target_plan",
@@ -63,13 +63,13 @@ pub(super) fn forge_history_restore_destination_root(value: &Value) -> Option<St
             )
         })
         .or_else(|| {
-            string_field(
+            safe_string_field(
                 value,
                 &["restore_approval", "restore", "restore_destination_root"],
             )
         })
         .or_else(|| {
-            string_field(
+            safe_string_field(
                 value,
                 &["restore_execution", "restore", "restore_destination_root"],
             )

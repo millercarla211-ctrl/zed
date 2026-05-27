@@ -68,7 +68,7 @@ pub(crate) fn source_edit_plan(root_path: Option<&Path>, selection: &Value) -> V
         .map(|path| path.display().to_string());
     let source_snapshot = resolved_source
         .as_ref()
-        .and_then(|source| source_file_snapshot(source));
+        .and_then(|source| source_file_snapshot(source, selection));
     let source_policy = root_path
         .zip(resolved_source.as_ref())
         .map(|(root_path, source)| source_policy_for_edit(root_path, source, selection));

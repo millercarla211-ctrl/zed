@@ -8,7 +8,10 @@ use serde_json::Value;
 
 use crate::dx_studio;
 
-use super::values::{bool_at, push_string_at, string_at, unique_strings};
+use super::{
+    manifest_ts::edit_contract_from_typescript,
+    values::{bool_at, push_string_at, string_at, unique_strings},
+};
 
 pub(super) fn resolve_selection_source(root_path: &Path, selection: &Value) -> Result<PathBuf> {
     if let Some(source) = resolved_source_candidates(root_path, selection)
@@ -289,18 +292,18 @@ fn manifest_allows_generated_edit(root_path: &Path, selection: &Value) -> bool {
     }
 
     for candidate in dx_studio::edit_manifest_candidates(root_path) {
-        if candidate
+        let extension = candidate
             .extension()
-            .and_then(|extension| extension.to_str())
-            != Some("json")
-        {
-            continue;
-        }
-
-        let Ok(contents) = fs::read_to_string(candidate) else {
+            .and_then(|extension| extension.to_str());
+        let Ok(contents) = fs::read_to_string(&candidate) else {
             continue;
         };
-        let Ok(manifest) = serde_json::from_str::<Value>(&contents) else {
+        let manifest = match extension {
+            Some("json") => serde_json::from_str::<Value>(&contents).ok(),
+            Some("ts" | "tsx") => edit_contract_from_typescript(&contents),
+            _ => None,
+        };
+        let Some(manifest) = manifest else {
             continue;
         };
         if bool_at(

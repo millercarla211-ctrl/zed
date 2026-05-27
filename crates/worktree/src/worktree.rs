@@ -5194,7 +5194,14 @@ impl BackgroundScanner {
                     self.remove_repo_path(path.clone(), &mut state.snapshot);
                 }
                 Err(err) => {
-                    log::error!("error reading file {abs_path:?} on event: {err:#}");
+                    if should_ignore_scan_metadata_error(&abs_path, &err) {
+                        log::debug!(
+                            "skipping unavailable filesystem entry {:?} on event: {err:#}",
+                            abs_path.display()
+                        );
+                    } else {
+                        log::error!("error reading file {abs_path:?} on event: {err:#}");
+                    }
                 }
             }
         }
@@ -5848,18 +5855,27 @@ fn should_ignore_windows_scan_metadata_error(path: &Path, err: &anyhow::Error) -
         return false;
     };
 
-    if is_windows_reserved_device_name(file_name) {
-        return true;
-    }
-
     let Some(io_error) = err.downcast_ref::<std::io::Error>() else {
         return false;
     };
 
-    match io_error.raw_os_error() {
-        Some(5) | Some(32) => is_windows_expected_system_entry(file_name),
+    let Some(raw_os_error) = io_error.raw_os_error() else {
+        return false;
+    };
+
+    if is_windows_reserved_device_name(file_name) {
+        return is_windows_expected_reserved_device_error(raw_os_error);
+    }
+
+    match raw_os_error {
+        5 | 32 => is_windows_expected_system_entry(file_name),
         _ => false,
     }
+}
+
+#[cfg(target_os = "windows")]
+fn is_windows_expected_reserved_device_error(raw_os_error: i32) -> bool {
+    matches!(raw_os_error, 2 | 3 | 5 | 32 | 87 | 123)
 }
 
 #[cfg(target_os = "windows")]

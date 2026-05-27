@@ -1,12 +1,8 @@
 use serde_json::Value;
-use std::{
-    fs::File,
-    io::{Read, Result},
-    path::{Path, PathBuf},
-    time::SystemTime,
-};
+use std::{path::PathBuf, time::SystemTime};
 
 use crate::dx_deploy_check_roots::check_receipt_roots;
+use crate::dx_deploy_invalid_receipts::read_limited_receipt_json;
 use crate::dx_deploy_launch_actions::{DxDeployLaunchAction, launch_actions};
 use crate::dx_deploy_launch_approval_evidence::{
     DxDeployLaunchApprovalEvidence, launch_approval_evidence,
@@ -129,7 +125,8 @@ fn push_check_candidates(
 fn parse_launch_gate_candidate(
     candidate: &LaunchGateCandidate,
 ) -> Result<DxDeployLaunchGateSnapshot, String> {
-    let receipt = read_json(&candidate.path)?;
+    let receipt =
+        read_limited_receipt_json(&candidate.path, MAX_CHECK_RECEIPT_BYTES, "dx-check launch")?;
     let zed = receipt.get("zed");
     let source_ready = receipt.get("source_ready");
     let runtime_approved = receipt.get("runtime_approved");
@@ -198,20 +195,4 @@ fn invalid_snapshot(candidate: &LaunchGateCandidate, error: String) -> DxDeployL
         next_action: Some(INVALID_LAUNCH_RECEIPT_NEXT_ACTION.to_string()),
         ..Default::default()
     }
-}
-
-fn read_json(path: &Path) -> Result<Value, String> {
-    let mut file = File::open(path)
-        .map_err(|error| format!("Unable to open dx-check launch receipt: {error}"))?;
-    let mut buffer = Vec::new();
-    read_limited(&mut file, &mut buffer)
-        .map_err(|error| format!("Unable to read dx-check launch receipt: {error}"))?;
-    serde_json::from_slice(&buffer)
-        .map_err(|error| format!("Unable to parse dx-check launch receipt: {error}"))
-}
-
-fn read_limited(file: &mut File, buffer: &mut Vec<u8>) -> Result<usize> {
-    file.by_ref()
-        .take(MAX_CHECK_RECEIPT_BYTES)
-        .read_to_end(buffer)
 }

@@ -7,24 +7,41 @@ use super::labels::{
     receipt_action_label, receipt_automation_label, receipt_detail_label,
     receipt_provider_model_label, receipt_social_label,
 };
+use super::text::receipt_optional_label;
 
 pub(super) fn dx_agent_receipt_detail_rows(receipt: &DxAgentReceipt) -> Vec<AnyElement> {
     let mut rows = vec![muted_line(receipt_detail_label(receipt))];
 
-    push_nonempty_metric(&mut rows, "Task", &receipt.task_state);
-    if let Some(duration) = receipt.duration_state.as_ref() {
+    if !receipt.safe_to_render {
+        return rows;
+    }
+
+    push_optional_metric(
+        &mut rows,
+        "Task",
+        receipt_optional_label(&receipt.task_state),
+    );
+    if let Some(duration) = receipt
+        .duration_state
+        .as_deref()
+        .and_then(receipt_optional_label)
+    {
         rows.push(muted_line(format!("Duration: {duration}")));
     }
     push_optional_line(&mut rows, receipt_provider_model_label(receipt));
     push_optional_line(&mut rows, receipt_action_label(receipt));
     push_optional_line(&mut rows, receipt_social_label(receipt));
     push_optional_line(&mut rows, receipt_automation_label(receipt));
-    push_nonempty_line(&mut rows, receipt.schema_version.clone());
+    push_optional_line(&mut rows, receipt_optional_label(&receipt.schema_version));
 
-    if let Some(error) = receipt.last_error.as_ref() {
+    if let Some(error) = receipt
+        .last_error
+        .as_deref()
+        .and_then(receipt_optional_label)
+    {
         rows.push(muted_line(format!("Error: {error}")));
     } else {
-        push_nonempty_line(&mut rows, receipt.next_action.clone());
+        push_optional_line(&mut rows, receipt_optional_label(&receipt.next_action));
     }
 
     rows
@@ -36,15 +53,9 @@ fn push_optional_line(rows: &mut Vec<AnyElement>, line: Option<String>) {
     }
 }
 
-fn push_nonempty_metric(rows: &mut Vec<AnyElement>, label: &str, value: &str) {
-    if !value.is_empty() {
+fn push_optional_metric(rows: &mut Vec<AnyElement>, label: &str, value: Option<String>) {
+    if let Some(value) = value {
         rows.push(muted_line(format!("{label}: {value}")));
-    }
-}
-
-fn push_nonempty_line(rows: &mut Vec<AnyElement>, line: String) {
-    if !line.is_empty() {
-        rows.push(muted_line(line));
     }
 }
 

@@ -5,6 +5,8 @@ use std::{
 
 use serde_json::Value;
 
+use crate::dx_deploy_root_key::deploy_root_key;
+
 use super::{
     CHECK_RECEIPT_RELATIVE_PATH, DX_FALLBACK_CHECK_RECEIPT, DxCheckPanelSnapshot,
     MAX_RECEIPT_BYTES,
@@ -41,7 +43,11 @@ fn check_receipt_candidates(workspace_roots: &[String]) -> Vec<PathBuf> {
 }
 
 fn push_unique_path(paths: &mut Vec<PathBuf>, path: PathBuf) {
-    if !paths.iter().any(|existing| existing == &path) {
+    let path_key = deploy_root_key(&path);
+    if !paths
+        .iter()
+        .any(|existing| deploy_root_key(existing) == path_key)
+    {
         paths.push(path);
     }
 }

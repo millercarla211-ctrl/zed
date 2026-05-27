@@ -2909,11 +2909,10 @@ impl Sidebar {
                 let can_move_up = group_index.is_some_and(|i| i > 0);
                 let can_move_down = group_index.is_some_and(|i| i + 1 < total_groups);
 
-                let active_workspace = multi_workspace
-                    .read_with(cx, |multi_workspace, _cx| {
-                        multi_workspace.workspace().clone()
-                    })
-                    .ok();
+                let active_workspace = this_for_menu
+                    .read_with(cx, |sidebar, cx| sidebar.active_workspace(cx))
+                    .ok()
+                    .flatten();
                 let workspace_labels: Vec<_> = open_workspaces
                     .iter()
                     .map(|workspace| workspace_menu_worktree_labels(workspace, cx))
@@ -6057,10 +6056,7 @@ impl Sidebar {
             }
             _ => None,
         };
-        let original_workspace = self
-            .multi_workspace
-            .upgrade()
-            .map(|mw| mw.read(cx).workspace().clone());
+        let original_workspace = self.active_workspace(cx);
 
         let thread_switcher = cx.new(|cx| ThreadSwitcher::new(entries, select_last, window, cx));
 
@@ -6477,9 +6473,9 @@ impl Sidebar {
     fn render_recent_projects_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let multi_workspace = self.multi_workspace.upgrade();
 
-        let workspace = multi_workspace
-            .as_ref()
-            .map(|mw| mw.read(cx).workspace().downgrade());
+        let workspace = self
+            .active_workspace(cx)
+            .map(|workspace| workspace.downgrade());
 
         let focus_handle = workspace
             .as_ref()
@@ -6980,13 +6976,13 @@ impl Sidebar {
     fn workspace_for_group(&self, key: &ProjectGroupKey, cx: &App) -> Option<Entity<Workspace>> {
         let mw = self.multi_workspace.upgrade()?;
         let mw = mw.read(cx);
-        let active = mw.workspace().clone();
-        let active_key = active.read(cx).project_group_key(cx);
-        if active_key == *key {
-            Some(active)
-        } else {
-            mw.workspace_for_paths(key.path_list(), key.host().as_ref(), cx)
+        if let Some(active) = self.active_workspace(cx) {
+            let active_key = active.read(cx).project_group_key(cx);
+            if active_key == *key {
+                return Some(active);
+            }
         }
+        mw.workspace_for_paths(key.path_list(), key.host().as_ref(), cx)
     }
 
     pub(crate) fn activate_or_open_workspace_for_group(

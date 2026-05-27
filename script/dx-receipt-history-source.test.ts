@@ -46,14 +46,21 @@ test("DX receipt history keeps bucket scanning, receipt IO, Forge summaries, and
   assert.match(buckets, /fn scan_bucket/);
   assert.match(buckets, /Forge History/);
   assert.match(fields, /pub\(super\) fn string_field/);
+  assert.match(fields, /pub\(super\) fn safe_string_field/);
   assert.match(fields, /pub\(super\) fn bool_field/);
   assert.match(fields, /pub\(super\) fn usize_field/);
+  assert.match(fields, /fn is_secret_like_scalar/);
+  assert.match(fields, /DX_RECEIPT_SECRET_MARKERS/);
   assert.match(forge, /pub\(super\) fn forge_receipt_summary/);
   assert.match(forge, /forge_history_kind/);
   assert.doesNotMatch(forge, /fn forge_history_kind/);
   assert.doesNotMatch(forge, /fn forge_history_target_path/);
   assert.match(forgeFields, /pub\(super\) fn forge_history_kind/);
   assert.match(forgeFields, /pub\(super\) fn forge_history_target_path/);
+  assert.match(forgeFields, /use super::fields::\{bool_field, safe_string_field, string_field, usize_field\}/);
+  assert.match(forgeFields, /forge_history_status[\s\S]*safe_string_field/);
+  assert.match(forgeFields, /forge_history_target_path[\s\S]*safe_string_field/);
+  assert.match(forgeFields, /forge_history_restore_destination_root[\s\S]*safe_string_field/);
   assert.match(forgeFields, /restore_target_plan/);
   assert.match(receiptFiles, /pub\(super\) fn count_receipt_files/);
   assert.match(receiptFiles, /pub\(super\) fn push_latest_receipts/);
@@ -64,7 +71,7 @@ test("DX receipt history keeps bucket scanning, receipt IO, Forge summaries, and
 
   assert.ok(lineCount(parentPath) < 95, "dx_receipt_history.rs should stay focused on cache and public snapshot types");
   assert.ok(lineCount(bucketsPath) < 95, "receipt-history bucket scanner should stay small");
-  assert.ok(lineCount(fieldsPath) < 35, "receipt-history field helpers should stay small");
+  assert.ok(lineCount(fieldsPath) < 75, "receipt-history field helpers should stay small");
   assert.ok(lineCount(forgePath) < 85, "receipt-history Forge summary parser should stay small");
   assert.ok(lineCount(forgeFieldsPath) < 120, "receipt-history Forge field parser should stay small");
   assert.ok(lineCount(receiptFilesPath) < 125, "receipt-history file walker should stay small");

@@ -63,6 +63,10 @@ pub(crate) fn refusal_status_detail(error: &anyhow::Error) -> &'static str {
         "requires_manifest_source_template"
     } else if error.contains("trusted Zed source snapshot") {
         "missing_trusted_source_snapshot"
+    } else if error.contains("source snapshot selection identity") {
+        "stale_source"
+    } else if error.contains("source snapshot content identity") {
+        "stale_source"
     } else if error.contains("source snapshot does not match") {
         "stale_source"
     } else if error.contains("stale text edit") || error.contains("stale source file") {

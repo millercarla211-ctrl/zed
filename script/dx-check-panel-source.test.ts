@@ -36,6 +36,9 @@ test("DX Check panel delegates receipt IO and panel parsing", () => {
   assert.match(parser, /pub\(super\) fn panel_from_receipt_value/);
   assert.match(parser, /pub\(super\) fn missing_snapshot/);
   assert.match(parser, /pub\(super\) fn malformed_snapshot/);
+  assert.match(reader, /use crate::dx_deploy_root_key::deploy_root_key;/);
+  assert.match(reader, /let path_key = deploy_root_key\(&path\);/);
+  assert.match(reader, /deploy_root_key\(existing\) == path_key/);
   assert.ok(lineCount("crates/agent_ui/src/dx_check_panel/reader.rs") < 140);
   assert.ok(lineCount("crates/agent_ui/src/dx_check_panel/parser.rs") < 560);
 });

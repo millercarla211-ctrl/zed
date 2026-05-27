@@ -4,6 +4,7 @@ use ui::{Color, prelude::*};
 use crate::dx_agent_bridge::DxAgentBridgeSnapshot;
 
 use super::super::super::metric_row;
+use super::labels::receipt_next_action_label;
 
 pub(super) fn dx_agent_receipt_footer_rows(snapshot: &DxAgentBridgeSnapshot) -> Vec<AnyElement> {
     let index = &snapshot.receipt_index;
@@ -24,7 +25,7 @@ pub(super) fn dx_agent_receipt_footer_rows(snapshot: &DxAgentBridgeSnapshot) -> 
     }
 
     rows.push(
-        Label::new(index.next_action.clone())
+        Label::new(receipt_next_action_label(&index.next_action))
             .size(LabelSize::XSmall)
             .color(Color::Muted)
             .truncate()

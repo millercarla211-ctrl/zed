@@ -125,7 +125,11 @@ test("deploy capability matrix surfaces malformed latest receipts", () => {
   assert.match(invalidReceipts, /pub\(crate\) struct DxDeployInvalidReceipt/);
   assert.match(capabilities, /pub invalid_receipts: Vec<DxDeployInvalidReceipt>/);
   assert.match(invalidReceipts, /read_deploy_receipt_json\(path: &Path\) -> Result<Value, String>/);
-  assert.match(invalidReceipts, /Unable to parse dx-deploy receipt/);
+  assert.match(invalidReceipts, /fs::metadata\(path\)/);
+  assert.match(invalidReceipts, /MAX_DEPLOY_RECEIPT_BYTES/);
+  assert.match(invalidReceipts, /\{receipt_label\} receipt is too large for the launch rail/);
+  assert.match(invalidReceipts, /read_limited_receipt_json\(path, MAX_DEPLOY_RECEIPT_BYTES, "dx-deploy"\)/);
+  assert.match(invalidReceipts, /Unable to parse \{receipt_label\} receipt/);
   assert.match(invalidReceipts, /MAX_INVALID_DEPLOY_RECEIPTS/);
   assert.match(invalidReceipts, /note_invalid_receipt\(/);
   assert.match(capabilities, /note_invalid_receipt\(invalid_receipts, &candidate\.label, error\)/);

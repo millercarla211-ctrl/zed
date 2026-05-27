@@ -4,6 +4,7 @@ use crate::dx_agent_bridge::DxAgentBridgeSnapshot;
 
 use super::super::super::metric_row;
 use super::status::dx_agent_receipt_root_state;
+use super::text::receipt_status_text;
 
 pub(super) struct DxAgentReceiptCounts {
     pub(super) redacted_count: usize,
@@ -33,12 +34,12 @@ pub(super) fn dx_agent_receipt_summary_rows(
     let inbox = &snapshot.receipt_inbox;
 
     vec![
-        metric_row("Index", index.status.clone()),
+        metric_row("Index", receipt_status_text(&index.status)),
         metric_row(
             "Root",
             dx_agent_receipt_root_state(index.receipt_root_present, snapshot.root_exists),
         ),
-        metric_row("Inbox", inbox.status.clone()),
+        metric_row("Inbox", receipt_status_text(&inbox.status)),
         metric_row(
             "Returned",
             format!("{} / {}", index.returned_receipt_count, index.receipt_count),

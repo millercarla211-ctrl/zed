@@ -17,6 +17,7 @@ mod row_details;
 mod rows;
 mod status;
 mod summary;
+mod text;
 
 pub(in super::super) fn dx_agent_receipt_state(
     snapshot: &DxAgentBridgeSnapshot,

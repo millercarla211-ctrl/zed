@@ -122,6 +122,53 @@ test("Sidebar active workspace helpers use the cached event payload", () => {
   assert.doesNotMatch(rebuildContents, /mw\.workspace\(\)/);
   assert.doesNotMatch(rebuildContents, /multi_workspace\.read\(cx\)\.workspace\(\)/);
 
+  const projectHeaderMenu = sliceBetween(
+    source,
+    "fn render_project_header_ellipsis_menu",
+    "fn render_sticky_header",
+  );
+  assert.match(
+    projectHeaderMenu,
+    /this_for_menu\s+\.read_with\(cx, \|sidebar, cx\| sidebar\.active_workspace\(cx\)\)\s+\.ok\(\)\s+\.flatten\(\)/,
+  );
+  assert.doesNotMatch(
+    projectHeaderMenu,
+    /multi_workspace\.workspace\(\)\.clone\(\)/,
+  );
+
+  const threadSwitcher = sliceBetween(
+    source,
+    "fn toggle_thread_switcher_impl",
+    "fn render_thread",
+  );
+  assert.match(threadSwitcher, /let original_workspace = self\.active_workspace\(cx\);/);
+  assert.doesNotMatch(
+    threadSwitcher,
+    /self\.multi_workspace\s+\.upgrade\(\)\s+\.map\(\|mw\| mw\.read\(cx\)\.workspace\(\)\.clone\(\)\)/,
+  );
+
+  const recentProjectsButton = sliceBetween(
+    source,
+    "fn render_recent_projects_button",
+    "fn new_thread_in_group",
+  );
+  assert.match(
+    recentProjectsButton,
+    /let workspace = self\s+\.active_workspace\(cx\)\s+\.map\(\|workspace\| workspace\.downgrade\(\)\);/,
+  );
+  assert.doesNotMatch(
+    recentProjectsButton,
+    /mw\.read\(cx\)\.workspace\(\)\.downgrade\(\)/,
+  );
+
+  const workspaceForGroup = sliceBetween(
+    source,
+    "fn workspace_for_group",
+    "pub(crate) fn activate_or_open_workspace_for_group",
+  );
+  assert.match(workspaceForGroup, /if let Some\(active\) = self\.active_workspace\(cx\)/);
+  assert.doesNotMatch(workspaceForGroup, /mw\.workspace\(\)\.clone\(\)/);
+
   const restoreWorktreeError = sliceBetween(
     source,
     'log::error!("Failed to restore worktree: {error:#}");',
@@ -149,4 +196,25 @@ test("Call integration consumes active workspace events without re-reading them"
   );
   assert.match(source, /Some\(multi_workspace\.workspace\(\)\.clone\(\)\)/);
   assert.doesNotMatch(source, /multi_workspace\.workspace\(\)\.read\(cx\)\.project\(\)/);
+});
+
+test("Zed active workspace subscriber consumes the event payload", () => {
+  const source = read("crates/zed/src/zed.rs");
+
+  const subscriber = sliceBetween(
+    source,
+    "let window_handle = window.window_handle();\n        let multi_workspace_handle = cx.entity();",
+    "cx.observe_new(move |workspace: &mut Workspace",
+  );
+
+  assert.match(
+    subscriber,
+    /MultiWorkspaceEvent::ActiveWorkspaceChanged \{\s+active_workspace,\s+source_workspace,\s+\}/,
+  );
+  assert.match(
+    subscriber,
+    /let Some\(active_workspace\) = active_workspace\.upgrade\(\) else/,
+  );
+  assert.doesNotMatch(subscriber, /multi_workspace\.workspace\(\)/);
+  assert.doesNotMatch(subscriber, /_multi_workspace\.workspace\(\)/);
 });

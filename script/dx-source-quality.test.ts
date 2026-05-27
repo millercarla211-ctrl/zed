@@ -142,6 +142,7 @@ test("DX Studio session surfaces invalid manifest candidates", () => {
 test("DX Studio session summary can load TypeScript edit contracts", () => {
   const manifest = read("crates/web_preview/src/dx_studio/manifest.rs");
   const manifestTs = read("crates/web_preview/src/dx_studio_source_edit/manifest_ts.rs");
+  const paths = read("crates/web_preview/src/dx_studio_source_edit/paths.rs");
 
   assert.match(manifest, /edit_contract_from_typescript/);
   assert.match(manifest, /Some\("ts" \| "tsx"\)/);
@@ -153,4 +154,38 @@ test("DX Studio session summary can load TypeScript edit contracts", () => {
     manifestTs,
     /pub\(crate\) fn edit_contract_from_typescript\(contents: &str\) -> Option<Value>/,
   );
+  assert.match(manifestTs, /fn assigned_delimiter_range\(/);
+  assert.match(manifestTs, /identifier_is_non_value_declaration/);
+  assert.match(manifestTs, /find_assignment_after_identifier/);
+  assert.match(manifestTs, /fn parses_typed_exported_contract_arrays_after_assignment\(\)/);
+  assert.match(manifestTs, /"allowGeneratedEdits"/);
+  assert.match(paths, /edit_contract_from_typescript/);
+  assert.match(paths, /Some\("ts" \| "tsx"\) => edit_contract_from_typescript/);
+});
+
+test("DX Studio source edits require content and selection-bound snapshots", () => {
+  const root = read("crates/web_preview/src/dx_studio_source_edit.rs");
+  const plan = read("crates/web_preview/src/dx_studio_source_edit/plan.rs");
+  const snapshot = read("crates/web_preview/src/dx_studio_source_edit/snapshot.rs");
+  const receipt = read("crates/web_preview/src/dx_studio_source_edit/receipt.rs");
+
+  assert.match(snapshot, /"content_digest": content_digest/);
+  assert.match(snapshot, /"selection_identity": selection_snapshot_identity\(selection\)/);
+  assert.match(snapshot, /fn validate_expected_selection_identity\(/);
+  assert.match(snapshot, /fn content_digest\(contents: &\[u8\]\) -> String/);
+  assert.match(snapshot, /0xcbf29ce484222325u64/);
+  assert.match(snapshot, /is_strong_selection_identity_key/);
+  assert.match(root, /validate_expected_source_contents\(&source, &original, payload\)\?/);
+  assert.match(plan, /source_file_snapshot\(source, selection\)/);
+  assert.match(receipt, /source snapshot selection identity/);
+  assert.match(receipt, /source snapshot content identity/);
+});
+
+test("DX Studio source writes stay inside bounded file and edit sizes", () => {
+  const root = read("crates/web_preview/src/dx_studio_source_edit.rs");
+
+  assert.match(root, /const DX_STUDIO_MAX_SOURCE_FILE_BYTES: u64 = 2_000_000;/);
+  assert.match(root, /const DX_STUDIO_MAX_SOURCE_EDIT_DELTA_BYTES: i64 = 200_000;/);
+  assert.match(root, /ensure_source_file_size_allows_edit\(&source, metadata\.len\(\)\)\?/);
+  assert.match(root, /ensure_source_write_bounds\(&source, edit\.updated\.len\(\), edit\.changed_bytes\)\?/);
 });

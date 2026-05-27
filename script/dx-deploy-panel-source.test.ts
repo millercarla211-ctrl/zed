@@ -131,6 +131,15 @@ test("deploy source files stay small enough for maintenance", () => {
   }
 });
 
+test("deploy local JSON reads reject oversized receipts instead of parsing truncation", () => {
+  const localFiles = read("crates/agent_ui/src/dx_deploy_local_files.rs");
+
+  assert.match(localFiles, /const MAX_JSON_BYTES: u64 = 64 \* 1024;/);
+  assert.match(localFiles, /take\(MAX_JSON_BYTES \+ 1\)/);
+  assert.match(localFiles, /if buffer\.len\(\) as u64 > MAX_JSON_BYTES/);
+  assert.match(localFiles, /return None;/);
+});
+
 test("deploy source guard tests stay split by ownership", () => {
   const guardFiles = deployGuardFiles();
 

@@ -65,6 +65,12 @@ pub(crate) fn edit_contract_from_typescript(contents: &str) -> Option<Value> {
         "absolutePositioning",
         extract_bool_from_contract(contents, "absolutePositioning"),
     );
+    insert_bool(
+        &mut contract,
+        "allowGeneratedEdits",
+        extract_bool_from_contract(contents, "allowGeneratedEdits")
+            .or_else(|| extract_bool_from_contract(contents, "allow_generated_edits")),
+    );
     contract.insert("operations".to_string(), Value::Array(operations));
     contract.insert(
         "editableSurfaces".to_string(),
@@ -149,13 +155,7 @@ fn extract_bool_from_contract(contents: &str, key: &str) -> Option<bool> {
 }
 
 fn const_array_objects(contents: &str, name: &str) -> Vec<String> {
-    let Some(start) = contents.find(name) else {
-        return Vec::new();
-    };
-    let Some(open) = contents[start..].find('[').map(|offset| start + offset) else {
-        return Vec::new();
-    };
-    let Some(close) = matching_delimiter(contents, open, '[', ']') else {
+    let Some((open, close)) = assigned_delimiter_range(contents, name, '[', ']') else {
         return Vec::new();
     };
 
@@ -163,10 +163,137 @@ fn const_array_objects(contents: &str, name: &str) -> Vec<String> {
 }
 
 fn object_after_marker(contents: &str, marker: &str) -> Option<String> {
-    let start = contents.find(marker)?;
-    let open = contents[start..].find('{').map(|offset| start + offset)?;
-    let close = matching_delimiter(contents, open, '{', '}')?;
+    let (open, close) = assigned_delimiter_range(contents, marker, '{', '}')?;
     Some(contents[open..=close].to_string())
+}
+
+fn assigned_delimiter_range(
+    contents: &str,
+    name: &str,
+    open_delimiter: char,
+    close_delimiter: char,
+) -> Option<(usize, usize)> {
+    for start in identifier_positions(contents, name) {
+        let after_name = start + name.len();
+        let Some(assignment) = find_assignment_after_identifier(contents, after_name) else {
+            continue;
+        };
+        let Some(open) = find_unquoted_char(contents, assignment + 1, open_delimiter) else {
+            continue;
+        };
+        let Some(close) = matching_delimiter(contents, open, open_delimiter, close_delimiter)
+        else {
+            continue;
+        };
+        return Some((open, close));
+    }
+    None
+}
+
+fn identifier_positions(contents: &str, name: &str) -> Vec<usize> {
+    contents
+        .match_indices(name)
+        .filter_map(|(start, _)| {
+            if identifier_is_non_value_declaration(contents, start) {
+                return None;
+            }
+            let before = start
+                .checked_sub(1)
+                .and_then(|index| contents.as_bytes().get(index))
+                .copied();
+            let after = contents.as_bytes().get(start + name.len()).copied();
+            (!before.is_some_and(is_identifier_byte) && !after.is_some_and(is_identifier_byte))
+                .then_some(start)
+        })
+        .collect()
+}
+
+fn identifier_is_non_value_declaration(contents: &str, start: usize) -> bool {
+    let line_start = contents[..start]
+        .rfind('\n')
+        .map(|offset| offset + 1)
+        .unwrap_or(0);
+    let prefix = contents[line_start..start].trim_start();
+    prefix.starts_with("//")
+        || prefix.starts_with("type ")
+        || prefix.starts_with("export type ")
+        || prefix.starts_with("interface ")
+        || prefix.starts_with("export interface ")
+}
+
+fn find_assignment_after_identifier(contents: &str, from: usize) -> Option<usize> {
+    let bytes = contents.as_bytes();
+    let mut quote = None;
+    let mut escaped = false;
+    for (offset, character) in contents[from..].char_indices() {
+        if let Some(active_quote) = quote {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == active_quote {
+                quote = None;
+            }
+            continue;
+        }
+
+        if matches!(character, '"' | '\'' | '`') {
+            quote = Some(character);
+            continue;
+        }
+        if character == ';' {
+            return None;
+        }
+        if character == '=' {
+            let absolute = from + offset;
+            let previous = absolute
+                .checked_sub(1)
+                .and_then(|index| bytes.get(index))
+                .copied();
+            let next = bytes.get(absolute + 1).copied();
+            if previous != Some(b'=')
+                && !matches!(next, Some(b'=' | b'>'))
+                && previous != Some(b'>')
+                && previous != Some(b'<')
+            {
+                return Some(absolute);
+            }
+        }
+    }
+    None
+}
+
+fn find_unquoted_char(contents: &str, from: usize, target: char) -> Option<usize> {
+    let mut quote = None;
+    let mut escaped = false;
+    for (offset, character) in contents[from..].char_indices() {
+        if let Some(active_quote) = quote {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == active_quote {
+                quote = None;
+            }
+            continue;
+        }
+
+        if matches!(character, '"' | '\'' | '`') {
+            quote = Some(character);
+            continue;
+        }
+        if character == target {
+            return Some(from + offset);
+        }
+        if character == ';' {
+            return None;
+        }
+    }
+    None
+}
+
+fn is_identifier_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'$')
 }
 
 fn object_literals(contents: &str) -> Vec<String> {
@@ -341,4 +468,60 @@ fn extract_quoted_value_with_len(source: &str) -> Option<(String, usize)> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_typed_exported_contract_arrays_after_assignment() {
+        let source = r#"
+export const launchStudioEditContract: DxStudioEditContract = {
+  schema: "zed.web_preview.dx_studio.launch_edit_contract.v1",
+  route: "/launch",
+  sourceOwned: true,
+  allowGeneratedEdits: false,
+};
+
+export const launchStudioEditOperations: LaunchStudioEditOperation[] = [
+  {
+    operation: "update_text_content",
+    selector: "[data-dx-edit-id='launch.hero']",
+    sourceFile: "components/launch/Hero.tsx",
+    writesFiles: true,
+  },
+];
+
+export const launchStudioEditableSurfaces: LaunchStudioEditableSurface[] = [
+  {
+    id: "launch.hero",
+    selector: "[data-dx-edit-id='launch.hero']",
+    sourceFile: "components/launch/Hero.tsx",
+    operations: ["update_text_content"],
+  },
+];
+"#;
+
+        let contract = edit_contract_from_typescript(source).expect("typed contract");
+
+        assert_eq!(
+            contract
+                .pointer("/operations/0/operation")
+                .and_then(Value::as_str),
+            Some("update_text_content")
+        );
+        assert_eq!(
+            contract
+                .pointer("/surfaces/0/sourceFile")
+                .and_then(Value::as_str),
+            Some("components/launch/Hero.tsx")
+        );
+        assert_eq!(
+            contract
+                .pointer("/allowGeneratedEdits")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+    }
 }

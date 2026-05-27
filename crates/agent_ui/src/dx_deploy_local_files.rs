@@ -11,6 +11,9 @@ pub(crate) fn read_json_limited(path: &Path) -> Option<Value> {
     let mut file = File::open(path).ok()?;
     let mut buffer = Vec::new();
     read_limited(&mut file, &mut buffer).ok()?;
+    if buffer.len() as u64 > MAX_JSON_BYTES {
+        return None;
+    }
     serde_json::from_slice(&buffer).ok()
 }
 
@@ -37,5 +40,5 @@ pub(crate) fn is_receipt_file(path: &Path) -> bool {
 }
 
 fn read_limited(file: &mut File, buffer: &mut Vec<u8>) -> Result<usize> {
-    file.by_ref().take(MAX_JSON_BYTES).read_to_end(buffer)
+    file.by_ref().take(MAX_JSON_BYTES + 1).read_to_end(buffer)
 }

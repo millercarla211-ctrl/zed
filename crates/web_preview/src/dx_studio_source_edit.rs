@@ -30,9 +30,14 @@ use self::{
     },
     paths::{ensure_source_policy_allows_edit, resolve_selection_source, source_policy_for_edit},
     receipt::source_policy_for_receipt,
-    snapshot::{system_time_ms, validate_expected_source_snapshot},
+    snapshot::{
+        system_time_ms, validate_expected_source_contents, validate_expected_source_snapshot,
+    },
     values::{compact_json, string_at},
 };
+
+const DX_STUDIO_MAX_SOURCE_FILE_BYTES: u64 = 2_000_000;
+const DX_STUDIO_MAX_SOURCE_EDIT_DELTA_BYTES: i64 = 200_000;
 
 pub(crate) const DX_STUDIO_SOURCE_EDIT_RECEIPT_SCHEMA: &str =
     "zed.web_preview.dx_studio_source_edit_receipt.v1";
@@ -86,6 +91,7 @@ pub(crate) fn apply_source_edit(root_path: Option<&Path>, payload: &Value) -> Re
     let metadata =
         fs::metadata(&source).with_context(|| format!("Read metadata for {}", source.display()))?;
     validate_expected_source_snapshot(&source, &metadata, payload)?;
+    ensure_source_file_size_allows_edit(&source, metadata.len())?;
     if metadata.permissions().readonly() {
         bail!(
             "DX Studio refused to edit readonly source file {}",
@@ -95,7 +101,9 @@ pub(crate) fn apply_source_edit(root_path: Option<&Path>, payload: &Value) -> Re
 
     let original = fs::read_to_string(&source)
         .with_context(|| format!("Read source file {}", source.display()))?;
+    validate_expected_source_contents(&source, &original, payload)?;
     let edit = apply_source_operation(&original, selection, payload, &operation)?;
+    ensure_source_write_bounds(&source, edit.updated.len(), edit.changed_bytes)?;
 
     if let Err(error) = fs::write(&source, edit.updated.as_bytes()) {
         let _ = fs::write(&source, original.as_bytes());
@@ -136,6 +144,33 @@ pub(crate) fn apply_source_edit(root_path: Option<&Path>, payload: &Value) -> Re
         },
         "source_policy": source_policy_for_receipt(source_policy),
     }))
+}
+
+fn ensure_source_file_size_allows_edit(source: &Path, source_len: u64) -> Result<()> {
+    if source_len > DX_STUDIO_MAX_SOURCE_FILE_BYTES {
+        bail!(
+            "DX Studio refused to edit oversized source file {}: {source_len} bytes exceeds {DX_STUDIO_MAX_SOURCE_FILE_BYTES}",
+            source.display()
+        );
+    }
+    Ok(())
+}
+
+fn ensure_source_write_bounds(source: &Path, updated_len: usize, changed_bytes: i64) -> Result<()> {
+    let updated_len = u64::try_from(updated_len).unwrap_or(u64::MAX);
+    if updated_len > DX_STUDIO_MAX_SOURCE_FILE_BYTES {
+        bail!(
+            "DX Studio refused source edit because updated file {} would exceed {DX_STUDIO_MAX_SOURCE_FILE_BYTES} bytes",
+            source.display()
+        );
+    }
+    if changed_bytes.unsigned_abs() > DX_STUDIO_MAX_SOURCE_EDIT_DELTA_BYTES as u64 {
+        bail!(
+            "DX Studio refused source edit because write delta for {} exceeds {DX_STUDIO_MAX_SOURCE_EDIT_DELTA_BYTES} bytes",
+            source.display()
+        );
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -285,7 +320,9 @@ mod tests {
     fn apply_source_edit_returns_style_receipt_context_for_declared_token_fixture() {
         let fixture = dx_studio_apply_source_edit_fixture_root("token_success");
         write_token_fixture_source(&fixture.source_file);
-        let snapshot = source_file_snapshot(&fixture.source_file).expect("fixture snapshot");
+        let snapshot =
+            source_file_snapshot(&fixture.source_file, &token_selection("launch-hero-panel"))
+                .expect("fixture snapshot");
         let payload = token_edit_payload(snapshot, "launch-hero-panel", "launch-hero-soft");
 
         let receipt =
@@ -353,7 +390,9 @@ mod tests {
         let fixture = dx_studio_apply_source_edit_fixture_root("token_stale");
         write_token_fixture_source(&fixture.source_file);
         let original = fs::read_to_string(&fixture.source_file).expect("original source");
-        let mut snapshot = source_file_snapshot(&fixture.source_file).expect("fixture snapshot");
+        let mut snapshot =
+            source_file_snapshot(&fixture.source_file, &token_selection("launch-hero-panel"))
+                .expect("fixture snapshot");
         let stale_len = snapshot.get("len").and_then(Value::as_u64).unwrap_or(0) + 1;
         snapshot
             .as_object_mut()
@@ -382,6 +421,22 @@ mod tests {
                 .and_then(Value::as_bool),
             Some(true)
         );
+    }
+
+    #[test]
+    fn apply_source_edit_refuses_snapshot_selection_identity_mismatch() {
+        let fixture = dx_studio_apply_source_edit_fixture_root("token_identity_mismatch");
+        write_token_fixture_source(&fixture.source_file);
+        let original = fs::read_to_string(&fixture.source_file).expect("original source");
+        let snapshot = source_file_snapshot(&fixture.source_file, &token_selection("launch.hero"))
+            .expect("fixture snapshot");
+        let payload = token_edit_payload(snapshot, "launch-hero-panel", "launch-hero-soft");
+
+        let error = apply_source_edit(Some(&fixture.root), &payload).expect_err("identity refusal");
+        let after_refusal = fs::read_to_string(&fixture.source_file).expect("source after refusal");
+
+        assert_eq!(refusal_status_detail(&error), "stale_source");
+        assert_eq!(after_refusal, original);
     }
 
     struct DxStudioFixture {
@@ -434,32 +489,36 @@ mod tests {
         .expect("fixture source");
     }
 
+    fn token_selection(old_token: &str) -> Value {
+        json!({
+            "source_file": "app/page.tsx",
+            "edit_id": "launch.hero",
+            "edit_kind": "hero",
+            "design_token": old_token,
+            "style_surface": "theme-token",
+            "operations": ["update_design_token"],
+            "hot_reload_target": "route:/launch",
+            "attributes": {
+                "data-dx-source-file": "app/page.tsx",
+                "data-dx-edit-id": "launch.hero",
+                "data-dx-edit-kind": "hero",
+                "data-dx-edit-ops": "update_design_token",
+                "data-dx-design-token": old_token,
+                "data-dx-style-surface": "theme-token",
+                "data-dx-hot-reload-target": "route:/launch"
+            },
+            "style_edit_plan": {
+                "schema": "zed.web_preview.dx_studio_style_edit_plan.v1",
+                "status": "token_contract_ready",
+                "operation": "update_design_token"
+            }
+        })
+    }
+
     fn token_edit_payload(snapshot: Value, old_token: &str, new_token: &str) -> Value {
         json!({
             "operation": "update_design_token",
-            "selection": {
-                "source_file": "app/page.tsx",
-                "edit_id": "launch.hero",
-                "edit_kind": "hero",
-                "design_token": old_token,
-                "style_surface": "theme-token",
-                "operations": ["update_design_token"],
-                "hot_reload_target": "route:/launch",
-                "attributes": {
-                    "data-dx-source-file": "app/page.tsx",
-                    "data-dx-edit-id": "launch.hero",
-                    "data-dx-edit-kind": "hero",
-                    "data-dx-edit-ops": "update_design_token",
-                    "data-dx-design-token": old_token,
-                    "data-dx-style-surface": "theme-token",
-                    "data-dx-hot-reload-target": "route:/launch"
-                },
-                "style_edit_plan": {
-                    "schema": "zed.web_preview.dx_studio_style_edit_plan.v1",
-                    "status": "token_contract_ready",
-                    "operation": "update_design_token"
-                }
-            },
+            "selection": token_selection(old_token),
             "edit": {
                 "old_token": old_token,
                 "new_token": new_token,

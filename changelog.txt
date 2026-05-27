@@ -1,3 +1,64 @@
+[2026-05-28] - Final Source Hardening Integration
+
+CHANGED:
+- `crates/agent_ui/src/dx_deploy_local_files.rs` now reads one byte beyond the local JSON limit and rejects oversized deploy local files before parsing, avoiding truncated JSON interpretation.
+- `script/dx-deploy-panel-source.test.ts` now guards the oversized local JSON rejection path.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-windows-reliability-source.test.ts script\dx-workspace-reentrant-source.test.ts script\dx-source-quality.test.ts script\dx-check-panel-source.test.ts script\dx-deploy-panel-source.test.ts script\dx-deploy-receipts-source.test.ts script\dx-deploy-launch-gate-source.test.ts script\dx-deploy-launch-evidence-source.test.ts script\dx-receipt-history-source.test.ts script\dx-launch-workspace-source.test.ts` (61/61 passing)
+- `rustfmt --edition 2024 --check` on all edited Rust files
+- Conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipped Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
+[2026-05-28] - Worker 4 Receipt Root And Launch Gate Follow-Up
+
+CHANGED:
+- Shared deploy receipt JSON reads now stat receipt files before parsing and reject oversized deploy/check-launch receipts as invalid launch-rail blockers instead of parsing only a bounded prefix.
+- `crates/agent_ui/src/dx_deploy_launch_gate.rs` now reuses the bounded receipt JSON reader for dx-check launch receipts while preserving invalid latest receipt blocking.
+- `crates/agent_ui/src/dx_check_panel/reader.rs` now de-duplicates workspace/fallback check receipt candidates through the Windows-safe deploy root key so slash/case variants do not reorder the same receipt source.
+- Source guards now cover oversized receipt rejection and normalized DX Check panel receipt candidate de-duplication.
+
+PASSED:
+- `node --test script\dx-check-panel-source.test.ts script\dx-deploy-receipts-source.test.ts script\dx-deploy-launch-gate-source.test.ts`
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_check_panel\reader.rs crates\agent_ui\src\dx_deploy_invalid_receipts.rs crates\agent_ui\src\dx_deploy_launch_gate.rs`
+
+NOTES:
+- Skipped Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, commits, pushes, and live deploy/runtime proof by direct Worker 4 instruction.
+
+[2026-05-28] - Worker 5 Windows Reliability Follow-Up
+
+CHANGED:
+- `crates/worktree/src/worktree.rs` now requires a Windows `std::io::Error` raw OS code before suppressing reserved-device metadata failures, so unexpected wrapper errors for names like `NUL` remain visible.
+- Worktree event reload metadata failures now use the same expected-Windows-entry debug skip as directory scans, while unexpected reload failures still log at error level.
+- `script\dx-windows-reliability-source.test.ts` now guards reserved-device OS-error gating, event reload severity, and local minidump endpoint-before-read gating.
+
+PASSED:
+- `node --test script\dx-windows-reliability-source.test.ts`
+- `rustfmt --edition 2024 --check crates/worktree/src/worktree.rs`
+
+NOTES:
+- Skipped Cargo build/check/test/clippy, `just run`, local servers/apps, commits, pushes, and live editor runtime proof by direct Worker 5 lane instruction.
+
+[2026-05-28] - Worker 6 Handoff Source Guard Registry
+
+ADDED:
+- Added `script/dx-handoff-source-guard-registry.test.ts` to protect the DX handoff source-guard registry and no-runtime-proof wording.
+- Added a `Lightweight Source Guard Registry` section to `DX.md` so future workers can find the targeted no-build guards without reading the full changelog.
+
+CHANGED:
+- `DX.md` now lists the current handoff, production-readiness, deploy, check, launch, receipt, Agent bridge, DX-WWW evidence, and Web Preview platform source guards with exact `node --test` commands where applicable.
+- `DX.md` and `todo.txt` now reword current Deploy-panel 100/100 handoff lines as source/config or dry-run evidence only, not runtime, launch, or production readiness.
+- `todo.txt` now records the Worker 6 source-only handoff-doc hygiene pass in the completed handoff list.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts`
+
+NOTES:
+- Skipped Cargo build/check/test/clippy, `just run`, local servers, browser automation, commits, pushes, and live editor runtime proof by direct Worker 6 instruction.
+
 [2026-05-28] - Six-Agent Source Production Hardening
 
 ADDED:
@@ -2441,7 +2502,7 @@ CHANGED:
 
 NOTES:
 - Verification run: red/green provider-gate source guard, red/green deploy-gate split guard, and `rustfmt --edition 2024 --check` on touched Rust files. Full Cargo/editor runtime proof remains deferred by launch-lane policy.
-- Current Zed Deploy panel source/config status remains 100/100. Governed native Zed visual/runtime proof remains intentionally outside this lightweight lane.
+- Current scoped Zed Deploy panel source/config score was 100/100 for that lane only. Governed native Zed visual/runtime proof remained intentionally outside this lightweight lane.
 
 [2026-05-22] - DX Deploy Rail Modularization And Root CLI Proof
 
@@ -9983,3 +10044,30 @@ FIXED:
 NOTES:
 - Ran `rustfmt --edition 2024 --check` on the changed Rust files.
 - Ran `$env:CARGO_BUILD_JOBS='6'; $env:ZED_GENERATE_MINIDUMPS='1'; just run`; the editor launched from the rebuilt dev binary, and the user confirmed the relaunched editor is working correctly.
+
+[2026-05-28] - Worker 3 Active Workspace Reentrancy Sweep
+
+CHANGED:
+- `crates/sidebar/src/sidebar.rs` now uses the cached active workspace for project-header menu active state, thread-switcher dismissal restore, recent-projects popover anchoring, and group activation lookup instead of re-reading `MultiWorkspace::workspace()` in those UI/update paths.
+- `script/dx-workspace-reentrant-source.test.ts` now guards the additional Sidebar cached-workspace paths and the Zed active-workspace event subscriber.
+
+NOTES:
+- Ran `node --test script/dx-workspace-reentrant-source.test.ts`.
+- Ran `rustfmt --edition 2024 --check crates/sidebar/src/sidebar.rs`.
+- Ran `git diff --check`.
+- Skipped Cargo build/check/test/clippy, `just run`, local servers/apps, commits, pushes, and live runtime proof by direct instruction.
+
+[2026-05-28] - Worker 2 DX Studio Source Edit Safety
+
+CHANGED:
+- `crates/web_preview/src/dx_studio_source_edit/snapshot.rs` now includes a source content digest and narrow selection identity in trusted source snapshots, then validates both before writes.
+- `crates/web_preview/src/dx_studio_source_edit.rs` now rechecks source content before applying a write and refuses oversized source files or edit deltas.
+- `crates/web_preview/src/dx_studio_source_edit/manifest_ts.rs` now parses TypeScript edit-contract arrays after the value assignment instead of the type annotation and carries `allowGeneratedEdits` into parsed contracts.
+- `crates/web_preview/src/dx_studio_source_edit/paths.rs` now lets generated/materialized-source policy checks read explicit generated-edit permission from TypeScript edit contracts.
+- `script/dx-source-quality.test.ts` now guards the snapshot identity, write bounds, and TypeScript parser safety shape.
+
+NOTES:
+- Ran `node --test script\dx-source-quality.test.ts`.
+- Ran targeted `rustfmt --edition 2024 --check` on the touched DX Studio Rust files.
+- Ran `git diff --check`.
+- Skipped Cargo build/check/test/clippy, `just run`, local servers/apps, commits, pushes, browser automation, and live WebView/runtime proof by direct instruction.

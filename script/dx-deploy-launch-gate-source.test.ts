@@ -93,6 +93,7 @@ test("launch gate keeps source-owned blocker provenance", () => {
 test("launch gate surfaces malformed latest receipts", () => {
   const reader = read("crates/agent_ui/src/dx_deploy_launch_gate.rs");
   const notices = read("crates/agent_ui/src/dx_deploy_launch_notices.rs");
+  const invalidReceipts = read("crates/agent_ui/src/dx_deploy_invalid_receipts.rs");
 
   assert.match(reader, /fn invalid_snapshot/);
   assert.match(reader, /Result<DxDeployLaunchGateSnapshot, String>/);
@@ -103,7 +104,10 @@ test("launch gate surfaces malformed latest receipts", () => {
   );
   assert.match(notices, /pub\(crate\) const INVALID_LAUNCH_RECEIPT_NEXT_ACTION/);
   assert.match(notices, /code: Some\("invalid_launch_receipt"\.to_string\(\)\)/);
-  assert.match(reader, /Unable to parse dx-check launch receipt/);
+  assert.match(reader, /read_limited_receipt_json\(&candidate\.path, MAX_CHECK_RECEIPT_BYTES, "dx-check launch"\)/);
+  assert.match(reader, /MAX_CHECK_RECEIPT_BYTES/);
+  assert.match(invalidReceipts, /fs::metadata\(path\)/);
+  assert.match(invalidReceipts, /\{receipt_label\} receipt is too large for the launch rail/);
   assert.match(notices, /Regenerate the dx-check launch receipt before using deploy readiness/);
   assert.doesNotMatch(reader, /\.find_map\(parse_launch_gate_candidate\)/);
   assert.doesNotMatch(reader, /serde_json::from_slice\(&buffer\)\.ok\(\)/);
