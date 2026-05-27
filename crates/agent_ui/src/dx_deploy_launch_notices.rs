@@ -2,6 +2,9 @@ use serde_json::Value;
 
 use crate::dx_deploy_receipt_fields::string_field;
 
+pub(crate) const INVALID_LAUNCH_RECEIPT_NEXT_ACTION: &str =
+    "Regenerate the dx-check launch receipt before using deploy readiness.";
+
 #[derive(Clone)]
 pub(crate) struct DxDeployLaunchGateNotice {
     pub severity: Option<String>,
@@ -9,6 +12,19 @@ pub(crate) struct DxDeployLaunchGateNotice {
     pub message: String,
     pub evidence_path: Option<String>,
     pub next_action: Option<String>,
+}
+
+pub(crate) fn invalid_launch_receipt_notice(
+    label: String,
+    error: String,
+) -> DxDeployLaunchGateNotice {
+    DxDeployLaunchGateNotice {
+        severity: Some("error".to_string()),
+        code: Some("invalid_launch_receipt".to_string()),
+        message: error,
+        evidence_path: Some(label),
+        next_action: Some(INVALID_LAUNCH_RECEIPT_NEXT_ACTION.to_string()),
+    }
 }
 
 pub(crate) fn notice_rows(value: Option<&Value>) -> Vec<DxDeployLaunchGateNotice> {

@@ -15,7 +15,10 @@ use crate::dx_deploy_launch_buckets::{DxDeployLaunchBucket, launch_buckets};
 use crate::dx_deploy_launch_evidence::{
     DxDeployLaunchChain, DxDeployLaunchEvidenceSource, launch_chain, launch_evidence_sources,
 };
-use crate::dx_deploy_launch_notices::{DxDeployLaunchGateNotice, notice_rows};
+use crate::dx_deploy_launch_notices::{
+    DxDeployLaunchGateNotice, INVALID_LAUNCH_RECEIPT_NEXT_ACTION, invalid_launch_receipt_notice,
+    notice_rows,
+};
 use crate::dx_deploy_launch_outcome::{DxDeployLaunchOutcome, launch_outcome};
 use crate::dx_deploy_launch_scope::{DxDeployLaunchScope, launch_scope};
 use crate::dx_deploy_receipt_fields::{
@@ -23,7 +26,6 @@ use crate::dx_deploy_receipt_fields::{
 };
 
 const MAX_CHECK_RECEIPT_BYTES: u64 = 256 * 1024;
-
 #[derive(Clone, Default)]
 pub(crate) struct DxDeployLaunchGateSnapshot {
     pub receipt_found: bool,
@@ -84,13 +86,15 @@ pub(crate) fn deploy_launch_gate_snapshot(
             })
     });
 
-    candidates
-        .iter()
-        .find_map(parse_launch_gate_candidate)
-        .unwrap_or_else(|| DxDeployLaunchGateSnapshot {
+    let Some(candidate) = candidates.first() else {
+        return DxDeployLaunchGateSnapshot {
             label: "No dx-check launch receipt".to_string(),
             ..Default::default()
-        })
+        };
+    };
+
+    parse_launch_gate_candidate(candidate)
+        .unwrap_or_else(|error| invalid_snapshot(candidate, error))
 }
 
 fn push_check_candidates(
@@ -124,7 +128,7 @@ fn push_check_candidates(
 
 fn parse_launch_gate_candidate(
     candidate: &LaunchGateCandidate,
-) -> Option<DxDeployLaunchGateSnapshot> {
+) -> Result<DxDeployLaunchGateSnapshot, String> {
     let receipt = read_json(&candidate.path)?;
     let zed = receipt.get("zed");
     let source_ready = receipt.get("source_ready");
@@ -135,7 +139,7 @@ fn parse_launch_gate_candidate(
         .and_then(|value| usize_field(value, "quick_fix_count"))
         .unwrap_or(quick_actions.len());
 
-    Some(DxDeployLaunchGateSnapshot {
+    Ok(DxDeployLaunchGateSnapshot {
         receipt_found: true,
         label: candidate.label.clone(),
         schema_version: zed
@@ -181,11 +185,29 @@ fn parse_launch_gate_candidate(
     })
 }
 
-fn read_json(path: &Path) -> Option<Value> {
-    let mut file = File::open(path).ok()?;
+fn invalid_snapshot(candidate: &LaunchGateCandidate, error: String) -> DxDeployLaunchGateSnapshot {
+    DxDeployLaunchGateSnapshot {
+        receipt_found: true,
+        label: candidate.label.clone(),
+        status: Some("invalid receipt".to_string()),
+        blocker_count: 1,
+        blockers: vec![invalid_launch_receipt_notice(
+            candidate.label.clone(),
+            error,
+        )],
+        next_action: Some(INVALID_LAUNCH_RECEIPT_NEXT_ACTION.to_string()),
+        ..Default::default()
+    }
+}
+
+fn read_json(path: &Path) -> Result<Value, String> {
+    let mut file = File::open(path)
+        .map_err(|error| format!("Unable to open dx-check launch receipt: {error}"))?;
     let mut buffer = Vec::new();
-    read_limited(&mut file, &mut buffer).ok()?;
-    serde_json::from_slice(&buffer).ok()
+    read_limited(&mut file, &mut buffer)
+        .map_err(|error| format!("Unable to read dx-check launch receipt: {error}"))?;
+    serde_json::from_slice(&buffer)
+        .map_err(|error| format!("Unable to parse dx-check launch receipt: {error}"))
 }
 
 fn read_limited(file: &mut File, buffer: &mut Vec<u8>) -> Result<usize> {

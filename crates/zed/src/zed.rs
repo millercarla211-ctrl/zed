@@ -457,15 +457,18 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
         cx.subscribe_in(
             &multi_workspace_handle,
             window,
-            |this, _multi_workspace, event: &workspace::MultiWorkspaceEvent, window, cx| {
+            |_this, _multi_workspace, event: &workspace::MultiWorkspaceEvent, window, cx| {
                 let workspace::MultiWorkspaceEvent::ActiveWorkspaceChanged {
-                    source_workspace, ..
+                    active_workspace,
+                    source_workspace,
                 } = event
                 else {
                     return;
                 };
 
-                let active_workspace = this.workspace().clone();
+                let Some(active_workspace) = active_workspace.upgrade() else {
+                    return;
+                };
                 let source_workspace = source_workspace.clone();
                 active_workspace.update(cx, |workspace, cx| {
                     if let Some(ref source) = source_workspace {

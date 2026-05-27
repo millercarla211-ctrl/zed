@@ -1,3 +1,39 @@
+[2026-05-28] - Release Hygiene No-Just-Run Audit
+
+CHANGED:
+- `AGENTS.md` now treats `just run` as the default full-validation command only when the current user prompt explicitly opens that window.
+- `DX.md` now marks the 2026-05-22 launch target as historical and records that current production readiness is source-audited only until governed runtime proof opens.
+- `todo.txt` now records this no-Cargo/no-`just run` release-hygiene audit and its next handoff action.
+- `justfile` now carries an agent-facing note that source-only passes must not invoke recipes that wrap Cargo unless the prompt allows them.
+- `crates/zed/src/reliability.rs` now checks for a configured minidump endpoint before requesting remote crash files, so remote dumps are not consumed when local dev upload is disabled.
+
+PASSED:
+- `git status --short --branch`
+- Targeted `rg` checks for stale command/date wording and conflict markers
+- `git diff --check`
+
+NOTES:
+- This pass is intentionally release-hygiene/source-level only: no Cargo build/check/test/clippy, no `just run`, no servers, no commits, and no pushes.
+
+[2026-05-28] - DX Workspace Reentrant Source Guards
+
+ADDED:
+- Added `script/dx-workspace-reentrant-source.test.ts` to guard the source-only contracts behind the recent reentrant workspace crash fix: AgentPanel reads DX launch roots and sizing helpers from its deferred `DxWorkspaceSnapshot`, `MultiWorkspaceEvent::ActiveWorkspaceChanged` and `WorkspaceRemoved` carry active workspace payloads, Sidebar active-workspace helpers use the cached event handle, and Call integration consumes the active-workspace event payload instead of re-reading it.
+
+CHANGED:
+- `crates/workspace/src/multi_workspace.rs`, `crates/sidebar/src/sidebar.rs`, `crates/zed/src/zed.rs`, and `crates/call/src/call_impl/mod.rs` now avoid the remaining active-workspace event re-read paths found during the source audit.
+- `crates/agent_ui/src/dx_deploy_launch_gate.rs` now surfaces an invalid latest dx-check launch receipt as an explicit blocker instead of silently falling back to older or generic receipts.
+- Updated `DX.md` and `todo.txt` with the source-only guard coverage and the remaining governed runtime proof gap.
+
+PASSED:
+- `node --test script\dx-workspace-reentrant-source.test.ts`
+- `node --test script\dx-deploy-launch-gate-source.test.ts`
+- `rustfmt --edition 2024 --check` on edited Rust files
+- `git diff --check`
+
+NOTES:
+- No Cargo build/check/test/clippy, `just run`, local server, browser automation, or live editor runtime proof ran in this pass.
+
 [2026-05-28] - Windows Worktree Startup Log Cleanup
 
 CHANGED:
@@ -6,8 +42,8 @@ CHANGED:
 - `justfile` now reports the active `CARGO_BUILD_JOBS` value and waits 10 seconds after launching Zed so immediate startup exits fail the run recipe.
 
 PASSED:
-- `$env:CARGO_BUILD_JOBS='6'; just run`
-- Zed remained running as `G:\Zed\target\debug\zed.exe` process `37476` after the launch guard.
+- `$env:CARGO_BUILD_JOBS='6'; just run` completed the build/launch path.
+- A later runtime pass exposed a follow-up reentrant workspace crash, which was fixed in the subsequent startup reentrant workspace entries.
 
 NOTES:
 - The existing `C:\Users\Computer\AppData\Local\Zed\logs\Zed.log` file still contains older historical copies of the reported lines, but the current source no longer emits the minidump warning or the expected Windows worktree scanner errors at error level.

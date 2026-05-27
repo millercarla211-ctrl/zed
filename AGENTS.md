@@ -13,10 +13,14 @@ You are running GPT-5.4 with xhigh reasoning effort via codex-cli. Key capabilit
 
 **THIS IS A VERY LARGE PROJECT**
 
-### ONLY Allowed Command
+### Default Full Validation Command
+Use this only when the current user prompt explicitly opens the final validation window. If the current prompt forbids `just run`, Cargo, servers, or runtime proof, that stricter prompt wins and no runnable build/test command is allowed for that pass.
+
 ```bash
 just run
 ```
+
+For source-only or release-hygiene passes, keep verification to the lightweight commands the prompt allows, such as `git status`, targeted `rg`, and `git diff --check`.
 
 ### FORBIDDEN Commands (DO NOT USE)
 - `cargo test` - Takes too long, will timeout
@@ -24,10 +28,12 @@ just run
 - `cargo build` - Use `just run` instead
 - `cargo clippy` - Too slow for iteration
 - Any other cargo commands
+- Justfile helper recipes that wrap Cargo, such as `just check`, `just build`, `just fmt`, or `just lint`, unless the current user prompt explicitly allows that command class
 
 ### When to Run `just run`
 - **RARELY** - Only after implementing ALL changes
 - **MOST OF THE TIME: DON'T RUN IT** - User will run manually
+- **NEVER** when the current user prompt or handoff lane forbids it
 - Running takes significant time - use that time to fix more bugs instead
 
 ### Your Primary Workflow
@@ -35,7 +41,7 @@ just run
 2. **FIND bugs by inspection** - Don't rely on tests/checks
 3. **IMPLEMENT fixes** - Make all necessary changes
 4. **VERIFY by code review** - Read your changes, ensure correctness
-5. **Let user test** - User will run `just run` when ready
+5. **Let user test** - The user, or an explicitly authorized validation pass, will run `just run` when ready
 
 **DO NOT WAIT FOR TEST OUTPUT TO VALIDATE YOUR WORK**
 - This project is too large for quick test cycles
@@ -136,7 +142,7 @@ NOTES:
 **End:** 
 - Update changelog.txt with all changes
 - Final todo.txt state
-- User will run `just run` to test when ready
+- The user, or an explicitly authorized validation pass, will run `just run` to test when ready
 
 ## Error Recovery
 changelog.txt shows what changed and where | todo.txt shows intent

@@ -1,7 +1,8 @@
 # DX/Zed Launch Worker Notes
 
-Date: 2026-05-21
-Launch target: 2026-05-22
+Date: 2026-05-28
+Launch target: historical 2026-05-22 planning target; current production readiness is source-audited only until the governed runtime proof window opens.
+Current branch handoff: `dev`, tracking `origin/dev` when this audit started.
 
 ## Worker Role
 
@@ -24,6 +25,13 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Prefer code reading, targeted implementation, `git diff --check`, conflict-marker search, and narrow checks after coherent milestones.
 - Update `todo.txt`, `changelog.txt`, and this file when changing launch status.
 
+## Current Verification Lane
+
+- This production-readiness pass is no-`just run` and no-Cargo by direct instruction.
+- Allowed proof for this pass is release-hygiene inspection with `git status`, targeted `rg`, and `git diff --check`.
+- Existing `100/100`, "complete", and "production" notes in older handoffs mean source/code-complete for their scoped lane unless a later governed runtime proof says otherwise.
+- Do not claim runtime-green, production-ready, or launch-ready from these docs alone.
+
 ## Current Launch Targets
 
 - Add `Agent` alongside existing AI actions like `Write` and `Ask`.
@@ -34,6 +42,8 @@ This checkout is the Zed/DX editor surface. Worker chats here should focus on GP
 - Wire DX Agents CLI receipts, social/account readiness, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
+
+- Added production-readiness source audit hardening: `crates/zed/src/reliability.rs` now avoids requesting remote crash files when no minidump endpoint is configured, `crates/workspace/src/multi_workspace.rs` carries active workspace payloads for active-workspace changes and removals, Sidebar/Zed/Call integration consume those event payloads instead of re-reading risky active workspace state, and the Deploy launch gate now surfaces malformed latest dx-check launch receipts as explicit blockers. `script/dx-workspace-reentrant-source.test.ts` guards AgentPanel's deferred `DxWorkspaceSnapshot`, active workspace event payloads, Sidebar cached active workspace helpers, and Call integration. Passed: targeted rustfmt check, `node --test script\dx-workspace-reentrant-source.test.ts`, `node --test script\dx-deploy-launch-gate-source.test.ts`, conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof. Exact next action: keep these guards in the lightweight source set and verify native startup/runtime behavior only in the governed runtime proof window.
 
 - Split DX Agent bridge detail ownership: `crates/agent_ui/src/dx_launch_workspace/agents/bridge/details.rs` now owns latest-receipt, failed-command, action-error redaction, contract command/catalog-regeneration, import recovery-command, and gate acceptance-row details in the original display order. `crates/agent_ui/src/dx_launch_workspace/agents/bridge.rs` now delegates summary, availability prompts, detail rows, and review rows through focused helpers and stays focused on the bridge rail shell at 49 lines. `script/dx-launch-workspace-source.test.ts` guards detail module registration, shell delegation, detail row ownership, redaction detail ownership, and tighter bridge/detail budgets. Passed: red/green workspace source guard, full lightweight source guard set (30/30), targeted rustfmt check, and line-count budgets. Skipped by policy: Cargo build/check/test/clippy, `just run`, local servers, browser automation, live editor runtime, provider calls, cloud writes, and deploy execution. Exact next action: verify native Agent bridge detail rows against real DX Agents latest receipt, action-error, contract, import-summary, and release-gate receipts in the governed native Zed proof window.
 

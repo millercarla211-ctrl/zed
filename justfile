@@ -1,5 +1,8 @@
 # Justfile for running Zed on this upgraded Windows dev machine.
 # Cargo output is pinned to G:/Zed/target in .cargo/config.toml.
+# Agent note: do not invoke any recipe here during source-only or no-`just run`
+# passes. These recipes wrap Cargo and are reserved for an explicitly authorized
+# validation window.
 set shell := ["powershell.exe", "-NoLogo", "-Command"]
 
 build_target_dir := "G:/Zed/target"

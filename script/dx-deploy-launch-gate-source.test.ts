@@ -43,10 +43,9 @@ test("launch gate notice parsing stays in a focused module", () => {
   const fields = read("crates/agent_ui/src/dx_deploy_receipt_fields.rs");
 
   assert.match(agentUi, /^mod dx_deploy_launch_notices;$/m);
-  assert.match(
-    reader,
-    /use crate::dx_deploy_launch_notices::\{DxDeployLaunchGateNotice, notice_rows\};/,
-  );
+  assert.match(reader, /use crate::dx_deploy_launch_notices::\{/);
+  assert.match(reader, /DxDeployLaunchGateNotice/);
+  assert.match(reader, /notice_rows/);
   assert.match(
     reader,
     /use crate::dx_deploy_receipt_fields::\{\s*array_len, bool_field, first_string_array_item, string_field, usize_field,\s*\};/s,
@@ -91,6 +90,25 @@ test("launch gate keeps source-owned blocker provenance", () => {
   assert.match(prompts, /evidence_path=/);
 });
 
+test("launch gate surfaces malformed latest receipts", () => {
+  const reader = read("crates/agent_ui/src/dx_deploy_launch_gate.rs");
+  const notices = read("crates/agent_ui/src/dx_deploy_launch_notices.rs");
+
+  assert.match(reader, /fn invalid_snapshot/);
+  assert.match(reader, /Result<DxDeployLaunchGateSnapshot, String>/);
+  assert.match(reader, /status: Some\("invalid receipt"\.to_string\(\)\)/);
+  assert.match(
+    reader,
+    /invalid_launch_receipt_notice\(\s*candidate\.label\.clone\(\),\s*error,\s*\)/s,
+  );
+  assert.match(notices, /pub\(crate\) const INVALID_LAUNCH_RECEIPT_NEXT_ACTION/);
+  assert.match(notices, /code: Some\("invalid_launch_receipt"\.to_string\(\)\)/);
+  assert.match(reader, /Unable to parse dx-check launch receipt/);
+  assert.match(notices, /Regenerate the dx-check launch receipt before using deploy readiness/);
+  assert.doesNotMatch(reader, /\.find_map\(parse_launch_gate_candidate\)/);
+  assert.doesNotMatch(reader, /serde_json::from_slice\(&buffer\)\.ok\(\)/);
+});
+
 test("launch gate keeps warning provenance visible", () => {
   const reader = read("crates/agent_ui/src/dx_deploy_launch_gate.rs");
   const rail = read("crates/agent_ui/src/dx_deploy_launch_gate_rail.rs");
@@ -125,7 +143,7 @@ test("launch gate normalizes dx-check score to a 100-point deploy status", () =>
   assert.match(score, /label\.push_str\(" estimated"\)/);
   assert.match(rail, /launch_status_score_label\(snapshot\)/);
   assert.match(rail, /metric_row\("Status score"/);
-  assert.match(prompts, /launch_status_score_label\(snapshot\)/);
+  assert.match(prompts, /launch_status_score_label\(&snapshot\.launch_gate\)/);
   assert.match(prompts, /status_score=/);
 });
 

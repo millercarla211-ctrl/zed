@@ -798,8 +798,15 @@ impl Sidebar {
                     this.subscribe_to_workspace(workspace, window, cx);
                     this.update_entries(cx);
                 }
-                MultiWorkspaceEvent::WorkspaceRemoved(_)
-                | MultiWorkspaceEvent::ProjectGroupsChanged => {
+                MultiWorkspaceEvent::WorkspaceRemoved {
+                    removed_workspace,
+                    active_workspace,
+                } => {
+                    this.forget_cached_workspace(*removed_workspace);
+                    this.active_workspace = active_workspace.upgrade();
+                    this.update_entries(cx);
+                }
+                MultiWorkspaceEvent::ProjectGroupsChanged => {
                     this.update_entries(cx);
                 }
             },
@@ -1199,6 +1206,24 @@ impl Sidebar {
 
     fn is_active_workspace(&self, workspace: &Entity<Workspace>, cx: &App) -> bool {
         self.active_workspace(cx).as_ref() == Some(workspace)
+    }
+
+    fn forget_cached_workspace(&mut self, workspace_id: EntityId) {
+        if self
+            .active_workspace
+            .as_ref()
+            .is_some_and(|workspace| workspace.entity_id() == workspace_id)
+        {
+            self.active_workspace = None;
+        }
+
+        if self
+            .active_entry
+            .as_ref()
+            .is_some_and(|entry| entry.workspace().entity_id() == workspace_id)
+        {
+            self.active_entry = None;
+        }
     }
 
     fn subscribe_to_workspace(
@@ -8568,11 +8593,7 @@ impl Sidebar {
     }
 
     fn show_archive(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(active_workspace) = self
-            .multi_workspace
-            .upgrade()
-            .map(|w| w.read(cx).workspace().clone())
-        else {
+        let Some(active_workspace) = self.active_workspace(cx) else {
             return;
         };
         let Some(agent_panel) = active_workspace.read(cx).panel::<AgentPanel>(cx) else {

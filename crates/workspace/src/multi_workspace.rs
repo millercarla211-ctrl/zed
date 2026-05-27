@@ -121,7 +121,10 @@ pub enum MultiWorkspaceEvent {
         source_workspace: Option<WeakEntity<Workspace>>,
     },
     WorkspaceAdded(Entity<Workspace>),
-    WorkspaceRemoved(EntityId),
+    WorkspaceRemoved {
+        removed_workspace: EntityId,
+        active_workspace: WeakEntity<Workspace>,
+    },
     ProjectGroupsChanged,
 }
 
@@ -1797,7 +1800,10 @@ impl MultiWorkspace {
                 group.last_active_workspace = None;
             }
         }
-        cx.emit(MultiWorkspaceEvent::WorkspaceRemoved(workspace.entity_id()));
+        cx.emit(MultiWorkspaceEvent::WorkspaceRemoved {
+            removed_workspace: workspace.entity_id(),
+            active_workspace: self.active_workspace.downgrade(),
+        });
         workspace.update(cx, |workspace, _cx| {
             workspace.session_id.take();
             workspace._schedule_serialize_workspace.take();

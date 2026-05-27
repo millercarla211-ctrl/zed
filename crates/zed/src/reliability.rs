@@ -60,22 +60,23 @@ pub fn init(client: Arc<Client>, cx: &mut App) {
             if !client.telemetry().diagnostics_enabled() {
                 return;
             }
+            let Some(endpoint) = MINIDUMP_ENDPOINT.as_ref().cloned() else {
+                log::debug!("Minidump endpoint not set; skipping remote minidump upload");
+                return;
+            };
             let request = remote_client
                 .proto_client()
                 .request(proto::GetCrashFiles {});
             cx.background_spawn(async move {
                 let GetCrashFilesResponse { crashes } = request.await?;
 
-                let Some(endpoint) = MINIDUMP_ENDPOINT.as_ref() else {
-                    return Ok(());
-                };
                 for CrashReport {
                     metadata,
                     minidump_contents,
                 } in crashes
                 {
                     if let Some(metadata) = serde_json::from_str(&metadata).log_err() {
-                        upload_minidump(client.clone(), endpoint, minidump_contents, &metadata)
+                        upload_minidump(client.clone(), &endpoint, minidump_contents, &metadata)
                             .await
                             .log_err();
                     }
