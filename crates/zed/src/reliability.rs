@@ -221,7 +221,7 @@ fn save_hang_trace(
 
 pub async fn upload_previous_minidumps(client: Arc<Client>) -> anyhow::Result<()> {
     let Some(minidump_endpoint) = MINIDUMP_ENDPOINT.as_ref() else {
-        log::warn!("Minidump endpoint not set");
+        log::debug!("Minidump endpoint not set; skipping previous minidump upload");
         return Ok(());
     };
 

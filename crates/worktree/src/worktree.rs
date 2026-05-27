@@ -4894,7 +4894,14 @@ impl BackgroundScanner {
                 Ok(Some(metadata)) => metadata,
                 Ok(None) => continue,
                 Err(err) => {
-                    log::error!("error processing {:?}: {err:#}", child_abs_path.display());
+                    if should_ignore_scan_metadata_error(&child_abs_path, &err) {
+                        log::debug!(
+                            "skipping unavailable filesystem entry {:?}: {err:#}",
+                            child_abs_path.display()
+                        );
+                    } else {
+                        log::error!("error processing {:?}: {err:#}", child_abs_path.display());
+                    }
                     continue;
                 }
             };
@@ -5820,6 +5827,80 @@ fn swap_to_front(child_paths: &mut Vec<PathBuf>, file: &str) {
         let temp = child_paths.remove(position);
         child_paths.insert(0, temp);
     }
+}
+
+fn should_ignore_scan_metadata_error(path: &Path, err: &anyhow::Error) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        return should_ignore_windows_scan_metadata_error(path, err);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (path, err);
+        false
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn should_ignore_windows_scan_metadata_error(path: &Path, err: &anyhow::Error) -> bool {
+    let Some(file_name) = path.file_name().and_then(OsStr::to_str) else {
+        return false;
+    };
+
+    if is_windows_reserved_device_name(file_name) {
+        return true;
+    }
+
+    let Some(io_error) = err.downcast_ref::<std::io::Error>() else {
+        return false;
+    };
+
+    match io_error.raw_os_error() {
+        Some(5) => is_windows_protected_system_entry(file_name),
+        Some(32) => is_windows_locked_system_entry(file_name),
+        _ => false,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn is_windows_reserved_device_name(file_name: &str) -> bool {
+    let stem = file_name
+        .split_once('.')
+        .map_or(file_name, |(stem, _)| stem)
+        .trim_end_matches([' ', '.']);
+
+    let upper_stem = stem.to_ascii_uppercase();
+    if matches!(
+        upper_stem.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) {
+        return true;
+    }
+
+    let Some(number) = upper_stem
+        .strip_prefix("COM")
+        .or_else(|| upper_stem.strip_prefix("LPT"))
+    else {
+        return false;
+    };
+
+    matches!(number, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9")
+}
+
+#[cfg(target_os = "windows")]
+fn is_windows_protected_system_entry(file_name: &str) -> bool {
+    file_name.eq_ignore_ascii_case("System Volume Information")
+        || file_name.eq_ignore_ascii_case("$RECYCLE.BIN")
+}
+
+#[cfg(target_os = "windows")]
+fn is_windows_locked_system_entry(file_name: &str) -> bool {
+    file_name.eq_ignore_ascii_case("pagefile.sys")
+        || file_name.eq_ignore_ascii_case("swapfile.sys")
+        || file_name.eq_ignore_ascii_case("hiberfil.sys")
+        || file_name.eq_ignore_ascii_case("DumpStack.log")
+        || file_name.eq_ignore_ascii_case("DumpStack.log.tmp")
 }
 
 fn char_bag_for_path(root_char_bag: CharBag, path: &RelPath) -> CharBag {

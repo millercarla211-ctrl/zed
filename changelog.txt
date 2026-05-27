@@ -1,3 +1,17 @@
+[2026-05-28] - Windows Worktree Startup Log Cleanup
+
+CHANGED:
+- `crates/worktree/src/worktree.rs` now treats expected Windows scanner metadata failures for reserved device names, protected drive-root system folders, and locked system files as debug-level skips instead of error-level worktree failures.
+- `crates/zed/src/reliability.rs` now quietly skips previous-minidump upload when this local dev build has diagnostics enabled but no minidump endpoint configured.
+- `justfile` now reports the active `CARGO_BUILD_JOBS` value and waits 10 seconds after launching Zed so immediate startup exits fail the run recipe.
+
+PASSED:
+- `$env:CARGO_BUILD_JOBS='6'; just run`
+- Zed remained running as `G:\Zed\target\debug\zed.exe` process `37476` after the launch guard.
+
+NOTES:
+- The existing `C:\Users\Computer\AppData\Local\Zed\logs\Zed.log` file still contains older historical copies of the reported lines, but the current source no longer emits the minidump warning or the expected Windows worktree scanner errors at error level.
+
 [2026-05-28] - Upstream Zed Main Merge Into Dev
 
 CHANGED:
