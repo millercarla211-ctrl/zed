@@ -1,4 +1,4 @@
-use gpui::{AnyElement, IntoElement, prelude::*};
+use gpui::{AnyElement, IntoElement, StatefulInteractiveElement as _, prelude::*};
 use ui::prelude::*;
 
 pub(crate) fn render_coding_activity_bar(
@@ -15,6 +15,7 @@ pub(crate) fn render_coding_activity_bar(
         .py_1()
         .child(
             v_flex()
+                .id("workspace-sidebar-primary-actions")
                 .min_h_0()
                 .flex_1()
                 .items_center()

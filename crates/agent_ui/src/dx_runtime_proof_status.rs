@@ -5,6 +5,7 @@ mod summaries;
 use self::receipts::{count_receipt_files, latest_receipt_paths};
 use self::summaries::{parse_import_summary, parse_plan_summary, parse_status_summary};
 use std::{
+    cmp::Ordering,
     path::PathBuf,
     sync::{Mutex, OnceLock},
     time::{Duration, Instant},

@@ -1,4 +1,5 @@
 use gpui::{AnyElement, App, SharedString, prelude::*};
+use ui::prelude::*;
 
 use crate::dx_agent_bridge::DxAgentBridgeSnapshot;
 

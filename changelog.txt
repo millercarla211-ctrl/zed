@@ -1,3 +1,21 @@
+[2026-05-28] - Upstream Zed Main Merge Into Dev
+
+CHANGED:
+- Fast-forwarded local `main` to upstream `zed-industries/zed` main tip `6e58a92713` and merged the refreshed main branch into `dev`.
+- Resolved merge integration across `Cargo.toml`, `Cargo.lock`, Agent tool wiring, GPUI platform/window updates, sidebar/titlebar behavior, onboarding, Web Preview source-edit paths, and local `just run` launch target handling.
+- Updated `justfile` launch recipes to run the binary from the configured `G:/Zed/target` build directory, report the launched process id, and fail if Zed exits immediately instead of using the repo-local `./target` path.
+
+FIXED:
+- Adjusted post-merge API drift in editor project-path calls, Agent DX tool imports, runtime-proof import cleanup, Agent UI type/import visibility, Web Preview manifest/source-edit helpers, onboarding GPUI APIs, and sidebar scroll state.
+
+PASSED:
+- `$env:CARGO_BUILD_JOBS='4'; just run`
+- `zed` and `cli` built successfully with `--locked`, and Zed launched from `G:/Zed/target/debug/zed.exe`.
+
+NOTES:
+- The first attempted `just --jobs 4 run` was unsupported by this local `just` binary, so the verified j4 path used `CARGO_BUILD_JOBS=4` with the repository-approved `just run` recipe.
+- Existing warnings remain in Agent UI, Web Preview, and sidebar, but the requested run path exits successfully.
+
 [2026-05-25] - DX Serializer Language Defaults
 
 ADDED:

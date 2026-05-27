@@ -6,7 +6,7 @@ use crate::dx_studio;
 
 use super::{
     manifest_ts::edit_contract_from_typescript,
-    values::{string_array_at, string_at},
+    values::{string_array_at, string_at, unique_strings},
 };
 
 mod selectors;

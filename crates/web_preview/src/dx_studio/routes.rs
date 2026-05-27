@@ -165,7 +165,7 @@ fn read_preview_manifest_routes(root: &Path) -> Vec<DxStudioPreviewTarget> {
             .extension()
             .and_then(|extension| extension.to_str());
 
-        let Ok(contents) = fs::read_to_string(candidate) else {
+        let Ok(contents) = fs::read_to_string(&candidate) else {
             continue;
         };
 

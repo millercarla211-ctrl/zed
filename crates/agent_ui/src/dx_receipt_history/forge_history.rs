@@ -7,6 +7,7 @@ use super::{
     },
     receipt_io::read_json,
 };
+use super::fields::string_field;
 use std::path::Path;
 
 pub(super) fn forge_receipt_summary(

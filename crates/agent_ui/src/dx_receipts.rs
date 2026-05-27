@@ -106,9 +106,9 @@ fn latest_receipt_labels(root: &Path, root_exists: bool) -> Vec<String> {
         return Vec::new();
     }
 
-    let mut receipts = Vec::new();
+    let mut receipts: Vec<(SystemTime, String)> = Vec::new();
     let Ok(children) = fs::read_dir(root) else {
-        return receipts;
+        return Vec::new();
     };
 
     for child in children.flatten().take(24) {

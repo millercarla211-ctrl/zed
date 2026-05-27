@@ -79,7 +79,7 @@ impl Editor {
 
         if let Some(active_path) = target_file_abs_path_for_app(self, cx)
             && is_react_editor_path(&active_path)
-            && let Some((project_root, active_path)) = self.project_path(cx).and_then(|path| {
+            && let Some((project_root, active_path)) = self.active_project_path(cx).and_then(|path| {
                 let project = self.project()?.read(cx);
                 Some((
                     project.get_workspace_root(&path, cx)?,
@@ -148,7 +148,7 @@ impl Editor {
 
         if let Some(active_path) = target_file_abs_path_for_app(self, cx)
             && is_react_editor_path(&active_path)
-            && let Some((project_root, active_path)) = self.project_path(cx).and_then(|path| {
+            && let Some((project_root, active_path)) = self.active_project_path(cx).and_then(|path| {
                 let project = self.project()?.read(cx);
                 Some((
                     project.get_workspace_root(&path, cx)?,
@@ -216,7 +216,7 @@ impl Editor {
             return Ok(format!("Inserted {}", media.label.as_ref()).into());
         };
 
-        let Some((project_root, active_path)) = self.project_path(cx).and_then(|path| {
+        let Some((project_root, active_path)) = self.active_project_path(cx).and_then(|path| {
             let project = self.project()?.read(cx);
             Some((
                 project.get_workspace_root(&path, cx)?,
@@ -283,7 +283,7 @@ impl Editor {
             return Ok(format!("Inserted {}", media.label.as_ref()).into());
         };
 
-        let Some((project_root, active_path)) = self.project_path(cx).and_then(|path| {
+        let Some((project_root, active_path)) = self.active_project_path(cx).and_then(|path| {
             let project = self.project()?.read(cx);
             Some((
                 project.get_workspace_root(&path, cx)?,
@@ -371,7 +371,7 @@ impl Editor {
             return Ok(format!("Inserted {}", asset.title.as_ref()).into());
         };
 
-        let Some((project_root, active_path)) = self.project_path(cx).and_then(|path| {
+        let Some((project_root, active_path)) = self.active_project_path(cx).and_then(|path| {
             let project = self.project()?.read(cx);
             Some((
                 project.get_workspace_root(&path, cx)?,
@@ -426,7 +426,7 @@ impl Editor {
             return Ok(format!("Inserted {}", asset.title.as_ref()).into());
         };
 
-        let Some((project_root, active_path)) = self.project_path(cx).and_then(|path| {
+        let Some((project_root, active_path)) = self.active_project_path(cx).and_then(|path| {
             let project = self.project()?.read(cx);
             Some((
                 project.get_workspace_root(&path, cx)?,
@@ -508,7 +508,7 @@ fn shadcn_import_exists(text: &str, import_statement: &str) -> bool {
 }
 
 fn target_file_abs_path_for_app(editor: &Editor, cx: &App) -> Option<PathBuf> {
-    if let Some(project_path) = editor.project_path(cx) {
+    if let Some(project_path) = editor.active_project_path(cx) {
         let project = editor.project()?.read(cx);
         return project.absolute_path(&project_path, cx);
     }
@@ -1675,6 +1675,10 @@ impl Item for Editor {
             true => ItemBufferKind::Singleton,
             false => ItemBufferKind::Multibuffer,
         }
+    }
+
+    fn active_project_path(&self, cx: &App) -> Option<ProjectPath> {
+        self.active_buffer(cx)?.read(cx).project_path(cx)
     }
 
     fn can_save_as(&self, cx: &App) -> bool {

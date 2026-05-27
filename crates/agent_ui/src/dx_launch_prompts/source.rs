@@ -9,6 +9,7 @@ pub(crate) fn source_action_icon(kind: DxSourceKind) -> IconName {
         }
         DxSourceKind::MediaOutput => IconName::File,
         DxSourceKind::ForgeRestorePreview => IconName::Archive,
+        DxSourceKind::DxToolchainConfig => IconName::Settings,
     }
 }
 
@@ -19,6 +20,7 @@ pub(crate) fn source_action_title(source: &DxSourceItem) -> String {
         DxSourceKind::ReducedContextReceipt => "Review Reduced Context".to_string(),
         DxSourceKind::MediaOutput => "Attach Media Output".to_string(),
         DxSourceKind::ForgeRestorePreview => "Review Restore Preview".to_string(),
+        DxSourceKind::DxToolchainConfig => "Inspect DX Toolchain".to_string(),
     }
 }
 
@@ -27,6 +29,7 @@ pub(crate) fn source_action_label(kind: DxSourceKind) -> &'static str {
         DxSourceKind::WorkspaceRoot
         | DxSourceKind::MetasearchSourcePack
         | DxSourceKind::MediaOutput => "Attach",
+        DxSourceKind::DxToolchainConfig => "Inspect",
         DxSourceKind::ReducedContextReceipt | DxSourceKind::ForgeRestorePreview => "Review",
     }
 }
@@ -81,6 +84,10 @@ pub(crate) fn source_action_prompt(source: &DxSourceItem) -> String {
         }
         DxSourceKind::ForgeRestorePreview => format!(
             "Review this Forge restore preview source: `{}`. Use inspect_dx_forge_history and prepare_dx_source_attachment as needed, summarize restore warnings, target path, overwrite risk, rollback evidence, visible restore_approval entries, and required restore-to-target approvals. Draft the approval checklist only; do not mutate target paths, overwrite files, delete files, or run restore-to-target actions.",
+            source.path
+        ),
+        DxSourceKind::DxToolchainConfig => format!(
+            "Inspect this DX toolchain config source: `{}`. Summarize serializer, RLM, check, lighthouse, icon, style, and output expectations. Do not run builds, local servers, browser input, shell commands, deploys, external serializer/RLM code, or model calls.",
             source.path
         ),
     }

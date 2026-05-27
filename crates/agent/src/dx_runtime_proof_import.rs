@@ -257,7 +257,7 @@ fn operator_copy_markdown(
 fn clean_lines(values: Vec<String>, limit: usize) -> Vec<String> {
     values
         .into_iter()
-        .filter_map(clean_optional_text)
+        .filter_map(|value| clean_optional_text(Some(value)))
         .take(limit)
         .collect()
 }

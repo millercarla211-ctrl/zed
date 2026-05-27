@@ -1,5 +1,5 @@
 use gpui::{AnyElement, App, prelude::*};
-use ui::{Color, IconName};
+use ui::{Color, IconName, prelude::*};
 
 use crate::dx_launch_source_audit::DxLaunchSourceAuditSnapshot;
 

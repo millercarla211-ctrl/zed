@@ -63,3 +63,6 @@ crates/docs_preprocessor/actions.json
 /inspirations/shadcn-ui/
 /models/
 /tools/
+
+# NixOS integration test state
+.nixos-test-history

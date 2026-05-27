@@ -1,4 +1,5 @@
 use gpui::{AnyElement, App, prelude::*};
+use ui::prelude::*;
 
 use crate::dx_launch_status::DxLaunchStatusSnapshot;
 

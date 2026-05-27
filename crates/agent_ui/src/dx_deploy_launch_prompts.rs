@@ -62,7 +62,8 @@ pub(crate) fn deploy_launch_gate_prompt(snapshot: &DxDeployTargetSnapshot) -> St
             .join("; ")
     };
     let next_action = gate.next_action.as_deref().unwrap_or("none");
-    let status_score = launch_status_score_label(snapshot).unwrap_or_else(|| "unknown".to_string());
+    let status_score =
+        launch_status_score_label(&snapshot.launch_gate).unwrap_or_else(|| "unknown".to_string());
     let launch_buckets = launch_buckets_prompt(&gate.buckets);
     let launch_outcome = launch_outcome_prompt(&gate.outcome);
     let duration_ms = launch_duration_label(&gate.outcome).unwrap_or_else(|| "none".to_string());

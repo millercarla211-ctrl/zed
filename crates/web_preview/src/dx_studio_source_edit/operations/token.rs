@@ -130,7 +130,7 @@ fn replace_selected_attribute_value(
         .flat_map(|pattern| {
             find_all(contents, pattern)
                 .into_iter()
-                .map(|offset| (pattern, offset))
+                .map(move |offset| (pattern, offset))
         })
         .collect::<Vec<_>>();
 
@@ -152,7 +152,7 @@ fn replace_selected_attribute_value(
         .flat_map(|pattern| {
             find_all(segment, pattern)
                 .into_iter()
-                .map(|offset| (pattern, offset))
+                .map(move |offset| (pattern, offset))
         })
         .collect::<Vec<_>>();
     if local_hits.len() != 1 {

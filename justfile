@@ -13,6 +13,9 @@ default:
 ensure-build-headroom:
     @$targetDir = "{{build_target_dir}}"; $driveName = (Split-Path -Qualifier $targetDir).TrimEnd(":"); $drive = Get-PSDrive -Name $driveName; $freeGb = [math]::Round($drive.Free / 1GB, 2); $minBytes = [int64]{{min_build_free_gb}} * 1GB; if ($drive.Free -lt $minBytes) { throw "Zed build target drive $($drive.Name): has only $freeGb GB free; need at least {{min_build_free_gb}} GB before running Cargo. Free rebuildable target/cache space on the configured G-drive target, then rerun this recipe." } else { Write-Host "Build target headroom OK: $freeGb GB free on $($drive.Name):" }
 
+launch-zed:
+    @$zed = "{{build_target_dir}}/debug/zed.exe"; if (!(Test-Path -LiteralPath $zed)) { throw "Built Zed binary not found at $zed" }; $process = Start-Process -FilePath $zed -WorkingDirectory (Get-Location) -PassThru; Start-Sleep -Seconds 2; if ($process.HasExited) { throw "Zed exited immediately with code $($process.ExitCode)" }; Write-Host "Launched Zed process $($process.Id)"
+
 # RECOMMENDED: Run Zed with balanced local settings
 run: ensure-build-headroom
     @echo "Running Zed with balanced G-drive build settings..."
@@ -21,7 +24,7 @@ run: ensure-build-headroom
     $env:CARGO_INCREMENTAL = "0"; cargo build --locked -p zed --bin zed
     $env:CARGO_INCREMENTAL = "0"; cargo build --locked -p cli --bin cli
     @echo "Build complete! Launching Zed once..."
-    ./target/debug/zed.exe
+    @just launch-zed
 
 # Try with Cranelift backend (requires nightly Rust)
 run-cranelift: ensure-build-headroom
@@ -30,7 +33,7 @@ run-cranelift: ensure-build-headroom
     $env:CARGO_INCREMENTAL = "0"; cargo +nightly build --locked -p zed --bin zed -Z codegen-backend
     $env:CARGO_INCREMENTAL = "0"; cargo +nightly build --locked -p cli --bin cli -Z codegen-backend
     @echo "Build complete! Running Zed..."
-    ./target/debug/zed.exe
+    @just launch-zed
 
 # Continue interrupted build
 continue: ensure-build-headroom
@@ -38,7 +41,7 @@ continue: ensure-build-headroom
     $env:CARGO_INCREMENTAL = "0"; cargo build --locked -p zed --bin zed
     $env:CARGO_INCREMENTAL = "0"; cargo build --locked -p cli --bin cli
     @echo "Build complete! Running Zed..."
-    ./target/debug/zed.exe
+    @just launch-zed
 
 # Build only (no run)
 build: ensure-build-headroom
@@ -72,7 +75,7 @@ clean:
 # Clean only the final binary (keeps incremental cache)
 clean-binary:
     @echo "Cleaning only the final binary (keeps incremental build cache)..."
-    Remove-Item -LiteralPath target/debug/zed,target/debug/zed.exe -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath "{{build_target_dir}}/debug/zed","{{build_target_dir}}/debug/zed.exe" -Force -ErrorAction SilentlyContinue
 
 # Install nightly Rust and Cranelift (one-time setup)
 setup-cranelift:

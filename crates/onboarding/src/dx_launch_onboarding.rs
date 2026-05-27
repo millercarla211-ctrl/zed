@@ -294,8 +294,11 @@ fn file_target_with_detail(
     }
 
     let detail = root
-        .and_then(|root| path.strip_prefix(root).ok())
-        .map(|relative| format!("{} - {}", root.display(), relative.display()))
+        .and_then(|root| {
+            path.strip_prefix(root)
+                .ok()
+                .map(|relative| format!("{} - {}", root.display(), relative.display()))
+        })
         .unwrap_or_else(|| path.display().to_string());
 
     Some(DxLaunchPreviewTarget {

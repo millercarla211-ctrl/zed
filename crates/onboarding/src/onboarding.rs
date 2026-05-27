@@ -6,7 +6,7 @@ use fs::Fs;
 use gpui::{
     Action, AnyElement, App, AppContext, AsyncWindowContext, Context, Entity, EventEmitter,
     FocusHandle, Focusable, Global, IntoElement, KeyContext, Render, ScrollHandle, SharedString,
-    Subscription, Task, WeakEntity, Window, actions,
+    Subscription, Task, WeakEntity, Window, actions, linear_color_stop, linear_gradient,
 };
 use notifications::status_toast::StatusToast;
 use project::agent_server_store::AllAgentServersSettings;
@@ -61,7 +61,6 @@ pub struct ImportCursorSettings {
 }
 
 pub const FIRST_OPEN: &str = "first_open";
-pub const DOCS_URL: &str = "https://zed.dev/docs/";
 
 actions!(
     onboarding,
@@ -585,7 +584,7 @@ impl Onboarding {
                     )
                     .child(
                         Button::new("dx_provider_readiness_settings", "Provider Settings")
-                            .size(ButtonSize::Small)
+                            .size(ButtonSize::Default)
                             .style(ButtonStyle::Outlined)
                             .on_click(|_, window, cx| {
                                 window.dispatch_action(OpenSettings.boxed_clone(), cx);
@@ -731,7 +730,7 @@ impl Onboarding {
                             .gap_1()
                             .child(
                                 Button::new("dx_load_www_preview", "Load G:\\WWW")
-                                    .size(ButtonSize::Small)
+                                    .size(ButtonSize::Default)
                                     .style(ButtonStyle::Outlined)
                                     .disabled(!has_dx_www)
                                     .on_click(|_, window, cx| {
@@ -740,7 +739,7 @@ impl Onboarding {
                             )
                             .child(
                                 Button::new("dx_load_bundled_preview", "Load 3D fallback")
-                                    .size(ButtonSize::Small)
+                                    .size(ButtonSize::Default)
                                     .style(ButtonStyle::Outlined)
                                     .on_click(|_, window, cx| {
                                         window.dispatch_action(
