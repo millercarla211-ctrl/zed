@@ -153,15 +153,20 @@ impl EntityMap {
         self.entities.insert(lease.id, lease.entity.take().unwrap());
     }
 
+    #[track_caller]
     pub fn read<T: 'static>(&self, entity: &Entity<T>) -> &T {
         self.assert_valid_context(entity);
         let mut accessed_entities = self.accessed_entities.borrow_mut();
         accessed_entities.insert(entity.entity_id);
 
-        self.entities
+        let Some(entity) = self
+            .entities
             .get(entity.entity_id)
             .and_then(|entity| entity.downcast_ref())
-            .unwrap_or_else(|| double_lease_panic::<T>("read"))
+        else {
+            double_lease_panic::<T>("read");
+        };
+        entity
     }
 
     fn assert_valid_context(&self, entity: &AnyEntity) {
@@ -461,6 +466,7 @@ impl<T: 'static> Entity<T> {
 
     /// Grab a reference to this entity from the context.
     #[inline]
+    #[track_caller]
     pub fn read<'a>(&self, cx: &'a App) -> &'a T {
         cx.entities.read(self)
     }

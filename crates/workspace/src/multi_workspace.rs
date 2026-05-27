@@ -117,6 +117,7 @@ pub fn sidebar_side_context_menu(
 
 pub enum MultiWorkspaceEvent {
     ActiveWorkspaceChanged {
+        active_workspace: WeakEntity<Workspace>,
         source_workspace: Option<WeakEntity<Workspace>>,
     },
     WorkspaceAdded(Entity<Workspace>),
@@ -1736,7 +1737,10 @@ impl MultiWorkspace {
             self.detach_workspace(&old_active_workspace, cx);
         }
 
-        cx.emit(MultiWorkspaceEvent::ActiveWorkspaceChanged { source_workspace });
+        cx.emit(MultiWorkspaceEvent::ActiveWorkspaceChanged {
+            active_workspace: self.active_workspace.downgrade(),
+            source_workspace,
+        });
         self.serialize(cx);
         self.focus_active_workspace(window, cx);
         cx.notify();

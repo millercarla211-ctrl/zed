@@ -458,8 +458,9 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             &multi_workspace_handle,
             window,
             |this, _multi_workspace, event: &workspace::MultiWorkspaceEvent, window, cx| {
-                let workspace::MultiWorkspaceEvent::ActiveWorkspaceChanged { source_workspace } =
-                    event
+                let workspace::MultiWorkspaceEvent::ActiveWorkspaceChanged {
+                    source_workspace, ..
+                } = event
                 else {
                     return;
                 };

@@ -999,7 +999,9 @@ pub struct AgentPanel {
     new_thread_menu_handle: PopoverMenuHandle<ContextMenu>,
     agent_panel_menu_handle: PopoverMenuHandle<ContextMenu>,
     _extension_subscription: Option<Subscription>,
+    _workspace_subscription: Option<Subscription>,
     _project_subscription: Subscription,
+    dx_workspace_snapshot: DxWorkspaceSnapshot,
     zoomed: bool,
     manual_zoom_override: Option<bool>,
     pending_serialization: Option<Task<Result<()>>>,
@@ -1015,6 +1017,51 @@ pub struct AgentPanel {
     last_context_source: Option<AgentContextSource>,
     show_trust_workspace_message: bool,
     is_active: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct DxWorkspaceSnapshot {
+    roots: Vec<String>,
+    has_no_editor_file: bool,
+    has_editor_and_browser: bool,
+}
+
+impl DxWorkspaceSnapshot {
+    fn from_workspace(workspace: &Workspace, cx: &App) -> Self {
+        let roots = workspace
+            .root_paths(cx)
+            .into_iter()
+            .map(|path| path.display().to_string())
+            .collect();
+
+        let has_no_editor_file = workspace.active_item(cx).is_none();
+        let mut has_editor = false;
+        let mut has_browser = false;
+
+        for pane in workspace.panes() {
+            let Some(item) = pane.read(cx).active_item() else {
+                continue;
+            };
+
+            match item.screen_kind(cx) {
+                WorkspaceScreenKind::Editor => has_editor = true,
+                WorkspaceScreenKind::Browser => has_browser = true,
+                WorkspaceScreenKind::Terminal
+                | WorkspaceScreenKind::LiquidGlass
+                | WorkspaceScreenKind::Other => {}
+            }
+
+            if has_editor && has_browser {
+                break;
+            }
+        }
+
+        Self {
+            roots,
+            has_no_editor_file,
+            has_editor_and_browser: has_editor && has_browser,
+        }
+    }
 }
 
 impl AgentPanel {
@@ -1328,7 +1375,22 @@ impl AgentPanel {
         let language_registry = project.read(cx).languages().clone();
         let client = workspace.client().clone();
         let workspace_id = workspace.database_id();
+        let dx_workspace_snapshot = DxWorkspaceSnapshot::from_workspace(workspace, cx);
         let workspace = workspace.weak_handle();
+        let workspace_subscription = workspace.upgrade().map(|workspace| {
+            cx.subscribe(&workspace, |this, _, event: &workspace::Event, cx| {
+                if matches!(
+                    event,
+                    workspace::Event::PaneAdded(_)
+                        | workspace::Event::PaneRemoved
+                        | workspace::Event::ItemAdded { .. }
+                        | workspace::Event::ItemRemoved { .. }
+                        | workspace::Event::ActiveItemChanged
+                ) {
+                    this.schedule_dx_workspace_snapshot_refresh(cx);
+                }
+            })
+        });
 
         let context_server_registry =
             cx.new(|cx| ContextServerRegistry::new(project.read(cx).context_server_store(), cx));
@@ -1373,6 +1435,7 @@ impl AgentPanel {
                     this.ensure_native_agent_connection(cx);
                     this.update_thread_work_dirs(cx);
                     this.persist_all_terminal_metadata(cx);
+                    this.schedule_dx_workspace_snapshot_refresh(cx);
                     cx.notify();
                 }
                 _ => {}
@@ -1417,7 +1480,9 @@ impl AgentPanel {
             agent_panel_menu_handle: PopoverMenuHandle::default(),
 
             _extension_subscription: extension_subscription,
+            _workspace_subscription: workspace_subscription,
             _project_subscription,
+            dx_workspace_snapshot,
             zoomed: false,
             manual_zoom_override: None,
             pending_serialization: None,
@@ -6642,19 +6707,31 @@ impl AgentPanel {
         self.insert_dx_launch_prompt(prompt, window, cx);
     }
 
+    fn schedule_dx_workspace_snapshot_refresh(&self, cx: &mut Context<Self>) {
+        let Some(workspace) = self.workspace.upgrade() else {
+            return;
+        };
+        let panel = cx.weak_entity();
+
+        cx.defer(move |cx| {
+            let snapshot = {
+                let workspace = workspace.read(cx);
+                DxWorkspaceSnapshot::from_workspace(workspace, cx)
+            };
+
+            if let Some(panel) = panel.upgrade() {
+                panel.update(cx, |panel, cx| {
+                    if panel.dx_workspace_snapshot != snapshot {
+                        panel.dx_workspace_snapshot = snapshot;
+                        cx.notify();
+                    }
+                });
+            }
+        });
+    }
+
     fn dx_launch_workspace_status(&self, cx: &Context<Self>) -> DxLaunchWorkspaceStatus {
-        let workspace_roots: Vec<String> = self
-            .workspace
-            .upgrade()
-            .map(|workspace| {
-                workspace
-                    .read(cx)
-                    .root_paths(cx)
-                    .into_iter()
-                    .map(|path| path.display().to_string())
-                    .collect()
-            })
-            .unwrap_or_default();
+        let workspace_roots = self.dx_workspace_snapshot.roots.clone();
 
         let visible_worktree_count = self.project.read(cx).visible_worktrees(cx).count();
 
@@ -6783,40 +6860,12 @@ impl AgentPanel {
         }
     }
 
-    fn workspace_has_no_editor_file(&self, cx: &App) -> bool {
-        self.workspace
-            .upgrade()
-            .is_some_and(|workspace| workspace.read(cx).active_item(cx).is_none())
+    fn workspace_has_no_editor_file(&self, _cx: &App) -> bool {
+        self.dx_workspace_snapshot.has_no_editor_file
     }
 
-    fn workspace_has_editor_and_browser(&self, cx: &App) -> bool {
-        let Some(workspace) = self.workspace.upgrade() else {
-            return false;
-        };
-
-        let workspace = workspace.read(cx);
-        let mut has_editor = false;
-        let mut has_browser = false;
-
-        for pane in workspace.panes() {
-            let Some(item) = pane.read(cx).active_item() else {
-                continue;
-            };
-
-            match item.screen_kind(cx) {
-                WorkspaceScreenKind::Editor => has_editor = true,
-                WorkspaceScreenKind::Browser => has_browser = true,
-                WorkspaceScreenKind::Terminal
-                | WorkspaceScreenKind::LiquidGlass
-                | WorkspaceScreenKind::Other => {}
-            }
-
-            if has_editor && has_browser {
-                return true;
-            }
-        }
-
-        false
+    fn workspace_has_editor_and_browser(&self, _cx: &App) -> bool {
+        self.dx_workspace_snapshot.has_editor_and_browser
     }
 
     fn should_use_dx_coding_panel_size(&self, cx: &App) -> bool {

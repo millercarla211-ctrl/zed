@@ -704,6 +704,7 @@ fn connect_remote(
 /// be computed from the current world state, compute it in the rebuild.
 pub struct Sidebar {
     multi_workspace: WeakEntity<MultiWorkspace>,
+    active_workspace: Option<Entity<Workspace>>,
     width: Pixels,
     focus_handle: FocusHandle,
     filter_editor: Entity<Editor>,
@@ -785,7 +786,10 @@ impl Sidebar {
             &multi_workspace,
             window,
             |this, _multi_workspace, event: &MultiWorkspaceEvent, window, cx| match event {
-                MultiWorkspaceEvent::ActiveWorkspaceChanged { .. } => {
+                MultiWorkspaceEvent::ActiveWorkspaceChanged {
+                    active_workspace, ..
+                } => {
+                    this.active_workspace = active_workspace.upgrade();
                     this.sync_active_entry_from_active_workspace(cx);
                     this.replace_archived_panel_thread(window, cx);
                     this.update_entries(cx);
@@ -851,6 +855,7 @@ impl Sidebar {
 
         Self {
             multi_workspace: multi_workspace.downgrade(),
+            active_workspace: Some(multi_workspace.read(cx).workspace().clone()),
             width: DEFAULT_WIDTH,
             focus_handle,
             filter_editor,
@@ -1193,9 +1198,7 @@ impl Sidebar {
     }
 
     fn is_active_workspace(&self, workspace: &Entity<Workspace>, cx: &App) -> bool {
-        self.multi_workspace
-            .upgrade()
-            .map_or(false, |mw| mw.read(cx).workspace() == workspace)
+        self.active_workspace(cx).as_ref() == Some(workspace)
     }
 
     fn subscribe_to_workspace(
@@ -8384,10 +8387,8 @@ impl Sidebar {
             .child(right_slot)
     }
 
-    fn active_workspace(&self, cx: &App) -> Option<Entity<Workspace>> {
-        self.multi_workspace
-            .upgrade()
-            .map(|w| w.read(cx).workspace().clone())
+    fn active_workspace(&self, _cx: &App) -> Option<Entity<Workspace>> {
+        self.active_workspace.clone()
     }
 
     fn focus_agent_panel(&self, window: &mut Window, cx: &mut Context<Self>) {

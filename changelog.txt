@@ -9876,3 +9876,18 @@ NOTES:
 - Ran `rustfmt --check crates/agent_ui/src/dx_check_panel.rs crates/agent_ui/src/dx_launch_workspace.rs`.
 - Attempted `cargo test -p agent_ui dx_check_panel --lib` twice; both attempts exceeded the timeout on the busy workspace, and Cargo/rustc were allowed to finish or go idle before continuing.
 - Exact next action: rerun the targeted `agent_ui` fixture during an idle Cargo window, then do a governed native launch-rail visual pass.
+
+[2026-05-28] - Windows Startup Reentrant Workspace Crash Fix
+
+CHANGED:
+- `crates/agent_ui/src/agent_panel.rs` now keeps a deferred DX workspace snapshot for roots, empty-editor state, and editor/browser presence so Agent panel sizing/render helpers do not read `Workspace` during a Workspace update.
+- `crates/workspace/src/multi_workspace.rs` now emits the active workspace handle with `ActiveWorkspaceChanged`, and `crates/sidebar/src/sidebar.rs` caches that handle instead of re-reading `MultiWorkspace` from active-workspace helpers during update callbacks.
+- `crates/gpui/src/app/entity_map.rs` now uses `#[track_caller]` on entity reads so future double-lease panics point at the caller that caused them.
+
+FIXED:
+- Fixed the startup fail-fast crashes reported as `cannot read workspace::Workspace while it is already being updated` and `cannot read workspace::multi_workspace::MultiWorkspace while it is already being updated`.
+- Preserved the prior Windows log-noise cleanup for locked/protected drive-root files, reserved `NUL` paths, and the local-dev missing minidump endpoint.
+
+NOTES:
+- Ran `rustfmt --edition 2024 --check` on the changed Rust files.
+- Ran `$env:CARGO_BUILD_JOBS='6'; $env:ZED_GENERATE_MINIDUMPS='1'; just run`; the editor launched from the rebuilt dev binary, and the user confirmed the relaunched editor is working correctly.
