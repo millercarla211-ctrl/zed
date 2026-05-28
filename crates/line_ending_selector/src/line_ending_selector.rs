@@ -110,6 +110,14 @@ impl LineEndingSelectorDelegate {
             selected_index: 0,
         }
     }
+
+    fn clamped_match_index(&self, ix: usize) -> usize {
+        ix.min(self.matches.len().saturating_sub(1))
+    }
+
+    fn clamp_selected_index_to_matches(&mut self) {
+        self.selected_index = self.clamped_match_index(self.selected_index);
+    }
 }
 
 impl PickerDelegate for LineEndingSelectorDelegate {
@@ -124,6 +132,8 @@ impl PickerDelegate for LineEndingSelectorDelegate {
     }
 
     fn confirm(&mut self, _: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
+        self.clamp_selected_index_to_matches();
+
         if let Some(line_ending) = self.matches.get(self.selected_index) {
             self.buffer.update(cx, |this, cx| {
                 this.set_line_ending(*line_ending, cx);
@@ -155,7 +165,7 @@ impl PickerDelegate for LineEndingSelectorDelegate {
         _window: &mut Window,
         _: &mut Context<Picker<Self>>,
     ) {
-        self.selected_index = ix;
+        self.selected_index = self.clamped_match_index(ix);
     }
 
     fn update_matches(

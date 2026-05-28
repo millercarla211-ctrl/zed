@@ -45,6 +45,11 @@ const FONT_PANEL_KEY: &str = "FontPanel";
 const MAX_FONT_RESULTS: usize = 160;
 const MAX_RECENT_FONT_ACTIONS: usize = 5;
 const MAX_PINNED_FONT_ACTIONS: usize = 8;
+const MAX_CUSTOM_WEB_FONT_NAME_WORDS: usize = 6;
+const MAX_CUSTOM_WEB_FONT_WORD_CHARS: usize = 24;
+const MAX_CUSTOM_WEB_FONT_NAME_CHARS: usize = 96;
+const MAX_FONT_ELEMENT_ID_VALUE_CHARS: usize = 96;
+const MAX_FONT_PREVIEW_FILE_STEM_CHARS: usize = 96;
 const PINNED_FONT_ACTIONS_KEY: &str = "asset_panel_pinned_fonts_v1";
 const PINNED_FONT_ACTIONS_STATE_VERSION: u32 = 1;
 const CLEAR_RECENT_FONTS_TOOLTIP: &str =
@@ -1517,9 +1522,18 @@ fn push_lowercase(buffer: &mut String, value: &str) {
 }
 
 fn font_element_id(prefix: &str, id: &str) -> String {
-    let mut element_id = String::with_capacity(prefix.len() + id.len());
+    let id_hash =
+        (id.chars().count() > MAX_FONT_ELEMENT_ID_VALUE_CHARS).then(|| stable_text_hash(id));
+    let mut element_id = String::with_capacity(
+        prefix.len() + id.len().min(MAX_FONT_ELEMENT_ID_VALUE_CHARS) + id_hash.map_or(0, |_| 17),
+    );
     element_id.push_str(prefix);
-    element_id.push_str(id);
+    if let Some(hash) = id_hash {
+        element_id.extend(id.chars().take(MAX_FONT_ELEMENT_ID_VALUE_CHARS));
+        let _ = write!(element_id, "-{hash:016x}");
+    } else {
+        element_id.push_str(id);
+    }
     element_id
 }
 
@@ -1586,24 +1600,57 @@ fn web_font_spec_by_name(name: &str) -> Option<WebFontSpec> {
 }
 
 fn custom_web_font_name(query: &str) -> Option<String> {
-    let mut name = String::with_capacity(query.len());
+    let mut name = String::with_capacity(MAX_CUSTOM_WEB_FONT_NAME_CHARS);
+    let mut name_chars = 0;
     for word in query
         .split(|character: char| !(character.is_alphanumeric() || character == ' '))
         .flat_map(|segment| segment.split_whitespace())
         .filter(|word| !word.is_empty())
-        .take(6)
+        .take(MAX_CUSTOM_WEB_FONT_NAME_WORDS)
     {
-        if !name.is_empty() {
-            name.push(' ');
-        }
-        let mut chars = word.chars();
-        if let Some(first) = chars.next() {
-            name.extend(first.to_uppercase());
-            name.push_str(chars.as_str());
+        push_custom_web_font_word(&mut name, word, &mut name_chars);
+        if name_chars >= MAX_CUSTOM_WEB_FONT_NAME_CHARS {
+            break;
         }
     }
 
     (!name.is_empty()).then_some(name)
+}
+
+fn push_custom_web_font_word(name: &mut String, word: &str, name_chars: &mut usize) {
+    let separator_chars = usize::from(!name.is_empty());
+    let available_chars = MAX_CUSTOM_WEB_FONT_NAME_CHARS
+        .saturating_sub((*name_chars).saturating_add(separator_chars));
+    let word_limit = available_chars.min(MAX_CUSTOM_WEB_FONT_WORD_CHARS);
+    if word_limit == 0 {
+        return;
+    }
+
+    if !name.is_empty() {
+        name.push(' ');
+        *name_chars += 1;
+    }
+
+    let mut pushed_chars = 0;
+    for (index, character) in word.chars().enumerate() {
+        if pushed_chars >= word_limit {
+            break;
+        }
+
+        if index == 0 {
+            for uppercase in character.to_uppercase() {
+                if pushed_chars >= word_limit {
+                    break;
+                }
+                name.push(uppercase);
+                pushed_chars += 1;
+            }
+        } else {
+            name.push(character);
+            pushed_chars += 1;
+        }
+    }
+    *name_chars += pushed_chars;
 }
 
 fn google_font_family_query(name: &str) -> String {
@@ -1655,8 +1702,11 @@ fn local_font_preview_url(
 }
 
 fn font_preview_file_stem(font_name: &str) -> String {
-    font_name
+    let font_name_hash = (font_name.chars().count() > MAX_FONT_PREVIEW_FILE_STEM_CHARS)
+        .then(|| stable_text_hash(font_name));
+    let mut stem = font_name
         .chars()
+        .take(MAX_FONT_PREVIEW_FILE_STEM_CHARS)
         .map(|character| {
             if character.is_ascii_alphanumeric() {
                 character.to_ascii_lowercase()
@@ -1664,9 +1714,30 @@ fn font_preview_file_stem(font_name: &str) -> String {
                 '-'
             }
         })
-        .collect::<String>()
-        .trim_matches('-')
-        .to_string()
+        .collect::<String>();
+
+    stem = stem.trim_matches('-').to_string();
+    if stem.is_empty() {
+        let hash = font_name_hash.unwrap_or_else(|| stable_text_hash(font_name));
+        return format!("font-{hash:016x}");
+    }
+
+    if let Some(hash) = font_name_hash {
+        let _ = write!(stem, "-{hash:016x}");
+    }
+    stem
+}
+
+fn stable_text_hash(value: &str) -> u64 {
+    const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x100000001b3;
+
+    let mut hash = FNV_OFFSET_BASIS;
+    for byte in value.bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(FNV_PRIME);
+    }
+    hash
 }
 
 fn font_preview_html(

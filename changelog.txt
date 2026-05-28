@@ -1,3 +1,32 @@
+[2026-05-28] - Encoding Line Ending Settings Tasks Feedback And Font Panel Hardening
+
+ADDED:
+- Added `script\dx-encoding-selector-source.test.ts` for encoding selector match caps, stale-selection, and candidate-id boundaries.
+- Added `script\dx-line-ending-selector-source.test.ts` for line ending selector stale-selection boundaries.
+- Added `script\dx-settings-profile-selector-source.test.ts` for settings profile row caps, active-profile preservation, stale-selection, and candidate-id boundaries.
+- Added `script\dx-tasks-modal-source.test.ts` for tasks modal candidate, match, tooltip tag, stale-selection, and confirm boundaries.
+- Added `script\dx-feedback-source.test.ts` for installed-extension clipboard and prompt materialization boundaries.
+- Added `script\dx-font-panel-source.test.ts` for custom web-font, element-id, and preview-file materialization boundaries.
+
+CHANGED:
+- Encoding Selector now caps empty-query and fuzzy matches, clamps stale selections, and guards candidate IDs before encoding lookup or render data.
+- Line Ending Selector now clamps stale selections before setter and confirm paths.
+- Settings Profile Selector now caps configured profiles while preserving Disabled and the active overflow profile, caps candidate/match rows, reclamps async replacement, and guards profile lookup by candidate ID.
+- Tasks Modal now caps candidate and fuzzy rows, bounds tag-label materialization before tooltip and row text, reclamps async replacement, and guards confirm-time candidate IDs.
+- Feedback now caps installed-extension report rows, report fields, and prompt preview text before clipboard and prompt materialization.
+- Font Panel now bounds custom web-font names, element IDs, and preview file stems, appending stable hashes for oversized values.
+- `DX.md` and the source-guard registry now list the new guards.
+
+PASSED:
+- `node --test script\dx-encoding-selector-source.test.ts script\dx-line-ending-selector-source.test.ts script\dx-settings-profile-selector-source.test.ts script\dx-tasks-modal-source.test.ts script\dx-feedback-source.test.ts script\dx-font-panel-source.test.ts` (26/26 passing)
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-encoding-selector-source.test.ts script\dx-line-ending-selector-source.test.ts script\dx-settings-profile-selector-source.test.ts script\dx-tasks-modal-source.test.ts script\dx-feedback-source.test.ts script\dx-font-panel-source.test.ts` (29/29 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Breadcrumbs Icon Picker Selectors Recent Projects And Notifications Hardening
 
 ADDED:
