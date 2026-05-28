@@ -14,6 +14,20 @@ const sliceBetween = (contents: string, startNeedle: string, endNeedle: string) 
   return contents.slice(start, end);
 };
 
+const assertOrdered = (
+  body: string,
+  firstNeedle: string,
+  secondNeedle: string,
+  message: string,
+) => {
+  const first = body.indexOf(firstNeedle);
+  const second = body.indexOf(secondNeedle);
+
+  assert.ok(first >= 0, `${message}: missing ${firstNeedle}`);
+  assert.ok(second >= 0, `${message}: missing ${secondNeedle}`);
+  assert.ok(second > first, message);
+};
+
 test("Web Preview clipboard payload import caps text before parsing or wrapping", () => {
   const webPreview = source();
   const clipboardImport = sliceBetween(
@@ -159,4 +173,154 @@ test("Web Preview managed queue import parses only after the bounded read succee
 
   assert.ok(boundedRead >= 0, "managed queue import should use bounded reads");
   assert.ok(parse > boundedRead, "JSON parsing must happen after bounded reads");
+});
+
+test("Web Preview file payload reads use sentinel-byte bounded helpers", () => {
+  const webPreview = source();
+
+  assert.match(
+    webPreview,
+    /const MAX_WEB_PREVIEW_JSON_PAYLOAD_BYTES: u64 = 16 \* 1024 \* 1024;/,
+  );
+  assert.match(
+    webPreview,
+    /const MAX_WEB_PREVIEW_SCREENSHOT_PNG_BYTES: u64 = 64 \* 1024 \* 1024;/,
+  );
+  assert.match(
+    webPreview,
+    /fn read_sentinel_bounded_file\(\s*path: &Path,\s*max_bytes: u64,\s*description: &str,\s*\) -> io::Result<Vec<u8>>/,
+  );
+  assert.match(webPreview, /fs::File::open\(path\)\?/);
+  assert.match(webPreview, /\.take\(max_bytes \+ 1\)/);
+  assert.match(webPreview, /read_to_end\(&mut buffer\)/);
+  assert.match(webPreview, /buffer\.len\(\) as u64 > max_bytes/);
+  assert.match(webPreview, /io::ErrorKind::InvalidData/);
+  assert.match(
+    webPreview,
+    /fn read_web_preview_json_payload_file\(path: &Path\) -> io::Result<Vec<u8>>/,
+  );
+  assert.match(
+    webPreview,
+    /fn read_web_preview_screenshot_png_file\(path: &Path\) -> io::Result<Vec<u8>>/,
+  );
+});
+
+test("Web Preview target JSON files are bounded before serde parsing", () => {
+  const webPreview = source();
+  const jsonTargets = [
+    {
+      name: "final validation durable evidence",
+      start: "fn agent_browser_final_validation_result_durable_evidence",
+      end: "fn agent_browser_panel_control_result_latest_paths",
+    },
+    {
+      name: "latest panel control result",
+      start: "fn latest_durable_agent_browser_panel_control_result",
+      end: "fn agent_browser_panel_control_result_durable_evidence",
+    },
+    {
+      name: "panel control durable evidence",
+      start: "fn agent_browser_panel_control_result_durable_evidence",
+      end: "fn agent_browser_final_runtime_headroom_cleanup_result_latest_paths",
+    },
+    {
+      name: "latest runtime headroom cleanup result",
+      start: "fn latest_durable_agent_browser_final_runtime_headroom_cleanup_result",
+      end: "fn agent_browser_final_runtime_headroom_cleanup_result_durable_evidence",
+    },
+    {
+      name: "runtime headroom cleanup durable evidence",
+      start: "fn agent_browser_final_runtime_headroom_cleanup_result_durable_evidence",
+      end: "fn agent_browser_final_runtime_headroom_cleanup_result_gate_from_template",
+    },
+    {
+      name: "managed Chrome execution summary",
+      start: "fn managed_chrome_execution_file_read_summary",
+      end: "fn managed_chrome_screenshot_summary",
+    },
+    {
+      name: "PC-use status summary",
+      start: "fn pc_use_status_file_read_summary",
+      end: "fn pc_use_status_proof_summary",
+    },
+    {
+      name: "adapter manifest readiness",
+      start: "fn adapter_manifest_ready",
+      end: "fn json_file_schema",
+    },
+    {
+      name: "JSON schema probe",
+      start: "fn json_file_schema",
+      end: "fn bootstrap_next_actions",
+    },
+    {
+      name: "bookmark loader",
+      start: "fn load_bookmarks",
+      end: "fn scan_local_extensions",
+    },
+    {
+      name: "extension manifest scanner",
+      start: "fn scan_chromium_extensions",
+      end: "fn scan_firefox_extensions",
+    },
+  ];
+
+  for (const target of jsonTargets) {
+    const body = sliceBetween(webPreview, target.start, target.end);
+
+    assert.doesNotMatch(
+      body,
+      /fs::read\(/,
+      `${target.name} should not use unbounded fs::read before JSON parse`,
+    );
+    assertOrdered(
+      body,
+      "read_web_preview_json_payload_file",
+      "serde_json::from_slice",
+      `${target.name} should bound the file before serde parsing`,
+    );
+  }
+});
+
+test("Web Preview screenshot files are bounded before image or attachment use", () => {
+  const webPreview = source();
+
+  const pngBytes = sliceBetween(
+    webPreview,
+    "fn capture_screenshot_png_bytes",
+    "fn capture_screenshot_payload",
+  );
+  assert.doesNotMatch(
+    pngBytes,
+    /fs::read\(/,
+    "capture_screenshot_png_bytes should not use unbounded fs::read",
+  );
+  assert.match(
+    pngBytes,
+    /read_web_preview_screenshot_png_file\(&path\)/,
+    "capture_screenshot_png_bytes should use the bounded PNG helper",
+  );
+
+  const payload = sliceBetween(
+    webPreview,
+    "fn capture_screenshot_payload",
+    "fn render_webview_body",
+  );
+  assert.doesNotMatch(
+    payload,
+    /fs::read\(/,
+    "capture_screenshot_payload should not use unbounded fs::read",
+  );
+  assertOrdered(
+    payload,
+    "read_web_preview_screenshot_png_file(&path)",
+    "GpuiImage::from_bytes",
+    "capture_screenshot_payload should bound PNG bytes before creating the image",
+  );
+  assertOrdered(
+    payload,
+    "read_web_preview_screenshot_png_file(&path)",
+    "screenshot_agent_blocks",
+    "capture_screenshot_payload should bound PNG bytes before attachment encoding",
+  );
 });

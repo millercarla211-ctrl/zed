@@ -14,6 +14,8 @@ const _: () = assert!(
      Forks: update APP_NAME in crates/paths/src/paths.rs when renaming the binary.",
 );
 
+const MAX_BUILTIN_JSON_SCHEMA_BYTES: usize = 8 * 1024 * 1024;
+
 use agent::{SharedThread, ThreadStore};
 use agent_client_protocol::schema as acp;
 use agent_ui::AgentPanel;
@@ -1172,6 +1174,13 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                             let json_schema_content =
                                 json_schema_store::handle_schema_request(lsp_store, uri, cx)
                                     .await?;
+                            if json_schema_content.len() > MAX_BUILTIN_JSON_SCHEMA_BYTES {
+                                anyhow::bail!(
+                                    "Built-in JSON Schema {schema_path} is {} bytes, exceeding the {} byte limit",
+                                    json_schema_content.len(),
+                                    MAX_BUILTIN_JSON_SCHEMA_BYTES
+                                );
+                            }
                             let json_schema_value: serde_json::Value =
                                 serde_json::from_str(&json_schema_content)
                                     .context("Failed to parse JSON Schema")?;

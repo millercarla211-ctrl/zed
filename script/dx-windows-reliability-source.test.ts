@@ -231,6 +231,93 @@ test("Previous minidump upload bounds metadata and payload file reads", () => {
   );
 });
 
+test("Minidump upload bounds and compacts HTTP response bodies", () => {
+  const source = read("crates/zed/src/reliability.rs");
+
+  const helpers = sliceBetween(
+    source,
+    "const MAX_MINIDUMP_UPLOAD_RESPONSE_BYTES",
+    "async fn upload_minidump(",
+  );
+  assert.match(
+    helpers,
+    /const MAX_MINIDUMP_UPLOAD_RESPONSE_BYTES: u64 = 64 \* 1024;/,
+  );
+  assert.match(
+    helpers,
+    /const MAX_MINIDUMP_UPLOAD_RESPONSE_DISPLAY_CHARS: usize = 1024;/,
+  );
+  assert.match(helpers, /struct LimitedMinidumpUploadResponse \{/);
+  assert.match(helpers, /text: String,/);
+  assert.match(helpers, /truncated: bool,/);
+  assert.match(
+    helpers,
+    /async fn read_limited_minidump_upload_response\(\s+response: &mut http_client::Response<AsyncBody>,\s+\) -> Result<LimitedMinidumpUploadResponse>/,
+  );
+  assert.match(
+    helpers,
+    /response\s+\.body_mut\(\)\s+\.take\(MAX_MINIDUMP_UPLOAD_RESPONSE_BYTES \+ 1\)/,
+  );
+  assert.match(helpers, /read_to_end\(&mut response_body\)\s+\.await/);
+  assert.match(
+    helpers,
+    /response_body\.len\(\) as u64 > MAX_MINIDUMP_UPLOAD_RESPONSE_BYTES/,
+  );
+  assert.match(
+    helpers,
+    /response_body\.truncate\(MAX_MINIDUMP_UPLOAD_RESPONSE_BYTES as usize\)/,
+  );
+  assert.match(helpers, /String::from_utf8_lossy\(&response_body\)\.into_owned\(\)/);
+  assert.match(
+    helpers,
+    /fn compact_minidump_upload_response_text\(\s*response: &LimitedMinidumpUploadResponse\s*\) -> String/,
+  );
+  assert.match(
+    helpers,
+    /split_whitespace\(\)\s+\.collect::<Vec<_>>\(\)\s+\.join\(" "\)/,
+  );
+  assert.match(
+    helpers,
+    /MAX_MINIDUMP_UPLOAD_RESPONSE_DISPLAY_CHARS\.saturating_sub\(suffix_chars\)/,
+  );
+  assert.match(
+    helpers,
+    /compact_response\.chars\(\)\.take\(max_text_chars\)\.collect\(\)/,
+  );
+  assert.match(helpers, /response body exceeded \{MAX_MINIDUMP_UPLOAD_RESPONSE_BYTES\} bytes/);
+  assert.doesNotMatch(helpers, /read_to_string/);
+
+  const upload = sliceBetween(
+    source,
+    "async fn upload_minidump(",
+    "#[derive(Debug, Deserialize)]",
+  );
+  assert.match(
+    upload,
+    /let response_text = read_limited_minidump_upload_response\(&mut response\)\.await\?;/,
+  );
+  assert.match(
+    upload,
+    /let response_text = compact_minidump_upload_response_text\(&response_text\);/,
+  );
+  assert.ok(
+    upload.indexOf("read_limited_minidump_upload_response(&mut response).await?") <
+      upload.indexOf("compact_minidump_upload_response_text(&response_text)"),
+    "upload response bodies must be bounded before display compaction",
+  );
+  assert.ok(
+    upload.indexOf("compact_minidump_upload_response_text(&response_text)") <
+      upload.indexOf("anyhow::bail!"),
+    "failed minidump uploads must display compact response text",
+  );
+  assert.ok(
+    upload.indexOf("compact_minidump_upload_response_text(&response_text)") <
+      upload.indexOf("log::info!"),
+    "successful minidump uploads must log compact response text",
+  );
+  assert.doesNotMatch(upload, /read_to_string/);
+});
+
 test("Build timing upload rejects oversized JSON before parsing", () => {
   const source = read("crates/zed/src/reliability.rs");
 

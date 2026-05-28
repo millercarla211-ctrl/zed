@@ -135,6 +135,7 @@ const MAX_THREAD_CLIPBOARD_DECODED_BYTES: usize = 16 * 1024 * 1024;
 const MAX_THREAD_CLIPBOARD_ENCODED_BYTES: usize =
     ((MAX_THREAD_CLIPBOARD_DECODED_BYTES + 2) / 3) * 4;
 const MAX_THREAD_CLIPBOARD_DECOMPRESSED_BYTES: usize = 64 * 1024 * 1024;
+const MAX_SKILL_URL_CLIPBOARD_BYTES: usize = 64 * 1024;
 const DX_LAUNCH_RECIPE_PROMPT: &str = "Run the DX launch metasearch-to-reduced-context recipe for this workspace. First call list_dx_launch_demo_recipes with focus=\"metasearch\". Then, using only permissioned Agent tools and no local servers or builds, guide me through the next safe receipt step: inspect_dx_metasearch, search_dx_metasearch with write_source_pack_receipt=true, prepare_dx_source_attachment, prepare_dx_metasearch_context, plan_dx_serializer_rlm_execution, gate_dx_serializer_rlm_runner, write_dx_serializer_rlm_reduced_context, and preview_dx_serializer_rlm_reducer_execution. Stop before execute_dx_serializer_rlm_reducer, external serializer/RLM runner work, or model-call execution unless I explicitly approve a no-shell absolute command vector and managed receipt.";
 const DX_MEDIA_PROOF_PROMPT: &str = "Prepare the DX media proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"media\". Then review any produced-file proof cards in the Sources rail and guide me through the next safe step using permissioned tools only: plan_dx_media_tool, gate_dx_media_tool_runner, execute_dx_media_tool only after an approved runner gate, and prepare_dx_source_attachment for produced files. Do not run local servers, builds, browser input, shell commands, unmanaged file writes, or media execution until I explicitly approve the tool request.";
 const DX_REDUCER_GUARD_PROMPT: &str = "Prepare a DX serializer/RLM reducer execution guard review for this workspace. Review metasearch source packs, source attachments, context bundles, execution-plan receipts, runner-gate receipts, reduced-context receipts, execution-preview receipts, external-execution receipts, citation coverage, token budget, and model-call approval state. If I provide approval evidence, first use preview_dx_serializer_rlm_reducer_execution for the managed dry-run preview. Use execute_dx_serializer_rlm_reducer only when I explicitly provide a no-shell absolute command vector under approved DX serializer/RLM roots and require a managed execution receipt. Do not run cargo, package managers, local servers, browser input, shell commands, network, unmanaged file writes, or model calls unless the governed tool request explicitly covers them.";
@@ -3299,11 +3300,23 @@ impl AgentPanel {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let initial_url = cx
-            .read_from_clipboard()
-            .and_then(|clipboard| clipboard.text())
-            .map(|text| text.trim().to_string())
-            .filter(|text| is_supported_skill_url(text));
+        let initial_url =
+            cx.read_from_clipboard().and_then(
+                |clipboard| match Self::clipboard_text_with_size_limit(
+                    &clipboard,
+                    MAX_SKILL_URL_CLIPBOARD_BYTES,
+                ) {
+                    Ok(Some(text)) => {
+                        let trimmed_url = text.trim();
+                        if is_supported_skill_url(trimmed_url) {
+                            Some(trimmed_url.to_string())
+                        } else {
+                            None
+                        }
+                    }
+                    Ok(None) | Err(()) => None,
+                },
+            );
 
         self.open_skill_creator(SkillCreatorOpenMode::Url { initial_url }, cx);
     }

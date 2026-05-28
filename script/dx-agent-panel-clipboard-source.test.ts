@@ -75,6 +75,28 @@ test("loading a native agent thread rejects oversized clipboard text before pars
   assert.match(loadThread, /Clipboard thread data is too large/);
 });
 
+test("creating a skill from a URL bounds clipboard text before trimming or filtering", () => {
+  const createSkillFromUrl = functionBody("deploy_skill_creator_from_url");
+
+  assert.match(agentPanel, /const MAX_SKILL_URL_CLIPBOARD_BYTES: usize = 64 \* 1024;/);
+  assert.match(
+    createSkillFromUrl,
+    /Self::clipboard_text_with_size_limit\(\s*&clipboard,\s*MAX_SKILL_URL_CLIPBOARD_BYTES,\s*\)/,
+  );
+  assert.doesNotMatch(createSkillFromUrl, /clipboard\.text\(\)/);
+  assert.match(createSkillFromUrl, /Err\(\(\)\) => None/);
+  assert.ok(
+    createSkillFromUrl.indexOf("Self::clipboard_text_with_size_limit") <
+      createSkillFromUrl.indexOf(".trim()"),
+    "URL clipboard text must be bounded before trimming",
+  );
+  assert.ok(
+    createSkillFromUrl.indexOf("Self::clipboard_text_with_size_limit") <
+      createSkillFromUrl.indexOf("is_supported_skill_url"),
+    "URL clipboard text must be bounded before supported-URL filtering",
+  );
+});
+
 test("loading a native agent thread bounds decompression before JSON parse", () => {
   const sharedThreadImplStart = sharedThread.indexOf("impl SharedThread");
   const sharedThreadImplEnd = sharedThread.indexOf("impl DbThread", sharedThreadImplStart);

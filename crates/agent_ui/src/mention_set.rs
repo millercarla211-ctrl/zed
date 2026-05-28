@@ -722,6 +722,7 @@ impl MentionSet {
 
 const MAX_SKILL_MENTION_FILE_BYTES: u64 = 1024 * 1024;
 const MAX_FETCH_MENTION_BODY_BYTES: u64 = 10 * 1024 * 1024;
+const MAX_FETCH_MENTION_ERROR_BODY_DISPLAY_BYTES: usize = 8 * 1024;
 const MAX_EXTERNAL_RASTER_IMAGE_FILE_BYTES: u64 = 25 * 1024 * 1024;
 
 fn read_skill_mention_file(path: &Path) -> Result<String> {
@@ -1441,6 +1442,23 @@ impl Render for ImageHover {
     }
 }
 
+fn format_fetch_mention_error_body(body: &[u8]) -> String {
+    let truncated = body.len() > MAX_FETCH_MENTION_ERROR_BODY_DISPLAY_BYTES;
+    let visible_len = body.len().min(MAX_FETCH_MENTION_ERROR_BODY_DISPLAY_BYTES);
+    let visible_body = &body[..visible_len];
+    let text = String::from_utf8_lossy(visible_body);
+    let mut display = text.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    if truncated {
+        if !display.is_empty() {
+            display.push(' ');
+        }
+        display.push_str("[truncated]");
+    }
+
+    display
+}
+
 async fn read_fetch_mention_body(body: &mut AsyncBody) -> Result<Vec<u8>> {
     let mut reader = body.take(MAX_FETCH_MENTION_BODY_BYTES + 1);
     let mut body = Vec::new();
@@ -1476,7 +1494,7 @@ async fn fetch_url_content(http_client: Arc<HttpClientWithUrl>, url: String) -> 
     let body = read_fetch_mention_body(response.body_mut()).await?;
 
     if response.status().is_client_error() {
-        let text = String::from_utf8_lossy(body.as_slice());
+        let text = format_fetch_mention_error_body(&body);
         anyhow::bail!(
             "status error {}, response: {text:?}",
             response.status().as_u16()

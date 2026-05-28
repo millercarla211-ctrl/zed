@@ -16,6 +16,9 @@ use util::command::new_command;
 use workspace::{ModalView, MultiWorkspace};
 
 const DONT_ASK_AGAIN_KEY: &str = "move_to_applications_dont_ask_again";
+const MAX_COPY_APP_BUNDLE_STDERR_BYTES: usize = 2048;
+const MAX_COPY_APP_BUNDLE_STDERR_CHARS: usize = 500;
+
 static PROMPTED_THIS_SESSION: AtomicBool = AtomicBool::new(false);
 
 pub fn init(cx: &mut App) {
@@ -296,13 +299,31 @@ async fn copy_app_bundle(source: &Path, destination: &Path) -> Result<()> {
         .await
         .with_context(|| format!("failed to run rsync for {}", source.display()))?;
 
-    anyhow::ensure!(
-        output.status.success(),
-        "failed to copy app bundle: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    if !output.status.success() {
+        let stderr = copy_app_bundle_stderr_display(&output.stderr);
+        anyhow::bail!("failed to copy app bundle: {stderr}");
+    }
 
     Ok(())
+}
+
+fn copy_app_bundle_stderr_display(stderr: &[u8]) -> String {
+    let truncated_bytes = stderr.len() > MAX_COPY_APP_BUNDLE_STDERR_BYTES;
+    let visible_len = stderr.len().min(MAX_COPY_APP_BUNDLE_STDERR_BYTES);
+    let decoded = String::from_utf8_lossy(&stderr[..visible_len]);
+    let compact = decoded.split_whitespace().collect::<Vec<_>>().join(" ");
+    let truncated_chars = compact.chars().count() > MAX_COPY_APP_BUNDLE_STDERR_CHARS;
+
+    if !truncated_bytes && !truncated_chars {
+        return compact;
+    }
+
+    let mut display = compact
+        .chars()
+        .take(MAX_COPY_APP_BUNDLE_STDERR_CHARS.saturating_sub(3))
+        .collect::<String>();
+    display.push_str("...");
+    display
 }
 
 fn restart_into(app_path: PathBuf, cx: &mut AsyncWindowContext) -> Result<()> {

@@ -310,6 +310,65 @@ fn log_missing_minidump_commit_sha(metadata: &crashes::CrashInfo) {
     }
 }
 
+const MAX_MINIDUMP_UPLOAD_RESPONSE_BYTES: u64 = 64 * 1024;
+const MAX_MINIDUMP_UPLOAD_RESPONSE_DISPLAY_CHARS: usize = 1024;
+
+struct LimitedMinidumpUploadResponse {
+    text: String,
+    truncated: bool,
+}
+
+async fn read_limited_minidump_upload_response(
+    response: &mut http_client::Response<AsyncBody>,
+) -> Result<LimitedMinidumpUploadResponse> {
+    let mut response_body = Vec::new();
+    let mut limited_response_body = response
+        .body_mut()
+        .take(MAX_MINIDUMP_UPLOAD_RESPONSE_BYTES + 1);
+    limited_response_body
+        .read_to_end(&mut response_body)
+        .await?;
+
+    let truncated = response_body.len() as u64 > MAX_MINIDUMP_UPLOAD_RESPONSE_BYTES;
+    if truncated {
+        response_body.truncate(MAX_MINIDUMP_UPLOAD_RESPONSE_BYTES as usize);
+    }
+
+    Ok(LimitedMinidumpUploadResponse {
+        text: String::from_utf8_lossy(&response_body).into_owned(),
+        truncated,
+    })
+}
+
+fn compact_minidump_upload_response_text(response: &LimitedMinidumpUploadResponse) -> String {
+    let mut compact_response = response
+        .text
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let suffix = if response.truncated {
+        format!("... [response body exceeded {MAX_MINIDUMP_UPLOAD_RESPONSE_BYTES} bytes]")
+    } else {
+        "...".to_string()
+    };
+    let suffix_chars = suffix.chars().count();
+
+    if compact_response.is_empty() {
+        compact_response = "<empty response>".to_string();
+    }
+
+    if compact_response.chars().count() > MAX_MINIDUMP_UPLOAD_RESPONSE_DISPLAY_CHARS
+        || response.truncated
+    {
+        let max_text_chars =
+            MAX_MINIDUMP_UPLOAD_RESPONSE_DISPLAY_CHARS.saturating_sub(suffix_chars);
+        compact_response = compact_response.chars().take(max_text_chars).collect();
+        compact_response.push_str(&suffix);
+    }
+
+    compact_response
+}
+
 async fn upload_minidump(
     client: Arc<Client>,
     endpoint: &str,
@@ -443,12 +502,9 @@ async fn upload_minidump(
         .uri(endpoint)
         .header("Content-Type", content_type)
         .body(AsyncBody::from(body_bytes))?;
-    let mut response_text = String::new();
     let mut response = client.http_client().send(req).await?;
-    response
-        .body_mut()
-        .read_to_string(&mut response_text)
-        .await?;
+    let response_text = read_limited_minidump_upload_response(&mut response).await?;
+    let response_text = compact_minidump_upload_response_text(&response_text);
     if !response.status().is_success() {
         anyhow::bail!("failed to upload minidump: {response_text}");
     }

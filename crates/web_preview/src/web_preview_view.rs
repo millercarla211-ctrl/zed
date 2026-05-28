@@ -70,6 +70,9 @@ const DEFAULT_WEB_PREVIEW_URL: &str = "https://www.google.com/";
 const GOOGLE_SEARCH_URL: &str = "https://www.google.com/search";
 const BOOKMARKS_FILE_NAME: &str = "bookmarks.json";
 const MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES: u64 = 256 * 1024;
+const MAX_WEB_PREVIEW_JSON_PAYLOAD_BYTES: u64 = 16 * 1024 * 1024;
+#[cfg(target_os = "windows")]
+const MAX_WEB_PREVIEW_SCREENSHOT_PNG_BYTES: u64 = 64 * 1024 * 1024;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
@@ -3387,9 +3390,14 @@ impl WebPreviewView {
         {
             let entry = match fs::metadata(&latest_path) {
                 Ok(metadata) if metadata.is_file() => {
-                    let parsed = fs::read(&latest_path)
-                        .ok()
-                        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+                    let (parsed, read_error, parse_error) =
+                        match read_web_preview_json_payload_file(&latest_path) {
+                            Ok(bytes) => match serde_json::from_slice::<Value>(&bytes) {
+                                Ok(value) => (Some(value), None, None),
+                                Err(error) => (None, None, Some(error.to_string())),
+                            },
+                            Err(error) => (None, Some(error.to_string()), None),
+                        };
                     let summary = parsed
                         .as_ref()
                         .map(Self::agent_browser_final_validation_result_summary);
@@ -3409,7 +3417,7 @@ impl WebPreviewView {
                             }
                         }
                     }
-                    serde_json::json!({
+                    let mut entry = serde_json::json!({
                         "root_mode": root_mode,
                         "managed_root": path_string(&managed_root),
                         "latest_path": path_string(&latest_path),
@@ -3417,7 +3425,14 @@ impl WebPreviewView {
                         "byte_len": metadata.len(),
                         "modified_at_ms": metadata.modified().ok().and_then(system_time_ms),
                         "summary": summary,
-                    })
+                    });
+                    if let Some(read_error) = read_error {
+                        entry["read_error"] = Value::String(read_error);
+                    }
+                    if let Some(parse_error) = parse_error {
+                        entry["parse_error"] = Value::String(parse_error);
+                    }
+                    entry
                 }
                 Ok(_) => serde_json::json!({
                     "root_mode": root_mode,
@@ -3533,7 +3548,7 @@ impl WebPreviewView {
 
     fn latest_durable_agent_browser_panel_control_result(&self) -> Option<Value> {
         for (_, _, latest_path) in self.agent_browser_panel_control_result_latest_paths() {
-            let parsed = fs::read(&latest_path)
+            let parsed = read_web_preview_json_payload_file(&latest_path)
                 .ok()
                 .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
             if parsed
@@ -3558,9 +3573,14 @@ impl WebPreviewView {
         {
             let entry = match fs::metadata(&latest_path) {
                 Ok(metadata) if metadata.is_file() => {
-                    let parsed = fs::read(&latest_path)
-                        .ok()
-                        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+                    let (parsed, read_error, parse_error) =
+                        match read_web_preview_json_payload_file(&latest_path) {
+                            Ok(bytes) => match serde_json::from_slice::<Value>(&bytes) {
+                                Ok(value) => (Some(value), None, None),
+                                Err(error) => (None, None, Some(error.to_string())),
+                            },
+                            Err(error) => (None, Some(error.to_string()), None),
+                        };
                     let summary = parsed
                         .as_ref()
                         .map(Self::agent_browser_panel_control_result_summary);
@@ -3581,7 +3601,7 @@ impl WebPreviewView {
                             .and_then(Value::as_str)
                             .map(str::to_string);
                     }
-                    serde_json::json!({
+                    let mut entry = serde_json::json!({
                         "root_mode": root_mode,
                         "managed_root": path_string(&managed_root),
                         "latest_path": path_string(&latest_path),
@@ -3589,7 +3609,14 @@ impl WebPreviewView {
                         "byte_len": metadata.len(),
                         "modified_at_ms": metadata.modified().ok().and_then(system_time_ms),
                         "summary": summary,
-                    })
+                    });
+                    if let Some(read_error) = read_error {
+                        entry["read_error"] = Value::String(read_error);
+                    }
+                    if let Some(parse_error) = parse_error {
+                        entry["parse_error"] = Value::String(parse_error);
+                    }
+                    entry
                 }
                 Ok(_) => serde_json::json!({
                     "root_mode": root_mode,
@@ -4617,7 +4644,7 @@ impl WebPreviewView {
         for (_, _, latest_path) in
             self.agent_browser_final_runtime_headroom_cleanup_result_latest_paths()
         {
-            let parsed = fs::read(&latest_path)
+            let parsed = read_web_preview_json_payload_file(&latest_path)
                 .ok()
                 .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
             if parsed
@@ -4641,9 +4668,14 @@ impl WebPreviewView {
         {
             let entry = match fs::metadata(&latest_path) {
                 Ok(metadata) if metadata.is_file() => {
-                    let parsed = fs::read(&latest_path)
-                        .ok()
-                        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+                    let (parsed, read_error, parse_error) =
+                        match read_web_preview_json_payload_file(&latest_path) {
+                            Ok(bytes) => match serde_json::from_slice::<Value>(&bytes) {
+                                Ok(value) => (Some(value), None, None),
+                                Err(error) => (None, None, Some(error.to_string())),
+                            },
+                            Err(error) => (None, Some(error.to_string()), None),
+                        };
                     let summary = parsed.as_ref().map(
                         Self::agent_browser_final_runtime_headroom_cleanup_result_template_summary,
                     );
@@ -4656,7 +4688,7 @@ impl WebPreviewView {
                         .and_then(|gate| gate.pointer("/ready_for_capacity_recheck"))
                         .and_then(Value::as_bool)
                         .unwrap_or(false);
-                    serde_json::json!({
+                    let mut entry = serde_json::json!({
                         "root_mode": root_mode,
                         "managed_root": path_string(&managed_root),
                         "latest_path": path_string(&latest_path),
@@ -4667,7 +4699,14 @@ impl WebPreviewView {
                         "cleanup_result_gate": gate.map(|gate| {
                             Self::agent_browser_final_runtime_headroom_cleanup_result_gate_summary(&gate)
                         }),
-                    })
+                    });
+                    if let Some(read_error) = read_error {
+                        entry["read_error"] = Value::String(read_error);
+                    }
+                    if let Some(parse_error) = parse_error {
+                        entry["parse_error"] = Value::String(parse_error);
+                    }
+                    entry
                 }
                 Ok(_) => serde_json::json!({
                     "root_mode": root_mode,
@@ -34178,7 +34217,7 @@ impl WebPreviewView {
         window: &Window,
     ) -> Result<Vec<u8>> {
         let path = self.capture_and_store_screenshot(crop, window)?;
-        fs::read(&path)
+        read_web_preview_screenshot_png_file(&path)
             .with_context(|| format!("Failed to read screenshot bytes from {}", path.display()))
     }
 
@@ -34200,7 +34239,7 @@ impl WebPreviewView {
         window: &Window,
     ) -> Result<(PathBuf, GpuiImage, Vec<acp::ContentBlock>)> {
         let path = self.capture_and_store_screenshot(crop, window)?;
-        let png_bytes = fs::read(&path)
+        let png_bytes = read_web_preview_screenshot_png_file(&path)
             .with_context(|| format!("Failed to read screenshot from {}", path.display()))?;
         let agent_png_bytes = self.prepare_agent_png_bytes(png_bytes.clone())?;
         let image = GpuiImage::from_bytes(GpuiImageFormat::Png, png_bytes);
@@ -35502,7 +35541,7 @@ fn managed_chrome_action_card_next_action(status: &str, outcome: Option<&str>) -
 }
 
 fn managed_chrome_execution_file_read_summary(path: &Path, expected_schema: &str) -> Value {
-    let bytes = match fs::read(path) {
+    let bytes = match read_web_preview_json_payload_file(path) {
         Ok(bytes) => bytes,
         Err(error) => {
             return serde_json::json!({
@@ -35738,7 +35777,7 @@ fn pc_use_status_file_read_summary(
     expected_schema: &str,
     kind: PcUseStatusFileKind,
 ) -> Value {
-    let bytes = match fs::read(path) {
+    let bytes = match read_web_preview_json_payload_file(path) {
         Ok(bytes) => bytes,
         Err(error) => {
             return serde_json::json!({
@@ -36126,7 +36165,7 @@ fn bootstrap_phase(name: &str, checks: &[Value], prefixes: &[&str]) -> Value {
 }
 
 fn adapter_manifest_ready(path: &Path) -> bool {
-    let bytes = match fs::read(path) {
+    let bytes = match read_web_preview_json_payload_file(path) {
         Ok(bytes) => bytes,
         Err(_) => return false,
     };
@@ -36142,7 +36181,7 @@ fn adapter_manifest_ready(path: &Path) -> bool {
 }
 
 fn json_file_schema(path: &Path) -> Option<String> {
-    let bytes = fs::read(path).ok()?;
+    let bytes = read_web_preview_json_payload_file(path).ok()?;
     serde_json::from_slice::<Value>(&bytes)
         .ok()?
         .get("schema")
@@ -36533,6 +36572,41 @@ fn env_path(name: &str) -> Option<PathBuf> {
     env::var_os(name).map(PathBuf::from)
 }
 
+fn read_sentinel_bounded_file(
+    path: &Path,
+    max_bytes: u64,
+    description: &str,
+) -> io::Result<Vec<u8>> {
+    let mut buffer = Vec::new();
+    let file = fs::File::open(path)?;
+    let mut limited = file.take(max_bytes + 1);
+    limited.read_to_end(&mut buffer)?;
+    if buffer.len() as u64 > max_bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("{description} exceeds {max_bytes} bytes"),
+        ));
+    }
+    Ok(buffer)
+}
+
+fn read_web_preview_json_payload_file(path: &Path) -> io::Result<Vec<u8>> {
+    read_sentinel_bounded_file(
+        path,
+        MAX_WEB_PREVIEW_JSON_PAYLOAD_BYTES,
+        "web preview JSON payload",
+    )
+}
+
+#[cfg(target_os = "windows")]
+fn read_web_preview_screenshot_png_file(path: &Path) -> io::Result<Vec<u8>> {
+    read_sentinel_bounded_file(
+        path,
+        MAX_WEB_PREVIEW_SCREENSHOT_PNG_BYTES,
+        "web preview screenshot PNG",
+    )
+}
+
 fn path_string(path: impl AsRef<Path>) -> String {
     path.as_ref().display().to_string()
 }
@@ -36747,7 +36821,8 @@ fn load_bookmarks(profile_dir: &Path) -> Result<Vec<String>> {
         return Ok(Vec::new());
     }
 
-    let data = fs::read(&path).with_context(|| format!("Failed to read {}", path.display()))?;
+    let data = read_web_preview_json_payload_file(&path)
+        .with_context(|| format!("Failed to read {}", path.display()))?;
     serde_json::from_slice(&data).with_context(|| format!("Failed to parse {}", path.display()))
 }
 
@@ -36856,11 +36931,10 @@ fn scan_chromium_extensions(
             continue;
         }
 
-        let manifest: Value = serde_json::from_slice(
-            &fs::read(&manifest_path)
-                .with_context(|| format!("Failed to read {}", manifest_path.display()))?,
-        )
-        .with_context(|| format!("Failed to parse {}", manifest_path.display()))?;
+        let manifest_data = read_web_preview_json_payload_file(&manifest_path)
+            .with_context(|| format!("Failed to read {}", manifest_path.display()))?;
+        let manifest: Value = serde_json::from_slice(&manifest_data)
+            .with_context(|| format!("Failed to parse {}", manifest_path.display()))?;
 
         let name = manifest
             .get("name")

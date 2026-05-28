@@ -39,6 +39,8 @@ These guards are source-contract checks only. They keep source ownership, handof
 Current handoff and production-readiness guards:
 - `node --test script/dx-handoff-source-guard-registry.test.ts` - handoff docs, guard registry, and source-only claim hygiene.
 - `node --test script/dx-windows-reliability-source.test.ts` - Windows scanner/minidump source contracts.
+- `node --test script/zed-builtin-schema-source.test.ts` - built-in JSON schema render byte-boundary contract.
+- `node --test script/zed-platform-source.test.ts` - app-bundle platform copy failure display boundaries.
 - `node --test script/dx-workspace-reentrant-source.test.ts` - active-workspace event payload and reentrant update contracts.
 - `node --test script/dx-source-quality.test.ts` - DX Studio source/edit manifest and bridge source contracts.
 - `node --test script/dx-studio-project-source.test.ts` - DX Studio project detection and source-edit bounded file-read contracts.
@@ -89,6 +91,8 @@ Adjacent source guards:
 - Wire DX Agents CLI receipts, social/account readiness, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
+
+- Completed a six-agent file/response-boundary hardening pass without `just run` or Cargo. Web Preview durable JSON/status/manifest/bookmark/screenshot reads now use sentinel-byte bounded helpers before serde parse, image creation, or attachment encoding; Agent Panel skill URL clipboard import now bounds text before trim/filter; built-in JSON schema rendering now rejects oversized schema payloads before parse/pretty-print; minidump upload response bodies and app-copy stderr now compact/cap display text before logs/errors; fetched mention client-error bodies now use capped compact text. Added source guards `script/zed-builtin-schema-source.test.ts` and `script/zed-platform-source.test.ts`, and extended `script/web-preview-payload-source.test.ts`, `script/dx-agent-panel-clipboard-source.test.ts`, `script/dx-mention-set-source.test.ts`, `script/dx-windows-reliability-source.test.ts`, and the handoff registry. Passed source-only integration: 28/28 targeted Node source subtests, targeted rustfmt checks, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 
 - Completed a six-agent local input-surface hardening pass without `just run` or Cargo. Previous minidump metadata/payload reads, Web Preview final-proof clipboard imports, external mention image and fetched-body ingestion, DX Studio source snapshot digesting, Agent Panel/draft prompt persisted KVP JSON, and failed DX Agents bridge stderr rendering now reject, skip, or compact oversized input before parse, digest, upload, image conversion, or UI/log display. Added source guard `script\dx-agent-persisted-state-source.test.ts` and extended `script\dx-windows-reliability-source.test.ts`, `script\web-preview-payload-source.test.ts`, `script\dx-mention-set-source.test.ts`, `script\dx-source-quality.test.ts`, and `script\dx-agent-bridge-source.test.ts`. Passed source-only integration: 35/35 targeted Node source subtests, targeted rustfmt checks, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 

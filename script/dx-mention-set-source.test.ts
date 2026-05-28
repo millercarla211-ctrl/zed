@@ -89,6 +89,42 @@ test("external pasted image files are bounded before format guessing", () => {
   assert.ok(source.includes(maxBytes), "expected external image byte constant to remain source-visible");
 });
 
+test("fetch mention client errors render capped compact response text", () => {
+  const source = read("crates/agent_ui/src/mention_set.rs");
+  const displayHelperStart = source.indexOf("fn format_fetch_mention_error_body(");
+  const bodyHelperStart = source.indexOf("async fn read_fetch_mention_body(");
+  const fetchStart = source.indexOf("async fn fetch_url_content(");
+  const contentTypeStart = source.indexOf("let Some(content_type)", fetchStart);
+
+  assert.ok(displayHelperStart >= 0, "expected a focused fetch error display helper");
+  assert.ok(bodyHelperStart > displayHelperStart, "expected display helper before body reads");
+  assert.ok(fetchStart > bodyHelperStart, "expected fetch helper after bounded body read helper");
+  assert.ok(contentTypeStart > fetchStart, "expected content-type handling after client-error branch");
+
+  const displayHelper = source.slice(displayHelperStart, bodyHelperStart);
+  const fetch = source.slice(fetchStart);
+  const clientErrorBranch = source.slice(
+    source.indexOf("if response.status().is_client_error()", fetchStart),
+    contentTypeStart,
+  );
+  const maxDisplayBytes = "MAX_FETCH_MENTION_ERROR_BODY_DISPLAY_BYTES";
+  const displayHelperCall = "format_fetch_mention_error_body(&body)";
+  const escaped = (text: string) => text.replace(/[().+]/g, "\\$&");
+
+  assert.match(source, /const MAX_FETCH_MENTION_ERROR_BODY_DISPLAY_BYTES: usize = \d+ \* 1024;/);
+  assert.match(displayHelper, new RegExp(escaped(`body.len() > ${maxDisplayBytes}`)));
+  assert.match(
+    displayHelper,
+    /body\s*\.len\(\)\s*\.min\(MAX_FETCH_MENTION_ERROR_BODY_DISPLAY_BYTES\)/,
+  );
+  assert.match(displayHelper, /String::from_utf8_lossy\(visible_body\)/);
+  assert.match(displayHelper, /\.split_whitespace\(\)/);
+  assert.match(displayHelper, /\[truncated\]/);
+  assert.match(fetch, new RegExp(escaped(displayHelperCall)));
+  assert.doesNotMatch(clientErrorBranch, /String::from_utf8_lossy/);
+  assert.doesNotMatch(fetch, /String::from_utf8_lossy\(body\.as_slice\(\)\)/);
+});
+
 test("fetch mention bodies are bounded before text or JSON conversion", () => {
   const source = read("crates/agent_ui/src/mention_set.rs");
   const bodyHelperStart = source.indexOf("async fn read_fetch_mention_body(");
@@ -104,6 +140,7 @@ test("fetch mention bodies are bounded before text or JSON conversion", () => {
   const bodyHelper = source.slice(bodyHelperStart, bodyHelperEnd);
   const maxBytes = "MAX_FETCH_MENTION_BODY_BYTES";
   const helperCall = "read_fetch_mention_body(response.body_mut()).await";
+  const displayHelperCall = "format_fetch_mention_error_body(&body)";
   const oversizeCheck = "body.len() as u64 > MAX_FETCH_MENTION_BODY_BYTES";
 
   assert.match(source, /const MAX_FETCH_MENTION_BODY_BYTES: u64 = \d+ \* 1024 \* 1024;/);
@@ -116,8 +153,8 @@ test("fetch mention bodies are bounded before text or JSON conversion", () => {
     "fetch body cap must apply before client-error response text is rendered",
   );
   assert.ok(
-    fetch.indexOf(helperCall) < fetch.indexOf("String::from_utf8_lossy"),
-    "fetch body cap must apply before lossy text conversion",
+    fetch.indexOf(helperCall) < fetch.indexOf(displayHelperCall),
+    "fetch body cap must apply before client-error display text is rendered",
   );
   assert.ok(
     fetch.indexOf(helperCall) < fetch.indexOf("convert_html_to_markdown(&body[..]"),

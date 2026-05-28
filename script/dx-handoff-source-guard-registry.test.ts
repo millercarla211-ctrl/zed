@@ -7,6 +7,8 @@ const read = (path: string) => readFileSync(path, "utf8");
 const registeredGuardScripts = [
   "script/dx-handoff-source-guard-registry.test.ts",
   "script/dx-windows-reliability-source.test.ts",
+  "script/zed-builtin-schema-source.test.ts",
+  "script/zed-platform-source.test.ts",
   "script/dx-workspace-reentrant-source.test.ts",
   "script/dx-source-quality.test.ts",
   "script/dx-studio-project-source.test.ts",

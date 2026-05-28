@@ -1,3 +1,26 @@
+[2026-05-28] - File And Response Boundary Hardening
+
+ADDED:
+- Added `script\zed-builtin-schema-source.test.ts` to guard built-in JSON schema render byte boundaries.
+- Added `script\zed-platform-source.test.ts` to guard platform app-copy stderr display boundaries.
+
+CHANGED:
+- Web Preview durable result, managed Chrome, PC-use, manifest/schema, bookmark, extension manifest, and screenshot reads now use sentinel-byte bounded helpers before serde parsing, image creation, or attachment encoding.
+- Agent Panel skill URL clipboard imports now bound text before trimming or supported-URL filtering.
+- Built-in JSON schema rendering now rejects oversized schema payloads before serde parsing, pretty-printing, or buffer insertion.
+- Minidump upload response bodies now use a bounded async read and compact display text before error/log output.
+- App-bundle copy failure reporting and fetched mention client-error reporting now compact and cap process/HTTP response text before user-facing errors.
+- `DX.md` and the source-guard registry now list the new Zed-specific guards.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-agent-panel-clipboard-source.test.ts script\dx-mention-set-source.test.ts script\dx-windows-reliability-source.test.ts script\web-preview-payload-source.test.ts script\zed-builtin-schema-source.test.ts script\zed-platform-source.test.ts` (28/28 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on all edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Local Input Surface Hardening
 
 ADDED:
