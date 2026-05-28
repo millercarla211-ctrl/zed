@@ -44,6 +44,8 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-workspace-reentrant-source.test.ts` - active-workspace event payload and reentrant update contracts.
 - `node --test script/dx-source-quality.test.ts` - DX Studio source/edit manifest and bridge source contracts.
 - `node --test script/dx-studio-project-source.test.ts` - DX Studio project detection and source-edit bounded file-read contracts.
+- `node --test script/dx-buffer-codegen-source.test.ts` - inline assistant rewrite source-selection byte boundaries.
+- `node --test script/dx-inline-prompt-source.test.ts` - inline assistant prompt materialization and linked-group byte boundaries.
 - `node --test script/dx-agent-panel-clipboard-source.test.ts` - native-agent thread clipboard payload size boundaries.
 - `node --test script/dx-agent-configuration-source.test.ts` - Agent Configuration settings editor insertion boundaries.
 - `node --test script/dx-agent-persisted-state-source.test.ts` - Agent Panel and draft prompt persisted KVP JSON boundaries.
@@ -92,6 +94,8 @@ Adjacent source guards:
 - Wire DX Agents CLI receipts, social/account readiness, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
+
+- Completed a six-agent inline prompt and DX Studio source-boundary hardening pass without `just run` or Cargo. Inline assistant codegen now rejects oversized selected source before request construction or streaming text materialization, empty rejected alternatives no longer rematerialize batch diffs, inline prompt submission and linked prompt-group unlinking now size-check before cloning prompt text, and DX Studio manifest-derived route/detail/ambiguity summaries are capped before UI/IPC exposure. Added `script/dx-buffer-codegen-source.test.ts` and `script/dx-inline-prompt-source.test.ts`, extended `script/dx-source-quality.test.ts`, and registered the new guards. Passed source-only integration: 37/37 targeted Node source subtests, targeted rustfmt checks, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 
 - Completed a six-agent prompt/IPC/receipt boundary hardening pass without `just run` or Cargo. Web Preview IPC messages are byte-capped before raw browser-event queueing, deferred queueing, and serde parsing, with bounded raw/deferred bridge queues; minidump multipart upload bodies are sentinel-byte capped before `AsyncBody`; Agent Configuration settings insertion refuses oversized buffers before `snapshot.text()`; DX Agent bridge receipt writes check post-serialization bytes and bound action-error display fields; launch prompt/context lists and workspace labels compact whitespace and cap individual receipt-derived rows. Added `script/dx-agent-configuration-source.test.ts`, extended the Web Preview, Windows reliability, Agent bridge, launch prompt, and launch workspace guards, and registered the new guard in the handoff registry. Passed source-only integration: 51/51 targeted Node source subtests, targeted rustfmt checks, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 

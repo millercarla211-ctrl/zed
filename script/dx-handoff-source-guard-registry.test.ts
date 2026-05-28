@@ -12,6 +12,8 @@ const registeredGuardScripts = [
   "script/dx-workspace-reentrant-source.test.ts",
   "script/dx-source-quality.test.ts",
   "script/dx-studio-project-source.test.ts",
+  "script/dx-buffer-codegen-source.test.ts",
+  "script/dx-inline-prompt-source.test.ts",
   "script/dx-agent-panel-clipboard-source.test.ts",
   "script/dx-agent-configuration-source.test.ts",
   "script/dx-agent-persisted-state-source.test.ts",

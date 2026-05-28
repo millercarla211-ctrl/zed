@@ -1,3 +1,25 @@
+[2026-05-28] - Inline Prompt And DX Studio Boundary Hardening
+
+ADDED:
+- Added `script\dx-buffer-codegen-source.test.ts` to guard inline assistant codegen source-selection boundaries.
+- Added `script\dx-inline-prompt-source.test.ts` to guard inline prompt materialization and linked-group boundaries.
+
+CHANGED:
+- Inline assistant codegen now rejects oversized selected source before building language-model requests or collecting streaming selected text.
+- Empty rejected codegen alternatives now avoid batch-diff rematerialization when reactivated.
+- Inline prompt submission and linked prompt-group unlinking now size-check editor buffers before cloning prompt text.
+- DX Studio route discovery now caps manifest route targets, per-route detail lists, launch materialized files, and ambiguous surface summaries before exposing them to editor/UI surfaces.
+- `DX.md` and the source-guard registry now list the new inline assistant source guards.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-buffer-codegen-source.test.ts script\dx-inline-prompt-source.test.ts script\dx-source-quality.test.ts script\dx-studio-project-source.test.ts script\dx-message-editor-source.test.ts script\zed-builtin-schema-source.test.ts script\web-preview-payload-source.test.ts` (37/37 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on all edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Prompt IPC And Receipt Boundary Hardening
 
 ADDED:

@@ -11,7 +11,9 @@ use crate::mention_set::MentionSet;
 use crate::{
     AgentPanel,
     buffer_codegen::{BufferCodegen, CodegenAlternative, CodegenEvent},
-    inline_prompt_editor::{CodegenStatus, InlineAssistId, PromptEditor, PromptEditorEvent},
+    inline_prompt_editor::{
+        CodegenStatus, InlineAssistId, InlinePromptSizeError, PromptEditor, PromptEditorEvent,
+    },
     terminal_inline_assistant::TerminalInlineAssistant,
 };
 use agent::ThreadStore;
@@ -1226,24 +1228,85 @@ impl InlineAssistant {
         assist_group.assist_ids.clone()
     }
 
+    fn prompt_size_error_for_assist_group(
+        &self,
+        assist_group_id: InlineAssistGroupId,
+        cx: &App,
+    ) -> Option<InlinePromptSizeError> {
+        self.assist_groups
+            .get(&assist_group_id)?
+            .assist_ids
+            .iter()
+            .find_map(|assist_id| self.prompt_size_error_for_assist(*assist_id, cx))
+    }
+
+    fn prompt_size_error_for_assist(
+        &self,
+        assist_id: InlineAssistId,
+        cx: &App,
+    ) -> Option<InlinePromptSizeError> {
+        self.assists
+            .get(&assist_id)?
+            .decorations
+            .as_ref()?
+            .prompt_editor
+            .read(cx)
+            .prompt_size_error(cx)
+    }
+
+    fn show_prompt_size_error(
+        &self,
+        assist_id: InlineAssistId,
+        error: InlinePromptSizeError,
+        cx: &mut App,
+    ) {
+        let Some(workspace) = self
+            .assists
+            .get(&assist_id)
+            .and_then(|assist| assist.workspace.upgrade())
+        else {
+            return;
+        };
+
+        workspace
+            .update(cx, |workspace, cx| {
+                struct InlinePromptSizeLimit;
+
+                let id = NotificationId::composite::<InlinePromptSizeLimit>(assist_id.0);
+                workspace.show_toast(Toast::new(id, error.to_string()), cx);
+            })
+            .ok();
+    }
+
     pub fn start_assist(&mut self, assist_id: InlineAssistId, window: &mut Window, cx: &mut App) {
-        let assist = if let Some(assist) = self.assists.get_mut(&assist_id) {
-            assist
-        } else {
+        let Some(assist) = self.assists.get(&assist_id) else {
             return;
         };
 
         let assist_group_id = assist.group_id;
         if self.assist_groups[&assist_group_id].linked {
+            if let Some(error) = self.prompt_size_error_for_assist_group(assist_group_id, cx) {
+                self.show_prompt_size_error(assist_id, error, cx);
+                return;
+            }
+
             for assist_id in self.unlink_assist_group(assist_group_id, window, cx) {
                 self.start_assist(assist_id, window, cx);
             }
             return;
         }
 
-        let Some((user_prompt, mention_set)) = assist.user_prompt(cx).zip(assist.mention_set(cx))
-        else {
+        let Some(mention_set) = assist.mention_set(cx) else {
             return;
+        };
+
+        let user_prompt = match assist.user_prompt(cx) {
+            Ok(Some(prompt)) => prompt,
+            Ok(None) => return,
+            Err(error) => {
+                self.show_prompt_size_error(assist_id, error, cx);
+                return;
+            }
         };
 
         self.prompt_history.retain(|prompt| *prompt != user_prompt);
@@ -1259,6 +1322,10 @@ impl InlineAssistant {
         };
 
         let context_task = load_context(&mention_set, cx).shared();
+        let Some(assist) = self.assists.get_mut(&assist_id) else {
+            return;
+        };
+
         assist
             .codegen
             .update(cx, |codegen, cx| {
@@ -1754,9 +1821,16 @@ impl InlineAssist {
         }
     }
 
-    fn user_prompt(&self, cx: &App) -> Option<String> {
-        let decorations = self.decorations.as_ref()?;
-        Some(decorations.prompt_editor.read(cx).prompt(cx))
+    fn user_prompt(&self, cx: &App) -> Result<Option<String>, InlinePromptSizeError> {
+        let Some(decorations) = self.decorations.as_ref() else {
+            return Ok(None);
+        };
+
+        decorations
+            .prompt_editor
+            .read(cx)
+            .bounded_prompt(cx)
+            .map(Some)
     }
 
     fn mention_set(&self, cx: &App) -> Option<Entity<MentionSet>> {

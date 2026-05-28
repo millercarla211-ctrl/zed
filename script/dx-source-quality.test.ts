@@ -285,3 +285,45 @@ test("DX Studio route discovery reads configs and preview manifests through boun
   );
   assert.doesNotMatch(routes, /fs::read_to_string/);
 });
+
+test("DX Studio manifest-derived discovery details stay capped", () => {
+  const routes = read("crates/web_preview/src/dx_studio/routes.rs");
+  const sourceEditManifest = read(
+    "crates/web_preview/src/dx_studio_source_edit/manifest.rs",
+  );
+
+  assert.match(routes, /const DX_STUDIO_MAX_PREVIEW_TARGETS: usize = 64;/);
+  assert.match(routes, /const DX_STUDIO_MAX_ROUTE_DETAIL_ITEMS: usize = 64;/);
+  assert.match(routes, /\.take\(DX_STUDIO_MAX_PREVIEW_TARGETS\)/);
+  assert.match(
+    routes,
+    /fn bounded_route_detail_values\(value: &Value, keys: &\[\&str\]\) -> Vec<String>/,
+  );
+  assert.match(
+    routes,
+    /string_values_for_keys\(value, keys\)[\s\S]*\.take\(DX_STUDIO_MAX_ROUTE_DETAIL_ITEMS\)/,
+  );
+  assert.match(
+    routes,
+    /launchRouteMaterializedFiles"[\s\S]*\.take\(DX_STUDIO_MAX_ROUTE_DETAIL_ITEMS\)/,
+  );
+
+  assert.match(
+    sourceEditManifest,
+    /const DX_STUDIO_MAX_AMBIGUOUS_SURFACE_SUMMARIES: usize = 8;/,
+  );
+  assert.match(sourceEditManifest, /let candidate_count = candidates\.len\(\);/);
+  assert.match(
+    sourceEditManifest,
+    /\.take\(DX_STUDIO_MAX_AMBIGUOUS_SURFACE_SUMMARIES\)/,
+  );
+  assert.match(sourceEditManifest, /"candidate_count": candidate_count/);
+  assert.match(
+    sourceEditManifest,
+    /"candidates_truncated": candidate_count > DX_STUDIO_MAX_AMBIGUOUS_SURFACE_SUMMARIES/,
+  );
+  assert.doesNotMatch(
+    sourceEditManifest,
+    /candidates\.iter\(\)\.map\(surface_summary\)\.collect::<Vec<_>>\(\)/,
+  );
+});

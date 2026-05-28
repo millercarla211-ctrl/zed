@@ -13,6 +13,8 @@ use super::{
 
 const DX_STUDIO_MAX_ROUTE_CONFIG_BYTES: u64 = 200_000;
 const DX_STUDIO_MAX_ROUTE_MANIFEST_BYTES: u64 = 2_000_000;
+const DX_STUDIO_MAX_PREVIEW_TARGETS: usize = 64;
+const DX_STUDIO_MAX_ROUTE_DETAIL_ITEMS: usize = 64;
 
 pub fn preview_targets(root: &Path) -> Vec<DxStudioPreviewTarget> {
     if detect_project(root).is_none() {
@@ -252,7 +254,7 @@ fn route_from_manifest_value(value: &Value, origin: &str) -> Option<DxStudioPrev
     Some(DxStudioPreviewTarget {
         route,
         url,
-        source_files: string_values_for_keys(
+        source_files: bounded_route_detail_values(
             value,
             &[
                 "source_files",
@@ -266,7 +268,7 @@ fn route_from_manifest_value(value: &Value, origin: &str) -> Option<DxStudioPrev
                 "sourcePath",
             ],
         ),
-        forge_packages: string_values_for_keys(
+        forge_packages: bounded_route_detail_values(
             value,
             &[
                 "forge_packages",
@@ -279,11 +281,11 @@ fn route_from_manifest_value(value: &Value, origin: &str) -> Option<DxStudioPrev
                 "packageName",
             ],
         ),
-        assets: string_values_for_keys(
+        assets: bounded_route_detail_values(
             value,
             &["assets", "asset", "media", "media_slots", "mediaSlots"],
         ),
-        data_dx_markers: string_values_for_keys(
+        data_dx_markers: bounded_route_detail_values(
             value,
             &[
                 "data_dx_markers",
@@ -317,6 +319,7 @@ fn route_from_launch_contract(contents: &str, origin: &str) -> Option<DxStudioPr
         contents,
         "launchRouteMaterializedFiles",
     ))
+    .take(DX_STUDIO_MAX_ROUTE_DETAIL_ITEMS)
     .collect::<Vec<_>>();
 
     Some(DxStudioPreviewTarget {
@@ -349,14 +352,24 @@ fn route_values_from_manifest(manifest: &Value) -> Vec<&Value> {
     .flatten()
     {
         if let Some(routes) = candidate.as_array() {
-            return routes.iter().collect();
+            return routes.iter().take(DX_STUDIO_MAX_PREVIEW_TARGETS).collect();
         }
         if let Some(routes) = candidate.as_object() {
-            return routes.values().collect();
+            return routes
+                .values()
+                .take(DX_STUDIO_MAX_PREVIEW_TARGETS)
+                .collect();
         }
     }
 
     Vec::new()
+}
+
+fn bounded_route_detail_values(value: &Value, keys: &[&str]) -> Vec<String> {
+    string_values_for_keys(value, keys)
+        .into_iter()
+        .take(DX_STUDIO_MAX_ROUTE_DETAIL_ITEMS)
+        .collect()
 }
 
 fn read_dx_key(contents: &str, key: &str) -> Option<String> {

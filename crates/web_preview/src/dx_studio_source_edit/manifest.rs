@@ -21,6 +21,7 @@ use self::{
 };
 
 const DX_STUDIO_MAX_MANIFEST_BYTES: u64 = 2_000_000;
+const DX_STUDIO_MAX_AMBIGUOUS_SURFACE_SUMMARIES: usize = 8;
 
 fn read_manifest_candidate(candidate: &Path) -> Option<String> {
     let file = File::open(candidate).ok()?;
@@ -119,6 +120,12 @@ fn selection_with_manifest_ambiguity(selection: &Value, lookup: ManifestSelectio
     else {
         return selection.clone();
     };
+    let candidate_count = candidates.len();
+    let candidate_summaries = candidates
+        .iter()
+        .take(DX_STUDIO_MAX_AMBIGUOUS_SURFACE_SUMMARIES)
+        .map(surface_summary)
+        .collect::<Vec<_>>();
 
     let mut enriched = selection.clone();
     if let Some(object) = enriched.as_object_mut() {
@@ -127,7 +134,10 @@ fn selection_with_manifest_ambiguity(selection: &Value, lookup: ManifestSelectio
             serde_json::json!({
                 "status": "ambiguous_selector",
                 "manifest": manifest_path,
-                "candidates": candidates.iter().map(surface_summary).collect::<Vec<_>>(),
+                "candidate_count": candidate_count,
+                "candidate_limit": DX_STUDIO_MAX_AMBIGUOUS_SURFACE_SUMMARIES,
+                "candidates_truncated": candidate_count > DX_STUDIO_MAX_AMBIGUOUS_SURFACE_SUMMARIES,
+                "candidates": candidate_summaries,
             }),
         );
     }

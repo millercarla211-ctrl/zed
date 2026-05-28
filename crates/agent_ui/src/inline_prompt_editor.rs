@@ -19,10 +19,10 @@ use parking_lot::Mutex;
 use project::Project;
 use prompt_store::PromptStore;
 use settings::Settings;
-use std::cmp;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::{cmp, fmt};
 use theme_settings::ThemeSettings;
 use ui::utils::WithRemSize;
 use ui::{IconButtonShape, KeyBinding, PopoverMenuHandle, Tooltip, prelude::*};
@@ -47,6 +47,35 @@ use crate::{
 };
 
 actions!(inline_assistant, [ThumbsUpResult, ThumbsDownResult]);
+
+const MAX_INLINE_PROMPT_BYTES: usize = 128 * 1024;
+
+#[derive(Clone, Copy, Debug)]
+pub struct InlinePromptSizeError {
+    actual_bytes: usize,
+}
+
+impl fmt::Display for InlinePromptSizeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Inline prompt is too large ({} bytes; max {} bytes). Shorten it and try again.",
+            self.actual_bytes, MAX_INLINE_PROMPT_BYTES
+        )
+    }
+}
+
+fn inline_prompt_size_error(byte_len: usize) -> Option<InlinePromptSizeError> {
+    (byte_len > MAX_INLINE_PROMPT_BYTES).then_some(InlinePromptSizeError {
+        actual_bytes: byte_len,
+    })
+}
+
+fn inline_prompt_snapshot_size_error(
+    snapshot: &editor::EditorSnapshot,
+) -> Option<InlinePromptSizeError> {
+    inline_prompt_size_error(snapshot.display_snapshot.buffer_snapshot().len().0)
+}
 
 enum CompletionState {
     Pending,
@@ -411,6 +440,19 @@ impl<T: 'static> PromptEditor<T> {
         self.editor.read(cx).text(cx)
     }
 
+    pub fn prompt_size_error(&self, cx: &App) -> Option<InlinePromptSizeError> {
+        let prompt_buffer = self.editor.read(cx).buffer().clone();
+        inline_prompt_size_error(prompt_buffer.read(cx).len(cx).0)
+    }
+
+    pub fn bounded_prompt(&self, cx: &App) -> Result<String, InlinePromptSizeError> {
+        if let Some(error) = self.prompt_size_error(cx) {
+            return Err(error);
+        }
+
+        Ok(self.prompt(cx))
+    }
+
     fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
         if inline_assistant_model_supports_images(cx)
             && let Some(task) = paste_images_as_context(
@@ -449,13 +491,17 @@ impl<T: 'static> PromptEditor<T> {
                             .log_edit_event("inline assist", is_via_ssh);
                     });
                 }
-                let prompt = snapshot.text();
-                if self
-                    .prompt_history_ix
-                    .is_none_or(|ix| self.prompt_history[ix] != prompt)
-                {
+                if inline_prompt_snapshot_size_error(&snapshot).is_some() {
                     self.prompt_history_ix.take();
-                    self.pending_prompt = prompt;
+                } else {
+                    let prompt = snapshot.text();
+                    if self
+                        .prompt_history_ix
+                        .is_none_or(|ix| self.prompt_history[ix] != prompt)
+                    {
+                        self.prompt_history_ix.take();
+                        self.pending_prompt = prompt;
+                    }
                 }
 
                 self.edited_since_done = true;
