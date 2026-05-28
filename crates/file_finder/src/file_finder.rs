@@ -23,7 +23,8 @@ use open_path_prompt::{
 };
 use picker::{Picker, PickerDelegate};
 use project::{
-    PathMatchCandidateSet, Project, ProjectPath, WorktreeId, worktree_store::WorktreeStore,
+    PathMatchCandidateSet, Project, ProjectPath, Worktree, WorktreeId,
+    worktree_store::WorktreeStore,
 };
 use project_panel::project_panel_settings::ProjectPanelSettings;
 use settings::Settings;
@@ -139,30 +140,47 @@ impl FileFinder {
             Some(FoundPath::new(project_path, abs_path))
         });
 
-        let history_items = workspace
-            .recent_navigation_history(Some(MAX_RECENT_SELECTIONS), cx)
-            .into_iter()
-            .filter_map(|(project_path, abs_path)| {
-                if project.entry_for_path(&project_path, cx).is_some() {
-                    return Some(Task::ready(Some(FoundPath::new(project_path, abs_path?))));
-                }
-                let abs_path = abs_path?;
-                if project.is_local() {
-                    let fs = fs.clone();
-                    Some(cx.background_spawn(async move {
-                        if fs.is_file(&abs_path).await {
-                            Some(FoundPath::new(project_path, abs_path))
-                        } else {
-                            None
-                        }
-                    }))
-                } else {
-                    Some(Task::ready(Some(FoundPath::new(project_path, abs_path))))
-                }
-            })
-            .collect::<Vec<_>>();
+        let mut history_item_tasks = Vec::with_capacity(MAX_FILE_FINDER_HISTORY_TASKS);
+        for (project_path, abs_path) in
+            workspace.recent_navigation_history(Some(MAX_FILE_FINDER_HISTORY_TASKS), cx)
+        {
+            if history_item_tasks.len() >= MAX_FILE_FINDER_HISTORY_TASKS {
+                log::warn!(
+                    "file finder history task cap reached at {MAX_FILE_FINDER_HISTORY_TASKS}"
+                );
+                break;
+            }
+
+            if project.entry_for_path(&project_path, cx).is_some() {
+                let Some(abs_path) = abs_path else {
+                    continue;
+                };
+                history_item_tasks.push(Task::ready(Some(FoundPath::new(project_path, abs_path))));
+                continue;
+            }
+
+            let Some(abs_path) = abs_path else {
+                continue;
+            };
+            if project.is_local() {
+                let fs = fs.clone();
+                history_item_tasks.push(cx.background_spawn(async move {
+                    if fs.is_file(&abs_path).await {
+                        Some(FoundPath::new(project_path, abs_path))
+                    } else {
+                        None
+                    }
+                }));
+            } else {
+                history_item_tasks.push(Task::ready(Some(FoundPath::new(project_path, abs_path))));
+            }
+        }
         cx.spawn_in(window, async move |workspace, cx| {
-            let history_items = join_all(history_items).await.into_iter().flatten();
+            let history_items = join_all(history_item_tasks)
+                .await
+                .into_iter()
+                .flatten()
+                .take(MAX_FILE_FINDER_HISTORY_ITEMS);
 
             workspace
                 .update_in(cx, |workspace, window, cx| {
@@ -561,24 +579,31 @@ impl Matches {
                 panel_match: None,
             };
 
-            self.matches
-                .extend(history_items.into_iter().map(path_to_entry));
+            self.matches.extend(
+                history_items
+                    .into_iter()
+                    .take(MAX_FILE_FINDER_HISTORY_ITEMS)
+                    .map(path_to_entry),
+            );
             return;
         };
 
         let worktree_name_by_id = if should_hide_root_in_entry_path(&worktree_store, cx) {
             None
         } else {
-            Some(
-                worktree_store
-                    .read(cx)
-                    .worktrees()
-                    .map(|worktree| {
-                        let snapshot = worktree.read(cx).snapshot();
-                        (snapshot.id(), snapshot.root_name().into())
-                    })
-                    .collect(),
-            )
+            let mut worktree_name_by_id = HashMap::default();
+            for worktree in worktree_store.read(cx).worktrees() {
+                if worktree_name_by_id.len() >= MAX_FILE_FINDER_WORKTREE_CANDIDATE_SETS {
+                    log::warn!(
+                        "file finder worktree-name cap reached at {MAX_FILE_FINDER_WORKTREE_CANDIDATE_SETS}"
+                    );
+                    break;
+                }
+
+                let snapshot = worktree.read(cx).snapshot();
+                worktree_name_by_id.insert(snapshot.id(), snapshot.root_name().into());
+            }
+            Some(worktree_name_by_id)
         };
         let new_history_matches = matching_history_items(
             history_items,
@@ -588,6 +613,7 @@ impl Matches {
             path_style,
         );
         let new_search_matches: Vec<Match> = new_search_matches
+            .take(MAX_FILE_FINDER_SEARCH_MATCHES)
             .filter(|path_match| {
                 !new_history_matches.contains_key(&ProjectPath {
                     path: path_match.0.path.clone(),
@@ -618,7 +644,7 @@ impl Matches {
                 Ok(_duplicate) => continue,
                 Err(i) => {
                     self.matches.insert(i, new_match);
-                    if self.matches.len() == 100 {
+                    if self.matches.len() >= MAX_FILE_FINDER_RESULTS {
                         break;
                     }
                 }
@@ -693,38 +719,40 @@ fn matching_history_items<'a>(
 ) -> HashMap<ProjectPath, Match> {
     let mut candidates_paths = HashMap::default();
 
-    let history_items_by_worktrees = history_items
-        .into_iter()
-        .chain(currently_opened)
-        .map(|found_path| {
-            // Only match history items names, otherwise their paths may match too many queries,
-            // producing false positives. E.g. `foo` would match both `something/foo/bar.rs` and
-            // `something/foo/foo.rs` and if the former is a history item, it would be shown first
-            // always, despite the latter being a better match.
-            let candidate = PathMatchCandidate::new(
-                &found_path.project.path,
-                false,
-                worktree_name_by_id
-                    .as_ref()
-                    .and_then(|m| m.get(&found_path.project.worktree_id))
-                    .map(|prefix| prefix.as_ref()),
-            );
-            candidates_paths.insert(&found_path.project, found_path);
-            (found_path.project.worktree_id, candidate)
-        })
-        .fold(
-            HashMap::default(),
-            |mut candidates, (worktree_id, new_candidate)| {
-                candidates
-                    .entry(worktree_id)
-                    .or_insert_with(Vec::new)
-                    .push(new_candidate);
-                candidates
-            },
+    let mut history_items_by_worktrees = HashMap::default();
+    let mut processed_history_items = 0;
+    for found_path in history_items.into_iter().chain(currently_opened) {
+        if processed_history_items >= MAX_FILE_FINDER_HISTORY_ITEMS {
+            log::warn!("file finder history item cap reached at {MAX_FILE_FINDER_HISTORY_ITEMS}");
+            break;
+        }
+        processed_history_items += 1;
+
+        // Only match history items names, otherwise their paths may match too many queries,
+        // producing false positives. E.g. `foo` would match both `something/foo/bar.rs` and
+        // `something/foo/foo.rs` and if the former is a history item, it would be shown first
+        // always, despite the latter being a better match.
+        let candidate = PathMatchCandidate::new(
+            &found_path.project.path,
+            false,
+            worktree_name_by_id
+                .as_ref()
+                .and_then(|m| m.get(&found_path.project.worktree_id))
+                .map(|prefix| prefix.as_ref()),
         );
+        candidates_paths.insert(&found_path.project, found_path);
+        history_items_by_worktrees
+            .entry(found_path.project.worktree_id)
+            .or_insert_with(Vec::new)
+            .push(candidate);
+    }
+
     let mut matching_history_paths = HashMap::default();
     for (worktree, candidates) in history_items_by_worktrees {
-        let max_results = candidates.len() + 1;
+        let max_results = candidates
+            .len()
+            .saturating_add(1)
+            .min(MAX_FILE_FINDER_RESULTS);
         let worktree_root_name = worktree_name_by_id
             .as_ref()
             .and_then(|w| w.get(&worktree).cloned());
@@ -796,6 +824,13 @@ impl FoundPath {
 }
 
 const MAX_RECENT_SELECTIONS: usize = 20;
+const MAX_FILE_FINDER_HISTORY_TASKS: usize = MAX_RECENT_SELECTIONS;
+const MAX_FILE_FINDER_HISTORY_ITEMS: usize = 256;
+const MAX_FILE_FINDER_RESULTS: usize = 100;
+const MAX_FILE_FINDER_SEARCH_MATCHES: usize = MAX_FILE_FINDER_RESULTS;
+const MAX_FILE_FINDER_WORKTREE_CANDIDATE_SETS: usize = 1_024;
+const MAX_FILE_FINDER_CHANNELS: usize = 2_048;
+const MAX_FILE_FINDER_QUERY_CHARS: usize = 4_096;
 
 pub enum Event {
     Selected(ProjectPath),
@@ -828,6 +863,10 @@ impl FileSearchQuery {
         let point = buffer_snapshot.point_from_external_input(row, col);
         Some(point..point)
     }
+}
+
+fn query_exceeds_file_finder_limit(query: &str) -> bool {
+    query.chars().nth(MAX_FILE_FINDER_QUERY_CHARS).is_some()
 }
 
 fn parse_file_search_query(raw_query: &str) -> FileSearchQuery {
@@ -976,25 +1015,29 @@ impl FileFinderDelegate {
             .as_ref()
             .map(|found_path| Arc::clone(&found_path.project.path));
         let worktree_store = self.project.read(cx).worktree_store();
-        let worktrees = worktree_store
+        let include_root_name = !should_hide_root_in_entry_path(&worktree_store, cx);
+        let mut candidate_sets = Vec::with_capacity(32);
+        for worktree in worktree_store
             .read(cx)
             .visible_worktrees_and_single_files(cx)
-            .collect::<Vec<_>>();
-        let include_root_name = !should_hide_root_in_entry_path(&worktree_store, cx);
-        let candidate_sets = worktrees
-            .into_iter()
-            .map(|worktree| {
-                let worktree = worktree.read(cx);
-                PathMatchCandidateSet {
-                    snapshot: worktree.snapshot(),
-                    include_ignored: self.include_ignored.unwrap_or_else(|| {
-                        worktree.root_entry().is_some_and(|entry| entry.is_ignored)
-                    }),
-                    include_root_name,
-                    candidates: project::Candidates::Files,
-                }
-            })
-            .collect::<Vec<_>>();
+        {
+            if candidate_sets.len() >= MAX_FILE_FINDER_WORKTREE_CANDIDATE_SETS {
+                log::warn!(
+                    "file finder worktree candidate-set cap reached at {MAX_FILE_FINDER_WORKTREE_CANDIDATE_SETS}"
+                );
+                break;
+            }
+
+            let worktree = worktree.read(cx);
+            candidate_sets.push(PathMatchCandidateSet {
+                snapshot: worktree.snapshot(),
+                include_ignored: self
+                    .include_ignored
+                    .unwrap_or_else(|| worktree.root_entry().is_some_and(|entry| entry.is_ignored)),
+                include_root_name,
+                candidates: project::Candidates::Files,
+            });
+        }
 
         let search_id = util::post_inc(&mut self.search_count);
         self.cancel_flag.store(true, atomic::Ordering::Release);
@@ -1062,7 +1105,15 @@ impl FileFinderDelegate {
             // Add channel matches
             if let Some(channel_store) = &self.channel_store {
                 let channel_store = channel_store.read(cx);
-                let channels: Vec<_> = channel_store.channels().cloned().collect();
+                let mut channels =
+                    Vec::with_capacity(channel_store.channel_count().min(MAX_FILE_FINDER_CHANNELS));
+                for channel in channel_store.channels().cloned() {
+                    if channels.len() >= MAX_FILE_FINDER_CHANNELS {
+                        log::warn!("file finder channel cap reached at {MAX_FILE_FINDER_CHANNELS}");
+                        break;
+                    }
+                    channels.push(channel);
+                }
                 if !channels.is_empty() {
                     let candidates = channels
                         .iter()
@@ -1097,6 +1148,12 @@ impl FileFinderDelegate {
                             } else {
                                 0.5 * (query_lower.len() as f64 / name_lower.len() as f64)
                             };
+                            if channel_matches.len() >= MAX_FILE_FINDER_RESULTS {
+                                log::warn!(
+                                    "file finder channel match cap reached at {MAX_FILE_FINDER_RESULTS}"
+                                );
+                                break;
+                            }
                             channel_matches.push(Match::Channel {
                                 channel_id: channel.id,
                                 channel_name: channel.name.clone(),
@@ -1115,7 +1172,12 @@ impl FileFinderDelegate {
                             .position(&channel_match, self.currently_opened_path.as_ref())
                         {
                             Ok(_duplicate) => {}
-                            Err(ix) => self.matches.matches.insert(ix, channel_match),
+                            Err(ix) => {
+                                self.matches.matches.insert(ix, channel_match);
+                                if self.matches.matches.len() > MAX_FILE_FINDER_RESULTS {
+                                    self.matches.matches.truncate(MAX_FILE_FINDER_RESULTS);
+                                }
+                            }
                         }
                     }
                 }
@@ -1123,46 +1185,49 @@ impl FileFinderDelegate {
 
             let query_path = query.raw_query.as_str();
             if let Ok(mut query_path) = RelPath::new(Path::new(query_path), path_style) {
-                let available_worktree = self
-                    .project
-                    .read(cx)
-                    .visible_worktrees(cx)
-                    .filter(|worktree| !worktree.read(cx).is_single_file())
-                    .collect::<Vec<_>>();
-                let worktree_count = available_worktree.len();
-                let mut expect_worktree = available_worktree.first().cloned();
-                for worktree in &available_worktree {
-                    let worktree_root = worktree.read(cx).root_name();
-                    if worktree_count > 1 {
-                        if let Ok(suffix) = query_path.strip_prefix(worktree_root) {
-                            query_path = Cow::Owned(suffix.to_owned());
-                            expect_worktree = Some(worktree.clone());
-                            break;
+                'create_new: {
+                    let Some(available_worktree) =
+                        self.collect_available_worktrees_for_create_new(cx)
+                    else {
+                        break 'create_new;
+                    };
+                    let worktree_count = available_worktree.len();
+                    let mut expect_worktree = available_worktree.first().cloned();
+                    for worktree in &available_worktree {
+                        let worktree_root = worktree.read(cx).root_name();
+                        if worktree_count > 1 {
+                            if let Ok(suffix) = query_path.strip_prefix(worktree_root) {
+                                query_path = Cow::Owned(suffix.to_owned());
+                                expect_worktree = Some(worktree.clone());
+                                break;
+                            }
                         }
                     }
-                }
 
-                if let Some(FoundPath { ref project, .. }) = self.currently_opened_path {
-                    let worktree_id = project.worktree_id;
-                    let focused_file_in_available_worktree = available_worktree
-                        .iter()
-                        .any(|wt| wt.read(cx).id() == worktree_id);
+                    if let Some(FoundPath { ref project, .. }) = self.currently_opened_path {
+                        let worktree_id = project.worktree_id;
+                        let focused_file_in_available_worktree = available_worktree
+                            .iter()
+                            .any(|wt| wt.read(cx).id() == worktree_id);
 
-                    if focused_file_in_available_worktree {
-                        expect_worktree = self.project.read(cx).worktree_for_id(worktree_id, cx);
+                        if focused_file_in_available_worktree {
+                            expect_worktree =
+                                self.project.read(cx).worktree_for_id(worktree_id, cx);
+                        }
                     }
-                }
 
-                if let Some(worktree) = expect_worktree {
-                    let worktree = worktree.read(cx);
-                    if worktree.entry_for_path(&query_path).is_none()
-                        && !query.raw_query.ends_with("/")
-                        && !(path_style.is_windows() && query.raw_query.ends_with("\\"))
-                    {
-                        self.matches.matches.push(Match::CreateNew(ProjectPath {
-                            worktree_id: worktree.id(),
-                            path: query_path.into_arc(),
-                        }));
+                    if let Some(worktree) = expect_worktree {
+                        let worktree = worktree.read(cx);
+                        if self.matches.len() < MAX_FILE_FINDER_RESULTS
+                            && worktree.entry_for_path(&query_path).is_none()
+                            && !query.raw_query.ends_with("/")
+                            && !(path_style.is_windows() && query.raw_query.ends_with("\\"))
+                        {
+                            self.matches.matches.push(Match::CreateNew(ProjectPath {
+                                worktree_id: worktree.id(),
+                                path: query_path.into_arc(),
+                            }));
+                        }
                     }
                 }
             }
@@ -1181,6 +1246,28 @@ impl FileFinderDelegate {
 
             cx.notify();
         }
+    }
+
+    fn collect_available_worktrees_for_create_new(
+        &self,
+        cx: &mut Context<Picker<Self>>,
+    ) -> Option<Vec<Entity<Worktree>>> {
+        let project = self.project.read(cx);
+        let mut worktrees = Vec::with_capacity(32);
+        for worktree in project.visible_worktrees(cx) {
+            if worktree.read(cx).is_single_file() {
+                continue;
+            }
+
+            if worktrees.len() >= MAX_FILE_FINDER_WORKTREE_CANDIDATE_SETS {
+                log::warn!(
+                    "file finder create-new worktree cap reached at {MAX_FILE_FINDER_WORKTREE_CANDIDATE_SETS}"
+                );
+                return None;
+            }
+            worktrees.push(worktree);
+        }
+        Some(worktrees)
     }
 
     fn labels_for_match(
@@ -1514,6 +1601,21 @@ impl PickerDelegate for FileFinderDelegate {
         cx: &mut Context<Picker<Self>>,
     ) -> Task<()> {
         let raw_query = raw_query.trim();
+
+        if query_exceeds_file_finder_limit(raw_query) {
+            log::warn!("file finder query exceeded {MAX_FILE_FINDER_QUERY_CHARS} characters");
+            self.cancel_flag.store(true, atomic::Ordering::Release);
+            self.latest_search_id = post_inc(&mut self.search_count);
+            self.latest_search_query = None;
+            self.latest_search_did_cancel = false;
+            self.matches = Matches {
+                separate_history: self.separate_history,
+                ..Matches::default()
+            };
+            self.selected_index = 0;
+            cx.notify();
+            return Task::ready(());
+        }
 
         let raw_query = match &raw_query.get(0..2) {
             Some(".\\" | "./") => &raw_query[2..],

@@ -72,6 +72,9 @@ struct ImeState {
 }
 
 const CURSOR_BLINK_INTERVAL: Duration = Duration::from_millis(500);
+const MAX_TERMINAL_PATHS_TO_PASTE: usize = 512;
+const MAX_TERMINAL_PATH_PASTE_BYTES: usize = 256 * 1024;
+const MAX_TERMINAL_VIEW_STORED_MATCHES: usize = 20_000;
 
 /// Event to transmit the scroll from the element to the view
 #[derive(Clone, Debug, PartialEq)]
@@ -191,6 +194,67 @@ impl ContentMode {
 struct HoverTarget {
     tooltip: String,
     hovered_word: HoveredWord,
+}
+
+fn bounded_terminal_paths_for_paste<I, P>(paths: I) -> Option<String>
+where
+    I: IntoIterator<Item = P>,
+    P: AsRef<Path>,
+{
+    let mut text = String::new();
+    let mut path_count = 0usize;
+    let mut truncated_by_count = false;
+    let mut truncated_by_bytes = false;
+
+    for path in paths {
+        if path_count >= MAX_TERMINAL_PATHS_TO_PASTE {
+            truncated_by_count = true;
+            break;
+        }
+
+        let segment = format!(" {:?}", path.as_ref());
+        if text.len().saturating_add(segment.len()).saturating_add(1)
+            > MAX_TERMINAL_PATH_PASTE_BYTES
+        {
+            truncated_by_bytes = true;
+            break;
+        }
+
+        text.push_str(&segment);
+        path_count += 1;
+    }
+
+    if truncated_by_count || truncated_by_bytes {
+        log::warn!(
+            "Terminal path paste truncated at {} paths and {} bytes",
+            path_count,
+            text.len()
+        );
+    }
+
+    if text.is_empty() {
+        None
+    } else {
+        text.push(' ');
+        Some(text)
+    }
+}
+
+fn bounded_terminal_view_matches(
+    matches: &[RangeInclusive<AlacPoint>],
+) -> Vec<RangeInclusive<AlacPoint>> {
+    if matches.len() > MAX_TERMINAL_VIEW_STORED_MATCHES {
+        log::warn!(
+            "Capping terminal view stored matches from {} to {}",
+            matches.len(),
+            MAX_TERMINAL_VIEW_STORED_MATCHES
+        );
+    }
+    matches
+        .iter()
+        .take(MAX_TERMINAL_VIEW_STORED_MATCHES)
+        .cloned()
+        .collect()
 }
 
 impl EventEmitter<Event> for TerminalView {}
@@ -860,8 +924,9 @@ impl TerminalView {
     }
 
     pub fn add_paths_to_terminal(&self, paths: &[PathBuf], window: &mut Window, cx: &mut App) {
-        let mut text = paths.iter().map(|path| format!(" {path:?}")).join("");
-        text.push(' ');
+        let Some(text) = bounded_terminal_paths_for_paste(paths.iter()) else {
+            return;
+        };
         window.focus(&self.focus_handle(cx), cx);
         self.terminal.update(cx, |terminal, _| {
             terminal.paste(&text);
@@ -1592,15 +1657,19 @@ impl Item for TerminalView {
             return false;
         } else if let Some(selection) = dropped.downcast_ref::<DraggedSelection>() {
             let project = project.read(cx);
-            let paths = selection
-                .items()
-                .map(|selected_entry| selected_entry.entry_id)
-                .filter_map(|entry_id| project.path_for_entry(entry_id, cx))
-                .filter_map(|project_path| project.absolute_path(&project_path, cx))
-                .collect::<Vec<_>>();
+            let paths_text = bounded_terminal_paths_for_paste(
+                selection
+                    .items()
+                    .map(|selected_entry| selected_entry.entry_id)
+                    .filter_map(|entry_id| project.path_for_entry(entry_id, cx))
+                    .filter_map(|project_path| project.absolute_path(&project_path, cx)),
+            );
 
-            if !paths.is_empty() {
-                self.add_paths_to_terminal(&paths, window, cx);
+            if let Some(text) = paths_text {
+                window.focus(&self.focus_handle(cx), cx);
+                self.terminal.update(cx, |terminal, _| {
+                    terminal.paste(&text);
+                });
             }
 
             return true;
@@ -1881,8 +1950,9 @@ impl SearchableItem for TerminalView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let bounded_matches = bounded_terminal_view_matches(matches);
         self.terminal()
-            .update(cx, |term, _| term.matches = matches.to_vec())
+            .update(cx, |term, _| term.matches = bounded_matches)
     }
 
     /// Returns the selection content to pre-load into this search
@@ -1935,8 +2005,13 @@ impl SearchableItem for TerminalView {
         cx: &mut Context<Self>,
     ) -> Task<Vec<Self::Match>> {
         if let Some(s) = regex_search_for_query(&query) {
-            self.terminal()
-                .update(cx, |term, cx| term.find_matches(s, cx))
+            let matches = self
+                .terminal()
+                .update(cx, |term, cx| term.find_matches(s, cx));
+            cx.spawn(async move |_, _| {
+                let matches = matches.await;
+                bounded_terminal_view_matches(&matches)
+            })
         } else {
             Task::ready(vec![])
         }

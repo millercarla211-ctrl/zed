@@ -1,3 +1,32 @@
+[2026-05-28] - Terminal View File Finder Agent Diff And Editor State Hardening
+
+ADDED:
+- Added `script\dx-terminal-view-source.test.ts` for terminal view persistence, restore, selection, path paste, search-match, and render materialization boundaries.
+- Added `script\dx-file-finder-source.test.ts` for file finder history, query, worktree, channel, create-new, and result materialization boundaries.
+- Added `script\dx-agent-diff-source.test.ts` for agent diff changed-buffer, diff hunk, selection, undo, workspace item, and single-file review boundaries.
+- Added `script\dx-editor-navigation-source.test.ts` for editor navigation, signature help, linked editing, and LSP extension fanout boundaries.
+- Added `script\dx-editor-inlay-semantic-source.test.ts` for inlay hint and semantic-token request/result/render boundaries.
+- Added `script\dx-workspace-ui-state-source.test.ts` for workspace dock, history, jump-list, and item project-handle state boundaries.
+
+CHANGED:
+- Terminal view restore and rendering now cap persisted panel JSON, restored pane/item/flex trees, terminal restore joins, task match waits, terminal selection lists, path paste materialization, stored search matches, and row/cell/highlight/background render vectors.
+- File finder now caps history task fanout, history items, oversized query text, worktree candidates, channel candidates, create-new rows, path matches, and search result vectors before join, parse, fuzzy, or render materialization.
+- Agent diff now caps changed-buffer lists, hunk rows, selection/action materialization, workspace item registration, single-file review buffers/editors, and undo buffers before sort, render, warning, or action paths.
+- Editor navigation, signature help, linked editing, and LSP extension helpers now cap hover-link tasks, location joins, grouped references, multibuffer ranges, excerpt anchors, document highlights, signatures, parameter docs/highlights, linked-edit selections/tasks/ranges, and runnable/source result vectors.
+- Inlay hints and semantic tokens now cap visible buffers/ranges, request tasks, fetched hint results, label bytes/parts, splice insertion/removal vectors, semantic token fetch tasks, per-buffer/server token responses, and highlight vectors before dedupe, sort, splice, or render storage.
+- Workspace dock/history/item state now caps panel-size persistence batches, workspace history path entries, jump-list removal payloads, history delete-id collection, and project-handle item walks before persistence or collection.
+- `DX.md` and the source-guard registry now list the new guards.
+
+PASSED:
+- Worker-reported source lane checks for the six new guards and targeted rustfmt checks.
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-terminal-view-source.test.ts script\dx-file-finder-source.test.ts script\dx-agent-diff-source.test.ts script\dx-editor-navigation-source.test.ts script\dx-editor-inlay-semantic-source.test.ts script\dx-workspace-ui-state-source.test.ts` (31/31 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on all edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Profile Terminal Editor Language And App Fanout Hardening
 
 ADDED:

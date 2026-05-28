@@ -8,7 +8,6 @@ use clock::Global;
 use collections::{HashMap, HashSet};
 use futures::future::join_all;
 use gpui::{App, Entity, Pixels, Task};
-use itertools::Itertools;
 use language::{
     BufferRow,
     language_settings::{InlayHintKind, InlayHintSettings},
@@ -16,8 +15,8 @@ use language::{
 use lsp::LanguageServerId;
 use multi_buffer::{Anchor, MultiBufferSnapshot};
 use project::{
-    HoverBlock, HoverBlockKind, InlayHintLabel, InlayHintLabelPartTooltip, InlayHintTooltip,
-    InvalidationStrategy, ResolveState,
+    HoverBlock, HoverBlockKind, InlayHint, InlayHintLabel, InlayHintLabelPartTooltip,
+    InlayHintTooltip, InvalidationStrategy, ResolveState,
     lsp_store::{CacheInlayHints, ResolvedHint},
 };
 use text::{Bias, BufferId};
@@ -40,6 +39,18 @@ pub fn inlay_hint_settings(
 ) -> InlayHintSettings {
     snapshot.language_settings_at(location, cx).inlay_hints
 }
+
+const MAX_VISIBLE_INLAY_HINT_RANGES: usize = 4_096;
+const MAX_VISIBLE_INLAY_HINT_BUFFERS: usize = 512;
+const MAX_INLAY_HINT_RANGES_PER_BUFFER: usize = 4_096;
+const MAX_INLAY_HINT_CHUNKS_PER_BUFFER: usize = 4_096;
+const MAX_INLAY_HINT_REQUEST_TASKS_PER_BUFFER: usize = 4_096;
+const MAX_INLAY_HINT_RESULTS_PER_REFRESH: usize = 100_000;
+const MAX_INLAY_HINT_LABEL_BYTES: usize = 16 * 1024;
+const MAX_INLAY_HINT_LABEL_PARTS: usize = 512;
+const MAX_INLAY_HINT_UI_SPLICE_ITEMS: usize = 100_000;
+
+type InlayHintRequestTask = Task<(Range<BufferRow>, anyhow::Result<CacheInlayHints>)>;
 
 #[derive(Debug)]
 pub struct LspInlayHintData {
@@ -317,6 +328,14 @@ impl Editor {
 
         let mut visible_excerpts = self.visible_buffer_ranges(cx);
         visible_excerpts.retain(|(snapshot, _, _)| self.is_lsp_relevant(snapshot.file(), cx));
+        if visible_excerpts.len() > MAX_VISIBLE_INLAY_HINT_RANGES {
+            log::warn!(
+                "truncating visible inlay hint ranges from {} to {} before LSP fanout",
+                visible_excerpts.len(),
+                MAX_VISIBLE_INLAY_HINT_RANGES
+            );
+            visible_excerpts.truncate(MAX_VISIBLE_INLAY_HINT_RANGES);
+        }
 
         let mut invalidate_hints_for_buffers = HashSet::default();
         let ignore_previous_fetches = match reason {
@@ -388,6 +407,15 @@ impl Editor {
             if !self.registered_buffers.contains_key(&buffer_id) {
                 continue;
             }
+            if !buffers_to_query.contains_key(&buffer_id)
+                && buffers_to_query.len() >= MAX_VISIBLE_INLAY_HINT_BUFFERS
+            {
+                log::warn!(
+                    "skipping inlay hint refresh for buffer {buffer_id:?}; visible buffer cap {} reached",
+                    MAX_VISIBLE_INLAY_HINT_BUFFERS
+                );
+                continue;
+            }
 
             let Some(buffer) = multi_buffer.read(cx).buffer(buffer_id) else {
                 continue;
@@ -406,6 +434,13 @@ impl Editor {
                         buffer: buffer.clone(),
                     });
             visible_excerpts.buffer_version = buffer_version;
+            if visible_excerpts.ranges.len() >= MAX_INLAY_HINT_RANGES_PER_BUFFER {
+                log::warn!(
+                    "skipping inlay hint range for buffer {buffer_id:?}; per-buffer range cap {} reached",
+                    MAX_INLAY_HINT_RANGES_PER_BUFFER
+                );
+                continue;
+            }
             visible_excerpts.ranges.push(buffer_anchor_range);
         }
 
@@ -435,6 +470,14 @@ impl Editor {
 
             let mut applicable_chunks =
                 semantics_provider.applicable_inlay_chunks(&buffer, &visible_excerpts.ranges, cx);
+            if applicable_chunks.len() > MAX_INLAY_HINT_CHUNKS_PER_BUFFER {
+                log::warn!(
+                    "truncating inlay hint chunks for buffer {buffer_id:?} from {} to {}",
+                    applicable_chunks.len(),
+                    MAX_INLAY_HINT_CHUNKS_PER_BUFFER
+                );
+                applicable_chunks.truncate(MAX_INLAY_HINT_CHUNKS_PER_BUFFER);
+            }
             applicable_chunks.retain(|chunk| fetched_chunks.insert(chunk.clone()));
             if applicable_chunks.is_empty() && !ignore_previous_fetches {
                 continue;
@@ -456,9 +499,17 @@ impl Editor {
     }
 
     pub fn clear_inlay_hints(&mut self, cx: &mut Context<Self>) {
-        let to_remove = Self::visible_inlay_hints(self.display_map.read(cx))
-            .map(|inlay| inlay.id)
-            .collect::<Vec<_>>();
+        let mut to_remove = Vec::new();
+        for inlay in Self::visible_inlay_hints(self.display_map.read(cx)) {
+            if to_remove.len() >= MAX_INLAY_HINT_UI_SPLICE_ITEMS {
+                log::warn!(
+                    "skipping clear_inlay_hints; visible hint cap {} reached",
+                    MAX_INLAY_HINT_UI_SPLICE_ITEMS
+                );
+                return;
+            }
+            to_remove.push(inlay.id);
+        }
         self.splice_inlays(&to_remove, Vec::new(), cx);
     }
 
@@ -499,7 +550,7 @@ impl Editor {
             }
             InlayHintRefreshReason::SettingsChange(new_settings) => {
                 let visible_inlay_hints =
-                    Self::visible_inlay_hints(self.display_map.read(cx)).collect::<Vec<_>>();
+                    Self::collect_visible_inlay_hints_for_splice(self.display_map.read(cx))?;
                 match inlay_hints.update_settings(*new_settings, visible_inlay_hints) {
                     ControlFlow::Break(Some(InlaySplice {
                         to_remove,
@@ -522,19 +573,22 @@ impl Editor {
                 }
             }
             InlayHintRefreshReason::BuffersRemoved(buffers_removed) => {
-                let to_remove = self
-                    .display_map
-                    .read(cx)
-                    .current_inlays()
-                    .filter_map(|inlay| {
-                        let anchor = inlay.position.raw_text_anchor()?;
-                        if buffers_removed.contains(&anchor.buffer_id) {
-                            Some(inlay.id)
-                        } else {
-                            None
+                let mut to_remove = Vec::new();
+                for inlay in self.display_map.read(cx).current_inlays() {
+                    let Some(anchor) = inlay.position.raw_text_anchor() else {
+                        continue;
+                    };
+                    if buffers_removed.contains(&anchor.buffer_id) {
+                        if to_remove.len() >= MAX_INLAY_HINT_UI_SPLICE_ITEMS {
+                            log::warn!(
+                                "skipping inlay removal for removed buffers; visible hint cap {} reached",
+                                MAX_INLAY_HINT_UI_SPLICE_ITEMS
+                            );
+                            return None;
                         }
-                    })
-                    .collect::<Vec<_>>();
+                        to_remove.push(inlay.id);
+                    }
+                }
                 self.splice_inlays(&to_remove, Vec::new(), cx);
                 return None;
             }
@@ -569,6 +623,21 @@ impl Editor {
             .current_inlays()
             .filter(move |inlay| matches!(inlay.id, InlayId::Hint(_)))
             .cloned()
+    }
+
+    fn collect_visible_inlay_hints_for_splice(display_map: &DisplayMap) -> Option<Vec<Inlay>> {
+        let mut visible_hints = Vec::new();
+        for inlay in Self::visible_inlay_hints(display_map) {
+            if visible_hints.len() >= MAX_INLAY_HINT_UI_SPLICE_ITEMS {
+                log::warn!(
+                    "skipping inlay hint splice; visible hint cap {} reached",
+                    MAX_INLAY_HINT_UI_SPLICE_ITEMS
+                );
+                return None;
+            }
+            visible_hints.push(inlay);
+        }
+        Some(visible_hints)
     }
 
     pub fn update_inlay_link_and_hover_points(
@@ -763,8 +832,9 @@ impl Editor {
         buffer_excerpts: VisibleExcerpts,
         known_chunks: Option<(Global, HashSet<Range<BufferRow>>)>,
         cx: &mut Context<Self>,
-    ) -> Option<Vec<Task<(Range<BufferRow>, anyhow::Result<CacheInlayHints>)>>> {
+    ) -> Option<Vec<InlayHintRequestTask>> {
         let semantics_provider = self.semantics_provider()?;
+        let buffer_id_for_log = buffer_excerpts.buffer.read(cx).remote_id();
 
         let new_hint_tasks = semantics_provider
             .inlay_hints(
@@ -778,6 +848,16 @@ impl Editor {
 
         let mut hint_tasks = None;
         for (row_range, new_hints_task) in new_hint_tasks {
+            if hint_tasks.as_ref().is_some_and(|hint_tasks: &Vec<_>| {
+                hint_tasks.len() >= MAX_INLAY_HINT_REQUEST_TASKS_PER_BUFFER
+            }) {
+                log::warn!(
+                    "truncating inlay hint request tasks for buffer {:?} at {}",
+                    buffer_id_for_log,
+                    MAX_INLAY_HINT_REQUEST_TASKS_PER_BUFFER
+                );
+                break;
+            }
             hint_tasks
                 .get_or_insert_with(Vec::new)
                 .push(cx.spawn(async move |_, _| (row_range, new_hints_task.await)));
@@ -794,15 +874,6 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         let multi_buffer_snapshot = self.buffer.read(cx).snapshot(cx);
-        let visible_inlay_hint_ids = Self::visible_inlay_hints(self.display_map.read(cx))
-            .filter(|inlay| {
-                multi_buffer_snapshot
-                    .anchor_to_buffer_anchor(inlay.position)
-                    .map(|(anchor, _)| anchor.buffer_id)
-                    == Some(buffer_id)
-            })
-            .map(|inlay| inlay.id)
-            .collect::<Vec<_>>();
         let Some(inlay_hints) = &mut self.inlay_hints else {
             return;
         };
@@ -825,7 +896,14 @@ impl Editor {
         // Hence, clear all excerpts' hints in the multi buffer: later, the invalidated ones will re-trigger the LSP query, the rest will be restored
         // from the cache.
         if invalidate_cache.should_invalidate() {
-            hints_to_remove.extend(visible_inlay_hint_ids);
+            let Some(mut visible_inlay_hint_ids) = collect_visible_inlay_hint_ids_for_buffer(
+                self.display_map.read(cx),
+                &multi_buffer_snapshot,
+                buffer_id,
+            ) else {
+                return;
+            };
+            hints_to_remove.append(&mut visible_inlay_hint_ids);
 
             // When invalidating, this task removes ALL visible hints for the buffer
             // but only adds back hints for its own chunk ranges. Chunks fetched by
@@ -840,98 +918,235 @@ impl Editor {
             }
         }
 
-        let mut inserted_hint_text = HashMap::default();
-        let new_hints = new_hints
-            .into_iter()
-            .filter_map(|(chunk_range, hints_result)| {
-                let chunks_fetched = inlay_hints.hint_chunk_fetching.get_mut(&buffer_id);
-                match hints_result {
-                    Ok(new_hints) => {
-                        if new_hints.is_empty() {
-                            if let Some((_, chunks_fetched)) = chunks_fetched {
-                                chunks_fetched.remove(&chunk_range);
-                            }
-                        }
-                        Some(new_hints)
-                    }
-                    Err(e) => {
-                        log::error!(
-                            "Failed to query inlays for buffer row range {chunk_range:?}, {e:#}"
-                        );
-                        if let Some((for_version, chunks_fetched)) = chunks_fetched {
-                            if for_version == &query_version {
-                                chunks_fetched.remove(&chunk_range);
-                            }
-                        }
-                        None
-                    }
-                }
-            })
-            .flat_map(|new_hints| {
-                let mut hints_deduplicated = Vec::new();
-
-                if new_hints.len() > 1 {
-                    for (server_id, new_hints) in new_hints {
-                        for (new_id, new_hint) in new_hints {
-                            let hints_text_for_position = inserted_hint_text
-                                .entry(new_hint.position)
-                                .or_insert_with(HashMap::default);
-                            let insert =
-                                match hints_text_for_position.entry(new_hint.text().to_string()) {
-                                    hash_map::Entry::Occupied(o) => o.get() == &server_id,
-                                    hash_map::Entry::Vacant(v) => {
-                                        v.insert(server_id);
-                                        true
-                                    }
-                                };
-
-                            if insert {
-                                hints_deduplicated.push((new_id, new_hint));
-                            }
-                        }
-                    }
-                } else {
-                    hints_deduplicated.extend(new_hints.into_values().flatten());
-                }
-
-                hints_deduplicated
-            })
-            .filter(|(hint_id, lsp_hint)| {
-                inlay_hints.allowed_hint_kinds.contains(&lsp_hint.kind)
-                    && inlay_hints
-                        .added_hints
-                        .insert(*hint_id, lsp_hint.kind)
-                        .is_none()
-            })
-            .sorted_by(|(_, a), (_, b)| a.position.cmp(&b.position, &buffer_snapshot))
-            .collect::<Vec<_>>();
-
-        let hints_to_insert = multi_buffer_snapshot
-            .text_anchors_to_visible_anchors(
-                new_hints.iter().map(|(_, lsp_hint)| lsp_hint.position),
-            )
-            .into_iter()
-            .zip(&new_hints)
-            .filter_map(|(position, (hint_id, hint))| Some(Inlay::hint(*hint_id, position?, &hint)))
-            .collect();
         let invalidate_hints_for_buffers =
             std::mem::take(&mut inlay_hints.invalidate_hints_for_buffers);
-        if !invalidate_hints_for_buffers.is_empty() {
-            hints_to_remove.extend(
-                Self::visible_inlay_hints(self.display_map.read(cx))
-                    .filter(|inlay| {
-                        multi_buffer_snapshot
-                            .anchor_to_buffer_anchor(inlay.position)
-                            .is_none_or(|(anchor, _)| {
-                                invalidate_hints_for_buffers.contains(&anchor.buffer_id)
-                            })
-                    })
-                    .map(|inlay| inlay.id),
-            );
+        if !invalidate_hints_for_buffers.is_empty()
+            && !push_visible_inlay_hint_ids_for_buffers(
+                self.display_map.read(cx),
+                &multi_buffer_snapshot,
+                &invalidate_hints_for_buffers,
+                &mut hints_to_remove,
+            )
+        {
+            inlay_hints.invalidate_hints_for_buffers = invalidate_hints_for_buffers;
+            return;
+        }
+
+        let mut inserted_hint_text = HashMap::default();
+        let mut new_hints_to_insert = Vec::new();
+        'hint_results: for (chunk_range, hints_result) in new_hints {
+            let new_hints_by_server = match hints_result {
+                Ok(new_hints_by_server) => {
+                    if new_hints_by_server.is_empty()
+                        && let Some((_, chunks_fetched)) =
+                            inlay_hints.hint_chunk_fetching.get_mut(&buffer_id)
+                    {
+                        chunks_fetched.remove(&chunk_range);
+                    }
+                    new_hints_by_server
+                }
+                Err(e) => {
+                    log::error!(
+                        "Failed to query inlays for buffer row range {chunk_range:?}, {e:#}"
+                    );
+                    if let Some((for_version, chunks_fetched)) =
+                        inlay_hints.hint_chunk_fetching.get_mut(&buffer_id)
+                        && for_version == &query_version
+                    {
+                        chunks_fetched.remove(&chunk_range);
+                    }
+                    continue;
+                }
+            };
+
+            let dedupe_by_text = new_hints_by_server.len() > 1;
+            for (server_id, server_hints) in new_hints_by_server {
+                for (new_id, new_hint) in server_hints {
+                    if !push_bounded_inlay_hint_result(
+                        buffer_id,
+                        inlay_hints,
+                        &mut inserted_hint_text,
+                        &mut new_hints_to_insert,
+                        server_id,
+                        new_id,
+                        new_hint,
+                        dedupe_by_text,
+                    ) {
+                        break 'hint_results;
+                    }
+                }
+            }
+        }
+
+        new_hints_to_insert.sort_by(|(_, a), (_, b)| a.position.cmp(&b.position, &buffer_snapshot));
+
+        let mut hints_to_insert = Vec::new();
+        for (position, (hint_id, hint)) in multi_buffer_snapshot
+            .text_anchors_to_visible_anchors(
+                new_hints_to_insert
+                    .iter()
+                    .map(|(_, lsp_hint)| lsp_hint.position),
+            )
+            .into_iter()
+            .zip(&new_hints_to_insert)
+        {
+            let Some(position) = position else {
+                continue;
+            };
+            if hints_to_insert.len() >= MAX_INLAY_HINT_UI_SPLICE_ITEMS {
+                log::warn!(
+                    "truncating inlay hint insertions for buffer {buffer_id:?} at {}",
+                    MAX_INLAY_HINT_UI_SPLICE_ITEMS
+                );
+                return;
+            }
+            hints_to_insert.push(Inlay::hint(*hint_id, position, hint));
         }
 
         self.splice_inlays(&hints_to_remove, hints_to_insert, cx);
     }
+}
+
+fn collect_visible_inlay_hint_ids_for_buffer(
+    display_map: &DisplayMap,
+    multi_buffer_snapshot: &MultiBufferSnapshot,
+    buffer_id: BufferId,
+) -> Option<Vec<InlayId>> {
+    let mut visible_inlay_hint_ids = Vec::new();
+    for inlay in Editor::visible_inlay_hints(display_map) {
+        if multi_buffer_snapshot
+            .anchor_to_buffer_anchor(inlay.position)
+            .map(|(anchor, _)| anchor.buffer_id)
+            != Some(buffer_id)
+        {
+            continue;
+        }
+        if visible_inlay_hint_ids.len() >= MAX_INLAY_HINT_UI_SPLICE_ITEMS {
+            log::warn!(
+                "skipping inlay hint removal for buffer {buffer_id:?}; visible hint cap {} reached",
+                MAX_INLAY_HINT_UI_SPLICE_ITEMS
+            );
+            return None;
+        }
+        visible_inlay_hint_ids.push(inlay.id);
+    }
+    Some(visible_inlay_hint_ids)
+}
+
+fn push_visible_inlay_hint_ids_for_buffers(
+    display_map: &DisplayMap,
+    multi_buffer_snapshot: &MultiBufferSnapshot,
+    buffer_ids: &HashSet<BufferId>,
+    hints_to_remove: &mut Vec<InlayId>,
+) -> bool {
+    for inlay in Editor::visible_inlay_hints(display_map) {
+        if !multi_buffer_snapshot
+            .anchor_to_buffer_anchor(inlay.position)
+            .is_none_or(|(anchor, _)| buffer_ids.contains(&anchor.buffer_id))
+        {
+            continue;
+        }
+        if hints_to_remove.len() >= MAX_INLAY_HINT_UI_SPLICE_ITEMS {
+            log::warn!(
+                "skipping inlay hint invalidation splice; visible hint cap {} reached",
+                MAX_INLAY_HINT_UI_SPLICE_ITEMS
+            );
+            return false;
+        }
+        hints_to_remove.push(inlay.id);
+    }
+    true
+}
+
+fn inlay_hint_label_text_for_cache(buffer_id: BufferId, hint: &InlayHint) -> Option<String> {
+    match &hint.label {
+        InlayHintLabel::String(text) => {
+            if text.len() > MAX_INLAY_HINT_LABEL_BYTES {
+                log::warn!(
+                    "dropping oversized inlay hint label for buffer {buffer_id:?}; {} bytes exceeds cap {}",
+                    text.len(),
+                    MAX_INLAY_HINT_LABEL_BYTES
+                );
+                None
+            } else {
+                Some(text.clone())
+            }
+        }
+        InlayHintLabel::LabelParts(parts) => {
+            if parts.len() > MAX_INLAY_HINT_LABEL_PARTS {
+                log::warn!(
+                    "dropping oversized inlay hint label for buffer {buffer_id:?}; {} label parts exceeds cap {}",
+                    parts.len(),
+                    MAX_INLAY_HINT_LABEL_PARTS
+                );
+                return None;
+            }
+
+            let mut text = String::new();
+            for part in parts {
+                if text.len().saturating_add(part.value.len()) > MAX_INLAY_HINT_LABEL_BYTES {
+                    log::warn!(
+                        "dropping oversized inlay hint label for buffer {buffer_id:?}; label bytes exceed cap {}",
+                        MAX_INLAY_HINT_LABEL_BYTES
+                    );
+                    return None;
+                }
+                text.push_str(&part.value);
+            }
+            Some(text)
+        }
+    }
+}
+
+fn push_bounded_inlay_hint_result(
+    buffer_id: BufferId,
+    inlay_hints: &mut LspInlayHintData,
+    inserted_hint_text: &mut HashMap<language::Anchor, HashMap<String, LanguageServerId>>,
+    new_hints_to_insert: &mut Vec<(InlayId, InlayHint)>,
+    server_id: LanguageServerId,
+    new_id: InlayId,
+    new_hint: InlayHint,
+    dedupe_by_text: bool,
+) -> bool {
+    if new_hints_to_insert.len() >= MAX_INLAY_HINT_RESULTS_PER_REFRESH {
+        log::warn!(
+            "truncating inlay hint results for buffer {buffer_id:?} at {}",
+            MAX_INLAY_HINT_RESULTS_PER_REFRESH
+        );
+        return false;
+    }
+
+    let Some(label_text) = inlay_hint_label_text_for_cache(buffer_id, &new_hint) else {
+        return true;
+    };
+
+    if dedupe_by_text {
+        let hints_text_for_position = inserted_hint_text
+            .entry(new_hint.position)
+            .or_insert_with(HashMap::default);
+        let insert = match hints_text_for_position.entry(label_text) {
+            hash_map::Entry::Occupied(o) => o.get() == &server_id,
+            hash_map::Entry::Vacant(v) => {
+                v.insert(server_id);
+                true
+            }
+        };
+
+        if !insert {
+            return true;
+        }
+    }
+
+    if inlay_hints.allowed_hint_kinds.contains(&new_hint.kind)
+        && inlay_hints
+            .added_hints
+            .insert(new_id, new_hint.kind)
+            .is_none()
+    {
+        new_hints_to_insert.push((new_id, new_hint));
+    }
+
+    true
 }
 
 #[derive(Debug)]
@@ -939,6 +1154,21 @@ struct VisibleExcerpts {
     ranges: Vec<Range<text::Anchor>>,
     buffer_version: Global,
     buffer: Entity<language::Buffer>,
+}
+
+fn cap_inlay_hint_tasks_for_join(
+    buffer_id: BufferId,
+    mut hint_tasks: Vec<InlayHintRequestTask>,
+) -> Vec<InlayHintRequestTask> {
+    if hint_tasks.len() > MAX_INLAY_HINT_REQUEST_TASKS_PER_BUFFER {
+        log::warn!(
+            "truncating inlay hint request tasks for buffer {buffer_id:?} from {} to {} before join_all",
+            hint_tasks.len(),
+            MAX_INLAY_HINT_REQUEST_TASKS_PER_BUFFER
+        );
+        hint_tasks.truncate(MAX_INLAY_HINT_REQUEST_TASKS_PER_BUFFER);
+    }
+    hint_tasks
 }
 
 fn spawn_editor_hints_refresh(
@@ -965,6 +1195,7 @@ fn spawn_editor_hints_refresh(
             return;
         };
         let hint_tasks = hint_tasks.unwrap_or_default();
+        let hint_tasks = cap_inlay_hint_tasks_for_join(buffer_id, hint_tasks);
         if hint_tasks.is_empty() {
             editor
                 .update(cx, |editor, _| {

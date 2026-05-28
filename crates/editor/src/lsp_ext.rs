@@ -21,6 +21,11 @@ use text::BufferId;
 use ui::SharedString;
 use util::ResultExt as _;
 
+const MAX_LSP_TASK_SOURCES: usize = 128;
+const MAX_LSP_TASK_BUFFERS_PER_SOURCE: usize = 512;
+const MAX_LSP_RUNNABLES_PER_RESPONSE: usize = 2_048;
+const MAX_LSP_TASKS_PER_SOURCE: usize = 4_096;
+
 pub(crate) fn find_specific_language_server_in_selection<F>(
     editor: &Editor,
     cx: &mut App,
@@ -102,11 +107,27 @@ pub fn lsp_tasks(
     for_position: Option<text::Anchor>,
     cx: &mut App,
 ) -> Task<Vec<(TaskSourceKind, Vec<(Option<LocationLink>, ResolvedTask)>)>> {
+    if task_sources.len() > MAX_LSP_TASK_SOURCES {
+        log::warn!(
+            "capping LSP task sources from {} to {}",
+            task_sources.len(),
+            MAX_LSP_TASK_SOURCES
+        );
+    }
     let lsp_task_sources = task_sources
         .iter()
+        .take(MAX_LSP_TASK_SOURCES)
         .filter_map(|(name, buffer_ids)| {
+            if buffer_ids.len() > MAX_LSP_TASK_BUFFERS_PER_SOURCE {
+                log::warn!(
+                    "capping LSP task buffers for {name} from {} to {}",
+                    buffer_ids.len(),
+                    MAX_LSP_TASK_BUFFERS_PER_SOURCE
+                );
+            }
             let buffers = buffer_ids
                 .iter()
+                .take(MAX_LSP_TASK_BUFFERS_PER_SOURCE)
                 .filter(|&&buffer_id| match for_position {
                     Some(for_position) => for_position.buffer_id == buffer_id,
                     None => true,
@@ -156,18 +177,41 @@ pub fn lsp_tasks(
                         )
                     });
                     if let Some(new_runnables) = runnables_task.await.log_err() {
-                        new_lsp_tasks.extend(new_runnables.runnables.into_iter().filter_map(
-                            |(location, runnable)| {
+                        if new_runnables.runnables.len() > MAX_LSP_RUNNABLES_PER_RESPONSE {
+                            log::warn!(
+                                "capping LSP runnable response from {} to {}",
+                                new_runnables.runnables.len(),
+                                MAX_LSP_RUNNABLES_PER_RESPONSE
+                            );
+                        }
+                        let bounded_runnables = new_runnables
+                            .runnables
+                            .into_iter()
+                            .take(MAX_LSP_RUNNABLES_PER_RESPONSE)
+                            .filter_map(|(location, runnable)| {
                                 let resolved_task =
                                     runnable.resolve_task(&id_base, &lsp_buffer_context)?;
                                 Some((location, resolved_task))
-                            },
-                        ));
+                            });
+                        new_lsp_tasks.extend(bounded_runnables);
                     }
-                    lsp_tasks
-                        .entry(source_kind)
-                        .or_insert_with(Vec::new)
-                        .append(&mut new_lsp_tasks);
+                    let entry = lsp_tasks.entry(source_kind).or_insert_with(Vec::new);
+                    let remaining = MAX_LSP_TASKS_PER_SOURCE.saturating_sub(entry.len());
+                    if remaining == 0 {
+                        log::warn!(
+                            "dropping resolved LSP tasks beyond source cap {}",
+                            MAX_LSP_TASKS_PER_SOURCE
+                        );
+                        continue;
+                    }
+                    if new_lsp_tasks.len() > remaining {
+                        log::warn!(
+                            "capping resolved LSP tasks for source at {}",
+                            MAX_LSP_TASKS_PER_SOURCE
+                        );
+                        new_lsp_tasks.truncate(remaining);
+                    }
+                    entry.append(&mut new_lsp_tasks);
                 }
             }
             lsp_tasks.into_iter().collect()

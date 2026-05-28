@@ -9,6 +9,7 @@ use language::BufferSnapshot;
 
 use markdown::{CopyButtonVisibility, Markdown, MarkdownElement};
 use multi_buffer::{Anchor, MultiBufferOffset, ToOffset};
+use project::lsp_command::signature_help::ParameterInfo;
 use settings::Settings;
 use std::ops::Range;
 use std::time::Duration;
@@ -23,6 +24,47 @@ use ui::{
 
 // Language-specific settings may define quotes as "brackets", so filter them out separately.
 const QUOTE_PAIRS: [(&str, &str); 3] = [("'", "'"), ("\"", "\""), ("`", "`")];
+const MAX_SIGNATURE_HELP_SIGNATURES: usize = 128;
+const MAX_SIGNATURE_HELP_PARAMETERS_PER_SIGNATURE: usize = 256;
+const MAX_SIGNATURE_HELP_LABEL_BYTES: usize = 16_384;
+const MAX_SIGNATURE_HELP_HIGHLIGHTS: usize = 4_096;
+
+fn cap_signature_label(label: SharedString) -> SharedString {
+    let text = label.as_ref();
+    if text.len() <= MAX_SIGNATURE_HELP_LABEL_BYTES {
+        return label;
+    }
+
+    log::warn!(
+        "capping signature-help label from {} bytes to {}",
+        text.len(),
+        MAX_SIGNATURE_HELP_LABEL_BYTES
+    );
+    let end = text
+        .char_indices()
+        .map(|(index, _)| index)
+        .take_while(|index| *index <= MAX_SIGNATURE_HELP_LABEL_BYTES)
+        .last()
+        .unwrap_or(0);
+    SharedString::from(text[..end].to_owned())
+}
+
+fn active_parameter_documentation(
+    active_parameter: Option<usize>,
+    parameters: &[ParameterInfo],
+) -> Option<Entity<Markdown>> {
+    let active_parameter = active_parameter?;
+    if active_parameter >= MAX_SIGNATURE_HELP_PARAMETERS_PER_SIGNATURE {
+        log::warn!(
+            "dropping signature-help parameter documentation beyond cap {}",
+            MAX_SIGNATURE_HELP_PARAMETERS_PER_SIGNATURE
+        );
+        return None;
+    }
+    parameters
+        .get(active_parameter)
+        .and_then(|param| param.documentation.clone())
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SignatureHelpHiddenBy {
@@ -230,8 +272,21 @@ impl Editor {
                             return;
                         };
 
+                        if signature_help.signatures.len() > MAX_SIGNATURE_HELP_SIGNATURES {
+                            log::warn!(
+                                "capping signature-help signatures from {} to {}",
+                                signature_help.signatures.len(),
+                                MAX_SIGNATURE_HELP_SIGNATURES
+                            );
+                        }
+
                         if let Some(language) = language {
-                            for signature in &mut signature_help.signatures {
+                            for signature in signature_help
+                                .signatures
+                                .iter_mut()
+                                .take(MAX_SIGNATURE_HELP_SIGNATURES)
+                            {
+                                signature.label = cap_signature_label(signature.label.clone());
                                 let text = Rope::from(signature.label.as_ref());
                                 let highlights = language
                                     .highlight_text(&text, 0..signature.label.len())
@@ -241,6 +296,10 @@ impl Editor {
                                     });
                                 signature.highlights =
                                     combine_highlights(signature.highlights.clone(), highlights)
+                                        .filter(|(range, _)| {
+                                            range.end <= signature.label.as_ref().len()
+                                        })
+                                        .take(MAX_SIGNATURE_HELP_HIGHLIGHTS)
                                         .collect();
                             }
                         }
@@ -259,15 +318,27 @@ impl Editor {
                         let signatures = signature_help
                             .signatures
                             .into_iter()
-                            .map(|s| SignatureHelp {
-                                label: s.label,
-                                documentation: s.documentation,
-                                highlights: s.highlights,
-                                active_parameter: s.active_parameter,
-                                parameter_documentation: s
-                                    .active_parameter
-                                    .and_then(|idx| s.parameters.get(idx))
-                                    .and_then(|param| param.documentation.clone()),
+                            .take(MAX_SIGNATURE_HELP_SIGNATURES)
+                            .map(|s| {
+                                let label = cap_signature_label(s.label);
+                                let label_len = label.as_ref().len();
+                                let highlights = s
+                                    .highlights
+                                    .into_iter()
+                                    .filter(|(range, _)| range.end <= label_len)
+                                    .take(MAX_SIGNATURE_HELP_HIGHLIGHTS)
+                                    .collect();
+                                let parameter_documentation = active_parameter_documentation(
+                                    s.active_parameter,
+                                    &s.parameters,
+                                );
+                                SignatureHelp {
+                                    label,
+                                    documentation: s.documentation,
+                                    highlights,
+                                    active_parameter: s.active_parameter,
+                                    parameter_documentation: parameter_documentation,
+                                }
                             })
                             .collect::<Vec<_>>();
 
@@ -381,6 +452,7 @@ impl SignatureHelpPopover {
         let Some(signature) = self.signatures.get(self.current_signature) else {
             return div().into_any_element();
         };
+        let signature_label = cap_signature_label(signature.label.clone());
 
         let main_content = div()
             .occlude()
@@ -393,7 +465,7 @@ impl SignatureHelpPopover {
                     .max_h(max_size.height)
                     .track_scroll(&self.scroll_handle)
                     .child(
-                        StyledText::new(signature.label.clone()).with_default_highlights(
+                        StyledText::new(signature_label).with_default_highlights(
                             &self.style,
                             signature.highlights.iter().cloned(),
                         ),

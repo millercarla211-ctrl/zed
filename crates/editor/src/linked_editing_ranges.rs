@@ -42,6 +42,38 @@ impl LinkedEditingRanges {
 }
 
 const UPDATE_DEBOUNCE: Duration = Duration::from_millis(50);
+const MAX_LINKED_EDITING_SELECTIONS: usize = 512;
+const MAX_LINKED_EDITING_TASKS: usize = 512;
+const MAX_LINKED_EDITING_RANGES_PER_RESPONSE: usize = 256;
+const MAX_LINKED_EDITING_RANGES_PER_BUFFER: usize = 20_000;
+
+fn cap_linked_edit_ranges_for_response(edits: Vec<Range<Anchor>>) -> Option<Vec<Range<Anchor>>> {
+    if edits.len() > MAX_LINKED_EDITING_RANGES_PER_RESPONSE {
+        log::warn!(
+            "dropping linked-editing response with {} ranges beyond cap {}",
+            edits.len(),
+            MAX_LINKED_EDITING_RANGES_PER_RESPONSE
+        );
+        return None;
+    }
+    Some(edits)
+}
+
+fn cap_linked_edit_ranges_for_buffer(
+    existing_len: usize,
+    mut ranges: Vec<(Range<Anchor>, Vec<Range<Anchor>>)>,
+) -> Vec<(Range<Anchor>, Vec<Range<Anchor>>)> {
+    let remaining = MAX_LINKED_EDITING_RANGES_PER_BUFFER.saturating_sub(existing_len);
+    if ranges.len() > remaining {
+        log::warn!(
+            "capping linked-editing stored ranges from {} to {} remaining entries",
+            ranges.len(),
+            remaining
+        );
+        ranges.truncate(remaining);
+    }
+    ranges
+}
 
 // TODO do not refresh anything at all, if the settings/capabilities do not have it enabled.
 pub(super) fn refresh_linked_ranges(
@@ -62,9 +94,16 @@ pub(super) fn refresh_linked_ranges(
             .update(cx, |editor, cx| {
                 let display_snapshot = editor.display_snapshot(cx);
                 let selections = editor.selections.all_anchors(&display_snapshot);
+                if selections.len() > MAX_LINKED_EDITING_SELECTIONS {
+                    log::warn!(
+                        "capping linked-editing selections from {} to {}",
+                        selections.len(),
+                        MAX_LINKED_EDITING_SELECTIONS
+                    );
+                }
                 let snapshot = display_snapshot.buffer_snapshot();
                 let buffer = editor.buffer.read(cx);
-                for selection in selections.iter() {
+                for selection in selections.iter().take(MAX_LINKED_EDITING_SELECTIONS) {
                     if let Some((_, range)) =
                         snapshot.anchor_range_to_buffer_anchor_range(selection.range())
                         && let Some(buffer) = buffer.buffer(range.start.buffer_id)
@@ -82,11 +121,21 @@ pub(super) fn refresh_linked_ranges(
         let highlights = project
             .update(cx, |project, cx| {
                 let mut linked_edits_tasks = vec![];
-                for (buffer, start, end) in &applicable_selections {
+                if applicable_selections.len() > MAX_LINKED_EDITING_TASKS {
+                    log::warn!(
+                        "capping linked-editing tasks from {} to {}",
+                        applicable_selections.len(),
+                        MAX_LINKED_EDITING_TASKS
+                    );
+                }
+                for (buffer, start, end) in
+                    applicable_selections.iter().take(MAX_LINKED_EDITING_TASKS)
+                {
                     let linked_edits_task = project.linked_edits(buffer, *start, cx);
                     let cx = cx.to_async();
                     let highlights = async move {
                         let edits = linked_edits_task.await.log_err()?;
+                        let edits = cap_linked_edit_ranges_for_response(edits)?;
                         let snapshot = cx.read_entity(&buffer, |buffer, _| buffer.snapshot());
                         let buffer_id = snapshot.remote_id();
 
@@ -135,11 +184,16 @@ pub(super) fn refresh_linked_ranges(
                     return;
                 }
                 for (buffer_id, ranges) in highlights.into_iter().flatten() {
-                    this.linked_edit_ranges
-                        .0
-                        .entry(buffer_id)
-                        .or_default()
-                        .extend(ranges);
+                    let entry = this.linked_edit_ranges.0.entry(buffer_id).or_default();
+                    if entry.len() >= MAX_LINKED_EDITING_RANGES_PER_BUFFER {
+                        log::warn!(
+                            "dropping linked-editing ranges beyond cap {}",
+                            MAX_LINKED_EDITING_RANGES_PER_BUFFER
+                        );
+                        continue;
+                    }
+                    let ranges = cap_linked_edit_ranges_for_buffer(entry.len(), ranges);
+                    entry.extend(ranges);
                 }
                 for (buffer_id, values) in this.linked_edit_ranges.0.iter_mut() {
                     let Some(snapshot) = this

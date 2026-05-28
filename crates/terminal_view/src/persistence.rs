@@ -24,6 +24,13 @@ use crate::{
     terminal_panel::{TerminalPanel, new_terminal_pane},
 };
 
+pub(crate) const MAX_SERIALIZED_TERMINAL_PANEL_JSON_BYTES: usize = 2 * 1024 * 1024;
+const MAX_RESTORED_TERMINAL_PANEL_ITEMS_TOTAL: usize = 2_048;
+const MAX_RESTORED_TERMINAL_ITEMS_PER_PANE: usize = 512;
+const MAX_RESTORED_TERMINAL_PANEL_NODES: usize = 2_048;
+const MAX_RESTORED_TERMINAL_GROUP_CHILDREN: usize = 256;
+const MAX_RESTORED_TERMINAL_GROUP_FLEXES: usize = 256;
+
 pub(crate) fn serialize_pane_group(
     pane_group: &PaneGroup,
     active_pane: &Entity<Pane>,
@@ -87,6 +94,128 @@ fn serialize_pane(pane: &Entity<Pane>, active: bool, cx: &mut App) -> Serialized
     }
 }
 
+pub(crate) fn deserialize_serialized_terminal_panel_json(
+    panel_json: &str,
+) -> Option<SerializedTerminalPanel> {
+    if panel_json.len() > MAX_SERIALIZED_TERMINAL_PANEL_JSON_BYTES {
+        log::warn!(
+            "Skipping persisted terminal panel: JSON is {} bytes, above the {} byte limit",
+            panel_json.len(),
+            MAX_SERIALIZED_TERMINAL_PANEL_JSON_BYTES
+        );
+        return None;
+    }
+
+    let mut serialized_panel = serde_json::from_str::<SerializedTerminalPanel>(panel_json)
+        .log_err()
+        .ok()?;
+    if !sanitize_serialized_terminal_panel(&mut serialized_panel) {
+        return None;
+    }
+    Some(serialized_panel)
+}
+
+fn sanitize_serialized_terminal_panel(serialized_panel: &mut SerializedTerminalPanel) -> bool {
+    let mut restore_limits = SerializedPanelRestoreLimits::default();
+    match &mut serialized_panel.items {
+        SerializedItems::NoSplits(item_ids) => {
+            restore_limits.bound_item_ids(item_ids, "legacy terminal panel");
+            true
+        }
+        SerializedItems::WithSplits(serialized_pane_group) => {
+            sanitize_serialized_pane_group(serialized_pane_group, &mut restore_limits)
+        }
+    }
+}
+
+fn sanitize_serialized_pane_group(
+    serialized: &mut SerializedPaneGroup,
+    restore_limits: &mut SerializedPanelRestoreLimits,
+) -> bool {
+    if !restore_limits.consume_pane_node() {
+        return false;
+    }
+
+    match serialized {
+        SerializedPaneGroup::Group {
+            flexes, children, ..
+        } => {
+            if children.len() > MAX_RESTORED_TERMINAL_GROUP_CHILDREN {
+                log::warn!(
+                    "Capping restored terminal group children from {} to {}",
+                    children.len(),
+                    MAX_RESTORED_TERMINAL_GROUP_CHILDREN
+                );
+                children.truncate(MAX_RESTORED_TERMINAL_GROUP_CHILDREN);
+            }
+
+            if let Some(flexes) = flexes {
+                let max_flexes = children.len().min(MAX_RESTORED_TERMINAL_GROUP_FLEXES);
+                if flexes.len() > max_flexes {
+                    log::warn!(
+                        "Capping restored terminal group flexes from {} to {}",
+                        flexes.len(),
+                        max_flexes
+                    );
+                    flexes.truncate(max_flexes);
+                }
+            }
+
+            children
+                .iter_mut()
+                .all(|child| sanitize_serialized_pane_group(child, restore_limits))
+        }
+        SerializedPaneGroup::Pane(serialized_pane) => {
+            restore_limits.bound_item_ids(&mut serialized_pane.children, "terminal pane");
+            true
+        }
+    }
+}
+
+#[derive(Default)]
+struct SerializedPanelRestoreLimits {
+    pane_nodes: usize,
+    restored_item_ids: usize,
+}
+
+impl SerializedPanelRestoreLimits {
+    fn consume_pane_node(&mut self) -> bool {
+        if self.pane_nodes >= MAX_RESTORED_TERMINAL_PANEL_NODES {
+            log::warn!(
+                "Skipping persisted terminal panel: pane node count exceeded {}",
+                MAX_RESTORED_TERMINAL_PANEL_NODES
+            );
+            return false;
+        }
+        self.pane_nodes += 1;
+        true
+    }
+
+    fn bound_item_ids(&mut self, item_ids: &mut Vec<u64>, context: &str) {
+        let original_len = item_ids.len();
+        let remaining_total =
+            MAX_RESTORED_TERMINAL_PANEL_ITEMS_TOTAL.saturating_sub(self.restored_item_ids);
+        let allowed_len = MAX_RESTORED_TERMINAL_ITEMS_PER_PANE.min(remaining_total);
+        if item_ids.len() > allowed_len {
+            log::warn!(
+                "Capping restored {context} terminal items from {} to {}",
+                item_ids.len(),
+                allowed_len
+            );
+            item_ids.truncate(allowed_len);
+        }
+        self.restored_item_ids = self.restored_item_ids.saturating_add(item_ids.len());
+        if original_len > item_ids.len()
+            && self.restored_item_ids >= MAX_RESTORED_TERMINAL_PANEL_ITEMS_TOTAL
+        {
+            log::warn!(
+                "Capping restored terminal panel items at {} total entries",
+                MAX_RESTORED_TERMINAL_PANEL_ITEMS_TOTAL
+            );
+        }
+    }
+}
+
 pub(crate) fn deserialize_terminal_panel(
     workspace: WeakEntity<Workspace>,
     project: Entity<Project>,
@@ -117,12 +246,14 @@ pub(crate) fn deserialize_terminal_panel(
                 })?;
             }
             SerializedItems::WithSplits(serialized_pane_group) => {
+                let mut restore_limits = SerializedPanelRestoreLimits::default();
                 let center_pane = deserialize_pane_group(
                     workspace,
                     project,
                     terminal_panel.clone(),
                     database_id,
                     serialized_pane_group,
+                    &mut restore_limits,
                     cx,
                 )
                 .await;
@@ -166,8 +297,13 @@ async fn deserialize_pane_group(
     panel: Entity<TerminalPanel>,
     workspace_id: WorkspaceId,
     serialized: &SerializedPaneGroup,
+    restore_limits: &mut SerializedPanelRestoreLimits,
     cx: &mut AsyncWindowContext,
 ) -> Option<(Member, Option<Entity<Pane>>)> {
+    if !restore_limits.consume_pane_node() {
+        return None;
+    }
+
     match serialized {
         SerializedPaneGroup::Group {
             axis,
@@ -183,6 +319,7 @@ async fn deserialize_pane_group(
                     panel.clone(),
                     workspace_id,
                     child,
+                    restore_limits,
                     cx,
                 )
                 .await
@@ -283,7 +420,8 @@ fn deserialize_terminal_views(
     item_ids: &[u64],
     cx: &mut AsyncWindowContext,
 ) -> impl Future<Output = Vec<Entity<TerminalView>>> + use<> {
-    let deserialized_items = join_all(item_ids.iter().filter_map(|item_id| {
+    let bounded_item_ids = bounded_terminal_view_item_ids(item_ids, "terminal view restore");
+    let deserialized_items = join_all(bounded_item_ids.iter().filter_map(|item_id| {
         cx.update(|window, cx| {
             TerminalView::deserialize(
                 project.clone(),
@@ -302,6 +440,19 @@ fn deserialize_terminal_views(
             .into_iter()
             .filter_map(|item| item.log_err())
             .collect()
+    }
+}
+
+fn bounded_terminal_view_item_ids<'a>(item_ids: &'a [u64], context: &str) -> &'a [u64] {
+    if item_ids.len() > MAX_RESTORED_TERMINAL_ITEMS_PER_PANE {
+        log::warn!(
+            "Capping {context} item restoration fanout from {} to {}",
+            item_ids.len(),
+            MAX_RESTORED_TERMINAL_ITEMS_PER_PANE
+        );
+        &item_ids[..MAX_RESTORED_TERMINAL_ITEMS_PER_PANE]
+    } else {
+        item_ids
     }
 }
 

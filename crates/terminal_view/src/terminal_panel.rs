@@ -3,7 +3,9 @@ use std::{cmp, path::PathBuf, process::ExitStatus, sync::Arc, time::Duration};
 use crate::{
     TerminalView, default_working_directory,
     persistence::{
-        SerializedItems, SerializedTerminalPanel, deserialize_terminal_panel, serialize_pane_group,
+        MAX_SERIALIZED_TERMINAL_PANEL_JSON_BYTES, SerializedItems, SerializedTerminalPanel,
+        deserialize_serialized_terminal_panel_json, deserialize_terminal_panel,
+        serialize_pane_group,
     },
 };
 use breadcrumbs::Breadcrumbs;
@@ -41,6 +43,9 @@ use anyhow::{Result, anyhow};
 use zed_actions::assistant::InlineAssist;
 
 const TERMINAL_PANEL_KEY: &str = "TerminalPanel";
+const MAX_TERMINAL_PANEL_TASK_MATCHES: usize = 1_024;
+const MAX_TERMINAL_PANEL_TASK_JOIN_HANDLES: usize = 1_024;
+const MAX_TERMINAL_PANEL_SELECTIONS: usize = 1_024;
 
 actions!(
     terminal_panel,
@@ -260,10 +265,7 @@ impl TerminalPanel {
                 .await
                 .log_err()
                 .flatten()
-                .map(|panel| serde_json::from_str::<SerializedTerminalPanel>(&panel))
-                .transpose()
-                .log_err()
-                .flatten()
+                .and_then(|panel| deserialize_serialized_terminal_panel_json(&panel))
             && let Ok(serialized) = workspace
                 .update_in(&mut cx, |workspace, window, cx| {
                     deserialize_terminal_panel(
@@ -719,7 +721,8 @@ impl TerminalPanel {
                 .map(move |(index, terminal_view)| (index, pane.clone(), terminal_view))
         };
 
-        self.center
+        let mut matching_terminals = self
+            .center
             .panes()
             .into_iter()
             .cloned()
@@ -732,8 +735,20 @@ impl TerminalPanel {
                     .cloned()
                     .flat_map(pane_terminal_views),
             )
+            .take(MAX_TERMINAL_PANEL_TASK_MATCHES.saturating_add(1))
             .sorted_by_key(|(_, _, terminal_view)| terminal_view.entity_id())
-            .collect()
+            .collect::<Vec<_>>();
+
+        if matching_terminals.len() > MAX_TERMINAL_PANEL_TASK_MATCHES {
+            log::warn!(
+                "Capping terminal task match fanout from at least {} to {}",
+                matching_terminals.len(),
+                MAX_TERMINAL_PANEL_TASK_MATCHES
+            );
+            matching_terminals.truncate(MAX_TERMINAL_PANEL_TASK_MATCHES);
+        }
+
+        matching_terminals
     }
 
     fn activate_terminal_view(
@@ -970,12 +985,21 @@ impl TerminalPanel {
             });
             cx.background_spawn(
                 async move {
+                    let serialized_panel = serde_json::to_string(&SerializedTerminalPanel {
+                        items,
+                        active_item_id: None,
+                    })?;
+                    if serialized_panel.len() > MAX_SERIALIZED_TERMINAL_PANEL_JSON_BYTES {
+                        log::warn!(
+                            "Skipping terminal panel serialization: JSON is {} bytes, above the {} byte limit",
+                            serialized_panel.len(),
+                            MAX_SERIALIZED_TERMINAL_PANEL_JSON_BYTES
+                        );
+                        return anyhow::Ok(());
+                    }
                     kvp.write_kvp(
                         serialization_key,
-                        serde_json::to_string(&SerializedTerminalPanel {
-                            items,
-                            active_item_id: None,
-                        })?,
+                        serialized_panel,
                     )
                     .await?;
                     anyhow::Ok(())
@@ -1107,7 +1131,8 @@ impl TerminalPanel {
 
     /// Returns all non-empty terminal selections from all terminal views in all panes.
     pub fn terminal_selections(&self, cx: &App) -> Vec<String> {
-        self.center
+        let mut selections = self
+            .center
             .panes()
             .iter()
             .flat_map(|pane| {
@@ -1123,7 +1148,19 @@ impl TerminalPanel {
                         .filter(|text| !text.is_empty())
                 })
             })
-            .collect()
+            .take(MAX_TERMINAL_PANEL_SELECTIONS.saturating_add(1))
+            .collect::<Vec<_>>();
+
+        if selections.len() > MAX_TERMINAL_PANEL_SELECTIONS {
+            log::warn!(
+                "Capping terminal selections from at least {} to {}",
+                selections.len(),
+                MAX_TERMINAL_PANEL_SELECTIONS
+            );
+            selections.truncate(MAX_TERMINAL_PANEL_SELECTIONS);
+        }
+
+        selections
     }
 
     fn is_enabled(&self, cx: &App) -> bool {
@@ -1276,13 +1313,24 @@ async fn wait_for_terminals_tasks(
     terminals_for_task: Vec<(usize, Entity<Pane>, Entity<TerminalView>)>,
     cx: &mut AsyncApp,
 ) {
-    let pending_tasks = terminals_for_task.iter().map(|(_, _, terminal)| {
-        terminal.update(cx, |terminal_view, cx| {
-            terminal_view
-                .terminal()
-                .update(cx, |terminal, cx| terminal.wait_for_completed_task(cx))
-        })
-    });
+    if terminals_for_task.len() > MAX_TERMINAL_PANEL_TASK_JOIN_HANDLES {
+        log::warn!(
+            "Capping terminal task wait joins from {} to {}",
+            terminals_for_task.len(),
+            MAX_TERMINAL_PANEL_TASK_JOIN_HANDLES
+        );
+    }
+
+    let pending_tasks = terminals_for_task
+        .iter()
+        .take(MAX_TERMINAL_PANEL_TASK_JOIN_HANDLES)
+        .map(|(_, _, terminal)| {
+            terminal.update(cx, |terminal_view, cx| {
+                terminal_view
+                    .terminal()
+                    .update(cx, |terminal, cx| terminal.wait_for_completed_task(cx))
+            })
+        });
     join_all(pending_tasks).await;
 }
 

@@ -368,6 +368,7 @@ pub struct PanelButtons {
 
 pub(crate) const PANEL_SIZE_STATE_KEY: &str = "dock_panel_size";
 pub(crate) const MAX_PANEL_SIZE_STATE_JSON_BYTES: usize = 4 * 1024;
+const MAX_PANEL_SIZE_STATE_PERSIST_BATCH: usize = 128;
 
 pub(crate) fn ensure_panel_size_state_json_within_limit(json: &str, key: &str) -> Option<()> {
     if json.len() > MAX_PANEL_SIZE_STATE_JSON_BYTES {
@@ -1024,20 +1025,33 @@ impl Dock {
             };
             panel_uses_flexible_width(self.position, active_entry.panel.as_ref(), window, cx)
         };
-        let mut size_states_to_persist = Vec::new();
+        let mut size_states_to_persist = Vec::with_capacity(
+            self.panel_entries
+                .len()
+                .min(MAX_PANEL_SIZE_STATE_PERSIST_BATCH),
+        );
+        let mut skipped_panel_size_state_persist_count = 0;
         for entry in &mut self.panel_entries {
             if panel_uses_flexible_width(self.position, entry.panel.as_ref(), window, cx)
                 == active_panel_uses_flexible_width
             {
-                size_states_to_persist.push(resize_panel_entry(
-                    self.position,
-                    entry,
-                    size,
-                    flex,
-                    window,
-                    cx,
-                ));
+                let size_state_to_persist =
+                    resize_panel_entry(self.position, entry, size, flex, window, cx);
+                if size_states_to_persist.len() < MAX_PANEL_SIZE_STATE_PERSIST_BATCH {
+                    size_states_to_persist.push(size_state_to_persist);
+                } else {
+                    skipped_panel_size_state_persist_count += 1;
+                }
             }
+        }
+
+        if skipped_panel_size_state_persist_count > 0 {
+            Err::<(), _>(anyhow::anyhow!(
+                "skipped persisting {} dock panel size states because the batch exceeded {} entries",
+                skipped_panel_size_state_persist_count,
+                MAX_PANEL_SIZE_STATE_PERSIST_BATCH
+            ))
+            .log_err();
         }
 
         let workspace = self.workspace.clone();

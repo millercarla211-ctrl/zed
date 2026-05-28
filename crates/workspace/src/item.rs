@@ -35,6 +35,24 @@ use ui::{Color, Icon, IntoElement, Label, LabelCommon};
 use util::ResultExt;
 
 pub const LEADER_UPDATE_THROTTLE: Duration = Duration::from_millis(200);
+const MAX_PROJECT_ITEMS_PER_ITEM: usize = 512;
+
+fn should_collect_project_item(visited: &mut usize, truncated: &mut bool) -> bool {
+    if *visited >= MAX_PROJECT_ITEMS_PER_ITEM {
+        *truncated = true;
+        return false;
+    }
+
+    *visited += 1;
+    true
+}
+
+fn log_project_item_collection_truncated(collection_name: &str) {
+    Err::<(), _>(anyhow::anyhow!(
+        "{collection_name} project item collection exceeded cap (max {MAX_PROJECT_ITEMS_PER_ITEM})"
+    ))
+    .log_err();
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct SaveOptions {
@@ -772,29 +790,53 @@ impl<T: Item> ItemHandle for Entity<T> {
 
     fn project_entry_ids(&self, cx: &App) -> SmallVec<[ProjectEntryId; 3]> {
         let mut result = SmallVec::new();
+        let mut visited = 0;
+        let mut truncated = false;
         self.read(cx).for_each_project_item(cx, &mut |_, item| {
+            if !should_collect_project_item(&mut visited, &mut truncated) {
+                return;
+            }
             if let Some(id) = item.entry_id(cx) {
                 result.push(id);
             }
         });
+        if truncated {
+            log_project_item_collection_truncated("project_entry_ids");
+        }
         result
     }
 
     fn project_paths(&self, cx: &App) -> SmallVec<[ProjectPath; 3]> {
         let mut result = SmallVec::new();
+        let mut visited = 0;
+        let mut truncated = false;
         self.read(cx).for_each_project_item(cx, &mut |_, item| {
+            if !should_collect_project_item(&mut visited, &mut truncated) {
+                return;
+            }
             if let Some(id) = item.project_path(cx) {
                 result.push(id);
             }
         });
+        if truncated {
+            log_project_item_collection_truncated("project_paths");
+        }
         result
     }
 
     fn project_item_model_ids(&self, cx: &App) -> SmallVec<[EntityId; 3]> {
         let mut result = SmallVec::new();
+        let mut visited = 0;
+        let mut truncated = false;
         self.read(cx).for_each_project_item(cx, &mut |id, _| {
+            if !should_collect_project_item(&mut visited, &mut truncated) {
+                return;
+            }
             result.push(id);
         });
+        if truncated {
+            log_project_item_collection_truncated("project_item_model_ids");
+        }
         result
     }
 
