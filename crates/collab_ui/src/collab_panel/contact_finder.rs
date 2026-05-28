@@ -68,6 +68,13 @@ impl Focusable for ContactFinder {
     }
 }
 
+impl ContactFinderDelegate {
+    fn clamp_selected_index_to_potential_contacts(&mut self) {
+        let last_selectable_index = self.potential_contacts.len().saturating_sub(1);
+        self.selected_index = self.selected_index.min(last_selectable_index);
+    }
+}
+
 impl PickerDelegate for ContactFinderDelegate {
     type ListItem = ListItem;
 
@@ -107,6 +114,7 @@ impl PickerDelegate for ContactFinderDelegate {
                 let potential_contacts = search_users.await?;
                 picker.update(cx, |picker, cx| {
                     picker.delegate.potential_contacts = potential_contacts.into();
+                    picker.delegate.clamp_selected_index_to_potential_contacts();
                     cx.notify();
                 })?;
                 anyhow::Ok(())

@@ -48,6 +48,8 @@ use sysinfo::{ProcessRefreshKind, RefreshKind, System, UpdateKind};
 use util::{ResultExt, paths::PathStyle, rel_path::RelPath};
 use worktree::Worktree;
 
+const MAX_REMOTE_DIRECTORY_LISTING_ENTRIES: usize = 10_000;
+
 pub struct HeadlessProject {
     pub fs: Arc<dyn Fs>,
     pub session: AnyProtoClient,
@@ -1158,6 +1160,14 @@ impl HeadlessProject {
         while let Some(path) = response.next().await {
             let path = path?;
             if let Some(file_name) = path.file_name() {
+                if entries.len() >= MAX_REMOTE_DIRECTORY_LISTING_ENTRIES {
+                    log::warn!(
+                        "remote directory listing for {:?} exceeded {} entries; truncating response",
+                        expanded,
+                        MAX_REMOTE_DIRECTORY_LISTING_ENTRIES
+                    );
+                    break;
+                }
                 entries.push(file_name.to_string_lossy().into_owned());
                 if check_info {
                     let is_dir = fs.is_dir(&path).await;

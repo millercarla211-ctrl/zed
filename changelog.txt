@@ -1,3 +1,32 @@
+[2026-05-28] - Command Palette Picker Search Debugger Collab And Remote Listing Hardening
+
+ADDED:
+- Added `script\dx-command-palette-source.test.ts` for command palette stale-selection and command materialization boundaries.
+- Added `script\dx-picker-core-source.test.ts` for picker core selection clamp, selectable fallback, and reveal-scroll boundaries.
+- Added `script\dx-search-ui-source.test.ts` for project-search active-match label and navigation boundaries.
+- Added `script\dx-debugger-ui-source.test.ts` for debugger console DAP completion materialization boundaries.
+- Added `script\dx-collab-notifications-source.test.ts` for collab contact finder async-result selection boundaries.
+- Added `script\dx-markdown-preview-source.test.ts` for remote directory listing response materialization boundaries.
+
+CHANGED:
+- Command Palette now clamps stale selected indexes after match replacement and before command materialization.
+- Picker core now clamps out-of-range selection requests before selectable fallback loops and bounds reveal-scroll targets after match updates.
+- Project Search now formats active-match labels through a bounded helper and clamps stale navigation indexes before range indexing.
+- Debugger console now caps DAP completion rows at a named boundary and marks truncated responses incomplete.
+- Collab contact finder now clamps stale selected indexes immediately after async search result replacement.
+- Remote directory listing responses now cap entry materialization while keeping `entry_info` aligned with returned entries.
+- `DX.md` and the source-guard registry now list the new guards.
+
+PASSED:
+- `node --test script\dx-command-palette-source.test.ts script\dx-picker-core-source.test.ts script\dx-search-ui-source.test.ts script\dx-debugger-ui-source.test.ts script\dx-collab-notifications-source.test.ts script\dx-markdown-preview-source.test.ts` (8/8 passing)
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-command-palette-source.test.ts script\dx-picker-core-source.test.ts script\dx-search-ui-source.test.ts script\dx-debugger-ui-source.test.ts script\dx-collab-notifications-source.test.ts script\dx-markdown-preview-source.test.ts` (11/11 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Project Panel Diagnostics Git Settings Extensions And Outline Hardening
 
 ADDED:

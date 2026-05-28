@@ -432,6 +432,7 @@ impl<D: PickerDelegate> Picker<D> {
         if match_count == 0 {
             return;
         }
+        ix = ix.min(match_count - 1);
 
         if let Some(bias) = fallback_direction {
             let mut curr_ix = ix;
@@ -731,6 +732,22 @@ impl<D: PickerDelegate> Picker<D> {
         });
     }
 
+    fn clamp_selected_index_to_match_count(
+        &mut self,
+        match_count: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if match_count == 0 {
+            return;
+        }
+
+        let selected_index = self.delegate.selected_index();
+        if selected_index >= match_count {
+            self.set_selected_index(match_count - 1, Some(Direction::Up), false, window, cx);
+        }
+    }
+
     fn matches_updated(
         &mut self,
         scroll_behavior: ScrollBehavior,
@@ -738,12 +755,15 @@ impl<D: PickerDelegate> Picker<D> {
         cx: &mut Context<Self>,
     ) {
         let match_count = self.delegate.match_count();
+        self.clamp_selected_index_to_match_count(match_count, window, cx);
         match &mut self.element_container {
             ElementContainer::List(state) => match scroll_behavior {
                 ScrollBehavior::RevealSelected => {
                     state.reset(match_count);
-                    let index = self.delegate.selected_index();
-                    self.scroll_to_item_index(index);
+                    if match_count > 0 {
+                        let index = self.delegate.selected_index();
+                        self.scroll_to_item_index(index.min(match_count - 1));
+                    }
                 }
                 ScrollBehavior::PreserveOffset => {
                     let offset = state.logical_scroll_top();
@@ -753,8 +773,10 @@ impl<D: PickerDelegate> Picker<D> {
             },
             ElementContainer::UniformList(_) => match scroll_behavior {
                 ScrollBehavior::RevealSelected => {
-                    let index = self.delegate.selected_index();
-                    self.scroll_to_item_index(index);
+                    if match_count > 0 {
+                        let index = self.delegate.selected_index();
+                        self.scroll_to_item_index(index.min(match_count - 1));
+                    }
                 }
                 ScrollBehavior::PreserveOffset => {}
             },

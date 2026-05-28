@@ -228,6 +228,26 @@ fn contains_uppercase(str: &str) -> bool {
     str.chars().any(|c| c.is_uppercase())
 }
 
+fn project_search_match_text(
+    active_match_index: Option<usize>,
+    match_quantity: usize,
+    limit_reached: bool,
+) -> String {
+    let Some(index) = active_match_index else {
+        return "0/0".to_string();
+    };
+    let Some(last_match_index) = match_quantity.checked_sub(1) else {
+        return "0/0".to_string();
+    };
+
+    let index = index.min(last_match_index).saturating_add(1);
+    if limit_reached {
+        format!("{index}/{match_quantity}+")
+    } else {
+        format!("{index}/{match_quantity}")
+    }
+}
+
 pub struct ProjectSearch {
     project: Entity<Project>,
     excerpts: Entity<MultiBuffer>,
@@ -1552,9 +1572,22 @@ impl ProjectSearchView {
     fn select_match(&mut self, direction: Direction, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(index) = self.active_match_index {
             let match_ranges = self.entity.read(cx).match_ranges.clone();
+            let Some(last_match_index) = match_ranges.len().checked_sub(1) else {
+                self.active_match_index = None;
+                self.results_editor.update(cx, |editor, cx| {
+                    editor.clear_background_highlights(HighlightKey::ProjectSearchView, cx);
+                });
+                cx.notify();
+                return;
+            };
+            let index = index.min(last_match_index);
+            if self.active_match_index != Some(index) {
+                self.active_match_index = Some(index);
+                cx.notify();
+            }
 
             if !EditorSettings::get_global(cx).search_wrap
-                && ((direction == Direction::Next && index + 1 >= match_ranges.len())
+                && ((direction == Direction::Next && index == last_match_index)
                     || (direction == Direction::Prev && index == 0))
             {
                 crate::show_no_more_matches(window, cx);
@@ -2220,23 +2253,11 @@ impl Render for ProjectSearchBar {
             _ => None,
         };
 
-        let match_text = search
-            .active_match_index
-            .and_then(|index| {
-                let index = index + 1;
-                let match_quantity = project_search.match_ranges.len();
-                if match_quantity > 0 {
-                    debug_assert!(match_quantity >= index);
-                    if limit_reached {
-                        Some(format!("{index}/{match_quantity}+"))
-                    } else {
-                        Some(format!("{index}/{match_quantity}"))
-                    }
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| "0/0".to_string());
+        let match_text = project_search_match_text(
+            search.active_match_index,
+            project_search.match_ranges.len(),
+            limit_reached,
+        );
 
         let query_focus = search.query_editor.focus_handle(cx);
 

@@ -332,10 +332,14 @@ impl CommandPaletteDelegate {
         }
         self.commands = commands;
         self.matches = new_matches;
-        if self.matches.is_empty() {
-            self.selected_ix = 0;
+        self.clamp_selected_index();
+    }
+
+    fn clamp_selected_index(&mut self) {
+        if let Some(max_ix) = self.matches.len().checked_sub(1) {
+            self.selected_ix = cmp::min(self.selected_ix, max_ix);
         } else {
-            self.selected_ix = cmp::min(self.selected_ix, self.matches.len() - 1);
+            self.selected_ix = 0;
         }
     }
 
@@ -431,6 +435,7 @@ impl PickerDelegate for CommandPaletteDelegate {
         _: &mut Context<Picker<Self>>,
     ) {
         self.selected_ix = ix;
+        self.clamp_selected_index();
     }
 
     fn update_matches(
@@ -584,7 +589,10 @@ impl PickerDelegate for CommandPaletteDelegate {
             self.query_history.reset_cursor();
         }
 
-        let action_ix = self.matches[self.selected_ix].candidate_id;
+        let Some(matching_command) = self.matches.get(self.selected_ix) else {
+            return;
+        };
+        let action_ix = matching_command.candidate_id;
         let command = self.commands.swap_remove(action_ix);
         telemetry::event!(
             "Action Invoked",
