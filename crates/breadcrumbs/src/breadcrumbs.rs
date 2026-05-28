@@ -21,6 +21,28 @@ pub struct RenderBreadcrumbText(pub RenderBreadcrumbTextFn);
 
 impl Global for RenderBreadcrumbText {}
 
+const MAX_BREADCRUMB_SEGMENTS_FOR_RENDERER: usize = 256;
+
+fn bounded_breadcrumb_segments(mut segments: Vec<HighlightedText>) -> Vec<HighlightedText> {
+    if segments.len() <= MAX_BREADCRUMB_SEGMENTS_FOR_RENDERER {
+        return segments;
+    }
+
+    let prefix_segment_count = MAX_BREADCRUMB_SEGMENTS_FOR_RENDERER / 2;
+    let suffix_segment_count =
+        MAX_BREADCRUMB_SEGMENTS_FOR_RENDERER.saturating_sub(prefix_segment_count + 1);
+    let suffix_start = segments.len().saturating_sub(suffix_segment_count);
+
+    segments.splice(
+        prefix_segment_count..suffix_start,
+        Some(HighlightedText {
+            text: "...".into(),
+            highlights: vec![],
+        }),
+    );
+    segments
+}
+
 pub struct Breadcrumbs {
     pane_focused: bool,
     active_item: Option<Box<dyn ItemHandle>>,
@@ -61,6 +83,7 @@ impl Render for Breadcrumbs {
         let Some((segments, breadcrumb_font)) = active_item.breadcrumbs(cx) else {
             return element.into_any_element();
         };
+        let segments = bounded_breadcrumb_segments(segments);
 
         let prefix_element = active_item.breadcrumb_prefix(window, cx);
 

@@ -36,6 +36,7 @@ const DX_ICON_DATA_DIR: &str = "G:/Assets/icon/data";
 const ICON_PACK_INDEX: &str = include_str!("icon_pack_index.tsv");
 const ICON_REPRESENTATIVE_BODIES: &str = include_str!("icon_representative_bodies.tsv");
 const MAX_ICON_RESULTS: usize = 360;
+const MAX_ICON_PACK_SAMPLE_NAMES: usize = 2;
 const MAX_RECENT_ICON_ACTIONS: usize = 5;
 const MAX_PINNED_ICON_ACTIONS: usize = 8;
 const STARTUP_ICON_PREVIEW_WARM_LIMIT: usize = MAX_ICON_RESULTS;
@@ -1908,12 +1909,7 @@ fn static_icon_pack_summaries() -> Vec<IconPackSummary> {
             continue;
         };
 
-        let mut sample_names = Vec::with_capacity(columns.size_hint().0);
-        sample_names.extend(
-            columns
-                .filter(|name| !name.is_empty())
-                .map(SharedString::from),
-        );
+        let sample_names = icon_pack_sample_names(columns);
         packs.push(IconPackSummary {
             prefix: prefix.into(),
             name: name.into(),
@@ -1927,9 +1923,22 @@ fn static_icon_pack_summaries() -> Vec<IconPackSummary> {
     packs
 }
 
+fn icon_pack_sample_names<'a>(columns: impl Iterator<Item = &'a str>) -> Vec<SharedString> {
+    let mut sample_names = Vec::with_capacity(MAX_ICON_PACK_SAMPLE_NAMES);
+    sample_names.extend(
+        columns
+            .filter(|name| !name.is_empty())
+            .take(MAX_ICON_PACK_SAMPLE_NAMES)
+            .map(SharedString::from),
+    );
+    sample_names
+}
+
 fn representative_icons_from_pack_summaries(packs: &[IconPackSummary]) -> Vec<ExternalIcon> {
-    let mut icons = Vec::with_capacity(MAX_ICON_RESULTS.min(packs.len().saturating_mul(2)));
-    for index in 0..2 {
+    let mut icons = Vec::with_capacity(
+        MAX_ICON_RESULTS.min(packs.len().saturating_mul(MAX_ICON_PACK_SAMPLE_NAMES)),
+    );
+    for index in 0..MAX_ICON_PACK_SAMPLE_NAMES {
         for pack in packs {
             let Some(name) = pack.sample_names.get(index) else {
                 continue;
@@ -1976,8 +1985,10 @@ fn load_external_icon_catalog() -> ExternalIconCatalog {
             .then_with(|| left.name.as_ref().cmp(right.name.as_ref()))
     });
 
-    let mut representative_icons = Vec::with_capacity(MAX_ICON_RESULTS.min(packs.len()));
-    for index in 0..2 {
+    let mut representative_icons = Vec::with_capacity(
+        MAX_ICON_RESULTS.min(packs.len().saturating_mul(MAX_ICON_PACK_SAMPLE_NAMES)),
+    );
+    for index in 0..MAX_ICON_PACK_SAMPLE_NAMES {
         for pack in &packs {
             if let Some(icon) = icons_by_pack
                 .get(pack.prefix.as_ref())

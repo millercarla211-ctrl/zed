@@ -1,3 +1,32 @@
+[2026-05-28] - Breadcrumbs Icon Picker Selectors Recent Projects And Notifications Hardening
+
+ADDED:
+- Added `script\dx-breadcrumbs-source.test.ts` for breadcrumb segment materialization boundaries.
+- Added `script\dx-icon-picker-source.test.ts` for icon picker TSV sample and representative preview boundaries.
+- Added `script\dx-language-selector-source.test.ts` for language selector candidate, match, stale-selection, and confirm boundaries.
+- Added `script\dx-toolchain-selector-source.test.ts` for toolchain selector match and stale-selection boundaries.
+- Added `script\dx-recent-projects-ui-source.test.ts` for recent projects candidate, result, path label, and stale-selection boundaries.
+- Added `script\dx-notifications-source.test.ts` for status toast message and action label boundaries.
+
+CHANGED:
+- Breadcrumbs now compacts oversized segment vectors to a bounded head/tail set before invoking the global breadcrumb renderer.
+- Icon Picker now caps TSV sample-name columns before pack summary storage and ties representative loops to the named sample cap.
+- Language Selector now caps visible candidates and empty/fuzzy matches, preserves the current language inside the cap, clamps stale selections, and guards stale confirm-time candidate IDs.
+- Toolchain Selector now caps empty-query and fuzzy picker rows through one named match boundary and reclamps async match replacement.
+- Recent Projects now caps sidebar workspace candidates, candidate path strings, empty/fuzzy result rows, rendered tooltip/highlight paths, and stale selections.
+- Status Toast now bounds message and action labels before Label, Button, tooltip, ToastAction, and action-id materialization.
+- `DX.md` and the source-guard registry now list the new guards.
+
+PASSED:
+- `node --test script\dx-breadcrumbs-source.test.ts script\dx-icon-picker-source.test.ts script\dx-language-selector-source.test.ts script\dx-toolchain-selector-source.test.ts script\dx-recent-projects-ui-source.test.ts script\dx-notifications-source.test.ts` (16/16 passing)
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-breadcrumbs-source.test.ts script\dx-icon-picker-source.test.ts script\dx-language-selector-source.test.ts script\dx-toolchain-selector-source.test.ts script\dx-recent-projects-ui-source.test.ts script\dx-notifications-source.test.ts` (19/19 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Activity Symbols Snippets Repl Preview And Acp Tools Hardening
 
 ADDED:
