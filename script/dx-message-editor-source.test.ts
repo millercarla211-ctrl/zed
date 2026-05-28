@@ -4,6 +4,14 @@ import { readFileSync } from "node:fs";
 
 const source = readFileSync("crates/agent_ui/src/message_editor.rs", "utf8");
 
+function sourceSlice(startNeedle: string, endNeedle: string): string {
+  const start = source.indexOf(startNeedle);
+  assert.notEqual(start, -1, `expected ${startNeedle}`);
+  const end = source.indexOf(endNeedle, start);
+  assert.notEqual(end, -1, `expected ${endNeedle} after ${startNeedle}`);
+  return source.slice(start, end);
+}
+
 test("message editor caps mention-link paste parsing before scanning text", () => {
   assert.match(
     source,
@@ -68,5 +76,74 @@ test("message editor parses pasted mention links only through the guarded path",
   assert.ok(
     paste.indexOf("editor.paste_item(clipboard, window, cx)") > fallbackStart,
     "oversized text should continue to the normal editor paste path",
+  );
+});
+
+test("message editor caps clipboard context entries before materializing them", () => {
+  assert.match(
+    source,
+    /const MAX_MESSAGE_EDITOR_PASTE_CLIPBOARD_ENTRIES: usize = \d+;/,
+  );
+
+  const body = sourceSlice(
+    "fn limited_pasted_context_entries(clipboard: &ClipboardItem) -> Vec<PastedContextEntry> {",
+    "\nasync fn resolve_pasted_context_items(",
+  );
+  assert.match(
+    body,
+    /clipboard\s*\.entries\(\)\s*\.iter\(\)\s*\.take\(MAX_MESSAGE_EDITOR_PASTE_CLIPBOARD_ENTRIES\)/,
+    "clipboard entries must be capped before they are cloned or collected",
+  );
+
+  const handlePastedContext = sourceSlice(
+    "    fn handle_pasted_context(",
+    "\n    pub fn insert_dragged_files(",
+  );
+  assert.match(
+    handlePastedContext,
+    /let entries = limited_pasted_context_entries\(clipboard\);/,
+    "pasted context must be materialized only through the limited helper",
+  );
+  assert.doesNotMatch(
+    handlePastedContext,
+    /clipboard\.clone\(\)\.into_entries\(\)\.collect::<Vec<_>>\(\)/,
+    "pasted context must not clone and collect the whole clipboard item",
+  );
+});
+
+test("message editor caps external paths before cloning them for paste context", () => {
+  assert.match(
+    source,
+    /const MAX_MESSAGE_EDITOR_PASTE_EXTERNAL_PATHS: usize = \d+;/,
+  );
+
+  const body = sourceSlice(
+    "fn limited_pasted_context_entries(clipboard: &ClipboardItem) -> Vec<PastedContextEntry> {",
+    "\nasync fn resolve_pasted_context_items(",
+  );
+  assert.match(
+    body,
+    /let mut external_paths_remaining = MAX_MESSAGE_EDITOR_PASTE_EXTERNAL_PATHS;/,
+  );
+  assert.match(
+    body,
+    /paths\s*\.paths\(\)\s*\.iter\(\)\s*\.take\(path_count\)\s*\.cloned\(\)\s*\.map\(PastedContextEntry::ExternalPath\)/,
+    "external paths must be capped before each path is cloned",
+  );
+
+  const resolver = sourceSlice(
+    "async fn resolve_pasted_context_items(",
+    "\nfn insert_project_path_as_context(",
+  );
+  assert.match(
+    resolver,
+    /entries: Vec<PastedContextEntry>/,
+    "the async resolver should receive already-limited context entries",
+  );
+  assert.match(resolver, /PastedContextEntry::ExternalPath\(path\)/);
+  assert.doesNotMatch(
+    resolver,
+    /ClipboardEntry::ExternalPaths|paths\.paths\(\)\.iter\(\)/,
+    "the async resolver must not iterate uncapped ExternalPaths payloads",
   );
 });

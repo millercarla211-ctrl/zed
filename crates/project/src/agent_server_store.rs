@@ -186,6 +186,11 @@ pub struct AgentServersUpdated;
 
 impl EventEmitter<AgentServersUpdated> for AgentServerStore {}
 
+const MAX_AGENT_SERVER_REGISTRY_DISCOVERY_ENTRIES: usize = 1024;
+const MAX_AGENT_SERVER_SETTINGS_DISCOVERY_ENTRIES: usize = 512;
+const MAX_AGENT_SERVER_REMOTE_DISCOVERY_ENTRIES: usize = 512;
+const MAX_VERSIONED_ARCHIVE_CACHE_SCAN_ENTRIES: usize = 512;
+
 static EXTENSION_TO_REGISTRY_IDS: LazyLock<HashMap<&'static str, &'static str>> =
     LazyLock::new(|| {
         HashMap::from_iter([
@@ -323,6 +328,7 @@ impl AgentServerStore {
                     .read(cx)
                     .agents()
                     .iter()
+                    .take(MAX_AGENT_SERVER_REGISTRY_DISCOVERY_ENTRIES)
                     .cloned()
                     .map(|agent| (agent.id().to_string(), agent))
                     .collect::<HashMap<_, _>>()
@@ -344,7 +350,10 @@ impl AgentServerStore {
             }
         }
 
-        for (name, settings) in new_settings.iter() {
+        for (name, settings) in new_settings
+            .iter()
+            .take(MAX_AGENT_SERVER_SETTINGS_DISCOVERY_ENTRIES)
+        {
             match settings {
                 CustomAgentServerSettings::Custom { command, .. } => {
                     let agent_name = AgentId(name.clone().into());
@@ -691,6 +700,7 @@ impl AgentServerStore {
                 .payload
                 .names
                 .into_iter()
+                .take(MAX_AGENT_SERVER_REMOTE_DISCOVERY_ENTRIES)
                 .map(|name| {
                     let agent_id = AgentId(name.into());
                     let (icon, display_name, source) = metadata
@@ -929,7 +939,13 @@ async fn remove_stale_versioned_archive_cache_dirs(
         .await
         .with_context(|| format!("reading archive cache directory {base_dir:?}"))?;
 
-    while let Some(entry) = entries.next().await {
+    let mut scanned_entries = 0usize;
+    while scanned_entries < MAX_VERSIONED_ARCHIVE_CACHE_SCAN_ENTRIES {
+        let Some(entry) = entries.next().await else {
+            break;
+        };
+        scanned_entries += 1;
+
         let entry = entry.with_context(|| format!("reading entry in {base_dir:?}"))?;
         let Some(entry_name) = entry.file_name() else {
             continue;
@@ -1528,6 +1544,7 @@ impl settings::Settings for AllAgentServersSettings {
             agent_settings
                 .0
                 .into_iter()
+                .take(MAX_AGENT_SERVER_SETTINGS_DISCOVERY_ENTRIES)
                 .map(|(k, v)| {
                     (
                         EXTENSION_TO_REGISTRY_IDS
@@ -1778,6 +1795,7 @@ mod tests {
             .read_dir(base_dir)
             .await
             .unwrap()
+            .take(MAX_VERSIONED_ARCHIVE_CACHE_SCAN_ENTRIES)
             .filter_map(|entry| async move { entry.ok() })
             .map(|path| {
                 path.file_name()

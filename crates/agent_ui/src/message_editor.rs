@@ -36,7 +36,7 @@ use project::{
 use prompt_store::PromptStore;
 use rope::Point;
 use settings::Settings;
-use std::{cmp::min, fmt::Write, ops::Range, rc::Rc, sync::Arc};
+use std::{cmp::min, fmt::Write, ops::Range, path::PathBuf, rc::Rc, sync::Arc};
 use theme_settings::ThemeSettings;
 use ui::{ContextMenu, prelude::*};
 use util::paths::PathStyle;
@@ -220,6 +220,8 @@ impl EventEmitter<MessageEditorEvent> for MessageEditor {}
 
 const COMMAND_HINT_INLAY_ID: InlayId = InlayId::Hint(0);
 const MAX_MARKDOWN_MENTION_LINK_PASTE_BYTES: usize = 256 * 1024;
+const MAX_MESSAGE_EDITOR_PASTE_CLIPBOARD_ENTRIES: usize = 64;
+const MAX_MESSAGE_EDITOR_PASTE_EXTERNAL_PATHS: usize = 512;
 
 fn should_parse_pasted_mention_links(text: &str) -> bool {
     text.len() <= MAX_MARKDOWN_MENTION_LINK_PASTE_BYTES && text.contains("[@")
@@ -316,11 +318,51 @@ enum ResolvedPastedContextItem {
     ProjectPath(ProjectPath),
 }
 
+enum PastedContextEntry {
+    Image(gpui::Image),
+    ExternalPath(PathBuf),
+}
+
+fn limited_pasted_context_entries(clipboard: &ClipboardItem) -> Vec<PastedContextEntry> {
+    let mut entries = Vec::new();
+    let mut external_paths_remaining = MAX_MESSAGE_EDITOR_PASTE_EXTERNAL_PATHS;
+
+    for entry in clipboard
+        .entries()
+        .iter()
+        .take(MAX_MESSAGE_EDITOR_PASTE_CLIPBOARD_ENTRIES)
+    {
+        match entry {
+            ClipboardEntry::String(_) => {}
+            ClipboardEntry::Image(image) => {
+                entries.push(PastedContextEntry::Image(image.clone()));
+            }
+            ClipboardEntry::ExternalPaths(paths) => {
+                let path_count = min(paths.paths().len(), external_paths_remaining);
+                entries.extend(
+                    paths
+                        .paths()
+                        .iter()
+                        .take(path_count)
+                        .cloned()
+                        .map(PastedContextEntry::ExternalPath),
+                );
+                external_paths_remaining = external_paths_remaining.saturating_sub(path_count);
+                if external_paths_remaining == 0 {
+                    break;
+                }
+            }
+        }
+    }
+
+    entries
+}
+
 async fn resolve_pasted_context_items(
     project: Entity<Project>,
     project_is_local: bool,
     supports_images: bool,
-    entries: Vec<ClipboardEntry>,
+    entries: Vec<PastedContextEntry>,
     cx: &mut gpui::AsyncWindowContext,
 ) -> (Vec<ResolvedPastedContextItem>, Vec<Entity<Worktree>>) {
     let mut items = Vec::new();
@@ -329,8 +371,7 @@ async fn resolve_pasted_context_items(
 
     for entry in entries {
         match entry {
-            ClipboardEntry::String(_) => {}
-            ClipboardEntry::Image(image) => {
+            PastedContextEntry::Image(image) => {
                 if supports_images {
                     items.push(ResolvedPastedContextItem::Image(
                         image,
@@ -338,43 +379,40 @@ async fn resolve_pasted_context_items(
                     ));
                 }
             }
-            ClipboardEntry::ExternalPaths(paths) => {
-                for path in paths.paths().iter() {
-                    if let Some((image, name)) = cx
-                        .background_spawn({
-                            let path = path.clone();
-                            let default_image_name = default_image_name.clone();
-                            async move {
-                                crate::mention_set::load_external_image_from_path(
-                                    &path,
-                                    &default_image_name,
-                                )
-                            }
-                        })
-                        .await
-                    {
-                        if supports_images {
-                            items.push(ResolvedPastedContextItem::Image(image, name));
+            PastedContextEntry::ExternalPath(path) => {
+                if let Some((image, name)) = cx
+                    .background_spawn({
+                        let path = path.clone();
+                        let default_image_name = default_image_name.clone();
+                        async move {
+                            crate::mention_set::load_external_image_from_path(
+                                &path,
+                                &default_image_name,
+                            )
                         }
-                        continue;
+                    })
+                    .await
+                {
+                    if supports_images {
+                        items.push(ResolvedPastedContextItem::Image(image, name));
                     }
+                    continue;
+                }
 
-                    if !project_is_local {
-                        continue;
-                    }
+                if !project_is_local {
+                    continue;
+                }
 
-                    let path = path.clone();
-                    let Ok(resolve_task) = cx.update({
-                        let project = project.clone();
-                        move |_, cx| Workspace::project_path_for_path(project, &path, false, cx)
-                    }) else {
-                        continue;
-                    };
+                let Ok(resolve_task) = cx.update({
+                    let project = project.clone();
+                    move |_, cx| Workspace::project_path_for_path(project, &path, false, cx)
+                }) else {
+                    continue;
+                };
 
-                    if let Some((worktree, project_path)) = resolve_task.await.log_err() {
-                        added_worktrees.push(worktree);
-                        items.push(ResolvedPastedContextItem::ProjectPath(project_path));
-                    }
+                if let Some((worktree, project_path)) = resolve_task.await.log_err() {
+                    added_worktrees.push(worktree);
+                    items.push(ResolvedPastedContextItem::ProjectPath(project_path));
                 }
             }
         }
@@ -1370,7 +1408,7 @@ impl MessageEditor {
         let editor = self.editor.clone();
         let mention_set = self.mention_set.clone();
         let workspace = self.workspace.clone();
-        let entries = clipboard.clone().into_entries().collect::<Vec<_>>();
+        let entries = limited_pasted_context_entries(clipboard);
 
         window
             .spawn(cx, async move |mut cx| {

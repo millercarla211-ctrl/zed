@@ -1,3 +1,29 @@
+[2026-05-28] - Network Discovery History And Clipboard Boundary Hardening
+
+ADDED:
+- Added `script\dx-project-agent-registry-source.test.ts` for ACP registry HTTP response size and error-display boundaries.
+- Added `script\dx-agent-server-store-source.test.ts` for agent server discovery and archive-cache enumeration boundaries.
+- Added `script\dx-workspace-enumeration-source.test.ts` for workspace history and random-space discovery enumeration boundaries.
+- Added `script\dx-thread-archive-source.test.ts` for thread import, archive, and project-picker materialization boundaries.
+
+CHANGED:
+- ACP registry and icon HTTP responses now use sentinel-byte body caps before JSON parse, cache payload reuse, or icon writes, and error bodies are capped before display.
+- Agent server discovery now caps registry-agent lookup, custom settings discovery/import, remote server-name discovery, and stale versioned archive-cache scans.
+- Workspace random-space discovery, sibling home scans, recent history, and Windows jump-list materialization now use named caps before collection, sorting, or rendering, and history/project-picker callers now use limited recent-workspace DB queries.
+- MessageEditor paste context now caps clipboard entries and external paths before cloning image/path payloads for async context resolution.
+- Thread import, thread worktree archive, archive search, and project picker flows now cap agent rows, connection stores, sessions, imported threads, workspaces, repositories, queries, candidates, branch labels, and path labels before list materialization; oversized worktree linked-thread sets now fail visibly instead of partially linking.
+- Web Preview clipboard JSON imports now use a dedicated named byte cap before string materialization and `serde_json::from_str`.
+- `DX.md` and the source-guard registry now list the new guards.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-project-agent-registry-source.test.ts script\dx-agent-server-store-source.test.ts script\dx-workspace-enumeration-source.test.ts script\dx-message-editor-source.test.ts script\dx-thread-archive-source.test.ts script\web-preview-payload-source.test.ts` (29/29 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on all edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Persistence Input And Enumeration Boundary Hardening
 
 ADDED:

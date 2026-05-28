@@ -68,6 +68,12 @@ pub struct AffectedProject {
     pub worktree_id: WorktreeId,
 }
 
+const THREAD_ARCHIVE_OPEN_WORKSPACE_LIMIT: usize = 128;
+const THREAD_ARCHIVE_WORKSPACE_SET_LIMIT: usize = 128;
+const THREAD_ARCHIVE_AFFECTED_PROJECT_LIMIT: usize = 128;
+const THREAD_ARCHIVE_REPOSITORY_SCAN_LIMIT: usize = 128;
+const THREAD_ARCHIVE_LINKED_THREAD_LIMIT: usize = 512;
+
 fn archived_worktree_ref_name(id: i64) -> String {
     format!("refs/archived-worktrees/{}", id)
 }
@@ -135,6 +141,7 @@ pub fn build_root_plan(
                 worktree_id,
             })
         })
+        .take(THREAD_ARCHIVE_AFFECTED_PROJECT_LIMIT)
         .collect::<Vec<_>>();
 
     if affected_projects.is_empty() {
@@ -152,6 +159,7 @@ pub fn build_root_plan(
                 .repositories(cx)
                 .values()
                 .cloned()
+                .take(THREAD_ARCHIVE_REPOSITORY_SCAN_LIMIT)
                 .collect::<Vec<_>>()
         })
         .find_map(|repo| {
@@ -465,20 +473,45 @@ pub async fn persist_worktree_state(root: &RootPlan, cx: &mut AsyncApp) -> Resul
         }
     };
 
-    // Link all threads on this worktree to the archived record
-    let thread_ids: Vec<ThreadId> = store.read_with(cx, |store, _cx| {
-        store
-            .entries()
-            .filter(|thread| {
-                thread
-                    .folder_paths()
-                    .paths()
-                    .iter()
-                    .any(|p| p.as_path() == root.root_path)
-            })
-            .map(|thread| thread.thread_id)
-            .collect()
+    // Link all threads on this worktree to the archived record. If the
+    // matching set is too large to persist safely in one operation, fail before
+    // the destructive removal path instead of silently leaving some threads
+    // pointed at a removed worktree.
+    let thread_ids = store.read_with(cx, |store, _cx| {
+        let mut thread_ids = Vec::new();
+        for thread in store.entries().filter(|thread| {
+            thread
+                .folder_paths()
+                .paths()
+                .iter()
+                .any(|p| p.as_path() == root.root_path)
+        }) {
+            if thread_ids.len() >= THREAD_ARCHIVE_LINKED_THREAD_LIMIT {
+                anyhow::bail!(
+                    "refusing to archive worktree because more than {THREAD_ARCHIVE_LINKED_THREAD_LIMIT} threads reference it"
+                );
+            }
+            thread_ids.push(thread.thread_id);
+        }
+        Ok(thread_ids)
     });
+    let thread_ids = match thread_ids {
+        Ok(thread_ids) => thread_ids,
+        Err(error) => {
+            if let Err(delete_error) = store
+                .read_with(cx, |store, cx| {
+                    store.delete_archived_worktree(archived_worktree_id, cx)
+                })
+                .await
+            {
+                log::error!(
+                    "Failed to delete archived worktree DB record after link limit failure: \
+                     {delete_error:#}"
+                );
+            }
+            return Err(error);
+        }
+    };
 
     for thread_id in &thread_ids {
         let link_result = store
@@ -819,16 +852,30 @@ pub async fn cleanup_thread_archived_worktrees(thread_id: ThreadId, cx: &mut Asy
 
 /// Collects every `Workspace` entity across all open `MultiWorkspace` windows.
 pub fn all_open_workspaces(cx: &App) -> Vec<Entity<Workspace>> {
-    cx.windows()
+    let mut workspaces = Vec::new();
+
+    for multi_workspace in cx
+        .windows()
         .into_iter()
         .filter_map(|window| window.downcast::<MultiWorkspace>())
-        .flat_map(|multi_workspace| {
-            multi_workspace
-                .read(cx)
-                .map(|multi_workspace| multi_workspace.workspaces().cloned().collect::<Vec<_>>())
-                .unwrap_or_default()
-        })
-        .collect()
+    {
+        if workspaces.len() >= THREAD_ARCHIVE_OPEN_WORKSPACE_LIMIT {
+            break;
+        }
+
+        let Ok(multi_workspace) = multi_workspace.read(cx) else {
+            continue;
+        };
+
+        for workspace in multi_workspace.workspaces().cloned() {
+            if workspaces.len() >= THREAD_ARCHIVE_OPEN_WORKSPACE_LIMIT {
+                break;
+            }
+            workspaces.push(workspace);
+        }
+    }
+
+    workspaces
 }
 
 pub fn workspaces_for_archive(
@@ -841,10 +888,15 @@ pub fn workspaces_for_archive(
                 .read(cx)
                 .workspaces()
                 .cloned()
+                .take(THREAD_ARCHIVE_WORKSPACE_SET_LIMIT)
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
+    workspaces.truncate(THREAD_ARCHIVE_WORKSPACE_SET_LIMIT);
     for workspace in all_open_workspaces(cx) {
+        if workspaces.len() >= THREAD_ARCHIVE_WORKSPACE_SET_LIMIT {
+            break;
+        }
         if !workspaces.contains(&workspace) {
             workspaces.push(workspace);
         }

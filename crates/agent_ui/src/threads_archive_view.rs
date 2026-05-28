@@ -22,7 +22,6 @@ use gpui::{
     ListState, Render, SharedString, Subscription, Task, TaskExt, WeakEntity, Window, list,
     prelude::*, px,
 };
-use itertools::Itertools as _;
 use menu::{Confirm, SelectFirst, SelectLast, SelectNext, SelectPrevious};
 use picker::{
     Picker, PickerDelegate,
@@ -46,6 +45,84 @@ use workspace::{
 
 use zed_actions::agents_sidebar::FocusSidebarFilter;
 use zed_actions::editor::{MoveDown, MoveUp};
+
+const THREAD_ARCHIVE_FILTER_QUERY_CHAR_LIMIT: usize = 256;
+const THREAD_ARCHIVE_FUZZY_CANDIDATE_CHAR_LIMIT: usize = 512;
+const THREAD_ARCHIVE_LIST_ENTRY_LIMIT: usize = 1_000;
+const THREAD_ARCHIVE_BRANCH_NAME_LIMIT: usize = 64;
+const PROJECT_PICKER_WORKSPACE_LIMIT: usize = 512;
+const PROJECT_PICKER_DB_WORKSPACE_ROW_LIMIT: usize = PROJECT_PICKER_WORKSPACE_LIMIT * 4;
+const PROJECT_PICKER_QUERY_CHAR_LIMIT: usize = 256;
+const PROJECT_PICKER_CANDIDATE_LIMIT: usize = 256;
+const PROJECT_PICKER_PATH_LABEL_LIMIT: usize = 24;
+const PROJECT_PICKER_PATH_TEXT_CHAR_LIMIT: usize = 256;
+
+fn bounded_thread_archive_filter_query(query: &str) -> String {
+    query
+        .chars()
+        .take(THREAD_ARCHIVE_FILTER_QUERY_CHAR_LIMIT)
+        .collect::<String>()
+        .to_lowercase()
+}
+
+fn bounded_project_picker_query(query: &str) -> String {
+    query
+        .chars()
+        .take(PROJECT_PICKER_QUERY_CHAR_LIMIT)
+        .collect()
+}
+
+fn bounded_project_picker_path_text(path: &str) -> String {
+    path.chars()
+        .take(PROJECT_PICKER_PATH_TEXT_CHAR_LIMIT)
+        .collect()
+}
+
+fn project_picker_candidate_string(workspace: &RecentWorkspace) -> String {
+    let mut combined_string = String::new();
+    for path in workspace
+        .identity_paths
+        .ordered_paths()
+        .take(PROJECT_PICKER_PATH_LABEL_LIMIT)
+    {
+        combined_string.push_str(&bounded_project_picker_path_text(
+            path.compact().to_string_lossy().as_ref(),
+        ));
+    }
+    combined_string
+}
+
+fn thread_archive_sort_key(thread: &ThreadMetadata) -> DateTime<Utc> {
+    thread.created_at.unwrap_or(thread.updated_at)
+}
+
+fn collect_bounded_recent_thread_entries<'a>(
+    entries: impl Iterator<Item = &'a ThreadMetadata>,
+) -> Vec<ThreadMetadata> {
+    let mut sessions = Vec::new();
+
+    for thread in entries {
+        if sessions.len() < THREAD_ARCHIVE_LIST_ENTRY_LIMIT {
+            sessions.push(thread.clone());
+            continue;
+        }
+
+        let Some((oldest_ix, oldest_thread)) = sessions
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, session)| thread_archive_sort_key(session))
+        else {
+            continue;
+        };
+
+        if thread_archive_sort_key(thread) > thread_archive_sort_key(oldest_thread) {
+            sessions[oldest_ix] = thread.clone();
+        }
+    }
+
+    sessions.sort_by_key(|thread| std::cmp::Reverse(thread_archive_sort_key(thread)));
+    sessions
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum ThreadFilter {
@@ -103,12 +180,18 @@ impl TimeBucket {
 }
 
 pub fn fuzzy_match_positions(query: &str, candidate: &str) -> Option<Vec<usize>> {
-    let query_chars: Vec<char> = query.chars().collect();
+    let query_chars: Vec<char> = query
+        .chars()
+        .take(THREAD_ARCHIVE_FILTER_QUERY_CHAR_LIMIT)
+        .collect();
     if query_chars.is_empty() {
         return Some(Vec::new());
     }
 
-    let candidate_chars: Vec<(usize, char)> = candidate.char_indices().collect();
+    let candidate_chars: Vec<(usize, char)> = candidate
+        .char_indices()
+        .take(THREAD_ARCHIVE_FUZZY_CANDIDATE_CHAR_LIMIT)
+        .collect();
     let window_count = candidate_chars.len().checked_sub(query_chars.len() - 1)?;
 
     'outer: for window_start in 0..window_count {
@@ -280,21 +363,19 @@ impl ThreadsArchiveView {
         }
 
         let thread_filter = self.thread_filter;
-        let sessions = store
-            .entries()
-            .filter(|t| match thread_filter {
-                ThreadFilter::All => true,
-                ThreadFilter::ArchivedOnly => t.archived,
-            })
-            .sorted_by_cached_key(|t| t.created_at.unwrap_or(t.updated_at))
-            .rev()
-            .cloned()
-            .collect::<Vec<_>>();
+        let sessions =
+            collect_bounded_recent_thread_entries(store.entries().filter(
+                |t| match thread_filter {
+                    ThreadFilter::All => true,
+                    ThreadFilter::ArchivedOnly => t.archived,
+                },
+            ));
 
-        let query = self.filter_editor.read(cx).text(cx).to_lowercase();
+        let query_text = self.filter_editor.read(cx).text(cx);
+        let query = bounded_thread_archive_filter_query(&query_text);
         let today = Local::now().naive_local().date();
 
-        let mut items = Vec::with_capacity(sessions.len() + 5);
+        let mut items = Vec::with_capacity(sessions.len().saturating_add(5));
         let mut current_bucket: Option<TimeBucket> = None;
 
         for session in sessions {
@@ -636,6 +717,7 @@ impl ThreadsArchiveView {
                     .get(&thread.thread_id)
                     .map(|map| {
                         map.iter()
+                            .take(THREAD_ARCHIVE_BRANCH_NAME_LIMIT)
                             .map(|(k, v)| (k.clone(), SharedString::from(v.clone())))
                             .collect()
                     })
@@ -1129,11 +1211,15 @@ impl ProjectPickerModal {
 
         let db = WorkspaceDb::global(cx);
         cx.spawn_in(window, async move |this, cx| {
-            let workspaces = db
-                .recent_project_workspaces(fs.as_ref())
+            let mut workspaces = db
+                .recent_project_workspaces_limited(
+                    fs.as_ref(),
+                    PROJECT_PICKER_DB_WORKSPACE_ROW_LIMIT,
+                )
                 .await
                 .log_err()
                 .unwrap_or_default();
+            workspaces.truncate(PROJECT_PICKER_WORKSPACE_LIMIT);
             this.update_in(cx, move |this, window, cx| {
                 this.picker.update(cx, move |picker, cx| {
                     picker.delegate.workspaces = workspaces;
@@ -1325,7 +1411,8 @@ impl PickerDelegate for ProjectPickerDelegate {
         _window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Task<()> {
-        let query = query.trim_start();
+        let bounded_query = bounded_project_picker_query(query.trim_start());
+        let query = bounded_query.as_str();
         let smart_case = query.chars().any(|c| c.is_uppercase());
         let is_empty_query = query.is_empty();
 
@@ -1334,13 +1421,9 @@ impl PickerDelegate for ProjectPickerDelegate {
             .iter()
             .enumerate()
             .filter(|(_, workspace)| self.is_sibling_workspace(workspace.workspace_id))
+            .take(PROJECT_PICKER_CANDIDATE_LIMIT)
             .map(|(id, workspace)| {
-                let combined_string = workspace
-                    .identity_paths
-                    .ordered_paths()
-                    .map(|path| path.compact().to_string_lossy().into_owned())
-                    .collect::<Vec<_>>()
-                    .join("");
+                let combined_string = project_picker_candidate_string(workspace);
                 StringMatchCandidate::new(id, &combined_string)
             })
             .collect();
@@ -1370,13 +1453,9 @@ impl PickerDelegate for ProjectPickerDelegate {
                 !self.is_current_workspace(workspace.workspace_id)
                     && !self.is_sibling_workspace(workspace.workspace_id)
             })
+            .take(PROJECT_PICKER_CANDIDATE_LIMIT)
             .map(|(id, workspace)| {
-                let combined_string = workspace
-                    .identity_paths
-                    .ordered_paths()
-                    .map(|path| path.compact().to_string_lossy().into_owned())
-                    .collect::<Vec<_>>()
-                    .join("");
+                let combined_string = project_picker_candidate_string(workspace);
                 StringMatchCandidate::new(id, &combined_string)
             })
             .collect();
@@ -1410,15 +1489,19 @@ impl PickerDelegate for ProjectPickerDelegate {
             entries.push(ProjectPickerEntry::Header("This Window".into()));
 
             if is_empty_query {
-                for (id, workspace) in self.workspaces.iter().enumerate() {
-                    if self.is_sibling_workspace(workspace.workspace_id) {
-                        entries.push(ProjectPickerEntry::Workspace(StringMatch {
-                            candidate_id: id,
-                            score: 0.0,
-                            positions: Vec::new(),
-                            string: String::new(),
-                        }));
-                    }
+                for (id, workspace) in self
+                    .workspaces
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, workspace)| self.is_sibling_workspace(workspace.workspace_id))
+                    .take(PROJECT_PICKER_CANDIDATE_LIMIT)
+                {
+                    entries.push(ProjectPickerEntry::Workspace(StringMatch {
+                        candidate_id: id,
+                        score: 0.0,
+                        positions: Vec::new(),
+                        string: String::new(),
+                    }));
                 }
             } else {
                 for m in sibling_matches {
@@ -1437,17 +1520,22 @@ impl PickerDelegate for ProjectPickerDelegate {
             entries.push(ProjectPickerEntry::Header("Recent Projects".into()));
 
             if is_empty_query {
-                for (id, workspace) in self.workspaces.iter().enumerate() {
-                    if !self.is_current_workspace(workspace.workspace_id)
-                        && !self.is_sibling_workspace(workspace.workspace_id)
-                    {
-                        entries.push(ProjectPickerEntry::Workspace(StringMatch {
-                            candidate_id: id,
-                            score: 0.0,
-                            positions: Vec::new(),
-                            string: String::new(),
-                        }));
-                    }
+                for (id, workspace) in self
+                    .workspaces
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, workspace)| {
+                        !self.is_current_workspace(workspace.workspace_id)
+                            && !self.is_sibling_workspace(workspace.workspace_id)
+                    })
+                    .take(PROJECT_PICKER_CANDIDATE_LIMIT)
+                {
+                    entries.push(ProjectPickerEntry::Workspace(StringMatch {
+                        candidate_id: id,
+                        score: 0.0,
+                        positions: Vec::new(),
+                        string: String::new(),
+                    }));
                 }
             } else {
                 for m in recent_matches {
@@ -1514,7 +1602,10 @@ impl PickerDelegate for ProjectPickerDelegate {
                 let ordered_paths: Vec<_> = workspace
                     .identity_paths
                     .ordered_paths()
-                    .map(|p| p.compact().to_string_lossy().to_string())
+                    .take(PROJECT_PICKER_PATH_LABEL_LIMIT)
+                    .map(|p| {
+                        bounded_project_picker_path_text(p.compact().to_string_lossy().as_ref())
+                    })
                     .collect();
 
                 let tooltip_path: SharedString = ordered_paths.join("\n").into();
@@ -1523,10 +1614,11 @@ impl PickerDelegate for ProjectPickerDelegate {
                 let match_labels: Vec<_> = workspace
                     .identity_paths
                     .ordered_paths()
+                    .take(PROJECT_PICKER_PATH_LABEL_LIMIT)
                     .map(|p| p.compact())
                     .map(|path| {
-                        let path_string = path.to_string_lossy();
-                        let path_text = path_string.to_string();
+                        let path_text =
+                            bounded_project_picker_path_text(path.to_string_lossy().as_ref());
                         let path_byte_len = path_text.len();
 
                         let path_positions: Vec<usize> = hit
@@ -1539,8 +1631,10 @@ impl PickerDelegate for ProjectPickerDelegate {
                             .collect();
 
                         let file_name_match = path.file_name().map(|file_name| {
-                            let file_name_text = file_name.to_string_lossy().into_owned();
-                            let file_name_start = path_byte_len - file_name_text.len();
+                            let file_name_text = bounded_project_picker_path_text(
+                                file_name.to_string_lossy().as_ref(),
+                            );
+                            let file_name_start = path_text.rfind(&file_name_text).unwrap_or(0);
                             let highlight_positions: Vec<usize> = path_positions
                                 .iter()
                                 .copied()

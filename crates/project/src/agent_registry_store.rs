@@ -23,6 +23,8 @@ const REFRESH_THROTTLE_DURATION: Duration = Duration::from_secs(60 * 60);
 // HTTP client only has a connect timeout.
 const REGISTRY_FETCH_TIMEOUT: Duration = Duration::from_secs(30);
 const REGISTRY_ICON_FETCH_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_REGISTRY_RESPONSE_BODY_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_REGISTRY_RESPONSE_ERROR_DISPLAY_BYTES: usize = 8 * 1024;
 
 #[derive(Clone, Debug)]
 pub struct RegistryAgentMetadata {
@@ -341,7 +343,7 @@ async fn fetch_registry_index(
             .context("fetching ACP registry")?;
 
     if status.is_client_error() {
-        let text = String::from_utf8_lossy(body.as_slice());
+        let text = format_registry_response_error_body(&body);
         bail!(
             "registry status error {}, response: {text:?}",
             status.as_u16()
@@ -522,7 +524,7 @@ async fn download_icon(
             .with_context(|| format!("fetching icon for {}", entry.id))?;
 
     if status.is_client_error() {
-        let text = String::from_utf8_lossy(body.as_slice());
+        let text = format_registry_response_error_body(&body);
         bail!("icon status error {}, response: {text:?}", status.as_u16());
     }
 
@@ -531,6 +533,20 @@ async fn download_icon(
         .join(format!("{}.svg", entry.id));
     fs.write(&icon_path, &body).await?;
     Ok(())
+}
+
+fn format_registry_response_error_body(body: &[u8]) -> String {
+    let visible_len = body.len().min(MAX_REGISTRY_RESPONSE_ERROR_DISPLAY_BYTES);
+    let visible_body = &body[..visible_len];
+    let mut text = String::from_utf8_lossy(visible_body).into_owned();
+
+    if body.len() > MAX_REGISTRY_RESPONSE_ERROR_DISPLAY_BYTES {
+        text.push_str(&format!(
+            " [truncated] response body exceeded {MAX_REGISTRY_RESPONSE_ERROR_DISPLAY_BYTES} bytes"
+        ));
+    }
+
+    text
 }
 
 async fn fetch_url_body(
@@ -549,9 +565,14 @@ async fn fetch_url_body(
         let mut body = Vec::new();
         response
             .body_mut()
+            .take(MAX_REGISTRY_RESPONSE_BODY_BYTES + 1)
             .read_to_end(&mut body)
             .await
             .with_context(|| format!("reading response from {url}"))?;
+
+        if body.len() as u64 > MAX_REGISTRY_RESPONSE_BODY_BYTES {
+            bail!("response body from {url} exceeded {MAX_REGISTRY_RESPONSE_BODY_BYTES} bytes");
+        }
 
         Ok((status, body))
     }

@@ -67,6 +67,26 @@ const MAX_USER_TOOLCHAIN_JSON_BYTES: usize = 64 * 1024;
 const MAX_REMOTE_ENV_JSON_BYTES: usize = 64 * 1024;
 const MAX_PANE_GROUP_FLEXES_JSON_BYTES: usize = 16 * 1024;
 
+type SerializedRecentWorkspaceRow = (
+    WorkspaceId,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<u64>,
+    Option<String>,
+    String,
+);
+
+type RecentWorkspaceRecord = (
+    WorkspaceId,
+    PathList,
+    Option<PathList>,
+    Option<RemoteConnectionId>,
+    Option<String>,
+    DateTime<Utc>,
+);
+
 fn ensure_persisted_json_within_limit(json: &str, max_bytes: usize, label: &str) -> Result<()> {
     if json.len() > max_bytes {
         bail!(
@@ -1833,21 +1853,10 @@ impl WorkspaceDb {
         }
     }
 
-    fn recent_workspaces(
-        &self,
-    ) -> Result<
-        Vec<(
-            WorkspaceId,
-            PathList,
-            Option<PathList>,
-            Option<RemoteConnectionId>,
-            Option<String>,
-            DateTime<Utc>,
-        )>,
-    > {
-        Ok(self
-            .recent_workspaces_query()?
-            .into_iter()
+    fn deserialize_recent_workspaces(
+        rows: Vec<SerializedRecentWorkspaceRow>,
+    ) -> Vec<RecentWorkspaceRecord> {
+        rows.into_iter()
             .map(
                 |(
                     id,
@@ -1874,7 +1883,19 @@ impl WorkspaceDb {
                     )
                 },
             )
-            .collect())
+            .collect()
+    }
+
+    fn recent_workspaces(&self) -> Result<Vec<RecentWorkspaceRecord>> {
+        Ok(Self::deserialize_recent_workspaces(
+            self.recent_workspaces_query()?,
+        ))
+    }
+
+    fn recent_workspaces_limited(&self, max_rows: usize) -> Result<Vec<RecentWorkspaceRecord>> {
+        Ok(Self::deserialize_recent_workspaces(
+            self.recent_workspaces_limited_query(max_rows.min(i64::MAX as usize) as i64)?,
+        ))
     }
 
     query! {
@@ -1885,6 +1906,18 @@ impl WorkspaceDb {
                 paths IS NOT NULL OR
                 remote_connection_id IS NOT NULL
             ORDER BY timestamp DESC
+        }
+    }
+
+    query! {
+        fn recent_workspaces_limited_query(max_rows: i64) -> Result<Vec<(WorkspaceId, String, String, Option<String>, Option<String>, Option<u64>, Option<String>, String)>> {
+            SELECT workspace_id, paths, paths_order, identity_paths, identity_paths_order, remote_connection_id, session_id, timestamp
+            FROM workspaces
+            WHERE
+                paths IS NOT NULL OR
+                remote_connection_id IS NOT NULL
+            ORDER BY timestamp DESC
+            LIMIT ?1
         }
     }
 
@@ -2066,10 +2099,19 @@ impl WorkspaceDb {
         &self,
         fs: &dyn Fs,
     ) -> Result<Vec<RecentWorkspace>> {
+        self.recent_project_workspaces_ungrouped_from_records(fs, self.recent_workspaces()?)
+            .await
+    }
+
+    async fn recent_project_workspaces_ungrouped_from_records(
+        &self,
+        fs: &dyn Fs,
+        workspaces: Vec<RecentWorkspaceRecord>,
+    ) -> Result<Vec<RecentWorkspace>> {
         let remote_connections = self.remote_connections()?;
         let mut result = Vec::new();
         for (id, paths, identity_paths_hint, remote_connection_id, _session_id, timestamp) in
-            self.recent_workspaces()?
+            workspaces
         {
             if let Some(remote_connection_id) = remote_connection_id {
                 if let Some(connection_options) = remote_connections.get(&remote_connection_id) {
@@ -2104,6 +2146,20 @@ impl WorkspaceDb {
         }
 
         Ok(result)
+    }
+
+    pub async fn recent_project_workspaces_limited(
+        &self,
+        fs: &dyn Fs,
+        max_rows: usize,
+    ) -> Result<Vec<RecentWorkspace>> {
+        Ok(dedupe_recent_workspaces(
+            self.recent_project_workspaces_ungrouped_from_records(
+                fs,
+                self.recent_workspaces_limited(max_rows)?,
+            )
+            .await?,
+        ))
     }
 
     // Returns the recent project workspaces suitable for recent-project UIs.

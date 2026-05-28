@@ -11,6 +11,10 @@ use crate::{
     persistence::WorkspaceDb,
 };
 
+const MAX_HISTORY_ENTRIES: usize = 256;
+const MAX_HISTORY_DB_RECENT_WORKSPACE_ROWS: usize = MAX_HISTORY_ENTRIES * 4;
+const MAX_JUMP_LIST_ENTRIES: usize = 64;
+
 pub fn init(fs: Arc<dyn Fs>, cx: &mut App) {
     let manager = cx.new(|_| HistoryManager::new());
     HistoryManager::set_global(manager.clone(), cx);
@@ -43,12 +47,14 @@ impl HistoryManager {
     fn init(this: Entity<HistoryManager>, fs: Arc<dyn Fs>, cx: &App) {
         let db = WorkspaceDb::global(cx);
         cx.spawn(async move |cx| {
-            let recent_folders = db
-                .recent_project_workspaces(fs.as_ref())
+            let mut recent_folders = db
+                .recent_project_workspaces_limited(
+                    fs.as_ref(),
+                    MAX_HISTORY_DB_RECENT_WORKSPACE_ROWS,
+                )
                 .await
                 .unwrap_or_default()
                 .into_iter()
-                .rev()
                 .filter_map(|workspace| {
                     if matches!(workspace.location, SerializedWorkspaceLocation::Local) {
                         Some(HistoryManagerEntry::new(
@@ -59,7 +65,9 @@ impl HistoryManager {
                         None
                     }
                 })
+                .take(MAX_HISTORY_ENTRIES)
                 .collect::<Vec<_>>();
+            recent_folders.reverse();
             this.update(cx, |this, cx| {
                 this.history = recent_folders;
                 this.update_jump_list(cx);
@@ -87,6 +95,10 @@ impl HistoryManager {
             self.history.remove(pos);
         }
         self.history.push(entry);
+        if self.history.len() > MAX_HISTORY_ENTRIES {
+            let overflow = self.history.len() - MAX_HISTORY_ENTRIES;
+            self.history.drain(..overflow);
+        }
         self.update_jump_list(cx);
     }
 
@@ -104,6 +116,7 @@ impl HistoryManager {
             .history
             .iter()
             .rev()
+            .take(MAX_JUMP_LIST_ENTRIES)
             .map(|entry| entry.path.clone())
             .collect::<Vec<_>>();
         let user_removed = cx.update_jump_list(menus, entries);

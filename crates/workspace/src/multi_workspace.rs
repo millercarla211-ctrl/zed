@@ -27,7 +27,10 @@ use settings::SidebarDockPosition;
 use ui::{ContextMenu, right_click_menu};
 
 const SIDEBAR_RESIZE_HANDLE_SIZE: Pixels = px(6.0);
+const MAX_SPACE_SEED_SCAN_ENTRIES: usize = 128;
 const MAX_SPACE_SEED_CHILDREN: usize = 24;
+const MAX_SIBLING_HOME_SCAN_ENTRIES: usize = 32;
+const MAX_SIBLING_HOME_SEEDS: usize = 8;
 const COMMON_SPACE_FOLDER_NAMES: [&str; 8] = [
     "Desktop",
     "Documents",
@@ -355,6 +358,7 @@ fn collect_space_candidates_from_seed(
         .into_iter()
         .flatten()
         .flatten()
+        .take(MAX_SPACE_SEED_SCAN_ENTRIES)
         .filter_map(|entry| {
             let path = entry.path();
             let file_name = path.file_name()?.to_str()?;
@@ -1575,10 +1579,12 @@ impl MultiWorkspace {
                 .into_iter()
                 .flatten()
                 .flatten()
+                .take(MAX_SIBLING_HOME_SCAN_ENTRIES)
                 .filter_map(|entry| entry.file_type().ok()?.is_dir().then_some(entry.path()))
                 .collect::<Vec<_>>();
             sibling_homes.sort();
-            seeds.extend(sibling_homes.into_iter().take(8));
+            sibling_homes.truncate(MAX_SIBLING_HOME_SEEDS);
+            seeds.extend(sibling_homes);
         }
 
         let mut seen = HashSet::default();

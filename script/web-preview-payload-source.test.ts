@@ -38,7 +38,7 @@ test("Web Preview clipboard payload import caps text before parsing or wrapping"
 
   assert.match(
     webPreview,
-    /const MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES: u64 = 256 \* 1024;/,
+    /const MAX_AGENT_BROWSER_CLIPBOARD_JSON_IMPORT_BYTES: u64 = 256 \* 1024;/,
   );
   assert.match(
     webPreview,
@@ -51,6 +51,23 @@ test("Web Preview clipboard payload import caps text before parsing or wrapping"
   assert.match(
     webPreview,
     /String::with_capacity\(total_len\)/,
+  );
+
+  const clipboardBoundHelper = sliceBetween(
+    webPreview,
+    "fn bounded_agent_browser_clipboard_import_text",
+    "fn read_agent_browser_action_payload_import_file",
+  );
+  assert.doesNotMatch(
+    clipboardBoundHelper,
+    /MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES/,
+    "clipboard JSON imports should use the clipboard-specific byte cap",
+  );
+  assertOrdered(
+    clipboardBoundHelper,
+    "MAX_AGENT_BROWSER_CLIPBOARD_JSON_IMPORT_BYTES",
+    "String::with_capacity(total_len)",
+    "clipboard JSON text should be byte-capped before string materialization",
   );
   assert.doesNotMatch(clipboardImport, /\.text\(\)/);
 

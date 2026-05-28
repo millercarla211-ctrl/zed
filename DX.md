@@ -42,8 +42,11 @@ Current handoff and production-readiness guards:
 - `node --test script/zed-builtin-schema-source.test.ts` - built-in JSON schema render byte-boundary contract.
 - `node --test script/zed-platform-source.test.ts` - app-bundle platform copy failure display boundaries.
 - `node --test script/zed-startup-reliability-source.test.ts` - startup theme/keymap and reliability enumeration boundaries.
+- `node --test script/dx-project-agent-registry-source.test.ts` - ACP registry HTTP response byte and error-display boundaries.
+- `node --test script/dx-agent-server-store-source.test.ts` - agent server discovery and archive-cache enumeration boundaries.
 - `node --test script/dx-workspace-reentrant-source.test.ts` - active-workspace event payload and reentrant update contracts.
 - `node --test script/dx-workspace-persistence-source.test.ts` - workspace persistence KVP and JSON column byte boundaries.
+- `node --test script/dx-workspace-enumeration-source.test.ts` - workspace history and local discovery enumeration boundaries.
 - `node --test script/dx-source-quality.test.ts` - DX Studio source/edit manifest and bridge source contracts.
 - `node --test script/dx-studio-project-source.test.ts` - DX Studio project detection and source-edit bounded file-read contracts.
 - `node --test script/dx-buffer-codegen-source.test.ts` - inline assistant rewrite source-selection byte boundaries.
@@ -56,6 +59,7 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-mention-set-source.test.ts` - external skill mention file bounded reads.
 - `node --test script/dx-message-editor-source.test.ts` - pasted markdown mention-link parsing size boundaries.
 - `node --test script/dx-thread-metadata-source.test.ts` - persisted remote-connection metadata JSON boundaries.
+- `node --test script/dx-thread-archive-source.test.ts` - thread import, archive, and project-picker materialization boundaries.
 
 Deploy and check guards:
 - `node --test script/dx-deploy-panel-source.test.ts`
@@ -99,6 +103,8 @@ Adjacent source guards:
 - Wire DX Agents CLI receipts, social/account readiness, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
+
+- Completed a six-agent network/discovery/history/clipboard/archive boundary hardening pass without `just run` or Cargo. ACP registry HTTP responses now use sentinel-byte body caps and bounded error display text; agent server discovery caps registry, settings, remote-name, and archive-cache scans; workspace random-space discovery plus history/jump-list materialization now caps filesystem and recent-entry growth, with history/project-picker callers using limited recent-workspace DB queries; MessageEditor paste context now limits clipboard entries and external paths before cloning; thread import/archive/project-picker flows cap agent rows, sessions, workspaces, queries, candidates, branch names, and path labels, while worktree archiving now refuses an oversized linked-thread set instead of reporting success after a partial link; Web Preview clipboard JSON imports now use a dedicated named cap before string materialization and JSON parsing. Added `script/dx-project-agent-registry-source.test.ts`, `script/dx-agent-server-store-source.test.ts`, `script/dx-workspace-enumeration-source.test.ts`, and `script/dx-thread-archive-source.test.ts`, extended the MessageEditor and Web Preview guards, and registered the new guards. Passed source-only integration: 29/29 targeted Node source subtests, targeted rustfmt checks, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 
 - Completed a six-agent persistence/input/enumeration boundary hardening pass without `just run` or Cargo, plus parent integration fixes for pre-clone AgentPanel text checks, the remaining startup scans in `main.rs`, source-guard registry existence checks, and remote minidump metadata caps. Workspace KVP/DB JSON, Agent configuration modal input, AgentPanel editor text/draft materialization, Web Preview local extension/profile discovery, DX receipt directory/latest-candidate scans, Zed theme/keymap startup paths, hang/minidump/build-timing reliability scans, remote crash metadata parsing, and debug language watcher registration now have explicit byte or entry caps before parse, clone, serialization, upload, or watch registration. Added `script/dx-workspace-persistence-source.test.ts`, `script/dx-agent-configuration-modal-source.test.ts`, `script/dx-agent-panel-input-source.test.ts`, `script/dx-receipt-directory-source.test.ts`, and `script/zed-startup-reliability-source.test.ts`, extended adjacent Web Preview, receipt-history, and Windows reliability guards, and registered the new guards. Passed source-only integration: 53/53 targeted Node source subtests, targeted rustfmt checks, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 

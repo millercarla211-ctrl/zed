@@ -70,6 +70,7 @@ const DEFAULT_WEB_PREVIEW_URL: &str = "https://www.google.com/";
 const GOOGLE_SEARCH_URL: &str = "https://www.google.com/search";
 const BOOKMARKS_FILE_NAME: &str = "bookmarks.json";
 const MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES: u64 = 256 * 1024;
+const MAX_AGENT_BROWSER_CLIPBOARD_JSON_IMPORT_BYTES: u64 = 256 * 1024;
 const MAX_WEB_PREVIEW_IPC_MESSAGE_BYTES: usize = 1024 * 1024;
 const MAX_DEFERRED_WEB_PREVIEW_IPC_MESSAGES: usize = 256;
 const MAX_WEB_PREVIEW_JSON_PAYLOAD_BYTES: u64 = 16 * 1024 * 1024;
@@ -21742,9 +21743,9 @@ impl WebPreviewView {
 
     fn bounded_agent_browser_import_text(text: String) -> Result<String, u64> {
         if u64::try_from(text.len()).unwrap_or(u64::MAX)
-            > MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES
+            > MAX_AGENT_BROWSER_CLIPBOARD_JSON_IMPORT_BYTES
         {
-            Err(MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES)
+            Err(MAX_AGENT_BROWSER_CLIPBOARD_JSON_IMPORT_BYTES)
         } else {
             Ok(text)
         }
@@ -21761,11 +21762,11 @@ impl WebPreviewView {
                 has_string = true;
                 total_len = total_len
                     .checked_add(text.text().len())
-                    .ok_or(MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES)?;
+                    .ok_or(MAX_AGENT_BROWSER_CLIPBOARD_JSON_IMPORT_BYTES)?;
                 if u64::try_from(total_len).unwrap_or(u64::MAX)
-                    > MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES
+                    > MAX_AGENT_BROWSER_CLIPBOARD_JSON_IMPORT_BYTES
                 {
-                    return Err(MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES);
+                    return Err(MAX_AGENT_BROWSER_CLIPBOARD_JSON_IMPORT_BYTES);
                 }
             }
         }
@@ -21788,9 +21789,9 @@ impl WebPreviewView {
 
                     _ = write!(text, "{}", path.display());
                     if u64::try_from(text.len()).unwrap_or(u64::MAX)
-                        > MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES
+                        > MAX_AGENT_BROWSER_CLIPBOARD_JSON_IMPORT_BYTES
                     {
-                        return Err(MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES);
+                        return Err(MAX_AGENT_BROWSER_CLIPBOARD_JSON_IMPORT_BYTES);
                     }
                 }
             }
