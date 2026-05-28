@@ -27,6 +27,13 @@ use crate::ui::{
 
 pub type ModelSelector = Picker<ModelPickerDelegate>;
 
+const MAX_MODEL_SELECTOR_MODELS: usize = 4096;
+const MAX_MODEL_SELECTOR_GROUPS: usize = 128;
+const MAX_MODEL_SELECTOR_MODELS_PER_GROUP: usize = 512;
+const MAX_MODEL_SELECTOR_PICKER_ENTRIES: usize = 10_000;
+const MAX_MODEL_SELECTOR_FUZZY_CANDIDATES: usize = 4096;
+const MAX_MODEL_SELECTOR_FUZZY_MATCHES: usize = 100;
+
 pub fn acp_model_selector(
     selector: Rc<dyn AgentModelSelector>,
     agent_server: Rc<dyn AgentServer>,
@@ -153,10 +160,7 @@ impl ModelPickerDelegate {
             return;
         };
 
-        let all_models: Vec<&AgentModelInfo> = match models {
-            AgentModelList::Flat(list) => list.iter().collect(),
-            AgentModelList::Grouped(index_map) => index_map.values().flatten().collect(),
-        };
+        let all_models = capped_model_refs(models);
 
         let favorite_models: Vec<_> = all_models
             .into_iter()
@@ -199,6 +203,18 @@ impl ModelPickerDelegate {
         } else {
             cx.notify();
         }
+    }
+}
+
+fn capped_model_refs(model_list: &AgentModelList) -> Vec<&AgentModelInfo> {
+    match model_list {
+        AgentModelList::Flat(list) => list.iter().take(MAX_MODEL_SELECTOR_MODELS).collect(),
+        AgentModelList::Grouped(index_map) => index_map
+            .values()
+            .take(MAX_MODEL_SELECTOR_GROUPS)
+            .flat_map(|models| models.iter().take(MAX_MODEL_SELECTOR_MODELS_PER_GROUP))
+            .take(MAX_MODEL_SELECTOR_MODELS)
+            .collect(),
     }
 }
 
@@ -408,10 +424,16 @@ fn info_list_to_picker_entries(
 ) -> Vec<ModelPickerEntry> {
     let mut entries = Vec::new();
 
-    let all_models: Vec<_> = match &model_list {
-        AgentModelList::Flat(list) => list.iter().collect(),
-        AgentModelList::Grouped(index_map) => index_map.values().flatten().collect(),
-    };
+    fn push_picker_entry(entries: &mut Vec<ModelPickerEntry>, entry: ModelPickerEntry) -> bool {
+        if entries.len() >= MAX_MODEL_SELECTOR_PICKER_ENTRIES {
+            return false;
+        }
+
+        entries.push(entry);
+        true
+    }
+
+    let all_models = capped_model_refs(&model_list);
 
     let favorite_models: Vec<_> = all_models
         .iter()
@@ -421,28 +443,55 @@ fn info_list_to_picker_entries(
 
     let has_favorites = !favorite_models.is_empty();
     if has_favorites {
-        entries.push(ModelPickerEntry::Separator("Favorite".into()));
+        if !push_picker_entry(&mut entries, ModelPickerEntry::Separator("Favorite".into())) {
+            return entries;
+        }
         for model in favorite_models {
-            entries.push(ModelPickerEntry::Model((*model).clone(), true));
+            if !push_picker_entry(
+                &mut entries,
+                ModelPickerEntry::Model((*model).clone(), true),
+            ) {
+                return entries;
+            }
         }
     }
 
     match model_list {
         AgentModelList::Flat(list) => {
             if has_favorites {
-                entries.push(ModelPickerEntry::Separator("All".into()));
+                if !push_picker_entry(&mut entries, ModelPickerEntry::Separator("All".into())) {
+                    return entries;
+                }
             }
-            for model in list {
+            for model in list.into_iter().take(MAX_MODEL_SELECTOR_MODELS) {
                 let is_favorite = favorites.contains(&model.id);
-                entries.push(ModelPickerEntry::Model(model, is_favorite));
+                if !push_picker_entry(&mut entries, ModelPickerEntry::Model(model, is_favorite)) {
+                    return entries;
+                }
             }
         }
         AgentModelList::Grouped(index_map) => {
-            for (group_name, models) in index_map {
-                entries.push(ModelPickerEntry::Separator(group_name.0));
-                for model in models {
+            let mut rendered_models = 0;
+            for (group_name, models) in index_map.into_iter().take(MAX_MODEL_SELECTOR_GROUPS) {
+                if rendered_models >= MAX_MODEL_SELECTOR_MODELS {
+                    break;
+                }
+
+                if !push_picker_entry(&mut entries, ModelPickerEntry::Separator(group_name.0)) {
+                    return entries;
+                }
+
+                for model in models.into_iter().take(MAX_MODEL_SELECTOR_MODELS_PER_GROUP) {
+                    if rendered_models >= MAX_MODEL_SELECTOR_MODELS {
+                        break;
+                    }
+
                     let is_favorite = favorites.contains(&model.id);
-                    entries.push(ModelPickerEntry::Model(model, is_favorite));
+                    if !push_picker_entry(&mut entries, ModelPickerEntry::Model(model, is_favorite))
+                    {
+                        return entries;
+                    }
+                    rendered_models += 1;
                 }
             }
         }
@@ -461,6 +510,10 @@ async fn fuzzy_search(
         query: &str,
         executor: BackgroundExecutor,
     ) -> Vec<AgentModelInfo> {
+        let model_list = model_list
+            .into_iter()
+            .take(MAX_MODEL_SELECTOR_FUZZY_CANDIDATES)
+            .collect::<Vec<_>>();
         let candidates = model_list
             .iter()
             .enumerate()
@@ -471,7 +524,7 @@ async fn fuzzy_search(
             query,
             false,
             true,
-            100,
+            MAX_MODEL_SELECTOR_FUZZY_MATCHES,
             &Default::default(),
             executor,
         )
@@ -493,12 +546,15 @@ async fn fuzzy_search(
             AgentModelList::Flat(fuzzy_search_list(model_list, &query, executor).await)
         }
         AgentModelList::Grouped(index_map) => {
-            let groups =
-                futures::future::join_all(index_map.into_iter().map(|(group_name, models)| {
-                    fuzzy_search_list(models, &query, executor.clone())
-                        .map(|results| (group_name, results))
-                }))
-                .await;
+            let groups = futures::future::join_all(
+                index_map.into_iter().take(MAX_MODEL_SELECTOR_GROUPS).map(
+                    |(group_name, models)| {
+                        fuzzy_search_list(models, &query, executor.clone())
+                            .map(|results| (group_name, results))
+                    },
+                ),
+            )
+            .await;
             AgentModelList::Grouped(IndexMap::from_iter(
                 groups
                     .into_iter()

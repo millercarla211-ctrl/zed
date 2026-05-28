@@ -32,6 +32,19 @@ use workspace::PathList;
 use workspace::item::ItemHandle;
 use workspace::{AppState, MultiWorkspace, OpenOptions, OpenResult, SerializedWorkspaceLocation};
 
+const MAX_OPEN_REQUEST_URLS: usize = 1024;
+const MAX_OPEN_REQUEST_PATHS: usize = 4096;
+const MAX_OPEN_REQUEST_DIFF_PAIRS: usize = 2048;
+const MAX_OPEN_REQUEST_PATH_BYTES: usize = 16 * 1024;
+const MAX_OPEN_REQUEST_URL_BYTES: usize = 128 * 1024;
+const MAX_OPEN_REQUEST_TOTAL_PATH_BYTES: usize = 16 * 1024 * 1024;
+const MAX_OPEN_REQUEST_TOTAL_URL_BYTES: usize = 16 * 1024 * 1024;
+const MAX_OPEN_BEHAVIOR_PATHBUFS: usize = MAX_OPEN_REQUEST_PATHS;
+const MAX_OPEN_BEHAVIOR_IS_DIR_FANOUT: usize = MAX_OPEN_REQUEST_PATHS;
+const MAX_OPEN_REQUEST_MATERIALIZED_ITEMS: usize =
+    MAX_OPEN_REQUEST_PATHS + MAX_OPEN_REQUEST_DIFF_PAIRS + 1;
+const MAX_OPEN_REQUEST_ITEM_RELEASE_WAITS: usize = MAX_OPEN_REQUEST_MATERIALIZED_ITEMS;
+
 #[derive(Default, Debug)]
 pub struct OpenRequest {
     pub kind: Option<OpenRequestKind>,
@@ -132,12 +145,23 @@ impl OpenRequest {
 
     pub fn parse(request: RawOpenRequest, cx: &App) -> Result<Self> {
         let mut this = Self::default();
+        let RawOpenRequest {
+            urls,
+            diff_paths,
+            diff_all,
+            dev_container,
+            wsl,
+            open_behavior,
+        } = request;
 
-        this.diff_paths = request.diff_paths;
-        this.diff_all = request.diff_all;
-        this.dev_container = request.dev_container;
-        this.open_behavior = request.open_behavior;
-        if let Some(wsl) = request.wsl {
+        validate_open_request_urls(&urls)?;
+        validate_open_request_diff_paths(&diff_paths)?;
+
+        this.diff_paths = diff_paths;
+        this.diff_all = diff_all;
+        this.dev_container = dev_container;
+        this.open_behavior = open_behavior;
+        if let Some(wsl) = wsl {
             let (user, distro_name) = if let Some((user, distro)) = wsl.split_once('@') {
                 if user.is_empty() {
                     anyhow::bail!("user is empty in wsl argument");
@@ -152,7 +176,7 @@ impl OpenRequest {
             }));
         }
 
-        for url in request.urls {
+        for url in urls {
             if let Some(server_name) = url.strip_prefix("zed-cli://") {
                 this.kind = Some(OpenRequestKind::CliConnection(connect_to_cli(server_name)?));
             } else if let Some(action_index) = url.strip_prefix("zed-dock-action://") {
@@ -160,9 +184,9 @@ impl OpenRequest {
                     index: action_index.parse()?,
                 });
             } else if let Some(file) = url.strip_prefix("file://") {
-                this.parse_file_path(file)
+                this.parse_file_path(file)?
             } else if let Some(file) = url.strip_prefix("zed://file") {
-                this.parse_file_path(file)
+                this.parse_file_path(file)?
             } else if let Some(file) = url.strip_prefix("zed://ssh") {
                 let ssh_url = "ssh:/".to_string() + file;
                 this.parse_ssh_file_path(&ssh_url, cx)?
@@ -218,10 +242,26 @@ impl OpenRequest {
         Ok(this)
     }
 
-    fn parse_file_path(&mut self, file: &str) {
+    fn parse_file_path(&mut self, file: &str) -> Result<()> {
         if let Some(decoded) = urlencoding::decode(file).log_err() {
-            self.open_paths.push(decoded.into_owned())
+            self.push_open_path(decoded.into_owned())?;
         }
+        Ok(())
+    }
+
+    fn push_open_path(&mut self, path: String) -> Result<()> {
+        anyhow::ensure!(
+            self.open_paths.len() < MAX_OPEN_REQUEST_PATHS,
+            "open request contains more than {MAX_OPEN_REQUEST_PATHS} paths"
+        );
+        anyhow::ensure!(
+            path.len() <= MAX_OPEN_REQUEST_PATH_BYTES,
+            "open request path is {} bytes, exceeding the {} byte limit",
+            path.len(),
+            MAX_OPEN_REQUEST_PATH_BYTES
+        );
+        self.open_paths.push(path);
+        Ok(())
     }
 
     fn parse_agent_url(&mut self, agent_path: &str) {
@@ -270,7 +310,7 @@ impl OpenRequest {
             .context("invalid git commit url: missing repo query parameter")?
             .to_string();
 
-        self.open_paths.push(repo);
+        self.push_open_path(repo)?;
 
         self.kind = Some(OpenRequestKind::GitCommit {
             sha: sha.to_string(),
@@ -313,9 +353,116 @@ impl OpenRequest {
             );
         }
         self.remote_connection = Some(connection_options);
-        self.parse_file_path(url.path());
+        self.parse_file_path(url.path())?;
         Ok(())
     }
+}
+
+fn validate_open_request_urls(urls: &[String]) -> Result<()> {
+    anyhow::ensure!(
+        urls.len() <= MAX_OPEN_REQUEST_URLS,
+        "open request contains {} urls, exceeding the {} url limit",
+        urls.len(),
+        MAX_OPEN_REQUEST_URLS
+    );
+
+    let mut total_bytes = 0usize;
+    for (index, url) in urls.iter().enumerate() {
+        let bytes = url.len();
+        anyhow::ensure!(
+            bytes <= MAX_OPEN_REQUEST_URL_BYTES,
+            "open request url {index} is {bytes} bytes, exceeding the {MAX_OPEN_REQUEST_URL_BYTES} byte limit"
+        );
+        total_bytes = total_bytes.saturating_add(bytes);
+        anyhow::ensure!(
+            total_bytes <= MAX_OPEN_REQUEST_TOTAL_URL_BYTES,
+            "open request urls total {total_bytes} bytes, exceeding the {MAX_OPEN_REQUEST_TOTAL_URL_BYTES} byte limit"
+        );
+    }
+
+    Ok(())
+}
+
+fn validate_open_request_paths(paths: &[String]) -> Result<()> {
+    anyhow::ensure!(
+        paths.len() <= MAX_OPEN_REQUEST_PATHS,
+        "open request contains {} paths, exceeding the {} path limit",
+        paths.len(),
+        MAX_OPEN_REQUEST_PATHS
+    );
+
+    let mut total_bytes = 0usize;
+    for (index, path) in paths.iter().enumerate() {
+        let bytes = path.len();
+        anyhow::ensure!(
+            bytes <= MAX_OPEN_REQUEST_PATH_BYTES,
+            "open request path {index} is {bytes} bytes, exceeding the {MAX_OPEN_REQUEST_PATH_BYTES} byte limit"
+        );
+        total_bytes = total_bytes.saturating_add(bytes);
+        anyhow::ensure!(
+            total_bytes <= MAX_OPEN_REQUEST_TOTAL_PATH_BYTES,
+            "open request paths total {total_bytes} bytes, exceeding the {MAX_OPEN_REQUEST_TOTAL_PATH_BYTES} byte limit"
+        );
+    }
+
+    Ok(())
+}
+
+fn validate_open_request_diff_paths(diff_paths: &[[String; 2]]) -> Result<()> {
+    anyhow::ensure!(
+        diff_paths.len() <= MAX_OPEN_REQUEST_DIFF_PAIRS,
+        "open request contains {} diff pairs, exceeding the {} diff pair limit",
+        diff_paths.len(),
+        MAX_OPEN_REQUEST_DIFF_PAIRS
+    );
+
+    let mut total_bytes = 0usize;
+    for (pair_index, diff_pair) in diff_paths.iter().enumerate() {
+        for (side_index, path) in diff_pair.iter().enumerate() {
+            let bytes = path.len();
+            anyhow::ensure!(
+                bytes <= MAX_OPEN_REQUEST_PATH_BYTES,
+                "open request diff path {pair_index}:{side_index} is {bytes} bytes, exceeding the {MAX_OPEN_REQUEST_PATH_BYTES} byte limit"
+            );
+            total_bytes = total_bytes.saturating_add(bytes);
+            anyhow::ensure!(
+                total_bytes <= MAX_OPEN_REQUEST_TOTAL_PATH_BYTES,
+                "open request diff paths total {total_bytes} bytes, exceeding the {MAX_OPEN_REQUEST_TOTAL_PATH_BYTES} byte limit"
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_open_request_materialization(
+    paths: &[String],
+    diff_paths: &[[String; 2]],
+) -> Result<()> {
+    validate_open_request_paths(paths)?;
+    validate_open_request_diff_paths(diff_paths)?;
+    Ok(())
+}
+
+fn validate_path_position_materialization(path_positions: &[PathWithPosition]) -> Result<()> {
+    anyhow::ensure!(
+        path_positions.len() <= MAX_OPEN_REQUEST_PATHS,
+        "open request materialized {} paths, exceeding the {} path limit",
+        path_positions.len(),
+        MAX_OPEN_REQUEST_PATHS
+    );
+    Ok(())
+}
+
+fn push_item_release_future(
+    item_release_futures: &mut Vec<oneshot::Receiver<()>>,
+    release_rx: oneshot::Receiver<()>,
+) -> bool {
+    if item_release_futures.len() >= MAX_OPEN_REQUEST_ITEM_RELEASE_WAITS {
+        return false;
+    }
+    item_release_futures.push(release_rx);
+    true
 }
 
 fn parse_ssh_url(url: &str) -> Result<url::Url> {
@@ -470,6 +617,9 @@ pub async fn open_paths_with_positions(
     WindowHandle<MultiWorkspace>,
     Vec<Option<Result<Box<dyn ItemHandle>>>>,
 )> {
+    validate_path_position_materialization(path_positions)?;
+    validate_open_request_diff_paths(diff_paths)?;
+
     let paths = path_positions
         .iter()
         .map(|path_with_position| path_with_position.path.clone())
@@ -535,6 +685,7 @@ pub async fn open_paths_with_positions(
 
     let items_for_navigation = items
         .iter()
+        .take(MAX_OPEN_REQUEST_MATERIALIZED_ITEMS)
         .map(|item| item.as_ref().and_then(|r| r.as_ref().ok()).cloned())
         .collect::<Vec<_>>();
     navigate_to_positions(&multi_workspace, items_for_navigation, path_positions, cx);
@@ -593,6 +744,16 @@ pub async fn handle_cli_connection(
                             }
                         };
                     });
+                    return;
+                }
+
+                if let Err(error) = validate_open_request_materialization(&paths, &diff_paths) {
+                    responses
+                        .send(CliResponse::Stderr {
+                            message: format!("{error:#}"),
+                        })
+                        .log_err();
+                    responses.send(CliResponse::Exit { status: 1 }).log_err();
                     return;
                 }
 
@@ -669,7 +830,11 @@ async fn resolve_open_behavior(
     }
 
     if !paths.is_empty() {
-        let paths_as_pathbufs: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
+        let paths_as_pathbufs: Vec<PathBuf> = paths
+            .iter()
+            .take(MAX_OPEN_BEHAVIOR_PATHBUFS)
+            .map(PathBuf::from)
+            .collect();
         let paths_in_existing_workspace = cx.update(|cx| {
             for window in cx.windows() {
                 if let Some(multi_workspace) = window.downcast::<MultiWorkspace>() {
@@ -695,11 +860,15 @@ async fn resolve_open_behavior(
     }
 
     if !paths.is_empty() {
-        let has_directory =
-            futures::future::join_all(paths.iter().map(|p| app_state.fs.is_dir(Path::new(p))))
-                .await
-                .into_iter()
-                .any(|is_dir| is_dir);
+        let has_directory = futures::future::join_all(
+            paths
+                .iter()
+                .take(MAX_OPEN_BEHAVIOR_IS_DIR_FANOUT)
+                .map(|p| app_state.fs.is_dir(Path::new(p))),
+        )
+        .await
+        .into_iter()
+        .any(|is_dir| is_dir);
 
         if !has_directory {
             return None;
@@ -798,6 +967,8 @@ async fn open_workspaces(
     cwd: Option<PathBuf>,
     cx: &mut AsyncApp,
 ) -> Result<()> {
+    validate_open_request_materialization(&paths, &diff_paths)?;
+
     if paths.is_empty() && diff_paths.is_empty() && open_behavior != cli::OpenBehavior::AlwaysNew {
         return restore_or_create_workspace(app_state, cx).await;
     }
@@ -923,6 +1094,15 @@ async fn open_local_workspace(
         workspace_paths.push(cwd.to_string_lossy().to_string());
     }
 
+    if let Err(error) = validate_open_request_materialization(&workspace_paths, &diff_paths) {
+        responses
+            .send(CliResponse::Stderr {
+                message: format!("{error:#}"),
+            })
+            .log_err();
+        return true;
+    }
+
     let paths_with_position =
         derive_paths_with_position(app_state.fs.as_ref(), workspace_paths).await;
 
@@ -971,12 +1151,17 @@ async fn open_local_workspace(
 
         if wait_for_window_close {
             let (release_tx, release_rx) = oneshot::channel();
-            item_release_futures.push(release_rx);
-            subscriptions.push(workspace.update(cx, |_, _, cx| {
-                cx.on_release(move |_, _| {
-                    let _ = release_tx.send(());
-                })
-            }));
+            if push_item_release_future(&mut item_release_futures, release_rx) {
+                subscriptions.push(workspace.update(cx, |_, _, cx| {
+                    cx.on_release(move |_, _| {
+                        let _ = release_tx.send(());
+                    })
+                }));
+            } else {
+                log::warn!(
+                    "open request exceeded item release wait cap; continuing without waiting for workspace release"
+                );
+            }
         }
     }
 
@@ -985,15 +1170,20 @@ async fn open_local_workspace(
             Some(Ok(item)) => {
                 if open_options.wait {
                     let (release_tx, release_rx) = oneshot::channel();
-                    item_release_futures.push(release_rx);
-                    subscriptions.push(Ok(cx.update(|cx| {
-                        item.on_release(
-                            cx,
-                            Box::new(move |_| {
-                                release_tx.send(()).ok();
-                            }),
-                        )
-                    })));
+                    if push_item_release_future(&mut item_release_futures, release_rx) {
+                        subscriptions.push(Ok(cx.update(|cx| {
+                            item.on_release(
+                                cx,
+                                Box::new(move |_| {
+                                    release_tx.send(()).ok();
+                                }),
+                            )
+                        })));
+                    } else {
+                        log::warn!(
+                            "open request exceeded item release wait cap; continuing without waiting for item release"
+                        );
+                    }
                 }
             }
             Some(Err(err)) => {
@@ -1040,11 +1230,22 @@ pub async fn derive_paths_with_position(
     fs: &dyn Fs,
     path_strings: impl IntoIterator<Item = impl AsRef<str>>,
 ) -> Vec<PathWithPosition> {
-    let path_strings: Vec<_> = path_strings.into_iter().collect();
-    let mut result = Vec::with_capacity(path_strings.len());
-    for path_str in path_strings {
-        let original_path = Path::new(path_str.as_ref());
-        let mut parsed = PathWithPosition::parse_str(path_str.as_ref());
+    let path_strings = path_strings.into_iter();
+    let (lower_bound, upper_bound) = path_strings.size_hint();
+    let capacity = upper_bound
+        .unwrap_or(lower_bound)
+        .min(MAX_OPEN_REQUEST_PATHS);
+    let mut result = Vec::with_capacity(capacity);
+    for path_str in path_strings.take(MAX_OPEN_REQUEST_PATHS) {
+        let path_str = path_str.as_ref();
+        if path_str.len() > MAX_OPEN_REQUEST_PATH_BYTES {
+            log::warn!(
+                "skipping open request path over {MAX_OPEN_REQUEST_PATH_BYTES} bytes during path derivation"
+            );
+            continue;
+        }
+        let original_path = Path::new(path_str);
+        let mut parsed = PathWithPosition::parse_str(path_str);
 
         // If the unparsed path string actually points to a file, use that file instead of parsing out the line/col number.
         // Note: The colon syntax is also used to open NTFS alternate data streams (e.g., `file.txt:stream`), which would cause issues.

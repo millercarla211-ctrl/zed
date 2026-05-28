@@ -3,7 +3,7 @@ use std::ops::Range;
 use acp_thread::{AcpThread, AgentThreadEntry};
 use agent::ThreadStore;
 use agent_client_protocol::schema as acp;
-use collections::HashMap;
+use collections::{HashMap, HashSet};
 use editor::{Editor, EditorEvent, EditorMode, MinimapVisibility, SizingBehavior};
 use gpui::{
     AnyEntity, App, AppContext as _, Entity, EntityId, EventEmitter, FocusHandle, Focusable,
@@ -20,6 +20,9 @@ use ui::{Context, TextSize};
 use workspace::Workspace;
 
 use crate::message_editor::{MessageEditor, MessageEditorEvent, SharedSessionCapabilities};
+
+const MAX_ENTRY_VIEW_TOOL_CALL_TERMINALS: usize = 64;
+const MAX_ENTRY_VIEW_TOOL_CALL_DIFFS: usize = 128;
 
 pub struct EntryViewState {
     workspace: WeakEntity<Workspace>,
@@ -115,8 +118,16 @@ impl EntryViewState {
             }
             AgentThreadEntry::ToolCall(tool_call) => {
                 let id = tool_call.id.clone();
-                let terminals = tool_call.terminals().cloned().collect::<Vec<_>>();
-                let diffs = tool_call.diffs().cloned().collect::<Vec<_>>();
+                let terminals = tool_call
+                    .terminals()
+                    .take(MAX_ENTRY_VIEW_TOOL_CALL_TERMINALS)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let diffs = tool_call
+                    .diffs()
+                    .take(MAX_ENTRY_VIEW_TOOL_CALL_DIFFS)
+                    .cloned()
+                    .collect::<Vec<_>>();
 
                 let views = if let Some(Entry::ToolCall(tool_call)) = self.entries.get_mut(index) {
                     &mut tool_call.content
@@ -133,6 +144,13 @@ impl EntryViewState {
                     };
                     &mut tool_call.content
                 };
+
+                let displayed_content_ids = terminals
+                    .iter()
+                    .chain(diffs.iter())
+                    .map(|entity| entity.entity_id())
+                    .collect::<HashSet<_>>();
+                views.retain(|entity_id, _| displayed_content_ids.contains(entity_id));
 
                 let is_tool_call_completed =
                     matches!(tool_call.status, acp_thread::ToolCallStatus::Completed);

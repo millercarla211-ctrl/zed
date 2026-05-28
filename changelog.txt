@@ -1,3 +1,31 @@
+[2026-05-28] - Picker Open Listener Context Server Worktree And Entry Boundary Hardening
+
+ADDED:
+- Added `script\dx-language-model-selector-source.test.ts` for language model picker provider/model/result materialization boundaries.
+- Added `script\dx-model-selector-source.test.ts` for agent model selector grouped/fuzzy materialization boundaries.
+- Added `script\zed-open-listener-source.test.ts` for open-listener URL/path/diff/item fanout boundaries.
+- Added `script\dx-context-server-store-source.test.ts` for context-server configuration, command, URL, OAuth, and client-secret boundaries.
+- Added `script\dx-worktree-event-source.test.ts` for worktree filesystem event, metadata fanout, and changed-path boundaries.
+- Added `script\dx-entry-view-state-source.test.ts` for agent entry-view tool-call display materialization boundaries.
+
+CHANGED:
+- Language model and agent model selectors now cap provider/model/group/favorite/fuzzy/render lists before candidate, result, and picker-row materialization.
+- Open-listener request handling now validates URL, path, and diff counts/bytes before request storage, default-open inspection, workspace opening, path derivation, diff vector materialization, navigation rows, and item-release waits.
+- Context server store now caps configured settings, server IDs, enabled-server fanout, command args/env fields, URLs, OAuth session JSON, and client secrets before command/keychain materialization, while preserving rejected configuration as visible error status.
+- Worktree event processing now drains filesystem events in bounded chunks, logs before root-rescan fallback on pathological event/symlink fanout, chunks metadata fanout, and caps changed-path tracking.
+- Entry-view tool-call rendering now caps terminal and diff rows before cloning display state and prunes cached views to the capped IDs.
+- `DX.md` and the source-guard registry now list the new guards.
+
+PASSED:
+- Worker-reported source lane checks for the six new guards and targeted rustfmt checks.
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-language-model-selector-source.test.ts script\dx-model-selector-source.test.ts script\zed-open-listener-source.test.ts script\dx-context-server-store-source.test.ts script\dx-worktree-event-source.test.ts script\dx-entry-view-state-source.test.ts` (25/25 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on all edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Registry Completion Search Task And LSP Boundary Hardening
 
 ADDED:

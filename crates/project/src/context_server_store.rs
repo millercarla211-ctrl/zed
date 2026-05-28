@@ -34,6 +34,203 @@ use crate::{
 /// Maximum timeout for context server requests
 /// Prevents extremely large timeout values from tying up resources indefinitely.
 const MAX_TIMEOUT_SECS: u64 = 600; // 10 minutes
+const MAX_CONTEXT_SERVER_CONFIGURED_ENTRIES: usize = 512;
+const MAX_CONTEXT_SERVER_ENABLED_FANOUT: usize = 512;
+const MAX_CONTEXT_SERVER_ID_COLLECTION_ENTRIES: usize = 1024;
+const MAX_CONTEXT_SERVER_REMOTE_COMMAND_ARGS: usize = 256;
+const MAX_CONTEXT_SERVER_REMOTE_COMMAND_ENV_VARS: usize = 256;
+const MAX_CONTEXT_SERVER_COMMAND_FIELD_BYTES: usize = 16 * 1024;
+const MAX_CONTEXT_SERVER_URL_BYTES: usize = 16 * 1024;
+const MAX_CONTEXT_SERVER_URL_PATH_SEGMENTS: usize = 128;
+const MAX_CONTEXT_SERVER_OAUTH_SESSION_BYTES: usize = 64 * 1024;
+const MAX_CONTEXT_SERVER_CLIENT_SECRET_BYTES: usize = 16 * 1024;
+
+fn bounded_context_server_settings(
+    settings: &HashMap<Arc<str>, ContextServerSettings>,
+) -> HashMap<Arc<str>, ContextServerSettings> {
+    if settings.len() > MAX_CONTEXT_SERVER_CONFIGURED_ENTRIES {
+        log::warn!(
+            "context server settings define {} entries; only the first {} are loaded",
+            settings.len(),
+            MAX_CONTEXT_SERVER_CONFIGURED_ENTRIES
+        );
+    }
+
+    settings
+        .iter()
+        .take(MAX_CONTEXT_SERVER_CONFIGURED_ENTRIES)
+        .map(|(id, settings)| (id.clone(), settings.clone()))
+        .collect()
+}
+
+fn ensure_context_server_value_within_limit(value: &str, label: &str) -> Result<()> {
+    if value.len() > MAX_CONTEXT_SERVER_COMMAND_FIELD_BYTES {
+        anyhow::bail!(
+            "{label} is too large ({} bytes; max {} bytes)",
+            value.len(),
+            MAX_CONTEXT_SERVER_COMMAND_FIELD_BYTES
+        );
+    }
+
+    Ok(())
+}
+
+fn bounded_context_server_string(value: String, label: &str) -> Result<String> {
+    ensure_context_server_value_within_limit(&value, label)?;
+    Ok(value)
+}
+
+fn ensure_context_server_path_within_limit(path: &Path, label: &str) -> Result<()> {
+    ensure_context_server_value_within_limit(&path.display().to_string(), label)
+}
+
+fn bounded_context_server_args(args: Vec<String>, label: &str) -> Result<Vec<String>> {
+    let mut bounded_args = Vec::new();
+    for (index, arg) in args.into_iter().enumerate() {
+        if index >= MAX_CONTEXT_SERVER_REMOTE_COMMAND_ARGS {
+            anyhow::bail!(
+                "{label} defines more than {} arguments",
+                MAX_CONTEXT_SERVER_REMOTE_COMMAND_ARGS
+            );
+        }
+
+        bounded_args.push(bounded_context_server_string(arg, label)?);
+    }
+
+    Ok(bounded_args)
+}
+
+fn bounded_context_server_env_entries<I>(env: I, label: &str) -> Result<Vec<(String, String)>>
+where
+    I: IntoIterator<Item = (String, String)>,
+{
+    let mut bounded_env = Vec::new();
+    for (index, (key, value)) in env.into_iter().enumerate() {
+        if index >= MAX_CONTEXT_SERVER_REMOTE_COMMAND_ENV_VARS {
+            anyhow::bail!(
+                "{label} defines more than {} environment variables",
+                MAX_CONTEXT_SERVER_REMOTE_COMMAND_ENV_VARS
+            );
+        }
+
+        ensure_context_server_value_within_limit(&key, "context server environment key")?;
+        ensure_context_server_value_within_limit(&value, "context server environment value")?;
+        bounded_env.push((key, value));
+    }
+
+    Ok(bounded_env)
+}
+
+fn bounded_context_server_command(
+    mut command: ContextServerCommand,
+) -> Result<ContextServerCommand> {
+    ensure_context_server_path_within_limit(&command.path, "context server command path")?;
+    command.args = bounded_context_server_args(command.args, "context server command argument")?;
+    command.env = command
+        .env
+        .map(|env| {
+            bounded_context_server_env_entries(env, "context server command environment")
+                .map(|env| env.into_iter().collect())
+        })
+        .transpose()?;
+
+    Ok(command)
+}
+
+fn ensure_context_server_url_within_limit(server_url: &url::Url) -> Result<()> {
+    if server_url.as_str().len() > MAX_CONTEXT_SERVER_URL_BYTES {
+        anyhow::bail!(
+            "context server URL is too large ({} bytes; max {} bytes)",
+            server_url.as_str().len(),
+            MAX_CONTEXT_SERVER_URL_BYTES
+        );
+    }
+
+    let path_segment_count = server_url
+        .path_segments()
+        .map(|segments| {
+            segments
+                .take(MAX_CONTEXT_SERVER_URL_PATH_SEGMENTS + 1)
+                .count()
+        })
+        .unwrap_or(0);
+
+    if path_segment_count > MAX_CONTEXT_SERVER_URL_PATH_SEGMENTS {
+        anyhow::bail!(
+            "context server URL has too many path segments ({}; max {})",
+            path_segment_count,
+            MAX_CONTEXT_SERVER_URL_PATH_SEGMENTS
+        );
+    }
+
+    Ok(())
+}
+
+fn ensure_oauth_session_bytes_within_limit(byte_len: usize) -> Result<()> {
+    if byte_len > MAX_CONTEXT_SERVER_OAUTH_SESSION_BYTES {
+        anyhow::bail!(
+            "context server OAuth session is too large ({} bytes; max {} bytes)",
+            byte_len,
+            MAX_CONTEXT_SERVER_OAUTH_SESSION_BYTES
+        );
+    }
+
+    Ok(())
+}
+
+fn ensure_context_server_client_secret_bytes_within_limit(byte_len: usize) -> Result<()> {
+    if byte_len > MAX_CONTEXT_SERVER_CLIENT_SECRET_BYTES {
+        anyhow::bail!(
+            "context server OAuth client secret is too large ({} bytes; max {} bytes)",
+            byte_len,
+            MAX_CONTEXT_SERVER_CLIENT_SECRET_BYTES
+        );
+    }
+
+    Ok(())
+}
+
+struct BoundedJsonWriter {
+    bytes: Vec<u8>,
+    max_bytes: usize,
+}
+
+impl BoundedJsonWriter {
+    fn new(max_bytes: usize) -> Self {
+        Self {
+            bytes: Vec::new(),
+            max_bytes,
+        }
+    }
+
+    fn into_inner(self) -> Vec<u8> {
+        self.bytes
+    }
+}
+
+impl std::io::Write for BoundedJsonWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if self.bytes.len().saturating_add(buf.len()) > self.max_bytes {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "context server OAuth session exceeds the byte limit",
+            ));
+        }
+
+        self.bytes.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+fn serialize_oauth_session_within_limit(session: &OAuthSession) -> Result<Vec<u8>> {
+    let mut writer = BoundedJsonWriter::new(MAX_CONTEXT_SERVER_OAUTH_SESSION_BYTES);
+    serde_json::to_writer(&mut writer, session)?;
+    Ok(writer.into_inner())
+}
 
 pub fn init(cx: &mut App) {
     extension::init(cx);
@@ -204,7 +401,7 @@ impl ContextServerConfiguration {
         registry: Entity<ContextServerDescriptorRegistry>,
         worktree_store: Entity<WorktreeStore>,
         cx: &AsyncApp,
-    ) -> Option<Self> {
+    ) -> Result<Option<Self>> {
         const EXTENSION_COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 
         match settings {
@@ -212,35 +409,42 @@ impl ContextServerConfiguration {
                 enabled: _,
                 command,
                 remote,
-            } => Some(ContextServerConfiguration::Custom { command, remote }),
+            } => {
+                let command = bounded_context_server_command(command)?;
+                Ok(Some(ContextServerConfiguration::Custom { command, remote }))
+            }
             ContextServerSettings::Extension {
                 enabled: _,
                 settings,
                 remote,
             } => {
-                let descriptor =
-                    cx.update(|cx| registry.read(cx).context_server_descriptor(&id.0))?;
+                let Some(descriptor) =
+                    cx.update(|cx| registry.read(cx).context_server_descriptor(&id.0))?
+                else {
+                    return Ok(None);
+                };
 
                 let command_future = descriptor.command(worktree_store, cx);
                 let timeout_future = cx.background_executor().timer(EXTENSION_COMMAND_TIMEOUT);
 
                 match futures::future::select(command_future, timeout_future).await {
-                    Either::Left((Ok(command), _)) => Some(ContextServerConfiguration::Extension {
-                        command,
-                        settings,
-                        remote,
-                    }),
+                    Either::Left((Ok(command), _)) => {
+                        let command = bounded_context_server_command(command)?;
+                        Ok(Some(ContextServerConfiguration::Extension {
+                            command,
+                            settings,
+                            remote,
+                        }))
+                    }
                     Either::Left((Err(e), _)) => {
-                        log::error!(
-                            "Failed to create context server configuration from settings: {e:#}"
-                        );
-                        None
+                        anyhow::bail!(
+                            "failed to create context server configuration from settings: {e:#}"
+                        )
                     }
                     Either::Right(_) => {
-                        log::error!(
-                            "Timed out resolving command for extension context server {id}"
-                        );
-                        None
+                        anyhow::bail!(
+                            "timed out resolving command for extension context server {id}"
+                        )
                     }
                 }
             }
@@ -251,13 +455,15 @@ impl ContextServerConfiguration {
                 timeout,
                 oauth,
             } => {
-                let url = url::Url::parse(&url).log_err()?;
-                Some(ContextServerConfiguration::Http {
+                let url = url::Url::parse(&url)
+                    .with_context(|| format!("failed to parse context server URL for `{id}`"))?;
+                ensure_context_server_url_within_limit(&url)?;
+                Ok(Some(ContextServerConfiguration::Http {
                     url,
                     headers: auth,
                     timeout,
                     oauth,
-                })
+                }))
             }
         }
     }
@@ -280,6 +486,7 @@ enum ContextServerStoreState {
 pub struct ContextServerStore {
     state: ContextServerStoreState,
     context_server_settings: HashMap<Arc<str>, ContextServerSettings>,
+    configuration_errors: HashMap<ContextServerId, Arc<str>>,
     servers: HashMap<ContextServerId, ContextServerState>,
     server_ids: Vec<ContextServerId>,
     worktree_store: Entity<WorktreeStore>,
@@ -363,6 +570,7 @@ impl ContextServerStore {
         self.context_server_settings
             .iter()
             .filter(|(_, settings)| settings.enabled())
+            .take(MAX_CONTEXT_SERVER_CONFIGURED_ENTRIES)
             .map(|(id, _)| ContextServerId(id.clone()))
             .collect()
     }
@@ -448,17 +656,23 @@ impl ContextServerStore {
             let ai_was_disabled = this.ai_disabled;
             this.ai_disabled = ai_disabled;
 
-            let settings =
-                &Self::resolve_project_settings(&this.worktree_store, cx).context_servers;
-            let settings_changed = &this.context_server_settings != settings;
+            let settings = bounded_context_server_settings(
+                &Self::resolve_project_settings(&this.worktree_store, cx).context_servers,
+            );
+            let settings_changed = this.context_server_settings != settings;
 
             if settings_changed {
-                this.context_server_settings = settings.clone();
+                this.context_server_settings = settings;
             }
 
             // When AI is disabled, stop all running servers
             if ai_disabled {
-                let server_ids: Vec<_> = this.servers.keys().cloned().collect();
+                let server_ids: Vec<_> = this
+                    .servers
+                    .keys()
+                    .take(MAX_CONTEXT_SERVER_ID_COLLECTION_ENTRIES)
+                    .cloned()
+                    .collect();
                 for id in server_ids {
                     this.stop_server(&id, cx).log_err();
                 }
@@ -493,14 +707,15 @@ impl ContextServerStore {
         let mut this = Self {
             state,
             _subscriptions: subscriptions,
-            context_server_settings: Self::resolve_project_settings(&worktree_store, cx)
-                .context_servers
-                .clone(),
+            context_server_settings: bounded_context_server_settings(
+                &Self::resolve_project_settings(&worktree_store, cx).context_servers,
+            ),
             worktree_store,
             project: weak_project,
             registry,
             needs_server_update: false,
             ai_disabled,
+            configuration_errors: HashMap::default(),
             servers: HashMap::default(),
             server_ids: Default::default(),
             update_servers_task: None,
@@ -525,7 +740,11 @@ impl ContextServerStore {
     }
 
     pub fn status_for_server(&self, id: &ContextServerId) -> Option<ContextServerStatus> {
-        self.servers.get(id).map(ContextServerStatus::from_state)
+        self.configuration_errors
+            .get(id)
+            .cloned()
+            .map(ContextServerStatus::Error)
+            .or_else(|| self.servers.get(id).map(ContextServerStatus::from_state))
     }
 
     pub fn configuration_for_server(
@@ -543,23 +762,26 @@ impl ContextServerStore {
     }
 
     fn populate_server_ids(&mut self, cx: &App) {
+        let registry_descriptors = self.registry.read(cx).context_server_descriptors();
         self.server_ids = self
             .servers
             .keys()
+            .take(MAX_CONTEXT_SERVER_ID_COLLECTION_ENTRIES)
             .cloned()
             .chain(
-                self.registry
-                    .read(cx)
-                    .context_server_descriptors()
+                registry_descriptors
                     .into_iter()
+                    .take(MAX_CONTEXT_SERVER_ID_COLLECTION_ENTRIES)
                     .map(|(id, _)| ContextServerId(id)),
             )
             .chain(
                 self.context_server_settings
                     .keys()
+                    .take(MAX_CONTEXT_SERVER_ID_COLLECTION_ENTRIES)
                     .map(|id| ContextServerId(id.clone())),
             )
             .unique()
+            .take(MAX_CONTEXT_SERVER_ID_COLLECTION_ENTRIES)
             .sorted_unstable_by(
                 // Sort context servers: ones without mcp-server- prefix first, then prefixed ones
                 |a, b| {
@@ -587,6 +809,7 @@ impl ContextServerStore {
                     None
                 }
             })
+            .take(MAX_CONTEXT_SERVER_ID_COLLECTION_ENTRIES)
             .collect()
     }
 
@@ -615,7 +838,8 @@ impl ContextServerStore {
                 cx,
             )
             .await
-            .context("Failed to create context server configuration")?;
+            .context("Failed to create context server configuration")?
+            .context("Context server configuration is unavailable")?;
 
             this.update(cx, |this, cx| {
                 this.run_server(server, Arc::new(configuration), cx)
@@ -733,6 +957,23 @@ impl ContextServerStore {
         Ok(())
     }
 
+    fn bounded_remote_context_server_command(
+        command: proto::ContextServerCommand,
+    ) -> Result<proto::ContextServerCommand> {
+        let path =
+            bounded_context_server_string(command.path, "remote context server command path")?;
+        let args =
+            bounded_context_server_args(command.args, "remote context server command argument")?;
+        let env = bounded_context_server_env_entries(
+            command.env,
+            "remote context server command environment",
+        )?
+        .into_iter()
+        .collect();
+
+        Ok(proto::ContextServerCommand { path, args, env })
+    }
+
     pub async fn create_context_server(
         this: WeakEntity<Self>,
         id: ContextServerId,
@@ -794,20 +1035,45 @@ impl ContextServerStore {
                 })
                 .await?;
 
+            let response = Self::bounded_remote_context_server_command(response)?;
+            let response_env: HashMap<_, _> = bounded_context_server_env_entries(
+                response.env,
+                "remote context server command environment",
+            )?
+            .into_iter()
+            .collect();
+            let response_args = response.args;
+            let response_path = response.path;
+
             let remote_command = upstream_client.update(cx, |client, _| {
                 client.build_command(
-                    Some(response.path),
-                    &response.args,
-                    &response.env.into_iter().collect(),
+                    Some(response_path),
+                    &response_args,
+                    &response_env,
                     root_dir,
                     None,
                 )
             })?;
 
+            let remote_command_program = bounded_context_server_string(
+                remote_command.program,
+                "remote context server wrapper path",
+            )?;
+            let remote_command_args = bounded_context_server_args(
+                remote_command.args,
+                "remote context server wrapper argument",
+            )?;
+            let remote_command_env: HashMap<_, _> = bounded_context_server_env_entries(
+                remote_command.env,
+                "remote context server wrapper environment",
+            )?
+            .into_iter()
+            .collect();
+
             let command = ContextServerCommand {
-                path: remote_command.program.into(),
-                args: remote_command.args,
-                env: Some(remote_command.env.into_iter().collect()),
+                path: remote_command_program.into(),
+                args: remote_command_args,
+                env: Some(remote_command_env),
                 timeout: None,
             };
 
@@ -945,21 +1211,27 @@ impl ContextServerStore {
             &cx,
         )
         .await
-        .with_context(|| format!("failed to build configuration for `{}`", server_id))?;
+        .with_context(|| format!("failed to build configuration for `{}`", server_id))?
+        .with_context(|| format!("configuration for `{}` is unavailable", server_id))?;
 
         let command = configuration
             .command()
             .context("context server has no command (HTTP servers don't need RPC)")?;
+        let path = command.path.display().to_string();
+        ensure_context_server_value_within_limit(&path, "context server command path")?;
+        let args =
+            bounded_context_server_args(command.args.clone(), "context server command argument")?;
+        let env = command
+            .env
+            .clone()
+            .map(|env| {
+                bounded_context_server_env_entries(env, "context server command environment")
+                    .map(|env| env.into_iter().collect())
+            })
+            .transpose()?
+            .unwrap_or_default();
 
-        Ok(proto::ContextServerCommand {
-            path: command.path.display().to_string(),
-            args: command.args.clone(),
-            env: command
-                .env
-                .clone()
-                .map(|env| env.into_iter().collect())
-                .unwrap_or_default(),
-        })
+        Ok(proto::ContextServerCommand { path, args, env })
     }
 
     fn resolve_project_settings<'a>(
@@ -1236,6 +1508,7 @@ impl ContextServerStore {
         configuration: Arc<ContextServerConfiguration>,
         cx: &mut AsyncApp,
     ) -> Result<()> {
+        ensure_context_server_url_within_limit(&discovery.resource_metadata.resource)?;
         let resource = oauth::canonical_server_uri(&discovery.resource_metadata.resource);
         let pkce = oauth::generate_pkce_challenge();
 
@@ -1379,10 +1652,11 @@ impl ContextServerStore {
         session: &OAuthSession,
         cx: &AsyncApp,
     ) -> Result<()> {
+        ensure_context_server_url_within_limit(server_url)?;
         let key = Self::keychain_key(server_url);
-        let json = serde_json::to_string(session)?;
+        let json = serialize_oauth_session_within_limit(session)?;
         credentials_provider
-            .write_credentials(&key, "mcp-oauth", json.as_bytes(), cx)
+            .write_credentials(&key, "mcp-oauth", &json, cx)
             .await
     }
 
@@ -1393,9 +1667,11 @@ impl ContextServerStore {
         server_url: &url::Url,
         cx: &AsyncApp,
     ) -> Result<Option<OAuthSession>> {
+        ensure_context_server_url_within_limit(server_url)?;
         let key = Self::keychain_key(server_url);
         match credentials_provider.read_credentials(&key, cx).await? {
             Some((_username, password_bytes)) => {
+                ensure_oauth_session_bytes_within_limit(password_bytes.len())?;
                 let session: OAuthSession = serde_json::from_slice(&password_bytes)?;
                 Ok(Some(session))
             }
@@ -1409,6 +1685,7 @@ impl ContextServerStore {
         server_url: &url::Url,
         cx: &AsyncApp,
     ) -> Result<()> {
+        ensure_context_server_url_within_limit(server_url)?;
         let key = Self::keychain_key(server_url);
         credentials_provider.delete_credentials(&key, cx).await
     }
@@ -1429,9 +1706,13 @@ impl ContextServerStore {
         server_url: &url::Url,
         cx: &AsyncApp,
     ) -> Result<Option<String>> {
+        ensure_context_server_url_within_limit(server_url)?;
         let key = Self::client_secret_keychain_key(server_url);
         match credentials_provider.read_credentials(&key, cx).await? {
-            Some((_username, secret_bytes)) => Ok(Some(String::from_utf8(secret_bytes)?)),
+            Some((_username, secret_bytes)) => {
+                ensure_context_server_client_secret_bytes_within_limit(secret_bytes.len())?;
+                Ok(Some(String::from_utf8(secret_bytes)?))
+            }
             None => Ok(None),
         }
     }
@@ -1442,6 +1723,8 @@ impl ContextServerStore {
         secret: &str,
         cx: &AsyncApp,
     ) -> Result<()> {
+        ensure_context_server_url_within_limit(server_url)?;
+        ensure_context_server_client_secret_bytes_within_limit(secret.len())?;
         let key = Self::client_secret_keychain_key(server_url);
         credentials_provider
             .write_credentials(&key, "mcp-oauth-client-secret", secret.as_bytes(), cx)
@@ -1453,6 +1736,7 @@ impl ContextServerStore {
         server_url: &url::Url,
         cx: &AsyncApp,
     ) -> Result<()> {
+        ensure_context_server_url_within_limit(server_url)?;
         let key = Self::client_secret_keychain_key(server_url);
         credentials_provider.delete_credentials(&key, cx).await
     }
@@ -1500,6 +1784,7 @@ impl ContextServerStore {
         cx: &mut Context<Self>,
     ) {
         let status = ContextServerStatus::from_state(&state);
+        self.configuration_errors.remove(&id);
         self.servers.insert(id.clone(), state);
         cx.emit(ServerStatusChangedEvent {
             server_id: id,
@@ -1537,7 +1822,12 @@ impl ContextServerStore {
         if ai_disabled {
             // Stop all running servers when AI is disabled
             this.update(cx, |this, cx| {
-                let server_ids: Vec<_> = this.servers.keys().cloned().collect();
+                let server_ids: Vec<_> = this
+                    .servers
+                    .keys()
+                    .take(MAX_CONTEXT_SERVER_ID_COLLECTION_ENTRIES)
+                    .cloned()
+                    .collect();
                 for id in server_ids {
                     let _ = this.stop_server(&id, cx);
                 }
@@ -1553,7 +1843,22 @@ impl ContextServerStore {
             )
         })?;
 
-        for (id, _) in registry.read_with(cx, |registry, _| registry.context_server_descriptors()) {
+        let registry_descriptors =
+            registry.read_with(cx, |registry, _| registry.context_server_descriptors());
+        let remaining_registry_entries =
+            MAX_CONTEXT_SERVER_CONFIGURED_ENTRIES.saturating_sub(configured_servers.len());
+        if registry_descriptors.len() > remaining_registry_entries {
+            log::warn!(
+                "context server registry defines {} additional entries; only {} fit in the configured server cap",
+                registry_descriptors.len(),
+                remaining_registry_entries
+            );
+        }
+
+        for (id, _) in registry_descriptors
+            .into_iter()
+            .take(remaining_registry_entries)
+        {
             configured_servers
                 .entry(id)
                 .or_insert(ContextServerSettings::default_extension());
@@ -1562,9 +1867,14 @@ impl ContextServerStore {
         let (enabled_servers, disabled_servers): (HashMap<_, _>, HashMap<_, _>) =
             configured_servers
                 .into_iter()
+                .take(MAX_CONTEXT_SERVER_CONFIGURED_ENTRIES)
                 .partition(|(_, settings)| settings.enabled());
 
-        let configured_servers = join_all(enabled_servers.into_iter().map(|(id, settings)| {
+        let enabled_servers = enabled_servers
+            .into_iter()
+            .take(MAX_CONTEXT_SERVER_ENABLED_FANOUT);
+
+        let resolved_servers = join_all(enabled_servers.map(|(id, settings)| {
             let id = ContextServerId(id);
             ContextServerConfiguration::from_settings(
                 settings,
@@ -1575,17 +1885,44 @@ impl ContextServerStore {
             )
             .map(move |config| (id, config))
         }))
-        .await
-        .into_iter()
-        .filter_map(|(id, config)| config.map(|config| (id, config)))
-        .collect::<HashMap<_, _>>();
+        .await;
+
+        let mut configuration_errors: HashMap<ContextServerId, Arc<str>> = HashMap::default();
+        let configured_servers = resolved_servers
+            .into_iter()
+            .filter_map(|(id, configuration)| match configuration {
+                Ok(Some(configuration)) => Some((id, configuration)),
+                Ok(None) => None,
+                Err(err) => {
+                    log::error!("{id} context server configuration failed: {err:#}");
+                    configuration_errors.insert(id, err.to_string().into());
+                    None
+                }
+            })
+            .collect::<HashMap<_, _>>();
+        let configuration_error_ids = configuration_errors.keys().cloned().collect::<HashSet<_>>();
 
         let mut servers_to_start = Vec::new();
         let mut servers_to_remove = HashSet::default();
         let mut servers_to_stop = HashSet::default();
 
         this.update(cx, |this, _cx| {
+            let stale_configuration_error_ids = this
+                .configuration_errors
+                .keys()
+                .filter(|id| !configuration_error_ids.contains(*id))
+                .cloned()
+                .collect::<Vec<_>>();
+            for id in stale_configuration_error_ids {
+                this.configuration_errors.remove(&id);
+            }
+
             for server_id in this.servers.keys() {
+                if configuration_error_ids.contains(server_id) {
+                    servers_to_remove.insert(server_id.clone());
+                    continue;
+                }
+
                 // All servers that are not in desired_servers should be removed from the store.
                 // This can happen if the user removed a server from the context server settings.
                 if !configured_servers.contains_key(server_id) {
@@ -1623,6 +1960,21 @@ impl ContextServerStore {
             anyhow::Ok(())
         })??;
 
+        this.update(cx, |this, inner_cx| {
+            let has_configuration_errors = !configuration_errors.is_empty();
+            for (id, error) in configuration_errors {
+                this.configuration_errors.insert(id.clone(), error.clone());
+                inner_cx.emit(ServerStatusChangedEvent {
+                    server_id: id,
+                    status: ContextServerStatus::Error(error),
+                });
+            }
+            if has_configuration_errors {
+                inner_cx.notify();
+            }
+            anyhow::Ok(())
+        })??;
+
         for (id, config) in servers_to_start {
             match Self::create_context_server(this.clone(), id.clone(), config, cx).await {
                 Ok((server, config)) => {
@@ -1632,10 +1984,12 @@ impl ContextServerStore {
                 }
                 Err(err) => {
                     log::error!("{id} context server failed to create: {err:#}");
-                    this.update(cx, |_this, cx| {
+                    this.update(cx, |this, cx| {
+                        let error: Arc<str> = err.to_string().into();
+                        this.configuration_errors.insert(id.clone(), error.clone());
                         cx.emit(ServerStatusChangedEvent {
                             server_id: id,
-                            status: ContextServerStatus::Error(err.to_string().into()),
+                            status: ContextServerStatus::Error(error),
                         });
                         cx.notify();
                     })?;

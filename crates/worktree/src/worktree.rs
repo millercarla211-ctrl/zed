@@ -78,6 +78,10 @@ pub use worktree_settings::WorktreeSettings;
 use crate::ignore::IgnoreKind;
 
 pub const FS_WATCH_LATENCY: Duration = Duration::from_millis(100);
+const MAX_WORKTREE_FS_EVENT_BATCH_EVENTS: usize = 8_192;
+const MAX_WORKTREE_PROCESS_EVENT_PATHS: usize = 8_192;
+const MAX_WORKTREE_METADATA_FANOUT: usize = 256;
+const MAX_WORKTREE_CHANGED_PATHS: usize = 8_192;
 
 /// A set of local or remote files that are being opened as part of a project.
 /// Responsible for tracking related FS (for local)/collab (for remote) events and corresponding updates.
@@ -3145,9 +3149,7 @@ impl BackgroundScannerState {
             .edit(entries_by_path_edits, ());
         self.snapshot.entries_by_id.edit(entries_by_id_edits, ());
 
-        if let Err(ix) = self.changed_paths.binary_search(&parent_path) {
-            self.changed_paths.insert(ix, parent_path.clone());
-        }
+        insert_changed_path(&mut self.changed_paths, parent_path.clone());
 
         #[cfg(feature = "test-support")]
         self.snapshot.check_invariants(false);
@@ -4135,17 +4137,9 @@ impl BackgroundScanner {
         // For these events, update events cannot be as precise, because we didn't
         // have the previous state loaded yet.
         self.phase = BackgroundScannerPhase::EventsReceivedDuringInitialScan;
-        if let Poll::Ready(Some(mut paths)) = futures::poll!(fs_events_rx.next()) {
-            while let Poll::Ready(Some(more_paths)) = futures::poll!(fs_events_rx.next()) {
-                paths.extend(more_paths);
-            }
-            self.process_events(
-                paths
-                    .into_iter()
-                    .filter(|event| event.kind.is_some())
-                    .collect(),
-            )
-            .await;
+        if let Poll::Ready(Some(paths)) = futures::poll!(fs_events_rx.next()) {
+            self.process_ready_fs_event_batches(paths, &mut fs_events_rx)
+                .await;
         }
         if let Some(abs_path) = containing_git_repository {
             self.process_events(vec![PathEvent {
@@ -4194,11 +4188,8 @@ impl BackgroundScanner {
                 }
 
                 paths = fs_events_rx.next().fuse() => {
-                    let Some(mut paths) = paths else { break };
-                    while let Poll::Ready(Some(more_paths)) = futures::poll!(fs_events_rx.next()) {
-                        paths.extend(more_paths);
-                    }
-                    self.process_events(paths.into_iter().filter(|event| event.kind.is_some()).collect()).await;
+                    let Some(paths) = paths else { break };
+                    self.process_ready_fs_event_batches(paths, &mut fs_events_rx).await;
                 }
 
                 _ = global_gitignore_events.next().fuse() => {
@@ -4208,6 +4199,48 @@ impl BackgroundScanner {
                 }
             }
         }
+    }
+
+    async fn process_ready_fs_event_batches(
+        &self,
+        paths: Vec<PathEvent>,
+        fs_events_rx: &mut Pin<Box<dyn Send + Stream<Item = Vec<PathEvent>>>>,
+    ) {
+        let mut pending_events =
+            Vec::with_capacity(paths.len().min(MAX_WORKTREE_FS_EVENT_BATCH_EVENTS));
+        self.push_fs_event_batch(&mut pending_events, paths).await;
+
+        while let Poll::Ready(Some(more_paths)) = futures::poll!(fs_events_rx.next()) {
+            self.push_fs_event_batch(&mut pending_events, more_paths)
+                .await;
+        }
+
+        self.flush_fs_event_batch(&mut pending_events).await;
+    }
+
+    async fn push_fs_event_batch(
+        &self,
+        pending_events: &mut Vec<PathEvent>,
+        paths: Vec<PathEvent>,
+    ) {
+        for event in paths {
+            if event.kind.is_none() {
+                continue;
+            }
+
+            pending_events.push(event);
+            if pending_events.len() >= MAX_WORKTREE_FS_EVENT_BATCH_EVENTS {
+                self.flush_fs_event_batch(pending_events).await;
+            }
+        }
+    }
+
+    async fn flush_fs_event_batch(&self, pending_events: &mut Vec<PathEvent>) {
+        if pending_events.is_empty() {
+            return;
+        }
+
+        self.process_events(mem::take(pending_events)).await;
     }
 
     async fn process_scan_request(&self, mut request: ScanRequest, scanning: bool) -> bool {
@@ -4266,7 +4299,17 @@ impl BackgroundScanner {
         if state.symlink_paths_by_target.is_empty() {
             return events;
         }
+        if events.len() >= MAX_WORKTREE_PROCESS_EVENT_PATHS {
+            log::warn!(
+                "worktree event batch has {} paths before symlink remapping; rescanning root",
+                events.len()
+            );
+            return vec![Self::root_rescan_path_event(root_canonical_path)];
+        }
+
+        let max_mapped_events = MAX_WORKTREE_PROCESS_EVENT_PATHS - events.len();
         let mut mapped_events = Vec::new();
+        let mut mapped_events_overflowed = false;
 
         events.retain(|event| {
             let abs_path = SanitizedPath::new(&event.path);
@@ -4296,6 +4339,11 @@ impl BackgroundScanner {
             let keep_original = target_root.starts_with(root_canonical_path.as_path());
 
             for symlink_path in symlink_paths {
+                if mapped_events.len() >= max_mapped_events {
+                    mapped_events_overflowed = true;
+                    return false;
+                }
+
                 let mapped_path = if suffix.as_os_str().is_empty() {
                     root_canonical_path
                         .as_path()
@@ -4315,7 +4363,38 @@ impl BackgroundScanner {
             }
             keep_original
         });
+
+        if mapped_events_overflowed {
+            log::warn!(
+                "worktree symlink event fanout exceeded {MAX_WORKTREE_PROCESS_EVENT_PATHS} paths; rescanning root"
+            );
+            return vec![Self::root_rescan_path_event(root_canonical_path)];
+        }
+
         events.extend(mapped_events);
+        Self::cap_process_events(events, root_canonical_path)
+    }
+
+    fn root_rescan_path_event(root_abs_path: &SanitizedPath) -> PathEvent {
+        PathEvent {
+            path: root_abs_path.as_path().to_path_buf(),
+            kind: Some(PathEventKind::Rescan),
+        }
+    }
+
+    fn cap_process_events(
+        mut events: Vec<PathEvent>,
+        root_abs_path: &SanitizedPath,
+    ) -> Vec<PathEvent> {
+        if events.len() <= MAX_WORKTREE_PROCESS_EVENT_PATHS {
+            return events;
+        }
+
+        log::warn!(
+            "worktree event batch exceeded {MAX_WORKTREE_PROCESS_EVENT_PATHS} paths; rescanning root"
+        );
+        events.clear();
+        events.push(Self::root_rescan_path_event(root_abs_path));
         events
     }
 
@@ -4374,6 +4453,7 @@ impl BackgroundScanner {
             let state = self.state.lock().await;
             events = Self::normalized_events_for_worktree(&state, &root_canonical_path, events);
         }
+        events = Self::cap_process_events(events, &root_canonical_path);
 
         log::debug!("raw events for process_events: {events:?}");
 
@@ -5060,10 +5140,10 @@ impl BackgroundScanner {
         scan_queue_tx: Option<Sender<ScanJob>>,
     ) {
         // grab metadata for all requested paths
-        let metadata = futures::future::join_all(
-            abs_paths
-                .iter()
-                .map(|abs_path| async move {
+        let mut metadata = Vec::with_capacity(abs_paths.len().min(MAX_WORKTREE_METADATA_FANOUT));
+        for abs_paths in abs_paths.chunks(MAX_WORKTREE_METADATA_FANOUT) {
+            metadata.extend(
+                futures::future::join_all(abs_paths.iter().map(|abs_path| async move {
                     let metadata = self.fs.metadata(abs_path).await?;
                     if let Some(metadata) = metadata {
                         let canonical_path = self.fs.canonicalize(abs_path).await?;
@@ -5086,10 +5166,10 @@ impl BackgroundScanner {
                     } else {
                         Ok(None)
                     }
-                })
-                .collect::<Vec<_>>(),
-        )
-        .await;
+                }))
+                .await,
+            );
+        }
 
         let mut new_ancestor_repo =
             if self.track_git_repositories && relative_paths.iter().any(|path| path.is_empty()) {
@@ -5206,12 +5286,7 @@ impl BackgroundScanner {
             }
         }
 
-        util::extend_sorted(
-            &mut state.changed_paths,
-            relative_paths.iter().cloned(),
-            usize::MAX,
-            Ord::cmp,
-        );
+        extend_changed_paths(&mut state.changed_paths, relative_paths.iter().cloned());
     }
 
     fn remove_repo_path(&self, path: Arc<RelPath>, snapshot: &mut LocalSnapshot) -> Option<()> {
@@ -5474,10 +5549,8 @@ impl BackgroundScanner {
 
         let state = &mut self.state.lock().await;
         for edit in &entries_by_path_edits {
-            if let Edit::Insert(entry) = edit
-                && let Err(ix) = state.changed_paths.binary_search(&entry.path)
-            {
-                state.changed_paths.insert(ix, entry.path.clone());
+            if let Edit::Insert(entry) = edit {
+                insert_changed_path(&mut state.changed_paths, entry.path.clone());
             }
         }
 
@@ -5686,6 +5759,42 @@ async fn discover_ancestor_git_repo(
     }
 
     (ignores, exclude, None)
+}
+
+fn insert_changed_path(changed_paths: &mut Vec<Arc<RelPath>>, path: Arc<RelPath>) {
+    if changed_paths
+        .first()
+        .is_some_and(|changed_path| changed_path.is_empty())
+    {
+        return;
+    }
+
+    if path.is_empty() {
+        changed_paths.clear();
+        changed_paths.push(path);
+        return;
+    }
+
+    if let Err(ix) = changed_paths.binary_search(&path) {
+        if changed_paths.len() >= MAX_WORKTREE_CHANGED_PATHS {
+            log::warn!(
+                "worktree changed-path tracking exceeded {MAX_WORKTREE_CHANGED_PATHS} paths; marking root changed"
+            );
+            changed_paths.clear();
+            changed_paths.push(RelPath::empty().into());
+        } else {
+            changed_paths.insert(ix, path);
+        }
+    }
+}
+
+fn extend_changed_paths(
+    changed_paths: &mut Vec<Arc<RelPath>>,
+    paths: impl IntoIterator<Item = Arc<RelPath>>,
+) {
+    for path in paths {
+        insert_changed_path(changed_paths, path);
+    }
 }
 
 fn merge_event_roots(changed_paths: &[Arc<RelPath>], event_roots: &[EventRoot]) -> Vec<EventRoot> {
