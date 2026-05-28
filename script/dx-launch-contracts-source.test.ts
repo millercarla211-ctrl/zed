@@ -42,8 +42,63 @@ test("DX launch contracts keep packet IO, JSON helpers, and review helpers focus
   assert.match(review, /pub\(super\) fn redaction_requires_review/);
   assert.match(review, /exports_secret_values/);
 
-  assert.ok(lineCount(parentPath) < 260, "dx_launch_contracts.rs should stay focused on snapshot assembly");
+  assert.ok(lineCount(parentPath) < 310, "dx_launch_contracts.rs should stay focused on snapshot assembly");
   assert.ok(lineCount(fieldsPath) < 80, "launch-contract field helper module should stay small");
   assert.ok(lineCount(packetsPath) < 60, "launch-contract packet IO module should stay small");
   assert.ok(lineCount(reviewPath) < 50, "launch-contract review module should stay small");
+});
+
+test("DX launch contracts compact display strings before snapshot use", () => {
+  const parentPath = "crates/agent_ui/src/dx_launch_contracts.rs";
+  const parent = read(parentPath);
+
+  assert.match(parent, /const MAX_LAUNCH_CONTRACT_DISPLAY_CHARS: usize = 240;/);
+  assert.match(parent, /fn compact_display_string\(value: &str\) -> Option<String>/);
+  assert.match(parent, /split_whitespace\(\)\.collect::<Vec<_>>\(\)\.join\(" "\)/);
+  assert.match(parent, /\.take\(MAX_LAUNCH_CONTRACT_DISPLAY_CHARS\.saturating_sub\(3\)\)/s);
+  assert.match(parent, /bounded\.push_str\("\.\.\."\)/);
+  assert.match(parent, /fn compact_display_string_or\(value: Option<&str>, fallback: &str\) -> String/);
+  assert.match(parent, /fn compact_optional_display_string\(value: Option<&str>\) -> Option<String>/);
+  assert.match(parent, /fn compact_display_strings\(values: Vec<String>\) -> Vec<String>/);
+
+  assert.match(
+    parent,
+    /let first_packets = packets[\s\S]*compact_optional_display_string\(string_field\(packet, "command"\)\)/,
+  );
+  assert.match(
+    parent,
+    /let first_action = actions[\s\S]*compact_optional_display_string\(string_field\(action, "command"\)\)/,
+  );
+  assert.match(
+    parent,
+    /let startup_commands =\s*compact_display_strings\(pointer_string_array\([\s\S]*handoff_ref,[\s\S]*"\/polling\/startup_commands"[\s\S]*\)\);/,
+  );
+  assert.match(
+    parent,
+    /let detail_commands =\s*compact_display_strings\(pointer_string_array\([\s\S]*handoff_ref,[\s\S]*"\/polling\/detail_commands"[\s\S]*\)\);/,
+  );
+  assert.match(
+    parent,
+    /let diagnostics_commands =\s*compact_display_strings\(pointer_string_array\([\s\S]*handoff_ref,[\s\S]*"\/polling\/diagnostics_commands"[\s\S]*\)\);/,
+  );
+  assert.match(
+    parent,
+    /let refresh_command =\s*compact_optional_display_string\(pointer_string\([\s\S]*handoff_ref,[\s\S]*"\/polling\/foreground_refresh_command"[\s\S]*\)\);/,
+  );
+  assert.match(
+    parent,
+    /let cached_receipt_path =\s*compact_optional_display_string\(pointer_string\([\s\S]*handoff_ref,[\s\S]*"\/polling\/cached_receipt_path"[\s\S]*\)\);/,
+  );
+  assert.match(parent, /let last_error = errors[\s\S]*\.first\(\)[\s\S]*\.and_then\(\|error\| compact_display_string\(error\)\);/);
+  assert.match(parent, /let status = if !manifest_present \|\| !handoff_present \{[\s\S]*compact_display_string_or\([\s\S]*string_field\(value, "status"\)[\s\S]*"ready"[\s\S]*\);/);
+  assert.match(
+    parent,
+    /let operator_summary = compact_display_string_or\([\s\S]*string_field\(value, "operator_summary"\)[\s\S]*"Launch handoff packets are not available\."/,
+  );
+  assert.match(parent, /let next_action = if !errors\.is_empty\(\) \{[\s\S]*compact_display_string_or\([\s\S]*string_field\(value, "next_action"\)/);
+
+  assert.doesNotMatch(parent, /string_field\(packet, "command"\)\.map\(ToString::to_string\)/);
+  assert.doesNotMatch(parent, /string_field\(action, "command"\)\s*\)\s*\.map\(ToString::to_string\)/);
+  assert.doesNotMatch(parent, /pointer_string\(handoff_ref, "[^"]+"\)\.map\(ToString::to_string\)/);
+  assert.doesNotMatch(parent, /\.unwrap_or\("ready"\)\s*;/);
 });

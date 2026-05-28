@@ -6,6 +6,9 @@ use super::{
     CHECK_RECEIPT_SCHEMA, DxCheckPanelNotice, DxCheckPanelQuickFix, DxCheckPanelSection,
     DxCheckPanelSnapshot, VIEW_MODEL_SCHEMA, ZED_PANEL_SCHEMA,
 };
+
+const MAX_PANEL_TEXT_CHARS: usize = 320;
+
 pub(super) fn panel_from_receipt_value(path: PathBuf, receipt: &Value) -> DxCheckPanelSnapshot {
     if string_at(receipt, &["schema_version"]).as_deref() != Some(CHECK_RECEIPT_SCHEMA) {
         return malformed_snapshot(
@@ -64,15 +67,17 @@ fn panel_from_zed_value(path: PathBuf, receipt: &Value, zed: &Value) -> DxCheckP
         .get("scoring_config")
         .or_else(|| receipt.get("scoring_config"));
     let scoring_config_status =
-        string_from(scoring_config.and_then(|value| value.get("status"))).unwrap_or("unknown");
+        bounded_string_from(scoring_config.and_then(|value| value.get("status")))
+            .unwrap_or_else(|| "unknown".to_string());
     let scoring_config_applies_to_score =
         bool_from(scoring_config.and_then(|value| value.get("applies_to_score"))).unwrap_or(true);
-    let config_path = string_from(scoring_config.and_then(|value| value.get("config_path")));
+    let config_path =
+        bounded_string_from(scoring_config.and_then(|value| value.get("config_path")));
 
     let next_action = first_non_empty([
-        string_from(receipt.get("next_actions").and_then(|value| value.get(0))).map(str::to_string),
-        string_at(zed, &["scoring_config", "next_action"]),
-        string_from(zed.get("detail_command")).map(str::to_string),
+        bounded_string_from(receipt.get("next_actions").and_then(|value| value.get(0))),
+        bounded_string_at(zed, ["scoring_config", "next_action"]),
+        bounded_string_from(zed.get("detail_command")),
         Some("Run dx check --json from the DX project root.".to_string()),
     ])
     .unwrap_or_else(|| "Run dx check --json from the DX project root.".to_string());
@@ -99,17 +104,14 @@ fn panel_from_zed_value(path: PathBuf, receipt: &Value, zed: &Value) -> DxCheckP
         u64_from(zed.get("duration_ms")).or_else(|| u64_from(receipt.get("duration_ms")));
 
     DxCheckPanelSnapshot {
-        status: string_from(zed.get("status"))
-            .unwrap_or("unknown")
-            .to_string(),
+        status: bounded_string_from(zed.get("status")).unwrap_or_else(|| "unknown".to_string()),
         title: "dx-check project health".to_string(),
         score_value: u32_from(zed.get("score_value")),
         score_max: u32_from(zed.get("score_max")),
         score_percent: u8_from(zed.get("score_percent")),
         score_estimated: bool_from(zed.get("score_estimated")).unwrap_or(false),
-        weight_profile: string_from(zed.get("weight_profile"))
-            .unwrap_or("dx-check.launch-default.v1")
-            .to_string(),
+        weight_profile: bounded_string_from(zed.get("weight_profile"))
+            .unwrap_or_else(|| "dx-check.launch-default.v1".to_string()),
         receipt_path: path,
         receipt_present: true,
         receipt_error: None,
@@ -122,14 +124,13 @@ fn panel_from_zed_value(path: PathBuf, receipt: &Value, zed: &Value) -> DxCheckP
         duration_ms,
         checked_paths,
         skipped_expensive_checks,
-        refresh_command: string_from(zed.get("refresh_command"))
-            .unwrap_or("dx check --json")
-            .to_string(),
-        detail_command: string_from(zed.get("detail_command")).map(str::to_string),
-        scoring_config_status: scoring_config_status.to_string(),
+        refresh_command: bounded_string_from(zed.get("refresh_command"))
+            .unwrap_or_else(|| "dx check --json".to_string()),
+        detail_command: bounded_string_from(zed.get("detail_command")),
+        scoring_config_status: scoring_config_status.clone(),
         scoring_config_applies_to_score,
         scoring_config_summary: scoring_config_summary(
-            scoring_config_status,
+            &scoring_config_status,
             scoring_config_applies_to_score,
             config_path.as_deref(),
         ),
@@ -152,22 +153,23 @@ fn panel_from_view_model_value(
         .get("scoring_config")
         .or_else(|| receipt.get("scoring_config"));
     let scoring_config_status =
-        string_from(scoring_config.and_then(|value| value.get("status"))).unwrap_or("unknown");
+        bounded_string_from(scoring_config.and_then(|value| value.get("status")))
+            .unwrap_or_else(|| "unknown".to_string());
     let scoring_config_applies_to_score =
         bool_from(scoring_config.and_then(|value| value.get("applies_to_score"))).unwrap_or(true);
-    let config_path = string_from(scoring_config.and_then(|value| value.get("config_path")));
+    let config_path =
+        bounded_string_from(scoring_config.and_then(|value| value.get("config_path")));
     let score_meter = view_model.get("score_meter");
-    let status = string_from(view_model.get("status"))
-        .unwrap_or("unknown")
-        .to_string();
+    let status =
+        bounded_string_from(view_model.get("status")).unwrap_or_else(|| "unknown".to_string());
 
     let next_action = first_non_empty([
-        string_at(view_model, &["blocker_rows", "0", "next_action"]),
-        string_at(view_model, &["warning_rows", "0", "next_action"]),
-        string_at(view_model, &["quick_fix_rows", "0", "next_action"]),
-        string_at(view_model, &["scoring_config", "next_action"]),
-        string_from(view_model.get("empty_state")).map(str::to_string),
-        string_at(view_model, &["primary_action", "command"]),
+        bounded_string_at(view_model, ["blocker_rows", "0", "next_action"]),
+        bounded_string_at(view_model, ["warning_rows", "0", "next_action"]),
+        bounded_string_at(view_model, ["quick_fix_rows", "0", "next_action"]),
+        bounded_string_at(view_model, ["scoring_config", "next_action"]),
+        bounded_string_from(view_model.get("empty_state")),
+        bounded_string_at(view_model, ["primary_action", "command"]),
         Some("Run dx check --json from the DX project root.".to_string()),
     ])
     .unwrap_or_else(|| "Run dx check --json from the DX project root.".to_string());
@@ -200,28 +202,26 @@ fn panel_from_view_model_value(
 
     DxCheckPanelSnapshot {
         status: status.clone(),
-        title: string_from(view_model.get("title"))
-            .unwrap_or("dx-check project health")
-            .to_string(),
+        title: bounded_string_from(view_model.get("title"))
+            .unwrap_or_else(|| "dx-check project health".to_string()),
         score_value: u32_from(score_meter.and_then(|value| value.get("value"))),
         score_max: u32_from(score_meter.and_then(|value| value.get("max"))),
         score_percent: u8_from(score_meter.and_then(|value| value.get("percent"))),
         score_estimated: bool_from(score_meter.and_then(|value| value.get("estimated")))
             .unwrap_or(false),
-        weight_profile: string_from(view_model.get("weight_profile"))
-            .or_else(|| string_from(receipt.get("weight_profile")))
-            .unwrap_or("dx-check.launch-default.v1")
-            .to_string(),
+        weight_profile: bounded_string_from(view_model.get("weight_profile"))
+            .or_else(|| bounded_string_from(receipt.get("weight_profile")))
+            .unwrap_or_else(|| "dx-check.launch-default.v1".to_string()),
         receipt_path: path,
         receipt_present: true,
         receipt_error: if status == "malformed" {
-            string_from(view_model.get("empty_state")).map(str::to_string)
+            bounded_string_from(view_model.get("empty_state"))
         } else {
             None
         },
         generated_at_unix_ms,
         last_run_label: last_run_label(
-            string_from(view_model.get("last_run_label")),
+            bounded_string_from(view_model.get("last_run_label")),
             generated_at_unix_ms,
         ),
         pass_count,
@@ -231,13 +231,13 @@ fn panel_from_view_model_value(
         duration_ms,
         checked_paths,
         skipped_expensive_checks,
-        refresh_command: string_at(view_model, &["primary_action", "command"])
+        refresh_command: bounded_string_at(view_model, ["primary_action", "command"])
             .unwrap_or_else(|| "dx check --json".to_string()),
-        detail_command: string_at(view_model, &["secondary_action", "command"]),
-        scoring_config_status: scoring_config_status.to_string(),
+        detail_command: bounded_string_at(view_model, ["secondary_action", "command"]),
+        scoring_config_status: scoring_config_status.clone(),
         scoring_config_applies_to_score,
         scoring_config_summary: scoring_config_summary(
-            scoring_config_status,
+            &scoring_config_status,
             scoring_config_applies_to_score,
             config_path.as_deref(),
         ),
@@ -264,9 +264,9 @@ fn view_model_fallback_warning(reason: impl Into<String>) -> DxCheckPanelNotice 
     }
 }
 
-fn last_run_label(receipt_label: Option<&str>, generated_at_unix_ms: Option<u64>) -> String {
-    if let Some(label) = receipt_label.filter(|label| !label.trim().is_empty()) {
-        return label.to_string();
+fn last_run_label(receipt_label: Option<String>, generated_at_unix_ms: Option<u64>) -> String {
+    if let Some(label) = receipt_label {
+        return label;
     }
 
     match generated_at_unix_ms {
@@ -311,6 +311,9 @@ pub(super) fn missing_snapshot(path: PathBuf) -> DxCheckPanelSnapshot {
 }
 
 pub(super) fn malformed_snapshot(path: PathBuf, message: String) -> DxCheckPanelSnapshot {
+    let message = bounded_panel_text(&message)
+        .unwrap_or_else(|| "dx-check receipt could not be parsed".to_string());
+
     DxCheckPanelSnapshot {
         status: "malformed".to_string(),
         title: "dx-check receipt malformed".to_string(),
@@ -354,7 +357,7 @@ fn scoring_config_summary(
     applies_to_score: bool,
     config_path: Option<&str>,
 ) -> String {
-    match (status, applies_to_score, config_path) {
+    let summary = match (status, applies_to_score, config_path) {
         ("detected_not_applied", false, Some(path)) => {
             format!("detected_not_applied at {path}; not applied")
         }
@@ -364,7 +367,8 @@ fn scoring_config_summary(
         (status, true, Some(path)) => format!("{status} at {path}"),
         (status, true, None) => status.to_string(),
         (status, false, None) => format!("{status}; not applied"),
-    }
+    };
+    bounded_panel_text(&summary).unwrap_or_else(|| "unknown".to_string())
 }
 
 fn section_rows(value: Option<&Value>) -> Vec<DxCheckPanelSection> {
@@ -374,17 +378,16 @@ fn section_rows(value: Option<&Value>) -> Vec<DxCheckPanelSection> {
         .flatten()
         .take(8)
         .filter_map(|section| {
-            let title = string_from(section.get("title"))
-                .or_else(|| string_from(section.get("label")))
-                .or_else(|| string_from(section.get("id")))?;
+            let title = bounded_string_from(section.get("title"))
+                .or_else(|| bounded_string_from(section.get("label")))
+                .or_else(|| bounded_string_from(section.get("id")))?;
             Some(DxCheckPanelSection {
-                title: title.to_string(),
+                title,
                 score: u32_from(section.get("score")),
                 max_score: u32_from(section.get("max_score")),
                 estimated: bool_from(section.get("estimated")).unwrap_or(false),
-                status: string_from(section.get("status"))
-                    .unwrap_or("unknown")
-                    .to_string(),
+                status: bounded_string_from(section.get("status"))
+                    .unwrap_or_else(|| "unknown".to_string()),
             })
         })
         .collect()
@@ -397,13 +400,12 @@ fn notice_rows(value: Option<&Value>) -> Vec<DxCheckPanelNotice> {
         .flatten()
         .take(8)
         .filter_map(|notice| {
-            let message = string_from(notice.get("message"))?;
+            let message = bounded_string_from(notice.get("message"))?;
             Some(DxCheckPanelNotice {
-                code: string_from(notice.get("code"))
-                    .unwrap_or("dx-check-notice")
-                    .to_string(),
-                message: message.to_string(),
-                next_action: string_from(notice.get("next_action")).map(str::to_string),
+                code: bounded_string_from(notice.get("code"))
+                    .unwrap_or_else(|| "dx-check-notice".to_string()),
+                message,
+                next_action: bounded_string_from(notice.get("next_action")),
             })
         })
         .collect()
@@ -416,19 +418,19 @@ fn quick_fix_rows(value: Option<&Value>) -> Vec<DxCheckPanelQuickFix> {
         .flatten()
         .take(8)
         .filter_map(|fix| {
-            let label = string_from(fix.get("label"))?;
-            let next_action = string_from(fix.get("next_action"))?;
-            let command = string_from(fix.get("command")).map(str::to_string);
+            let label = bounded_string_from(fix.get("label"))?;
+            let next_action = bounded_string_from(fix.get("next_action"))?;
+            let raw_command = string_from(fix.get("command"));
+            let command = raw_command.and_then(bounded_panel_text);
             Some(DxCheckPanelQuickFix {
-                label: label.to_string(),
-                next_action: next_action.to_string(),
-                risk_level: string_from(fix.get("risk_level"))
-                    .map(str::to_string)
-                    .unwrap_or_else(|| quick_fix_risk_level(command.as_deref()).to_string()),
+                label,
+                next_action,
+                risk_level: bounded_string_from(fix.get("risk_level"))
+                    .unwrap_or_else(|| quick_fix_risk_level(raw_command).to_string()),
                 requires_user_approval: bool_from(fix.get("requires_user_approval"))
-                    .unwrap_or_else(|| quick_fix_requires_approval(command.as_deref())),
+                    .unwrap_or_else(|| quick_fix_requires_approval(raw_command)),
                 writes_receipts: bool_from(fix.get("writes_receipts"))
-                    .unwrap_or_else(|| quick_fix_writes_receipts(command.as_deref())),
+                    .unwrap_or_else(|| quick_fix_writes_receipts(raw_command)),
                 command,
             })
         })
@@ -481,6 +483,37 @@ fn string_at(value: &Value, path: &[&str]) -> Option<String> {
     string_from(Some(current)).map(str::to_string)
 }
 
+fn bounded_string_at<const N: usize>(value: &Value, path: [&str; N]) -> Option<String> {
+    string_at(value, &path).and_then(|value| bounded_panel_text(&value))
+}
+
+fn bounded_string_from(value: Option<&Value>) -> Option<String> {
+    bounded_panel_text(string_from(value)?)
+}
+
+fn bounded_panel_text(value: &str) -> Option<String> {
+    let compacted = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    let compacted = compacted
+        .chars()
+        .filter(|character| !character.is_control())
+        .collect::<String>();
+
+    if compacted.is_empty() {
+        return None;
+    }
+
+    if compacted.chars().count() <= MAX_PANEL_TEXT_CHARS {
+        return Some(compacted);
+    }
+
+    let mut bounded = compacted
+        .chars()
+        .take(MAX_PANEL_TEXT_CHARS.saturating_sub(3))
+        .collect::<String>();
+    bounded.push_str("...");
+    Some(bounded)
+}
+
 fn string_from(value: Option<&Value>) -> Option<&str> {
     value
         .and_then(Value::as_str)
@@ -508,14 +541,7 @@ fn string_array(value: Option<&Value>) -> Vec<String> {
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter_map(|value| {
-            let value = string_from(Some(value))?.trim();
-            if value.is_empty() {
-                None
-            } else {
-                Some(value.to_string())
-            }
-        })
+        .filter_map(|value| bounded_panel_text(string_from(Some(value))?))
         .take(8)
         .collect()
 }

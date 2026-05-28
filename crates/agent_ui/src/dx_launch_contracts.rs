@@ -22,6 +22,7 @@ const HANDOFF_SCHEMA: &str = "dx.launch.handoff.v1";
 const DX_LAUNCH_IMPORT_MANIFEST_COMMAND: &str = "dx launch import-manifest --json";
 const DX_LAUNCH_HANDOFF_COMMAND: &str = "dx launch handoff --json";
 const LAUNCH_CONTRACT_CACHE_TTL: Duration = Duration::from_secs(5);
+const MAX_LAUNCH_CONTRACT_DISPLAY_CHARS: usize = 240;
 
 #[derive(Clone)]
 pub(crate) struct DxLaunchContractSnapshot {
@@ -72,6 +73,46 @@ pub(crate) fn launch_contract_snapshot() -> DxLaunchContractSnapshot {
     }
 
     scan_launch_contracts()
+}
+
+fn compact_display_string(value: &str) -> Option<String> {
+    let compact = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    let compact = compact
+        .chars()
+        .filter(|character| !character.is_control())
+        .collect::<String>();
+
+    if compact.is_empty() {
+        return None;
+    }
+
+    if compact.chars().count() <= MAX_LAUNCH_CONTRACT_DISPLAY_CHARS {
+        return Some(compact);
+    }
+
+    let mut bounded = compact
+        .chars()
+        .take(MAX_LAUNCH_CONTRACT_DISPLAY_CHARS.saturating_sub(3))
+        .collect::<String>();
+    bounded.push_str("...");
+    Some(bounded)
+}
+
+fn compact_display_string_or(value: Option<&str>, fallback: &str) -> String {
+    value
+        .and_then(compact_display_string)
+        .unwrap_or_else(|| fallback.to_string())
+}
+
+fn compact_optional_display_string(value: Option<&str>) -> Option<String> {
+    value.and_then(compact_display_string)
+}
+
+fn compact_display_strings(values: Vec<String>) -> Vec<String> {
+    values
+        .into_iter()
+        .filter_map(|value| compact_display_string(&value))
+        .collect()
 }
 
 fn scan_launch_contracts() -> DxLaunchContractSnapshot {
@@ -151,7 +192,9 @@ fn scan_launch_contracts() -> DxLaunchContractSnapshot {
             packets
                 .iter()
                 .take(4)
-                .filter_map(|packet| string_field(packet, "command").map(ToString::to_string))
+                .filter_map(|packet| {
+                    compact_optional_display_string(string_field(packet, "command"))
+                })
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
@@ -177,8 +220,7 @@ fn scan_launch_contracts() -> DxLaunchContractSnapshot {
     let command_fanout_count = packet_fanout_count + action_fanout_count;
     let first_action = actions
         .and_then(|actions| actions.first())
-        .and_then(|action| string_field(action, "command"))
-        .map(ToString::to_string);
+        .and_then(|action| compact_optional_display_string(string_field(action, "command")));
     let no_command_fanout = handoff_ref
         .and_then(|value| value.get("no_command_fanout"))
         .and_then(Value::as_bool)
@@ -186,35 +228,54 @@ fn scan_launch_contracts() -> DxLaunchContractSnapshot {
         && command_fanout_count == 0;
     let redaction_requires_review = manifest_ref.is_some_and(redaction_requires_review)
         || handoff_ref.is_some_and(redaction_requires_review);
-    let startup_commands = pointer_string_array(handoff_ref, "/polling/startup_commands");
-    let detail_commands = pointer_string_array(handoff_ref, "/polling/detail_commands");
-    let diagnostics_commands = pointer_string_array(handoff_ref, "/polling/diagnostics_commands");
-    let refresh_command =
-        pointer_string(handoff_ref, "/polling/foreground_refresh_command").map(ToString::to_string);
-    let cached_receipt_path =
-        pointer_string(handoff_ref, "/polling/cached_receipt_path").map(ToString::to_string);
-    let last_error = errors.first().cloned();
+    let startup_commands = compact_display_strings(pointer_string_array(
+        handoff_ref,
+        "/polling/startup_commands",
+    ));
+    let detail_commands = compact_display_strings(pointer_string_array(
+        handoff_ref,
+        "/polling/detail_commands",
+    ));
+    let diagnostics_commands = compact_display_strings(pointer_string_array(
+        handoff_ref,
+        "/polling/diagnostics_commands",
+    ));
+    let refresh_command = compact_optional_display_string(pointer_string(
+        handoff_ref,
+        "/polling/foreground_refresh_command",
+    ));
+    let cached_receipt_path = compact_optional_display_string(pointer_string(
+        handoff_ref,
+        "/polling/cached_receipt_path",
+    ));
+    let last_error = errors
+        .first()
+        .and_then(|error| compact_display_string(error));
     let status = if !manifest_present || !handoff_present {
-        "missing"
+        "missing".to_string()
     } else if !errors.is_empty() || redaction_requires_review || !no_command_fanout {
-        "warning"
+        "warning".to_string()
     } else {
-        manifest_ref
-            .and_then(|value| string_field(value, "status"))
-            .unwrap_or("ready")
+        compact_display_string_or(
+            manifest_ref.and_then(|value| string_field(value, "status")),
+            "ready",
+        )
     };
-    let operator_summary = manifest_ref
-        .and_then(|value| string_field(value, "operator_summary"))
-        .or_else(|| handoff_ref.and_then(|value| string_field(value, "operator_summary")))
-        .unwrap_or("Launch handoff packets are not available.")
-        .to_string();
-    let next_action = if !errors.is_empty() {
-        DX_LAUNCH_IMPORT_MANIFEST_COMMAND
-    } else {
+    let operator_summary = compact_display_string_or(
         manifest_ref
-            .and_then(|value| string_field(value, "next_action"))
-            .or_else(|| handoff_ref.and_then(|value| string_field(value, "next_action")))
-            .unwrap_or(DX_LAUNCH_HANDOFF_COMMAND)
+            .and_then(|value| string_field(value, "operator_summary"))
+            .or_else(|| handoff_ref.and_then(|value| string_field(value, "operator_summary"))),
+        "Launch handoff packets are not available.",
+    );
+    let next_action = if !errors.is_empty() {
+        DX_LAUNCH_IMPORT_MANIFEST_COMMAND.to_string()
+    } else {
+        compact_display_string_or(
+            manifest_ref
+                .and_then(|value| string_field(value, "next_action"))
+                .or_else(|| handoff_ref.and_then(|value| string_field(value, "next_action"))),
+            DX_LAUNCH_HANDOFF_COMMAND,
+        )
     };
 
     DxLaunchContractSnapshot {
@@ -223,7 +284,7 @@ fn scan_launch_contracts() -> DxLaunchContractSnapshot {
         handoff_path,
         manifest_present,
         handoff_present,
-        status: status.to_string(),
+        status,
         operator_summary,
         packet_count,
         fixture_family_count,
@@ -241,7 +302,7 @@ fn scan_launch_contracts() -> DxLaunchContractSnapshot {
         refresh_command,
         cached_receipt_path,
         last_error,
-        next_action: next_action.to_string(),
+        next_action,
         redaction_requires_review,
     }
 }

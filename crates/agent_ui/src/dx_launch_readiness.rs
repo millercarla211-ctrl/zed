@@ -25,6 +25,11 @@ const DX_LAUNCH_IMPORT_SUMMARY_COMMAND: &str = "dx launch import-summary --json"
 const DX_LAUNCH_RELEASE_GATE_COMMAND: &str = "dx launch release-gate --json";
 const DX_LAUNCH_FALLBACK_DRILL_COMMAND: &str = "dx launch fallback-drill --json";
 const LAUNCH_READINESS_CACHE_TTL: Duration = Duration::from_secs(5);
+const MAX_PACKET_LABEL_CHARS: usize = 96;
+const MAX_PACKET_STATUS_CHARS: usize = 48;
+const MAX_PACKET_STATE_CHARS: usize = 80;
+const MAX_PACKET_DETAIL_CHARS: usize = 180;
+const MAX_PACKET_ACTION_CHARS: usize = 240;
 
 const IMPORT_SUMMARY_FILES: &[&str] = &[
     "import-summary-ready.json",
@@ -148,6 +153,7 @@ fn scan_launch_readiness() -> DxLaunchReadinessSnapshot {
 
     if !root_exists {
         snapshot.first_issue = Some(format!("Missing {}", root.display()));
+        compact_snapshot_display_strings(&mut snapshot);
         return snapshot;
     }
 
@@ -192,6 +198,7 @@ fn scan_launch_readiness() -> DxLaunchReadinessSnapshot {
         snapshot.next_action = "zed_launch_import_ready".to_string();
     }
 
+    compact_snapshot_display_strings(&mut snapshot);
     snapshot.examples = balanced_examples(&snapshot.examples);
     snapshot
 }
@@ -202,33 +209,42 @@ fn record_import_summary(
     snapshot: &mut DxLaunchReadinessSnapshot,
 ) {
     snapshot.import_summary_count += 1;
-    let status = packet_status(packet);
-    snapshot.import_status_counts.record(&status);
+    let raw_status = packet_status(packet);
+    snapshot.import_status_counts.record(&raw_status);
+    let status = compact_packet_text(&raw_status, MAX_PACKET_STATUS_CHARS)
+        .unwrap_or_else(|| "unknown".to_string());
     record_packet_safety(packet, snapshot);
 
-    let freshness = pointer_string(packet, "/freshness_policy/latest_freshness_state")
-        .unwrap_or("unknown")
-        .to_string();
+    let freshness = compact_packet_text(
+        pointer_string(packet, "/freshness_policy/latest_freshness_state").unwrap_or("unknown"),
+        MAX_PACKET_STATE_CHARS,
+    )
+    .unwrap_or_else(|| "unknown".to_string());
     push_unique(&mut snapshot.freshness_states, freshness.clone());
     push_recovery_commands(packet, snapshot);
 
     let acceptance_count = pointer_usize(packet, "/release_gate/acceptance_count").unwrap_or(0);
     let action_count = pointer_usize(packet, "/handoff/action_count").unwrap_or(0);
-    let next_action = string_field(packet, "next_action").map(ToString::to_string);
+    let next_action =
+        compact_packet_option(string_field(packet, "next_action"), MAX_PACKET_ACTION_CHARS);
     snapshot.examples.push(DxLaunchReadinessExample {
-        label: format!("Import {file_name}"),
+        label: compact_packet_text(&format!("Import {file_name}"), MAX_PACKET_LABEL_CHARS)
+            .unwrap_or_else(|| "Import packet".to_string()),
         status,
-        detail: format!(
+        detail: compact_packet_text(&format!(
             "{freshness} cached receipt, {acceptance_count} gate row(s), {action_count} action(s)"
-        ),
+        ), MAX_PACKET_DETAIL_CHARS)
+        .unwrap_or_else(|| "import summary packet".to_string()),
         next_action,
     });
 }
 
 fn record_release_gate(file_name: &str, packet: &Value, snapshot: &mut DxLaunchReadinessSnapshot) {
     snapshot.release_gate_count += 1;
-    let status = packet_status(packet);
-    snapshot.release_gate_status_counts.record(&status);
+    let raw_status = packet_status(packet);
+    snapshot.release_gate_status_counts.record(&raw_status);
+    let status = compact_packet_text(&raw_status, MAX_PACKET_STATUS_CHARS)
+        .unwrap_or_else(|| "unknown".to_string());
     record_packet_safety(packet, snapshot);
 
     snapshot.acceptance_count = snapshot
@@ -244,21 +260,29 @@ fn record_release_gate(file_name: &str, packet: &Value, snapshot: &mut DxLaunchR
         .failed_count
         .max(usize_field(packet, "failed_count").unwrap_or(0));
 
-    let freshness = pointer_string(packet, "/latest_status_receipt/freshness_state")
-        .unwrap_or("unknown")
-        .to_string();
+    let freshness = compact_packet_text(
+        pointer_string(packet, "/latest_status_receipt/freshness_state").unwrap_or("unknown"),
+        MAX_PACKET_STATE_CHARS,
+    )
+    .unwrap_or_else(|| "unknown".to_string());
     push_unique(&mut snapshot.freshness_states, freshness.clone());
 
-    let next_action = string_field(packet, "next_action").map(ToString::to_string);
+    let next_action =
+        compact_packet_option(string_field(packet, "next_action"), MAX_PACKET_ACTION_CHARS);
     snapshot.examples.push(DxLaunchReadinessExample {
-        label: format!("Gate {file_name}"),
+        label: compact_packet_text(&format!("Gate {file_name}"), MAX_PACKET_LABEL_CHARS)
+            .unwrap_or_else(|| "Gate packet".to_string()),
         status,
-        detail: format!(
-            "{} passed / {} warning / {} failed, cached {freshness}",
-            usize_field(packet, "passed_count").unwrap_or(0),
-            usize_field(packet, "warning_count").unwrap_or(0),
-            usize_field(packet, "failed_count").unwrap_or(0),
-        ),
+        detail: compact_packet_text(
+            &format!(
+                "{} passed / {} warning / {} failed, cached {freshness}",
+                usize_field(packet, "passed_count").unwrap_or(0),
+                usize_field(packet, "warning_count").unwrap_or(0),
+                usize_field(packet, "failed_count").unwrap_or(0),
+            ),
+            MAX_PACKET_DETAIL_CHARS,
+        )
+        .unwrap_or_else(|| "release gate packet".to_string()),
         next_action,
     });
 }
@@ -269,29 +293,116 @@ fn record_fallback_drill(
     snapshot: &mut DxLaunchReadinessSnapshot,
 ) {
     snapshot.fallback_drill_count += 1;
-    let status = packet_status(packet);
-    snapshot.fallback_status_counts.record(&status);
+    let raw_status = packet_status(packet);
+    snapshot.fallback_status_counts.record(&raw_status);
+    let status = compact_packet_text(&raw_status, MAX_PACKET_STATUS_CHARS)
+        .unwrap_or_else(|| "unknown".to_string());
     record_packet_safety(packet, snapshot);
     push_recovery_commands(packet, snapshot);
 
-    let active_state = string_field(packet, "active_receipt_state")
-        .unwrap_or("unknown")
-        .to_string();
+    let active_state = compact_packet_text(
+        string_field(packet, "active_receipt_state").unwrap_or("unknown"),
+        MAX_PACKET_STATE_CHARS,
+    )
+    .unwrap_or_else(|| "unknown".to_string());
     push_unique(&mut snapshot.fallback_states, active_state.clone());
     snapshot.fallback_state_count = snapshot
         .fallback_state_count
         .max(usize_field(packet, "state_count").unwrap_or(0));
 
-    let next_action = string_field(packet, "next_action").map(ToString::to_string);
+    let next_action =
+        compact_packet_option(string_field(packet, "next_action"), MAX_PACKET_ACTION_CHARS);
     snapshot.examples.push(DxLaunchReadinessExample {
-        label: format!("Fallback {file_name}"),
+        label: compact_packet_text(&format!("Fallback {file_name}"), MAX_PACKET_LABEL_CHARS)
+            .unwrap_or_else(|| "Fallback packet".to_string()),
         status,
-        detail: format!(
-            "{active_state} active state, {} cached state(s)",
-            usize_field(packet, "state_count").unwrap_or(0)
-        ),
+        detail: compact_packet_text(
+            &format!(
+                "{active_state} active state, {} cached state(s)",
+                usize_field(packet, "state_count").unwrap_or(0)
+            ),
+            MAX_PACKET_DETAIL_CHARS,
+        )
+        .unwrap_or_else(|| "fallback drill packet".to_string()),
         next_action,
     });
+}
+
+fn compact_snapshot_display_strings(snapshot: &mut DxLaunchReadinessSnapshot) {
+    snapshot.status = compact_packet_text(&snapshot.status, MAX_PACKET_STATUS_CHARS)
+        .unwrap_or_else(|| "unknown".to_string());
+    snapshot.operator_summary =
+        compact_packet_text(&snapshot.operator_summary, MAX_PACKET_DETAIL_CHARS)
+            .unwrap_or_else(|| "Launch readiness examples need review.".to_string());
+    if let Some(issue) = snapshot.first_issue.take() {
+        snapshot.first_issue = compact_packet_text(&issue, MAX_PACKET_DETAIL_CHARS);
+    }
+    snapshot.next_action = compact_packet_text(&snapshot.next_action, MAX_PACKET_ACTION_CHARS)
+        .unwrap_or_else(|| DX_LAUNCH_IMPORT_SUMMARY_COMMAND.to_string());
+    snapshot.freshness_states = compact_packet_list(
+        std::mem::take(&mut snapshot.freshness_states),
+        MAX_PACKET_STATE_CHARS,
+    );
+    snapshot.fallback_states = compact_packet_list(
+        std::mem::take(&mut snapshot.fallback_states),
+        MAX_PACKET_STATE_CHARS,
+    );
+    snapshot.recovery_commands = compact_packet_list(
+        std::mem::take(&mut snapshot.recovery_commands),
+        MAX_PACKET_ACTION_CHARS,
+    );
+    for example in &mut snapshot.examples {
+        example.label = compact_packet_text(&example.label, MAX_PACKET_LABEL_CHARS)
+            .unwrap_or_else(|| "Launch readiness packet".to_string());
+        example.status = compact_packet_text(&example.status, MAX_PACKET_STATUS_CHARS)
+            .unwrap_or_else(|| "unknown".to_string());
+        example.detail = compact_packet_text(&example.detail, MAX_PACKET_DETAIL_CHARS)
+            .unwrap_or_else(|| "No packet detail".to_string());
+        example.next_action = example
+            .next_action
+            .take()
+            .and_then(|action| compact_packet_text(&action, MAX_PACKET_ACTION_CHARS));
+    }
+}
+
+fn compact_packet_option(raw: Option<&str>, max_chars: usize) -> Option<String> {
+    raw.and_then(|value| compact_packet_text(value, max_chars))
+}
+
+fn compact_packet_list(values: Vec<String>, max_chars: usize) -> Vec<String> {
+    let mut compacted = Vec::new();
+    for value in values {
+        if let Some(value) = compact_packet_text(&value, max_chars) {
+            push_unique(&mut compacted, value);
+        }
+    }
+    compacted
+}
+
+fn compact_packet_text(raw: &str, max_chars: usize) -> Option<String> {
+    if max_chars == 0 {
+        return None;
+    }
+
+    let compact = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    let compact = compact
+        .chars()
+        .filter(|character| !character.is_control())
+        .collect::<String>();
+
+    if compact.is_empty() {
+        return None;
+    }
+    if compact.chars().count() <= max_chars {
+        return Some(compact);
+    }
+    if max_chars <= 3 {
+        return Some(compact.chars().take(max_chars).collect());
+    }
+
+    let mut bounded = compact.chars().take(max_chars - 3).collect::<String>();
+    bounded.push_str("...");
+    Some(bounded)
 }
 
 fn record_packet_safety(packet: &Value, snapshot: &mut DxLaunchReadinessSnapshot) {

@@ -27,6 +27,10 @@ const SMOKE_SCHEMA: &str = "dx.launch.smoke.v1";
 const STATUS_SCHEMA: &str = "dx.launch.status.v1";
 const DX_LAUNCH_SCHEMAS_COMMAND: &str = "dx launch schemas --json";
 const LAUNCH_AUDIT_CACHE_TTL: Duration = Duration::from_secs(5);
+const SNAPSHOT_DISPLAY_LABEL_MAX_CHARS: usize = 96;
+const SNAPSHOT_DISPLAY_ROW_MAX_CHARS: usize = 180;
+const SNAPSHOT_DISPLAY_SUMMARY_MAX_CHARS: usize = 240;
+const SNAPSHOT_DISPLAY_ACTION_MAX_CHARS: usize = 160;
 
 #[derive(Clone)]
 pub(crate) struct DxLaunchAuditSnapshot {
@@ -86,6 +90,54 @@ pub(crate) fn launch_audit_snapshot() -> DxLaunchAuditSnapshot {
     }
 
     scan_launch_audit()
+}
+
+fn bounded_display_string(value: &str, max_chars: usize) -> String {
+    if max_chars == 0 {
+        return String::new();
+    }
+
+    let compact = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    let compact = compact
+        .chars()
+        .filter(|character| !character.is_control())
+        .collect::<String>();
+
+    if compact.chars().count() <= max_chars {
+        return compact;
+    }
+
+    if max_chars <= 3 {
+        return compact.chars().take(max_chars).collect();
+    }
+
+    let mut bounded = compact.chars().take(max_chars - 3).collect::<String>();
+    bounded.push_str("...");
+    bounded
+}
+
+fn bounded_optional_string_field(value: &Value, field: &str, max_chars: usize) -> Option<String> {
+    string_field(value, field).map(|value| bounded_display_string(value, max_chars))
+}
+
+fn bounded_string_field(value: &Value, field: &str, fallback: &str, max_chars: usize) -> String {
+    bounded_optional_string_field(value, field, max_chars).unwrap_or_else(|| fallback.to_string())
+}
+
+fn bounded_packet_field(packet: Option<&Value>, field: &str, max_chars: usize) -> Option<String> {
+    packet.and_then(|value| bounded_optional_string_field(value, field, max_chars))
+}
+
+fn bounded_label_field(value: &Value, field: &str) -> Option<String> {
+    bounded_optional_string_field(value, field, SNAPSHOT_DISPLAY_LABEL_MAX_CHARS)
+}
+
+fn bounded_label_or(value: &Value, field: &str, fallback: &str) -> String {
+    bounded_string_field(value, field, fallback, SNAPSHOT_DISPLAY_LABEL_MAX_CHARS)
+}
+
+fn bounded_row(value: String) -> String {
+    bounded_display_string(&value, SNAPSHOT_DISPLAY_ROW_MAX_CHARS)
 }
 
 fn scan_launch_audit() -> DxLaunchAuditSnapshot {
@@ -196,11 +248,9 @@ fn scan_launch_audit() -> DxLaunchAuditSnapshot {
                 .iter()
                 .take(5)
                 .filter_map(|command| {
-                    Some(format!(
-                        "{} -> {}",
-                        string_field(command, "cli_command")?,
-                        string_field(command, "schema_version").unwrap_or("unknown")
-                    ))
+                    let command_label = bounded_label_field(command, "cli_command")?;
+                    let schema_version = bounded_label_or(command, "schema_version", "unknown");
+                    Some(bounded_row(format!("{command_label} -> {schema_version}")))
                 })
                 .collect()
         })
@@ -212,14 +262,14 @@ fn scan_launch_audit() -> DxLaunchAuditSnapshot {
                 .take(3)
                 .filter_map(|fixture| {
                     let render = fixture.get("render_state");
-                    Some(format!(
-                        "{}: {} / {}",
-                        string_field(fixture, "label")?,
-                        string_field(fixture, "expected_status").unwrap_or("unknown"),
-                        render
-                            .and_then(|render| string_field(render, "primary_action"))
-                            .unwrap_or("no action")
-                    ))
+                    let fixture_label = bounded_label_field(fixture, "label")?;
+                    let expected_status = bounded_label_or(fixture, "expected_status", "unknown");
+                    let primary_action = render
+                        .map(|render| bounded_label_or(render, "primary_action", "no action"))
+                        .unwrap_or_else(|| "no action".to_string());
+                    Some(bounded_row(format!(
+                        "{fixture_label}: {expected_status} / {primary_action}"
+                    )))
                 })
                 .collect()
         })
@@ -230,11 +280,9 @@ fn scan_launch_audit() -> DxLaunchAuditSnapshot {
                 .iter()
                 .take(4)
                 .filter_map(|check| {
-                    Some(format!(
-                        "{}: {}",
-                        string_field(check, "label")?,
-                        string_field(check, "status").unwrap_or("unknown")
-                    ))
+                    let check_label = bounded_label_field(check, "label")?;
+                    let check_status = bounded_label_or(check, "status", "unknown");
+                    Some(bounded_row(format!("{check_label}: {check_status}")))
                 })
                 .collect()
         })
@@ -259,18 +307,31 @@ fn scan_launch_audit() -> DxLaunchAuditSnapshot {
     } else {
         "ready"
     };
-    let operator_summary = smoke_ref
-        .and_then(|value| string_field(value, "operator_summary"))
-        .or_else(|| schemas_ref.and_then(|value| string_field(value, "operator_summary")))
-        .unwrap_or("Launch audit packets are not available.")
-        .to_string();
+    let operator_summary = bounded_packet_field(
+        smoke_ref,
+        "operator_summary",
+        SNAPSHOT_DISPLAY_SUMMARY_MAX_CHARS,
+    )
+    .or_else(|| {
+        bounded_packet_field(
+            schemas_ref,
+            "operator_summary",
+            SNAPSHOT_DISPLAY_SUMMARY_MAX_CHARS,
+        )
+    })
+    .unwrap_or_else(|| "Launch audit packets are not available.".to_string());
     let next_action = if issues.is_empty() {
-        smoke_ref
-            .and_then(|value| string_field(value, "next_action"))
-            .or_else(|| schemas_ref.and_then(|value| string_field(value, "next_action")))
-            .unwrap_or(DX_LAUNCH_SCHEMAS_COMMAND)
+        bounded_packet_field(smoke_ref, "next_action", SNAPSHOT_DISPLAY_ACTION_MAX_CHARS)
+            .or_else(|| {
+                bounded_packet_field(
+                    schemas_ref,
+                    "next_action",
+                    SNAPSHOT_DISPLAY_ACTION_MAX_CHARS,
+                )
+            })
+            .unwrap_or_else(|| DX_LAUNCH_SCHEMAS_COMMAND.to_string())
     } else {
-        DX_LAUNCH_SCHEMAS_COMMAND
+        DX_LAUNCH_SCHEMAS_COMMAND.to_string()
     };
 
     DxLaunchAuditSnapshot {
@@ -298,19 +359,29 @@ fn scan_launch_audit() -> DxLaunchAuditSnapshot {
         smoke_warning_count,
         smoke_failed_count,
         example_status: status_ref
-            .and_then(|value| string_field(value, "status"))
-            .unwrap_or("missing")
-            .to_string(),
-        example_agents: status_agent_summary(status_ref),
-        example_tokens: status_token_summary(status_ref),
-        example_discovery: status_discovery_summary(status_ref),
+            .and_then(|value| bounded_label_field(value, "status"))
+            .unwrap_or_else(|| "missing".to_string()),
+        example_agents: bounded_display_string(
+            &status_agent_summary(status_ref),
+            SNAPSHOT_DISPLAY_SUMMARY_MAX_CHARS,
+        ),
+        example_tokens: bounded_display_string(
+            &status_token_summary(status_ref),
+            SNAPSHOT_DISPLAY_SUMMARY_MAX_CHARS,
+        ),
+        example_discovery: bounded_display_string(
+            &status_discovery_summary(status_ref),
+            SNAPSHOT_DISPLAY_SUMMARY_MAX_CHARS,
+        ),
         command_fanout_count,
         redaction_requires_review,
         command_rows,
         fixture_rows,
         smoke_rows,
-        first_issue: issues.first().cloned(),
-        next_action: next_action.to_string(),
+        first_issue: issues
+            .first()
+            .map(|issue| bounded_display_string(issue, SNAPSHOT_DISPLAY_SUMMARY_MAX_CHARS)),
+        next_action,
     }
 }
 

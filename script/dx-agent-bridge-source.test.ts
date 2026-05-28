@@ -14,6 +14,7 @@ test("DX Agent bridge stays split by command, runtime, and receipt ownership", (
     "crates/agent_ui/src/dx_agent_bridge/local_file_labels.rs",
     "crates/agent_ui/src/dx_agent_bridge/local_files.rs",
     "crates/agent_ui/src/dx_agent_bridge/receipts.rs",
+    "crates/agent_ui/src/dx_agent_bridge/receipts/receipt_strings.rs",
     "crates/agent_ui/src/dx_agent_bridge/runtime.rs",
   ];
 
@@ -41,6 +42,7 @@ test("DX Agent bridge delegates bridge commands and receipt parsing", () => {
   const localFileLabels = read("crates/agent_ui/src/dx_agent_bridge/local_file_labels.rs");
   const localFiles = read("crates/agent_ui/src/dx_agent_bridge/local_files.rs");
   const receipts = read("crates/agent_ui/src/dx_agent_bridge/receipts.rs");
+  const receiptStrings = read("crates/agent_ui/src/dx_agent_bridge/receipts/receipt_strings.rs");
   const runtime = read("crates/agent_ui/src/dx_agent_bridge/runtime.rs");
 
   assert.doesNotMatch(parent, /fn run_bridge_command/);
@@ -76,6 +78,11 @@ test("DX Agent bridge delegates bridge commands and receipt parsing", () => {
   assert.match(localFileLabels, /receipt_file_label_accepts_uppercase_json_extension/);
   assert.match(receipts, /pub\(super\) fn contract_summary/);
   assert.match(receipts, /pub\(super\) fn receipt_index_summary/);
+  assert.match(receipts, /^mod receipt_strings;$/m);
+  assert.match(receipts, /use self::receipt_strings::\{/);
+  assert.match(receiptStrings, /pub\(super\) fn receipt_string_field/);
+  assert.match(receiptStrings, /pub\(super\) fn receipt_string_array_field/);
+  assert.match(receiptStrings, /pub\(super\) fn receipt_string_values_field/);
   assert.match(runtime, /pub\(super\) fn social_accounts/);
   assert.match(runtime, /pub\(super\) fn catalog_summary/);
   assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/command_safety.rs") < 120);
@@ -84,6 +91,7 @@ test("DX Agent bridge delegates bridge commands and receipt parsing", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/local_file_labels.rs") < 110);
   assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/local_files.rs") < 110);
   assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/receipts.rs") < 560);
+  assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/receipts/receipt_strings.rs") < 75);
   assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/runtime.rs") < 420);
 });
 
@@ -107,5 +115,54 @@ test("DX Agent bridge local receipt reads reject post-metadata growth before par
   assert.ok(
     readJson.indexOf(growthLimitCheck) < readJson.indexOf("serde_json::from_slice"),
     "receipt buffers must be rejected over MAX_RECEIPT_BYTES before parsing",
+  );
+});
+
+test("DX Agent receipt display strings are redacted and bounded at parser boundaries", () => {
+  const receipts = read("crates/agent_ui/src/dx_agent_bridge/receipts.rs");
+  const receiptStrings = read("crates/agent_ui/src/dx_agent_bridge/receipts/receipt_strings.rs");
+
+  assert.match(receiptStrings, /const MAX_RECEIPT_DISPLAY_CHARS: usize = 180;/);
+  assert.match(receiptStrings, /fn receipt_string_field/);
+  assert.match(receiptStrings, /safe_string_field\(value, path\)\.and_then\(bound_receipt_string\)/);
+  assert.match(receiptStrings, /fn receipt_string_array_field/);
+  assert.match(receiptStrings, /fn receipt_string_values_field/);
+  assert.match(receiptStrings, /take\(MAX_RECEIPT_STRING_VALUES\)/);
+  assert.match(receiptStrings, /split_whitespace\(\)\.collect::<Vec<_>>\(\)\.join\(" "\)/);
+  assert.match(receiptStrings, /take\(MAX_RECEIPT_DISPLAY_CHARS\.saturating_sub\(3\)\)/);
+  assert.match(receiptStrings, /bounded\.push_str\("\.\.\."\)/);
+  assert.doesNotMatch(receipts, /(?<!receipt_|safe_)string_field\(/);
+  assert.doesNotMatch(receipts, /(?<!receipt_)string_array_field\(/);
+  assert.doesNotMatch(receipts, /(?<!receipt_)string_values_field\(/);
+
+  const criticalBoundaries = [
+    "safe_regeneration_command",
+    "next_action",
+    "operator_summary",
+    "warning_reasons",
+    "blocking_reasons",
+    "recovery_commands",
+    "last_error",
+    "command",
+    "status",
+  ];
+
+  for (const boundary of criticalBoundaries) {
+    assert.match(
+      receipts,
+      new RegExp(`receipt_string_(field|array_field|values_field)\\(value, &\\["${boundary}"\\]`),
+      `expected ${boundary} to use the redacted bounded receipt string helper`,
+    );
+  }
+
+  assert.match(
+    receipts,
+    /let label = receipt_string_field\(row, &\["label"\]\)\?/,
+    "release-gate acceptance row labels must be redacted and bounded",
+  );
+  assert.match(
+    receipts,
+    /let status =\s*receipt_string_field\(row, &\["status"\]\)/,
+    "release-gate acceptance row statuses must be redacted and bounded",
   );
 });

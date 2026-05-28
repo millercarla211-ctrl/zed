@@ -48,6 +48,30 @@ test("DX runtime proof status keeps receipt IO and JSON helpers focused", () => 
   assert.match(summaries, /pub\(super\) fn parse_plan_summary/);
   assert.match(summaries, /pub\(super\) fn parse_import_summary/);
   assert.match(summaries, /pub\(super\) fn parse_status_summary/);
+  assert.doesNotMatch(
+    summaries,
+    /(^|[^\w])string_at\(/,
+    "runtime-proof summaries should not use raw string extraction for display and prompt fields",
+  );
+  assert.match(summaries, /status: compact_string_at\(status, "status"\)/);
+  assert.match(
+    summaries,
+    /expected_final_command: compact_string_at\(request, "expected_final_command"\)/,
+  );
+  assert.match(summaries, /next_action: compact_string_at\(plan, "next_action"\)/);
+  assert.match(
+    summaries,
+    /operator_status: compact_string_at\(request, "operator_status"\)/,
+  );
+  assert.match(
+    summaries,
+    /validation_status: compact_string_at\(validation, "status"\)/,
+  );
+  assert.match(
+    summaries,
+    /headline: compact_string_at\(operator_status_copy, "headline"\)/,
+  );
+  assert.match(summaries, /headline: compact_string_at\(status_copy, "headline"\)/);
 
   assert.ok(lineCount(parentPath) < 280, "dx_runtime_proof_status.rs should stay focused on snapshot assembly");
   assert.ok(lineCount(receiptsPath) < 95, "runtime-proof receipt IO module should stay small");

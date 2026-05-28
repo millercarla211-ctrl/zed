@@ -32,6 +32,23 @@ test("DX launch audit keeps packet IO, JSON helpers, and review policy focused",
   assert.match(parent, /use self::review::\{command_fanout_count, redaction_requires_review\};/);
   assert.match(parent, /use self::status_summaries::\{/);
   assert.match(parent, /status_agent_summary, status_discovery_summary, status_token_summary,/);
+  assert.match(parent, /const SNAPSHOT_DISPLAY_LABEL_MAX_CHARS: usize = \d+;/);
+  assert.match(parent, /const SNAPSHOT_DISPLAY_ROW_MAX_CHARS: usize = \d+;/);
+  assert.match(parent, /const SNAPSHOT_DISPLAY_SUMMARY_MAX_CHARS: usize = \d+;/);
+  assert.match(parent, /const SNAPSHOT_DISPLAY_ACTION_MAX_CHARS: usize = \d+;/);
+  assert.match(parent, /fn bounded_display_string\(value: &str, max_chars: usize\) -> String/);
+  assert.match(parent, /fn bounded_optional_string_field\(/);
+  assert.match(parent, /fn bounded_string_field\(/);
+  assert.match(parent, /fn bounded_packet_field\(/);
+  assert.match(parent, /fn bounded_label_field\(/);
+  assert.match(parent, /fn bounded_row\(value: String\) -> String/);
+  assert.match(parent, /let command_label = bounded_label_field\(command, "cli_command"\)\?/);
+  assert.match(parent, /let fixture_label = bounded_label_field\(fixture, "label"\)\?/);
+  assert.match(parent, /let check_label = bounded_label_field\(check, "label"\)\?/);
+  assert.match(parent, /bounded_packet_field\(\s*smoke_ref,\s*"operator_summary",\s*SNAPSHOT_DISPLAY_SUMMARY_MAX_CHARS,\s*\)/);
+  assert.match(parent, /bounded_packet_field\(\s*smoke_ref,\s*"next_action",\s*SNAPSHOT_DISPLAY_ACTION_MAX_CHARS,?\s*\)/);
+  assert.match(parent, /bounded_display_string\(\s*&status_agent_summary\(status_ref\),\s*SNAPSHOT_DISPLAY_SUMMARY_MAX_CHARS,\s*\)/);
+  assert.match(parent, /first_issue: issues/);
   assert.doesNotMatch(parent, /fn read_checked_packet\(/);
   assert.doesNotMatch(parent, /fn read_json_packet\(/);
   assert.doesNotMatch(parent, /fn string_field</);
@@ -54,7 +71,7 @@ test("DX launch audit keeps packet IO, JSON helpers, and review policy focused",
   assert.match(status, /pub\(super\) fn status_agent_summary/);
   assert.match(status, /pub\(super\) fn status_discovery_summary/);
 
-  assert.ok(lineCount(parentPath) < 340, "dx_launch_audit.rs should stay focused on snapshot assembly");
+  assert.ok(lineCount(parentPath) < 405, "dx_launch_audit.rs should stay focused on snapshot assembly");
   assert.ok(lineCount(fieldsPath) < 65, "launch-audit packet field module should stay small");
   assert.ok(lineCount(packetsPath) < 65, "launch-audit packet IO module should stay small");
   assert.ok(lineCount(reviewPath) < 70, "launch-audit review policy module should stay small");

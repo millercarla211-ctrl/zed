@@ -1,3 +1,24 @@
+[2026-05-28] - Receipt Display String Hardening
+
+ADDED:
+- Added `crates/agent_ui/src/dx_agent_bridge/receipts/receipt_strings.rs` to own bounded, redacted Agent bridge receipt display-string extraction.
+
+CHANGED:
+- DX Check panel parsing now compacts and bounds receipt/view-model titles, commands, next actions, errors, row labels, checked/skipped path samples, and quick-fix text before snapshot use.
+- Runtime Proof status summaries now use compact extraction for plan/status/operator/headline/command/next-action fields instead of raw receipt strings.
+- Agent bridge receipts now route receipt commands, errors, next actions, operator summaries, row labels/statuses, warning/blocking reasons, recovery commands, and receipt row metadata through bounded redacted helpers.
+- Launch Audit, Launch Readiness, and Launch Handoff contract snapshots now compact and bound packet-derived commands, labels, summaries, statuses, first issues, recovery rows, polling rows, and next actions.
+- Source guards now pin the receipt display-string boundaries across Check panel, Runtime Proof, Agent bridge, Launch Audit, Launch Readiness, and Launch Contracts.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-check-panel-source.test.ts script\dx-runtime-proof-status-source.test.ts script\dx-agent-bridge-source.test.ts script\dx-launch-audit-source.test.ts script\dx-launch-readiness-source.test.ts script\dx-launch-contracts-source.test.ts`
+- `rustfmt --edition 2024 --check` on all edited Rust files
+- Conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipped Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Bounded Packet Config And Source Read Hardening
 
 CHANGED:

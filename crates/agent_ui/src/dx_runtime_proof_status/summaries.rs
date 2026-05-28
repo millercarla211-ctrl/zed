@@ -1,6 +1,5 @@
 use super::fields::{
-    array_len_at, bool_at, compact_string_array_at, compact_string_at, string_array_at, string_at,
-    usize_at,
+    array_len_at, bool_at, compact_string_array_at, compact_string_at, string_array_at, usize_at,
 };
 use super::receipts::read_json;
 use super::{DxRuntimeProofPlanSummary, DxRuntimeProofReceiptSummary};
@@ -20,11 +19,11 @@ pub(super) fn parse_plan_summary(path: &Path, label: &str) -> Option<DxRuntimePr
 
     Some(DxRuntimeProofPlanSummary {
         label: label.to_string(),
-        status: string_at(status, "status")
-            .or_else(|| string_at(plan, "status"))
+        status: compact_string_at(status, "status")
+            .or_else(|| compact_string_at(plan, "status"))
             .unwrap_or_else(|| "unknown".to_string()),
-        expected_final_command: string_at(request, "expected_final_command")
-            .or_else(|| string_at(evidence_contract, "final_command")),
+        expected_final_command: compact_string_at(request, "expected_final_command")
+            .or_else(|| compact_string_at(evidence_contract, "final_command")),
         checklist_step_count,
         required_step_count: usize_at(status, "required_step_count"),
         minimum_evidence_lines_for_pass: usize_at(
@@ -45,7 +44,8 @@ pub(super) fn parse_plan_summary(path: &Path, label: &str) -> Option<DxRuntimePr
             ),
         blocker_count: usize_at(status, "blocker_count").max(blockers.len()),
         blockers,
-        next_action: string_at(plan, "next_action").or_else(|| string_at(&value, "next_action")),
+        next_action: compact_string_at(plan, "next_action")
+            .or_else(|| compact_string_at(&value, "next_action")),
     })
 }
 
@@ -61,15 +61,16 @@ pub(super) fn parse_import_summary(
 
     Some(DxRuntimeProofReceiptSummary {
         label: label.to_string(),
-        operator_status: string_at(request, "operator_status")
-            .or_else(|| string_at(operator_status_copy, "operator_status"))
+        operator_status: compact_string_at(request, "operator_status")
+            .or_else(|| compact_string_at(operator_status_copy, "operator_status"))
             .unwrap_or_else(|| "unknown".to_string()),
-        validation_status: string_at(validation, "status").unwrap_or_else(|| "unknown".to_string()),
+        validation_status: compact_string_at(validation, "status")
+            .unwrap_or_else(|| "unknown".to_string()),
         runtime_green_candidate: bool_at(validation, "runtime_green_candidate"),
         can_claim_runtime_green: bool_at(operator_status_copy, "can_claim_runtime_green"),
         evidence_count: usize_at(validation, "evidence_count"),
         blocker_count: usize_at(validation, "blocker_count"),
-        headline: string_at(operator_status_copy, "headline"),
+        headline: compact_string_at(operator_status_copy, "headline"),
         proof_summary: compact_string_at(request, "proof_summary"),
         final_command: compact_string_at(request, "final_command"),
         source: compact_string_at(request, "source"),
@@ -89,15 +90,16 @@ pub(super) fn parse_status_summary(
 
     Some(DxRuntimeProofReceiptSummary {
         label: label.to_string(),
-        operator_status: string_at(status_copy, "operator_status").unwrap_or_else(|| {
-            string_at(validation, "operator_status").unwrap_or_else(|| "unknown".to_string())
-        }),
-        validation_status: string_at(validation, "status").unwrap_or_else(|| "unknown".to_string()),
+        operator_status: compact_string_at(status_copy, "operator_status")
+            .or_else(|| compact_string_at(validation, "operator_status"))
+            .unwrap_or_else(|| "unknown".to_string()),
+        validation_status: compact_string_at(validation, "status")
+            .unwrap_or_else(|| "unknown".to_string()),
         runtime_green_candidate: bool_at(validation, "runtime_green_candidate"),
         can_claim_runtime_green: bool_at(status_copy, "can_claim_runtime_green"),
         evidence_count: usize_at(validation, "evidence_count"),
         blocker_count: usize_at(validation, "blocker_count"),
-        headline: string_at(status_copy, "headline"),
+        headline: compact_string_at(status_copy, "headline"),
         proof_summary: compact_string_at(request, "proof_summary"),
         final_command: compact_string_at(request, "final_command"),
         source: compact_string_at(request, "source"),

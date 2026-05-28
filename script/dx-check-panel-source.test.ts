@@ -40,7 +40,7 @@ test("DX Check panel delegates receipt IO and panel parsing", () => {
   assert.match(reader, /let path_key = deploy_root_key\(&path\);/);
   assert.match(reader, /deploy_root_key\(existing\) == path_key/);
   assert.ok(lineCount("crates/agent_ui/src/dx_check_panel/reader.rs") < 140);
-  assert.ok(lineCount("crates/agent_ui/src/dx_check_panel/parser.rs") < 560);
+  assert.ok(lineCount("crates/agent_ui/src/dx_check_panel/parser.rs") < 620);
 });
 
 test("DX Check panel reader uses sentinel-byte bounded JSON reads", () => {
@@ -51,4 +51,53 @@ test("DX Check panel reader uses sentinel-byte bounded JSON reads", () => {
   assert.match(reader, /receipt\.len\(\) as u64 > MAX_RECEIPT_BYTES/);
   assert.match(reader, /serde_json::from_slice::<Value>\(&receipt\)/);
   assert.doesNotMatch(reader, /read_to_string/);
+});
+
+test("DX Check panel parser bounds user-controlled snapshot strings", () => {
+  const parser = read("crates/agent_ui/src/dx_check_panel/parser.rs");
+
+  assert.match(parser, /const MAX_PANEL_TEXT_CHARS: usize = \d+;/);
+  assert.match(parser, /fn bounded_panel_text\(value: &str\) -> Option<String>/);
+  assert.match(parser, /fn bounded_string_from\(value: Option<&Value>\) -> Option<String>/);
+  assert.match(
+    parser,
+    /fn bounded_string_at<const N: usize>\(value: &Value, path: \[&str; N\]\) -> Option<String>/,
+  );
+
+  const boundedSnapshotFields = [
+    /status: bounded_string_from\(zed\.get\("status"\)\)/,
+    /weight_profile: bounded_string_from\(zed\.get\("weight_profile"\)\)/,
+    /refresh_command: bounded_string_from\(zed\.get\("refresh_command"\)\)/,
+    /detail_command: bounded_string_from\(zed\.get\("detail_command"\)\)/,
+    /title: bounded_string_from\(view_model\.get\("title"\)\)/,
+    /receipt_error: if status == "malformed" \{\s+bounded_string_from\(view_model\.get\("empty_state"\)\)/,
+    /last_run_label\(\s+bounded_string_from\(view_model\.get\("last_run_label"\)\)/,
+    /refresh_command: bounded_string_at\(view_model, \["primary_action", "command"\]\)/,
+    /detail_command: bounded_string_at\(view_model, \["secondary_action", "command"\]\)/,
+  ];
+
+  for (const pattern of boundedSnapshotFields) {
+    assert.match(parser, pattern);
+  }
+
+  const boundedRowPatterns = [
+    /let title = bounded_string_from\(section\.get\("title"\)\)/,
+    /status: bounded_string_from\(section\.get\("status"\)\)/,
+    /let message = bounded_string_from\(notice\.get\("message"\)\)\?/,
+    /code: bounded_string_from\(notice\.get\("code"\)\)/,
+    /next_action: bounded_string_from\(notice\.get\("next_action"\)\)/,
+    /let label = bounded_string_from\(fix\.get\("label"\)\)\?/,
+    /let next_action = bounded_string_from\(fix\.get\("next_action"\)\)\?/,
+    /let raw_command = string_from\(fix\.get\("command"\)\);/,
+    /let command = raw_command\.and_then\(bounded_panel_text\);/,
+    /risk_level: bounded_string_from\(fix\.get\("risk_level"\)\)/,
+    /quick_fix_risk_level\(raw_command\)/,
+    /quick_fix_requires_approval\(raw_command\)/,
+    /quick_fix_writes_receipts\(raw_command\)/,
+    /string_array\(value: Option<&Value>\).*bounded_panel_text/s,
+  ];
+
+  for (const pattern of boundedRowPatterns) {
+    assert.match(parser, pattern);
+  }
 });
