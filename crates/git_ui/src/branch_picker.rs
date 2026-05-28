@@ -290,7 +290,7 @@ impl BranchList {
                             picker.delegate.restore_selected_branch = picker
                                 .delegate
                                 .matches
-                                .get(picker.delegate.selected_index)
+                                .get(picker.delegate.selected_index())
                                 .and_then(|entry| entry.as_branch().map(|b| b.ref_name.clone()));
                             picker.delegate.all_branches = process_branches(
                                 &branch_list,
@@ -382,9 +382,8 @@ impl BranchList {
             if picker.delegate.is_select_only() {
                 return;
             }
-            picker
-                .delegate
-                .delete_at(picker.delegate.selected_index, false, window, cx)
+            let ix = picker.delegate.selected_index();
+            picker.delegate.delete_at(ix, false, window, cx)
         })
     }
 
@@ -398,9 +397,8 @@ impl BranchList {
             if picker.delegate.is_select_only() {
                 return;
             }
-            picker
-                .delegate
-                .delete_at(picker.delegate.selected_index, true, window, cx)
+            let ix = picker.delegate.selected_index();
+            picker.delegate.delete_at(ix, true, window, cx)
         })
     }
 
@@ -899,6 +897,14 @@ impl BranchListDelegate {
         self.branch_selection_behavior.is_select_only()
     }
 
+    fn clamp_selected_index(&self, ix: usize) -> usize {
+        if self.matches.is_empty() {
+            0
+        } else {
+            ix.min(self.matches.len() - 1)
+        }
+    }
+
     fn is_force_delete_hovering_index(&self, index: usize) -> bool {
         self.modifiers.alt && self.hovered_delete_index == Some(index)
     }
@@ -1185,7 +1191,7 @@ impl PickerDelegate for BranchListDelegate {
     }
 
     fn selected_index(&self) -> usize {
-        self.selected_index
+        self.clamp_selected_index(self.selected_index)
     }
 
     fn set_selected_index(
@@ -1194,7 +1200,7 @@ impl PickerDelegate for BranchListDelegate {
         _window: &mut Window,
         _: &mut Context<Picker<Self>>,
     ) {
-        self.selected_index = ix;
+        self.selected_index = self.clamp_selected_index(ix);
     }
 
     fn update_matches(
@@ -1257,9 +1263,14 @@ impl PickerDelegate for BranchListDelegate {
                 )
                 .await
                 .into_iter()
-                .map(|candidate| Entry::Branch {
-                    branch: branches[candidate.candidate_id].clone(),
-                    positions: candidate.positions,
+                .filter_map(|candidate| {
+                    branches
+                        .get(candidate.candidate_id)
+                        .cloned()
+                        .map(|branch| Entry::Branch {
+                            branch: branch.clone(),
+                            positions: candidate.positions,
+                        })
                 })
                 .collect();
 
@@ -1328,7 +1339,7 @@ impl PickerDelegate for BranchListDelegate {
                             .unwrap_or(0);
                     } else {
                         delegate.selected_index =
-                            core::cmp::min(delegate.selected_index, delegate.matches.len() - 1);
+                            delegate.clamp_selected_index(delegate.selected_index);
                     }
                     delegate.last_query = query;
                 })

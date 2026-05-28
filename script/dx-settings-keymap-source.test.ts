@@ -87,12 +87,17 @@ test("settings language, navbar, and visible row materialization are bounded", (
   );
   assert.match(
     visiblePageItems,
-    /\.filter\(move \|\&\(item_index, _\)\| self\.filter_table\[page_idx\]\[item_index\]\)\s+\.take\(MAX_SETTINGS_VISIBLE_PAGE_ITEMS\)/,
+    /\.filter\(move \|\&\(item_index, _\)\| self\.visible_page_item_matches\(page_idx, item_index\)\)\s+\.take\(MAX_SETTINGS_VISIBLE_PAGE_ITEMS\)/,
     "visible page row iteration must be capped at the iterator boundary",
   );
 });
 
 test("settings search result paths are capped before applying filters", () => {
+  const openPath = sliceBetween(
+    settingsSource,
+    "fn open_path(",
+    "    let existing_window = cx",
+  );
   const filterByJsonPath = sliceBetween(
     settingsSource,
     "fn filter_by_json_path(&self, query: &str) -> Vec<usize> {",
@@ -120,6 +125,51 @@ test("settings search result paths are capped before applying filters", () => {
     /for match_index in match_indices\.take\(MAX_SETTINGS_MATCH_INDICES\)/,
     "applied setting match indices must be capped at the filter-table write boundary",
   );
+  assert.match(
+    applyMatchIndices,
+    /if let Some\(page\) = self\.filter_table\.get_mut\(page_index\)/,
+    "applied setting match indices must guard stale filter-table page indexes",
+  );
+  assert.match(
+    applyMatchIndices,
+    /page\.get_mut\(header_index\)/,
+    "applied setting match indices must guard stale header indexes",
+  );
+  assert.match(
+    applyMatchIndices,
+    /page\.get_mut\(item_index\)/,
+    "applied setting match indices must guard stale item indexes",
+  );
+  assert.match(
+    openPath,
+    /search_index\.key_lut\.get\(\*index\)/,
+    "settings deep-link navigation must guard stale search-index entries",
+  );
+  assert.match(
+    openPath,
+    /settings_window\.visible_page_item_matches\(page_index, item_index\)/,
+    "settings deep-link navigation must guard stale filter-table entries",
+  );
+  assert.match(
+    openPath,
+    /settings_window\.pages\.get\(page_index\)/,
+    "settings deep-link navigation must guard stale page indexes",
+  );
+  assert.match(
+    openPath,
+    /page\.items\.get\(item_index\)/,
+    "settings deep-link navigation must guard stale item indexes",
+  );
+  assert.match(
+    openPath,
+    /page\.items\.get\(header_index\)/,
+    "settings deep-link navigation must guard stale header indexes",
+  );
+  assert.doesNotMatch(
+    openPath,
+    /(?:key_lut|filter_table|pages|items)\[[^\]]+\]/,
+    "settings deep-link navigation must not directly index search, filter, page, or item tables",
+  );
   assertBefore(
     updateMatches,
     ".take(MAX_SETTINGS_EXACT_MATCHES)",
@@ -131,6 +181,215 @@ test("settings search result paths are capped before applying filters", () => {
     "MAX_SETTINGS_FUZZY_MATCHES",
     "cx.background_executor().clone()",
     "settings fuzzy search must receive a named result cap",
+  );
+});
+
+test("settings navigation render paths guard stale page and item indexes", () => {
+  const visiblePageItemMatches = sliceBetween(
+    settingsSource,
+    "fn visible_page_item_matches(&self, page_idx: usize, item_index: usize) -> bool {",
+    "fn visible_page_items",
+  );
+  const navEntrySearchFilter = sliceBetween(
+    settingsSource,
+    "fn nav_entry_in_search_filter(&self, entry: &NavBarEntry) -> bool {",
+    "fn visible_navbar_entries",
+  );
+  const toggleNavbarEntry = sliceBetween(
+    settingsSource,
+    "fn toggle_navbar_entry(&mut self, nav_entry_index: usize) {",
+    "fn toggle_and_focus_navbar_entry",
+  );
+  const toggleAndFocusNavbarEntry = sliceBetween(
+    settingsSource,
+    "fn toggle_and_focus_navbar_entry(",
+    "fn toggle_navbar_entry_on_double_click",
+  );
+  const openNavbarEntryPage = sliceBetween(
+    settingsSource,
+    "fn open_navbar_entry_page(&mut self, navbar_entry: usize) {",
+    "fn open_best_matching_nav_page",
+  );
+  const openAndScrollNavbar = sliceBetween(
+    settingsSource,
+    "fn open_and_scroll_to_navbar_entry(",
+    "fn scroll_to_content_item",
+  );
+  const focusAndScrollNavbar = sliceBetween(
+    settingsSource,
+    "fn focus_and_scroll_to_nav_entry(",
+    "fn current_sub_page_scroll_handle",
+  );
+  const changeFile = sliceBetween(
+    settingsSource,
+    "fn change_file(&mut self, ix: usize, window: &mut Window, cx: &mut Context<SettingsWindow>) {",
+    "fn render_files_header",
+  );
+  const renderFilesHeader = sliceBetween(
+    settingsSource,
+    "fn render_files_header(",
+    "fn render_search",
+  );
+  const visibleNavbarEntries = sliceBetween(
+    settingsSource,
+    "fn visible_navbar_entries(&self) -> impl Iterator<Item = (usize, &NavBarEntry)> {",
+    "fn filter_matches_to_file",
+  );
+  const contentFocusHandle = sliceBetween(
+    settingsSource,
+    "fn focus_handle_for_content_element(",
+    "fn focused_nav_entry",
+  );
+  const rootEntryContaining = sliceBetween(
+    settingsSource,
+    "fn root_entry_containing(",
+    "\n}",
+  );
+  const currentPageItems = sliceBetween(
+    settingsSource,
+    "fn render_current_page_items(",
+    "fn render_sub_page_items",
+  );
+
+  assert.match(
+    visiblePageItemMatches,
+    /self\.filter_table\s*\.get\(page_idx\)\s*\.and_then\(\|page_matches\| page_matches\.get\(item_index\)\)/,
+    "visible page filters must guard stale page and item indexes",
+  );
+  assert.match(
+    visiblePageItemMatches,
+    /\.copied\(\)\s*\.unwrap_or\(false\)/,
+    "visible page filters must fail closed when the filter table is stale",
+  );
+  assert.match(
+    navEntrySearchFilter,
+    /self\.filter_table\s*\.get\(entry\.page_index\)/,
+    "navbar search visibility must guard stale page indexes before reading the filter table",
+  );
+  assert.match(
+    navEntrySearchFilter,
+    /page_matches\.get\(item_index\)\.copied\(\)\.unwrap_or\(false\)/,
+    "navbar search visibility must fail closed for stale item indexes",
+  );
+  assert.match(
+    navEntrySearchFilter,
+    /None => false/,
+    "navbar search visibility must fail closed for missing filter pages",
+  );
+  assert.match(
+    visibleNavbarEntries,
+    /self\.nav_entry_in_search_filter\(entry\)/,
+    "visible navbar iteration must delegate filter-table reads through the guarded helper",
+  );
+  assert.doesNotMatch(
+    visibleNavbarEntries,
+    /search_matches\[[^\]]+\]/,
+    "visible navbar iteration must not directly index search match pages",
+  );
+  assert.match(
+    toggleNavbarEntry,
+    /let Some\(entry\) = self\.navbar_entries\.get_mut\(nav_entry_index\)/,
+    "navbar toggles must guard stale target indexes",
+  );
+  assert.doesNotMatch(
+    toggleNavbarEntry,
+    /navbar_entries\[[^\]]+\]/,
+    "navbar toggles must not directly index navbar entries",
+  );
+  assert.match(
+    toggleAndFocusNavbarEntry,
+    /let Some\(focus_handle\) = self\s*\.navbar_entries\s*\.get\(nav_entry_index\)/,
+    "navbar toggle focus must guard stale target indexes",
+  );
+  assert.doesNotMatch(
+    toggleAndFocusNavbarEntry,
+    /navbar_entries\[[^\]]+\]/,
+    "navbar toggle focus must not directly index navbar entries",
+  );
+  assert.match(
+    openNavbarEntryPage,
+    /let Some\(target_page_index\) = self\s*\.navbar_entries\s*\.get\(navbar_entry\)/,
+    "opening a navbar entry must guard stale target indexes",
+  );
+  assert.doesNotMatch(
+    openNavbarEntryPage,
+    /navbar_entries\[[^\]]+\]/,
+    "opening a navbar entry must not directly index navbar entries",
+  );
+  assert.match(
+    openAndScrollNavbar,
+    /let Some\(entry\) = self\.navbar_entries\.get\(navbar_entry_index\)/,
+    "scrolling to a navbar entry must guard stale target indexes",
+  );
+  assert.doesNotMatch(
+    openAndScrollNavbar,
+    /navbar_entries\[[^\]]+\]/,
+    "scrolling to a navbar entry must not directly index navbar entries",
+  );
+  assert.match(
+    focusAndScrollNavbar,
+    /let Some\(focus_handle\) = self\s*\.navbar_entries\s*\.get\(nav_entry_index\)/,
+    "focusing a navbar entry must guard stale target indexes",
+  );
+  assert.doesNotMatch(
+    focusAndScrollNavbar,
+    /navbar_entries\[[^\]]+\]/,
+    "focusing a navbar entry must not directly index navbar entries",
+  );
+  assert.match(
+    changeFile,
+    /let Some\(next_file\) = self\.files\.get\(ix\)\.map\(\|\(file, _\)\| file\.clone\(\)\)/,
+    "file switching must guard stale file indexes before reading the selected file",
+  );
+  assert.doesNotMatch(
+    changeFile,
+    /self\.files\[ix\]/,
+    "file switching must not directly index selected files",
+  );
+  assert.match(
+    renderFilesHeader,
+    /let Some\(\(file, focus_handle\)\) = self\.files\.get\(selected_file_ix\)/,
+    "file header rendering must guard stale selected overflow indexes",
+  );
+  assert.doesNotMatch(
+    renderFilesHeader,
+    /self\.files\[[^\]]+\]/,
+    "file header rendering must not directly index files",
+  );
+  assert.match(
+    contentFocusHandle,
+    /self\.content_handles\s*\.get\(page_index\)\s*\.and_then\(\|page_handles\| page_handles\.get\(actual_item_index\)\)/,
+    "content focus lookup must guard stale page and item indexes",
+  );
+  assert.match(
+    rootEntryContaining,
+    /-> Option<usize>/,
+    "root lookup must fail closed instead of panicking on stale navbar state",
+  );
+  assert.match(
+    rootEntryContaining,
+    /self\.navbar_entries\.get\(prev_index\)/,
+    "root lookup must guard stale parent indexes",
+  );
+  assert.doesNotMatch(
+    rootEntryContaining,
+    /navbar_entries\[[^\]]+\]|expect\("No root entry found"\)/,
+    "root lookup must not directly index or panic on stale navbar state",
+  );
+  assert.doesNotMatch(
+    settingsSource,
+    /navbar_entries\[(?:focused_entry|focused_entry_parent|prev_index)\]/,
+    "collapse and expand nav actions must not direct-index focused navbar entries",
+  );
+  assert.match(
+    currentPageItems,
+    /let Some\(item_focus_handle\) = this\.focus_handle_for_content_element\(\s*current_page_index,\s*actual_item_index,\s*cx,\s*\) else \{/,
+    "settings page rendering must fail closed when a stale item lacks a focus handle",
+  );
+  assert.doesNotMatch(
+    currentPageItems,
+    /content_handles\[[^\]]+\]\[[^\]]+\]/,
+    "settings page rendering must not directly index content handles",
   );
 });
 

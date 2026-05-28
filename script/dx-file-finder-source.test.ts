@@ -137,6 +137,62 @@ test("file finder workspace-driven channel and create-new lists are bounded", ()
   );
 });
 
+test("file finder channel matches fail closed for stale fuzzy candidate ids", () => {
+  const source = read("crates/file_finder/src/file_finder.rs");
+  const setSearchMatches = functionBody(source, "set_search_matches");
+
+  assert.doesNotMatch(
+    setSearchMatches,
+    /channels\[candidate\.id\]/,
+    "channel match construction must not index channels with a fuzzy candidate id",
+  );
+  assert.match(
+    setSearchMatches,
+    /let Some\(channel\) = channels\.get\(candidate\.id\) else \{\s+continue;\s+\};/,
+    "channel match construction must skip stale fuzzy candidate ids",
+  );
+  assertBefore({
+    body: setSearchMatches,
+    before: "channels.get(candidate.id)",
+    after: "channel_matches.push(Match::Channel",
+    message: "channel matches must resolve stale candidate ids before materialization",
+  });
+});
+
+test("file finder clamps stale selected indexes to current matches", () => {
+  const source = read("crates/file_finder/src/file_finder.rs");
+  const clampSelectedIndex = functionBody(source, "clamp_selected_index");
+  const setSearchMatches = functionBody(source, "set_search_matches");
+  const setSelectedIndex = functionBody(source, "set_selected_index");
+  const updateMatches = functionBody(source, "update_matches");
+
+  assert.match(
+    clampSelectedIndex,
+    /requested_index\.min\(self\.matches\.len\(\)\.saturating_sub\(1\)\)/,
+    "selected-index clamp must cap requests to the last current match",
+  );
+  assert.match(
+    setSelectedIndex,
+    /self\.selected_index = self\.clamp_selected_index\(ix\);/,
+    "picker selection updates must clamp against current matches",
+  );
+  assert.match(
+    setSearchMatches,
+    /self\.selected_index = self\.clamp_selected_index\(\s*selected_match\.map_or_else\(/,
+    "search result replacement must clamp reselected stale indexes",
+  );
+  assert.match(
+    updateMatches,
+    /if query_exceeds_file_finder_limit\(raw_query\)[\s\S]*self\.matches = Matches \{[\s\S]*\};\s+self\.selected_index = self\.clamp_selected_index\(0\);/,
+    "oversized-query replacement must clamp selection after replacing matches",
+  );
+  assert.match(
+    updateMatches,
+    /if raw_query\.is_empty\(\) \{[\s\S]*self\.matches = Matches \{[\s\S]*self\.matches\.push_new_matches\([\s\S]*\);\s+self\.first_update = false;\s+self\.selected_index = self\.clamp_selected_index\(0\);/,
+    "empty-query replacement must clamp selection after rebuilding matches",
+  );
+});
+
 test("file finder rejects oversized user queries before parsing or fuzzy search", () => {
   const source = read("crates/file_finder/src/file_finder.rs");
   const updateMatches = functionBody(source, "update_matches");

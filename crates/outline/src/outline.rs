@@ -227,6 +227,14 @@ impl OutlineViewDelegate {
         })
     }
 
+    fn clamped_match_index(&self, ix: usize) -> usize {
+        ix.min(self.matches.len().saturating_sub(1))
+    }
+
+    fn clamp_selected_index_to_matches(&mut self) {
+        self.selected_match_index = self.clamped_match_index(self.selected_match_index);
+    }
+
     fn set_selected_index(
         &mut self,
         ix: usize,
@@ -234,15 +242,16 @@ impl OutlineViewDelegate {
 
         cx: &mut Context<Picker<OutlineViewDelegate>>,
     ) {
-        let Some(selected_match) = self.matches.get(ix) else {
-            self.selected_match_index = self.matches.len();
+        self.selected_match_index = self.clamped_match_index(ix);
+
+        let Some(selected_match) = self.matches.get(self.selected_match_index) else {
             return;
         };
 
-        self.selected_match_index = ix;
-
         if navigate {
-            let outline_item = &self.outline.items[selected_match.candidate_id];
+            let Some(outline_item) = self.outline.items.get(selected_match.candidate_id) else {
+                return;
+            };
 
             self.active_editor.update(cx, |active_editor, cx| {
                 active_editor.clear_row_highlights::<OutlineRowHighlights>();
@@ -323,6 +332,7 @@ impl PickerDelegate for OutlineViewDelegate {
 
             let _ = this.update(cx, |this, cx| {
                 this.delegate.matches = matches;
+                this.delegate.clamp_selected_index_to_matches();
                 let selected_index = if is_query_empty {
                     let (buffer, cursor_offset) =
                         this.delegate.active_editor.update(cx, |editor, cx| {
@@ -338,7 +348,7 @@ impl PickerDelegate for OutlineViewDelegate {
                         .iter()
                         .enumerate()
                         .filter_map(|(ix, m)| {
-                            let item = &this.delegate.outline.items[m.candidate_id];
+                            let item = this.delegate.outline.items.get(m.candidate_id)?;
                             let range = item.range.to_offset(&buffer);
                             range.contains(&cursor_offset).then_some((ix, item.depth))
                         })

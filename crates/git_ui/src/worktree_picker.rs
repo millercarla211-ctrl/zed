@@ -243,13 +243,13 @@ impl Render for WorktreePicker {
             }))
             .on_action(cx.listener(|this, _: &DeleteWorktree, window, cx| {
                 this.picker.update(cx, |picker, cx| {
-                    let ix = picker.delegate.selected_index;
+                    let ix = picker.delegate.selected_index();
                     picker.delegate.delete_worktree(ix, false, window, cx);
                 });
             }))
             .on_action(cx.listener(|this, _: &ForceDeleteWorktree, window, cx| {
                 this.picker.update(cx, |picker, cx| {
-                    let ix = picker.delegate.selected_index;
+                    let ix = picker.delegate.selected_index();
                     picker.delegate.delete_worktree(ix, true, window, cx);
                 });
             }))
@@ -463,6 +463,14 @@ impl WorktreePickerDelegate {
         self.modifiers.alt && self.hovered_delete_index == Some(index)
     }
 
+    fn clamp_selected_index(&self, ix: usize) -> usize {
+        if self.matches.is_empty() {
+            0
+        } else {
+            ix.min(self.matches.len() - 1)
+        }
+    }
+
     fn delete_worktree(
         &self,
         ix: usize,
@@ -559,11 +567,9 @@ impl WorktreePickerDelegate {
                     !matches!(e, WorktreeEntry::Worktree { worktree, .. } if worktree.path == path)
                 });
                 picker.delegate.all_worktrees.retain(|w| w.path != path);
-                if picker.delegate.matches.is_empty() {
-                    picker.delegate.selected_index = 0;
-                } else if picker.delegate.selected_index >= picker.delegate.matches.len() {
-                    picker.delegate.selected_index = picker.delegate.matches.len() - 1;
-                }
+                picker.delegate.selected_index = picker
+                    .delegate
+                    .clamp_selected_index(picker.delegate.selected_index);
                 picker.delegate.hovered_delete_index = None;
                 cx.notify();
             })?;
@@ -575,6 +581,7 @@ impl WorktreePickerDelegate {
 
     fn sync_selected_index(&mut self, has_query: bool) {
         if !has_query {
+            self.selected_index = self.clamp_selected_index(self.selected_index);
             return;
         }
 
@@ -612,7 +619,7 @@ impl PickerDelegate for WorktreePickerDelegate {
     }
 
     fn selected_index(&self) -> usize {
-        self.selected_index
+        self.clamp_selected_index(self.selected_index)
     }
 
     fn set_selected_index(
@@ -621,7 +628,7 @@ impl PickerDelegate for WorktreePickerDelegate {
         _window: &mut Window,
         _cx: &mut Context<Picker<Self>>,
     ) {
-        self.selected_index = ix;
+        self.selected_index = self.clamp_selected_index(ix);
     }
 
     fn can_select(&self, ix: usize, _window: &mut Window, _cx: &mut Context<Picker<Self>>) -> bool {
@@ -731,8 +738,13 @@ impl PickerDelegate for WorktreePickerDelegate {
                     let mut new_matches: Vec<WorktreeEntry> = Vec::new();
 
                     for candidate in &fuzzy_matches {
+                        let Some(worktree) =
+                            repo_worktrees_clone.get(candidate.candidate_id).cloned()
+                        else {
+                            continue;
+                        };
                         new_matches.push(WorktreeEntry::Worktree {
-                            worktree: repo_worktrees_clone[candidate.candidate_id].clone(),
+                            worktree,
                             positions: candidate.positions.clone(),
                         });
                     }
@@ -766,7 +778,7 @@ impl PickerDelegate for WorktreePickerDelegate {
     }
 
     fn confirm(&mut self, secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
-        let Some(entry) = self.matches.get(self.selected_index) else {
+        let Some(entry) = self.matches.get(self.selected_index()) else {
             return;
         };
 
@@ -1140,7 +1152,7 @@ impl PickerDelegate for WorktreePickerDelegate {
         }
 
         let focus_handle = self.focus_handle.clone();
-        let selected_entry = self.matches.get(self.selected_index);
+        let selected_entry = self.matches.get(self.selected_index());
 
         let is_creating = selected_entry.is_some_and(|e| {
             matches!(

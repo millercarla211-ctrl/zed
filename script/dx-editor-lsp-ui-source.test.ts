@@ -181,3 +181,30 @@ test("completion resolve and markdown parse fanout are capped around nearby cand
     message: "nearby completion markdown parse fanout must be capped before parse creation",
   });
 });
+
+test("snippet fuzzy completion skips stale candidate ids before snippet lookup", () => {
+  const source = read("crates/editor/src/completions.rs");
+  const body = functionBody(source, "snippet_completions");
+
+  assert.match(
+    body,
+    /sorted_snippet_candidates\s*\.get\(string_match\.candidate_id\)/,
+    "snippet fuzzy matches must guard stale candidate ids before candidate lookup",
+  );
+  assert.doesNotMatch(
+    body,
+    /sorted_snippet_candidates\s*\[\s*string_match\.candidate_id\s*\]/,
+    "snippet fuzzy matches must not directly index sorted candidates by candidate_id",
+  );
+  assertBefore({
+    body,
+    before: /sorted_snippet_candidates\s*\.get\(string_match\.candidate_id\)/,
+    after: /snippets\.get\(snippet_index\)/,
+    message: "snippet candidate ids must be guarded before snippet lookup",
+  });
+  assert.doesNotMatch(
+    body,
+    /let snippet = &snippets\[\s*snippet_index\s*\]/,
+    "snippet lookup derived from fuzzy candidates must use get()",
+  );
+});

@@ -1140,7 +1140,9 @@ impl FileFinderDelegate {
                         }
 
                         if query_idx == query_lower.len() {
-                            let channel = &channels[candidate.id];
+                            let Some(channel) = channels.get(candidate.id) else {
+                                continue;
+                            };
                             let score = if name_lower == query_lower {
                                 1.0
                             } else if name_lower.starts_with(&query_lower) {
@@ -1232,14 +1234,14 @@ impl FileFinderDelegate {
                 }
             }
 
-            self.selected_index = selected_match.map_or_else(
+            self.selected_index = self.clamp_selected_index(selected_match.map_or_else(
                 || self.calculate_selected_index(cx),
                 |m| {
                     self.matches
                         .position(&m, self.currently_opened_path.as_ref())
                         .unwrap_or(0)
                 },
-            );
+            ));
 
             self.latest_search_query = Some(query);
             self.latest_search_did_cancel = did_cancel;
@@ -1531,6 +1533,10 @@ impl FileFinderDelegate {
         0
     }
 
+    fn clamp_selected_index(&self, requested_index: usize) -> usize {
+        requested_index.min(self.matches.len().saturating_sub(1))
+    }
+
     fn key_context(&self, window: &Window, cx: &App) -> KeyContext {
         let mut key_context = KeyContext::new_with_defaults();
         key_context.add("FileFinder");
@@ -1572,7 +1578,7 @@ impl PickerDelegate for FileFinderDelegate {
 
     fn set_selected_index(&mut self, ix: usize, _: &mut Window, cx: &mut Context<Picker<Self>>) {
         self.has_changed_selected_index = true;
-        self.selected_index = ix;
+        self.selected_index = self.clamp_selected_index(ix);
         cx.notify();
     }
 
@@ -1612,7 +1618,7 @@ impl PickerDelegate for FileFinderDelegate {
                 separate_history: self.separate_history,
                 ..Matches::default()
             };
-            self.selected_index = 0;
+            self.selected_index = self.clamp_selected_index(0);
             cx.notify();
             return Task::ready(());
         }
@@ -1673,7 +1679,7 @@ impl PickerDelegate for FileFinderDelegate {
                 );
 
                 self.first_update = false;
-                self.selected_index = 0;
+                self.selected_index = self.clamp_selected_index(0);
             }
             cx.notify();
             Task::ready(())

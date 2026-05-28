@@ -315,6 +315,14 @@ impl StashListDelegate {
         )
     }
 
+    fn clamp_selected_index(&self, ix: usize) -> usize {
+        if self.matches.is_empty() {
+            0
+        } else {
+            ix.min(self.matches.len() - 1)
+        }
+    }
+
     fn drop_stash_at(&self, ix: usize, window: &mut Window, cx: &mut Context<Picker<Self>>) {
         let Some(entry_match) = self.matches.get(ix) else {
             return;
@@ -399,7 +407,7 @@ impl PickerDelegate for StashListDelegate {
     }
 
     fn selected_index(&self) -> usize {
-        self.selected_index
+        self.clamp_selected_index(self.selected_index)
     }
 
     fn set_selected_index(
@@ -408,7 +416,7 @@ impl PickerDelegate for StashListDelegate {
         _window: &mut Window,
         _: &mut Context<Picker<Self>>,
     ) {
-        self.selected_index = ix;
+        self.selected_index = self.clamp_selected_index(ix);
     }
 
     fn update_matches(
@@ -464,18 +472,18 @@ impl PickerDelegate for StashListDelegate {
                 )
                 .await
                 .into_iter()
-                .map(|candidate| {
-                    let entry = all_stash_entries[candidate.candidate_id].clone();
+                .filter_map(|candidate| {
+                    let entry = all_stash_entries.get(candidate.candidate_id).cloned()?;
                     let formatted_timestamp = Self::format_timestamp(entry.timestamp, timezone);
                     let formatted_absolute_timestamp =
                         Self::format_absolute_timestamp(entry.timestamp, timezone);
 
-                    StashEntryMatch {
+                    Some(StashEntryMatch {
                         entry,
                         positions: candidate.positions,
                         formatted_timestamp,
                         formatted_absolute_timestamp,
-                    }
+                    })
                 })
                 .collect()
             };
@@ -488,7 +496,7 @@ impl PickerDelegate for StashListDelegate {
                         delegate.selected_index = 0;
                     } else {
                         delegate.selected_index =
-                            core::cmp::min(delegate.selected_index, delegate.matches.len() - 1);
+                            delegate.clamp_selected_index(delegate.selected_index);
                     }
                     delegate.last_query = query;
                 })

@@ -87,6 +87,10 @@ fn cap_extension_version_selector_rows(extension_versions: &mut Vec<ExtensionMet
     extension_versions.truncate(MAX_EXTENSION_VERSION_SELECTOR_ROWS);
 }
 
+fn clamp_extension_version_selector_index(selected_index: usize, match_count: usize) -> usize {
+    selected_index.min(match_count.saturating_sub(1))
+}
+
 pub struct ExtensionVersionSelectorDelegate {
     fs: Arc<dyn Fs>,
     selector: WeakEntity<ExtensionVersionSelector>,
@@ -155,7 +159,7 @@ impl PickerDelegate for ExtensionVersionSelectorDelegate {
         _window: &mut Window,
         _cx: &mut Context<Picker<Self>>,
     ) {
-        self.selected_index = ix;
+        self.selected_index = clamp_extension_version_selector_index(ix, self.matches.len());
     }
 
     fn update_matches(
@@ -206,10 +210,10 @@ impl PickerDelegate for ExtensionVersionSelectorDelegate {
 
             this.update(cx, |this, _cx| {
                 this.delegate.matches = matches;
-                this.delegate.selected_index = this
-                    .delegate
-                    .selected_index
-                    .min(this.delegate.matches.len().saturating_sub(1));
+                this.delegate.selected_index = clamp_extension_version_selector_index(
+                    this.delegate.selected_index,
+                    this.delegate.matches.len(),
+                );
             })
             .log_err();
         })
@@ -221,8 +225,14 @@ impl PickerDelegate for ExtensionVersionSelectorDelegate {
             return;
         }
 
-        let candidate_id = self.matches[self.selected_index].candidate_id;
-        let extension_version = &self.extension_versions[candidate_id];
+        let Some(version_match) = self.matches.get(self.selected_index) else {
+            self.dismissed(window, cx);
+            return;
+        };
+        let candidate_id = version_match.candidate_id;
+        let Some(extension_version) = self.extension_versions.get(candidate_id) else {
+            return;
+        };
 
         if !extension_host::is_version_compatible(ReleaseChannel::global(cx), extension_version) {
             return;

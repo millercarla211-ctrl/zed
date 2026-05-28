@@ -222,6 +222,60 @@ test("extension version selector bounds rows, labels, query, and fuzzy matches",
     "version selector candidates must be capped before candidate creation",
   );
   assert.match(updateMatches, /MAX_EXTENSION_VERSION_SELECTOR_FUZZY_MATCHES/);
+
+  assert.match(
+    versionSelectorSource,
+    /fn clamp_extension_version_selector_index\(selected_index: usize, match_count: usize\) -> usize/,
+  );
+  const clampSelectedIndex = functionBody(
+    versionSelectorSource,
+    "clamp_extension_version_selector_index",
+  );
+  assert.match(
+    clampSelectedIndex,
+    /selected_index\.min\(match_count\.saturating_sub\(1\)\)/,
+    "version selector selected index clamp must tolerate empty match lists",
+  );
+
+  const setSelectedIndex = functionBody(versionSelectorSource, "set_selected_index");
+  assert.match(
+    setSelectedIndex,
+    /self\.selected_index\s*=\s*clamp_extension_version_selector_index\(ix,\s*self\.matches\.len\(\)\)/,
+    "set_selected_index must clamp to the current match count",
+  );
+  assert.doesNotMatch(
+    setSelectedIndex,
+    /self\.selected_index\s*=\s*ix\s*;/,
+    "set_selected_index must not store a stale index directly",
+  );
+
+  assert.match(
+    updateMatches,
+    /this\.delegate\.selected_index\s*=\s*clamp_extension_version_selector_index\(\s*this\.delegate\.selected_index,\s*this\.delegate\.matches\.len\(\),?\s*\)/,
+    "async match replacement must clamp stale selected indexes",
+  );
+
+  const confirm = functionBody(versionSelectorSource, "confirm");
+  assert.match(
+    confirm,
+    /self\.matches\.get\(self\.selected_index\)/,
+    "confirm must guard stale selected indexes",
+  );
+  assert.match(
+    confirm,
+    /self\.extension_versions\.get\(candidate_id\)/,
+    "confirm must guard stale fuzzy candidate ids",
+  );
+  assert.doesNotMatch(
+    confirm,
+    /self\.matches\[[^\]]+\]/,
+    "confirm must not directly index matches",
+  );
+  assert.doesNotMatch(
+    confirm,
+    /self\.extension_versions\[[^\]]+\]/,
+    "confirm must not directly index extension versions",
+  );
 });
 
 test("extension suggestions bound notification display labels", () => {

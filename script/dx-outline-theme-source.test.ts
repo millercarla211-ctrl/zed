@@ -146,6 +146,64 @@ test("outline modal caps fetched items and empty-query render rows", () => {
   );
 });
 
+test("outline modal guards stale selection indexes and candidate ids", () => {
+  const source = sources.outlineModal;
+  const clampedMatchIndex = functionBody(source, "clamped_match_index");
+  assert.match(clampedMatchIndex, /self\.matches\.len\(\)\.saturating_sub\(1\)/);
+
+  const clampSelection = functionBody(source, "clamp_selected_index_to_matches");
+  assert.match(
+    clampSelection,
+    /self\.selected_match_index = self\.clamped_match_index\(self\.selected_match_index\);/,
+  );
+
+  const setSelectedIndex = functionBody(source, "set_selected_index");
+  assert.match(
+    setSelectedIndex,
+    /self\.selected_match_index = self\.clamped_match_index\(ix\);/,
+  );
+  assert.match(
+    setSelectedIndex,
+    /self\.matches\.get\(self\.selected_match_index\)/,
+  );
+  assert.match(
+    setSelectedIndex,
+    /self\.outline\.items\.get\(selected_match\.candidate_id\)/,
+  );
+  assert.doesNotMatch(
+    setSelectedIndex,
+    /outline\.items\s*\[\s*selected_match\.candidate_id\s*\]/,
+  );
+
+  const updateMatches = functionBody(source, "update_matches");
+  assertBefore(
+    updateMatches,
+    "this.delegate.matches = matches;",
+    "this.delegate.clamp_selected_index_to_matches();",
+    "outline modal must clamp the selected index after replacing matches",
+  );
+  assertBefore(
+    updateMatches,
+    "this.delegate.clamp_selected_index_to_matches();",
+    "let selected_index = if is_query_empty {",
+    "outline modal must clamp stale selection before choosing the new selected match",
+  );
+
+  const emptyQuerySelection = sliceBetween(
+    updateMatches,
+    "let selected_index = if is_query_empty {",
+    "} else {",
+  );
+  assert.match(
+    emptyQuerySelection,
+    /filter_map\(\|\(ix, m\)\|\s*\{\s*let item = this\.delegate\.outline\.items\.get\(m\.candidate_id\)\?;/,
+  );
+  assert.doesNotMatch(
+    emptyQuerySelection,
+    /outline\.items\s*\[\s*m\.candidate_id\s*\]/,
+  );
+});
+
 test("outline panel bounds cached rows, match candidates, and filtering", () => {
   const source = sources.outlinePanel;
   assert.match(source, /const MAX_OUTLINE_PANEL_CACHED_ENTRIES: usize = 50_000;/);

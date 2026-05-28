@@ -155,6 +155,150 @@ test("stash picker bounds stash entries, fuzzy candidates, and rendered labels",
   );
 });
 
+test("git pickers guard stale fuzzy IDs and selected indexes", () => {
+  const branchSource = productionSource(read("crates/git_ui/src/branch_picker.rs"));
+  const stashSource = productionSource(read("crates/git_ui/src/stash_picker.rs"));
+  const worktreeSource = productionSource(read("crates/git_ui/src/worktree_picker.rs"));
+
+  const branchUpdateMatches = sliceBetween(
+    branchSource,
+    "fn update_matches(",
+    "fn confirm(",
+  );
+  const branchSetSelectedIndex = functionBody(branchSource, "set_selected_index");
+  const branchConfirm = functionBody(branchSource, "confirm");
+
+  assert.match(
+    branchUpdateMatches,
+    /branches\s*\.get\(candidate\.candidate_id\)\s*\.cloned\(\)/,
+    "branch fuzzy results must ignore stale candidate IDs",
+  );
+  assert.doesNotMatch(
+    branchUpdateMatches,
+    /branches\s*\[\s*candidate\.candidate_id\s*\]/,
+    "branch fuzzy results must not index stale candidate IDs directly",
+  );
+  assert.match(
+    branchSource,
+    /fn clamp_selected_index\(&self, ix: usize\) -> usize/,
+    "branch picker must have a shared selected-index clamp",
+  );
+  assert.match(
+    branchSetSelectedIndex,
+    /self\.selected_index = self\.clamp_selected_index\(ix\);/,
+    "branch selected-index setter must clamp against current matches",
+  );
+  assert.doesNotMatch(
+    branchSetSelectedIndex,
+    /self\.selected_index = ix;/,
+    "branch selected-index setter must not store raw indexes",
+  );
+  assert.match(
+    branchConfirm,
+    /self\.matches\.get\(self\.selected_index\(\)\)/,
+    "branch confirm must read through the clamped selected index",
+  );
+  assert.doesNotMatch(
+    branchSource,
+    /\.delete_at\(picker\.delegate\.selected_index,/,
+    "branch delete actions must not pass raw selected indexes",
+  );
+
+  const stashUpdateMatches = sliceBetween(
+    stashSource,
+    "fn update_matches(",
+    "fn confirm(",
+  );
+  const stashSetSelectedIndex = functionBody(stashSource, "set_selected_index");
+  const stashConfirm = functionBody(stashSource, "confirm");
+
+  assert.match(
+    stashUpdateMatches,
+    /all_stash_entries\s*\.get\(candidate\.candidate_id\)\s*\.cloned\(\)/,
+    "stash fuzzy results must ignore stale candidate IDs",
+  );
+  assert.doesNotMatch(
+    stashUpdateMatches,
+    /all_stash_entries\s*\[\s*candidate\.candidate_id\s*\]/,
+    "stash fuzzy results must not index stale candidate IDs directly",
+  );
+  assert.match(
+    stashSource,
+    /fn clamp_selected_index\(&self, ix: usize\) -> usize/,
+    "stash picker must have a shared selected-index clamp",
+  );
+  assert.match(
+    stashSetSelectedIndex,
+    /self\.selected_index = self\.clamp_selected_index\(ix\);/,
+    "stash selected-index setter must clamp against current matches",
+  );
+  assert.doesNotMatch(
+    stashSetSelectedIndex,
+    /self\.selected_index = ix;/,
+    "stash selected-index setter must not store raw indexes",
+  );
+  assert.match(
+    stashConfirm,
+    /self\.matches\.get\(self\.selected_index\(\)\)/,
+    "stash confirm must read through the clamped selected index",
+  );
+
+  const worktreeUpdateMatches = sliceBetween(
+    worktreeSource,
+    "fn update_matches(",
+    "fn confirm(",
+  );
+  const worktreeSetSelectedIndex = functionBody(worktreeSource, "set_selected_index");
+  const worktreeSyncSelectedIndex = functionBody(worktreeSource, "sync_selected_index");
+  const worktreeConfirm = functionBody(worktreeSource, "confirm");
+
+  assert.match(
+    worktreeUpdateMatches,
+    /repo_worktrees_clone\s*\.get\(candidate\.candidate_id\)\s*\.cloned\(\)/,
+    "worktree fuzzy results must ignore stale candidate IDs",
+  );
+  assert.doesNotMatch(
+    worktreeUpdateMatches,
+    /repo_worktrees_clone\s*\[\s*candidate\.candidate_id\s*\]/,
+    "worktree fuzzy results must not index stale candidate IDs directly",
+  );
+  assert.match(
+    worktreeSource,
+    /fn clamp_selected_index\(&self, ix: usize\) -> usize/,
+    "worktree picker must have a shared selected-index clamp",
+  );
+  assert.match(
+    worktreeSetSelectedIndex,
+    /self\.selected_index = self\.clamp_selected_index\(ix\);/,
+    "worktree selected-index setter must clamp against current matches",
+  );
+  assert.doesNotMatch(
+    worktreeSetSelectedIndex,
+    /self\.selected_index = ix;/,
+    "worktree selected-index setter must not store raw indexes",
+  );
+  assert.match(
+    worktreeSyncSelectedIndex,
+    /self\.selected_index = self\.clamp_selected_index\(self\.selected_index\);/,
+    "worktree selected-index sync must clamp when preserving selection",
+  );
+  assert.match(
+    worktreeConfirm,
+    /self\.matches\.get\(self\.selected_index\(\)\)/,
+    "worktree confirm must read through the clamped selected index",
+  );
+  assert.doesNotMatch(
+    worktreeSource,
+    /let ix = picker\.delegate\.selected_index;/,
+    "worktree action handlers must not pass raw selected indexes",
+  );
+  assert.doesNotMatch(
+    worktreeSource,
+    /self\.matches\.get\(self\.selected_index\)/,
+    "worktree footer and confirm paths must read through the clamped selected index",
+  );
+});
+
 test("repository selector bounds repository lists and prompt labels", () => {
   const source = productionSource(read("crates/git_ui/src/repository_selector.rs"));
   const newSelector = functionBody(source, "new");

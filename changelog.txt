@@ -1,3 +1,24 @@
+[2026-05-29] - Stale Selection And Candidate Lookup Hardening
+
+CHANGED:
+- Outline modal now clamps stale match selections and guards outline item candidate IDs before navigation.
+- Extension Version Selector now clamps selection after picker and async match changes, and guards confirm-time version lookups.
+- File Finder now skips stale channel fuzzy candidate IDs and clamps selection after match replacement and reset paths.
+- Editor snippet completions now skip stale fuzzy candidates before snippet lookup.
+- Git branch, stash, and worktree pickers now guard stale fuzzy IDs and use clamped selected indexes for confirm, delete, and footer paths.
+- Settings UI now guards deep-link search entries, filter-table writes, navbar visibility/toggle/open/focus paths, file selector reads, content focus handles, and root-entry lookup against stale indexes.
+- Extended `script\dx-outline-theme-source.test.ts`, `script\dx-extensions-ui-source.test.ts`, `script\dx-file-finder-source.test.ts`, `script\dx-editor-lsp-ui-source.test.ts`, `script\dx-git-ui-source.test.ts`, and `script\dx-settings-keymap-source.test.ts`.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-outline-theme-source.test.ts script\dx-extensions-ui-source.test.ts script\dx-file-finder-source.test.ts script\dx-editor-lsp-ui-source.test.ts script\dx-git-ui-source.test.ts script\dx-settings-keymap-source.test.ts` (40/40 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Targeted stale-index pattern scans over edited source
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-29] - Config Options Tool Picker Debugger Open Path And Tab Switcher Hardening
 
 ADDED:
