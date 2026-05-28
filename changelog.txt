@@ -1,3 +1,28 @@
+[2026-05-28] - Registry Completion Search Task And LSP Boundary Hardening
+
+ADDED:
+- Added `script\dx-agent-registry-ui-source.test.ts` for Agent Registry UI query, filtered-result, and render-count materialization boundaries.
+- Added `script\dx-completion-provider-source.test.ts` for agent prompt completion candidate boundaries.
+- Added `script\dx-project-search-source.test.ts` for multiline project search file-read byte boundaries.
+- Added `script\dx-task-inventory-source.test.ts` for task/debug template and validation-list boundaries.
+- Added `script\dx-lsp-aggregation-source.test.ts` for document link and symbol LSP response aggregation boundaries.
+
+CHANGED:
+- ACP registry loading now caps index agents, icon fetch fanout, and binary targets before agent/icon/target materialization while preserving current-platform priority.
+- Agent Registry UI search now bounds editor query extraction before lowercase filtering, caps stored filtered indices, and caps rendered rows.
+- Agent prompt completions now cap slash skills/commands, skill mentions, top-recent thread matches, visible worktrees, empty-query file rows, and symbol candidates before collection or fuzzy matching.
+- Multiline project search now reads through a sentinel-byte bounded helper before UTF-8 string materialization.
+- Task inventory now caps settings-backed template lists, per-file task/debug template counts, validation errors, and unknown-variable display lists.
+- Document link and symbol LSP aggregation now caps remote response tasks before `join_all`, caps local response collection, caps per-server link/symbol payloads, and caps recursive symbol outline flattening before dedupe/sort collection.
+- `DX.md` and the source-guard registry now list the new guards.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-project-agent-registry-source.test.ts script\dx-agent-registry-ui-source.test.ts script\dx-completion-provider-source.test.ts script\dx-project-search-source.test.ts script\dx-task-inventory-source.test.ts script\dx-lsp-aggregation-source.test.ts` (22/22 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on all edited Rust files
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Network Discovery History And Clipboard Boundary Hardening
 
 ADDED:

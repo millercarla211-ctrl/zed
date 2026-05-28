@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use client::zed_urls;
 use collections::HashMap;
-use editor::{Editor, EditorElement, EditorStyle};
+use editor::{Editor, EditorElement, EditorStyle, MultiBufferOffset};
 use fs::Fs;
 use gpui::{
     AnyElement, App, Context, Entity, EventEmitter, Focusable, KeyContext, ParentElement, Render,
@@ -21,6 +21,10 @@ use workspace::{
     Workspace,
     item::{Item, ItemEvent},
 };
+
+const MAX_AGENT_REGISTRY_SEARCH_QUERY_CHARS: usize = 256;
+const MAX_FILTERED_AGENT_REGISTRY_RESULTS: usize = 512;
+const MAX_DISPLAYED_AGENT_REGISTRY_RESULTS: usize = MAX_FILTERED_AGENT_REGISTRY_RESULTS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RegistryFilter {
@@ -167,17 +171,24 @@ impl AgentRegistryPage {
     }
 
     fn search_query(&self, cx: &mut App) -> Option<String> {
-        let search = self.query_editor.read(cx).text(cx);
-        if search.trim().is_empty() {
+        let buffer = self.query_editor.read(cx).buffer().clone();
+        let snapshot = buffer.read(cx).snapshot(cx);
+        let search = snapshot
+            .text_for_range(MultiBufferOffset(0)..snapshot.len())
+            .flat_map(str::chars)
+            .take(MAX_AGENT_REGISTRY_SEARCH_QUERY_CHARS)
+            .collect::<String>();
+        let search = search.trim();
+        if search.is_empty() {
             None
         } else {
-            Some(search)
+            Some(search.to_lowercase())
         }
     }
 
     fn filter_registry_agents(&mut self, cx: &mut Context<Self>) {
         self.refresh_installed_statuses(cx);
-        let search = self.search_query(cx).map(|search| search.to_lowercase());
+        let search = self.search_query(cx);
         let filter = self.filter;
         let installed_statuses = self.installed_statuses.clone();
 
@@ -210,6 +221,7 @@ impl AgentRegistryPage {
                 matches_search && matches_filter
             })
             .map(|(index, _)| index)
+            .take(MAX_FILTERED_AGENT_REGISTRY_RESULTS)
             .collect();
 
         self.filtered_registry_indices = filtered_indices;
@@ -643,7 +655,10 @@ impl Render for AgentRegistryPage {
                     ),
             )
             .child(v_flex().px_4().size_full().overflow_y_hidden().map(|this| {
-                let count = self.filtered_registry_indices.len();
+                let count = self
+                    .filtered_registry_indices
+                    .len()
+                    .min(MAX_DISPLAYED_AGENT_REGISTRY_RESULTS);
                 if count == 0 {
                     this.child(self.render_empty_state(cx)).into_any_element()
                 } else {

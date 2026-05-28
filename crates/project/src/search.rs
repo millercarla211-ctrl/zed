@@ -1,5 +1,5 @@
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use client::proto;
 use fancy_regex::{Captures, Regex, RegexBuilder};
 use gpui::Entity;
@@ -86,6 +86,25 @@ static WORD_MATCH_TEST: LazyLock<Regex> = LazyLock::new(|| {
         .build()
         .expect("Failed to create WORD_MATCH_TEST")
 });
+
+const MAX_PROJECT_SEARCH_MULTILINE_FILE_BYTES: u64 = 8 * 1024 * 1024;
+
+fn read_bounded_multiline_search_text(
+    reader: &mut BufReader<Box<dyn Read + Send + Sync>>,
+) -> Result<String> {
+    let mut bytes = Vec::new();
+    reader
+        .by_ref()
+        .take(MAX_PROJECT_SEARCH_MULTILINE_FILE_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_PROJECT_SEARCH_MULTILINE_FILE_BYTES {
+        bail!(
+            "project search multiline file exceeded {} bytes",
+            MAX_PROJECT_SEARCH_MULTILINE_FILE_BYTES
+        );
+    }
+    Ok(String::from_utf8(bytes)?)
+}
 
 impl SearchQuery {
     /// Create a text query
@@ -394,11 +413,11 @@ impl SearchQuery {
 
         match self {
             Self::Text { search, .. } => {
-                let mut text = String::new();
                 if query_str.contains('\n') {
-                    reader.read_to_string(&mut text)?;
+                    let text = read_bounded_multiline_search_text(&mut reader)?;
                     Ok(search.is_match(&text))
                 } else {
+                    let mut text = String::new();
                     let mut bytes_read = 0;
                     while reader.read_line(&mut text)? > 0 {
                         if search.is_match(&text) {
@@ -417,11 +436,11 @@ impl SearchQuery {
             Self::Regex {
                 regex, multiline, ..
             } => {
-                let mut text = String::new();
                 if *multiline {
-                    reader.read_to_string(&mut text)?;
+                    let text = read_bounded_multiline_search_text(&mut reader)?;
                     Ok(regex.is_match(&text)?)
                 } else {
+                    let mut text = String::new();
                     let mut bytes_read = 0;
                     while reader.read_line(&mut text)? > 0 {
                         if regex.is_match(&text)? {

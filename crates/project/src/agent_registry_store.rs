@@ -25,6 +25,9 @@ const REGISTRY_FETCH_TIMEOUT: Duration = Duration::from_secs(30);
 const REGISTRY_ICON_FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_REGISTRY_RESPONSE_BODY_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_REGISTRY_RESPONSE_ERROR_DISPLAY_BYTES: usize = 8 * 1024;
+const MAX_REGISTRY_INDEX_AGENTS: usize = 512;
+const MAX_REGISTRY_ICON_FETCHES: usize = 256;
+const MAX_REGISTRY_BINARY_TARGETS: usize = 64;
 
 #[derive(Clone, Debug)]
 pub struct RegistryAgentMetadata {
@@ -379,8 +382,9 @@ async fn build_registry_agents(
     }
 
     let current_platform = current_platform_key();
+    let registry_entries = capped_registry_entries(index.agents);
     let icon_paths = resolve_icon_paths(
-        &index.agents,
+        &registry_entries,
         &icons_dir,
         update_cache,
         fs.clone(),
@@ -389,8 +393,8 @@ async fn build_registry_agents(
     )
     .await;
 
-    let mut agents = Vec::new();
-    for (entry, icon_path) in index.agents.into_iter().zip(icon_paths) {
+    let mut agents = Vec::with_capacity(registry_entries.len());
+    for (entry, icon_path) in registry_entries.into_iter().zip(icon_paths) {
         let metadata = RegistryAgentMetadata {
             id: AgentId::new(entry.id),
             name: entry.name.into(),
@@ -407,17 +411,18 @@ async fn build_registry_agents(
             }
 
             let mut targets = HashMap::default();
-            for (platform, target) in binary.iter() {
-                targets.insert(
-                    platform.clone(),
-                    RegistryTargetConfig {
-                        archive: target.archive.clone(),
-                        cmd: target.cmd.clone(),
-                        args: target.args.clone(),
-                        sha256: None,
-                        env: target.env.clone(),
-                    },
-                );
+            let current_platform_target =
+                current_platform.and_then(|platform| binary.get_key_value(platform));
+            for (platform, target) in current_platform_target
+                .into_iter()
+                .chain(
+                    binary
+                        .iter()
+                        .filter(|(platform, _)| current_platform != Some(platform.as_str())),
+                )
+                .take(MAX_REGISTRY_BINARY_TARGETS)
+            {
+                targets.insert(platform.clone(), registry_target_config(target));
             }
 
             let supports_current_platform = current_platform
@@ -457,6 +462,20 @@ async fn build_registry_agents(
     Ok(agents)
 }
 
+fn capped_registry_entries(entries: Vec<RegistryEntry>) -> Vec<RegistryEntry> {
+    if entries.len() > MAX_REGISTRY_INDEX_AGENTS {
+        log::warn!(
+            "ACP registry returned {} agents; only the first {MAX_REGISTRY_INDEX_AGENTS} will be loaded",
+            entries.len()
+        );
+    }
+
+    entries
+        .into_iter()
+        .take(MAX_REGISTRY_INDEX_AGENTS)
+        .collect()
+}
+
 async fn resolve_icon_paths(
     entries: &[RegistryEntry],
     icons_dir: &Path,
@@ -465,7 +484,14 @@ async fn resolve_icon_paths(
     http_client: Arc<dyn HttpClient>,
     executor: &BackgroundExecutor,
 ) -> Vec<Option<SharedString>> {
-    join_all(entries.iter().map(|entry| {
+    if entries.len() > MAX_REGISTRY_ICON_FETCHES {
+        log::warn!(
+            "ACP registry returned {} agents with potential icons; only the first {MAX_REGISTRY_ICON_FETCHES} icon paths will be resolved",
+            entries.len()
+        );
+    }
+
+    let mut icon_paths = join_all(entries.iter().take(MAX_REGISTRY_ICON_FETCHES).map(|entry| {
         let fs = fs.clone();
         let http_client = http_client.clone();
         async move {
@@ -475,7 +501,9 @@ async fn resolve_icon_paths(
                 .flatten()
         }
     }))
-    .await
+    .await;
+    icon_paths.resize(entries.len(), None);
+    icon_paths
 }
 
 async fn resolve_icon_path(
@@ -636,6 +664,16 @@ fn current_platform_key() -> Option<&'static str> {
         },
         _ => return None,
     })
+}
+
+fn registry_target_config(target: &RegistryBinaryTarget) -> RegistryTargetConfig {
+    RegistryTargetConfig {
+        archive: target.archive.clone(),
+        cmd: target.cmd.clone(),
+        args: target.args.clone(),
+        sha256: None,
+        env: target.env.clone(),
+    }
 }
 
 fn registry_cache_dir() -> PathBuf {

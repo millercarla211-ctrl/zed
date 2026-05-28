@@ -32,6 +32,12 @@ use crate::{git_store::GitStore, task_store::TaskSettingsLocation, worktree_stor
 
 pub const GIT_COMMAND_TASK_TAG: &str = "git-command";
 
+const MAX_TASK_TEMPLATES_PER_SETTINGS_FILE: usize = 2_048;
+const MAX_DEBUG_SCENARIOS_PER_SETTINGS_FILE: usize = 2_048;
+const MAX_TASK_TEMPLATES_FROM_SETTINGS_LIST: usize = 4_096;
+const MAX_TASK_TEMPLATE_VALIDATION_ERRORS: usize = 128;
+const MAX_TASK_TEMPLATE_UNKNOWN_VARIABLES_PER_ERROR: usize = 64;
+
 #[derive(Clone, Debug, Default)]
 pub struct DebugScenarioContext {
     pub task_context: SharedTaskContext,
@@ -392,11 +398,13 @@ impl Inventory {
         worktree: Option<WorktreeId>,
         cx: &App,
     ) -> Task<Vec<(TaskSourceKind, TaskTemplate)>> {
-        let global_tasks = self.global_templates_from_settings().collect::<Vec<_>>();
-        let mut worktree_tasks = worktree
-            .into_iter()
-            .flat_map(|worktree| self.worktree_templates_from_settings(worktree))
-            .collect::<Vec<_>>();
+        let global_tasks =
+            collect_bounded_task_templates_from_settings(self.global_templates_from_settings());
+        let mut worktree_tasks = collect_bounded_task_templates_from_settings(
+            worktree
+                .into_iter()
+                .flat_map(|worktree| self.worktree_templates_from_settings(worktree)),
+        );
 
         let task_source_kind = language.as_ref().map(|language| TaskSourceKind::Language {
             name: language.name().into(),
@@ -507,7 +515,8 @@ impl Inventory {
             .collect::<Vec<_>>();
 
         let not_used_score = post_inc(&mut lru_score);
-        let global_tasks = self.global_templates_from_settings().collect::<Vec<_>>();
+        let global_tasks =
+            collect_bounded_task_templates_from_settings(self.global_templates_from_settings());
         let associated_tasks = language
             .filter(|language| {
                 LanguageSettings::resolve(
@@ -523,10 +532,11 @@ impl Inventory {
                     .context_provider()
                     .map(|provider| provider.associated_tasks(buffer, cx))
             });
-        let worktree_tasks = worktree
-            .into_iter()
-            .flat_map(|worktree| self.worktree_templates_from_settings(worktree))
-            .collect::<Vec<_>>();
+        let worktree_tasks = collect_bounded_task_templates_from_settings(
+            worktree
+                .into_iter()
+                .flat_map(|worktree| self.worktree_templates_from_settings(worktree)),
+        );
         let task_contexts = task_contexts.clone();
         cx.background_spawn(async move {
             let language_tasks = if let Some(task) = associated_tasks {
@@ -648,9 +658,12 @@ impl Inventory {
 
     /// Returns global task templates with the provided tag.
     pub fn global_templates_with_tag(&self, tag: &str) -> Vec<(TaskSourceKind, TaskTemplate)> {
-        self.global_templates_from_settings()
-            .filter(|(_, template)| template.tags.iter().any(|template_tag| template_tag == tag))
-            .collect()
+        collect_bounded_task_templates_from_settings(
+            self.global_templates_from_settings()
+                .filter(|(_, template)| {
+                    template.tags.iter().any(|template_tag| template_tag == tag)
+                }),
+        )
     }
 
     /// Resolves global task templates with the provided tag against the provided task context.
@@ -677,10 +690,11 @@ impl Inventory {
         hooks: &HashSet<TaskHook>,
         worktree: WorktreeId,
     ) -> Vec<(TaskSourceKind, TaskTemplate)> {
-        self.worktree_templates_from_settings(worktree)
-            .chain(self.global_templates_from_settings())
-            .filter(|(_, template)| !template.hooks.is_disjoint(hooks))
-            .collect()
+        collect_bounded_task_templates_from_settings(
+            self.worktree_templates_from_settings(worktree)
+                .chain(self.global_templates_from_settings())
+                .filter(|(_, template)| !template.hooks.is_disjoint(hooks)),
+        )
     }
 
     fn global_templates_from_settings(
@@ -735,31 +749,62 @@ impl Inventory {
             }
         };
 
+        if raw_tasks.len() > MAX_TASK_TEMPLATES_PER_SETTINGS_FILE {
+            return Err(InvalidSettingsError::Tasks {
+                path: match &location {
+                    TaskSettingsLocation::Global(path) => path.to_path_buf(),
+                    TaskSettingsLocation::Worktree(location) => {
+                        location.path.as_std_path().join(task_file_name())
+                    }
+                },
+                message: format!(
+                    "Task file defines {} task templates, which exceeds the supported limit of {}",
+                    raw_tasks.len(),
+                    MAX_TASK_TEMPLATES_PER_SETTINGS_FILE
+                ),
+            });
+        }
+
         let mut validation_errors = Vec::new();
-        let new_templates = raw_tasks.into_iter().filter_map(|raw_template| {
-            let template = serde_json::from_value::<TaskTemplate>(raw_template).log_err()?;
+        let mut validation_errors_omitted = 0usize;
+        let new_templates = raw_tasks
+            .into_iter()
+            .take(MAX_TASK_TEMPLATES_PER_SETTINGS_FILE)
+            .filter_map(|raw_template| {
+                let template = serde_json::from_value::<TaskTemplate>(raw_template).log_err()?;
 
-            // Validate the variable names used in the `TaskTemplate`.
-            let unknown_variables = template.unknown_variables();
-            if !unknown_variables.is_empty() {
-                let variables_list = unknown_variables
-                    .iter()
-                    .map(|variable| format!("${variable}"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                // Validate the variable names used in the `TaskTemplate`.
+                let unknown_variables = template.unknown_variables();
+                if !unknown_variables.is_empty() {
+                    let omitted_variables = unknown_variables
+                        .len()
+                        .saturating_sub(MAX_TASK_TEMPLATE_UNKNOWN_VARIABLES_PER_ERROR);
+                    let mut variables = unknown_variables
+                        .iter()
+                        .take(MAX_TASK_TEMPLATE_UNKNOWN_VARIABLES_PER_ERROR)
+                        .map(|variable| format!("${variable}"))
+                        .collect::<Vec<_>>();
+                    if omitted_variables > 0 {
+                        variables.push(format!("and {omitted_variables} more"));
+                    }
+                    let variables_list = variables.join(", ");
 
-                validation_errors.push(format!(
-                    "Task '{}' uses unknown variables: {}",
-                    template.label, variables_list
-                ));
+                    if validation_errors.len() < MAX_TASK_TEMPLATE_VALIDATION_ERRORS {
+                        validation_errors.push(format!(
+                            "Task '{}' uses unknown variables: {}",
+                            template.label, variables_list
+                        ));
+                    } else {
+                        validation_errors_omitted += 1;
+                    }
 
-                // Skip this template, since it uses unknown variable names, but
-                // continue processing others.
-                return None;
-            }
+                    // Skip this template, since it uses unknown variable names, but
+                    // continue processing others.
+                    return None;
+                }
 
-            Some(template)
-        });
+                Some(template)
+            });
 
         let parsed_templates = &mut self.templates_from_settings;
         match location {
@@ -767,7 +812,7 @@ impl Inventory {
                 parsed_templates
                     .global
                     .entry(path.to_owned())
-                    .insert_entry(new_templates.collect());
+                    .insert_entry(new_templates.collect::<Vec<_>>());
                 self.last_scheduled_tasks.retain(|(kind, _)| {
                     if let TaskSourceKind::AbsPath { abs_path, .. } = kind {
                         abs_path != path
@@ -808,6 +853,13 @@ impl Inventory {
         }
 
         if !validation_errors.is_empty() {
+            if validation_errors_omitted > 0 {
+                validation_errors.push(format!(
+                    "Additional task template validation errors omitted after {} entries ({} more)",
+                    MAX_TASK_TEMPLATE_VALIDATION_ERRORS, validation_errors_omitted
+                ));
+            }
+
             return Err(InvalidSettingsError::Tasks {
                 path: match &location {
                     TaskSettingsLocation::Global(path) => path.to_path_buf(),
@@ -849,8 +901,25 @@ impl Inventory {
             }
         };
 
+        if raw_tasks.len() > MAX_DEBUG_SCENARIOS_PER_SETTINGS_FILE {
+            return Err(InvalidSettingsError::Debug {
+                path: match &location {
+                    TaskSettingsLocation::Global(path) => path.to_path_buf(),
+                    TaskSettingsLocation::Worktree(location) => {
+                        location.path.as_std_path().join(debug_task_file_name())
+                    }
+                },
+                message: format!(
+                    "Debug file defines {} scenarios, which exceeds the supported limit of {}",
+                    raw_tasks.len(),
+                    MAX_DEBUG_SCENARIOS_PER_SETTINGS_FILE
+                ),
+            });
+        }
+
         let new_templates = raw_tasks
             .into_iter()
+            .take(MAX_DEBUG_SCENARIOS_PER_SETTINGS_FILE)
             .filter_map(|raw_template| {
                 serde_json::from_value::<DebugScenario>(raw_template).log_err()
             })
@@ -909,6 +978,14 @@ impl Inventory {
 
         Ok(())
     }
+}
+
+fn collect_bounded_task_templates_from_settings(
+    templates: impl Iterator<Item = (TaskSourceKind, TaskTemplate)>,
+) -> Vec<(TaskSourceKind, TaskTemplate)> {
+    templates
+        .take(MAX_TASK_TEMPLATES_FROM_SETTINGS_LIST)
+        .collect::<Vec<_>>()
 }
 
 fn task_lru_comparator(

@@ -39,6 +39,14 @@ use workspace::Workspace;
 use crate::AgentPanel;
 use crate::mention_set::MentionSet;
 
+const MAX_SLASH_COMPLETION_SKILL_CANDIDATES: usize = 1024;
+const MAX_SLASH_COMPLETION_COMMAND_CANDIDATES: usize = 1024;
+const MAX_SKILL_MENTION_COMPLETION_CANDIDATES: usize = 1024;
+const MAX_THREAD_COMPLETION_CANDIDATES: usize = 256;
+const MAX_PROMPT_COMPLETION_VISIBLE_WORKTREES: usize = 128;
+const MAX_EMPTY_FILE_COMPLETION_MATCHES: usize = 512;
+const MAX_SYMBOL_COMPLETION_CANDIDATES: usize = 10_000;
+
 #[derive(Clone)]
 pub(crate) enum AgentContextSelection {
     Editor(Vec<(Entity<Buffer>, Range<text::Anchor>)>),
@@ -878,12 +886,14 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
             .source
             .available_skills(cx)
             .into_iter()
+            .take(MAX_SLASH_COMPLETION_SKILL_CANDIDATES)
             .map(SlashCompletionCandidate::Skill)
             .collect::<Vec<_>>();
         candidates.extend(
             self.source
                 .available_commands(cx)
                 .into_iter()
+                .take(MAX_SLASH_COMPLETION_COMMAND_CANDIDATES)
                 .map(SlashCompletionCandidate::Command),
         );
         if candidates.is_empty() {
@@ -1132,7 +1142,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
             .read_with(cx, |store, _cx| store.mentions());
         let workspace = workspace.read(cx);
         let project = workspace.project().read(cx);
-        let include_root_name = workspace.visible_worktrees(cx).count() > 1;
+        let include_root_name = has_multiple_visible_worktrees(workspace, cx);
 
         if let Some(agent_panel) = workspace.panel::<AgentPanel>(cx)
             && let Some(thread) = agent_panel.read(cx).active_agent_thread(cx)
@@ -2024,6 +2034,10 @@ fn pluralize(noun: &str, count: usize) -> String {
     }
 }
 
+fn has_multiple_visible_worktrees(workspace: &Workspace, cx: &App) -> bool {
+    workspace.visible_worktrees(cx).take(2).count() > 1
+}
+
 pub(crate) fn search_files(
     query: String,
     cancellation_flag: Arc<AtomicBool>,
@@ -2033,8 +2047,11 @@ pub(crate) fn search_files(
     if query.is_empty() {
         let workspace = workspace.read(cx);
         let project = workspace.project().read(cx);
-        let visible_worktrees = workspace.visible_worktrees(cx).collect::<Vec<_>>();
-        let include_root_name = visible_worktrees.len() > 1;
+        let include_root_name = has_multiple_visible_worktrees(workspace, cx);
+        let visible_worktrees = workspace
+            .visible_worktrees(cx)
+            .take(MAX_PROMPT_COMPLETION_VISIBLE_WORKTREES)
+            .collect::<Vec<_>>();
 
         let recent_matches = workspace
             .recent_navigation_history(Some(10), cx)
@@ -2063,26 +2080,29 @@ pub(crate) fn search_files(
                 }
             });
 
-        let file_matches = visible_worktrees.into_iter().flat_map(|worktree| {
-            let worktree = worktree.read(cx);
-            let path_prefix: Arc<RelPath> = if include_root_name {
-                worktree.root_name().into()
-            } else {
-                RelPath::empty().into()
-            };
-            worktree.entries(false, 0).map(move |entry| FileMatch {
-                mat: PathMatch {
-                    score: 0.,
-                    positions: Vec::new(),
-                    worktree_id: worktree.id().to_usize(),
-                    path: entry.path.clone(),
-                    path_prefix: path_prefix.clone(),
-                    distance_to_relative_ancestor: 0,
-                    is_dir: entry.is_dir(),
-                },
-                is_recent: false,
+        let file_matches = visible_worktrees
+            .into_iter()
+            .flat_map(|worktree| {
+                let worktree = worktree.read(cx);
+                let path_prefix: Arc<RelPath> = if include_root_name {
+                    worktree.root_name().into()
+                } else {
+                    RelPath::empty().into()
+                };
+                worktree.entries(false, 0).map(move |entry| FileMatch {
+                    mat: PathMatch {
+                        score: 0.,
+                        positions: Vec::new(),
+                        worktree_id: worktree.id().to_usize(),
+                        path: entry.path.clone(),
+                        path_prefix: path_prefix.clone(),
+                        distance_to_relative_ancestor: 0,
+                        is_dir: entry.is_dir(),
+                    },
+                    is_recent: false,
+                })
             })
-        });
+            .take(MAX_EMPTY_FILE_COMPLETION_MATCHES);
 
         Task::ready(recent_matches.chain(file_matches).collect())
     } else {
@@ -2091,8 +2111,11 @@ pub(crate) fn search_files(
             .recent_navigation_history_iter(cx)
             .next()
             .map(|(path, _)| path.path);
-        let worktrees = workspace.visible_worktrees(cx).collect::<Vec<_>>();
-        let include_root_name = worktrees.len() > 1;
+        let include_root_name = has_multiple_visible_worktrees(workspace, cx);
+        let worktrees = workspace
+            .visible_worktrees(cx)
+            .take(MAX_PROMPT_COMPLETION_VISIBLE_WORKTREES)
+            .collect::<Vec<_>>();
         let candidate_sets = worktrees
             .into_iter()
             .map(|worktree| {
@@ -2150,6 +2173,7 @@ pub(crate) fn search_symbols(
                 symbols
                     .iter()
                     .enumerate()
+                    .take(MAX_SYMBOL_COMPLETION_CANDIDATES)
                     .map(|(id, symbol)| StringMatchCandidate::new(id, symbol.label.filter_text()))
                     .partition(|candidate| match &symbols[candidate.id].path {
                         SymbolLocation::InProject(project_path) => project
@@ -2214,12 +2238,12 @@ fn collect_session_matches(cx: &App) -> Vec<SessionMatch> {
     let Some(store) = ThreadMetadataStore::try_global(cx) else {
         return Vec::new();
     };
-    let mut entries: Vec<&ThreadMetadata> = store
-        .read(cx)
-        .entries()
-        .filter(|t| !t.archived && t.agent_id == *agent::ZED_AGENT_ID)
-        .collect();
-    entries.sort_by_key(|t| Reverse(t.updated_at));
+    let store = store.read(cx);
+    let entries = collect_recent_session_metadata(
+        store
+            .entries()
+            .filter(|t| !t.archived && t.agent_id == *agent::ZED_AGENT_ID),
+    );
     entries
         .into_iter()
         .map(|metadata| {
@@ -2230,6 +2254,31 @@ fn collect_session_matches(cx: &App) -> Vec<SessionMatch> {
             }
         })
         .collect()
+}
+
+fn collect_recent_session_metadata<'a>(
+    metadata: impl Iterator<Item = &'a ThreadMetadata>,
+) -> Vec<&'a ThreadMetadata> {
+    let mut entries = Vec::new();
+    for metadata in metadata {
+        insert_recent_session_metadata(&mut entries, metadata);
+    }
+    entries
+}
+
+fn insert_recent_session_metadata<'a>(
+    entries: &mut Vec<&'a ThreadMetadata>,
+    metadata: &'a ThreadMetadata,
+) {
+    let insert_at = entries.partition_point(|entry| entry.updated_at >= metadata.updated_at);
+    if insert_at < MAX_THREAD_COMPLETION_CANDIDATES {
+        entries.insert(insert_at, metadata);
+        if entries.len() > MAX_THREAD_COMPLETION_CANDIDATES {
+            entries.pop();
+        }
+    } else if entries.len() < MAX_THREAD_COMPLETION_CANDIDATES {
+        entries.push(metadata);
+    }
 }
 
 fn filter_sessions_by_query(
@@ -2285,6 +2334,10 @@ pub(crate) fn search_skills(
     skills: Vec<AvailableSkill>,
     cx: &mut App,
 ) -> Task<Vec<AvailableSkill>> {
+    let skills = skills
+        .into_iter()
+        .take(MAX_SKILL_MENTION_COMPLETION_CANDIDATES)
+        .collect::<Vec<_>>();
     if skills.is_empty() {
         return Task::ready(Vec::new());
     }

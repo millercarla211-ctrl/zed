@@ -21,6 +21,9 @@ use crate::lsp_command::{GetDocumentLinks, LspCommand as _};
 use crate::lsp_store::LspStore;
 use crate::project_settings::ProjectSettings;
 
+const MAX_DOCUMENT_LINK_LSP_RESPONSES: usize = 64;
+const MAX_DOCUMENT_LINKS_PER_LSP_RESPONSE: usize = 10_000;
+
 #[derive(Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct DocumentLinkId(u64);
 
@@ -54,6 +57,24 @@ impl DocumentLinksData {
         self.link_resolves
             .retain(|(resolved_server, _), _| *resolved_server != server_id);
     }
+}
+
+fn cap_document_links_for_response(
+    server_id: LanguageServerId,
+    links: Vec<LspDocumentLink>,
+) -> Vec<LspDocumentLink> {
+    if links.len() > MAX_DOCUMENT_LINKS_PER_LSP_RESPONSE {
+        log::warn!(
+            "Skipping {} document links for server {server_id} over cap {}",
+            links.len() - MAX_DOCUMENT_LINKS_PER_LSP_RESPONSE,
+            MAX_DOCUMENT_LINKS_PER_LSP_RESPONSE
+        );
+    }
+
+    links
+        .into_iter()
+        .take(MAX_DOCUMENT_LINKS_PER_LSP_RESPONSE)
+        .collect()
 }
 
 /// Mirror of [`crate::lsp_store::ResolvedHint`] for document links: callers
@@ -154,6 +175,8 @@ impl LspStore {
 
                         let mut tagged = BufferDocumentLinks::default();
                         for (server_id, server_links) in fetched_links {
+                            let server_links =
+                                cap_document_links_for_response(server_id, server_links);
                             let mut by_id = HashMap::default();
                             by_id.reserve(server_links.len());
                             for link in server_links {
@@ -228,25 +251,39 @@ impl LspStore {
                     return Ok(None);
                 };
 
-                let document_links = join_all(responses.payload.into_iter().map(|response| {
-                    let lsp_store = lsp_store.clone();
-                    let buffer = buffer.clone();
-                    let cx = cx.clone();
-                    async move {
-                        let server_id = LanguageServerId::from_proto(response.server_id);
-                        let links = GetDocumentLinks
-                            .response_from_proto(response.response, lsp_store, buffer, cx)
-                            .await;
-                        (server_id, links)
-                    }
-                }))
-                .await;
+                let response_count = responses.payload.len();
+                if response_count > MAX_DOCUMENT_LINK_LSP_RESPONSES {
+                    log::warn!(
+                        "Skipping {} document link LSP responses over cap {}",
+                        response_count - MAX_DOCUMENT_LINK_LSP_RESPONSES,
+                        MAX_DOCUMENT_LINK_LSP_RESPONSES
+                    );
+                }
+                let response_tasks = responses
+                    .payload
+                    .into_iter()
+                    .take(MAX_DOCUMENT_LINK_LSP_RESPONSES)
+                    .map(|response| {
+                        let lsp_store = lsp_store.clone();
+                        let buffer = buffer.clone();
+                        let cx = cx.clone();
+                        async move {
+                            let server_id = LanguageServerId::from_proto(response.server_id);
+                            let links = GetDocumentLinks
+                                .response_from_proto(response.response, lsp_store, buffer, cx)
+                                .await;
+                            (server_id, links)
+                        }
+                    });
+                let document_links = join_all(response_tasks).await;
 
                 let mut has_errors = false;
                 let result = document_links
                     .into_iter()
                     .filter_map(|(server_id, links)| match links {
-                        Ok(links) => Some((server_id, links)),
+                        Ok(links) => {
+                            Some((server_id, cap_document_links_for_response(server_id, links)))
+                        }
                         Err(e) => {
                             has_errors = true;
                             log::error!(
@@ -265,7 +302,25 @@ impl LspStore {
         } else {
             let links_task =
                 self.request_multiple_lsp_locally(buffer, None::<usize>, GetDocumentLinks, cx);
-            cx.background_spawn(async move { Ok(Some(links_task.await.into_iter().collect())) })
+            cx.background_spawn(async move {
+                let links = links_task.await;
+                if links.len() > MAX_DOCUMENT_LINK_LSP_RESPONSES {
+                    log::warn!(
+                        "Skipping {} local document link LSP responses over cap {}",
+                        links.len() - MAX_DOCUMENT_LINK_LSP_RESPONSES,
+                        MAX_DOCUMENT_LINK_LSP_RESPONSES
+                    );
+                }
+                Ok(Some(
+                    links
+                        .into_iter()
+                        .take(MAX_DOCUMENT_LINK_LSP_RESPONSES)
+                        .map(|(server_id, links)| {
+                            (server_id, cap_document_links_for_response(server_id, links))
+                        })
+                        .collect(),
+                ))
+            })
         }
     }
 

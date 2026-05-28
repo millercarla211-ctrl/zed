@@ -127,3 +127,87 @@ test("Project agent registry bounds response bytes before JSON parse and cache p
     "registry raw payload should only be materialized after bounded parse input",
   );
 });
+
+test("Project agent registry caps entries before icon fanout and agent build", () => {
+  const source = read("crates/project/src/agent_registry_store.rs");
+  const buildAgents = sliceBetween(
+    source,
+    "async fn build_registry_agents(",
+    "async fn resolve_icon_paths(",
+  );
+  const iconResolver = sliceBetween(
+    source,
+    "async fn resolve_icon_paths(",
+    "async fn resolve_icon_path(",
+  );
+
+  assert.match(source, /const MAX_REGISTRY_INDEX_AGENTS: usize = \d+;/);
+  assert.match(source, /const MAX_REGISTRY_ICON_FETCHES: usize = \d+;/);
+  assert.match(
+    source,
+    /fn capped_registry_entries\(entries: Vec<RegistryEntry>\) -> Vec<RegistryEntry>[\s\S]+\.take\(MAX_REGISTRY_INDEX_AGENTS\)/,
+  );
+  assertOrdered(
+    buildAgents,
+    "let registry_entries = capped_registry_entries(index.agents);",
+    "resolve_icon_paths(",
+    "registry entries must be capped before icon path resolution",
+  );
+  assertOrdered(
+    buildAgents,
+    "let registry_entries = capped_registry_entries(index.agents);",
+    "let mut agents = Vec::with_capacity(registry_entries.len());",
+    "registry entries must be capped before RegistryAgent vector materialization",
+  );
+  assert.doesNotMatch(
+    buildAgents,
+    /resolve_icon_paths\(\s*&index\.agents/,
+    "icon resolution must not fan out over the raw registry index",
+  );
+  assert.doesNotMatch(
+    buildAgents,
+    /index\.agents\.into_iter\(\)/,
+    "agent build loop must not iterate the raw registry index",
+  );
+  assert.match(
+    iconResolver,
+    /entries\.iter\(\)\.take\(MAX_REGISTRY_ICON_FETCHES\)\.map\(\|entry\|/,
+  );
+  assert.match(iconResolver, /icon_paths\.resize\(entries\.len\(\), None\)/);
+  assertOrdered(
+    iconResolver,
+    ".take(MAX_REGISTRY_ICON_FETCHES)",
+    "resolve_icon_path(entry",
+    "icon fetch fanout must be capped before spawning per-entry futures",
+  );
+});
+
+test("Project agent registry caps binary targets before insertion", () => {
+  const source = read("crates/project/src/agent_registry_store.rs");
+  const buildAgents = sliceBetween(
+    source,
+    "async fn build_registry_agents(",
+    "async fn resolve_icon_paths(",
+  );
+
+  assert.match(source, /const MAX_REGISTRY_BINARY_TARGETS: usize = \d+;/);
+  assert.match(
+    buildAgents,
+    /current_platform_target\s+\.into_iter\(\)\s+\.chain\(/,
+  );
+  assert.match(
+    buildAgents,
+    /\.take\(MAX_REGISTRY_BINARY_TARGETS\)\s+\{\s+targets\.insert\(/,
+  );
+  assertOrdered(
+    buildAgents,
+    ".take(MAX_REGISTRY_BINARY_TARGETS)",
+    "targets.insert(",
+    "binary target maps must be capped before target insertion",
+  );
+  assert.doesNotMatch(
+    buildAgents,
+    /for \(platform, target\) in binary\.iter\(\) \{\s+targets\.insert\(/,
+    "binary target insertion must not loop over the unbounded distribution map",
+  );
+});
