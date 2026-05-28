@@ -1,3 +1,30 @@
+[2026-05-29] - Stale UI Row And Candidate Lookup Hardening
+
+ADDED:
+- Added `script\dx-collab-panel-source.test.ts` for Collab Panel stale fuzzy candidate-id materialization boundaries.
+- Added `script\dx-dev-container-source.test.ts` for Dev Container template/feature picker stale match-row boundaries.
+- Added `script\dx-debugger-stack-frame-source.test.ts` for Debugger stack-frame filtered-row and entry render boundaries.
+- Added `script\dx-component-preview-source.test.ts` for Component Preview list/sidebar stale-row render boundaries.
+
+CHANGED:
+- Collab Panel fuzzy materialization now skips stale candidate IDs before reading pending participants, channels, channel invites, incoming/outgoing contact requests, and contacts.
+- Dev Container template and feature picker rendering now guards stale matching rows before template/feature lookup.
+- Debugger stack-frame rendering now fails closed when filtered row mappings or backing entries are stale.
+- Inline Prompt history editing and navigation now use checked prompt-history lookups.
+- Project Search match selection and field cycling now guard stale computed indexes before selecting ranges or focusing views.
+- Component Preview list and sidebar rendering now skip stale row indexes.
+- `DX.md`, `todo.txt`, and the handoff source guard registry now list the new guards and source-only proof boundary.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-collab-panel-source.test.ts script\dx-dev-container-source.test.ts script\dx-debugger-stack-frame-source.test.ts script\dx-inline-prompt-source.test.ts script\dx-search-ui-source.test.ts script\dx-component-preview-source.test.ts` (20/20 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Targeted stale candidate/index pattern scans over edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-29] - Stale Fuzzy Candidate Lookup Hardening
 
 ADDED:

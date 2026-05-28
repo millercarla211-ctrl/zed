@@ -713,13 +713,17 @@ impl CollabPanel {
                     &Default::default(),
                     executor.clone(),
                 ));
-                self.entries
-                    .extend(matches.iter().map(|mat| ListEntry::CallParticipant {
-                        user: room.pending_participants()[mat.candidate_id].clone(),
-                        peer_id: None,
-                        is_pending: true,
-                        role: proto::ChannelRole::Member,
-                    }));
+                self.entries.extend(matches.iter().filter_map(|mat| {
+                    room.pending_participants()
+                        .get(mat.candidate_id)
+                        .cloned()
+                        .map(|user| ListEntry::CallParticipant {
+                            user,
+                            peer_id: None,
+                            is_pending: true,
+                            role: proto::ChannelRole::Member,
+                        })
+                }));
             }
         }
 
@@ -801,14 +805,17 @@ impl CollabPanel {
 
             let matches_by_id: HashMap<_, _> = matches
                 .iter()
-                .map(|mat| (channels[mat.candidate_id].id, mat.clone()))
+                .filter_map(|mat| {
+                    channels
+                        .get(mat.candidate_id)
+                        .map(|channel| (channel.id, mat.clone()))
+                })
                 .collect();
 
             let channel_ids_of_matches_or_parents: HashSet<_> = matches
                 .iter()
-                .flat_map(|mat| {
-                    let match_channel = channels[mat.candidate_id];
-
+                .filter_map(|mat| channels.get(mat.candidate_id).copied())
+                .flat_map(|match_channel| {
                     match_channel
                         .parent_path
                         .iter()
@@ -912,11 +919,12 @@ impl CollabPanel {
                 &Default::default(),
                 executor.clone(),
             ));
-            request_entries.extend(
-                matches
-                    .iter()
-                    .map(|mat| ListEntry::ChannelInvite(channel_invites[mat.candidate_id].clone())),
-            );
+            request_entries.extend(matches.iter().filter_map(|mat| {
+                channel_invites
+                    .get(mat.candidate_id)
+                    .cloned()
+                    .map(ListEntry::ChannelInvite)
+            }));
 
             if !request_entries.is_empty() {
                 self.entries
@@ -948,11 +956,12 @@ impl CollabPanel {
                 &Default::default(),
                 executor.clone(),
             ));
-            request_entries.extend(
-                matches
-                    .iter()
-                    .map(|mat| ListEntry::IncomingRequest(incoming[mat.candidate_id].clone())),
-            );
+            request_entries.extend(matches.iter().filter_map(|mat| {
+                incoming
+                    .get(mat.candidate_id)
+                    .cloned()
+                    .map(ListEntry::IncomingRequest)
+            }));
         }
 
         let outgoing = user_store.outgoing_contact_requests();
@@ -973,11 +982,12 @@ impl CollabPanel {
                 &Default::default(),
                 executor.clone(),
             ));
-            request_entries.extend(
-                matches
-                    .iter()
-                    .map(|mat| ListEntry::OutgoingRequest(outgoing[mat.candidate_id].clone())),
-            );
+            request_entries.extend(matches.iter().filter_map(|mat| {
+                outgoing
+                    .get(mat.candidate_id)
+                    .cloned()
+                    .map(ListEntry::OutgoingRequest)
+            }));
         }
 
         if !request_entries.is_empty() {
@@ -1010,18 +1020,18 @@ impl CollabPanel {
 
             let (online_contacts, offline_contacts) = matches
                 .iter()
-                .partition::<Vec<_>, _>(|mat| contacts[mat.candidate_id].online);
+                .filter_map(|mat| contacts.get(mat.candidate_id))
+                .partition::<Vec<_>, _>(|contact| contact.online);
 
-            for (matches, section) in [
+            for (contacts, section) in [
                 (online_contacts, Section::Online),
                 (offline_contacts, Section::Offline),
             ] {
-                if !matches.is_empty() {
+                if !contacts.is_empty() {
                     self.entries.push(ListEntry::Header(section));
                     if !self.collapsed_sections.contains(&section) {
                         let active_call = &ActiveCall::global(cx).read(cx);
-                        for mat in matches {
-                            let contact = &contacts[mat.candidate_id];
+                        for contact in contacts {
                             self.entries.push(ListEntry::Contact {
                                 contact: contact.clone(),
                                 calling: active_call

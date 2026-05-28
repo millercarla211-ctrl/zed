@@ -78,6 +78,8 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-picker-core-source.test.ts` - picker core stale-selection, selectable fallback, and reveal-scroll boundaries.
 - `node --test script/dx-search-ui-source.test.ts` - project-search active-match label and navigation index boundaries.
 - `node --test script/dx-debugger-ui-source.test.ts` - debugger console DAP completion materialization boundaries.
+- `node --test script/dx-debugger-stack-frame-source.test.ts` - debugger stack-frame filtered-row and entry render boundaries.
+- `node --test script/dx-collab-panel-source.test.ts` - collab panel stale fuzzy candidate-id materialization boundaries.
 - `node --test script/dx-collab-notifications-source.test.ts` - collab contact finder async-result selection boundaries.
 - `node --test script/dx-markdown-preview-source.test.ts` - remote directory listing response materialization boundaries.
 - `node --test script/dx-activity-indicator-source.test.ts` - activity indicator status, tooltip, and pending-work menu materialization boundaries.
@@ -85,11 +87,13 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-snippets-source.test.ts` - snippet scope candidate and existing scope-file materialization boundaries.
 - `node --test script/dx-repl-ui-source.test.ts` - REPL kernel picker stale-selection and selected-kernel materialization boundaries.
 - `node --test script/dx-preview-surfaces-source.test.ts` - CSV preview rendered-index metric materialization boundaries.
+- `node --test script/dx-component-preview-source.test.ts` - Component Preview list/sidebar stale-row render boundaries.
 - `node --test script/dx-acp-tools-source.test.ts` - ACP tool request-id chip materialization boundaries.
 - `node --test script/dx-breadcrumbs-source.test.ts` - breadcrumb segment materialization boundaries.
 - `node --test script/dx-icon-picker-source.test.ts` - icon picker TSV sample and representative preview materialization boundaries.
 - `node --test script/dx-language-selector-source.test.ts` - language selector candidate, match, stale-selection, and confirm boundaries.
 - `node --test script/dx-toolchain-selector-source.test.ts` - toolchain selector match and stale-selection boundaries.
+- `node --test script/dx-dev-container-source.test.ts` - Dev Container template/feature picker stale match-row boundaries.
 - `node --test script/dx-recent-projects-ui-source.test.ts` - recent projects candidate, path label, result, and stale-selection boundaries.
 - `node --test script/dx-notifications-source.test.ts` - status toast message and action label materialization boundaries.
 - `node --test script/dx-encoding-selector-source.test.ts` - encoding selector match caps, stale-selection, and candidate-id boundaries.
@@ -111,7 +115,7 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-source-quality.test.ts` - DX Studio source/edit manifest and bridge source contracts.
 - `node --test script/dx-studio-project-source.test.ts` - DX Studio project detection and source-edit bounded file-read contracts.
 - `node --test script/dx-buffer-codegen-source.test.ts` - inline assistant rewrite source-selection byte boundaries.
-- `node --test script/dx-inline-prompt-source.test.ts` - inline assistant prompt materialization and linked-group byte boundaries.
+- `node --test script/dx-inline-prompt-source.test.ts` - inline assistant prompt materialization, linked-group byte, and prompt-history navigation boundaries.
 - `node --test script/dx-agent-panel-input-source.test.ts` - Agent Panel editor text and draft materialization byte boundaries.
 - `node --test script/dx-agent-panel-clipboard-source.test.ts` - native-agent thread clipboard payload size boundaries.
 - `node --test script/dx-agent-configuration-source.test.ts` - Agent Configuration settings editor insertion boundaries.
@@ -164,6 +168,8 @@ Adjacent source guards:
 - Wire DX Agents CLI receipts, social/account readiness, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
+
+- Completed a six-agent stale UI row and fuzzy-candidate hardening pass for Collab Panel, Dev Container pickers, Debugger stack frames, Inline Prompt history, Project Search navigation, and Component Preview without `just run` or Cargo. Collab Panel now skips stale fuzzy candidate IDs across pending participants, channels, invites, requests, and contacts; Dev Container template/feature rendering guards stale match rows; Debugger stack-frame rendering fails closed for stale filtered rows and entries; Inline Prompt history navigation and edit comparisons use checked history lookups; Project Search selection/focus navigation guards stale computed indexes; Component Preview list/sidebar rows skip stale render indexes. Added and registered `script/dx-collab-panel-source.test.ts`, `script/dx-dev-container-source.test.ts`, `script/dx-debugger-stack-frame-source.test.ts`, and `script/dx-component-preview-source.test.ts`, and extended `script/dx-inline-prompt-source.test.ts` plus `script/dx-search-ui-source.test.ts`. Passed source-only integration: 20/20 targeted Node source subtests including the handoff registry, targeted rustfmt checks, refined stale candidate/index pattern scans, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 
 - Completed a six-agent stale fuzzy-candidate/index hardening pass for Command Palette, Extensions UI, Agent UI completions/selectors, Settings UI pickers, and Editor completion menus without `just run` or Cargo. Command Palette de-duplication now guards command candidates before action comparison; Extensions row rendering guards filtered dev/remote row indexes and backing entries; Agent completion, symbol, session, skill, and model selector fuzzy results now skip stale candidate IDs while preserving sorted ranking before caps; Settings font/theme/icon-theme pickers guard current-selection lookup; Editor completion menus guard documentation, rendered rows, snippet de-duplication, groups, and sort paths before completion lookup. Added and registered `script/dx-agent-ui-selector-source.test.ts` and `script/dx-settings-ui-source.test.ts`, and extended `script/dx-command-palette-source.test.ts`, `script/dx-extensions-ui-source.test.ts`, `script/dx-completion-provider-source.test.ts`, and `script/dx-editor-lsp-ui-source.test.ts`. Passed source-only integration: 35/35 targeted Node source subtests including the handoff registry and adjacent selector guards, targeted rustfmt checks, stale candidate/index pattern scans, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 

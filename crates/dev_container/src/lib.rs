@@ -391,7 +391,11 @@ impl PickerDelegate for TemplatePickerDelegate {
         _window: &mut Window,
         _cx: &mut Context<picker::Picker<Self>>,
     ) -> Option<Self::ListItem> {
-        let Some(template_entry) = self.candidate_templates.get(self.matching_indices[ix]) else {
+        let Some(template_entry) = self
+            .matching_indices
+            .get(ix)
+            .and_then(|ix| self.candidate_templates.get(*ix))
+        else {
             return None;
         };
         Some(
@@ -583,7 +587,14 @@ impl PickerDelegate for FeaturePickerDelegate {
         _window: &mut Window,
         _cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
-        let feature_entry = self.candidate_features[self.matching_indices[ix]].clone();
+        let Some(feature_entry) = self
+            .matching_indices
+            .get(ix)
+            .and_then(|ix| self.candidate_features.get(*ix))
+            .cloned()
+        else {
+            return None;
+        };
 
         Some(
             ListItem::new("li-what")

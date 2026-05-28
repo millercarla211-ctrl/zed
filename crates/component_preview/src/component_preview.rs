@@ -505,11 +505,9 @@ impl ComponentPreview {
                     list(
                         self.component_list.clone(),
                         cx.processor(|this, ix, window, cx| {
-                            if ix >= this.entries.len() {
+                            let Some(entry) = this.entries.get(ix) else {
                                 return div().w_full().h_0().into_any_element();
-                            }
-
-                            let entry = &this.entries[ix];
+                            };
 
                             match entry {
                                 PreviewEntry::Component(component, _) => this
@@ -614,15 +612,9 @@ impl Render for ComponentPreview {
                             cx.processor(move |this, range: Range<usize>, _window, cx| {
                                 range
                                     .filter_map(|ix| {
-                                        if ix < sidebar_entries.len() {
-                                            Some(this.render_sidebar_entry(
-                                                ix,
-                                                &sidebar_entries[ix],
-                                                cx,
-                                            ))
-                                        } else {
-                                            None
-                                        }
+                                        sidebar_entries
+                                            .get(ix)
+                                            .map(|entry| this.render_sidebar_entry(ix, entry, cx))
                                     })
                                     .collect()
                             }),

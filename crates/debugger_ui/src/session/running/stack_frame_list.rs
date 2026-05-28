@@ -7,7 +7,7 @@ use dap::StackFrameId;
 use dap::adapters::DebugAdapterName;
 use db::kvp::KeyValueStore;
 use gpui::{
-    Action, AnyElement, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, ListState,
+    Action, AnyElement, Empty, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, ListState,
     Subscription, Task, TaskExt, WeakEntity, list,
 };
 use util::{
@@ -735,10 +735,19 @@ impl StackFrameList {
     fn render_entry(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
         let ix = match self.list_filter {
             StackFrameFilter::All => ix,
-            StackFrameFilter::OnlyUserFrames => self.filter_entries_indices[ix],
+            StackFrameFilter::OnlyUserFrames => {
+                let Some(ix) = self.filter_entries_indices.get(ix).copied() else {
+                    return Empty.into_any();
+                };
+                ix
+            }
         };
 
-        match &self.entries[ix] {
+        let Some(entry) = self.entries.get(ix) else {
+            return Empty.into_any();
+        };
+
+        match entry {
             StackFrameEntry::Label(stack_frame) => self.render_label_entry(stack_frame, cx),
             StackFrameEntry::Normal(stack_frame) => self.render_normal_entry(ix, stack_frame, cx),
             StackFrameEntry::Collapsed(stack_frames) => {

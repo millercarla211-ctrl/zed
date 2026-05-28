@@ -113,3 +113,37 @@ test("project search navigation clamps stale active indexes before indexing rang
   });
   assert.doesNotMatch(selectMatch, /index \+ 1 >= match_ranges\.len\(\)/);
 });
+
+test("project search navigation guards stale editor indexes after navigation", () => {
+  const source = read("crates/search/src/project_search.rs");
+  const selectMatch = functionBody(source, "select_match");
+
+  assert.doesNotMatch(selectMatch, /match_ranges\s*\[\s*new_index\s*\]/);
+  assert.match(
+    selectMatch,
+    /let Some\(range_to_select\) = match_ranges\.get\(new_index\)\.cloned\(\) else \{/,
+  );
+  assertBefore({
+    body: selectMatch,
+    before: "match_ranges.get(new_index).cloned()",
+    after: "editor.range_for_match(&range_to_select)",
+    message: "editor-provided match indexes must be guarded before selecting a range",
+  });
+});
+
+test("project search field cycling guards stale focus indexes before focusing views", () => {
+  const source = read("crates/search/src/project_search.rs");
+  const cycleField = functionBody(source, "cycle_field");
+
+  assert.doesNotMatch(cycleField, /views\s*\[\s*new_index\s*\]/);
+  assert.match(
+    cycleField,
+    /let Some\(next_focus_handle\) = views\.get\(new_index\) else \{/,
+  );
+  assertBefore({
+    body: cycleField,
+    before: "views.get(new_index)",
+    after: "window.focus(next_focus_handle, cx);",
+    message: "field cycling must guard the computed focus index before focusing",
+  });
+});

@@ -84,6 +84,36 @@ test("inline assistant request construction uses the bounded prompt path", () =>
   assert.doesNotMatch(userPrompt, /\.prompt\(cx\)/);
 });
 
+test("inline prompt history navigation uses checked history lookups", () => {
+  const moveUpStart = promptEditor.indexOf("fn move_up(");
+  const moveDownStart = promptEditor.indexOf("fn move_down(", moveUpStart);
+  const renderButtonsStart = promptEditor.indexOf("\n    fn render_buttons", moveDownStart);
+  assert.notEqual(moveUpStart, -1, "expected move_up handler");
+  assert.ok(moveDownStart > moveUpStart, "expected move_down after move_up");
+  assert.ok(
+    renderButtonsStart > moveDownStart,
+    "expected render_buttons after move_down",
+  );
+
+  const navigationHandlers = {
+    move_up: promptEditor.slice(moveUpStart, moveDownStart),
+    move_down: promptEditor.slice(moveDownStart, renderButtonsStart),
+  };
+
+  for (const [name, handler] of Object.entries(navigationHandlers)) {
+    assert.doesNotMatch(
+      handler,
+      /self\.prompt_history\s*\[[^\]]+\]/,
+      `${name} must not directly index prompt_history`,
+    );
+    assert.match(
+      handler,
+      /self\.prompt_history\.get\(/,
+      `${name} should use checked prompt_history lookups`,
+    );
+  }
+});
+
 test("oversized inline prompt refusal surfaces through existing assistant toast UI", () => {
   const toastStart = inlineAssistant.indexOf("fn show_prompt_size_error");
   const toastEnd = inlineAssistant.indexOf("\n    pub fn start_assist", toastStart);

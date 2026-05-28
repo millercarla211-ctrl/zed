@@ -1606,7 +1606,9 @@ impl ProjectSearchView {
                 )
             });
 
-            let range_to_select = match_ranges[new_index].clone();
+            let Some(range_to_select) = match_ranges.get(new_index).cloned() else {
+                return;
+            };
             self.results_editor.update(cx, |editor, cx| {
                 let range_to_select = editor.range_for_match(&range_to_select);
                 let autoscroll = if EditorSettings::get_global(cx).search.center_on_match {
@@ -1959,7 +1961,9 @@ impl ProjectSearchBar {
                 Direction::Prev if current_index == 0 => views.len() - 1,
                 Direction::Prev => (current_index - 1) % views.len(),
             };
-            let next_focus_handle = &views[new_index];
+            let Some(next_focus_handle) = views.get(new_index) else {
+                return;
+            };
             window.focus(next_focus_handle, cx);
             cx.stop_propagation();
         });
