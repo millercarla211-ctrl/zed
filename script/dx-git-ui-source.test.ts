@@ -416,3 +416,65 @@ test("git panel bounds status, history, remote, and worktree materialization", (
     "status rows must compact path labels before id and label rendering",
   );
 });
+
+test("git panel stale indexes fail closed through checked lookups", () => {
+  const source = productionSource(read("crates/git_ui/src/git_panel.rs"));
+  const gitInit = functionBody(source, "git_init");
+  const selectFirst = functionBody(source, "select_first");
+  const selectPrevious = functionBody(source, "select_previous");
+  const renderEntries = functionBody(source, "render_entries");
+  const uniformListRender = sliceBetween(
+    renderEntries,
+    "uniform_list(",
+    ".when(is_tree_view",
+  );
+
+  assert.match(
+    gitInit,
+    /worktrees\s*\.get\(ix\)\s*\.cloned\(\)/,
+    "git init prompt selections must ignore stale worktree indexes",
+  );
+  assert.doesNotMatch(
+    gitInit,
+    /worktrees\s*\[\s*ix\s*\]\s*\.clone\(\)/,
+    "git init prompt selections must not direct-index stale worktree indexes",
+  );
+
+  assert.match(
+    selectFirst,
+    /index\.and_then\(\|index\|\s*state\s*\.logical_indices\s*\.get\(index\)\s*\.copied\(\)\s*\)/,
+    "tree select-first must map visible rows through checked logical indexes",
+  );
+  assert.doesNotMatch(
+    selectFirst,
+    /state\s*\.logical_indices\s*\[\s*index\s*\]/,
+    "tree select-first must not direct-index logical indexes",
+  );
+
+  assert.match(
+    selectPrevious,
+    /state\s*\.logical_indices\s*\.get\(\s*current_logical_index\.saturating_sub\(1\)\s*\)\s*\.copied\(\)/,
+    "tree select-previous must read previous logical indexes through checked lookup",
+  );
+  assert.doesNotMatch(
+    selectPrevious,
+    /state\s*\.logical_indices\s*\[\s*current_logical_index\.saturating_sub\(1\)\s*\]/,
+    "tree select-previous must not direct-index previous logical indexes",
+  );
+
+  assert.match(
+    uniformListRender,
+    /range\.into_iter\(\)\.filter_map\(\|ix\| match &this\.view_mode/,
+    "tree uniform-list rendering must drop stale logical row indexes",
+  );
+  assert.match(
+    uniformListRender,
+    /GitPanelViewMode::Tree\(state\) => \{\s*state\s*\.logical_indices\s*\.get\(ix\)\s*\.copied\(\)\s*\}/,
+    "tree uniform-list rendering must use checked logical-index lookups",
+  );
+  assert.doesNotMatch(
+    uniformListRender,
+    /state\s*\.logical_indices\s*\[\s*ix\s*\]/,
+    "tree uniform-list rendering must not direct-index logical indexes",
+  );
+});

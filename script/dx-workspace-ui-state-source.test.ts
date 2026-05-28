@@ -7,6 +7,7 @@ const read = (path: string) => readFileSync(path, "utf8");
 const dock = read("crates/workspace/src/dock.rs");
 const historyManager = read("crates/workspace/src/history_manager.rs");
 const item = read("crates/workspace/src/item.rs");
+const pane = read("crates/workspace/src/pane.rs");
 const workspace = read("crates/workspace/src/workspace.rs");
 
 const functionBody = (source: string, name: string) => {
@@ -182,5 +183,26 @@ test("workspace pane cycling uses checked target pane lookups", () => {
     previousPane,
     /panes\s*\.get\(\s*prev_ix\s*\)/,
     "previous-pane activation must check the target pane still exists",
+  );
+});
+
+test("workspace pane tab materialization checks stale item indexes", () => {
+  const renderTab = functionBody(pane, "render_tab");
+  assert.doesNotMatch(
+    renderTab,
+    /self\.items\s*\[\s*ix\s*\]/,
+    "render_tab must use its provided item handle instead of directly indexing self.items[ix]",
+  );
+
+  const renderTabBar = functionBody(pane, "render_tab_bar");
+  assert.doesNotMatch(
+    renderTabBar,
+    /self\.items\s*\[\s*ix\s*\]/,
+    "render_tab_bar must not directly index stale visible item indexes",
+  );
+  assert.match(
+    renderTabBar,
+    /self\.items\s*\.get\(\s*ix\s*\)/,
+    "render_tab_bar must check visible indexes before cloning item handles",
   );
 });

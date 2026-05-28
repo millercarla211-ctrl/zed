@@ -172,8 +172,13 @@ impl AddLlmProviderInput {
         self.models.push(ModelInput::new(model_index, window, cx));
     }
 
-    fn remove_model(&mut self, index: usize) {
-        self.models.remove(index);
+    fn remove_model(&mut self, index: usize) -> bool {
+        if index < self.models.len() {
+            self.models.remove(index);
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -453,17 +458,20 @@ impl AddLlmProviderModal {
 
     fn render_model(&self, ix: usize, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let has_more_than_one_model = self.input.models.len() > 1;
-        let model = &self.input.models[ix];
-
-        v_flex()
+        let row = v_flex()
             .p_2()
             .gap_2()
             .rounded_sm()
             .border_1()
             .border_dashed()
             .border_color(cx.theme().colors().border.opacity(0.6))
-            .bg(cx.theme().colors().element_active.opacity(0.15))
-            .child(model.name.clone())
+            .bg(cx.theme().colors().element_active.opacity(0.15));
+
+        let Some(model) = self.input.models.get(ix) else {
+            return row;
+        };
+
+        row.child(model.name.clone())
             .child(
                 h_flex()
                     .gap_2()
@@ -478,16 +486,20 @@ impl AddLlmProviderModal {
                         Checkbox::new(("supports-tools", ix), model.capabilities.supports_tools)
                             .label("Supports tools")
                             .on_click(cx.listener(move |this, checked, _window, cx| {
-                                this.input.models[ix].capabilities.supports_tools = *checked;
-                                cx.notify();
+                                if let Some(model) = this.input.models.get_mut(ix) {
+                                    model.capabilities.supports_tools = *checked;
+                                    cx.notify();
+                                }
                             })),
                     )
                     .child(
                         Checkbox::new(("supports-images", ix), model.capabilities.supports_images)
                             .label("Supports images")
                             .on_click(cx.listener(move |this, checked, _window, cx| {
-                                this.input.models[ix].capabilities.supports_images = *checked;
-                                cx.notify();
+                                if let Some(model) = this.input.models.get_mut(ix) {
+                                    model.capabilities.supports_images = *checked;
+                                    cx.notify();
+                                }
                             })),
                     )
                     .child(
@@ -498,10 +510,10 @@ impl AddLlmProviderModal {
                         .label("Supports parallel_tool_calls")
                         .on_click(cx.listener(
                             move |this, checked, _window, cx| {
-                                this.input.models[ix]
-                                    .capabilities
-                                    .supports_parallel_tool_calls = *checked;
-                                cx.notify();
+                                if let Some(model) = this.input.models.get_mut(ix) {
+                                    model.capabilities.supports_parallel_tool_calls = *checked;
+                                    cx.notify();
+                                }
                             },
                         )),
                     )
@@ -513,9 +525,10 @@ impl AddLlmProviderModal {
                         .label("Supports prompt_cache_key")
                         .on_click(cx.listener(
                             move |this, checked, _window, cx| {
-                                this.input.models[ix].capabilities.supports_prompt_cache_key =
-                                    *checked;
-                                cx.notify();
+                                if let Some(model) = this.input.models.get_mut(ix) {
+                                    model.capabilities.supports_prompt_cache_key = *checked;
+                                    cx.notify();
+                                }
                             },
                         )),
                     )
@@ -527,9 +540,10 @@ impl AddLlmProviderModal {
                         .label("Supports /chat/completions")
                         .on_click(cx.listener(
                             move |this, checked, _window, cx| {
-                                this.input.models[ix].capabilities.supports_chat_completions =
-                                    *checked;
-                                cx.notify();
+                                if let Some(model) = this.input.models.get_mut(ix) {
+                                    model.capabilities.supports_chat_completions = *checked;
+                                    cx.notify();
+                                }
                             },
                         )),
                     ),
@@ -546,8 +560,9 @@ impl AddLlmProviderModal {
                         .style(ButtonStyle::Outlined)
                         .full_width()
                         .on_click(cx.listener(move |this, _, _window, cx| {
-                            this.input.remove_model(ix);
-                            cx.notify();
+                            if this.input.remove_model(ix) {
+                                cx.notify();
+                            }
                         })),
                 )
             })

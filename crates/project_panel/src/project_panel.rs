@@ -1662,19 +1662,33 @@ impl ProjectPanel {
                 entry_ix -= 1;
             } else if worktree_ix > 0 {
                 worktree_ix -= 1;
-                entry_ix = self.state.visible_entries[worktree_ix].entries.len() - 1;
+                let Some(last_entry_ix) = self
+                    .state
+                    .visible_entries
+                    .get(worktree_ix)
+                    .and_then(|visible_entries| visible_entries.entries.len().checked_sub(1))
+                else {
+                    return;
+                };
+                entry_ix = last_entry_ix;
             } else {
                 return;
             }
 
-            let VisibleEntriesForWorktree {
+            let Some(VisibleEntriesForWorktree {
                 worktree_id,
                 entries,
                 ..
-            } = &self.state.visible_entries[worktree_ix];
+            }) = self.state.visible_entries.get(worktree_ix)
+            else {
+                return;
+            };
+            let Some(entry) = entries.get(entry_ix) else {
+                return;
+            };
             let selection = SelectedEntry {
                 worktree_id: *worktree_id,
-                entry_id: entries[entry_ix].id,
+                entry_id: entry.id,
             };
             self.selection = Some(selection);
             if window.modifiers().shift {
@@ -6696,7 +6710,8 @@ impl ProjectPanel {
 
         let (active_indent_range, depth) = {
             let (worktree_ix, child_offset, ix) = self.index_for_entry(entry.id, worktree.id())?;
-            let child_paths = &self.state.visible_entries[worktree_ix].entries;
+            let visible_worktree = self.state.visible_entries.get(worktree_ix)?;
+            let child_paths = &visible_worktree.entries;
             let mut child_count = 0;
             let depth = entry.path.ancestors().count();
             while let Some(entry) = child_paths.get(child_offset + child_count + 1) {
@@ -6709,7 +6724,6 @@ impl ProjectPanel {
             let start = ix + 1;
             let end = start + child_count;
 
-            let visible_worktree = &self.state.visible_entries[worktree_ix];
             let visible_worktree_entries = visible_worktree.index.get_or_init(|| {
                 visible_worktree
                     .entries

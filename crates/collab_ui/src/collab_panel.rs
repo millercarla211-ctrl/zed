@@ -2711,7 +2711,9 @@ impl CollabPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let entry = self.entries[ix].clone();
+        let Some(entry) = self.entries.get(ix).cloned() else {
+            return Empty.into_any_element();
+        };
 
         let is_selected = self.selection == Some(ix);
         match entry {

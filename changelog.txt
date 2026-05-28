@@ -1,3 +1,24 @@
+[2026-05-29] - UI Materialization Stale Index Hardening
+
+CHANGED:
+- Project Panel previous-selection navigation and active-indent guide lookup now check visible worktree and entry indexes before reading visible entries.
+- Git Panel tree selection, prompt worktree selection, and tree row rendering now use checked logical/worktree lookups.
+- Collab Panel row rendering now returns an empty element for stale row indexes instead of direct-indexing entries.
+- Settings UI navbar focus subscriptions now iterate entry references directly, and file filtering now checks filter-table rows before mutation.
+- Add LLM Provider model rendering, capability toggles, and removal now check model indexes before rendering, mutating, or removing models.
+- Workspace pane tab rendering now uses the provided item handle and checked visible item lookups while preserving visible-index/detail alignment.
+- Extended `script\dx-project-panel-source.test.ts`, `script\dx-git-ui-source.test.ts`, `script\dx-collab-panel-source.test.ts`, `script\dx-settings-keymap-source.test.ts`, `script\dx-agent-configuration-modal-source.test.ts`, and `script\dx-workspace-ui-state-source.test.ts`.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-project-panel-source.test.ts script\dx-git-ui-source.test.ts script\dx-collab-panel-source.test.ts script\dx-settings-keymap-source.test.ts script\dx-agent-configuration-modal-source.test.ts script\dx-workspace-ui-state-source.test.ts` (40/40 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Targeted stale direct-index pattern scan over edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-29] - UI Navigation Stale Index Hardening
 
 ADDED:

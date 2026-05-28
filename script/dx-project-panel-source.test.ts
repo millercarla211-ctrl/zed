@@ -112,6 +112,51 @@ test("project panel expansion and selection fanout is bounded", () => {
   });
 });
 
+test("project panel previous selection uses checked visible-entry lookups", () => {
+  const source = read("crates/project_panel/src/project_panel.rs");
+  const selectPrevious = functionBody(source, "select_previous");
+
+  assert.doesNotMatch(
+    selectPrevious,
+    /visible_entries\s*\[\s*worktree_ix\s*\]/,
+    "select_previous must not index visible_entries with a stale worktree_ix",
+  );
+  assert.doesNotMatch(
+    selectPrevious,
+    /entries\s*\[\s*entry_ix\s*\]/,
+    "select_previous must not index entries with a stale entry_ix",
+  );
+  assertBefore({
+    body: selectPrevious,
+    before: /\.visible_entries\s*\.\s*get\(\s*worktree_ix\s*\)/,
+    after: "let selection = SelectedEntry",
+    message: "select_previous must check the target worktree before creating a selection",
+  });
+  assertBefore({
+    body: selectPrevious,
+    before: /entries\.get\(\s*entry_ix\s*\)/,
+    after: "let selection = SelectedEntry",
+    message: "select_previous must check the target entry before creating a selection",
+  });
+});
+
+test("project panel active indent guide uses checked visible-entry lookups", () => {
+  const source = read("crates/project_panel/src/project_panel.rs");
+  const findActiveIndentGuide = functionBody(source, "find_active_indent_guide");
+
+  assert.doesNotMatch(
+    findActiveIndentGuide,
+    /visible_entries\s*\[\s*worktree_ix\s*\]/,
+    "active indent guide lookup must not index visible_entries with a stale worktree_ix",
+  );
+  assertBefore({
+    body: findActiveIndentGuide,
+    before: /\.visible_entries\s*\.\s*get\(\s*worktree_ix\s*\)/,
+    after: "let child_paths =",
+    message: "active indent guide lookup must check the target worktree before reading entries",
+  });
+});
+
 test("project panel drag, drop, and download materialization is bounded", () => {
   const source = read("crates/project_panel/src/project_panel.rs");
   const dropExternalFiles = functionBody(source, "drop_external_files");

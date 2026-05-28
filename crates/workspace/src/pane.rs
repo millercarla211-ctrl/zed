@@ -3273,9 +3273,11 @@ impl Pane {
                     }),
             );
 
-        let single_entry_to_resolve = (self.items[ix].buffer_kind(cx) == ItemBufferKind::Singleton)
-            .then(|| self.items[ix].project_entry_ids(cx).get(0).copied())
-            .flatten();
+        let single_entry_to_resolve = if item.buffer_kind(cx) == ItemBufferKind::Singleton {
+            item.project_entry_ids(cx).first().copied()
+        } else {
+            None
+        };
 
         let total_items = self.items.len();
         let has_multibuffer_items = self
@@ -3649,11 +3651,11 @@ impl Pane {
                 }
             });
 
-        let visible_indices = self.visible_item_indices(cx);
-        let visible_items = visible_indices
-            .iter()
-            .map(|&ix| self.items[ix].boxed_clone())
-            .collect::<Vec<_>>();
+        let (visible_indices, visible_items): (Vec<_>, Vec<_>) = self
+            .visible_item_indices(cx)
+            .into_iter()
+            .filter_map(|ix| self.items.get(ix).map(|item| (ix, item.boxed_clone())))
+            .unzip();
         let active_visible_ix = visible_indices
             .iter()
             .position(|&ix| ix == self.active_item_index)

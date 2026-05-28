@@ -1861,8 +1861,8 @@ impl SettingsWindow {
     ) {
         let mut focus_subscriptions = Vec::new();
 
-        for entry_index in 0..self.navbar_entries.len() {
-            let focus_handle = self.navbar_entries[entry_index].focus_handle.clone();
+        for (entry_index, entry) in self.navbar_entries.iter().enumerate() {
+            let focus_handle = entry.focus_handle.clone();
 
             let subscription = cx.on_focus(
                 &focus_handle,
@@ -1938,7 +1938,9 @@ impl SettingsWindow {
                 match item {
                     SettingsPageItem::SectionHeader(_) => {
                         if !any_found_since_last_header {
-                            page_filter[header_index] = false;
+                            if let Some(header_match) = page_filter.get_mut(header_index) {
+                                *header_match = false;
+                            }
                         }
                         header_index = index;
                         any_found_since_last_header = false;
@@ -1950,14 +1952,18 @@ impl SettingsWindow {
                         ..
                     }) => {
                         if !files.contains(current_file) {
-                            page_filter[index] = false;
+                            if let Some(item_match) = page_filter.get_mut(index) {
+                                *item_match = false;
+                            }
                         } else {
                             any_found_since_last_header = true;
                         }
                     }
                     SettingsPageItem::ActionLink(ActionLink { files, .. }) => {
                         if !files.contains(current_file) {
-                            page_filter[index] = false;
+                            if let Some(item_match) = page_filter.get_mut(index) {
+                                *item_match = false;
+                            }
                         } else {
                             any_found_since_last_header = true;
                         }

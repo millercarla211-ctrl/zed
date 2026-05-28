@@ -47,6 +47,10 @@ function assertBefore(
   assert.ok(beforeIndex < afterIndex, message);
 }
 
+function matchCount(haystack: string, pattern: RegExp): number {
+  return Array.from(haystack.matchAll(pattern)).length;
+}
+
 test("settings UI declares named search and render fanout caps", () => {
   assert.match(settingsSource, /const MAX_SETTINGS_LANGUAGE_SUBPAGES: usize = \d+;/);
   assert.match(settingsSource, /const MAX_SETTINGS_NAVBAR_ENTRIES: usize = \d+;/);
@@ -390,6 +394,55 @@ test("settings navigation render paths guard stale page and item indexes", () =>
     currentPageItems,
     /content_handles\[[^\]]+\]\[[^\]]+\]/,
     "settings page rendering must not directly index content handles",
+  );
+});
+
+test("settings focus subscriptions and file filtering guard stale indexes", () => {
+  const setupNavbarFocusSubscriptions = sliceBetween(
+    settingsSource,
+    "fn setup_navbar_focus_subscriptions(",
+    "fn nav_entry_in_search_filter",
+  );
+  const filterMatchesToFile = sliceBetween(
+    settingsSource,
+    "fn filter_matches_to_file(&mut self) {",
+    "fn filter_by_json_path",
+  );
+
+  assert.match(
+    setupNavbarFocusSubscriptions,
+    /for \(entry_index, entry\) in self\.navbar_entries\.iter\(\)\.enumerate\(\)/,
+    "navbar focus subscriptions must iterate entries directly while retaining indexes",
+  );
+  assert.match(
+    setupNavbarFocusSubscriptions,
+    /let focus_handle = entry\.focus_handle\.clone\(\);/,
+    "navbar focus subscriptions must clone focus handles from the iterated entry",
+  );
+  assert.doesNotMatch(
+    setupNavbarFocusSubscriptions,
+    /navbar_entries\[[^\]]+\]/,
+    "navbar focus subscriptions must not direct-index navbar entries",
+  );
+  assert.doesNotMatch(
+    setupNavbarFocusSubscriptions,
+    /0\.\.self\.navbar_entries\.len\(\)/,
+    "navbar focus subscriptions must not create indexes separate from entry references",
+  );
+
+  assert.match(
+    filterMatchesToFile,
+    /page_filter\.get_mut\(header_index\)/,
+    "file filtering must guard stale section header indexes",
+  );
+  assert.ok(
+    matchCount(filterMatchesToFile, /page_filter\.get_mut\(index\)/g) >= 2,
+    "file filtering must guard stale setting and action row indexes",
+  );
+  assert.doesNotMatch(
+    filterMatchesToFile,
+    /page_filter\[[^\]]+\]\s*=/,
+    "file filtering must not direct-index stale filter-table rows",
   );
 });
 

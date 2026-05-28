@@ -129,6 +129,55 @@ test("provider model fields are size-checked before parsing numeric text", () =>
   );
 });
 
+test("provider model rendering uses checked model indexes", () => {
+  const renderModel = sliceBetween(
+    providerModal,
+    "fn render_model(&self, ix: usize, cx: &mut Context<Self>) -> impl IntoElement + use<> {",
+    "\n    fn on_tab",
+  );
+  const removeModel = sliceBetween(
+    providerModal,
+    "fn remove_model(&mut self, index: usize)",
+    "struct ModelCapabilityToggles",
+  );
+
+  assert.doesNotMatch(
+    renderModel,
+    /self\.input\.models\s*\[\s*ix\s*\]/,
+    "render_model must not directly index self.input.models",
+  );
+  assert.doesNotMatch(
+    renderModel,
+    /this\.input\.models\s*\[\s*ix\s*\]/,
+    "render_model capability handlers must not directly index input.models",
+  );
+  assert.match(
+    renderModel,
+    /self\.input\.models\.get\(ix\)/,
+    "render_model should render from a checked model lookup",
+  );
+  assert.match(
+    renderModel,
+    /this\.input\.models\.get_mut\(ix\)/,
+    "render_model capability handlers should mutate through get_mut",
+  );
+  assert.match(
+    removeModel,
+    /fn remove_model\(&mut self, index: usize\) -> bool/,
+    "remove_model should report whether the indexed removal happened",
+  );
+  assert.match(
+    removeModel,
+    /if index < self\.models\.len\(\) \{\s*self\.models\.remove\(index\);\s*true\s*\} else \{\s*false\s*\}/s,
+    "remove_model should guard stale indexes before removing models",
+  );
+  assert.match(
+    renderModel,
+    /if this\.input\.remove_model\(ix\) \{\s*cx\.notify\(\);\s*\}/s,
+    "remove button handlers should notify only after a checked model removal",
+  );
+});
+
 test("context server editor text is capped before parse and settings mutation", () => {
   assert.match(
     contextServerModal,

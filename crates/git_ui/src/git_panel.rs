@@ -1146,7 +1146,7 @@ impl GitPanel {
                     entry.status_entry().is_some() || entry.directory_entry().is_some()
                 });
 
-                index.map(|index| state.logical_indices[index])
+                index.and_then(|index| state.logical_indices.get(index).copied())
             }
         };
 
@@ -1187,7 +1187,15 @@ impl GitPanel {
                     return;
                 };
 
-                state.logical_indices[current_logical_index.saturating_sub(1)]
+                let Some(new_index) = state
+                    .logical_indices
+                    .get(current_logical_index.saturating_sub(1))
+                    .copied()
+                else {
+                    return;
+                };
+
+                new_index
             }
         };
 
@@ -3061,7 +3069,7 @@ impl GitPanel {
                 cx,
             );
 
-            cx.spawn(async move |_, _| prompt.await.map(|ix| worktrees[ix].clone()))
+            cx.spawn(async move |_, _| prompt.await.and_then(|ix| worktrees.get(ix).cloned()))
         };
 
         cx.spawn_in(window, async move |this, cx| {
@@ -5788,9 +5796,11 @@ impl GitPanel {
 
                                 let mut items = Vec::with_capacity(range.end - range.start);
 
-                                for ix in range.into_iter().map(|ix| match &this.view_mode {
-                                    GitPanelViewMode::Tree(state) => state.logical_indices[ix],
-                                    GitPanelViewMode::Flat => ix,
+                                for ix in range.into_iter().filter_map(|ix| match &this.view_mode {
+                                    GitPanelViewMode::Tree(state) => {
+                                        state.logical_indices.get(ix).copied()
+                                    }
+                                    GitPanelViewMode::Flat => Some(ix),
                                 }) {
                                     match &this.entries.get(ix) {
                                         Some(GitListEntry::Status(entry)) => {
