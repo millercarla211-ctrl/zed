@@ -153,6 +153,28 @@ test("Minidump upload skips local and remote missing-commit dev metadata quietly
   );
 });
 
+test("Remote minidump upload bounds metadata before parsing", () => {
+  const source = read("crates/zed/src/reliability.rs");
+
+  assert.match(source, /const MAX_REMOTE_MINIDUMP_METADATA_BYTES: usize = 64 \* 1024;/);
+  const remote = sliceBetween(
+    source,
+    "remote_client.update(cx, |remote_client, cx|",
+    "anyhow::Ok(())",
+  );
+  assert.match(remote, /metadata\.len\(\) > MAX_REMOTE_MINIDUMP_METADATA_BYTES/);
+  assert.ok(
+    remote.indexOf("metadata.len() > MAX_REMOTE_MINIDUMP_METADATA_BYTES") <
+      remote.indexOf("serde_json::from_str(&metadata)"),
+    "remote minidump metadata must be bounded before JSON parsing",
+  );
+  assert.ok(
+    remote.indexOf("metadata.len() > MAX_REMOTE_MINIDUMP_METADATA_BYTES") <
+      remote.indexOf("upload_minidump(client.clone(), &endpoint"),
+    "remote minidump metadata must be bounded before upload forwarding",
+  );
+});
+
 test("Previous minidump upload bounds metadata and payload file reads", () => {
   const source = read("crates/zed/src/reliability.rs");
 
@@ -403,6 +425,98 @@ test("Build timing upload rejects oversized JSON before parsing", () => {
     "build timing JSON must be size-checked before parsing",
   );
   assert.doesNotMatch(upload, /smol::fs::read_to_string/);
+});
+
+test("Hang trace persistence bounds file and timing enumeration before pruning or serialization", () => {
+  const source = read("crates/zed/src/reliability.rs");
+
+  const constants = sliceBetween(
+    source,
+    "const MAX_HANG_TRACES",
+    "pub fn init",
+  );
+  assert.match(constants, /const MAX_HANG_TRACE_SCAN_ENTRIES: usize = 256;/);
+  assert.match(constants, /const MAX_HANG_TRACE_THREAD_TIMINGS: usize = 128;/);
+
+  const helper = sliceBetween(
+    source,
+    "fn hang_trace_files_for_pruning",
+    "fn cleanup_old_hang_traces",
+  );
+  assert.match(helper, /std::fs::read_dir\(paths::hang_traces_dir\(\)\)/);
+  assert.match(helper, /\.take\(MAX_HANG_TRACE_SCAN_ENTRIES\)/);
+  assert.ok(
+    helper.indexOf(".take(MAX_HANG_TRACE_SCAN_ENTRIES)") <
+      helper.indexOf(".collect()"),
+    "hang trace directory entries must be capped before collecting for sort/prune",
+  );
+
+  const cleanup = sliceBetween(
+    source,
+    "fn cleanup_old_hang_traces",
+    "fn save_hang_trace",
+  );
+  assert.match(cleanup, /let mut files = hang_trace_files_for_pruning\(\);/);
+  assert.doesNotMatch(cleanup, /std::fs::read_dir/);
+
+  const save = sliceBetween(
+    source,
+    "fn save_hang_trace",
+    "const MAX_PREVIOUS_MINIDUMP_METADATA_BYTES",
+  );
+  assert.match(save, /\.take\(MAX_HANG_TRACE_THREAD_TIMINGS\)/);
+  assert.ok(
+    save.indexOf(".take(MAX_HANG_TRACE_THREAD_TIMINGS)") <
+      save.indexOf("SerializedThreadTaskTimings::convert"),
+    "thread timings must be capped before serialization into the hang trace payload",
+  );
+  assert.match(save, /let mut files = hang_trace_files_for_pruning\(\);/);
+  assert.doesNotMatch(save, /std::fs::read_dir\(paths::hang_traces_dir\(\)\)/);
+});
+
+test("Previous minidump and build timing uploads cap directory entries before parse or upload", () => {
+  const source = read("crates/zed/src/reliability.rs");
+
+  assert.match(source, /const MAX_PREVIOUS_MINIDUMP_SCAN_ENTRIES: usize = 256;/);
+  assert.match(source, /const MAX_BUILD_TIMING_SCAN_ENTRIES: usize = 128;/);
+
+  const previous = sliceBetween(
+    source,
+    "pub async fn upload_previous_minidumps",
+    "fn has_missing_minidump_commit_sha",
+  );
+  assert.match(previous, /let mut scanned_entries = 0;/);
+  assert.match(previous, /if scanned_entries >= MAX_PREVIOUS_MINIDUMP_SCAN_ENTRIES \{/);
+  assert.match(previous, /scanned_entries \+= 1;/);
+  assert.ok(
+    previous.indexOf("if scanned_entries >= MAX_PREVIOUS_MINIDUMP_SCAN_ENTRIES") <
+      previous.indexOf("read_previous_minidump_metadata(&json_path).await"),
+    "previous minidump scans must hit the per-pass cap before metadata parsing",
+  );
+  assert.ok(
+    previous.indexOf("if scanned_entries >= MAX_PREVIOUS_MINIDUMP_SCAN_ENTRIES") <
+      previous.indexOf("upload_minidump("),
+    "previous minidump scans must hit the per-pass cap before upload",
+  );
+
+  const build = sliceBetween(
+    source,
+    "async fn upload_build_timings",
+    "trait FormExt",
+  );
+  assert.match(build, /let mut scanned_entries = 0;/);
+  assert.match(build, /if scanned_entries >= MAX_BUILD_TIMING_SCAN_ENTRIES \{/);
+  assert.match(build, /scanned_entries \+= 1;/);
+  assert.ok(
+    build.indexOf("if scanned_entries >= MAX_BUILD_TIMING_SCAN_ENTRIES") <
+      build.indexOf("read_build_timing_json(&path).await"),
+    "build timing scans must hit the per-pass cap before bounded JSON reads",
+  );
+  assert.ok(
+    build.indexOf("if scanned_entries >= MAX_BUILD_TIMING_SCAN_ENTRIES") <
+      build.indexOf("serde_json::from_str(&contents)"),
+    "build timing scans must hit the per-pass cap before parsing JSON",
+  );
 });
 
 test("production-readiness docs name the Windows reliability source guard", () => {

@@ -20,6 +20,9 @@ use util::ResultExt;
 use crate::STARTUP_TIME;
 
 const MAX_HANG_TRACES: usize = 3;
+const MAX_HANG_TRACE_SCAN_ENTRIES: usize = 256;
+const MAX_HANG_TRACE_THREAD_TIMINGS: usize = 128;
+const MAX_REMOTE_MINIDUMP_METADATA_BYTES: usize = 64 * 1024;
 
 pub fn init(client: Arc<Client>, cx: &mut App) {
     if cfg!(debug_assertions) {
@@ -75,6 +78,15 @@ pub fn init(client: Arc<Client>, cx: &mut App) {
                     minidump_contents,
                 } in crashes
                 {
+                    if metadata.len() > MAX_REMOTE_MINIDUMP_METADATA_BYTES {
+                        log::warn!(
+                            "Remote minidump metadata is too large to parse: {} bytes (limit {} bytes)",
+                            metadata.len(),
+                            MAX_REMOTE_MINIDUMP_METADATA_BYTES
+                        );
+                        continue;
+                    }
+
                     if let Some(metadata) = serde_json::from_str(&metadata).log_err() {
                         upload_minidump(client.clone(), &endpoint, minidump_contents, &metadata)
                             .await
@@ -141,23 +153,30 @@ fn monitor_hangs(cx: &App) {
         .detach();
 }
 
-fn cleanup_old_hang_traces() {
-    if let Ok(entries) = std::fs::read_dir(paths::hang_traces_dir()) {
-        let mut files: Vec<_> = entries
-            .filter_map(|entry| entry.ok())
-            .filter(|entry| {
-                entry
-                    .path()
-                    .extension()
-                    .is_some_and(|ext| ext == "json" || ext == "miniprof")
-            })
-            .collect();
+fn hang_trace_files_for_pruning() -> Vec<std::fs::DirEntry> {
+    let Ok(entries) = std::fs::read_dir(paths::hang_traces_dir()) else {
+        return Vec::new();
+    };
 
-        if files.len() > MAX_HANG_TRACES {
-            files.sort_by_key(|entry| entry.file_name());
-            for entry in files.iter().take(files.len() - MAX_HANG_TRACES) {
-                std::fs::remove_file(entry.path()).log_err();
-            }
+    entries
+        .filter_map(|entry| entry.ok())
+        .take(MAX_HANG_TRACE_SCAN_ENTRIES)
+        .filter(|entry| {
+            entry
+                .path()
+                .extension()
+                .is_some_and(|ext| ext == "json" || ext == "miniprof")
+        })
+        .collect()
+}
+
+fn cleanup_old_hang_traces() {
+    let mut files = hang_trace_files_for_pruning();
+
+    if files.len() > MAX_HANG_TRACES {
+        files.sort_by_key(|entry| entry.file_name());
+        for entry in files.iter().take(files.len() - MAX_HANG_TRACES) {
+            std::fs::remove_file(entry.path()).log_err();
         }
     }
 }
@@ -170,6 +189,7 @@ fn save_hang_trace(
     let thread_timings = background_executor.dispatcher().get_all_timings();
     let thread_timings = thread_timings
         .into_iter()
+        .take(MAX_HANG_TRACE_THREAD_TIMINGS)
         .map(|mut timings| {
             if timings.thread_id == main_thread_id {
                 timings.thread_name = Some("main".to_string());
@@ -191,22 +211,12 @@ fn save_hang_trace(
         return;
     };
 
-    if let Ok(entries) = std::fs::read_dir(paths::hang_traces_dir()) {
-        let mut files: Vec<_> = entries
-            .filter_map(|entry| entry.ok())
-            .filter(|entry| {
-                entry
-                    .path()
-                    .extension()
-                    .is_some_and(|ext| ext == "json" || ext == "miniprof")
-            })
-            .collect();
+    let mut files = hang_trace_files_for_pruning();
 
-        if files.len() >= MAX_HANG_TRACES {
-            files.sort_by_key(|entry| entry.file_name());
-            for entry in files.iter().take(files.len() - (MAX_HANG_TRACES - 1)) {
-                std::fs::remove_file(entry.path()).log_err();
-            }
+    if files.len() >= MAX_HANG_TRACES {
+        files.sort_by_key(|entry| entry.file_name());
+        for entry in files.iter().take(files.len() - (MAX_HANG_TRACES - 1)) {
+            std::fs::remove_file(entry.path()).log_err();
         }
     }
 
@@ -222,6 +232,7 @@ fn save_hang_trace(
 
 const MAX_PREVIOUS_MINIDUMP_METADATA_BYTES: u64 = 64 * 1024;
 const MAX_PREVIOUS_MINIDUMP_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_PREVIOUS_MINIDUMP_SCAN_ENTRIES: usize = 256;
 
 async fn read_limited_previous_minidump_file(
     path: &Path,
@@ -268,7 +279,18 @@ pub async fn upload_previous_minidumps(client: Arc<Client>) -> anyhow::Result<()
     };
 
     let mut children = smol::fs::read_dir(paths::logs_dir()).await?;
-    while let Some(child) = children.next().await {
+    let mut scanned_entries = 0;
+    loop {
+        if scanned_entries >= MAX_PREVIOUS_MINIDUMP_SCAN_ENTRIES {
+            log::debug!(
+                "Previous minidump scan reached {MAX_PREVIOUS_MINIDUMP_SCAN_ENTRIES} entries; skipping remaining files for this upload pass"
+            );
+            break;
+        }
+        let Some(child) = children.next().await else {
+            break;
+        };
+        scanned_entries += 1;
         let child = child?;
         let child_path = child.path();
         if child_path.extension() != Some(OsStr::new("dmp")) {
@@ -539,6 +561,7 @@ struct BuildTiming {
 }
 
 const MAX_BUILD_TIMING_JSON_BYTES: u64 = 64 * 1024;
+const MAX_BUILD_TIMING_SCAN_ENTRIES: usize = 128;
 
 async fn read_build_timing_json(path: &Path) -> Result<Option<String>> {
     let file = smol::fs::File::open(path).await?;
@@ -580,7 +603,18 @@ async fn upload_build_timings(_client: Arc<Client>) -> Result<()> {
     let ram_size_gb = (system.total_memory() as f64) / (1024.0 * 1024.0 * 1024.0);
 
     let mut entries = smol::fs::read_dir(&build_timings_dir).await?;
-    while let Some(entry) = entries.next().await {
+    let mut scanned_entries = 0;
+    loop {
+        if scanned_entries >= MAX_BUILD_TIMING_SCAN_ENTRIES {
+            log::debug!(
+                "Build timing scan reached {MAX_BUILD_TIMING_SCAN_ENTRIES} entries; skipping remaining files for this upload pass"
+            );
+            break;
+        }
+        let Some(entry) = entries.next().await else {
+            break;
+        };
+        scanned_entries += 1;
         let entry = entry?;
         let path = entry.path();
 

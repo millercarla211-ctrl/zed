@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const read = (path: string) => readFileSync(path, "utf8");
@@ -9,13 +9,17 @@ const registeredGuardScripts = [
   "script/dx-windows-reliability-source.test.ts",
   "script/zed-builtin-schema-source.test.ts",
   "script/zed-platform-source.test.ts",
+  "script/zed-startup-reliability-source.test.ts",
   "script/dx-workspace-reentrant-source.test.ts",
+  "script/dx-workspace-persistence-source.test.ts",
   "script/dx-source-quality.test.ts",
   "script/dx-studio-project-source.test.ts",
   "script/dx-buffer-codegen-source.test.ts",
   "script/dx-inline-prompt-source.test.ts",
   "script/dx-agent-panel-clipboard-source.test.ts",
+  "script/dx-agent-panel-input-source.test.ts",
   "script/dx-agent-configuration-source.test.ts",
+  "script/dx-agent-configuration-modal-source.test.ts",
   "script/dx-agent-persisted-state-source.test.ts",
   "script/dx-mention-set-source.test.ts",
   "script/dx-message-editor-source.test.ts",
@@ -38,6 +42,7 @@ const registeredGuardScripts = [
   "script/dx-launch-source-audit-source.test.ts",
   "script/dx-launch-status-source.test.ts",
   "script/dx-receipt-history-source.test.ts",
+  "script/dx-receipt-directory-source.test.ts",
   "script/dx-runtime-proof-status-source.test.ts",
   "script/dx-source-sets-source.test.ts",
   "script/dx-agent-bridge-source.test.ts",
@@ -55,6 +60,7 @@ test("DX.md exposes the lightweight source guard registry", () => {
   assert.match(dx, /Run the narrowest guard that matches the owned lane/);
 
   for (const guard of registeredGuardScripts) {
+    assert.ok(existsSync(guard), `registered guard should exist: ${guard}`);
     assert.ok(dx.includes(guard), `DX.md should list ${guard}`);
   }
 });

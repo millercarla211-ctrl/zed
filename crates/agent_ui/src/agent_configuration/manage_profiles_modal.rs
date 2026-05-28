@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use agent::ContextServerRegistry;
 use agent_settings::{AgentProfile, AgentProfileId, AgentSettings, builtin_profiles};
-use editor::Editor;
+use editor::{Editor, MultiBufferSnapshot};
 use fs::Fs;
 use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Subscription, prelude::*};
 use language_model::{LanguageModel, LanguageModelRegistry};
@@ -21,6 +21,31 @@ use crate::agent_configuration::manage_profiles_modal::profile_modal_header::Pro
 use crate::agent_configuration::tool_picker::{ToolPicker, ToolPickerDelegate};
 use crate::language_model_selector::{LanguageModelSelector, language_model_selector};
 use crate::{AgentPanel, ManageProfiles};
+
+const MAX_AGENT_PROFILE_NAME_INPUT_BYTES: usize = 1024;
+const MAX_AGENT_PROFILE_NAME_INPUT_CHARS: usize = 1024;
+
+fn profile_name_editor_text(
+    editor: &Editor,
+    cx: &App,
+) -> std::result::Result<String, SharedString> {
+    let snapshot = editor.buffer().read(cx).snapshot(cx);
+    if profile_name_snapshot_exceeds_limit(&snapshot) {
+        return Err(format!(
+            "Profile name is too large (maximum {} bytes)",
+            MAX_AGENT_PROFILE_NAME_INPUT_BYTES
+        )
+        .into());
+    }
+
+    Ok(snapshot.text())
+}
+
+fn profile_name_snapshot_exceeds_limit(snapshot: &MultiBufferSnapshot) -> bool {
+    let summary = snapshot.text_summary();
+    summary.len.0 > MAX_AGENT_PROFILE_NAME_INPUT_BYTES
+        || summary.chars > MAX_AGENT_PROFILE_NAME_INPUT_CHARS
+}
 
 enum Mode {
     ChooseProfile(ChooseProfileMode),
@@ -103,6 +128,7 @@ pub struct ViewProfileMode {
 pub struct NewProfileMode {
     name_editor: Entity<Editor>,
     base_profile_id: Option<AgentProfileId>,
+    new_profile_error: Option<SharedString>,
 }
 
 pub struct ManageProfilesModal {
@@ -190,6 +216,7 @@ impl ManageProfilesModal {
         self.mode = Mode::NewProfile(NewProfileMode {
             name_editor,
             base_profile_id,
+            new_profile_error: None,
         });
         self.focus_handle(cx).focus(window, cx);
     }
@@ -409,11 +436,19 @@ impl ManageProfilesModal {
     }
 
     fn confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match &self.mode {
+        match &mut self.mode {
             Mode::ChooseProfile { .. } => {}
             Mode::NewProfile(mode) => {
-                let name = mode.name_editor.read(cx).text(cx);
+                let name = match profile_name_editor_text(mode.name_editor.read(cx), cx) {
+                    Ok(name) => name,
+                    Err(error) => {
+                        mode.new_profile_error = Some(error);
+                        cx.notify();
+                        return;
+                    }
+                };
                 let base_profile_id = mode.base_profile_id.clone();
+                mode.new_profile_error = None;
 
                 let profile_id =
                     AgentProfile::create(name, base_profile_id.clone(), self.fs.clone(), cx);
@@ -670,6 +705,20 @@ impl ManageProfilesModal {
             ))
             .child(ListSeparator)
             .child(h_flex().p_2().child(mode.name_editor))
+            .when_some(mode.new_profile_error, |this, error| {
+                this.child(
+                    h_flex()
+                        .px_2()
+                        .pb_2()
+                        .gap_1p5()
+                        .child(
+                            Icon::new(IconName::Warning)
+                                .size(IconSize::Small)
+                                .color(Color::Warning),
+                        )
+                        .child(Label::new(error).size(LabelSize::Small).color(Color::Muted)),
+                )
+            })
     }
 
     fn render_view_profile(

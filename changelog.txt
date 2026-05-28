@@ -1,3 +1,31 @@
+[2026-05-28] - Persistence Input And Enumeration Boundary Hardening
+
+ADDED:
+- Added `script\dx-workspace-persistence-source.test.ts` for workspace persisted KVP and DB JSON byte boundaries.
+- Added `script\dx-agent-configuration-modal-source.test.ts` for Agent configuration modal text-input boundaries.
+- Added `script\dx-agent-panel-input-source.test.ts` for AgentPanel editor text and draft materialization boundaries.
+- Added `script\dx-receipt-directory-source.test.ts` for DX receipt directory enumeration and bounded latest-candidate collection.
+- Added `script\zed-startup-reliability-source.test.ts` for Zed startup theme/keymap and reliability enumeration boundaries.
+
+CHANGED:
+- Workspace default bounds, multi-workspace state, dock state, panel-size state, toolchain JSON, Docker remote env, and pane flexes now reject oversized persisted JSON before deserialization.
+- Agent configuration modal provider, model, MCP config, OAuth secret, and profile-name inputs now size-check before parse, keychain/settings writes, auth submission, or profile creation.
+- AgentPanel now checks `MessageEditor` byte length before cloning message text or snapshotting draft content blocks, and terminal title text is capped before commit.
+- Web Preview local browser extension/profile discovery now caps directory walks and reads extension manifests through a small sentinel-byte cap before serde parsing.
+- DX receipt/proof/deploy/history directory scans now use named entry caps and bounded latest-candidate helpers instead of collecting every matching receipt first.
+- Zed startup theme/keymap paths, user-theme/background watch paths, debug language watcher registration, hang trace pruning/serialization, remote/previous minidump metadata upload scans, and build-timing upload scans now have explicit byte or entry caps.
+- The handoff source-guard registry now asserts each registered guard file exists so docs cannot point at missing source guards.
+- `DX.md` and the source-guard registry now list the new guards.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-workspace-persistence-source.test.ts script\dx-agent-configuration-modal-source.test.ts script\dx-agent-panel-input-source.test.ts script\web-preview-payload-source.test.ts script\dx-receipt-directory-source.test.ts script\dx-deploy-receipts-source.test.ts script\dx-receipt-history-source.test.ts script\dx-windows-reliability-source.test.ts script\zed-startup-reliability-source.test.ts` (53/53 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on all edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Inline Prompt And DX Studio Boundary Hardening
 
 ADDED:

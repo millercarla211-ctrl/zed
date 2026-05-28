@@ -367,6 +367,21 @@ pub struct PanelButtons {
 }
 
 pub(crate) const PANEL_SIZE_STATE_KEY: &str = "dock_panel_size";
+pub(crate) const MAX_PANEL_SIZE_STATE_JSON_BYTES: usize = 4 * 1024;
+
+pub(crate) fn ensure_panel_size_state_json_within_limit(json: &str, key: &str) -> Option<()> {
+    if json.len() > MAX_PANEL_SIZE_STATE_JSON_BYTES {
+        Err::<(), _>(anyhow::anyhow!(
+            "{key} panel size state KVP payload is too large ({} bytes; max {} bytes)",
+            json.len(),
+            MAX_PANEL_SIZE_STATE_JSON_BYTES
+        ))
+        .log_err();
+        return None;
+    }
+
+    Some(())
+}
 
 fn panel_uses_flexible_width(
     position: DockPosition,
@@ -1092,7 +1107,10 @@ impl Dock {
             .read(&format!("{workspace_id}:{panel_key}"))
             .log_err()
             .flatten()
-            .and_then(|json| serde_json::from_str::<PanelSizeState>(&json).log_err())
+            .and_then(|json| {
+                ensure_panel_size_state_json_within_limit(&json, panel_key)?;
+                serde_json::from_str::<PanelSizeState>(&json).log_err()
+            })
     }
 }
 

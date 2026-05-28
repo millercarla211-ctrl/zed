@@ -9,6 +9,11 @@ use std::{
 const PROOF_FRESHNESS_CACHE_TTL: Duration = Duration::from_secs(5);
 const FRESH_PROOF_WINDOW: Duration = Duration::from_secs(24 * 60 * 60);
 const STALE_PROOF_WINDOW: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+const PROOF_FRESHNESS_RECEIPT_ROOT_ENTRY_LIMIT: usize = 128;
+const PROOF_FRESHNESS_RECEIPT_NESTED_ENTRY_LIMIT: usize = 64;
+const PROOF_FRESHNESS_LATEST_ROOT_ENTRY_LIMIT: usize = 64;
+const PROOF_FRESHNESS_LATEST_NESTED_ENTRY_LIMIT: usize = 64;
+const PROOF_FRESHNESS_LATEST_CANDIDATE_LIMIT: usize = 8;
 
 #[derive(Clone)]
 pub(crate) struct DxProofFreshnessSnapshot {
@@ -194,7 +199,7 @@ fn count_receipt_files(root: &Path) -> usize {
 
     entries
         .flatten()
-        .take(128)
+        .take(PROOF_FRESHNESS_RECEIPT_ROOT_ENTRY_LIMIT)
         .map(|entry| {
             let path = entry.path();
             if path.is_file() {
@@ -204,7 +209,7 @@ fn count_receipt_files(root: &Path) -> usize {
                     .map(|entries| {
                         entries
                             .flatten()
-                            .take(64)
+                            .take(PROOF_FRESHNESS_RECEIPT_NESTED_ENTRY_LIMIT)
                             .filter(|entry| {
                                 let path = entry.path();
                                 path.is_file() && is_receipt_file(&path)
@@ -228,14 +233,26 @@ fn latest_receipt_labels(
         return Vec::new();
     };
 
+    let candidate_limit = limit.min(PROOF_FRESHNESS_LATEST_CANDIDATE_LIMIT);
     let mut receipts = Vec::new();
-    for entry in entries.flatten().take(64) {
+    for entry in entries
+        .flatten()
+        .take(PROOF_FRESHNESS_LATEST_ROOT_ENTRY_LIMIT)
+    {
         let path = entry.path();
         if path.is_file() {
-            push_receipt_label(workspace_root, &path, &mut receipts);
+            push_bounded_receipt_label(workspace_root, &path, &mut receipts, candidate_limit);
         } else if let Ok(children) = fs::read_dir(&path) {
-            for child in children.flatten().take(64) {
-                push_receipt_label(workspace_root, &child.path(), &mut receipts);
+            for child in children
+                .flatten()
+                .take(PROOF_FRESHNESS_LATEST_NESTED_ENTRY_LIMIT)
+            {
+                push_bounded_receipt_label(
+                    workspace_root,
+                    &child.path(),
+                    &mut receipts,
+                    candidate_limit,
+                );
             }
         }
     }
@@ -245,12 +262,13 @@ fn latest_receipt_labels(
     receipts
 }
 
-fn push_receipt_label(
+fn push_bounded_receipt_label(
     workspace_root: &Path,
     path: &Path,
     receipts: &mut Vec<(SystemTime, String)>,
+    candidate_limit: usize,
 ) {
-    if !path.is_file() || !is_receipt_file(path) {
+    if candidate_limit == 0 || !path.is_file() || !is_receipt_file(path) {
         return;
     }
 
@@ -264,6 +282,10 @@ fn push_receipt_label(
         .display()
         .to_string();
     receipts.push((modified, label));
+    if receipts.len() > candidate_limit {
+        receipts.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(Ordering::Equal));
+        receipts.truncate(candidate_limit);
+    }
 }
 
 fn is_receipt_file(path: &Path) -> bool {

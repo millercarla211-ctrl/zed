@@ -7,6 +7,12 @@ use std::{
 
 use crate::dx_deploy_local_files::{is_receipt_file, relative_label};
 
+const DEPLOY_RECEIPT_ROOT_ENTRY_LIMIT: usize = 128;
+const DEPLOY_RECEIPT_NESTED_ENTRY_LIMIT: usize = 64;
+const DEPLOY_RECEIPT_LATEST_ROOT_ENTRY_LIMIT: usize = 64;
+const DEPLOY_RECEIPT_LATEST_NESTED_ENTRY_LIMIT: usize = 64;
+const DEPLOY_RECEIPT_LATEST_CANDIDATE_LIMIT: usize = 16;
+
 pub(crate) struct DeployReceiptCandidate {
     pub modified: SystemTime,
     pub label: String,
@@ -20,7 +26,7 @@ pub(crate) fn count_receipt_files(path: &Path) -> usize {
 
     entries
         .flatten()
-        .take(128)
+        .take(DEPLOY_RECEIPT_ROOT_ENTRY_LIMIT)
         .map(|entry| count_receipt_entry(&entry.path(), false))
         .sum()
 }
@@ -32,7 +38,7 @@ pub(crate) fn count_direct_receipt_files(path: &Path) -> usize {
 
     entries
         .flatten()
-        .take(128)
+        .take(DEPLOY_RECEIPT_ROOT_ENTRY_LIMIT)
         .filter(|entry| {
             let path = entry.path();
             path.is_file() && is_receipt_file(&path)
@@ -49,14 +55,26 @@ pub(crate) fn latest_receipt_candidates(
         return Vec::new();
     };
 
+    let candidate_limit = limit.min(DEPLOY_RECEIPT_LATEST_CANDIDATE_LIMIT);
     let mut receipts = Vec::new();
-    for entry in entries.flatten().take(64) {
+    for entry in entries
+        .flatten()
+        .take(DEPLOY_RECEIPT_LATEST_ROOT_ENTRY_LIMIT)
+    {
         let path = entry.path();
         if path.is_file() {
-            push_receipt_candidate(workspace_root, &path, &mut receipts);
+            push_bounded_receipt_candidate(workspace_root, &path, &mut receipts, candidate_limit);
         } else if let Ok(children) = fs::read_dir(&path) {
-            for child in children.flatten().take(64) {
-                push_receipt_candidate(workspace_root, &child.path(), &mut receipts);
+            for child in children
+                .flatten()
+                .take(DEPLOY_RECEIPT_LATEST_NESTED_ENTRY_LIMIT)
+            {
+                push_bounded_receipt_candidate(
+                    workspace_root,
+                    &child.path(),
+                    &mut receipts,
+                    candidate_limit,
+                );
             }
         }
     }
@@ -75,9 +93,18 @@ pub(crate) fn latest_direct_receipt_candidates(
         return Vec::new();
     };
 
+    let candidate_limit = limit.min(DEPLOY_RECEIPT_LATEST_CANDIDATE_LIMIT);
     let mut receipts = Vec::new();
-    for entry in entries.flatten().take(64) {
-        push_receipt_candidate(workspace_root, &entry.path(), &mut receipts);
+    for entry in entries
+        .flatten()
+        .take(DEPLOY_RECEIPT_LATEST_ROOT_ENTRY_LIMIT)
+    {
+        push_bounded_receipt_candidate(
+            workspace_root,
+            &entry.path(),
+            &mut receipts,
+            candidate_limit,
+        );
     }
 
     receipts.sort_by(newest_first);
@@ -108,19 +135,20 @@ fn count_receipt_entry(path: &Path, nested: bool) -> usize {
         .map(|entries| {
             entries
                 .flatten()
-                .take(64)
+                .take(DEPLOY_RECEIPT_NESTED_ENTRY_LIMIT)
                 .map(|entry| count_receipt_entry(&entry.path(), true))
                 .sum()
         })
         .unwrap_or_default()
 }
 
-fn push_receipt_candidate(
+fn push_bounded_receipt_candidate(
     workspace_root: &Path,
     path: &Path,
     receipts: &mut Vec<DeployReceiptCandidate>,
+    candidate_limit: usize,
 ) {
-    if !path.is_file() || !is_receipt_file(path) {
+    if candidate_limit == 0 || !path.is_file() || !is_receipt_file(path) {
         return;
     }
 
@@ -133,4 +161,8 @@ fn push_receipt_candidate(
         label: relative_label(workspace_root, path),
         path: path.to_path_buf(),
     });
+    if receipts.len() > candidate_limit {
+        receipts.sort_by(newest_first);
+        receipts.truncate(candidate_limit);
+    }
 }

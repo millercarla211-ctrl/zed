@@ -15,6 +15,11 @@ const _: () = assert!(
 );
 
 const MAX_BUILTIN_JSON_SCHEMA_BYTES: usize = 8 * 1024 * 1024;
+const MAX_USER_THEME_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_USER_THEME_DIR_ENTRIES: usize = 256;
+const MAX_USER_THEME_WATCH_EVENT_PATHS: usize = 256;
+#[cfg(debug_assertions)]
+const MAX_DEBUG_LANGUAGE_WATCH_DIR_ENTRIES: usize = 256;
 
 use agent::{SharedThread, ThreadStore};
 use agent_client_protocol::schema as acp;
@@ -60,7 +65,7 @@ use smol::future::poll_once;
 use std::{
     cell::RefCell,
     env,
-    io::{self, IsTerminal},
+    io::{self, IsTerminal, Read as _},
     path::{Path, PathBuf},
     process,
     rc::Rc,
@@ -1929,6 +1934,28 @@ fn load_embedded_fonts(cx: &App) {
         .unwrap();
 }
 
+async fn load_limited_user_theme_bytes(
+    fs: &Arc<dyn fs::Fs>,
+    path: &Path,
+) -> Result<Option<Vec<u8>>> {
+    let file = fs.open_sync(path).await?;
+    let mut bytes = Vec::new();
+    let mut limited_file = file.take(MAX_USER_THEME_BYTES + 1);
+    limited_file.read_to_end(&mut bytes)?;
+
+    if bytes.len() as u64 > MAX_USER_THEME_BYTES {
+        log::warn!(
+            "User theme file {:?} is too large to load: {} bytes read (limit {} bytes)",
+            path,
+            bytes.len(),
+            MAX_USER_THEME_BYTES
+        );
+        return Ok(None);
+    }
+
+    Ok(Some(bytes))
+}
+
 /// Spawns a background task to load the user themes from the themes directory.
 fn load_user_themes_in_background(fs: Arc<dyn fs::Fs>, cx: &mut App) {
     cx.spawn({
@@ -1958,11 +1985,26 @@ fn load_user_themes_in_background(fs: Arc<dyn fs::Fs>, cx: &mut App) {
                 .await
                 .with_context(|| format!("reading themes from {themes_dir:?}"))?;
 
-            while let Some(theme_path) = theme_paths.next().await {
+            let mut scanned_entries = 0;
+            loop {
+                if scanned_entries >= MAX_USER_THEME_DIR_ENTRIES {
+                    log::debug!(
+                        "User theme scan reached {MAX_USER_THEME_DIR_ENTRIES} entries; skipping remaining files"
+                    );
+                    break;
+                }
+                let Some(theme_path) = theme_paths.next().await else {
+                    break;
+                };
+                scanned_entries += 1;
                 let Some(theme_path) = theme_path.log_err() else {
                     continue;
                 };
-                let Some(bytes) = fs.load_bytes(&theme_path).await.log_err() else {
+                let Some(bytes) = load_limited_user_theme_bytes(&fs, &theme_path)
+                    .await
+                    .log_err()
+                    .flatten()
+                else {
                     continue;
                 };
 
@@ -1985,10 +2027,13 @@ fn watch_themes(fs: Arc<dyn fs::Fs>, cx: &mut App) {
             .await;
 
         while let Some(paths) = events.next().await {
-            for event in paths {
+            for event in paths.into_iter().take(MAX_USER_THEME_WATCH_EVENT_PATHS) {
                 if fs.metadata(&event.path).await.ok().flatten().is_some() {
                     let theme_registry = cx.update(|cx| ThemeRegistry::global(cx));
-                    if let Some(bytes) = fs.load_bytes(&event.path).await.log_err()
+                    if let Some(bytes) = load_limited_user_theme_bytes(&fs, &event.path)
+                        .await
+                        .log_err()
+                        .flatten()
                         && load_user_theme(&theme_registry, &bytes).log_err().is_some()
                     {
                         cx.update(theme_settings::reload_theme);
@@ -2014,7 +2059,18 @@ fn watch_languages(fs: Arc<dyn fs::Fs>, languages: Arc<LanguageRegistry>, cx: &m
 
         // add subdirectories since fs.watch is not recursive on Linux
         if let Some(mut paths) = fs.read_dir(&languages_src).await.log_err() {
-            while let Some(path) = paths.next().await {
+            let mut scanned_entries = 0;
+            loop {
+                if scanned_entries >= MAX_DEBUG_LANGUAGE_WATCH_DIR_ENTRIES {
+                    log::debug!(
+                        "Debug language watcher reached {MAX_DEBUG_LANGUAGE_WATCH_DIR_ENTRIES} entries; skipping remaining directories"
+                    );
+                    break;
+                }
+                let Some(path) = paths.next().await else {
+                    break;
+                };
+                scanned_entries += 1;
                 if let Some(path) = path.log_err()
                     && fs.is_dir(&path).await
                 {

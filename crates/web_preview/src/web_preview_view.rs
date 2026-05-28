@@ -36914,6 +36914,28 @@ fn load_bookmarks(profile_dir: &Path) -> Result<Vec<String>> {
     serde_json::from_slice(&data).with_context(|| format!("Failed to parse {}", path.display()))
 }
 
+#[cfg(target_os = "windows")]
+const MAX_LOCAL_BROWSER_DISCOVERED_EXTENSIONS: usize = 512;
+#[cfg(target_os = "windows")]
+const MAX_LOCAL_BROWSER_EXTENSION_DIRS: usize = 512;
+#[cfg(target_os = "windows")]
+const MAX_LOCAL_BROWSER_EXTENSION_VERSION_DIRS: usize = 64;
+#[cfg(target_os = "windows")]
+const MAX_LOCAL_BROWSER_FIREFOX_PROFILE_DIRS: usize = 64;
+#[cfg(target_os = "windows")]
+const MAX_LOCAL_BROWSER_FIREFOX_EXTENSIONS_PER_PROFILE: usize = 256;
+#[cfg(target_os = "windows")]
+const MAX_LOCAL_BROWSER_EXTENSION_MANIFEST_BYTES: u64 = 512 * 1024;
+
+#[cfg(target_os = "windows")]
+fn read_local_browser_extension_manifest(path: &Path) -> io::Result<Vec<u8>> {
+    read_sentinel_bounded_file(
+        path,
+        MAX_LOCAL_BROWSER_EXTENSION_MANIFEST_BYTES,
+        "local browser extension manifest",
+    )
+}
+
 fn scan_local_extensions() -> Result<Vec<DetectedExtension>> {
     let mut extensions = Vec::new();
 
@@ -36993,7 +37015,11 @@ fn scan_chromium_extensions(
         return Ok(());
     }
 
-    for extension_dir in fs::read_dir(root)? {
+    for extension_dir in fs::read_dir(root)?.take(MAX_LOCAL_BROWSER_EXTENSION_DIRS) {
+        if extensions.len() >= MAX_LOCAL_BROWSER_DISCOVERED_EXTENSIONS {
+            return Ok(());
+        }
+
         let extension_dir = extension_dir?;
         let extension_path = extension_dir.path();
         if !extension_path.is_dir() {
@@ -37004,14 +37030,7 @@ fn scan_chromium_extensions(
             continue;
         };
 
-        let mut versions = fs::read_dir(&extension_path)?
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .filter(|path| path.is_dir())
-            .collect::<Vec<_>>();
-        versions.sort();
-
-        let Some(version_dir) = versions.pop() else {
+        let Some(version_dir) = latest_chromium_extension_version_dir(&extension_path)? else {
             continue;
         };
         let manifest_path = version_dir.join("manifest.json");
@@ -37019,7 +37038,7 @@ fn scan_chromium_extensions(
             continue;
         }
 
-        let manifest_data = read_web_preview_json_payload_file(&manifest_path)
+        let manifest_data = read_local_browser_extension_manifest(&manifest_path)
             .with_context(|| format!("Failed to read {}", manifest_path.display()))?;
         let manifest: Value = serde_json::from_slice(&manifest_data)
             .with_context(|| format!("Failed to parse {}", manifest_path.display()))?;
@@ -37056,6 +37075,31 @@ fn scan_chromium_extensions(
 }
 
 #[cfg(target_os = "windows")]
+fn latest_chromium_extension_version_dir(extension_path: &Path) -> Result<Option<PathBuf>> {
+    let mut latest_version = None;
+
+    for version_dir in fs::read_dir(extension_path)?.take(MAX_LOCAL_BROWSER_EXTENSION_VERSION_DIRS)
+    {
+        let Ok(version_dir) = version_dir else {
+            continue;
+        };
+        let version_path = version_dir.path();
+        if !version_path.is_dir() {
+            continue;
+        }
+
+        let should_replace = latest_version
+            .as_ref()
+            .map_or(true, |latest| version_path > *latest);
+        if should_replace {
+            latest_version = Some(version_path);
+        }
+    }
+
+    Ok(latest_version)
+}
+
+#[cfg(target_os = "windows")]
 fn scan_firefox_extensions(
     browser: &str,
     root: &Path,
@@ -37065,14 +37109,24 @@ fn scan_firefox_extensions(
         return Ok(());
     }
 
-    for profile_dir in fs::read_dir(root)? {
+    for profile_dir in fs::read_dir(root)?.take(MAX_LOCAL_BROWSER_FIREFOX_PROFILE_DIRS) {
+        if extensions.len() >= MAX_LOCAL_BROWSER_DISCOVERED_EXTENSIONS {
+            return Ok(());
+        }
+
         let profile_dir = profile_dir?;
         let extensions_dir = profile_dir.path().join("extensions");
         if !extensions_dir.is_dir() {
             continue;
         }
 
-        for entry in fs::read_dir(&extensions_dir)? {
+        for entry in
+            fs::read_dir(&extensions_dir)?.take(MAX_LOCAL_BROWSER_FIREFOX_EXTENSIONS_PER_PROFILE)
+        {
+            if extensions.len() >= MAX_LOCAL_BROWSER_DISCOVERED_EXTENSIONS {
+                return Ok(());
+            }
+
             let entry = entry?;
             let path = entry.path();
             if !path.is_file() && !path.is_dir() {

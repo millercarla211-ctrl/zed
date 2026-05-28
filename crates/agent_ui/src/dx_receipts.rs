@@ -8,6 +8,11 @@ use std::{
 
 const DX_RECEIPTS_ROOT: &str = r"G:\Dx\.dx\receipts";
 const RECEIPT_CACHE_TTL: Duration = Duration::from_secs(5);
+const DX_RECEIPT_BUCKET_ENTRY_LIMIT: usize = 128;
+const DX_RECEIPT_BUCKET_NESTED_ENTRY_LIMIT: usize = 32;
+const DX_RECEIPT_LATEST_ROOT_ENTRY_LIMIT: usize = 24;
+const DX_RECEIPT_LATEST_CHILD_ENTRY_LIMIT: usize = 24;
+const DX_RECEIPT_LATEST_LABEL_LIMIT: usize = 4;
 
 #[derive(Clone)]
 pub(crate) struct DxReceiptBucket {
@@ -80,7 +85,7 @@ fn count_receipt_files(path: &Path) -> usize {
     };
 
     let mut count = 0;
-    for entry in entries.flatten().take(128) {
+    for entry in entries.flatten().take(DX_RECEIPT_BUCKET_ENTRY_LIMIT) {
         let path = entry.path();
         if path.is_file() {
             if is_receipt_file(&path) {
@@ -91,7 +96,7 @@ fn count_receipt_files(path: &Path) -> usize {
                 .map(|entries| {
                     entries
                         .flatten()
-                        .take(32)
+                        .take(DX_RECEIPT_BUCKET_NESTED_ENTRY_LIMIT)
                         .filter(|entry| entry.path().is_file() && is_receipt_file(&entry.path()))
                         .count()
                 })
@@ -111,15 +116,15 @@ fn latest_receipt_labels(root: &Path, root_exists: bool) -> Vec<String> {
         return Vec::new();
     };
 
-    for child in children.flatten().take(24) {
+    for child in children.flatten().take(DX_RECEIPT_LATEST_ROOT_ENTRY_LIMIT) {
         let child_path = child.path();
         if child_path.is_file() {
-            push_receipt_label(root, &child_path, &mut receipts);
+            push_bounded_receipt_label(root, &child_path, &mut receipts);
         } else if let Ok(entries) = fs::read_dir(&child_path) {
-            for entry in entries.flatten().take(24) {
+            for entry in entries.flatten().take(DX_RECEIPT_LATEST_CHILD_ENTRY_LIMIT) {
                 let path = entry.path();
                 if path.is_file() {
-                    push_receipt_label(root, &path, &mut receipts);
+                    push_bounded_receipt_label(root, &path, &mut receipts);
                 }
             }
         }
@@ -128,13 +133,13 @@ fn latest_receipt_labels(root: &Path, root_exists: bool) -> Vec<String> {
     receipts.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(Ordering::Equal));
     receipts
         .into_iter()
-        .take(4)
+        .take(DX_RECEIPT_LATEST_LABEL_LIMIT)
         .map(|(_, label)| label)
         .collect()
 }
 
-fn push_receipt_label(root: &Path, path: &Path, receipts: &mut Vec<(SystemTime, String)>) {
-    if !is_receipt_file(path) {
+fn push_bounded_receipt_label(root: &Path, path: &Path, receipts: &mut Vec<(SystemTime, String)>) {
+    if !path.is_file() || !is_receipt_file(path) {
         return;
     }
 
@@ -149,6 +154,10 @@ fn push_receipt_label(root: &Path, path: &Path, receipts: &mut Vec<(SystemTime, 
         .display()
         .to_string();
     receipts.push((modified, label));
+    if receipts.len() > DX_RECEIPT_LATEST_LABEL_LIMIT {
+        receipts.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(Ordering::Equal));
+        receipts.truncate(DX_RECEIPT_LATEST_LABEL_LIMIT);
+    }
 }
 
 fn is_receipt_file(path: &Path) -> bool {

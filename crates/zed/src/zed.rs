@@ -77,6 +77,7 @@ use sidebar::Sidebar;
 
 use std::{
     borrow::Cow,
+    io::Read as _,
     path::{Path, PathBuf},
     sync::Arc,
     sync::atomic::{self, AtomicBool},
@@ -1942,6 +1943,21 @@ pub fn watch_settings_files(fs: Arc<dyn fs::Fs>, cx: &mut App) {
     });
 }
 
+const MAX_USER_KEYMAP_BYTES: usize = 1024 * 1024;
+
+fn bounded_user_keymap_content(content: String) -> Option<String> {
+    if content.len() > MAX_USER_KEYMAP_BYTES {
+        log::warn!(
+            "Keymap file is too large to reload: {} bytes (limit {} bytes)",
+            content.len(),
+            MAX_USER_KEYMAP_BYTES
+        );
+        return None;
+    }
+
+    Some(content)
+}
+
 pub fn handle_keymap_file_changes(
     mut user_keymap_file_rx: mpsc::UnboundedReceiver<String>,
     user_keymap_watcher: gpui::Task<()>,
@@ -2012,6 +2028,9 @@ pub fn handle_keymap_file_changes(
                 _ = keyboard_layout_rx.next() => {},
                 content = user_keymap_file_rx.next() => {
                     if let Some(content) = content {
+                        let Some(content) = bounded_user_keymap_content(content) else {
+                            continue;
+                        };
                         if let Ok(Some(migrated_content)) = migrate_keymap(&content) {
                             user_keymap_content = migrated_content;
                             migrating_in_memory = true;
@@ -2444,6 +2463,33 @@ fn open_settings_file(
     .detach_and_log_err(cx);
 }
 
+const MAX_EAGER_THEME_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_EAGER_ICON_THEME_BYTES: u64 = 8 * 1024 * 1024;
+
+async fn load_limited_startup_file_bytes(
+    fs: &Arc<dyn Fs>,
+    path: &Path,
+    max_bytes: u64,
+    label: &str,
+) -> anyhow::Result<Option<Vec<u8>>> {
+    let file = fs.open_sync(path).await?;
+    let mut contents = Vec::new();
+    let mut limited_file = file.take(max_bytes + 1);
+    limited_file.read_to_end(&mut contents)?;
+
+    if contents.len() as u64 > max_bytes {
+        log::warn!(
+            "Startup {label} file {:?} is too large to load eagerly: {} bytes read (limit {} bytes)",
+            path,
+            contents.len(),
+            max_bytes
+        );
+        return Ok(None);
+    }
+
+    Ok(Some(contents))
+}
+
 /// Eagerly loads the active theme and icon theme based on the selections in the
 /// theme settings.
 ///
@@ -2508,14 +2554,30 @@ pub(crate) fn eager_load_active_theme_and_icon_theme(fs: Arc<dyn Fs>, cx: &mut A
             scope.spawn(async move {
                 match load_target {
                     LoadTarget::Theme(theme_path) => {
-                        if let Some(bytes) = fs.load_bytes(&theme_path).await.log_err()
+                        if let Some(bytes) = load_limited_startup_file_bytes(
+                            &fs,
+                            &theme_path,
+                            MAX_EAGER_THEME_BYTES,
+                            "theme",
+                        )
+                        .await
+                        .log_err()
+                        .flatten()
                             && load_user_theme(theme_registry, &bytes).log_err().is_some()
                         {
                             reload_tasks.lock().push(ReloadTarget::Theme);
                         }
                     }
                     LoadTarget::IconTheme((icon_theme_path, icons_root_path)) => {
-                        if let Some(bytes) = fs.load_bytes(&icon_theme_path).await.log_err()
+                        if let Some(bytes) = load_limited_startup_file_bytes(
+                            &fs,
+                            &icon_theme_path,
+                            MAX_EAGER_ICON_THEME_BYTES,
+                            "icon theme",
+                        )
+                        .await
+                        .log_err()
+                        .flatten()
                             && let Some(icon_theme_family) =
                                 deserialize_icon_theme(&bytes).log_err()
                             && theme_registry

@@ -4,6 +4,12 @@ use std::{
     time::SystemTime,
 };
 
+const RECEIPT_HISTORY_ROOT_ENTRY_LIMIT: usize = 192;
+const RECEIPT_HISTORY_NESTED_ENTRY_LIMIT: usize = 64;
+const RECEIPT_HISTORY_LATEST_ROOT_ENTRY_LIMIT: usize = 64;
+const RECEIPT_HISTORY_LATEST_NESTED_ENTRY_LIMIT: usize = 64;
+const RECEIPT_HISTORY_LATEST_CANDIDATE_LIMIT: usize = 32;
+
 pub(super) type LatestReceipt = (SystemTime, PathBuf, String);
 
 pub(super) fn root_label(relative_root: &Path, workspace_roots: &[PathBuf]) -> String {
@@ -21,7 +27,7 @@ pub(super) fn count_receipt_files(root: &Path) -> usize {
 
     entries
         .flatten()
-        .take(192)
+        .take(RECEIPT_HISTORY_ROOT_ENTRY_LIMIT)
         .map(|entry| {
             let path = entry.path();
             if path.is_file() {
@@ -44,10 +50,13 @@ pub(super) fn push_latest_receipts(
         return;
     };
 
-    for entry in entries.flatten().take(64) {
+    for entry in entries
+        .flatten()
+        .take(RECEIPT_HISTORY_LATEST_ROOT_ENTRY_LIMIT)
+    {
         let path = entry.path();
         if path.is_file() {
-            push_receipt_label(workspace_root, &path, receipts);
+            push_bounded_receipt_label(workspace_root, &path, receipts);
         } else if path.is_dir() {
             push_nested_receipt_labels(workspace_root, &path, receipts);
         }
@@ -63,7 +72,7 @@ fn count_nested_receipt_files(path: &Path) -> usize {
         .map(|entries| {
             entries
                 .flatten()
-                .take(64)
+                .take(RECEIPT_HISTORY_NESTED_ENTRY_LIMIT)
                 .filter(|entry| entry.path().is_file() && is_receipt_file(&entry.path()))
                 .count()
         })
@@ -82,15 +91,22 @@ fn push_nested_receipt_labels(
     let Ok(children) = fs::read_dir(path) else {
         return;
     };
-    for child in children.flatten().take(64) {
+    for child in children
+        .flatten()
+        .take(RECEIPT_HISTORY_LATEST_NESTED_ENTRY_LIMIT)
+    {
         let path = child.path();
         if path.is_file() {
-            push_receipt_label(workspace_root, &path, receipts);
+            push_bounded_receipt_label(workspace_root, &path, receipts);
         }
     }
 }
 
-fn push_receipt_label(workspace_root: &Path, path: &Path, receipts: &mut Vec<LatestReceipt>) {
+fn push_bounded_receipt_label(
+    workspace_root: &Path,
+    path: &Path,
+    receipts: &mut Vec<LatestReceipt>,
+) {
     if !is_receipt_file(path) {
         return;
     }
@@ -105,6 +121,15 @@ fn push_receipt_label(workspace_root: &Path, path: &Path, receipts: &mut Vec<Lat
         .display()
         .to_string();
     receipts.push((modified, path.to_path_buf(), label));
+    if receipts.len() > RECEIPT_HISTORY_LATEST_CANDIDATE_LIMIT {
+        receipts.sort_by(|left, right| {
+            right
+                .0
+                .partial_cmp(&left.0)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        receipts.truncate(RECEIPT_HISTORY_LATEST_CANDIDATE_LIMIT);
+    }
 }
 
 fn is_receipt_file(path: &Path) -> bool {

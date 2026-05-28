@@ -1,7 +1,7 @@
 use anyhow::{Context as _, Result};
 use collections::HashMap;
 use context_server::{ContextServerCommand, ContextServerId};
-use editor::{Editor, EditorElement, EditorStyle};
+use editor::{Editor, EditorElement, EditorStyle, MultiBufferSnapshot};
 
 use gpui::{
     AsyncWindowContext, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle,
@@ -32,6 +32,79 @@ use util::ResultExt as _;
 use workspace::{ModalView, Workspace};
 
 use crate::AddContextServer;
+
+const MAX_CONTEXT_SERVER_CONFIGURATION_INPUT_BYTES: usize = 256 * 1024;
+const MAX_CONTEXT_SERVER_CONFIGURATION_INPUT_CHARS: usize = 256 * 1024;
+const MAX_CONTEXT_SERVER_CLIENT_SECRET_INPUT_BYTES: usize = 16 * 1024;
+const MAX_CONTEXT_SERVER_CLIENT_SECRET_INPUT_CHARS: usize = 16 * 1024;
+
+const CONTEXT_SERVER_CONFIGURATION_INPUT_LIMIT: EditorTextLimit = EditorTextLimit::new(
+    "MCP server configuration",
+    MAX_CONTEXT_SERVER_CONFIGURATION_INPUT_BYTES,
+    MAX_CONTEXT_SERVER_CONFIGURATION_INPUT_CHARS,
+);
+const CONTEXT_SERVER_CLIENT_SECRET_INPUT_LIMIT: EditorTextLimit = EditorTextLimit::new(
+    "OAuth client secret",
+    MAX_CONTEXT_SERVER_CLIENT_SECRET_INPUT_BYTES,
+    MAX_CONTEXT_SERVER_CLIENT_SECRET_INPUT_CHARS,
+);
+
+#[derive(Clone, Copy)]
+struct EditorTextLimit {
+    label: &'static str,
+    max_bytes: usize,
+    max_chars: usize,
+}
+
+impl EditorTextLimit {
+    const fn new(label: &'static str, max_bytes: usize, max_chars: usize) -> Self {
+        Self {
+            label,
+            max_bytes,
+            max_chars,
+        }
+    }
+}
+
+fn configuration_editor_text(editor: &Editor, limit: EditorTextLimit, cx: &App) -> Result<String> {
+    let snapshot = editor.buffer().read(cx).snapshot(cx);
+    ensure_editor_snapshot_within_limit(&snapshot, limit)?;
+    Ok(snapshot.text())
+}
+
+fn client_secret_editor_text(
+    editor: &Editor,
+    cx: &App,
+) -> std::result::Result<String, SharedString> {
+    let snapshot = editor.buffer().read(cx).snapshot(cx);
+    ensure_editor_snapshot_within_limit(&snapshot, CONTEXT_SERVER_CLIENT_SECRET_INPUT_LIMIT)
+        .map_err(|error| SharedString::from(error.to_string()))?;
+    Ok(snapshot.text())
+}
+
+fn ensure_editor_snapshot_within_limit(
+    snapshot: &MultiBufferSnapshot,
+    limit: EditorTextLimit,
+) -> Result<()> {
+    let summary = snapshot.text_summary();
+    if summary.len.0 > limit.max_bytes {
+        anyhow::bail!(
+            "{} is too large (maximum {} bytes)",
+            limit.label,
+            limit.max_bytes
+        );
+    }
+
+    if summary.chars > limit.max_chars {
+        anyhow::bail!(
+            "{} is too large (maximum {} characters)",
+            limit.label,
+            limit.max_chars
+        );
+    }
+
+    Ok(())
+}
 
 enum ConfigurationTarget {
     New,
@@ -171,8 +244,13 @@ impl ConfigurationSource {
         match self {
             ConfigurationSource::New { editor, is_http }
             | ConfigurationSource::Existing { editor, is_http } => {
+                let text = configuration_editor_text(
+                    editor.read(cx),
+                    CONTEXT_SERVER_CONFIGURATION_INPUT_LIMIT,
+                    cx,
+                )?;
                 if *is_http {
-                    parse_http_input(&editor.read(cx).text(cx)).map(|(id, url, auth, oauth)| {
+                    parse_http_input(&text).map(|(id, url, auth, oauth)| {
                         (
                             id,
                             ContextServerSettings::Http {
@@ -185,7 +263,7 @@ impl ConfigurationSource {
                         )
                     })
                 } else {
-                    parse_input(&editor.read(cx).text(cx)).map(|(id, command)| {
+                    parse_input(&text).map(|(id, command)| {
                         (
                             id,
                             ContextServerSettings::Stdio {
@@ -203,11 +281,12 @@ impl ConfigurationSource {
                 settings_validator,
                 ..
             } => {
-                let text = editor
-                    .as_ref()
-                    .context("No output available")?
-                    .read(cx)
-                    .text(cx);
+                let editor = editor.as_ref().context("No output available")?;
+                let text = configuration_editor_text(
+                    editor.read(cx),
+                    CONTEXT_SERVER_CONFIGURATION_INPUT_LIMIT,
+                    cx,
+                )?;
                 let settings = serde_json_lenient::from_str::<serde_json::Value>(&text)?;
                 if let Some(settings_validator) = settings_validator
                     && let Err(error) = settings_validator.validate(&settings)
@@ -719,7 +798,17 @@ impl ConfigureContextServerModal {
     }
 
     fn submit_client_secret(&mut self, server_id: ContextServerId, cx: &mut Context<Self>) {
-        let secret = self.secret_editor.read(cx).text(cx);
+        let secret = match client_secret_editor_text(self.secret_editor.read(cx), cx) {
+            Ok(secret) => secret,
+            Err(error) => {
+                self.state = State::ClientSecretRequired {
+                    server_id,
+                    error: Some(error),
+                };
+                cx.notify();
+                return;
+            }
+        };
         self.context_server_store.update(cx, |store, cx| {
             store.submit_client_secret(&server_id, secret, cx).log_err();
         });

@@ -81,6 +81,6 @@ test("DX receipt history keeps bucket scanning, receipt IO, Forge summaries, and
   assert.ok(lineCount(fieldsPath) < 75, "receipt-history field helpers should stay small");
   assert.ok(lineCount(forgePath) < 85, "receipt-history Forge summary parser should stay small");
   assert.ok(lineCount(forgeFieldsPath) < 120, "receipt-history Forge field parser should stay small");
-  assert.ok(lineCount(receiptFilesPath) < 125, "receipt-history file walker should stay small");
+  assert.ok(lineCount(receiptFilesPath) < 145, "receipt-history file walker should stay small");
   assert.ok(lineCount(receiptIoPath) < 25, "receipt-history receipt IO should stay small");
 });

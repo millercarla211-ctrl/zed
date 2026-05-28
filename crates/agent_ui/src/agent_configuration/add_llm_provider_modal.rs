@@ -16,6 +16,85 @@ use ui::{
 use ui_input::InputField;
 use workspace::{ModalView, Workspace};
 
+const MAX_PROVIDER_NAME_INPUT_BYTES: usize = 1024;
+const MAX_PROVIDER_API_URL_INPUT_BYTES: usize = 4096;
+const MAX_PROVIDER_API_KEY_INPUT_BYTES: usize = 16 * 1024;
+const MAX_MODEL_NAME_INPUT_BYTES: usize = 1024;
+const MAX_MODEL_TOKEN_INPUT_BYTES: usize = 64;
+
+const PROVIDER_NAME_INPUT_LIMIT: ModalTextLimit = ModalTextLimit::new(
+    "Provider Name",
+    MAX_PROVIDER_NAME_INPUT_BYTES,
+    MAX_PROVIDER_NAME_INPUT_BYTES,
+);
+const PROVIDER_API_URL_INPUT_LIMIT: ModalTextLimit = ModalTextLimit::new(
+    "API URL",
+    MAX_PROVIDER_API_URL_INPUT_BYTES,
+    MAX_PROVIDER_API_URL_INPUT_BYTES,
+);
+const PROVIDER_API_KEY_INPUT_LIMIT: ModalTextLimit = ModalTextLimit::new(
+    "API Key",
+    MAX_PROVIDER_API_KEY_INPUT_BYTES,
+    MAX_PROVIDER_API_KEY_INPUT_BYTES,
+);
+const MODEL_NAME_INPUT_LIMIT: ModalTextLimit = ModalTextLimit::new(
+    "Model Name",
+    MAX_MODEL_NAME_INPUT_BYTES,
+    MAX_MODEL_NAME_INPUT_BYTES,
+);
+const MODEL_TOKEN_INPUT_LIMIT: ModalTextLimit = ModalTextLimit::new(
+    "Model token field",
+    MAX_MODEL_TOKEN_INPUT_BYTES,
+    MAX_MODEL_TOKEN_INPUT_BYTES,
+);
+
+#[derive(Clone, Copy)]
+struct ModalTextLimit {
+    label: &'static str,
+    max_bytes: usize,
+    max_chars: usize,
+}
+
+impl ModalTextLimit {
+    const fn new(label: &'static str, max_bytes: usize, max_chars: usize) -> Self {
+        Self {
+            label,
+            max_bytes,
+            max_chars,
+        }
+    }
+}
+
+fn input_text_within_limit(
+    input: &Entity<InputField>,
+    limit: ModalTextLimit,
+    cx: &App,
+) -> Result<String, SharedString> {
+    let text = input.read(cx).text(cx);
+    ensure_modal_text_within_limit(&text, limit)?;
+    Ok(text)
+}
+
+fn ensure_modal_text_within_limit(text: &str, limit: ModalTextLimit) -> Result<(), SharedString> {
+    if text.len() > limit.max_bytes {
+        return Err(format!(
+            "{} is too large (maximum {} bytes)",
+            limit.label, limit.max_bytes
+        )
+        .into());
+    }
+
+    if text.chars().count() > limit.max_chars {
+        return Err(format!(
+            "{} is too large (maximum {} characters)",
+            limit.label, limit.max_chars
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
 fn single_line_input(
     label: impl Into<SharedString>,
     placeholder: &str,
@@ -176,31 +255,30 @@ impl ModelInput {
     }
 
     fn parse(&self, cx: &App) -> Result<AvailableModel, SharedString> {
-        let name = self.name.read(cx).text(cx);
+        let name = input_text_within_limit(&self.name, MODEL_NAME_INPUT_LIMIT, cx)?;
         if name.is_empty() {
             return Err(SharedString::from("Model Name cannot be empty"));
         }
+        let max_completion_tokens =
+            input_text_within_limit(&self.max_completion_tokens, MODEL_TOKEN_INPUT_LIMIT, cx)?;
+        let max_output_tokens =
+            input_text_within_limit(&self.max_output_tokens, MODEL_TOKEN_INPUT_LIMIT, cx)?;
+        let max_tokens = input_text_within_limit(&self.max_tokens, MODEL_TOKEN_INPUT_LIMIT, cx)?;
+
         Ok(AvailableModel {
             name,
             display_name: None,
             max_completion_tokens: Some(
-                self.max_completion_tokens
-                    .read(cx)
-                    .text(cx)
+                max_completion_tokens
                     .parse::<u64>()
                     .map_err(|_| SharedString::from("Max Completion Tokens must be a number"))?,
             ),
             max_output_tokens: Some(
-                self.max_output_tokens
-                    .read(cx)
-                    .text(cx)
+                max_output_tokens
                     .parse::<u64>()
                     .map_err(|_| SharedString::from("Max Output Tokens must be a number"))?,
             ),
-            max_tokens: self
-                .max_tokens
-                .read(cx)
-                .text(cx)
+            max_tokens: max_tokens
                 .parse::<u64>()
                 .map_err(|_| SharedString::from("Max Tokens must be a number"))?,
             reasoning_effort: None,
@@ -220,33 +298,39 @@ fn save_provider_to_settings(
     input: &AddLlmProviderInput,
     cx: &mut App,
 ) -> Task<Result<(), SharedString>> {
-    let provider_name: Arc<str> = input.provider_name.read(cx).text(cx).into();
-    if provider_name.is_empty() {
-        return Task::ready(Err("Provider Name cannot be empty".into()));
-    }
+    let (provider_name, api_url, api_key) = match (|| {
+        let provider_name =
+            input_text_within_limit(&input.provider_name, PROVIDER_NAME_INPUT_LIMIT, cx)?;
+        if provider_name.is_empty() {
+            return Err("Provider Name cannot be empty".into());
+        }
 
-    if LanguageModelRegistry::read_global(cx)
-        .providers()
-        .iter()
-        .any(|provider| {
-            provider.id().0.as_ref() == provider_name.as_ref()
-                || provider.name().0.as_ref() == provider_name.as_ref()
-        })
-    {
-        return Task::ready(Err(
-            "Provider Name is already taken by another provider".into()
-        ));
-    }
+        if LanguageModelRegistry::read_global(cx)
+            .providers()
+            .iter()
+            .any(|provider| {
+                provider.id().0.as_ref() == provider_name.as_str()
+                    || provider.name().0.as_ref() == provider_name.as_str()
+            })
+        {
+            return Err("Provider Name is already taken by another provider".into());
+        }
 
-    let api_url = input.api_url.read(cx).text(cx);
-    if api_url.is_empty() {
-        return Task::ready(Err("API URL cannot be empty".into()));
-    }
+        let api_url = input_text_within_limit(&input.api_url, PROVIDER_API_URL_INPUT_LIMIT, cx)?;
+        if api_url.is_empty() {
+            return Err("API URL cannot be empty".into());
+        }
 
-    let api_key = input.api_key.read(cx).text(cx);
-    if api_key.is_empty() {
-        return Task::ready(Err("API Key cannot be empty".into()));
-    }
+        let api_key = input_text_within_limit(&input.api_key, PROVIDER_API_KEY_INPUT_LIMIT, cx)?;
+        if api_key.is_empty() {
+            return Err("API Key cannot be empty".into());
+        }
+
+        Ok::<_, SharedString>((Arc::<str>::from(provider_name), api_url, api_key))
+    })() {
+        Ok(input) => input,
+        Err(err) => return Task::ready(Err(err)),
+    };
 
     let mut models = Vec::new();
     let mut model_names: HashSet<String> = HashSet::default();

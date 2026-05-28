@@ -11202,6 +11202,7 @@ fn load_legacy_panel_size(
 
     let kvp = db::kvp::KeyValueStore::global(cx);
     let json = kvp.read_kvp(&legacy_key).log_err().flatten()?;
+    dock::ensure_panel_size_state_json_within_limit(&json, &legacy_key)?;
     let state = serde_json::from_str::<LegacyPanelState>(&json).log_err()?;
     let size = match dock_position {
         DockPosition::Bottom => state.height,

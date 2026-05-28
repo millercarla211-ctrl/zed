@@ -1858,6 +1858,10 @@ impl MessageEditor {
         self.editor.read(cx).text(cx)
     }
 
+    pub fn text_byte_len(&self, cx: &App) -> usize {
+        self.editor.read(cx).buffer().read(cx).len(cx).0
+    }
+
     pub fn set_cursor_offset(
         &mut self,
         offset: usize,

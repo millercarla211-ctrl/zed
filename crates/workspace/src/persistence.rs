@@ -60,6 +60,24 @@ use self::model::{DockStructure, SerializedWorkspaceLocation, SessionWorkspace};
 // > <..> the maximum value of a host parameter number is SQLITE_MAX_VARIABLE_NUMBER,
 // > which defaults to <..> 32766 for SQLite versions after 3.32.0.
 const MAX_QUERY_PLACEHOLDERS: usize = 32000;
+const MAX_DEFAULT_WINDOW_BOUNDS_JSON_BYTES: usize = 16 * 1024;
+const MAX_MULTI_WORKSPACE_STATE_JSON_BYTES: usize = 64 * 1024;
+const MAX_DEFAULT_DOCK_STATE_JSON_BYTES: usize = 64 * 1024;
+const MAX_USER_TOOLCHAIN_JSON_BYTES: usize = 64 * 1024;
+const MAX_REMOTE_ENV_JSON_BYTES: usize = 64 * 1024;
+const MAX_PANE_GROUP_FLEXES_JSON_BYTES: usize = 16 * 1024;
+
+fn ensure_persisted_json_within_limit(json: &str, max_bytes: usize, label: &str) -> Result<()> {
+    if json.len() > max_bytes {
+        bail!(
+            "{label} persisted JSON is too large ({} bytes; max {} bytes)",
+            json.len(),
+            max_bytes
+        );
+    }
+
+    Ok(())
+}
 
 fn parse_timestamp(text: &str) -> DateTime<Utc> {
     NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S")
@@ -191,8 +209,15 @@ pub fn read_default_window_bounds(kvp: &KeyValueStore) -> Option<(Uuid, WindowBo
         .log_err()
         .flatten()?;
 
-    let (display_uuid, persisted) =
-        serde_json::from_str::<(Uuid, WindowBoundsJson)>(&json_str).ok()?;
+    ensure_persisted_json_within_limit(
+        &json_str,
+        MAX_DEFAULT_WINDOW_BOUNDS_JSON_BYTES,
+        "default window bounds",
+    )
+    .log_err()?;
+    let (display_uuid, persisted) = serde_json::from_str::<(Uuid, WindowBoundsJson)>(&json_str)
+        .context("deserialize persisted default window bounds")
+        .log_err()?;
     Some((display_uuid, persisted.into()))
 }
 
@@ -307,7 +332,17 @@ fn read_multi_workspace_state(window_id: WindowId, cx: &App) -> model::MultiWork
         .read(&window_id.as_u64().to_string())
         .log_err()
         .flatten()
-        .and_then(|json| serde_json::from_str(&json).ok())
+        .and_then(|json| {
+            ensure_persisted_json_within_limit(
+                &json,
+                MAX_MULTI_WORKSPACE_STATE_JSON_BYTES,
+                "multi-workspace state",
+            )
+            .log_err()?;
+            serde_json::from_str(&json)
+                .context("deserialize persisted multi-workspace state")
+                .log_err()
+        })
         .unwrap_or_default()
 }
 
@@ -371,7 +406,15 @@ const DEFAULT_DOCK_STATE_KEY: &str = "default_dock_state";
 pub fn read_default_dock_state(kvp: &KeyValueStore) -> Option<DockStructure> {
     let json_str = kvp.read_kvp(DEFAULT_DOCK_STATE_KEY).log_err().flatten()?;
 
-    serde_json::from_str::<DockStructure>(&json_str).ok()
+    ensure_persisted_json_within_limit(
+        &json_str,
+        MAX_DEFAULT_DOCK_STATE_JSON_BYTES,
+        "default dock state",
+    )
+    .log_err()?;
+    serde_json::from_str::<DockStructure>(&json_str)
+        .context("deserialize persisted default dock state")
+        .log_err()
 }
 
 pub async fn write_default_dock_state(
@@ -1432,7 +1475,20 @@ impl WorkspaceDb {
                     ToolchainScope::Project
                 }
             };
-            let Ok(as_json) = serde_json::from_str(&raw_json) else {
+            if ensure_persisted_json_within_limit(
+                &raw_json,
+                MAX_USER_TOOLCHAIN_JSON_BYTES,
+                "user toolchain raw_json",
+            )
+            .log_err()
+            .is_none()
+            {
+                continue;
+            }
+            let Some(as_json) = serde_json::from_str::<serde_json::Value>(&raw_json)
+                .context("deserialize persisted user toolchain JSON")
+                .log_err()
+            else {
                 continue;
             };
             let toolchain = Toolchain {
@@ -1960,8 +2016,16 @@ impl WorkspaceDb {
                 ..Default::default()
             })),
             RemoteConnectionKind::Docker => {
-                let remote_env: BTreeMap<String, String> =
-                    serde_json::from_str(&remote_env?).ok()?;
+                let remote_env_json = remote_env?;
+                ensure_persisted_json_within_limit(
+                    &remote_env_json,
+                    MAX_REMOTE_ENV_JSON_BYTES,
+                    "Docker remote_env",
+                )
+                .log_err()?;
+                let remote_env: BTreeMap<String, String> = serde_json::from_str(&remote_env_json)
+                    .context("deserialize persisted Docker remote_env")
+                    .log_err()?;
                 Some(RemoteConnectionOptions::Docker(DockerConnectionOptions {
                     container_id: container_id?,
                     name: name?,
@@ -2268,7 +2332,15 @@ impl WorkspaceDb {
             let maybe_pane = maybe!({ Some((pane_id?, active?, pinned_count?)) });
             if let Some((group_id, axis)) = group_id.zip(axis) {
                 let flexes = flexes
-                    .map(|flexes: String| serde_json::from_str::<Vec<f32>>(&flexes))
+                    .map(|flexes: String| {
+                        ensure_persisted_json_within_limit(
+                            &flexes,
+                            MAX_PANE_GROUP_FLEXES_JSON_BYTES,
+                            "pane-group flexes",
+                        )?;
+                        serde_json::from_str::<Vec<f32>>(&flexes)
+                            .context("deserialize persisted pane-group flexes")
+                    })
                     .transpose()?;
 
                 Ok(SerializedPaneGroup::Group {

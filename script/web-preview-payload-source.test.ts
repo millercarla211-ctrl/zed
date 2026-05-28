@@ -407,11 +407,13 @@ test("Web Preview target JSON files are bounded before serde parsing", () => {
       name: "extension manifest scanner",
       start: "fn scan_chromium_extensions",
       end: "fn scan_firefox_extensions",
+      read: "read_local_browser_extension_manifest",
     },
   ];
 
   for (const target of jsonTargets) {
     const body = sliceBetween(webPreview, target.start, target.end);
+    const boundedRead = target.read ?? "read_web_preview_json_payload_file";
 
     assert.doesNotMatch(
       body,
@@ -420,11 +422,131 @@ test("Web Preview target JSON files are bounded before serde parsing", () => {
     );
     assertOrdered(
       body,
-      "read_web_preview_json_payload_file",
+      boundedRead,
       "serde_json::from_slice",
       `${target.name} should bound the file before serde parsing`,
     );
   }
+});
+
+test("Web Preview local extension discovery caps profile and extension directory walks", () => {
+  const webPreview = source();
+
+  assert.match(
+    webPreview,
+    /const MAX_LOCAL_BROWSER_DISCOVERED_EXTENSIONS: usize = 512;/,
+  );
+  assert.match(
+    webPreview,
+    /const MAX_LOCAL_BROWSER_EXTENSION_DIRS: usize = 512;/,
+  );
+  assert.match(
+    webPreview,
+    /const MAX_LOCAL_BROWSER_EXTENSION_VERSION_DIRS: usize = 64;/,
+  );
+  assert.match(
+    webPreview,
+    /const MAX_LOCAL_BROWSER_FIREFOX_PROFILE_DIRS: usize = 64;/,
+  );
+  assert.match(
+    webPreview,
+    /const MAX_LOCAL_BROWSER_FIREFOX_EXTENSIONS_PER_PROFILE: usize = 256;/,
+  );
+
+  const chromiumScanner = sliceBetween(
+    webPreview,
+    "fn scan_chromium_extensions",
+    "fn latest_chromium_extension_version_dir",
+  );
+  assert.match(
+    chromiumScanner,
+    /fs::read_dir\(root\)\?\s*\.take\(MAX_LOCAL_BROWSER_EXTENSION_DIRS\)/,
+    "Chromium extension root scans should be item-capped",
+  );
+  assert.match(
+    chromiumScanner,
+    /extensions\.len\(\) >= MAX_LOCAL_BROWSER_DISCOVERED_EXTENSIONS/,
+    "Chromium extension discovery should stop at the global result cap",
+  );
+  assert.match(
+    chromiumScanner,
+    /latest_chromium_extension_version_dir\(&extension_path\)\?/,
+    "Chromium extension scanner should delegate version selection to the capped helper",
+  );
+
+  const latestVersionHelper = sliceBetween(
+    webPreview,
+    "fn latest_chromium_extension_version_dir",
+    "fn scan_firefox_extensions",
+  );
+  assert.match(
+    latestVersionHelper,
+    /fs::read_dir\(extension_path\)\?\s*\.take\(MAX_LOCAL_BROWSER_EXTENSION_VERSION_DIRS\)/,
+    "Chromium extension version scans should be item-capped",
+  );
+  assert.doesNotMatch(
+    latestVersionHelper,
+    /collect::<Vec/,
+    "Chromium extension version selection should not collect an unbounded directory list",
+  );
+
+  const firefoxScanner = sliceBetween(
+    webPreview,
+    "fn scan_firefox_extensions",
+    "#[cfg(target_os = \"macos\")]",
+  );
+  assert.match(
+    firefoxScanner,
+    /fs::read_dir\(root\)\?\s*\.take\(MAX_LOCAL_BROWSER_FIREFOX_PROFILE_DIRS\)/,
+    "Firefox profile scans should be item-capped",
+  );
+  assert.match(
+    firefoxScanner,
+    /fs::read_dir\(&extensions_dir\)\?\s*\.take\(MAX_LOCAL_BROWSER_FIREFOX_EXTENSIONS_PER_PROFILE\)/,
+    "Firefox extension scans should be item-capped per profile",
+  );
+  assert.match(
+    firefoxScanner,
+    /extensions\.len\(\) >= MAX_LOCAL_BROWSER_DISCOVERED_EXTENSIONS/,
+    "Firefox extension discovery should stop at the global result cap",
+  );
+});
+
+test("Web Preview local extension manifests use a small bounded read before serde parsing", () => {
+  const webPreview = source();
+
+  assert.match(
+    webPreview,
+    /const MAX_LOCAL_BROWSER_EXTENSION_MANIFEST_BYTES: u64 = 512 \* 1024;/,
+  );
+
+  const manifestReader = sliceBetween(
+    webPreview,
+    "fn read_local_browser_extension_manifest",
+    "fn scan_local_extensions",
+  );
+  assert.match(
+    manifestReader,
+    /read_sentinel_bounded_file\(\s*path,\s*MAX_LOCAL_BROWSER_EXTENSION_MANIFEST_BYTES,\s*"local browser extension manifest",\s*\)/s,
+    "extension manifests should use a manifest-specific sentinel-byte cap",
+  );
+
+  const chromiumScanner = sliceBetween(
+    webPreview,
+    "fn scan_chromium_extensions",
+    "fn scan_firefox_extensions",
+  );
+  assert.doesNotMatch(
+    chromiumScanner,
+    /read_web_preview_json_payload_file\(&manifest_path\)/,
+    "extension manifests should not use the broad Web Preview JSON payload cap",
+  );
+  assertOrdered(
+    chromiumScanner,
+    "read_local_browser_extension_manifest(&manifest_path)",
+    "serde_json::from_slice",
+    "extension manifests should be read through the smaller manifest cap before serde parsing",
+  );
 });
 
 test("Web Preview screenshot files are bounded before image or attachment use", () => {
