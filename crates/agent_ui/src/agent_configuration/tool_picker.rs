@@ -9,6 +9,8 @@ use settings::{AgentProfileContent, ContextServerPresetContent, update_settings_
 use ui::{ListItem, ListItemSpacing, prelude::*};
 use util::ResultExt as _;
 
+const MAX_TOOL_PICKER_TOOL_ROWS: usize = 512;
+
 pub struct ToolPicker {
     picker: Entity<Picker<ToolPickerDelegate>>,
 }
@@ -150,6 +152,12 @@ impl ToolPickerDelegate {
             selected_index: 0,
         }
     }
+
+    fn clamp_selected_index(&mut self) {
+        self.selected_index = self
+            .selected_index
+            .min(self.filtered_items.len().saturating_sub(1));
+    }
 }
 
 impl PickerDelegate for ToolPickerDelegate {
@@ -170,13 +178,13 @@ impl PickerDelegate for ToolPickerDelegate {
         _cx: &mut Context<Picker<Self>>,
     ) {
         self.selected_index = ix;
+        self.clamp_selected_index();
     }
 
     fn can_select(&self, ix: usize, _window: &mut Window, _cx: &mut Context<Picker<Self>>) -> bool {
-        let item = &self.filtered_items[ix];
-        match item {
-            PickerItem::Tool { .. } => true,
-            PickerItem::ContextServer { .. } => false,
+        match self.filtered_items.get(ix) {
+            Some(PickerItem::Tool { .. }) => true,
+            Some(PickerItem::ContextServer { .. }) | None => false,
         }
     }
 
@@ -201,12 +209,18 @@ impl PickerDelegate for ToolPickerDelegate {
                 .background_spawn(async move {
                     let mut tools_by_provider: BTreeMap<Option<Arc<str>>, Vec<Arc<str>>> =
                         BTreeMap::default();
+                    let mut tool_row_count = 0;
 
                     for item in all_items.iter() {
+                        if tool_row_count >= MAX_TOOL_PICKER_TOOL_ROWS {
+                            break;
+                        }
+
                         if let PickerItem::Tool { server_id, name } = item.clone()
                             && name.contains(&query)
                         {
                             tools_by_provider.entry(server_id).or_default().push(name);
+                            tool_row_count += 1;
                         }
                     }
 
@@ -230,10 +244,7 @@ impl PickerDelegate for ToolPickerDelegate {
 
             this.update(cx, |this, _cx| {
                 this.delegate.filtered_items = filtered_items;
-                this.delegate.selected_index = this
-                    .delegate
-                    .selected_index
-                    .min(this.delegate.filtered_items.len().saturating_sub(1));
+                this.delegate.clamp_selected_index();
             })
             .log_err();
         })
@@ -245,7 +256,9 @@ impl PickerDelegate for ToolPickerDelegate {
             return;
         }
 
-        let item = &self.filtered_items[self.selected_index];
+        let Some(item) = self.filtered_items.get(self.selected_index) else {
+            return;
+        };
 
         let PickerItem::Tool {
             name: tool_name,

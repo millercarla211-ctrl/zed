@@ -1,6 +1,6 @@
 # DX/Zed Launch Worker Notes
 
-Date: 2026-05-28
+Date: 2026-05-29
 Launch target: historical 2026-05-22 planning target; current production readiness is source-audited only until the governed runtime proof window opens.
 Current branch handoff: `dev`, tracking `origin/dev` when this audit started.
 
@@ -96,6 +96,12 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-tasks-modal-source.test.ts` - tasks modal candidate, match, tooltip tag, stale-selection, and confirm boundaries.
 - `node --test script/dx-feedback-source.test.ts` - feedback installed-extension clipboard and prompt materialization boundaries.
 - `node --test script/dx-font-panel-source.test.ts` - font panel custom web-font, element-id, and preview-file materialization boundaries.
+- `node --test script/dx-agent-config-options-source.test.ts` - agent config option row, current overflow option, fuzzy, and stale-selection boundaries.
+- `node --test script/dx-agent-tool-picker-source.test.ts` - agent tool picker row cap, context-server header, and stale-selection boundaries.
+- `node --test script/dx-debugger-attach-modal-source.test.ts` - debugger attach process candidate, command text, fuzzy row, and stale-selection boundaries.
+- `node --test script/dx-debugger-new-process-source.test.ts` - debugger scenario candidate, prompt command, stale-selection, and render candidate-id boundaries.
+- `node --test script/dx-open-path-prompt-source.test.ts` - open path prompt directory, fuzzy, user-input suffix, and stale-selection boundaries.
+- `node --test script/dx-tab-switcher-source.test.ts` - all-pane tab switcher collection, fuzzy label, result mapping, and stale-selection boundaries.
 - `node --test script/dx-agent-server-store-source.test.ts` - agent server discovery and archive-cache enumeration boundaries.
 - `node --test script/dx-workspace-reentrant-source.test.ts` - active-workspace event payload and reentrant update contracts.
 - `node --test script/dx-workspace-persistence-source.test.ts` - workspace persistence KVP and JSON column byte boundaries.
@@ -156,6 +162,8 @@ Adjacent source guards:
 - Wire DX Agents CLI receipts, social/account readiness, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
+
+- Completed a six-agent config option picker, tool picker, debugger attach modal, debugger new-process modal, open-path prompt, and tab switcher hardening pass without `just run` or Cargo. Config options now cap picker/fuzzy rows, guard match IDs, and preserve the current overflow option inside the bounded list; Agent Tool Picker now caps visible tool rows while preserving context-server headers and guards stale selection; Debugger Attach now caps process candidates, command fields, fuzzy rows, and command render text; Debugger New Process now caps scenario candidates/fuzzy rows, guards candidate IDs, and refuses oversized custom commands before shell splitting; Open Path Prompt now caps directory/fuzzy materialization while refusing oversized create suffixes instead of truncating real paths; Tab Switcher now caps all-pane tab collection, fuzzy labels/results, and clamps before preview activation. Added `script/dx-agent-config-options-source.test.ts`, `script/dx-agent-tool-picker-source.test.ts`, `script/dx-debugger-attach-modal-source.test.ts`, `script/dx-debugger-new-process-source.test.ts`, `script/dx-open-path-prompt-source.test.ts`, and `script/dx-tab-switcher-source.test.ts`, and registered the new guards. Passed source-only integration: 28/28 targeted Node source subtests including the handoff registry, targeted rustfmt checks, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 
 - Completed a six-agent encoding selector, line ending selector, settings profile selector, tasks modal, feedback, and font panel hardening pass without `just run` or Cargo. Encoding Selector now caps empty/fuzzy matches, clamps stale selections, and guards stale candidate IDs before encoding lookup; Line Ending Selector now clamps stale selections before setter and confirm paths; Settings Profile Selector now caps configured profiles while preserving Disabled and the active overflow profile, caps string matches, reclamps async replacement, and guards candidate IDs; Tasks Modal now caps candidate/fuzzy rows, bounded tag-label materialization, reclamps async replacement, and guards confirm-time candidate IDs; Feedback now caps installed-extension report rows, field text, and prompt preview before clipboard/prompt display; Font Panel now bounds custom web-font names, element IDs, and preview file stems with stable hashes for oversized values. Added `script/dx-encoding-selector-source.test.ts`, `script/dx-line-ending-selector-source.test.ts`, `script/dx-settings-profile-selector-source.test.ts`, `script/dx-tasks-modal-source.test.ts`, `script/dx-feedback-source.test.ts`, and `script/dx-font-panel-source.test.ts`, and registered the new guards. Passed source-only integration: 29/29 targeted Node source subtests including the handoff registry, targeted rustfmt checks, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 

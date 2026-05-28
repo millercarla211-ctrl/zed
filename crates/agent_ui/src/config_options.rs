@@ -22,6 +22,10 @@ use util::ResultExt as _;
 use crate::ui::documentation_aside_side;
 
 const PICKER_THRESHOLD: usize = 5;
+const MAX_CONFIG_OPTION_PICKER_OPTIONS: usize = 4096;
+const MAX_CONFIG_OPTION_PICKER_ENTRIES: usize = (MAX_CONFIG_OPTION_PICKER_OPTIONS * 3) + 1;
+const MAX_CONFIG_OPTION_FUZZY_CANDIDATES: usize = 4096;
+const MAX_CONFIG_OPTION_FUZZY_MATCHES: usize = 100;
 
 pub struct ConfigOptionsView {
     config_options: Rc<dyn AgentSessionConfigOptions>,
@@ -439,13 +443,8 @@ impl ConfigOptionPickerDelegate {
         let filtered_entries = options_to_picker_entries(&all_options, &favorites);
 
         let current_value = get_current_value(&config_options, &config_id);
-        let selected_index = current_value
-            .and_then(|current| {
-                filtered_entries.iter().position(|entry| {
-                    matches!(entry, ConfigOptionPickerEntry::Option(opt) if opt.value == current)
-                })
-            })
-            .unwrap_or(0);
+        let selected_index = selected_index_for_current_value(&filtered_entries, current_value);
+        let selected_index = clamp_config_option_selected_index(selected_index, &filtered_entries);
 
         let agent_server_for_subscription = agent_server.clone();
         let config_id_for_subscription = config_id.clone();
@@ -521,7 +520,11 @@ impl PickerDelegate for ConfigOptionPickerDelegate {
                     if query.is_empty() {
                         None
                     } else {
-                        Some((all_options.clone(), query.clone(), cx.background_executor().clone()))
+                        Some((
+                            all_options.clone(),
+                            query.clone(),
+                            cx.background_executor().clone(),
+                        ))
                     }
                 })
                 .ok()
@@ -536,13 +539,12 @@ impl PickerDelegate for ConfigOptionPickerDelegate {
                     options_to_picker_entries(&filtered_options, &this.delegate.favorites);
 
                 let current_value = this.delegate.current_value();
-                let new_index = current_value
-                    .and_then(|current| {
-                        this.delegate.filtered_entries.iter().position(|entry| {
-                            matches!(entry, ConfigOptionPickerEntry::Option(opt) if opt.value == current)
-                        })
-                    })
-                    .unwrap_or(0);
+                let new_index = selected_index_for_current_value(
+                    &this.delegate.filtered_entries,
+                    current_value,
+                );
+                let new_index =
+                    clamp_config_option_selected_index(new_index, &this.delegate.filtered_entries);
 
                 this.set_selected_index(new_index, Some(picker::Direction::Down), true, window, cx);
                 cx.notify();
@@ -708,29 +710,93 @@ fn extract_options(
 
     match &option.kind {
         acp::SessionConfigKind::Select(select) => match &select.options {
-            acp::SessionConfigSelectOptions::Ungrouped(options) => options
-                .iter()
-                .map(|opt| ConfigOptionValue {
-                    value: opt.value.clone(),
-                    name: opt.name.clone(),
-                    description: opt.description.clone(),
-                    group: None,
-                })
-                .collect(),
-            acp::SessionConfigSelectOptions::Grouped(groups) => groups
-                .iter()
-                .flat_map(|group| {
-                    group.options.iter().map(|opt| ConfigOptionValue {
-                        value: opt.value.clone(),
-                        name: opt.name.clone(),
-                        description: opt.description.clone(),
-                        group: Some(group.name.clone()),
+            acp::SessionConfigSelectOptions::Ungrouped(options) => {
+                let mut capped_options = options
+                    .iter()
+                    .take(MAX_CONFIG_OPTION_PICKER_OPTIONS)
+                    .map(|option| config_option_value_from_select_option(option, None))
+                    .collect::<Vec<_>>();
+
+                let overflow_current_option = options
+                    .iter()
+                    .skip(MAX_CONFIG_OPTION_PICKER_OPTIONS)
+                    .find(|option| &option.value == &select.current_value)
+                    .map(|option| config_option_value_from_select_option(option, None));
+
+                preserve_overflow_current_option(
+                    &mut capped_options,
+                    &select.current_value,
+                    overflow_current_option,
+                );
+
+                capped_options
+            }
+            acp::SessionConfigSelectOptions::Grouped(groups) => {
+                let mut capped_options = groups
+                    .iter()
+                    .flat_map(|group| {
+                        group.options.iter().map(|option| {
+                            config_option_value_from_select_option(option, Some(group.name.clone()))
+                        })
                     })
-                })
-                .collect(),
+                    .take(MAX_CONFIG_OPTION_PICKER_OPTIONS)
+                    .collect::<Vec<_>>();
+
+                let overflow_current_option = groups
+                    .iter()
+                    .flat_map(|group| {
+                        group
+                            .options
+                            .iter()
+                            .map(|option| (group.name.as_str(), option))
+                    })
+                    .skip(MAX_CONFIG_OPTION_PICKER_OPTIONS)
+                    .find(|(_, option)| &option.value == &select.current_value)
+                    .map(|(group_name, option)| {
+                        config_option_value_from_select_option(option, Some(group_name.to_string()))
+                    });
+
+                preserve_overflow_current_option(
+                    &mut capped_options,
+                    &select.current_value,
+                    overflow_current_option,
+                );
+
+                capped_options
+            }
             _ => Vec::new(),
         },
         _ => Vec::new(),
+    }
+}
+
+fn config_option_value_from_select_option(
+    option: &acp::SessionConfigSelectOption,
+    group: Option<String>,
+) -> ConfigOptionValue {
+    ConfigOptionValue {
+        value: option.value.clone(),
+        name: option.name.clone(),
+        description: option.description.clone(),
+        group,
+    }
+}
+
+fn preserve_overflow_current_option(
+    capped_options: &mut Vec<ConfigOptionValue>,
+    current_value: &acp::SessionConfigValueId,
+    overflow_current_option: Option<ConfigOptionValue>,
+) {
+    if capped_options
+        .iter()
+        .any(|option| &option.value == current_value)
+    {
+        return;
+    }
+
+    if let Some(option) = overflow_current_option {
+        capped_options.pop();
+        capped_options.push(option);
     }
 }
 
@@ -763,9 +829,20 @@ fn options_to_picker_entries(
     }
 
     if !favorite_options.is_empty() {
-        entries.push(ConfigOptionPickerEntry::Separator("Favorites".into()));
+        if !push_config_option_picker_entry(
+            &mut entries,
+            ConfigOptionPickerEntry::Separator("Favorites".into()),
+        ) {
+            return entries;
+        }
+
         for option in favorite_options {
-            entries.push(ConfigOptionPickerEntry::Option(option));
+            if !push_config_option_picker_entry(
+                &mut entries,
+                ConfigOptionPickerEntry::Option(option),
+            ) {
+                return entries;
+            }
         }
 
         // If the remaining list would start ungrouped (group == None), insert a separator so
@@ -773,7 +850,12 @@ fn options_to_picker_entries(
         if let Some(option) = options.first()
             && option.group.is_none()
         {
-            entries.push(ConfigOptionPickerEntry::Separator("All Options".into()));
+            if !push_config_option_picker_entry(
+                &mut entries,
+                ConfigOptionPickerEntry::Separator("All Options".into()),
+            ) {
+                return entries;
+            }
         }
     }
 
@@ -781,16 +863,56 @@ fn options_to_picker_entries(
     for option in options {
         if option.group != current_group {
             if let Some(group_name) = &option.group {
-                entries.push(ConfigOptionPickerEntry::Separator(
-                    group_name.clone().into(),
-                ));
+                if !push_config_option_picker_entry(
+                    &mut entries,
+                    ConfigOptionPickerEntry::Separator(group_name.clone().into()),
+                ) {
+                    return entries;
+                }
             }
             current_group = option.group.clone();
         }
-        entries.push(ConfigOptionPickerEntry::Option(option.clone()));
+        if !push_config_option_picker_entry(
+            &mut entries,
+            ConfigOptionPickerEntry::Option(option.clone()),
+        ) {
+            return entries;
+        }
     }
 
     entries
+}
+
+fn push_config_option_picker_entry(
+    entries: &mut Vec<ConfigOptionPickerEntry>,
+    entry: ConfigOptionPickerEntry,
+) -> bool {
+    if entries.len() >= MAX_CONFIG_OPTION_PICKER_ENTRIES {
+        return false;
+    }
+
+    entries.push(entry);
+    true
+}
+
+fn selected_index_for_current_value(
+    entries: &[ConfigOptionPickerEntry],
+    current_value: Option<acp::SessionConfigValueId>,
+) -> usize {
+    current_value
+        .and_then(|current| {
+            entries.iter().position(|entry| {
+                matches!(entry, ConfigOptionPickerEntry::Option(opt) if opt.value == current)
+            })
+        })
+        .unwrap_or(0)
+}
+
+fn clamp_config_option_selected_index(
+    selected_index: usize,
+    entries: &[ConfigOptionPickerEntry],
+) -> usize {
+    selected_index.min(entries.len().saturating_sub(1))
 }
 
 async fn fuzzy_search_options(
@@ -798,6 +920,11 @@ async fn fuzzy_search_options(
     query: &str,
     executor: BackgroundExecutor,
 ) -> Vec<ConfigOptionValue> {
+    let options = options
+        .into_iter()
+        .take(MAX_CONFIG_OPTION_FUZZY_CANDIDATES)
+        .collect::<Vec<_>>();
+
     let candidates = options
         .iter()
         .enumerate()
@@ -809,20 +936,23 @@ async fn fuzzy_search_options(
         query,
         false,
         true,
-        100,
+        MAX_CONFIG_OPTION_FUZZY_MATCHES,
         &Default::default(),
         executor,
     )
     .await;
 
     matches.sort_unstable_by_key(|mat| {
-        let candidate = &candidates[mat.candidate_id];
-        (Reverse(OrderedFloat(mat.score)), candidate.id)
+        let candidate_id = candidates
+            .get(mat.candidate_id)
+            .map(|candidate| candidate.id)
+            .unwrap_or(usize::MAX);
+        (Reverse(OrderedFloat(mat.score)), candidate_id)
     });
 
     matches
         .into_iter()
-        .map(|mat| options[mat.candidate_id].clone())
+        .filter_map(|mat| options.get(mat.candidate_id).cloned())
         .collect()
 }
 

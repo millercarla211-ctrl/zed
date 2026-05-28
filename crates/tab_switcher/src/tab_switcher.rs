@@ -29,6 +29,10 @@ use workspace::{
 };
 
 const PANEL_WIDTH_REMS: f32 = 28.;
+const MAX_ALL_PANE_TAB_ROWS: usize = 10_000;
+const MAX_ALL_PANE_FUZZY_ROWS: usize = MAX_ALL_PANE_TAB_ROWS;
+const MAX_ALL_PANE_FUZZY_MATCHES: usize = 10_000;
+const MAX_ALL_PANE_FUZZY_LABEL_CHARS: usize = 512;
 
 /// Toggles the tab switcher interface.
 #[derive(PartialEq, Clone, Deserialize, JsonSchema, Default, Action)]
@@ -327,6 +331,19 @@ impl TabMatch {
     }
 }
 
+fn bounded_tab_match_label(tab_match: &TabMatch, cx: &App) -> String {
+    let label = tab_match.item.tab_content_text(0, cx);
+    let label = label.as_ref();
+    let mut char_indices = label.char_indices();
+    if let Some((truncate_at, _)) = char_indices.nth(MAX_ALL_PANE_FUZZY_LABEL_CHARS) {
+        let mut bounded = label[..truncate_at].to_string();
+        bounded.push_str("...");
+        bounded
+    } else {
+        label.to_string()
+    }
+}
+
 impl TabSwitcherDelegate {
     #[allow(clippy::complexity)]
     fn new(
@@ -406,9 +423,17 @@ impl TabSwitcherDelegate {
         let mut all_items = Vec::new();
         let mut item_index = 0;
         for pane_handle in workspace.read(cx).panes() {
+            let remaining = MAX_ALL_PANE_TAB_ROWS.saturating_sub(all_items.len());
+            if remaining == 0 {
+                break;
+            }
+
             let pane = pane_handle.read(cx);
-            let items: Vec<Box<dyn ItemHandle>> =
-                pane.items().map(|item| item.boxed_clone()).collect();
+            let items: Vec<Box<dyn ItemHandle>> = pane
+                .items()
+                .take(remaining)
+                .map(|item| item.boxed_clone())
+                .collect();
             for ((_detail, item), detail) in items
                 .iter()
                 .enumerate()
@@ -433,12 +458,10 @@ impl TabSwitcherDelegate {
         } else {
             let candidates = all_items
                 .iter()
+                .take(MAX_ALL_PANE_FUZZY_ROWS)
                 .enumerate()
-                .flat_map(|(ix, tab_match)| {
-                    Some(StringMatchCandidate::new(
-                        ix,
-                        &tab_match.item.tab_content_text(0, cx),
-                    ))
+                .map(|(ix, tab_match)| {
+                    StringMatchCandidate::new(ix, bounded_tab_match_label(tab_match, cx))
                 })
                 .collect::<Vec<_>>();
             fuzzy_nucleo::match_strings(
@@ -446,10 +469,10 @@ impl TabSwitcherDelegate {
                 &query,
                 fuzzy_nucleo::Case::Smart,
                 fuzzy_nucleo::LengthPenalty::On,
-                10000,
+                MAX_ALL_PANE_FUZZY_MATCHES,
             )
             .into_iter()
-            .map(|m| all_items[m.candidate_id].clone())
+            .filter_map(|m| all_items.get(m.candidate_id).cloned())
             .collect()
         };
 
@@ -534,6 +557,14 @@ impl TabSwitcherDelegate {
             .map(|tab_match| tab_match.item.item_id())
     }
 
+    fn clamped_selected_index(&self, ix: usize) -> usize {
+        if self.matches.is_empty() {
+            0
+        } else {
+            ix.min(self.matches.len() - 1)
+        }
+    }
+
     fn compute_selected_index(
         &mut self,
         prev_selected_item_id: Option<EntityId>,
@@ -551,14 +582,14 @@ impl TabSwitcherDelegate {
                 .iter()
                 .position(|tab_match| tab_match.item.item_id() == selected_item_id)
             {
-                return item_index;
+                return self.clamped_selected_index(item_index);
             }
             // Otherwise, try to preserve the previously selected index.
-            return self.selected_index.min(self.matches.len() - 1);
+            return self.clamped_selected_index(self.selected_index);
         }
 
         if self.select_last {
-            let item_index = self.matches.len() - 1;
+            let item_index = self.clamped_selected_index(self.matches.len() - 1);
             self.set_selected_index(item_index, window, cx);
             return item_index;
         }
@@ -566,8 +597,9 @@ impl TabSwitcherDelegate {
         // This only runs when initially opening the picker
         // Index 0 is already active, so don't preselect it for switching.
         if self.matches.len() > 1 {
-            self.set_selected_index(1, window, cx);
-            return 1;
+            let item_index = self.clamped_selected_index(1);
+            self.set_selected_index(item_index, window, cx);
+            return item_index;
         }
 
         0
@@ -722,7 +754,7 @@ impl PickerDelegate for TabSwitcherDelegate {
     }
 
     fn selected_index(&self) -> usize {
-        self.selected_index
+        self.clamped_selected_index(self.selected_index)
     }
 
     fn set_selected_index(
@@ -731,10 +763,11 @@ impl PickerDelegate for TabSwitcherDelegate {
         window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) {
-        self.selected_index = ix;
+        let selected_index = self.clamped_selected_index(ix);
+        self.selected_index = selected_index;
 
         if !self.open_in_active_pane {
-            let Some(selected_match) = self.matches.get(self.selected_index()) else {
+            let Some(selected_match) = self.matches.get(selected_index) else {
                 return;
             };
             selected_match

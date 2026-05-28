@@ -27,6 +27,10 @@ use util::{
 };
 use workspace::Workspace;
 
+const MAX_OPEN_PATH_PROMPT_DIRECTORY_ENTRIES: usize = 4_096;
+const MAX_OPEN_PATH_PROMPT_MATCH_ROWS: usize = 100;
+const MAX_OPEN_PATH_PROMPT_USER_INPUT_CHARS: usize = 4_096;
+
 pub struct OpenPathPrompt;
 
 pub struct OpenPathDelegate {
@@ -162,6 +166,11 @@ impl OpenPathDelegate {
             PathStyle::Windows => ".\\",
         }
     }
+
+    fn clamp_selected_index(&mut self) {
+        let max_index = self.match_count().saturating_sub(1);
+        self.selected_index = self.selected_index.min(max_index);
+    }
 }
 
 #[derive(Debug)]
@@ -277,6 +286,7 @@ impl PickerDelegate for OpenPathDelegate {
 
     fn set_selected_index(&mut self, ix: usize, _: &mut Window, cx: &mut Context<Picker<Self>>) {
         self.selected_index = ix;
+        self.clamp_selected_index();
         cx.notify();
     }
 
@@ -289,6 +299,7 @@ impl PickerDelegate for OpenPathDelegate {
         let lister = &self.lister;
         let input_is_empty = query.is_empty();
         let (dir, suffix) = get_dir_and_suffix(query, self.path_style);
+        let display_suffix = capped_open_path_prompt_display_suffix(&suffix);
 
         let query = match &self.directory_state {
             DirectoryState::List { parent_path, .. } => {
@@ -361,15 +372,9 @@ impl PickerDelegate for OpenPathDelegate {
                                     });
 
                                     let new_id = new_id.map(|id| id + 1).unwrap_or(0);
-                                    let user_input = if suffix.is_empty() {
-                                        None
-                                    } else {
-                                        Some(UserInput {
-                                            file: StringMatchCandidate::new(new_id, &suffix),
-                                            exists,
-                                            is_dir,
-                                        })
-                                    };
+                                    let user_input = open_path_prompt_user_input(
+                                        new_id, &suffix, exists, is_dir,
+                                    );
                                     DirectoryState::Create {
                                         entries,
                                         parent_path: dir.clone(),
@@ -379,11 +384,9 @@ impl PickerDelegate for OpenPathDelegate {
                                 Err(_) => DirectoryState::Create {
                                     entries: Vec::new(),
                                     parent_path: dir.clone(),
-                                    user_input: Some(UserInput {
-                                        exists: false,
-                                        is_dir: false,
-                                        file: StringMatchCandidate::new(0, &suffix),
-                                    }),
+                                    user_input: open_path_prompt_user_input(
+                                        0, &suffix, false, false,
+                                    ),
                                 },
                             },
                         };
@@ -455,6 +458,7 @@ impl PickerDelegate for OpenPathDelegate {
                     this.delegate.selected_index = 0;
                     this.delegate.string_matches = new_entries
                         .iter()
+                        .take(MAX_OPEN_PATH_PROMPT_MATCH_ROWS)
                         .map(|m| StringMatch {
                             candidate_id: m.path.id,
                             score: 0.0,
@@ -477,6 +481,7 @@ impl PickerDelegate for OpenPathDelegate {
                                 entries: new_entries,
                             },
                         };
+                    this.delegate.clamp_selected_index();
                     cx.notify();
                 })
                 .ok();
@@ -505,14 +510,15 @@ impl PickerDelegate for OpenPathDelegate {
                         Some(&entry.path)
                     }
                 })
+                .take(MAX_OPEN_PATH_PROMPT_DIRECTORY_ENTRIES)
                 .collect::<Vec<_>>();
 
             let matches = fuzzy::match_strings(
                 candidates.as_slice(),
-                &suffix,
+                &display_suffix,
                 false,
                 true,
-                100,
+                MAX_OPEN_PATH_PROMPT_MATCH_ROWS,
                 &cancel_flag,
                 cx.background_executor().clone(),
             )
@@ -530,7 +536,7 @@ impl PickerDelegate for OpenPathDelegate {
                             .iter()
                             .find(|entry| entry.path.id == m.candidate_id)
                             .map(|entry| &entry.path)
-                            .map(|candidate| !candidate.string.starts_with(&suffix)),
+                            .map(|candidate| !candidate.string.starts_with(&display_suffix)),
                         m.candidate_id,
                     )
                 });
@@ -545,11 +551,7 @@ impl PickerDelegate for OpenPathDelegate {
                     DirectoryState::None { create: true } => DirectoryState::Create {
                         entries: new_entries,
                         parent_path: dir.clone(),
-                        user_input: Some(UserInput {
-                            file: StringMatchCandidate::new(0, &suffix),
-                            exists: false,
-                            is_dir: false,
-                        }),
+                        user_input: open_path_prompt_user_input(0, &suffix, false, false),
                     },
                     DirectoryState::Create { user_input, .. } => {
                         let (new_id, exists, is_dir) = user_input
@@ -559,15 +561,14 @@ impl PickerDelegate for OpenPathDelegate {
                         DirectoryState::Create {
                             entries: new_entries,
                             parent_path: dir.clone(),
-                            user_input: Some(UserInput {
-                                file: StringMatchCandidate::new(new_id, &suffix),
-                                exists,
-                                is_dir,
-                            }),
+                            user_input: open_path_prompt_user_input(
+                                new_id, &suffix, exists, is_dir,
+                            ),
                         }
                     }
                 };
 
+                this.delegate.clamp_selected_index();
                 cx.notify();
             })
             .ok();
@@ -914,12 +915,42 @@ fn path_candidates(
     });
     children
         .iter()
+        .take(MAX_OPEN_PATH_PROMPT_DIRECTORY_ENTRIES)
         .enumerate()
         .map(|(ix, item)| CandidateInfo {
             path: StringMatchCandidate::new(ix, &item.path.to_string_lossy()),
             is_dir: item.is_dir,
         })
         .collect()
+}
+
+fn capped_open_path_prompt_display_suffix(suffix: &str) -> String {
+    suffix
+        .chars()
+        .take(MAX_OPEN_PATH_PROMPT_USER_INPUT_CHARS)
+        .collect()
+}
+
+fn open_path_prompt_user_input(
+    id: usize,
+    suffix: &str,
+    exists: bool,
+    is_dir: bool,
+) -> Option<UserInput> {
+    if suffix.is_empty()
+        || suffix
+            .chars()
+            .nth(MAX_OPEN_PATH_PROMPT_USER_INPUT_CHARS)
+            .is_some()
+    {
+        return None;
+    }
+
+    Some(UserInput {
+        file: StringMatchCandidate::new(id, suffix),
+        exists,
+        is_dir,
+    })
 }
 
 fn get_dir_and_suffix(query: String, path_style: PathStyle) -> (String, String) {

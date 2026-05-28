@@ -1,3 +1,32 @@
+[2026-05-29] - Config Options Tool Picker Debugger Open Path And Tab Switcher Hardening
+
+ADDED:
+- Added `script\dx-agent-config-options-source.test.ts` for agent config option row, current overflow option, fuzzy, and stale-selection boundaries.
+- Added `script\dx-agent-tool-picker-source.test.ts` for agent tool picker row cap, context-server header, and stale-selection boundaries.
+- Added `script\dx-debugger-attach-modal-source.test.ts` for debugger attach process candidate, command text, fuzzy row, and stale-selection boundaries.
+- Added `script\dx-debugger-new-process-source.test.ts` for debugger scenario candidate, prompt command, stale-selection, and render candidate-id boundaries.
+- Added `script\dx-open-path-prompt-source.test.ts` for open path prompt directory, fuzzy, user-input suffix, and stale-selection boundaries.
+- Added `script\dx-tab-switcher-source.test.ts` for all-pane tab switcher collection, fuzzy label, result mapping, and stale-selection boundaries.
+
+CHANGED:
+- Agent config options now cap picker/fuzzy rows, guard fuzzy match IDs, and preserve the current overflow option inside the bounded list.
+- Agent Tool Picker now caps visible tool rows while preserving context-server headers, clamps selection, and avoids direct filtered-item indexing.
+- Debugger Attach now caps process candidates, command fields, fuzzy rows, tooltip text, and row command text before materialization.
+- Debugger New Process now caps scenario candidate/fuzzy rows, guards stale candidate IDs in confirm/render paths, and refuses oversized custom commands before shell splitting.
+- Open Path Prompt now caps directory/fuzzy materialization while refusing oversized create suffixes instead of truncating real path text.
+- Tab Switcher now caps all-pane tab collection, fuzzy labels/results, and stale selections before preview activation.
+- `DX.md` and the source-guard registry now list the new guards.
+
+PASSED:
+- `node --test script\dx-agent-config-options-source.test.ts script\dx-agent-tool-picker-source.test.ts script\dx-debugger-attach-modal-source.test.ts script\dx-debugger-new-process-source.test.ts script\dx-open-path-prompt-source.test.ts script\dx-tab-switcher-source.test.ts` (25/25 passing)
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-agent-config-options-source.test.ts script\dx-agent-tool-picker-source.test.ts script\dx-debugger-attach-modal-source.test.ts script\dx-debugger-new-process-source.test.ts script\dx-open-path-prompt-source.test.ts script\dx-tab-switcher-source.test.ts` (28/28 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Encoding Line Ending Settings Tasks Feedback And Font Panel Hardening
 
 ADDED:

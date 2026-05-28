@@ -134,6 +134,70 @@ impl Focusable for AttachModal {
 
 impl ModalView for AttachModal {}
 
+const MAX_ATTACH_MODAL_MATCH_CANDIDATES: usize = 2_000;
+const MAX_ATTACH_MODAL_MATCHES: usize = 100;
+const MAX_ATTACH_MODAL_COMMAND_ARGS: usize = 32;
+const MAX_ATTACH_MODAL_FIELD_CHARS: usize = 512;
+
+impl AttachModalDelegate {
+    fn clamped_match_index(&self, ix: usize) -> usize {
+        ix.min(self.matches.len().saturating_sub(1))
+    }
+
+    fn clamp_selected_index_to_matches(&mut self) {
+        self.selected_index = self.clamped_match_index(self.selected_index);
+    }
+}
+
+fn bounded_process_field(value: &str) -> String {
+    if value
+        .char_indices()
+        .nth(MAX_ATTACH_MODAL_FIELD_CHARS)
+        .is_none()
+    {
+        return value.to_string();
+    }
+
+    let truncate_at = value
+        .char_indices()
+        .nth(MAX_ATTACH_MODAL_FIELD_CHARS.saturating_sub(3))
+        .map(|(index, _)| index)
+        .unwrap_or(value.len());
+    let mut bounded = value[..truncate_at].to_string();
+    bounded.push_str("...");
+    bounded
+}
+
+fn process_command_text(command: &[String], skip_args: usize) -> String {
+    command
+        .iter()
+        .skip(skip_args)
+        .take(MAX_ATTACH_MODAL_COMMAND_ARGS)
+        .map(|arg| bounded_process_field(arg))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn process_match_candidates(processes: &[Candidate]) -> Vec<StringMatchCandidate> {
+    processes
+        .iter()
+        .enumerate()
+        .take(MAX_ATTACH_MODAL_MATCH_CANDIDATES)
+        .map(|(id, candidate)| {
+            let command_text = candidate
+                .command
+                .iter()
+                .take(MAX_ATTACH_MODAL_COMMAND_ARGS)
+                .map(|arg| bounded_process_field(arg))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let name = bounded_process_field(candidate.name.as_ref());
+            let match_text = format!("{} {} {}", command_text, candidate.pid, name);
+            StringMatchCandidate::new(id, match_text.as_str())
+        })
+        .collect()
+}
+
 impl PickerDelegate for AttachModalDelegate {
     type ListItem = ListItem;
 
@@ -151,7 +215,7 @@ impl PickerDelegate for AttachModalDelegate {
         _window: &mut Window,
         _: &mut Context<Picker<Self>>,
     ) {
-        self.selected_index = ix;
+        self.selected_index = self.clamped_match_index(ix);
     }
 
     fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> std::sync::Arc<str> {
@@ -172,43 +236,24 @@ impl PickerDelegate for AttachModalDelegate {
                 return;
             };
 
-            let matches = fuzzy::match_strings(
-                &processes
-                    .iter()
-                    .enumerate()
-                    .map(|(id, candidate)| {
-                        StringMatchCandidate::new(
-                            id,
-                            format!(
-                                "{} {} {}",
-                                candidate.command.join(" "),
-                                candidate.pid,
-                                candidate.name
-                            )
-                            .as_str(),
-                        )
-                    })
-                    .collect::<Vec<_>>(),
+            let match_candidates = process_match_candidates(&processes);
+            let mut matches = fuzzy::match_strings(
+                &match_candidates,
                 &query,
                 true,
                 true,
-                100,
+                MAX_ATTACH_MODAL_MATCHES,
                 &Default::default(),
                 cx.background_executor().clone(),
             )
             .await;
+            matches.truncate(MAX_ATTACH_MODAL_MATCHES);
 
             this.update(cx, |this, _| {
                 let delegate = &mut this.delegate;
 
                 delegate.matches = matches;
-
-                if delegate.matches.is_empty() {
-                    delegate.selected_index = 0;
-                } else {
-                    delegate.selected_index =
-                        delegate.selected_index.min(delegate.matches.len() - 1);
-                }
+                delegate.clamp_selected_index_to_matches();
             })
             .ok();
         })
@@ -315,6 +360,9 @@ impl PickerDelegate for AttachModalDelegate {
     ) -> Option<Self::ListItem> {
         let hit = &self.matches.get(ix)?;
         let candidate = self.candidates.get(hit.candidate_id)?;
+        let process_name = bounded_process_field(candidate.name.as_ref());
+        let command_text = process_command_text(&candidate.command, 0);
+        let command_args_text = process_command_text(&candidate.command, 1);
 
         Some(
             ListItem::new(format!("process-entry-{ix}"))
@@ -324,29 +372,20 @@ impl PickerDelegate for AttachModalDelegate {
                 .child(
                     v_flex()
                         .items_start()
-                        .child(Label::new(format!("{} {}", candidate.name, candidate.pid)))
+                        .child(Label::new(format!(
+                            "{} {}",
+                            process_name.as_str(),
+                            candidate.pid
+                        )))
                         .child(
                             div()
                                 .id(format!("process-entry-{ix}-command"))
-                                .tooltip(Tooltip::text(
-                                    candidate
-                                        .command
-                                        .clone()
-                                        .into_iter()
-                                        .collect::<Vec<_>>()
-                                        .join(" "),
-                                ))
+                                .tooltip(Tooltip::text(command_text))
                                 .child(
                                     Label::new(format!(
                                         "{} {}",
-                                        candidate.name,
-                                        candidate
-                                            .command
-                                            .clone()
-                                            .into_iter()
-                                            .skip(1)
-                                            .collect::<Vec<_>>()
-                                            .join(" ")
+                                        process_name.as_str(),
+                                        command_args_text
                                     ))
                                     .size(LabelSize::Small)
                                     .color(Color::Muted),
