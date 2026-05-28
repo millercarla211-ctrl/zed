@@ -221,3 +221,28 @@ test("symbol, thread, and skill mention completions cap searchable candidates", 
     "skill mentions must be capped before StringMatchCandidate allocation",
   );
 });
+
+test("fuzzy completion candidate lookups fail closed on stale candidate ids", () => {
+  const unsafeCandidateLookup =
+    /\b(?:candidates|entries|symbols|sessions|skills)\s*\[\s*mat\.candidate_id\s*\]/;
+
+  assert.doesNotMatch(
+    source,
+    unsafeCandidateLookup,
+    "fuzzy candidate ids must not directly index backing vectors",
+  );
+
+  for (const collection of [
+    "candidates",
+    "entries",
+    "symbols",
+    "sessions",
+    "skills",
+  ]) {
+    assert.match(
+      source,
+      new RegExp(`\\b${collection}\\.get\\(mat\\.candidate_id\\)`),
+      `${collection} fuzzy lookups should use get(mat.candidate_id)`,
+    );
+  }
+});

@@ -98,6 +98,16 @@ test("extensions page caps search text and list materialization", () => {
   assert.match(fetchExtensions, /MAX_FILTERED_EXTENSION_RESULTS/);
   assert.match(fetchExtensions, /installed_extension_ids/);
   assert.match(fetchExtensions, /bounded_remote_extension_entries\(extensions, &installed_extension_ids\)/);
+  assert.match(
+    fetchExtensions,
+    /dev_extensions\.get\(mat\.candidate_id\)\.cloned\(\)/,
+    "dev extension fuzzy results must fail closed on stale candidate ids",
+  );
+  assert.doesNotMatch(
+    fetchExtensions,
+    /dev_extensions\s*\[\s*mat\.candidate_id\s*\]/,
+    "dev extension fuzzy results must not directly index by candidate_id",
+  );
 
   const filterEntries = functionBody(extensionsSource, "filter_extension_entries");
   assert.match(filterEntries, /let dev_limit = if self\.filter\.include_dev_extensions\(\)/);
@@ -175,6 +185,41 @@ test("extension card text and chips use bounded display helpers", () => {
 
   const menu = functionBody(extensionsSource, "render_remote_extension_context_menu");
   assert.match(menu, /bounded_extension_authors_text\(&authors\)/);
+});
+
+test("extensions page guards stale filtered row indexes before row materialization", () => {
+  const renderExtensions = functionBody(extensionsSource, "render_extensions");
+
+  assert.match(
+    renderExtensions,
+    /self\s*\.filtered_dev_extension_indices\s*\.get\(ix\)\s*\.copied\(\)/,
+    "dev filtered row lookup must fail closed when a stale row index is rendered",
+  );
+  assert.match(
+    renderExtensions,
+    /self\s*\.filtered_remote_extension_indices\s*\.get\(ix\s*-\s*dev_extension_entries_len\)\s*\.copied\(\)/,
+    "remote filtered row lookup must fail closed when a stale row index is rendered",
+  );
+  assert.match(
+    renderExtensions,
+    /self\s*\.dev_extension_entries\.get\(dev_ix\)/,
+    "dev filtered row indexes must be guarded before extension entry lookup",
+  );
+  assert.match(
+    renderExtensions,
+    /self\s*\.remote_extension_entries\.get\(extension_ix\)/,
+    "remote filtered row indexes must be guarded before extension entry lookup",
+  );
+  assert.doesNotMatch(
+    renderExtensions,
+    /self\.filtered_dev_extension_indices\s*\[[^\]]+\]/,
+    "render_extensions must not directly index dev filtered rows",
+  );
+  assert.doesNotMatch(
+    renderExtensions,
+    /self\.filtered_remote_extension_indices\s*\[[^\]]+\]/,
+    "render_extensions must not directly index remote filtered rows",
+  );
 });
 
 test("extension version selector bounds rows, labels, query, and fuzzy matches", () => {

@@ -2,7 +2,7 @@ use std::{cmp::Reverse, sync::Arc};
 
 use agent_settings::AgentSettings;
 use collections::{HashMap, HashSet, IndexMap};
-use fuzzy::{StringMatch, StringMatchCandidate, match_strings};
+use fuzzy::{StringMatchCandidate, match_strings};
 use gpui::{
     Action, AnyElement, App, BackgroundExecutor, DismissEvent, FocusHandle, ForegroundExecutor,
     Subscription, Task,
@@ -409,7 +409,7 @@ impl ModelMatcher {
     }
 
     pub fn fuzzy_search(&self, query: &str) -> Vec<ModelInfo> {
-        let mut matches = self.fg_executor.block_on(match_strings(
+        let matches = self.fg_executor.block_on(match_strings(
             &self.candidates,
             query,
             false,
@@ -419,19 +419,24 @@ impl ModelMatcher {
             self.bg_executor.clone(),
         ));
 
-        let sorting_key = |mat: &StringMatch| {
-            let candidate = &self.candidates[mat.candidate_id];
-            (Reverse(OrderedFloat(mat.score)), candidate.id)
-        };
-        matches.sort_unstable_by_key(sorting_key);
-
-        let matched_models: Vec<_> = matches
+        let mut matched_models = matches
             .into_iter()
-            .take(MAX_SELECTOR_FUZZY_MATCHES)
-            .map(|mat| self.models[mat.candidate_id].clone())
-            .collect();
+            .filter_map(|mat| {
+                let candidate = self.candidates.get(mat.candidate_id)?;
+                let model = self.models.get(mat.candidate_id)?.clone();
+                Some((mat, candidate.id, model))
+            })
+            .collect::<Vec<_>>();
+
+        matched_models.sort_unstable_by_key(|(mat, candidate_id, _)| {
+            (Reverse(OrderedFloat(mat.score)), *candidate_id)
+        });
 
         matched_models
+            .into_iter()
+            .take(MAX_SELECTOR_FUZZY_MATCHES)
+            .map(|(_, _, model)| model)
+            .collect()
     }
 
     pub fn exact_search(&self, query: &str) -> Vec<ModelInfo> {

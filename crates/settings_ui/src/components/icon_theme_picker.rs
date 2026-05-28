@@ -104,7 +104,11 @@ impl PickerDelegate for IconThemePickerDelegate {
         } else {
             matches
                 .iter()
-                .position(|m| icon_themes[m.candidate_id] == current_theme)
+                .position(|m| {
+                    icon_themes
+                        .get(m.candidate_id)
+                        .is_some_and(|theme| *theme == current_theme)
+                })
                 .unwrap_or(0)
         };
 

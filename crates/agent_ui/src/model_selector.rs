@@ -530,14 +530,22 @@ async fn fuzzy_search(
         )
         .await;
 
-        matches.sort_unstable_by_key(|mat| {
-            let candidate = &candidates[mat.candidate_id];
-            (Reverse(OrderedFloat(mat.score)), candidate.id)
+        let mut matched_models = matches
+            .into_iter()
+            .filter_map(|mat| {
+                let candidate = candidates.get(mat.candidate_id)?;
+                let model = model_list.get(mat.candidate_id)?.clone();
+                Some((mat, candidate.id, model))
+            })
+            .collect::<Vec<_>>();
+
+        matched_models.sort_unstable_by_key(|(mat, candidate_id, _)| {
+            (Reverse(OrderedFloat(mat.score)), *candidate_id)
         });
 
-        matches
+        matched_models
             .into_iter()
-            .map(|mat| model_list[mat.candidate_id].clone())
+            .map(|(_, _, model)| model)
             .collect()
     }
 

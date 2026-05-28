@@ -612,11 +612,9 @@ impl CompletionsMenu {
             .scroll_to_item(self.selected_item, ScrollStrategy::Nearest);
         if let Some(provider) = provider {
             let entries = self.entries.borrow();
-            let entry = if self.selected_item < entries.len() {
-                entries[self.selected_item].as_match()
-            } else {
-                None
-            };
+            let entry = entries
+                .get(self.selected_item)
+                .and_then(CompletionMenuEntry::as_match);
             provider.selection_changed(entry, window, cx);
         }
         self.resolve_visible_completions(provider, cx);
@@ -683,14 +681,21 @@ impl CompletionsMenu {
         // This filtering doesn't happen if the completions are currently being updated.
         let completions = self.completions.borrow();
         let candidate_ids = entry_indices
-            .filter_map(|i| entries[i].as_match().map(|m| m.candidate_id))
-            .filter(|i| completions[*i].documentation.is_none());
+            .filter_map(|i| entries.get(i).and_then(CompletionMenuEntry::as_match))
+            .map(|m| m.candidate_id)
+            .filter(|i| {
+                completions
+                    .get(*i)
+                    .is_some_and(|completion| completion.documentation.is_none())
+            });
 
         // Current selection is always resolved even if it already has documentation, to handle
         // out-of-spec language servers that return more results later.
-        let Some(selected_candidate_id) = entries[self.selected_item]
-            .as_match()
+        let Some(selected_candidate_id) = entries
+            .get(self.selected_item)
+            .and_then(CompletionMenuEntry::as_match)
             .map(|m| m.candidate_id)
+            .filter(|candidate_id| completions.get(*candidate_id).is_some())
         else {
             drop(entries);
             drop(completions);
@@ -781,7 +786,8 @@ impl CompletionsMenu {
         }
         let candidate_id = entries[index].as_match()?.candidate_id;
         let completions = self.completions.borrow();
-        match &completions[candidate_id].documentation {
+        let completion = completions.get(candidate_id)?;
+        match &completion.documentation {
             Some(CompletionDocumentation::MultiLineMarkdown(source)) if !source.is_empty() => self
                 .get_or_create_markdown(candidate_id, Some(source), false, &completions, cx)
                 .map(|(_, markdown)| markdown),
@@ -819,7 +825,7 @@ impl CompletionsMenu {
                 // Heuristic guess that documentation can be reused when new_text matches. This is
                 // to mitigate documentation flicker while typing. If this is wrong, then resolution
                 // should cause the correct documentation to be displayed soon.
-                let completion = &completions[candidate_id];
+                let completion = completions.get(candidate_id)?;
                 matching_entry = markdown_cache.iter().find_position(|(key, _)| {
                     matches!(key, MarkdownCacheKey::ForCompletionMatch { new_text, .. }
                                 if new_text == &completion.new_text)
@@ -913,9 +919,9 @@ impl CompletionsMenu {
                 .borrow()
                 .iter()
                 .enumerate()
-                .filter_map(|(ix, entry)| entry.as_match().map(|m| (ix, m)))
-                .max_by_key(|(_, mat)| {
-                    let completion = &completions[mat.candidate_id];
+                .filter_map(|(ix, entry)| {
+                    let mat = entry.as_match()?;
+                    let completion = completions.get(mat.candidate_id)?;
                     let documentation = &completion.documentation;
 
                     let mut len = completion.label.text.chars().count();
@@ -925,8 +931,9 @@ impl CompletionsMenu {
                         }
                     }
 
-                    len
+                    Some((ix, len))
                 })
+                .max_by_key(|(_, len)| *len)
                 .map(|(ix, _)| ix);
             drop(completions);
             widest_completion_ix
@@ -967,7 +974,9 @@ impl CompletionsMenu {
                             };
                         };
 
-                        let completion = &completions_guard[mat.candidate_id];
+                        let Some(completion) = completions_guard.get(mat.candidate_id) else {
+                            return div().into_any_element();
+                        };
                         let documentation = if show_completion_documentation {
                             &completion.documentation
                         } else {
@@ -1211,11 +1220,17 @@ impl CompletionsMenu {
         }
 
         let entries = self.entries.borrow();
-        let Some(mat) = entries[self.selected_item].as_match() else {
+        let Some(mat) = entries
+            .get(self.selected_item)
+            .and_then(CompletionMenuEntry::as_match)
+        else {
             return None;
         };
         let completions = self.completions.borrow();
-        let multiline_docs = match completions[mat.candidate_id].documentation.as_ref() {
+        let Some(completion) = completions.get(mat.candidate_id) else {
+            return None;
+        };
+        let multiline_docs = match completion.documentation.as_ref() {
             Some(CompletionDocumentation::MultiLinePlainText(text)) => div().child(text.clone()),
             Some(CompletionDocumentation::SingleLineAndMultiLinePlainText {
                 plain_text: Some(text),
@@ -1383,7 +1398,10 @@ impl CompletionsMenu {
             // the text "c c" in two places; we should only show the longer one)
             let mut snippets_seen = HashSet::<(usize, usize)>::default();
             matches.retain(|result| {
-                match completions_ref[result.candidate_id].snippet_deduplication_key {
+                let Some(completion) = completions_ref.get(result.candidate_id) else {
+                    return false;
+                };
+                match completion.snippet_deduplication_key {
                     Some(key) => snippets_seen.insert(key),
                     None => true,
                 }
@@ -1404,7 +1422,10 @@ impl CompletionsMenu {
         let mut entries: Vec<CompletionMenuEntry> = Vec::with_capacity(matches.len());
         let mut last_group: Option<&CompletionGroup> = None;
         for mat in matches {
-            let group = completions[mat.candidate_id].group.as_ref();
+            let Some(completion) = completions.get(mat.candidate_id) else {
+                continue;
+            };
+            let group = completion.group.as_ref();
             if group != last_group {
                 if group.is_some() || last_group.is_some() {
                     if !entries.is_empty() {
@@ -1432,6 +1453,13 @@ impl CompletionsMenu {
     ) -> Vec<StringMatch> {
         let mut matches = matches;
 
+        matches.retain(|string_match| {
+            let Some(completion) = completions.get(string_match.candidate_id) else {
+                return false;
+            };
+            snippet_sort_order != SnippetSortOrder::None || !completion.is_snippet_kind()
+        });
+
         #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
         enum MatchTier<'a> {
             WordStartMatch {
@@ -1454,13 +1482,12 @@ impl CompletionsMenu {
             .and_then(|q| q.chars().next())
             .and_then(|c| c.to_lowercase().next());
 
-        if snippet_sort_order == SnippetSortOrder::None {
-            matches
-                .retain(|string_match| !completions[string_match.candidate_id].is_snippet_kind());
-        }
-
         matches.sort_unstable_by_key(|string_match| {
-            let completion = &completions[string_match.candidate_id];
+            let score = string_match.score;
+            let sort_score = Reverse(OrderedFloat(score));
+            let Some(completion) = completions.get(string_match.candidate_id) else {
+                return MatchTier::OtherMatch { sort_score };
+            };
 
             let sort_text = match &completion.source {
                 CompletionSource::Lsp { lsp_completion, .. } => lsp_completion.sort_text.as_deref(),
@@ -1469,9 +1496,6 @@ impl CompletionsMenu {
             };
 
             let (sort_kind, sort_label) = completion.sort_key();
-
-            let score = string_match.score;
-            let sort_score = Reverse(OrderedFloat(score));
 
             // Snippets do their own first-letter matching logic elsewhere.
             let is_snippet = completion.is_snippet_kind();

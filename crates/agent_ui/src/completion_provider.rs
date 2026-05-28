@@ -920,7 +920,7 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
 
             matches
                 .into_iter()
-                .map(|mat| candidates[mat.candidate_id].clone())
+                .filter_map(|mat| candidates.get(mat.candidate_id).cloned())
                 .collect()
         })
     }
@@ -1091,11 +1091,12 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
                     )
                     .await;
 
-                    matches.extend(entry_matches.into_iter().map(|mat| {
-                        Match::Entry(EntryMatch {
-                            entry: entries[mat.candidate_id],
+                    matches.extend(entry_matches.into_iter().filter_map(|mat| {
+                        let entry = entries.get(mat.candidate_id).copied()?;
+                        Some(Match::Entry(EntryMatch {
+                            entry,
                             mat: Some(mat),
-                        })
+                        }))
                     }));
 
                     if let Some(branch_diff_task) = branch_diff_task {
@@ -2210,20 +2211,41 @@ pub(crate) fn search_symbols(
             &cancellation_flag,
             cx.background_executor().clone(),
         ));
-        let sort_key_for_match = |mat: &StringMatch| {
-            let symbol = &symbols[mat.candidate_id];
-            (Reverse(OrderedFloat(mat.score)), symbol.label.filter_text())
+        let mut visible_matches = visible_matches
+            .into_iter()
+            .filter_map(|mat| {
+                let symbol = symbols.get(mat.candidate_id)?.clone();
+                Some((mat, symbol))
+            })
+            .collect::<Vec<_>>();
+        let mut external_matches = external_matches
+            .into_iter()
+            .filter_map(|mat| {
+                let symbol = symbols.get(mat.candidate_id)?.clone();
+                Some((mat, symbol))
+            })
+            .collect::<Vec<_>>();
+        let sort_match = |(a_mat, a_symbol): &(StringMatch, Symbol),
+                          (b_mat, b_symbol): &(StringMatch, Symbol)| {
+            let a_key = (
+                Reverse(OrderedFloat(a_mat.score)),
+                a_symbol.label.filter_text(),
+            );
+            let b_key = (
+                Reverse(OrderedFloat(b_mat.score)),
+                b_symbol.label.filter_text(),
+            );
+            a_key.cmp(&b_key)
         };
 
-        visible_matches.sort_unstable_by_key(sort_key_for_match);
-        external_matches.sort_unstable_by_key(sort_key_for_match);
+        visible_matches.sort_unstable_by(sort_match);
+        external_matches.sort_unstable_by(sort_match);
         let mut matches = visible_matches;
         matches.append(&mut external_matches);
 
         matches
             .into_iter()
-            .map(|mut mat| {
-                let symbol = symbols[mat.candidate_id].clone();
+            .map(|(mut mat, symbol)| {
                 let filter_start = symbol.label.filter_range.start;
                 for position in &mut mat.positions {
                     *position += filter_start;
@@ -2324,7 +2346,7 @@ async fn filter_sessions(
 
     matches
         .into_iter()
-        .map(|mat| sessions[mat.candidate_id].clone())
+        .filter_map(|mat| sessions.get(mat.candidate_id).cloned())
         .collect()
 }
 
@@ -2360,7 +2382,7 @@ pub(crate) fn search_skills(
         .await;
         matches
             .into_iter()
-            .map(|mat| skills[mat.candidate_id].clone())
+            .filter_map(|mat| skills.get(mat.candidate_id).cloned())
             .collect()
     })
 }

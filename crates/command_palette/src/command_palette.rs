@@ -310,10 +310,11 @@ impl CommandPaletteDelegate {
             positions,
         } in intercept_result.results
         {
-            if let Some(idx) = matches
-                .iter()
-                .position(|m| commands[m.candidate_id].action.partial_eq(&*action))
-            {
+            if let Some(idx) = matches.iter().position(|m| {
+                commands
+                    .get(m.candidate_id)
+                    .is_some_and(|command| command.action.partial_eq(&*action))
+            }) {
                 matches.remove(idx);
             }
             commands.push(Command {
@@ -593,6 +594,9 @@ impl PickerDelegate for CommandPaletteDelegate {
             return;
         };
         let action_ix = matching_command.candidate_id;
+        let Some(_) = self.commands.get(action_ix) else {
+            return;
+        };
         let command = self.commands.swap_remove(action_ix);
         telemetry::event!(
             "Action Invoked",

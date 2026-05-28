@@ -96,7 +96,11 @@ impl PickerDelegate for FontPickerDelegate {
         } else {
             matches
                 .iter()
-                .position(|m| fonts[m.candidate_id] == current_font)
+                .position(|m| {
+                    fonts
+                        .get(m.candidate_id)
+                        .is_some_and(|font| *font == current_font)
+                })
                 .unwrap_or(0)
         };
 

@@ -673,7 +673,7 @@ impl ExtensionsPage {
                 .await;
                 matches
                     .into_iter()
-                    .map(|mat| dev_extensions[mat.candidate_id].clone())
+                    .filter_map(|mat| dev_extensions.get(mat.candidate_id).cloned())
                     .collect()
             } else {
                 dev_extensions
@@ -730,13 +730,24 @@ impl ExtensionsPage {
         range
             .map(|ix| {
                 if ix < dev_extension_entries_len {
-                    let dev_ix = self.filtered_dev_extension_indices[ix];
-                    let extension = &self.dev_extension_entries[dev_ix];
+                    let Some(dev_ix) = self.filtered_dev_extension_indices.get(ix).copied() else {
+                        return ExtensionCard::new();
+                    };
+                    let Some(extension) = self.dev_extension_entries.get(dev_ix) else {
+                        return ExtensionCard::new();
+                    };
                     self.render_dev_extension(extension, cx)
                 } else {
-                    let extension_ix =
-                        self.filtered_remote_extension_indices[ix - dev_extension_entries_len];
-                    let extension = &self.remote_extension_entries[extension_ix];
+                    let Some(extension_ix) = self
+                        .filtered_remote_extension_indices
+                        .get(ix - dev_extension_entries_len)
+                        .copied()
+                    else {
+                        return ExtensionCard::new();
+                    };
+                    let Some(extension) = self.remote_extension_entries.get(extension_ix) else {
+                        return ExtensionCard::new();
+                    };
                     self.render_remote_extension(extension, cx)
                 }
             })

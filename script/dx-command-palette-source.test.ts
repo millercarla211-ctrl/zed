@@ -63,6 +63,16 @@ test("command palette clamps stale selection before command materialization", ()
     after: "self.clamp_selected_index();",
     message: "match updates must clamp stale selected indexes after replacing results",
   });
+  assert.match(
+    matchesUpdated,
+    /commands\s*\.get\(m\.candidate_id\)\s*\.is_some_and\(\|command\|\s*command\.action\.partial_eq\(&\*action\)\s*\)/s,
+    "intercept result de-duplication must fail closed when fuzzy candidate IDs are stale",
+  );
+  assert.doesNotMatch(
+    matchesUpdated,
+    /commands\s*\[\s*m\.candidate_id\s*\]/,
+    "intercept result de-duplication must not index commands with a stale fuzzy candidate_id",
+  );
   assertBefore({
     body: setSelectedIndex,
     before: "self.selected_ix = ix;",
@@ -74,6 +84,17 @@ test("command palette clamps stale selection before command materialization", ()
     confirm,
     /let Some\(matching_command\) = self\.matches\.get\(self\.selected_ix\) else \{\s+return;\s+\};/,
   );
+  assert.match(
+    confirm,
+    /let Some\(_\) = self\.commands\.get\(action_ix\) else \{\s+return;\s+\};/,
+    "confirm must guard stale command candidate ids before swap_remove",
+  );
+  assertBefore({
+    body: confirm,
+    before: "self.commands.get(action_ix)",
+    after: "self.commands.swap_remove(action_ix)",
+    message: "confirm must prove action_ix is in bounds before swap_remove",
+  });
   assert.doesNotMatch(
     confirm,
     /self\.matches\[self\.selected_ix\]/,

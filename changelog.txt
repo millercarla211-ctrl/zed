@@ -1,3 +1,27 @@
+[2026-05-29] - Stale Fuzzy Candidate Lookup Hardening
+
+ADDED:
+- Added `script\dx-agent-ui-selector-source.test.ts` for Agent UI model selector stale fuzzy candidate-id boundaries.
+- Added `script\dx-settings-ui-source.test.ts` for Settings UI font, theme, and icon-theme picker stale fuzzy candidate-id boundaries.
+
+CHANGED:
+- Command Palette action de-duplication now guards fuzzy candidate IDs before command/action lookup.
+- Extensions UI row rendering now guards filtered dev/remote row indexes and backing extension entries before materialization.
+- Agent UI completion provider and selector fuzzy searches now skip stale candidate IDs for slash completions, entries, symbols, sessions, skills, and models while preserving valid-result ordering before caps.
+- Settings UI font, theme, and icon-theme pickers now guard current-selection lookup against stale fuzzy candidate IDs.
+- Editor completion menus now guard completion lookups for documentation, rendered rows, selected docs, snippet de-duplication, grouping, and sorting paths.
+- `DX.md`, `todo.txt`, and the handoff source guard registry now list the new guards and source-only proof boundary.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-command-palette-source.test.ts script\dx-extensions-ui-source.test.ts script\dx-completion-provider-source.test.ts script\dx-agent-ui-selector-source.test.ts script\dx-settings-ui-source.test.ts script\dx-editor-lsp-ui-source.test.ts script\dx-language-model-selector-source.test.ts script\dx-model-selector-source.test.ts` (35/35 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Targeted stale candidate/index pattern scans over edited source
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-29] - Stale Selection And Candidate Lookup Hardening
 
 CHANGED:

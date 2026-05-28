@@ -94,7 +94,11 @@ impl PickerDelegate for ThemePickerDelegate {
         } else {
             matches
                 .iter()
-                .position(|m| themes[m.candidate_id] == current_theme)
+                .position(|m| {
+                    themes
+                        .get(m.candidate_id)
+                        .is_some_and(|theme| *theme == current_theme)
+                })
                 .unwrap_or(0)
         };
 

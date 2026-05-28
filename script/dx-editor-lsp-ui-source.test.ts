@@ -208,3 +208,34 @@ test("snippet fuzzy completion skips stale candidate ids before snippet lookup",
     "snippet lookup derived from fuzzy candidates must use get()",
   );
 });
+
+test("completion menu fuzzy lookups skip stale candidate ids before completion lookup", () => {
+  const source = read("crates/editor/src/code_context_menus.rs");
+  const resolveBody = functionBody(source, "resolve_visible_completions");
+
+  assert.doesNotMatch(
+    source,
+    /(?:completions|completions_guard|completions_ref)\s*\[\s*(?:\*i|candidate_id|mat\.candidate_id|result\.candidate_id|string_match\.candidate_id)\s*\]/,
+    "completion menu fuzzy lookups must not directly index completions by candidate_id",
+  );
+  assert.match(
+    source,
+    /(?:completions|completions_guard|completions_ref)\s*\.get\(\s*(?:\*i|candidate_id|mat\.candidate_id|result\.candidate_id|string_match\.candidate_id)\s*\)/,
+    "completion menu fuzzy lookups should use get() for candidate ids",
+  );
+  assert.doesNotMatch(
+    resolveBody,
+    /entries\s*\[\s*self\.selected_item\s*\]/,
+    "completion resolution must not directly index selected entries",
+  );
+  assert.doesNotMatch(
+    source,
+    /entries\s*\[\s*self\.selected_item\s*\]/,
+    "completion menu selected-entry paths should use get() instead of direct indexing",
+  );
+  assert.match(
+    resolveBody,
+    /entries\s*\.get\(self\.selected_item\)/,
+    "completion resolution should guard stale selected entries",
+  );
+});
