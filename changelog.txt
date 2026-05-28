@@ -1,3 +1,25 @@
+[2026-05-28] - External Payload Boundary Hardening
+
+ADDED:
+- Added focused source guards for native-agent thread clipboard payloads, Web Preview agent-browser payload imports, skill mention file reads, pasted markdown mention-link parsing, and thread metadata remote-connection JSON boundaries.
+
+CHANGED:
+- Native-agent thread clipboard copy/load now rejects oversized encoded, compressed, or decompressed thread payloads before clipboard write, base64 decode, zstd expansion, or shared-thread JSON parsing.
+- Web Preview agent-browser payload imports now bound clipboard entries before concatenating text, JSON parse, or plain-text wrapping and use sentinel-byte bounded reads for managed queue JSON.
+- Reliability build-timing uploads now reject oversized timing JSON before UTF-8 decoding or parsing.
+- External skill mention file ingestion now uses a sentinel-byte bounded read before converting file content into mention text.
+- Message editor pasted markdown mention-link parsing now short-circuits on oversized text and falls through to normal paste.
+- Thread and terminal thread metadata stores now bound persisted remote-connection JSON before deserializing `RemoteConnectionOptions`.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-agent-panel-clipboard-source.test.ts script\web-preview-payload-source.test.ts script\dx-windows-reliability-source.test.ts script\dx-mention-set-source.test.ts script\dx-message-editor-source.test.ts script\dx-thread-metadata-source.test.ts` (20/20 passing)
+- `rustfmt --edition 2024 --check` on all edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Receipt Display String Hardening
 
 ADDED:

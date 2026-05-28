@@ -10,6 +10,10 @@ const registeredGuardScripts = [
   "script/dx-workspace-reentrant-source.test.ts",
   "script/dx-source-quality.test.ts",
   "script/dx-studio-project-source.test.ts",
+  "script/dx-agent-panel-clipboard-source.test.ts",
+  "script/dx-mention-set-source.test.ts",
+  "script/dx-message-editor-source.test.ts",
+  "script/dx-thread-metadata-source.test.ts",
   "script/dx-deploy-panel-source.test.ts",
   "script/dx-deploy-receipts-source.test.ts",
   "script/dx-deploy-launch-gate-source.test.ts",
@@ -31,6 +35,7 @@ const registeredGuardScripts = [
   "script/dx-runtime-proof-status-source.test.ts",
   "script/dx-source-sets-source.test.ts",
   "script/dx-agent-bridge-source.test.ts",
+  "script/web-preview-payload-source.test.ts",
   "script/dx-www-launch-evidence-source.test.ts",
   "script/web-preview-platform-lifecycle.test.ts",
 ];

@@ -4,9 +4,9 @@ use anyhow::{Context as _, Result, anyhow};
 use base64::Engine as _;
 use editor::Editor;
 use gpui::{
-    Action, Anchor, App, AppContext as _, Bounds, ClipboardItem, Context, Entity, EventEmitter,
-    FocusHandle, Focusable, Image as GpuiImage, Pixels, Render, SharedString, Subscription, Task,
-    WeakEntity, Window, canvas, point, size,
+    Action, Anchor, App, AppContext as _, Bounds, ClipboardEntry, ClipboardItem, Context, Entity,
+    EventEmitter, FocusHandle, Focusable, Image as GpuiImage, Pixels, Render, SharedString,
+    Subscription, Task, WeakEntity, Window, canvas, point, size,
 };
 #[cfg(target_os = "windows")]
 use gpui::{AsyncApp, EntityId, ImageFormat as GpuiImageFormat};
@@ -18,7 +18,8 @@ use serde_json::Value;
 use std::os::windows::ffi::OsStrExt;
 use std::{
     cell::{Cell, RefCell},
-    env, fs, io,
+    env, fs,
+    io::{self, Read},
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
     rc::Rc,
@@ -68,6 +69,7 @@ use windows::core::PCWSTR;
 const DEFAULT_WEB_PREVIEW_URL: &str = "https://www.google.com/";
 const GOOGLE_SEARCH_URL: &str = "https://www.google.com/search";
 const BOOKMARKS_FILE_NAME: &str = "bookmarks.json";
+const MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES: u64 = 256 * 1024;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
@@ -21645,6 +21647,95 @@ impl WebPreviewView {
         paths
     }
 
+    fn bounded_agent_browser_action_payload_import_text(text: String) -> Result<String, u64> {
+        if u64::try_from(text.len()).unwrap_or(u64::MAX)
+            > MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES
+        {
+            Err(MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES)
+        } else {
+            Ok(text)
+        }
+    }
+
+    fn bounded_agent_browser_action_payload_import_clipboard_text(
+        clipboard: &ClipboardItem,
+    ) -> Result<Option<String>, u64> {
+        let mut total_len = 0usize;
+        let mut has_string = false;
+
+        for entry in clipboard.entries() {
+            if let ClipboardEntry::String(text) = entry {
+                has_string = true;
+                total_len = total_len
+                    .checked_add(text.text().len())
+                    .ok_or(MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES)?;
+                if u64::try_from(total_len).unwrap_or(u64::MAX)
+                    > MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES
+                {
+                    return Err(MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES);
+                }
+            }
+        }
+
+        if has_string {
+            let mut text = String::with_capacity(total_len);
+            for entry in clipboard.entries() {
+                if let ClipboardEntry::String(clipboard_string) = entry {
+                    text.push_str(clipboard_string.text());
+                }
+            }
+            return Ok(Some(
+                Self::bounded_agent_browser_action_payload_import_text(text)?,
+            ));
+        }
+
+        let mut text = String::new();
+        for entry in clipboard.entries() {
+            if let ClipboardEntry::ExternalPaths(paths) = entry {
+                for path in &paths.0 {
+                    use std::fmt::Write as _;
+
+                    _ = write!(text, "{}", path.display());
+                    if u64::try_from(text.len()).unwrap_or(u64::MAX)
+                        > MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES
+                    {
+                        return Err(MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES);
+                    }
+                }
+            }
+        }
+
+        if text.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(
+                Self::bounded_agent_browser_action_payload_import_text(text)?,
+            ))
+        }
+    }
+
+    fn read_agent_browser_action_payload_import_file(path: &Path) -> io::Result<String> {
+        let mut buffer = Vec::new();
+        let file = fs::File::open(path)?;
+        let mut limited = file.take(MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES + 1);
+        limited.read_to_end(&mut buffer)?;
+        if buffer.len() as u64 > MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "browser payload queue item exceeds {} bytes",
+                    MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES
+                ),
+            ));
+        }
+        String::from_utf8(buffer).map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("browser payload queue item is not UTF-8: {error}"),
+            )
+        })
+    }
+
     fn import_agent_browser_action_payload_value(
         &mut self,
         window: &Window,
@@ -21733,10 +21824,25 @@ impl WebPreviewView {
         window: &Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(clipboard_text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+        let Some(clipboard) = cx.read_from_clipboard() else {
             self.show_toast("No clipboard text available for browser payload import", cx);
             return;
         };
+        let clipboard_text =
+            match Self::bounded_agent_browser_action_payload_import_clipboard_text(&clipboard) {
+                Ok(Some(text)) => text,
+                Ok(None) => {
+                    self.show_toast("No clipboard text available for browser payload import", cx);
+                    return;
+                }
+                Err(max_bytes) => {
+                    self.show_toast(
+                        format!("Browser payload clipboard text exceeds {max_bytes} bytes"),
+                        cx,
+                    );
+                    return;
+                }
+            };
         let (imported_payload, imported_as) = match serde_json::from_str::<Value>(&clipboard_text) {
             Ok(payload) => (payload, "json"),
             Err(_) => (
@@ -21768,7 +21874,7 @@ impl WebPreviewView {
     ) {
         let mut missing_paths = Vec::new();
         for path in self.agent_browser_payload_queue_latest_paths() {
-            match fs::read_to_string(&path) {
+            match Self::read_agent_browser_action_payload_import_file(&path) {
                 Ok(contents) => {
                     let queue_item = match serde_json::from_str::<Value>(&contents) {
                         Ok(value) => value,

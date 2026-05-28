@@ -13,7 +13,7 @@ use reqwest::{
 };
 use serde::Deserialize;
 use smol::stream::StreamExt;
-use std::{ffi::OsStr, fs, sync::Arc, thread::ThreadId, time::Duration};
+use std::{ffi::OsStr, fs, path::Path, sync::Arc, thread::ThreadId, time::Duration};
 use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 use util::ResultExt;
 
@@ -429,6 +429,27 @@ struct BuildTiming {
     command: String,
 }
 
+const MAX_BUILD_TIMING_JSON_BYTES: u64 = 64 * 1024;
+
+async fn read_build_timing_json(path: &Path) -> Result<Option<String>> {
+    let file = smol::fs::File::open(path).await?;
+    let mut contents = Vec::new();
+    let mut limited_file = file.take(MAX_BUILD_TIMING_JSON_BYTES + 1);
+    limited_file.read_to_end(&mut contents).await?;
+
+    if contents.len() as u64 > MAX_BUILD_TIMING_JSON_BYTES {
+        log::warn!(
+            "Build timing file {:?} is too large to parse: {} bytes read (limit {} bytes)",
+            path,
+            contents.len(),
+            MAX_BUILD_TIMING_JSON_BYTES
+        );
+        return Ok(None);
+    }
+
+    Ok(Some(String::from_utf8(contents)?))
+}
+
 // NOTE: this is a bit of a hack. We want to be able to have internal
 // metrics around build times, but we don't have an easy way to authenticate
 // users - except - we know internal users use Zed.
@@ -458,8 +479,9 @@ async fn upload_build_timings(_client: Arc<Client>) -> Result<()> {
             continue;
         }
 
-        let contents = match smol::fs::read_to_string(&path).await {
-            Ok(contents) => contents,
+        let contents = match read_build_timing_json(&path).await {
+            Ok(Some(contents)) => contents,
+            Ok(None) => continue,
             Err(err) => {
                 log::warn!("Failed to read build timing file {:?}: {}", path, err);
                 continue;

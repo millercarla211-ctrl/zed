@@ -94,8 +94,8 @@ use extension_host::ExtensionStore;
 
 use fs::Fs;
 use gpui::{
-    Action, Anchor, Animation, AnimationExt, AnyElement, App, AsyncWindowContext, ClipboardItem,
-    Entity, EventEmitter, ExternalPaths, FocusHandle, Focusable, KeyContext, Pixels,
+    Action, Anchor, Animation, AnimationExt, AnyElement, App, AsyncWindowContext, ClipboardEntry,
+    ClipboardItem, Entity, EventEmitter, ExternalPaths, FocusHandle, Focusable, KeyContext, Pixels,
     PlatformDisplay, Subscription, Task, TaskExt, WeakEntity, WindowHandle, prelude::*,
     pulsating_between,
 };
@@ -128,6 +128,10 @@ const DX_CODING_PANEL_WIDTH: Pixels = px(360.);
 const LAST_USED_AGENT_KEY: &str = "agent_panel__last_used_external_agent";
 const LAST_CREATED_ENTRY_KIND_KEY: &str = "agent_panel__last_created_entry_kind";
 const TERMINAL_AGENT_TELEMETRY_ID: &str = "terminal";
+const MAX_THREAD_CLIPBOARD_DECODED_BYTES: usize = 16 * 1024 * 1024;
+const MAX_THREAD_CLIPBOARD_ENCODED_BYTES: usize =
+    ((MAX_THREAD_CLIPBOARD_DECODED_BYTES + 2) / 3) * 4;
+const MAX_THREAD_CLIPBOARD_DECOMPRESSED_BYTES: usize = 64 * 1024 * 1024;
 const DX_LAUNCH_RECIPE_PROMPT: &str = "Run the DX launch metasearch-to-reduced-context recipe for this workspace. First call list_dx_launch_demo_recipes with focus=\"metasearch\". Then, using only permissioned Agent tools and no local servers or builds, guide me through the next safe receipt step: inspect_dx_metasearch, search_dx_metasearch with write_source_pack_receipt=true, prepare_dx_source_attachment, prepare_dx_metasearch_context, plan_dx_serializer_rlm_execution, gate_dx_serializer_rlm_runner, write_dx_serializer_rlm_reduced_context, and preview_dx_serializer_rlm_reducer_execution. Stop before execute_dx_serializer_rlm_reducer, external serializer/RLM runner work, or model-call execution unless I explicitly approve a no-shell absolute command vector and managed receipt.";
 const DX_MEDIA_PROOF_PROMPT: &str = "Prepare the DX media proof flow for this workspace. First call list_dx_launch_demo_recipes with focus=\"media\". Then review any produced-file proof cards in the Sources rail and guide me through the next safe step using permissioned tools only: plan_dx_media_tool, gate_dx_media_tool_runner, execute_dx_media_tool only after an approved runner gate, and prepare_dx_source_attachment for produced files. Do not run local servers, builds, browser input, shell commands, unmanaged file writes, or media execution until I explicitly approve the tool request.";
 const DX_REDUCER_GUARD_PROMPT: &str = "Prepare a DX serializer/RLM reducer execution guard review for this workspace. Review metasearch source packs, source attachments, context bundles, execution-plan receipts, runner-gate receipts, reduced-context receipts, execution-preview receipts, external-execution receipts, citation coverage, token budget, and model-call approval state. If I provide approval evidence, first use preview_dx_serializer_rlm_reducer_execution for the managed dry-run preview. Use execute_dx_serializer_rlm_reducer only when I explicitly provide a no-shell absolute command vector under approved DX serializer/RLM roots and require a managed execution receipt. Do not run cargo, package managers, local servers, browser input, shell commands, network, unmanaged file writes, or model calls unless the governed tool request explicitly covers them.";
@@ -3514,7 +3518,28 @@ impl AgentPanel {
             let db_thread = load_task.await;
             let shared_thread = SharedThread::from_db_thread(&db_thread);
             let thread_data = shared_thread.to_bytes()?;
+            if thread_data.len() > MAX_THREAD_CLIPBOARD_DECODED_BYTES {
+                cx.update(|_window, cx| {
+                    Self::show_deferred_toast(
+                        &workspace,
+                        "Thread is too large to copy to clipboard",
+                        cx,
+                    );
+                })?;
+                return anyhow::Ok(());
+            }
+
             let encoded = base64::Engine::encode(&base64::prelude::BASE64_STANDARD, &thread_data);
+            if encoded.len() > MAX_THREAD_CLIPBOARD_ENCODED_BYTES {
+                cx.update(|_window, cx| {
+                    Self::show_deferred_toast(
+                        &workspace,
+                        "Thread is too large to copy to clipboard",
+                        cx,
+                    );
+                })?;
+                return anyhow::Ok(());
+            }
 
             cx.update(|_window, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(encoded));
@@ -3572,10 +3597,29 @@ impl AgentPanel {
             return;
         };
 
-        let Some(encoded) = clipboard.text() else {
-            Self::show_deferred_toast(&self.workspace, "Clipboard does not contain text", cx);
-            return;
+        let encoded = match Self::clipboard_text_with_size_limit(
+            &clipboard,
+            MAX_THREAD_CLIPBOARD_ENCODED_BYTES,
+        ) {
+            Ok(Some(text)) => text,
+            Ok(None) => {
+                Self::show_deferred_toast(&self.workspace, "Clipboard does not contain text", cx);
+                return;
+            }
+            Err(()) => {
+                Self::show_deferred_toast(
+                    &self.workspace,
+                    "Clipboard thread data is too large",
+                    cx,
+                );
+                return;
+            }
         };
+
+        if encoded.len() > MAX_THREAD_CLIPBOARD_ENCODED_BYTES {
+            Self::show_deferred_toast(&self.workspace, "Clipboard thread data is too large", cx);
+            return;
+        }
 
         let thread_data = match base64::Engine::decode(&base64::prelude::BASE64_STANDARD, &encoded)
         {
@@ -3590,7 +3634,15 @@ impl AgentPanel {
             }
         };
 
-        let shared_thread = match SharedThread::from_bytes(&thread_data) {
+        if thread_data.len() > MAX_THREAD_CLIPBOARD_DECODED_BYTES {
+            Self::show_deferred_toast(&self.workspace, "Clipboard thread data is too large", cx);
+            return;
+        }
+
+        let shared_thread = match SharedThread::from_bytes_with_decompressed_size_limit(
+            &thread_data,
+            MAX_THREAD_CLIPBOARD_DECOMPRESSED_BYTES,
+        ) {
             Ok(thread) => thread,
             Err(_) => {
                 Self::show_deferred_toast(
@@ -3638,6 +3690,54 @@ impl AgentPanel {
             anyhow::Ok(())
         })
         .detach_and_log_err(cx);
+    }
+
+    fn clipboard_text_with_size_limit(
+        clipboard: &ClipboardItem,
+        max_bytes: usize,
+    ) -> Result<Option<String>, ()> {
+        let mut total_len = 0usize;
+        let mut has_string = false;
+
+        for entry in clipboard.entries() {
+            if let ClipboardEntry::String(text) = entry {
+                has_string = true;
+                total_len = total_len.checked_add(text.text().len()).ok_or(())?;
+                if total_len > max_bytes {
+                    return Err(());
+                }
+            }
+        }
+
+        if has_string {
+            let mut text = String::with_capacity(total_len);
+            for entry in clipboard.entries() {
+                if let ClipboardEntry::String(clipboard_string) = entry {
+                    text.push_str(clipboard_string.text());
+                }
+            }
+            return Ok(Some(text));
+        }
+
+        let mut text = String::new();
+        for entry in clipboard.entries() {
+            if let ClipboardEntry::ExternalPaths(paths) = entry {
+                for path in &paths.0 {
+                    use std::fmt::Write as _;
+
+                    _ = write!(text, "{}", path.display());
+                    if text.len() > max_bytes {
+                        return Err(());
+                    }
+                }
+            }
+        }
+
+        if text.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(text))
+        }
     }
 
     fn show_thread_metadata(

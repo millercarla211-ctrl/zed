@@ -42,6 +42,10 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-workspace-reentrant-source.test.ts` - active-workspace event payload and reentrant update contracts.
 - `node --test script/dx-source-quality.test.ts` - DX Studio source/edit manifest and bridge source contracts.
 - `node --test script/dx-studio-project-source.test.ts` - DX Studio project detection and source-edit bounded file-read contracts.
+- `node --test script/dx-agent-panel-clipboard-source.test.ts` - native-agent thread clipboard payload size boundaries.
+- `node --test script/dx-mention-set-source.test.ts` - external skill mention file bounded reads.
+- `node --test script/dx-message-editor-source.test.ts` - pasted markdown mention-link parsing size boundaries.
+- `node --test script/dx-thread-metadata-source.test.ts` - persisted remote-connection metadata JSON boundaries.
 
 Deploy and check guards:
 - `node --test script/dx-deploy-panel-source.test.ts`
@@ -70,6 +74,7 @@ Launch workspace and receipt guards:
 
 Adjacent source guards:
 - `node --test script/dx-agent-bridge-source.test.ts`
+- `node --test script/web-preview-payload-source.test.ts`
 - `node --test script/dx-www-launch-evidence-source.test.ts`
 - `node --test script/web-preview-platform-lifecycle.test.ts`
 
@@ -83,6 +88,8 @@ Adjacent source guards:
 - Wire DX Agents CLI receipts, social/account readiness, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
+
+- Completed a six-agent external payload-boundary hardening pass without `just run` or Cargo. Native-agent thread clipboard export/import, Web Preview agent-browser payload imports, reliability build-timing JSON reads, external skill mention files, pasted markdown mention-link parsing, and persisted remote-connection metadata JSON now reject or skip oversized external text/file payloads before text concatenation, base64/zstd decode, parse, prompt insertion, or deserialization. Added source guards `script\dx-agent-panel-clipboard-source.test.ts`, `script\web-preview-payload-source.test.ts`, `script\dx-mention-set-source.test.ts`, `script\dx-message-editor-source.test.ts`, and `script\dx-thread-metadata-source.test.ts`, and extended `script\dx-windows-reliability-source.test.ts`. Passed source-only integration: 20/20 targeted Node source subtests, targeted rustfmt checks, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 
 - Completed a six-agent receipt display-string hardening pass without `just run` or Cargo. DX Check panel parser, Runtime Proof status summaries, Agent bridge receipts, Launch Audit packets, Launch Readiness packets, and Launch Handoff contracts now compact, bound, and where applicable redact receipt/packet-derived strings before snapshot or prompt-facing use. Added focused `dx_agent_bridge/receipts/receipt_strings.rs` ownership and extended source guards across `script\dx-agent-bridge-source.test.ts`, `script\dx-check-panel-source.test.ts`, `script\dx-runtime-proof-status-source.test.ts`, `script\dx-launch-audit-source.test.ts`, `script\dx-launch-readiness-source.test.ts`, and `script\dx-launch-contracts-source.test.ts`. Passed source-only integration: targeted Node source guards plus handoff registry, targeted rustfmt checks, conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 

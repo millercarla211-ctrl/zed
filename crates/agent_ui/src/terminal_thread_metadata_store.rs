@@ -44,6 +44,23 @@ impl TestTerminalMetadataDbName {
     }
 }
 
+const MAX_TERMINAL_THREAD_REMOTE_CONNECTION_JSON_BYTES: usize = 64 * 1024;
+
+fn deserialize_terminal_thread_remote_connection(
+    remote_connection_json: &str,
+) -> anyhow::Result<RemoteConnectionOptions> {
+    if remote_connection_json.len() > MAX_TERMINAL_THREAD_REMOTE_CONNECTION_JSON_BYTES {
+        anyhow::bail!(
+            "deserialize terminal thread remote connection: remote_connection_json is too large ({} bytes; max {} bytes)",
+            remote_connection_json.len(),
+            MAX_TERMINAL_THREAD_REMOTE_CONNECTION_JSON_BYTES
+        );
+    }
+
+    serde_json::from_str::<RemoteConnectionOptions>(remote_connection_json)
+        .context("deserialize terminal thread remote connection")
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct TerminalThreadMetadata {
     pub terminal_id: TerminalId,
@@ -513,9 +530,8 @@ impl Column for TerminalThreadMetadata {
 
         let remote_connection = remote_connection_json
             .as_deref()
-            .map(serde_json::from_str::<RemoteConnectionOptions>)
-            .transpose()
-            .context("deserialize terminal thread remote connection")?;
+            .map(deserialize_terminal_thread_remote_connection)
+            .transpose()?;
 
         let worktree_paths = WorktreePaths::from_path_lists(main_worktree_paths, folder_paths)
             .unwrap_or_else(|_| WorktreePaths::default());

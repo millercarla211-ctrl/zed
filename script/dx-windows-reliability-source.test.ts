@@ -145,6 +145,44 @@ test("Minidump upload skips local and remote missing-commit dev metadata quietly
   );
 });
 
+test("Build timing upload rejects oversized JSON before parsing", () => {
+  const source = read("crates/zed/src/reliability.rs");
+
+  const boundedRead = sliceBetween(
+    source,
+    "const MAX_BUILD_TIMING_JSON_BYTES",
+    "// NOTE: this is a bit of a hack.",
+  );
+  assert.match(boundedRead, /const MAX_BUILD_TIMING_JSON_BYTES: u64 = 64 \* 1024;/);
+  assert.match(boundedRead, /smol::fs::File::open\(path\)\.await/);
+  assert.match(boundedRead, /take\(MAX_BUILD_TIMING_JSON_BYTES \+ 1\)/);
+  assert.match(boundedRead, /read_to_end\(&mut contents\)\.await/);
+  assert.match(
+    boundedRead,
+    /contents\.len\(\) as u64 > MAX_BUILD_TIMING_JSON_BYTES/,
+  );
+  assert.match(boundedRead, /too large to parse/);
+  assert.match(boundedRead, /return Ok\(None\);/);
+  assert.match(boundedRead, /String::from_utf8\(contents\)\?/);
+  assert.doesNotMatch(boundedRead, /serde_json::from_str/);
+
+  const upload = sliceBetween(
+    source,
+    "async fn upload_build_timings",
+    "trait FormExt",
+  );
+  assert.match(upload, /read_build_timing_json\(&path\)\.await/);
+  assert.match(upload, /Ok\(Some\(contents\)\) => contents/);
+  assert.match(upload, /Ok\(None\) => continue/);
+  assert.match(upload, /let timing: BuildTiming = match serde_json::from_str\(&contents\)/);
+  assert.ok(
+    upload.indexOf("read_build_timing_json(&path).await") <
+      upload.indexOf("serde_json::from_str(&contents)"),
+    "build timing JSON must be size-checked before parsing",
+  );
+  assert.doesNotMatch(upload, /smol::fs::read_to_string/);
+});
+
 test("production-readiness docs name the Windows reliability source guard", () => {
   const docs = [read("DX.md"), read("todo.txt"), read("changelog.txt")].join("\n");
 

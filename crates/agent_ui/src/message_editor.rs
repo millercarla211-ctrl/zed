@@ -219,6 +219,11 @@ pub enum MessageEditorEvent {
 impl EventEmitter<MessageEditorEvent> for MessageEditor {}
 
 const COMMAND_HINT_INLAY_ID: InlayId = InlayId::Hint(0);
+const MAX_MARKDOWN_MENTION_LINK_PASTE_BYTES: usize = 256 * 1024;
+
+fn should_parse_pasted_mention_links(text: &str) -> bool {
+    text.len() <= MAX_MARKDOWN_MENTION_LINK_PASTE_BYTES && text.contains("[@")
+}
 
 enum MentionInsertPosition {
     AtCursor,
@@ -1198,11 +1203,11 @@ impl MessageEditor {
         // Handle text paste with potential markdown mention links before
         // clipboard context entries so markdown text still pastes as text.
         let clipboard_text = clipboard.entries().iter().find_map(|entry| match entry {
-            ClipboardEntry::String(text) => Some(text.text().to_string()),
+            ClipboardEntry::String(text) => Some(text.text()),
             _ => None,
         });
-        if let Some(clipboard_text) = clipboard_text.as_deref() {
-            if clipboard_text.contains("[@") {
+        if let Some(clipboard_text) = clipboard_text {
+            if should_parse_pasted_mention_links(clipboard_text) {
                 let selections_before = self.editor.update(cx, |editor, cx| {
                     let snapshot = editor.buffer().read(cx).snapshot(cx);
                     editor

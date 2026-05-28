@@ -16,7 +16,7 @@ use sqlez::{
     connection::Connection,
     statement::Statement,
 };
-use std::sync::Arc;
+use std::{io::Read as _, sync::Arc};
 use ui::{App, SharedString};
 use util::path_list::PathList;
 use zed_env_vars::ZED_STATELESS;
@@ -101,6 +101,7 @@ pub struct SharedThread {
 
 impl SharedThread {
     pub const VERSION: &'static str = "1.0.0";
+    const MAX_DECOMPRESSED_BYTES: usize = 64 * 1024 * 1024;
 
     pub fn from_db_thread(thread: &DbThread) -> Self {
         Self {
@@ -141,7 +142,25 @@ impl SharedThread {
     }
 
     pub fn from_bytes(data: &[u8]) -> Result<Self> {
-        let decompressed = zstd::decode_all(data)?;
+        Self::from_bytes_with_decompressed_size_limit(data, Self::MAX_DECOMPRESSED_BYTES)
+    }
+
+    pub fn from_bytes_with_decompressed_size_limit(
+        data: &[u8],
+        max_decompressed_bytes: usize,
+    ) -> Result<Self> {
+        let mut decompressed = Vec::new();
+        let decoder = zstd::stream::read::Decoder::new(data)?;
+        let read_limit = u64::try_from(max_decompressed_bytes)
+            .unwrap_or(u64::MAX - 1)
+            .saturating_add(1);
+        decoder.take(read_limit).read_to_end(&mut decompressed)?;
+        if decompressed.len() > max_decompressed_bytes {
+            anyhow::bail!(
+                "shared thread payload exceeds {} decompressed bytes",
+                max_decompressed_bytes
+            );
+        }
         Ok(serde_json::from_slice(&decompressed)?)
     }
 }

@@ -28,6 +28,7 @@ use std::{
     cell::RefCell,
     ffi::OsStr,
     fmt::Write,
+    io::Read,
     ops::{Range, RangeInclusive},
     path::{Path, PathBuf},
     rc::Rc,
@@ -501,7 +502,7 @@ impl MentionSet {
             }));
         }
         cx.background_spawn(async move {
-            let content = std::fs::read_to_string(&skill_file_path).map_err(|e| {
+            let content = read_skill_mention_file(&skill_file_path).map_err(|e| {
                 anyhow!(
                     "Failed to read skill file {}: {}",
                     skill_file_path.display(),
@@ -717,6 +718,21 @@ impl MentionSet {
             }
         })
     }
+}
+
+const MAX_SKILL_MENTION_FILE_BYTES: u64 = 1024 * 1024;
+
+fn read_skill_mention_file(path: &Path) -> Result<String> {
+    let mut bytes = Vec::new();
+    let mut file = std::fs::File::open(path)?.take(MAX_SKILL_MENTION_FILE_BYTES + 1);
+    file.read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_SKILL_MENTION_FILE_BYTES {
+        return Err(anyhow!(
+            "skill file exceeds {} bytes",
+            MAX_SKILL_MENTION_FILE_BYTES
+        ));
+    }
+    Ok(String::from_utf8(bytes)?)
 }
 
 /// Computes disambiguated labels for a set of mentions. When multiple mentions
