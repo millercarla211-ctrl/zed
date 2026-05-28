@@ -41,6 +41,7 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-windows-reliability-source.test.ts` - Windows scanner/minidump source contracts.
 - `node --test script/dx-workspace-reentrant-source.test.ts` - active-workspace event payload and reentrant update contracts.
 - `node --test script/dx-source-quality.test.ts` - DX Studio source/edit manifest and bridge source contracts.
+- `node --test script/dx-studio-project-source.test.ts` - DX Studio project detection and source-edit bounded file-read contracts.
 
 Deploy and check guards:
 - `node --test script/dx-deploy-panel-source.test.ts`
@@ -82,6 +83,8 @@ Adjacent source guards:
 - Wire DX Agents CLI receipts, social/account readiness, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
+
+- Completed a six-agent bounded-read hardening pass without `just run` or Cargo. Remaining DX launch packet readers, DX Check panel receipt reads, DX-WWW launch evidence JSON reads, DX Studio route/config reads, DX Studio project detection scans, and DX Studio source-edit source-file reads now use sentinel-byte bounded reads before parsing or UTF-8 decoding. Source guards were extended across `script\dx-launch-audit-source.test.ts`, `script\dx-launch-readiness-source.test.ts`, `script\dx-launch-source-audit-source.test.ts`, `script\dx-launch-contracts-source.test.ts`, `script\dx-www-launch-evidence-source.test.ts`, `script\dx-check-panel-source.test.ts`, `script\dx-source-quality.test.ts`, and `script\dx-studio-project-source.test.ts`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 
 - Completed a six-agent receipt and manifest read-bound hardening pass without `just run` or Cargo. Agent bridge receipts, runtime-proof receipts, source-set receipts, extensionless `dx` config reads, receipt-history JSON IO, launch receipt/status reads, and DX Studio manifest/session/policy reads now use sentinel-byte bounded reads before parsing so oversized files cannot be accepted as truncated proof. Source guards were extended across `script\dx-agent-bridge-source.test.ts`, `script\dx-runtime-proof-status-source.test.ts`, `script\dx-source-sets-source.test.ts`, `script\dx-receipt-history-source.test.ts`, `script\dx-launch-receipts-source.test.ts`, `script\dx-launch-status-source.test.ts`, and `script\dx-source-quality.test.ts`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 

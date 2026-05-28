@@ -1,9 +1,13 @@
 use std::{
-    fs,
+    fs::{self, File},
+    io::Read,
     path::{Path, PathBuf},
 };
 
 use super::{DxStudioProjectDetection, MAX_DX_MARKER_SCAN_BYTES, MAX_DX_MARKER_SCAN_FILES};
+
+const MAX_DX_CARGO_TOML_SCAN_BYTES: u64 = 256 * 1024;
+
 pub fn detect_project(root: &Path) -> Option<DxStudioProjectDetection> {
     if !root.is_dir() {
         return None;
@@ -68,11 +72,7 @@ pub fn detect_project(root: &Path) -> Option<DxStudioProjectDetection> {
     }
 
     let cargo_toml = root.join("Cargo.toml");
-    if cargo_toml.is_file()
-        && fs::read_to_string(&cargo_toml)
-            .map(|contents| contents.contains("dx-www") || contents.contains("dx_www"))
-            .unwrap_or(false)
-    {
+    if cargo_toml.is_file() && cargo_toml_contains_dx_www_marker(&cargo_toml) {
         confidence = confidence.saturating_add(18);
         reasons.push("DX-WWW Rust workspace".to_string());
     }
@@ -89,6 +89,12 @@ pub fn detect_project(root: &Path) -> Option<DxStudioProjectDetection> {
         legacy_toml_present: legacy_toml.is_file(),
         node_modules_present: node_modules.exists(),
     })
+}
+
+fn cargo_toml_contains_dx_www_marker(path: &Path) -> bool {
+    read_bounded_utf8_file(path, MAX_DX_CARGO_TOML_SCAN_BYTES)
+        .map(|contents| contents.contains("dx-www") || contents.contains("dx_www"))
+        .unwrap_or(false)
 }
 
 fn contains_dx_marker_in_project_sources(root: &Path) -> bool {
@@ -171,14 +177,7 @@ fn is_dx_marker_source_file(path: &Path) -> bool {
 }
 
 fn dx_marker_source_file_contains_marker(path: &Path) -> bool {
-    if fs::metadata(path)
-        .map(|metadata| metadata.len() > MAX_DX_MARKER_SCAN_BYTES)
-        .unwrap_or(true)
-    {
-        return false;
-    }
-
-    fs::read_to_string(path)
+    read_bounded_utf8_file(path, MAX_DX_MARKER_SCAN_BYTES)
         .map(|contents| {
             [
                 "data-dx-route",
@@ -194,4 +193,16 @@ fn dx_marker_source_file_contains_marker(path: &Path) -> bool {
             .any(|marker| contents.contains(marker))
         })
         .unwrap_or(false)
+}
+
+fn read_bounded_utf8_file(path: &Path, max_bytes: u64) -> Option<String> {
+    let file = File::open(path).ok()?;
+    let mut bytes = Vec::new();
+    let mut limited = file.take(max_bytes + 1);
+    limited.read_to_end(&mut bytes).ok()?;
+    if bytes.len() as u64 > max_bytes {
+        return None;
+    }
+
+    String::from_utf8(bytes).ok()
 }

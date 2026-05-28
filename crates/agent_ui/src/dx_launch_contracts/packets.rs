@@ -14,10 +14,17 @@ pub(super) fn read_json_packet(path: &Path) -> Result<Value, String> {
         ));
     }
 
-    let mut contents = String::new();
+    let mut buffer = Vec::new();
     File::open(path)
-        .and_then(|mut file| file.read_to_string(&mut contents))
+        .and_then(|file| file.take(MAX_PACKET_BYTES + 1).read_to_end(&mut buffer))
         .map_err(|error| format!("Unable to read launch contract packet: {error}"))?;
-    serde_json::from_str(&contents)
+    if buffer.len() as u64 > MAX_PACKET_BYTES {
+        return Err(format!(
+            "Launch contract packet is too large to render safely: {} bytes",
+            buffer.len()
+        ));
+    }
+
+    serde_json::from_slice(&buffer)
         .map_err(|error| format!("Unable to parse launch contract packet: {error}"))
 }

@@ -44,6 +44,12 @@ test("DX launch readiness keeps packet IO, JSON helpers, and review helpers focu
   assert.match(fields, /pub\(super\) fn pointer_usize/);
   assert.match(packets, /pub\(super\) fn read_checked_packet/);
   assert.match(packets, /MAX_PACKET_BYTES/);
+  assert.match(packets, /\.take\(MAX_PACKET_BYTES \+ 1\)/);
+  assert.match(packets, /read_to_end\(&mut buffer\)/);
+  assert.match(packets, /buffer\.len\(\) as u64 > MAX_PACKET_BYTES/);
+  assert.match(packets, /serde_json::from_slice\(&buffer\)/);
+  assert.doesNotMatch(packets, /read_to_string/);
+  assert.doesNotMatch(packets, /serde_json::from_str/);
   assert.match(review, /pub\(super\) fn command_fanout_count/);
   assert.match(review, /exports_secret_values/);
   assert.match(examples, /pub\(super\) fn balanced_examples/);

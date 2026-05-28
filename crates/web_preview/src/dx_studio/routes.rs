@@ -1,5 +1,6 @@
 use std::{
-    fs,
+    fs::File,
+    io::Read,
     path::{Component, Path},
 };
 
@@ -9,6 +10,9 @@ use super::{
     DX_DEFAULT_DEV_HOST, DX_DEFAULT_DEV_PORT, DX_HOT_RELOAD_VERSION_ENDPOINT,
     DxStudioPreviewTarget, detect_project, manifest_candidates, string_values_for_keys,
 };
+
+const DX_STUDIO_MAX_ROUTE_CONFIG_BYTES: u64 = 200_000;
+const DX_STUDIO_MAX_ROUTE_MANIFEST_BYTES: u64 = 2_000_000;
 
 pub fn preview_targets(root: &Path) -> Vec<DxStudioPreviewTarget> {
     if detect_project(root).is_none() {
@@ -104,7 +108,7 @@ pub fn dev_server_origin(root: &Path) -> String {
     let mut port = DX_DEFAULT_DEV_PORT;
 
     for config_path in [root.join("dx"), root.join("dx.config.toml")] {
-        let Ok(contents) = fs::read_to_string(config_path) else {
+        let Some(contents) = read_route_config_candidate(&config_path) else {
             continue;
         };
 
@@ -126,6 +130,26 @@ pub fn dev_server_origin(root: &Path) -> String {
 
 pub fn extract_dx_route_marker(markup: &str) -> Option<String> {
     extract_attribute(markup, "data-dx-route")
+}
+
+fn read_route_config_candidate(candidate: &Path) -> Option<String> {
+    read_bounded_utf8_file(candidate, DX_STUDIO_MAX_ROUTE_CONFIG_BYTES)
+}
+
+fn read_route_manifest_candidate(candidate: &Path) -> Option<String> {
+    read_bounded_utf8_file(candidate, DX_STUDIO_MAX_ROUTE_MANIFEST_BYTES)
+}
+
+fn read_bounded_utf8_file(candidate: &Path, limit: u64) -> Option<String> {
+    let file = File::open(candidate).ok()?;
+    let mut bytes = Vec::new();
+    let mut reader = file.take(limit + 1);
+    reader.read_to_end(&mut bytes).ok()?;
+    if bytes.len() as u64 > limit {
+        return None;
+    }
+
+    String::from_utf8(bytes).ok()
 }
 
 fn read_preview_manifest_target(root: &Path) -> Option<DxStudioPreviewTarget> {
@@ -165,7 +189,7 @@ fn read_preview_manifest_routes(root: &Path) -> Vec<DxStudioPreviewTarget> {
             .extension()
             .and_then(|extension| extension.to_str());
 
-        let Ok(contents) = fs::read_to_string(&candidate) else {
+        let Some(contents) = read_route_manifest_candidate(&candidate) else {
             continue;
         };
 

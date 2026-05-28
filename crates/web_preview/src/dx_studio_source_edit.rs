@@ -1,4 +1,8 @@
-use std::{fs, path::Path};
+use std::{
+    fs::{self, File},
+    io::Read,
+    path::Path,
+};
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use serde_json::Value;
@@ -99,8 +103,7 @@ pub(crate) fn apply_source_edit(root_path: Option<&Path>, payload: &Value) -> Re
         );
     }
 
-    let original = fs::read_to_string(&source)
-        .with_context(|| format!("Read source file {}", source.display()))?;
+    let original = read_source_file_for_edit(&source)?;
     validate_expected_source_contents(&source, &original, payload)?;
     let edit = apply_source_operation(&original, selection, payload, &operation)?;
     ensure_source_write_bounds(&source, edit.updated.len(), edit.changed_bytes)?;
@@ -144,6 +147,25 @@ pub(crate) fn apply_source_edit(root_path: Option<&Path>, payload: &Value) -> Re
         },
         "source_policy": source_policy_for_receipt(source_policy),
     }))
+}
+
+fn read_source_file_for_edit(source: &Path) -> Result<String> {
+    let file =
+        File::open(source).with_context(|| format!("Read source file {}", source.display()))?;
+    let mut bytes = Vec::new();
+    let mut limited = file.take(DX_STUDIO_MAX_SOURCE_FILE_BYTES + 1);
+    limited
+        .read_to_end(&mut bytes)
+        .with_context(|| format!("Read source file {}", source.display()))?;
+    if bytes.len() as u64 > DX_STUDIO_MAX_SOURCE_FILE_BYTES {
+        bail!(
+            "DX Studio refused to edit oversized source file {}: {} bytes exceeds {DX_STUDIO_MAX_SOURCE_FILE_BYTES}",
+            source.display(),
+            bytes.len()
+        );
+    }
+
+    String::from_utf8(bytes).with_context(|| format!("Read source file {}", source.display()))
 }
 
 fn ensure_source_file_size_allows_edit(source: &Path, source_len: u64) -> Result<()> {

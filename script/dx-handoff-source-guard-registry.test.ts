@@ -9,6 +9,7 @@ const registeredGuardScripts = [
   "script/dx-windows-reliability-source.test.ts",
   "script/dx-workspace-reentrant-source.test.ts",
   "script/dx-source-quality.test.ts",
+  "script/dx-studio-project-source.test.ts",
   "script/dx-deploy-panel-source.test.ts",
   "script/dx-deploy-receipts-source.test.ts",
   "script/dx-deploy-launch-gate-source.test.ts",

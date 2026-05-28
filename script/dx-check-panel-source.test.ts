@@ -42,3 +42,13 @@ test("DX Check panel delegates receipt IO and panel parsing", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_check_panel/reader.rs") < 140);
   assert.ok(lineCount("crates/agent_ui/src/dx_check_panel/parser.rs") < 560);
 });
+
+test("DX Check panel reader uses sentinel-byte bounded JSON reads", () => {
+  const reader = read("crates/agent_ui/src/dx_check_panel/reader.rs");
+
+  assert.match(reader, /File::open\(path\)/);
+  assert.match(reader, /\.take\(MAX_RECEIPT_BYTES \+ 1\)\s*\.read_to_end\(&mut receipt\)/);
+  assert.match(reader, /receipt\.len\(\) as u64 > MAX_RECEIPT_BYTES/);
+  assert.match(reader, /serde_json::from_slice::<Value>\(&receipt\)/);
+  assert.doesNotMatch(reader, /read_to_string/);
+});

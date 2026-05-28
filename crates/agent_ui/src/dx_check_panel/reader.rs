@@ -1,5 +1,6 @@
 use std::{
-    fs,
+    fs::{self, File},
+    io::Read,
     path::{Path, PathBuf},
 };
 
@@ -73,8 +74,8 @@ fn read_check_receipt(path: &Path) -> DxCheckPanelSnapshot {
         );
     }
 
-    let receipt = match fs::read_to_string(path) {
-        Ok(receipt) => receipt,
+    let file = match File::open(path) {
+        Ok(file) => file,
         Err(error) => {
             return malformed_snapshot(
                 path.to_path_buf(),
@@ -83,7 +84,25 @@ fn read_check_receipt(path: &Path) -> DxCheckPanelSnapshot {
         }
     };
 
-    let parsed = match serde_json::from_str::<Value>(&receipt) {
+    let mut receipt = Vec::new();
+    if let Err(error) = file.take(MAX_RECEIPT_BYTES + 1).read_to_end(&mut receipt) {
+        return malformed_snapshot(
+            path.to_path_buf(),
+            format!("dx-check receipt could not be read: {error}"),
+        );
+    }
+
+    if receipt.len() as u64 > MAX_RECEIPT_BYTES {
+        return malformed_snapshot(
+            path.to_path_buf(),
+            format!(
+                "dx-check receipt is too large for the launch rail: {} bytes",
+                receipt.len()
+            ),
+        );
+    }
+
+    let parsed = match serde_json::from_slice::<Value>(&receipt) {
         Ok(parsed) => parsed,
         Err(error) => {
             return malformed_snapshot(

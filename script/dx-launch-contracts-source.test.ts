@@ -35,6 +35,10 @@ test("DX launch contracts keep packet IO, JSON helpers, and review helpers focus
   assert.match(fields, /pub\(super\) fn pointer_string_array/);
   assert.match(packets, /pub\(super\) fn read_json_packet/);
   assert.match(packets, /MAX_PACKET_BYTES/);
+  assert.match(packets, /\.take\(MAX_PACKET_BYTES \+ 1\)\s*\.read_to_end\(&mut buffer\)/s);
+  assert.match(packets, /buffer\.len\(\) as u64 > MAX_PACKET_BYTES/);
+  assert.match(packets, /serde_json::from_slice\(&buffer\)/);
+  assert.doesNotMatch(packets, /read_to_string/);
   assert.match(review, /pub\(super\) fn redaction_requires_review/);
   assert.match(review, /exports_secret_values/);
 

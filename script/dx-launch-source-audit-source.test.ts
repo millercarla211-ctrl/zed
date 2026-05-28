@@ -55,6 +55,10 @@ test("DX launch source audit keeps paths, packet IO, fields, rows, and status fo
   assert.match(packetIo, /pub\(super\) fn read_json_packet/);
   assert.match(packetIo, /pub\(super\) fn packet_schema/);
   assert.match(packetIo, /MAX_AUDIT_BYTES/);
+  assert.match(packetIo, /\.take\(MAX_AUDIT_BYTES \+ 1\)\s*\.read_to_end\(&mut buffer\)/s);
+  assert.match(packetIo, /buffer\.len\(\) as u64 > MAX_AUDIT_BYTES/);
+  assert.match(packetIo, /serde_json::from_slice\(&buffer\)/);
+  assert.doesNotMatch(packetIo, /read_to_string/);
   assert.match(paths, /pub\(super\) struct SourceAuditPaths/);
   assert.match(paths, /pub\(super\) fn source_audit_paths/);
   assert.match(rows, /pub\(super\) fn repo_row/);

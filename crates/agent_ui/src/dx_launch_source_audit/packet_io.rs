@@ -14,11 +14,18 @@ pub(super) fn read_json_packet(path: &Path) -> Result<Value, String> {
         ));
     }
 
-    let mut contents = String::new();
+    let mut buffer = Vec::new();
     File::open(path)
-        .and_then(|mut file| file.read_to_string(&mut contents))
+        .and_then(|file| file.take(MAX_AUDIT_BYTES + 1).read_to_end(&mut buffer))
         .map_err(|error| format!("Unable to read source audit packet: {error}"))?;
-    serde_json::from_str(&contents)
+    if buffer.len() as u64 > MAX_AUDIT_BYTES {
+        return Err(format!(
+            "Source audit packet is too large to render safely: {} bytes",
+            buffer.len()
+        ));
+    }
+
+    serde_json::from_slice(&buffer)
         .map_err(|error| format!("Unable to parse source audit packet: {error}"))
 }
 

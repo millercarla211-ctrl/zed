@@ -1,3 +1,19 @@
+[2026-05-28] - Bounded Packet Config And Source Read Hardening
+
+CHANGED:
+- DX launch audit/readiness/source-audit/contract packet readers, DX-WWW launch evidence JSON reads, and DX Check panel receipt reads now use sentinel-byte bounded buffers before JSON parsing.
+- DX Studio route/config manifest reads, project detection marker scans, Cargo.toml marker scans, and source-edit source-file reads now reject over-limit files before UTF-8 decoding.
+- Source guards now pin these bounded-read contracts, including the new `script/dx-studio-project-source.test.ts` guard.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-check-panel-source.test.ts script\dx-launch-audit-source.test.ts script\dx-launch-readiness-source.test.ts script\dx-launch-source-audit-source.test.ts script\dx-launch-contracts-source.test.ts script\dx-www-launch-evidence-source.test.ts script\dx-source-quality.test.ts script\dx-studio-project-source.test.ts` (23/23 passing)
+- `rustfmt --edition 2024 --check` on all edited Rust files
+- Conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Receipt And Manifest Read-Bound Hardening
 
 CHANGED:

@@ -306,21 +306,22 @@ fn inspect_expected_artifact(
 }
 
 fn read_json_packet(path: &Path) -> Result<Value, String> {
-    let metadata = path
-        .metadata()
-        .map_err(|error| format!("Unable to inspect WWW launch evidence: {error}"))?;
-    if metadata.len() > MAX_EVIDENCE_BYTES {
+    let mut buffer = Vec::new();
+    (|| -> std::io::Result<()> {
+        File::open(path)?
+            .take(MAX_EVIDENCE_BYTES + 1)
+            .read_to_end(&mut buffer)?;
+        Ok(())
+    })()
+    .map_err(|error| format!("Unable to read WWW launch evidence: {error}"))?;
+    if buffer.len() as u64 > MAX_EVIDENCE_BYTES {
         return Err(format!(
             "WWW launch evidence is too large to render safely: {} bytes",
-            metadata.len()
+            buffer.len()
         ));
     }
 
-    let mut contents = String::new();
-    File::open(path)
-        .and_then(|mut file| file.read_to_string(&mut contents))
-        .map_err(|error| format!("Unable to read WWW launch evidence: {error}"))?;
-    serde_json::from_str(&contents)
+    serde_json::from_slice(&buffer)
         .map_err(|error| format!("Unable to parse WWW launch evidence: {error}"))
 }
 

@@ -4,6 +4,11 @@ import test from "node:test";
 
 const read = (path: string) => readFileSync(path, "utf8");
 const lineCount = (path: string) => read(path).split(/\r?\n/).length;
+const functionBody = (source: string, name: string) => {
+  const match = source.match(new RegExp(`fn ${name}\\([^]*?\\n\\}`));
+  assert.ok(match, `expected ${name} source body`);
+  return match[0];
+};
 
 test("DX-WWW launch evidence keeps artifact catalog out of scanner", () => {
   const parentPath = "crates/agent_ui/src/dx_www_launch_evidence.rs";
@@ -33,6 +38,14 @@ test("DX-WWW launch evidence keeps artifact catalog out of scanner", () => {
   assert.match(parent, /pub\(crate\) fn www_launch_evidence_snapshot/);
   assert.match(parent, /fn scan_www_launch_evidence/);
   assert.match(parent, /fn inspect_expected_artifact/);
+  const readJsonPacket = functionBody(parent, "read_json_packet");
+  assert.match(
+    readJsonPacket,
+    /File::open\(path\)\?\s*\.take\(MAX_EVIDENCE_BYTES \+ 1\)\s*\.read_to_end\(&mut buffer\)/,
+  );
+  assert.match(readJsonPacket, /buffer\.len\(\) as u64 > MAX_EVIDENCE_BYTES/);
+  assert.match(readJsonPacket, /serde_json::from_slice/);
+  assert.doesNotMatch(readJsonPacket, /read_to_string/);
   assert.ok(lineCount(parentPath) < 430, "scanner should stay below the catalog-free line budget");
 
   assert.match(catalog, /pub\(super\) struct ExpectedWwwEvidenceArtifact/);

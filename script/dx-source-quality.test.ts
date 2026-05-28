@@ -226,3 +226,37 @@ test("DX Studio manifest contract reads stay bounded before parsing", () => {
   );
   assert.doesNotMatch(paths, /fs::read_to_string/);
 });
+
+test("DX Studio route discovery reads configs and preview manifests through bounded readers", () => {
+  const routes = read("crates/web_preview/src/dx_studio/routes.rs");
+
+  assert.match(routes, /use std::\{[\s\S]*fs::File,[\s\S]*io::Read,/);
+  assert.match(routes, /const DX_STUDIO_MAX_ROUTE_CONFIG_BYTES: u64 = 200_000;/);
+  assert.match(routes, /const DX_STUDIO_MAX_ROUTE_MANIFEST_BYTES: u64 = 2_000_000;/);
+  assert.match(
+    routes,
+    /fn read_route_config_candidate\(candidate: &Path\) -> Option<String>/,
+  );
+  assert.match(
+    routes,
+    /fn read_route_manifest_candidate\(candidate: &Path\) -> Option<String>/,
+  );
+  assert.match(
+    routes,
+    /fn read_bounded_utf8_file\(candidate: &Path, limit: u64\) -> Option<String>/,
+  );
+  assert.match(routes, /File::open\(candidate\)/);
+  assert.match(routes, /\.take\(limit \+ 1\)/);
+  assert.match(routes, /\.read_to_end\(&mut bytes\)/);
+  assert.match(routes, /bytes\.len\(\) as u64 > limit/);
+  assert.match(routes, /String::from_utf8\(bytes\)\.ok\(\)/);
+  assert.match(
+    routes,
+    /let Some\(contents\) = read_route_config_candidate\(&config_path\) else/,
+  );
+  assert.match(
+    routes,
+    /let Some\(contents\) = read_route_manifest_candidate\(&candidate\) else/,
+  );
+  assert.doesNotMatch(routes, /fs::read_to_string/);
+});
