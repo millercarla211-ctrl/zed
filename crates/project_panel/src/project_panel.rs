@@ -4992,9 +4992,11 @@ impl ProjectPanel {
                 .index
                 .get_or_init(|| visible.entries.iter().map(|e| e.path.clone()).collect());
             let base_index = ix + entry_range.start;
-            for (i, entry) in visible.entries[entry_range].iter().enumerate() {
-                let global_index = base_index + i;
-                callback(entry, global_index, entries, window, cx);
+            if let Some(entries_for_range) = visible.entries.get(entry_range) {
+                for (i, entry) in entries_for_range.iter().enumerate() {
+                    let global_index = base_index + i;
+                    callback(entry, global_index, entries, window, cx);
+                }
             }
             ix = end_ix;
         }
@@ -5040,80 +5042,97 @@ impl ProjectPanel {
                 let entries = visible
                     .index
                     .get_or_init(|| visible.entries.iter().map(|e| e.path.clone()).collect());
-                for entry in visible.entries[entry_range].iter() {
-                    let status = git_status_setting
-                        .then_some(entry.git_summary)
-                        .unwrap_or_default();
+                if let Some(entries_for_range) = visible.entries.get(entry_range) {
+                    for entry in entries_for_range {
+                        let status = git_status_setting
+                            .then_some(entry.git_summary)
+                            .unwrap_or_default();
 
-                    let mut details = self.details_for_entry(
-                        entry,
-                        visible.worktree_id,
-                        root_name,
-                        entries,
-                        status,
-                        None,
-                        window,
-                        cx,
-                    );
+                        let mut details = self.details_for_entry(
+                            entry,
+                            visible.worktree_id,
+                            root_name,
+                            entries,
+                            status,
+                            None,
+                            window,
+                            cx,
+                        );
 
-                    if let Some(edit_state) = &self.state.edit_state {
-                        let is_edited_entry = if edit_state.is_new_entry() {
-                            entry.id == NEW_ENTRY_ID
-                        } else {
-                            entry.id == edit_state.entry_id
-                                || self.state.ancestors.get(&entry.id).is_some_and(
-                                    |auto_folded_dirs| {
-                                        auto_folded_dirs.ancestors.contains(&edit_state.entry_id)
-                                    },
-                                )
-                        };
+                        if let Some(edit_state) = &self.state.edit_state {
+                            let is_edited_entry = if edit_state.is_new_entry() {
+                                entry.id == NEW_ENTRY_ID
+                            } else {
+                                entry.id == edit_state.entry_id
+                                    || self.state.ancestors.get(&entry.id).is_some_and(
+                                        |auto_folded_dirs| {
+                                            auto_folded_dirs
+                                                .ancestors
+                                                .contains(&edit_state.entry_id)
+                                        },
+                                    )
+                            };
 
-                        if is_edited_entry {
-                            if let Some(processing_filename) = &edit_state.processing_filename {
-                                details.is_processing = true;
-                                if let Some(ancestors) = edit_state
-                                    .leaf_entry_id
-                                    .and_then(|entry| self.state.ancestors.get(&entry))
-                                {
-                                    let position = ancestors.ancestors.iter().position(|entry_id| *entry_id == edit_state.entry_id).expect("Edited sub-entry should be an ancestor of selected leaf entry") + 1;
-                                    let all_components = ancestors.ancestors.len();
-
-                                    let prefix_components = all_components - position;
-                                    let suffix_components = position.checked_sub(1);
-                                    let mut previous_components =
-                                        Path::new(&details.filename).components();
-                                    let mut new_path = previous_components
-                                        .by_ref()
-                                        .take(prefix_components)
-                                        .collect::<PathBuf>();
-                                    if let Some(last_component) =
-                                        processing_filename.components().next_back()
+                            if is_edited_entry {
+                                if let Some(processing_filename) = &edit_state.processing_filename {
+                                    details.is_processing = true;
+                                    if let Some(ancestors) = edit_state
+                                        .leaf_entry_id
+                                        .and_then(|entry| self.state.ancestors.get(&entry))
                                     {
-                                        new_path.push(last_component);
-                                        previous_components.next();
-                                    }
+                                        if let Some(position) = ancestors
+                                            .ancestors
+                                            .iter()
+                                            .position(|entry_id| *entry_id == edit_state.entry_id)
+                                        {
+                                            let position = position + 1;
+                                            let all_components = ancestors.ancestors.len();
 
-                                    if suffix_components.is_some() {
-                                        new_path.push(previous_components);
-                                    }
-                                    if let Some(str) = new_path.to_str() {
+                                            let prefix_components = all_components - position;
+                                            let suffix_components = position.checked_sub(1);
+                                            let mut previous_components =
+                                                Path::new(&details.filename).components();
+                                            let mut new_path = previous_components
+                                                .by_ref()
+                                                .take(prefix_components)
+                                                .collect::<PathBuf>();
+                                            if let Some(last_component) =
+                                                processing_filename.components().next_back()
+                                            {
+                                                new_path.push(last_component);
+                                                previous_components.next();
+                                            }
+
+                                            if suffix_components.is_some() {
+                                                new_path.push(previous_components);
+                                            }
+                                            if let Some(str) = new_path.to_str() {
+                                                details.filename.clear();
+                                                details.filename.push_str(str);
+                                            }
+                                        } else {
+                                            details.filename.clear();
+                                            details
+                                                .filename
+                                                .push_str(processing_filename.as_unix_str());
+                                        }
+                                    } else {
                                         details.filename.clear();
-                                        details.filename.push_str(str);
+                                        details
+                                            .filename
+                                            .push_str(processing_filename.as_unix_str());
                                     }
                                 } else {
-                                    details.filename.clear();
-                                    details.filename.push_str(processing_filename.as_unix_str());
+                                    if edit_state.is_new_entry() {
+                                        details.filename.clear();
+                                    }
+                                    details.is_editing = true;
                                 }
-                            } else {
-                                if edit_state.is_new_entry() {
-                                    details.filename.clear();
-                                }
-                                details.is_editing = true;
                             }
                         }
-                    }
 
-                    callback(entry.id, details, window, cx);
+                        callback(entry.id, details, window, cx);
+                    }
                 }
             }
             ix = end_ix;

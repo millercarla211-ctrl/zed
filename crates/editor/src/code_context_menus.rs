@@ -545,16 +545,17 @@ impl CompletionsMenu {
         } else {
             len - 1
         };
-        let start = index;
-        loop {
-            if entries[index].is_selectable() {
+        index = index.min(len - 1);
+        for _ in 0..len {
+            if entries
+                .get(index)
+                .is_some_and(CompletionMenuEntry::is_selectable)
+            {
                 return index;
             }
             index = if index > 0 { index - 1 } else { len - 1 };
-            if index == start {
-                return self.selected_item;
-            }
         }
+        self.selected_item.min(len - 1)
     }
 
     fn next_match_index(&self) -> usize {
@@ -563,21 +564,18 @@ impl CompletionsMenu {
         if len == 0 {
             return 0;
         }
-        let mut index = if self.selected_item + 1 < len {
-            self.selected_item + 1
-        } else {
-            0
-        };
-        let start = index;
-        loop {
-            if entries[index].is_selectable() {
+        let next_index = self.selected_item.saturating_add(1);
+        let mut index = if next_index < len { next_index } else { 0 };
+        for _ in 0..len {
+            if entries
+                .get(index)
+                .is_some_and(CompletionMenuEntry::is_selectable)
+            {
                 return index;
             }
             index = if index + 1 < len { index + 1 } else { 0 };
-            if index == start {
-                return self.selected_item;
-            }
         }
+        self.selected_item.min(len - 1)
     }
 
     fn find_selectable_entry(&self, start: usize, forward: bool) -> Option<usize> {
@@ -586,9 +584,13 @@ impl CompletionsMenu {
         if len == 0 {
             return None;
         }
+        entries.get(start)?;
         let mut index = start;
-        loop {
-            if entries[index].is_selectable() {
+        for _ in 0..len {
+            if entries
+                .get(index)
+                .is_some_and(CompletionMenuEntry::is_selectable)
+            {
                 return Some(index);
             }
             if forward {
@@ -596,10 +598,8 @@ impl CompletionsMenu {
             } else {
                 index = if index > 0 { index - 1 } else { len - 1 };
             }
-            if index == start {
-                return None;
-            }
         }
+        None
     }
 
     fn handle_selection_changed(
@@ -781,10 +781,10 @@ impl CompletionsMenu {
         cx: &mut Context<Editor>,
     ) -> Option<Entity<Markdown>> {
         let entries = self.entries.borrow();
-        if index >= entries.len() {
-            return None;
-        }
-        let candidate_id = entries[index].as_match()?.candidate_id;
+        let candidate_id = entries
+            .get(index)
+            .and_then(CompletionMenuEntry::as_match)?
+            .candidate_id;
         let completions = self.completions.borrow();
         let completion = completions.get(candidate_id)?;
         match &completion.documentation {

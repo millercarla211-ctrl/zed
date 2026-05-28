@@ -2630,8 +2630,12 @@ impl SearchableItem for Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.unfold_ranges(&[matches[index].clone()], false, true, cx);
-        let range = self.range_for_match(&matches[index]);
+        let Some(search_match) = matches.get(index).cloned() else {
+            return;
+        };
+
+        self.unfold_ranges(std::slice::from_ref(&search_match), false, true, cx);
+        let range = self.range_for_match(&search_match);
         let autoscroll = if EditorSettings::get_global(cx).search.center_on_match {
             Autoscroll::center()
         } else {
@@ -2750,7 +2754,10 @@ impl SearchableItem for Editor {
         let cursor = if self.selections.disjoint_anchors_arc().len() == 1 {
             self.selections.newest_anchor().head()
         } else {
-            matches[current_match_index].start
+            let Some(current_match) = matches.get(current_match_index) else {
+                return current_match_index;
+            };
+            current_match.start
         };
 
         let buffer = self.buffer().read(cx).snapshot(cx);

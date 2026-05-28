@@ -55,13 +55,14 @@ Current handoff and production-readiness guards:
 - `node --test script/zed-open-listener-source.test.ts` - CLI/open-listener path, diff, item, and fanout boundaries.
 - `node --test script/dx-context-server-store-source.test.ts` - context server configuration, command, OAuth, and fanout boundaries.
 - `node --test script/dx-worktree-event-source.test.ts` - worktree filesystem event, metadata, and changed-path boundaries.
-- `node --test script/dx-entry-view-state-source.test.ts` - agent entry-view tool-call display materialization boundaries.
+- `node --test script/dx-entry-view-state-source.test.ts` - agent entry-view tool-call display materialization and stale-entry replacement boundaries.
 - `node --test script/dx-profile-selector-source.test.ts` - profile picker candidate, fuzzy-match, and render materialization boundaries.
 - `node --test script/dx-terminal-thread-metadata-source.test.ts` - terminal thread metadata DB, cache, path-list, and serialization boundaries.
 - `node --test script/dx-terminal-display-source.test.ts` - terminal display/search/hyperlink materialization boundaries.
 - `node --test script/dx-editor-git-source.test.ts` - editor diff-review overlay stale-index boundaries.
 - `node --test script/dx-editor-search-source.test.ts` - editor search match stale-index boundaries.
-- `node --test script/dx-editor-context-menu-source.test.ts` - editor completion documentation cache stale-index boundaries.
+- `node --test script/dx-editor-items-source.test.ts` - editor searchable item match activation and navigation stale-index boundaries.
+- `node --test script/dx-editor-context-menu-source.test.ts` - editor completion navigation, markdown, and documentation cache stale-index boundaries.
 - `node --test script/dx-editor-lsp-ui-source.test.ts` - editor code-action, code-lens, and completion fanout boundaries.
 - `node --test script/dx-editor-element-source.test.ts` - editor element layout stale visible-row and popover materialization boundaries.
 - `node --test script/dx-editor-line-ops-source.test.ts` - editor line-rotation selection remap stale-row boundaries.
@@ -72,9 +73,10 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-agent-diff-source.test.ts` - agent diff changed-buffer, hunk, undo, and workspace item materialization boundaries.
 - `node --test script/dx-editor-navigation-source.test.ts` - editor navigation, signature-help, linked-editing, and LSP extension fanout boundaries.
 - `node --test script/dx-editor-inlay-semantic-source.test.ts` - editor inlay hint and semantic-token request/result materialization boundaries.
+- `node --test script/dx-editor-input-source.test.ts` - editor newline cursor remap stale-row boundaries.
 - `node --test script/dx-workspace-ui-state-source.test.ts` - workspace dock, history, jump-list, and item project-handle materialization boundaries.
 - `node --test script/dx-title-bar-source.test.ts` - title-bar application menu stale entry activation boundaries.
-- `node --test script/dx-project-panel-source.test.ts` - project panel tree, selection, drag/drop, sticky-row, and undo materialization boundaries.
+- `node --test script/dx-project-panel-source.test.ts` - project panel tree, selection, visible-range, edit-state, drag/drop, sticky-row, and undo materialization boundaries.
 - `node --test script/dx-diagnostics-ui-source.test.ts` - diagnostics grouping, excerpt, markdown, hint, copy, and status-label materialization boundaries.
 - `node --test script/dx-git-ui-source.test.ts` - Git branch, stash, repository, status, history, remote, and worktree picker materialization boundaries.
 - `node --test script/dx-settings-keymap-source.test.ts` - settings search/picker rows and keymap stale candidate-id materialization boundaries.
@@ -135,7 +137,7 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-mention-set-source.test.ts` - external skill mention file bounded reads.
 - `node --test script/dx-message-editor-source.test.ts` - pasted markdown mention-link parsing size boundaries.
 - `node --test script/dx-thread-metadata-source.test.ts` - persisted remote-connection metadata JSON boundaries.
-- `node --test script/dx-thread-archive-source.test.ts` - thread import, archive, and project-picker materialization boundaries.
+- `node --test script/dx-thread-archive-source.test.ts` - thread import, archive, bounded replacement, and project-picker materialization boundaries.
 
 Deploy and check guards:
 - `node --test script/dx-deploy-panel-source.test.ts`
@@ -179,6 +181,8 @@ Adjacent source guards:
 - Wire DX Agents CLI receipts, social/account readiness, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
+
+- Completed a six-agent editor/project-panel/agent-ui stale-state hardening pass without `just run` or Cargo. Editor searchable item activation/navigation, completion context-menu navigation and markdown lookup, Agent entry-view replacement, thread-archive bounded replacement, Project Panel visible-entry range/edit-state materialization, and editor newline cursor remapping now use checked lookups or safe fallbacks instead of stale direct indexes or invariant panics. Added and registered `script/dx-editor-items-source.test.ts` and `script/dx-editor-input-source.test.ts`, and extended `script/dx-editor-context-menu-source.test.ts`, `script/dx-entry-view-state-source.test.ts`, `script/dx-thread-archive-source.test.ts`, and `script/dx-project-panel-source.test.ts`. Passed source-only integration: 26/26 targeted Node source subtests including the handoff registry, targeted rustfmt checks, stale direct-index/panic pattern scan, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 
 - Completed a six-agent editor/workspace/debugger stale-state hardening pass without `just run` or Cargo. Editor element layout navigation labels, inline diagnostics, and cursor popovers now check visible row/layout/popover indexes before materialization; workspace persistence grouping and recent-workspace de-dupe now use checked collection access; Workspace pane removal and pinned-tab movement now verify source/destination item indexes before mutation; line rotation selection remaps preserve stale selections instead of panicking; debugger restart now fails closed when binary state is missing, and run-in-terminal cwd fallback avoids the missing-binary unwrap while continuing without a binary-derived cwd. Added and registered `script/dx-editor-element-source.test.ts`, `script/dx-editor-line-ops-source.test.ts`, `script/dx-debugger-panel-source.test.ts`, and `script/dx-debugger-run-terminal-source.test.ts`, and extended `script/dx-workspace-persistence-source.test.ts` plus `script/dx-workspace-ui-state-source.test.ts`. Passed source-only integration: 23/23 targeted Node source subtests including the handoff registry, targeted rustfmt checks, stale direct-index/unwrap pattern scan, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 

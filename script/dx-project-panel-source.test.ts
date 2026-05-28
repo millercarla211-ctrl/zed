@@ -157,6 +157,60 @@ test("project panel active indent guide uses checked visible-entry lookups", () 
   });
 });
 
+test("project panel visible-entry range materialization skips stale ranges", () => {
+  const source = read("crates/project_panel/src/project_panel.rs");
+  const iterVisibleEntries = functionBody(source, "iter_visible_entries");
+  const forEachVisibleEntry = functionBody(source, "for_each_visible_entry");
+
+  assert.doesNotMatch(
+    iterVisibleEntries,
+    /visible\.entries\s*\[\s*entry_range\s*\]/,
+    "iter_visible_entries must not directly slice a potentially stale visible entry range",
+  );
+  assertBefore({
+    body: iterVisibleEntries,
+    before: /visible\.entries\s*\.\s*get\(\s*entry_range\s*\)/,
+    after: "for (i, entry)",
+    message: "iter_visible_entries must check the entry range before iterating it",
+  });
+  assert.doesNotMatch(
+    forEachVisibleEntry,
+    /visible\.entries\s*\[\s*entry_range\s*\]/,
+    "for_each_visible_entry must not directly slice a potentially stale visible entry range",
+  );
+  assertBefore({
+    body: forEachVisibleEntry,
+    before: /visible\.entries\s*\.\s*get\(\s*entry_range\s*\)/,
+    after: "let status =",
+    message: "for_each_visible_entry must check the entry range before materializing details",
+  });
+});
+
+test("project panel edit-state display handles stale ancestor relations", () => {
+  const source = read("crates/project_panel/src/project_panel.rs");
+  const forEachVisibleEntry = functionBody(source, "for_each_visible_entry");
+
+  assert.doesNotMatch(
+    forEachVisibleEntry,
+    /\.expect\(\s*"Edited sub-entry should be an ancestor of selected leaf entry"\s*\)/,
+    "edit-state display must not panic when a stale leaf no longer contains the edited ancestor",
+  );
+  assertBefore({
+    body: forEachVisibleEntry,
+    before:
+      /if let Some\(position\)\s*=\s*ancestors\s*\.\s*ancestors\s*\.\s*iter\(\)\s*\.\s*position\(\|entry_id\|\s*\*entry_id\s*==\s*edit_state\.entry_id\)/,
+    after: "let all_components = ancestors.ancestors.len();",
+    message: "edit-state display must check the edited ancestor position before deriving path components",
+  });
+  assertBefore({
+    body: forEachVisibleEntry,
+    before:
+      /if let Some\(position\)\s*=\s*ancestors\s*\.\s*ancestors\s*\.\s*iter\(\)\s*\.\s*position\(\|entry_id\|\s*\*entry_id\s*==\s*edit_state\.entry_id\)/,
+    after: /details\s*\.\s*filename\s*\.\s*push_str\(\s*processing_filename\.as_unix_str\(\)\s*\)/,
+    message: "edit-state display must fall back to the processing filename when ancestor lookup is stale",
+  });
+});
+
 test("project panel drag, drop, and download materialization is bounded", () => {
   const source = read("crates/project_panel/src/project_panel.rs");
   const dropExternalFiles = functionBody(source, "drop_external_files");

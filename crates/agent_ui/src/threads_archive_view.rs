@@ -116,7 +116,9 @@ fn collect_bounded_recent_thread_entries<'a>(
         };
 
         if thread_archive_sort_key(thread) > thread_archive_sort_key(oldest_thread) {
-            sessions[oldest_ix] = thread.clone();
+            if let Some(oldest_session) = sessions.get_mut(oldest_ix) {
+                *oldest_session = thread.clone();
+            }
         }
     }
 

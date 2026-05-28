@@ -140,7 +140,7 @@ impl EntryViewState {
                         }),
                     );
                     let Some(Entry::ToolCall(tool_call)) = self.entries.get_mut(index) else {
-                        unreachable!()
+                        return;
                     };
                     &mut tool_call.content
                 };
@@ -244,7 +244,7 @@ impl EntryViewState {
                         }),
                     );
                     let Some(Entry::AssistantMessage(entry)) = self.entries.get_mut(index) else {
-                        unreachable!()
+                        return;
                     };
                     entry
                 };
@@ -261,8 +261,8 @@ impl EntryViewState {
     fn set_entry(&mut self, index: usize, entry: Entry) {
         if index == self.entries.len() {
             self.entries.push(entry);
-        } else {
-            self.entries[index] = entry;
+        } else if let Some(existing_entry) = self.entries.get_mut(index) {
+            *existing_entry = entry;
         }
     }
 

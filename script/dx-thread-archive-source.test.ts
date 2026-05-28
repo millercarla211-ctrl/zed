@@ -6,16 +6,25 @@ const read = (path: string) => readFileSync(path, "utf8");
 
 test("thread archive list caps query normalization and row materialization", () => {
   const source = read("crates/agent_ui/src/threads_archive_view.rs");
+  const collectBoundedRecentThreadEntries = source.match(
+    /fn collect_bounded_recent_thread_entries<'a>\([\s\S]*?\n}\r?\n\r?\n#\[derive/,
+  );
+  assert.ok(collectBoundedRecentThreadEntries);
+  const collectSource = collectBoundedRecentThreadEntries[0];
 
   assert.match(source, /const THREAD_ARCHIVE_FILTER_QUERY_CHAR_LIMIT: usize = 256;/);
   assert.match(source, /const THREAD_ARCHIVE_LIST_ENTRY_LIMIT: usize = 1_000;/);
   assert.match(source, /const THREAD_ARCHIVE_BRANCH_NAME_LIMIT: usize = 64;/);
   assert.match(source, /fn bounded_thread_archive_filter_query\(query: &str\) -> String/);
   assert.match(source, /fn collect_bounded_recent_thread_entries<'a>\(/);
-  assert.match(source, /if sessions\.len\(\) < THREAD_ARCHIVE_LIST_ENTRY_LIMIT/);
-  assert.match(source, /min_by_key\(\|\(_, session\)\| thread_archive_sort_key\(session\)\)/);
-  assert.match(source, /sessions\[oldest_ix\] = thread\.clone\(\);/);
-  assert.match(source, /sessions\.sort_by_key\(\|thread\| std::cmp::Reverse\(thread_archive_sort_key\(thread\)\)\);/);
+  assert.match(collectSource, /if sessions\.len\(\) < THREAD_ARCHIVE_LIST_ENTRY_LIMIT/);
+  assert.match(collectSource, /min_by_key\(\|\(_, session\)\| thread_archive_sort_key\(session\)\)/);
+  assert.doesNotMatch(collectSource, /sessions\[oldest_ix\]\s*=\s*thread\.clone\(\);/);
+  assert.match(
+    collectSource,
+    /if let Some\(oldest_session\) = sessions\.get_mut\(oldest_ix\) \{\s*\*oldest_session = thread\.clone\(\);\s*\}/,
+  );
+  assert.match(collectSource, /sessions\.sort_by_key\(\|thread\| std::cmp::Reverse\(thread_archive_sort_key\(thread\)\)\);/);
   assert.match(source, /\.chars\(\)\s*\.take\(THREAD_ARCHIVE_FILTER_QUERY_CHAR_LIMIT\)[\s\S]*\.to_lowercase\(\)/);
   assert.match(source, /let query_text = self\.filter_editor\.read\(cx\)\.text\(cx\);[\s\S]*let query = bounded_thread_archive_filter_query\(&query_text\);/);
   assert.match(source, /let sessions =\s*collect_bounded_recent_thread_entries\(store\.entries\(\)\.filter\(\s*\|t\| match thread_filter/);

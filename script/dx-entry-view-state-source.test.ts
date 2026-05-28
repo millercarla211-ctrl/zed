@@ -119,6 +119,45 @@ test("entry view prunes cached tool-call views to the capped display ids before 
   );
 });
 
+test("set_entry appends contiguous entries and checked-replaces existing entries", () => {
+  const setEntry = sliceBetween(
+    "fn set_entry(&mut self, index: usize, entry: Entry) {",
+    "\n    pub fn remove",
+  );
+
+  assert.match(
+    setEntry,
+    /if index == self\.entries\.len\(\)\s*\{\s*self\.entries\.push\(entry\);/s,
+    "set_entry must preserve append behavior for the next contiguous entry",
+  );
+  assertPatternBefore(
+    setEntry,
+    /index == self\.entries\.len\(\)/,
+    /self\.entries\.get_mut\(index\)/,
+    "set_entry must append before checked replacement so stale future indexes stay fail-closed",
+  );
+  assert.match(
+    setEntry,
+    /self\.entries\.get_mut\(index\)/,
+    "set_entry must check the replacement index before mutating an existing entry",
+  );
+  assert.match(
+    setEntry,
+    /\*[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*entry;/,
+    "set_entry must replace the existing entry through the checked mutable reference",
+  );
+  assert.doesNotMatch(
+    setEntry,
+    /self\.entries\s*\[\s*index\s*\]\s*=/,
+    "set_entry must not directly assign by possibly stale index",
+  );
+  assert.doesNotMatch(
+    setEntry,
+    /\.(?:insert|resize|resize_with)\s*\(/,
+    "stale future indexes must not create non-contiguous entry gaps",
+  );
+});
+
 test("entry view state guard stays focused on production source", () => {
   assert.equal(sourcePath, "crates/agent_ui/src/entry_view_state.rs");
   assert.doesNotMatch(sourcePath, /test/i);

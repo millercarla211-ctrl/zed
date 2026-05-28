@@ -1,3 +1,28 @@
+[2026-05-29] - Editor Project Panel Agent UI Stale State Hardening
+
+ADDED:
+- Added `script\dx-editor-items-source.test.ts` for editor searchable item match activation and navigation stale-index boundaries.
+- Added `script\dx-editor-input-source.test.ts` for editor newline cursor remap stale-row boundaries.
+
+CHANGED:
+- Editor search match activation and match navigation now check match indexes before unfolding, selecting, or deriving fallback cursors.
+- Completion context-menu navigation and entry markdown lookup now check entry indexes before reading selectable state or completion matches.
+- Agent entry-view replacement now appends contiguous entries, checked-replaces existing entries, and ignores stale future indexes instead of direct assigning.
+- Thread archive bounded recent-entry replacement now mutates through a checked oldest-session lookup.
+- Project Panel visible-entry range materialization now uses checked slices, and stale edit-state ancestor relations fall back to the processing filename instead of panicking.
+- Editor newline-above/newline-below cursor remapping now preserves the original cursor and goal when row mappings drift.
+- Registered the new source guards in `script\dx-handoff-source-guard-registry.test.ts`, `DX.md`, and `todo.txt`.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-editor-items-source.test.ts script\dx-editor-context-menu-source.test.ts script\dx-entry-view-state-source.test.ts script\dx-thread-archive-source.test.ts script\dx-project-panel-source.test.ts script\dx-editor-input-source.test.ts` (26/26 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Targeted stale direct-index and invariant-panic pattern scan over edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-29] - Editor Workspace Debugger Stale State Hardening
 
 ADDED:

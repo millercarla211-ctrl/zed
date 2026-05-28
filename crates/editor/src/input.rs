@@ -813,8 +813,10 @@ impl Editor {
 
             editor.change_selections(Default::default(), window, cx, |s| {
                 let mut index = 0;
-                s.move_cursors_with(&mut |map, _, _| {
-                    let row = rows[index];
+                s.move_cursors_with(&mut |map, cursor, goal| {
+                    let Some(row) = rows.get(index).copied() else {
+                        return (cursor, goal);
+                    };
                     index += 1;
 
                     let point = Point::new(row, 0);
@@ -866,6 +868,7 @@ impl Editor {
             let Some((buffer_handle, buffer_point)) =
                 self.buffer.read(cx).point_to_buffer_point(point, cx)
             else {
+                rows.push(None);
                 continue;
             };
 
@@ -876,7 +879,7 @@ impl Editor {
                 .push(buffer_point);
 
             rows_inserted += 1;
-            rows.push(row + rows_inserted);
+            rows.push(Some(row + rows_inserted));
         }
 
         self.transact(window, cx, |editor, window, cx| {
@@ -896,9 +899,12 @@ impl Editor {
 
             editor.change_selections(Default::default(), window, cx, |s| {
                 let mut index = 0;
-                s.move_cursors_with(&mut |map, _, _| {
-                    let row = rows[index];
+                s.move_cursors_with(&mut |map, cursor, goal| {
+                    let row = rows.get(index).copied().flatten();
                     index += 1;
+                    let Some(row) = row else {
+                        return (cursor, goal);
+                    };
 
                     let point = Point::new(row, 0);
                     let boundary = map.next_line_boundary(point).1;
@@ -910,7 +916,7 @@ impl Editor {
 
             let mut indent_edits = Vec::new();
             let multibuffer_snapshot = editor.buffer.read(cx).snapshot(cx);
-            for row in rows {
+            for row in rows.into_iter().flatten() {
                 let indents = multibuffer_snapshot.suggested_indents(row..row + 1, cx);
                 for (row, indent) in indents {
                     if indent.len == 0 {
