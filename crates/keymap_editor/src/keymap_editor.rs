@@ -729,8 +729,9 @@ impl KeymapEditor {
         .await;
         this.update(cx, |this, cx| {
             matches.retain(|candidate| {
-                this.source_filters
-                    .allows(this.keybindings[candidate.candidate_id].keybind_source())
+                this.keybindings
+                    .get(candidate.candidate_id)
+                    .is_some_and(|binding| this.source_filters.allows(binding.keybind_source()))
             });
 
             match this.filter_state {
@@ -746,8 +747,9 @@ impl KeymapEditor {
             match this.search_mode {
                 SearchMode::KeyStroke { exact_match } => {
                     matches.retain(|item| {
-                        this.keybindings[item.candidate_id]
-                            .keystrokes()
+                        this.keybindings
+                            .get(item.candidate_id)
+                            .and_then(|binding| binding.keystrokes())
                             .is_some_and(|keystrokes| {
                                 if exact_match {
                                     keystrokes_match_exactly(&keystroke_query, keystrokes)
@@ -792,15 +794,24 @@ impl KeymapEditor {
             }
 
             if !this.show_no_action_bindings {
-                matches.retain(|item| !this.keybindings[item.candidate_id].is_no_action());
+                matches.retain(|item| {
+                    this.keybindings
+                        .get(item.candidate_id)
+                        .is_some_and(|binding| !binding.is_no_action())
+                });
             }
 
             if action_query.is_empty() {
                 matches.sort_by(|item1, item2| {
-                    let binding1 = &this.keybindings[item1.candidate_id];
-                    let binding2 = &this.keybindings[item2.candidate_id];
-
-                    binding1.cmp(binding2)
+                    match (
+                        this.keybindings.get(item1.candidate_id),
+                        this.keybindings.get(item2.candidate_id),
+                    ) {
+                        (Some(binding1), Some(binding2)) => binding1.cmp(binding2),
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => item1.candidate_id.cmp(&item2.candidate_id),
+                    }
                 });
             }
             this.selected_index.take();
@@ -985,7 +996,7 @@ impl KeymapEditor {
                         } => {
                             let scroll_position =
                                 this.matches.iter().enumerate().find_map(|(index, item)| {
-                                    let binding = &this.keybindings[item.candidate_id];
+                                    let binding = this.keybindings.get(item.candidate_id)?;
                                     if binding.get_action_mapping().is_some_and(|binding_mapping| {
                                         binding_mapping == action_mapping
                                     }) && binding.action().name == action_name
@@ -1058,8 +1069,11 @@ impl KeymapEditor {
     }
 
     fn selected_keybind_and_index(&self) -> Option<(&ProcessedBinding, usize)> {
-        self.selected_keybind_index()
-            .map(|keybind_index| (&self.keybindings[keybind_index], keybind_index))
+        self.selected_keybind_index().and_then(|keybind_index| {
+            self.keybindings
+                .get(keybind_index)
+                .map(|binding| (binding, keybind_index))
+        })
     }
 
     fn selected_binding(&self) -> Option<&ProcessedBinding> {
@@ -2147,7 +2161,7 @@ impl Render for KeymapEditor {
                             range
                                 .filter_map(|index| {
                                     let candidate_id = this.matches.get(index)?.candidate_id;
-                                    let binding = &this.keybindings[candidate_id];
+                                    let binding = this.keybindings.get(candidate_id)?;
                                     let action_name = binding.action().name;
                                     let conflict = this.get_conflict(index);
                                     let is_unbound_by_unbind = binding.is_unbound_by_unbind();

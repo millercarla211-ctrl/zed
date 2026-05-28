@@ -83,3 +83,36 @@ test("toolchain selector reclamps selection after async match replacement", () =
     "async match replacement must reclamp the selected row before notify",
   );
 });
+
+test("toolchain selector confirm ignores stale fuzzy candidate ids", () => {
+  const confirm = functionBody(source, "confirm");
+  const selectedMatchLookup = confirm.indexOf(
+    "self.matches.get(self.selected_index)",
+  );
+  const candidateLookup = confirm.search(
+    /self\.candidates\s*\.get\(string_match\.candidate_id\)/,
+  );
+  const workspaceLookup = confirm.indexOf("self.workspace");
+
+  assert.ok(
+    selectedMatchLookup >= 0,
+    "confirm should read the selected fuzzy match before choosing a toolchain",
+  );
+  assert.ok(
+    candidateLookup >= 0,
+    "confirm must guard stale fuzzy candidate ids with self.candidates.get(string_match.candidate_id)",
+  );
+  assert.ok(
+    selectedMatchLookup < candidateLookup,
+    "confirm should guard the candidate id after reading the selected match",
+  );
+  assert.ok(
+    candidateLookup < workspaceLookup,
+    "confirm should guard the candidate id before workspace side effects",
+  );
+  assert.doesNotMatch(
+    confirm,
+    /self\.candidates\s*\[\s*string_match\.candidate_id\s*\]/,
+    "confirm must not index candidates directly from a potentially stale fuzzy match",
+  );
+});

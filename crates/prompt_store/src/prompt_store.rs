@@ -469,7 +469,7 @@ impl PromptStore {
                 .await;
                 matches
                     .into_iter()
-                    .map(|mat| cached_metadata[mat.candidate_id].clone())
+                    .filter_map(|mat| cached_metadata.get(mat.candidate_id).cloned())
                     .collect()
             };
             matches.sort_by_key(|metadata| Reverse(metadata.default));

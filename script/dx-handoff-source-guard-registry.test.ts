@@ -14,6 +14,7 @@ const registeredGuardScripts = [
   "script/dx-agent-registry-ui-source.test.ts",
   "script/dx-completion-provider-source.test.ts",
   "script/dx-project-search-source.test.ts",
+  "script/dx-prompt-store-source.test.ts",
   "script/dx-task-inventory-source.test.ts",
   "script/dx-lsp-aggregation-source.test.ts",
   "script/dx-language-model-selector-source.test.ts",

@@ -498,6 +498,90 @@ test("keymap binding/action indexing and search results are bounded", () => {
   );
 });
 
+test("keymap fuzzy candidate ids are checked before binding materialization", () => {
+  const updateMatches = sliceBetween(
+    keymapSource,
+    "async fn update_matches(",
+    "fn get_conflict",
+  );
+  const previousEditScroll = sliceBetween(
+    keymapSource,
+    "PreviousEdit::Keybinding {",
+    "if let Some(scroll_position) = scroll_position",
+  );
+  const selectedKeybindAndIndex = sliceBetween(
+    keymapSource,
+    "fn selected_keybind_and_index(&self) -> Option<(&ProcessedBinding, usize)> {",
+    "fn selected_binding",
+  );
+  const renderRows = sliceBetween(
+    keymapSource,
+    'Table::new(COLS)',
+    ".map_row(cx.processor(",
+  );
+
+  assert.match(
+    updateMatches,
+    /this\.keybindings\s*\.get\(candidate\.candidate_id\)\s*\.is_some_and\(\|binding\|/,
+    "source filters must skip stale fuzzy candidate ids before reading bindings",
+  );
+  assert.match(
+    updateMatches,
+    /this\.keybindings\s*\.get\(item\.candidate_id\)\s*\.and_then\(\|binding\| binding\.keystrokes\(\)\)/,
+    "keystroke search filters must skip stale fuzzy candidate ids before reading keystrokes",
+  );
+  assert.match(
+    updateMatches,
+    /this\.keybindings\s*\.get\(item\.candidate_id\)\s*\.is_some_and\(\|binding\| !binding\.is_no_action\(\)\)/,
+    "no-action filtering must skip stale fuzzy candidate ids before reading bindings",
+  );
+  assert.match(
+    updateMatches,
+    /this\.keybindings\s*\.get\(item1\.candidate_id\)/,
+    "empty-query sort must guard the first fuzzy candidate id",
+  );
+  assert.match(
+    updateMatches,
+    /this\.keybindings\s*\.get\(item2\.candidate_id\)/,
+    "empty-query sort must guard the second fuzzy candidate id",
+  );
+  assert.doesNotMatch(
+    updateMatches,
+    /this\.keybindings\[[^\]]*candidate_id[^\]]*\]/,
+    "keymap search materialization must not direct-index bindings by fuzzy candidate ids",
+  );
+  assert.match(
+    previousEditScroll,
+    /let binding = this\.keybindings\.get\(item\.candidate_id\)\?;/,
+    "previous-edit scroll recovery must skip stale fuzzy candidate ids",
+  );
+  assert.doesNotMatch(
+    previousEditScroll,
+    /this\.keybindings\[[^\]]*candidate_id[^\]]*\]/,
+    "previous-edit scroll recovery must not direct-index bindings by fuzzy candidate ids",
+  );
+  assert.match(
+    selectedKeybindAndIndex,
+    /self\.keybindings\s*\.get\(keybind_index\)\s*\.map\(\|binding\| \(binding, keybind_index\)\)/,
+    "selected binding lookup must guard stale keybinding indexes",
+  );
+  assert.doesNotMatch(
+    selectedKeybindAndIndex,
+    /self\.keybindings\[[^\]]+\]/,
+    "selected binding lookup must not direct-index keybindings",
+  );
+  assert.match(
+    renderRows,
+    /let binding = this\.keybindings\.get\(candidate_id\)\?;/,
+    "rendered keymap rows must skip stale fuzzy candidate ids",
+  );
+  assert.doesNotMatch(
+    renderRows,
+    /this\.keybindings\[candidate_id\]/,
+    "rendered keymap rows must not direct-index bindings by fuzzy candidate ids",
+  );
+});
+
 test("keymap conflict rows and action completions use bounded result caps", () => {
   const conflictingIndices = sliceBetween(
     keymapSource,
@@ -534,7 +618,20 @@ test("keymap conflict rows and action completions use bounded result caps", () =
   assertBefore(
     actionCompletionSource,
     ".take(MAX_ACTION_COMPLETION_MATCHES)",
-    ".map(|m|",
+    ".filter_map(|m|",
     "action completion rows must be capped before Completion materialization",
+  );
+});
+
+test("action completion materialization skips stale fuzzy candidate ids", () => {
+  assert.match(
+    actionCompletionSource,
+    /\.filter_map\(\|m\| {\s+let action_name = \*action_names\.get\(m\.candidate_id\)\?;/,
+    "action completion rows must guard stale fuzzy candidate ids before reading action names",
+  );
+  assert.doesNotMatch(
+    actionCompletionSource,
+    /action_names\[[^\]]*candidate_id[^\]]*\]/,
+    "action completion rows must not direct-index action names by fuzzy candidate ids",
   );
 });

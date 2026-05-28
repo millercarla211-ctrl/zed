@@ -213,38 +213,46 @@ impl PickerDelegate for ScopeSelectorDelegate {
     }
 
     fn confirm(&mut self, _: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
-        if let Some(mat) = self.matches.get(self.selected_index) {
-            let scope_name = self.candidates[mat.candidate_id].string.clone();
-            let language = self.language_registry.language_for_name(&scope_name);
+        let Some(mat) = self.matches.get(self.selected_index) else {
+            self.dismissed(window, cx);
+            return;
+        };
 
-            if let Some(workspace) = self.workspace.upgrade() {
-                cx.spawn_in(window, async move |_, cx| {
-                    let scope_file_name = ScopeFileName(match scope_name.to_lowercase().as_str() {
-                        GLOBAL_SCOPE_NAME => Cow::Borrowed(GLOBAL_SCOPE_FILE_NAME),
-                        _ => Cow::Owned(language.await?.lsp_id()),
-                    });
+        let Some(candidate) = self.candidates.get(mat.candidate_id) else {
+            self.dismissed(window, cx);
+            return;
+        };
 
-                    workspace.update_in(cx, |workspace, window, cx| {
-                        workspace
-                            .with_local_workspace(window, cx, |workspace, window, cx| {
-                                workspace
-                                    .open_abs_path(
-                                        snippets_dir().join(scope_file_name.with_extension()),
-                                        OpenOptions {
-                                            visible: Some(OpenVisible::None),
-                                            ..Default::default()
-                                        },
-                                        window,
-                                        cx,
-                                    )
-                                    .detach();
-                            })
-                            .detach();
-                    })
+        let scope_name = candidate.string.clone();
+        let language = self.language_registry.language_for_name(&scope_name);
+
+        if let Some(workspace) = self.workspace.upgrade() {
+            cx.spawn_in(window, async move |_, cx| {
+                let scope_file_name = ScopeFileName(match scope_name.to_lowercase().as_str() {
+                    GLOBAL_SCOPE_NAME => Cow::Borrowed(GLOBAL_SCOPE_FILE_NAME),
+                    _ => Cow::Owned(language.await?.lsp_id()),
+                });
+
+                workspace.update_in(cx, |workspace, window, cx| {
+                    workspace
+                        .with_local_workspace(window, cx, |workspace, window, cx| {
+                            workspace
+                                .open_abs_path(
+                                    snippets_dir().join(scope_file_name.with_extension()),
+                                    OpenOptions {
+                                        visible: Some(OpenVisible::None),
+                                        ..Default::default()
+                                    },
+                                    window,
+                                    cx,
+                                )
+                                .detach();
+                        })
+                        .detach();
                 })
-                .detach_and_log_err(cx);
-            };
-        }
+            })
+            .detach_and_log_err(cx);
+        };
         self.dismissed(window, cx);
     }
 
@@ -320,11 +328,10 @@ impl PickerDelegate for ScopeSelectorDelegate {
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
         let mat = &self.matches.get(ix)?;
+        let candidate = self.candidates.get(mat.candidate_id)?;
         let name_label = mat.string.clone();
 
-        let scope_name = ScopeName(Cow::Owned(
-            LanguageName::new(&self.candidates[mat.candidate_id].string).lsp_id(),
-        ));
+        let scope_name = ScopeName(Cow::Owned(LanguageName::new(&candidate.string).lsp_id()));
         let file_label = if self.existing_scopes.contains(&scope_name) {
             Some(ScopeFileName::from(scope_name).with_extension())
         } else {

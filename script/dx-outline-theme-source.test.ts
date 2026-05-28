@@ -7,9 +7,12 @@ const readProductionSource = (path: string) => {
   return source.split(/\r?\n#\[cfg\(test\)\]\r?\nmod tests\s*\{/)[0] ?? source;
 };
 
+const readFullSource = (path: string) => readFileSync(path, "utf8");
+
 const sources = {
   outlinePanel: readProductionSource("crates/outline_panel/src/outline_panel.rs"),
   outlineModal: readProductionSource("crates/outline/src/outline.rs"),
+  outlineModalFull: readFullSource("crates/outline/src/outline.rs"),
   languageOutline: readProductionSource("crates/language/src/outline.rs"),
   themeSelector: readProductionSource("crates/theme_selector/src/theme_selector.rs"),
   iconThemeSelector: readProductionSource(
@@ -201,6 +204,46 @@ test("outline modal guards stale selection indexes and candidate ids", () => {
   assert.doesNotMatch(
     emptyQuerySelection,
     /outline\.items\s*\[\s*m\.candidate_id\s*\]/,
+  );
+});
+
+test("language outline skips stale fuzzy candidates before tree expansion", () => {
+  const source = sources.languageOutline;
+  const searchBody = functionBody(source, "search");
+
+  assert.match(searchBody, /self\.items\.get\(string_match\.candidate_id\)/);
+  assert.match(
+    searchBody,
+    /self\s*\.path_candidate_prefixes\s*\.get\(string_match\.candidate_id\)/,
+  );
+  assert.match(
+    searchBody,
+    /self\.items\s*\.get\(\s*prev_item_ix\s*\.\.\s*string_match\.candidate_id\s*\)/,
+  );
+  assert.doesNotMatch(
+    searchBody,
+    /self\.items\s*\[\s*string_match\.candidate_id\s*\]/,
+  );
+  assert.doesNotMatch(
+    searchBody,
+    /self\.path_candidate_prefixes\s*\[\s*string_match\.candidate_id\s*\]/,
+  );
+  assert.doesNotMatch(
+    searchBody,
+    /self\.items\s*\[\s*prev_item_ix\s*\.\.\s*string_match\.candidate_id\s*\]/,
+  );
+});
+
+test("outline modal tests and helpers avoid direct stale match indexing", () => {
+  const source = sources.outlineModalFull;
+  const outlineNames = functionBody(source, "outline_names");
+
+  assert.match(outlineNames, /filter_map\(\|hit\|/);
+  assert.match(outlineNames, /items\.get\(hit\.candidate_id\)/);
+  assert.doesNotMatch(outlineNames, /items\s*\[\s*hit\.candidate_id\s*\]/);
+  assert.doesNotMatch(
+    source,
+    /delegate\.matches\s*\[\s*delegate\.selected_match_index\s*\]/,
   );
 });
 

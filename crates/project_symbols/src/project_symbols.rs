@@ -78,7 +78,7 @@ impl ProjectSymbolsDelegate {
     // Note if you make changes to this, also change `agent_ui::completion_provider::search_symbols`
     fn filter(&mut self, query: &str, window: &mut Window, cx: &mut Context<Picker<Self>>) {
         const MAX_MATCHES: usize = 100;
-        let mut visible_matches = cx.foreground_executor().block_on(fuzzy::match_strings(
+        let visible_matches = cx.foreground_executor().block_on(fuzzy::match_strings(
             &self.visible_match_candidates,
             query,
             false,
@@ -87,7 +87,7 @@ impl ProjectSymbolsDelegate {
             &Default::default(),
             cx.background_executor().clone(),
         ));
-        let mut external_matches = cx.foreground_executor().block_on(fuzzy::match_strings(
+        let external_matches = cx.foreground_executor().block_on(fuzzy::match_strings(
             &self.external_match_candidates,
             query,
             false,
@@ -96,23 +96,33 @@ impl ProjectSymbolsDelegate {
             &Default::default(),
             cx.background_executor().clone(),
         ));
+        let prepare_matches = |matches: Vec<StringMatch>| -> Vec<StringMatch> {
+            matches
+                .into_iter()
+                .filter_map(|mut mat| {
+                    let symbol = self.symbols.get(mat.candidate_id)?;
+                    let filter_start = symbol.label.filter_range.start;
+                    for position in &mut mat.positions {
+                        *position += filter_start;
+                    }
+                    Some(mat)
+                })
+                .collect()
+        };
+        let mut visible_matches = prepare_matches(visible_matches);
+        let mut external_matches = prepare_matches(external_matches);
         let sort_key_for_match = |mat: &StringMatch| {
-            let symbol = &self.symbols[mat.candidate_id];
-            (Reverse(OrderedFloat(mat.score)), symbol.label.filter_text())
+            let symbol_filter_text = self
+                .symbols
+                .get(mat.candidate_id)
+                .map(|symbol| symbol.label.filter_text());
+            (Reverse(OrderedFloat(mat.score)), symbol_filter_text)
         };
 
         visible_matches.sort_unstable_by_key(sort_key_for_match);
         external_matches.sort_unstable_by_key(sort_key_for_match);
         let mut matches = visible_matches;
         matches.append(&mut external_matches);
-
-        for mat in &mut matches {
-            let symbol = &self.symbols[mat.candidate_id];
-            let filter_start = symbol.label.filter_range.start;
-            for position in &mut mat.positions {
-                *position += filter_start;
-            }
-        }
 
         self.matches = matches;
         self.set_selected_index(0, window, cx);
@@ -129,7 +139,8 @@ impl PickerDelegate for ProjectSymbolsDelegate {
         if let Some(symbol) = self
             .matches
             .get(self.selected_match_index)
-            .map(|mat| self.symbols[mat.candidate_id].clone())
+            .and_then(|mat| self.symbols.get(mat.candidate_id))
+            .cloned()
         {
             let buffer = self.project.update(cx, |project, cx| {
                 project.open_buffer_for_symbol(&symbol, cx)
@@ -256,7 +267,7 @@ impl PickerDelegate for ProjectSymbolsDelegate {
     ) -> Option<Self::ListItem> {
         let path_style = self.project.read(cx).path_style(cx);
         let string_match = &self.matches.get(ix)?;
-        let symbol = &self.symbols.get(string_match.candidate_id)?;
+        let symbol = self.symbols.get(string_match.candidate_id)?;
         let theme = cx.theme();
         let local_player = theme.players().local();
         let syntax_runs = styled_runs_for_code_label(&symbol.label, theme.syntax(), &local_player);
@@ -430,7 +441,7 @@ mod tests {
                     Ok(Some(lsp::WorkspaceSymbolResponse::Flat(
                         matches
                             .into_iter()
-                            .map(|mat| fake_symbols[mat.candidate_id].clone())
+                            .filter_map(|mat| fake_symbols.get(mat.candidate_id).cloned())
                             .collect(),
                     )))
                 }
@@ -566,7 +577,7 @@ mod tests {
                     Ok(Some(lsp::WorkspaceSymbolResponse::Flat(
                         matches
                             .into_iter()
-                            .map(|mat| fake_symbols[mat.candidate_id].clone())
+                            .filter_map(|mat| fake_symbols.get(mat.candidate_id).cloned())
                             .collect(),
                     )))
                 }

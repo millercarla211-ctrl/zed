@@ -1,3 +1,27 @@
+[2026-05-29] - Keymap Prompt Symbols Outline Snippets And Toolchain Candidate Hardening
+
+ADDED:
+- Added `script\dx-prompt-store-source.test.ts` for Prompt Store fuzzy metadata candidate materialization boundaries.
+
+CHANGED:
+- Keymap Editor fuzzy/search filters, previous-edit recovery, selected binding lookup, rendered rows, and action completions now guard stale binding/action candidate IDs before materialization.
+- Prompt Store fuzzy metadata search now skips stale cached metadata candidate IDs.
+- Project Symbols now filters stale symbol candidate IDs before sorting, offsetting, confirming, or building fake workspace-symbol response rows.
+- Outline search now guards item, path-prefix, and ancestor-range lookups; outline helpers avoid direct stale match/item indexing.
+- Snippets UI scope confirm and render paths now guard stale scope candidate IDs.
+- Toolchain Selector confirm now ignores stale toolchain candidate IDs before workspace/database side effects.
+- `DX.md`, `todo.txt`, and the handoff source guard registry now list the new Prompt Store guard and the extended candidate-id guard coverage.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-settings-keymap-source.test.ts script\dx-prompt-store-source.test.ts script\dx-project-symbols-source.test.ts script\dx-outline-theme-source.test.ts script\dx-snippets-source.test.ts script\dx-toolchain-selector-source.test.ts` (37/37 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Targeted stale candidate-id pattern scans over edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-29] - Stale UI Row And Candidate Lookup Hardening
 
 ADDED:

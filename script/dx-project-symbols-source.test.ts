@@ -7,7 +7,8 @@ const sourcePath = "crates/project_symbols/src/project_symbols.rs";
 const productionSource = (source: string) =>
   source.split(/\r?\n#\[cfg\(test\)\]\r?\nmod tests\s*\{/)[0] ?? source;
 
-const source = productionSource(readFileSync(sourcePath, "utf8"));
+const fullSource = readFileSync(sourcePath, "utf8");
+const source = productionSource(fullSource);
 
 function indexOfPattern(source: string, pattern: string | RegExp): number {
   if (typeof pattern === "string") {
@@ -84,6 +85,61 @@ test("project symbols filters stale fuzzy positions before render highlights", (
     renderMatch,
     /ceil_char_boundary\(pos \+ 1\)/,
     "render_match should not trust fuzzy positions with direct ceil_char_boundary calls",
+  );
+});
+
+test("project symbols skips stale fuzzy candidate ids before symbol lookup", () => {
+  assert.doesNotMatch(
+    source,
+    /self\.symbols\s*\[\s*mat\.candidate_id\s*\]/,
+    "project symbol fuzzy matches must not index symbols directly by candidate_id",
+  );
+
+  const filter = functionBody(source, "filter");
+  assertBefore(
+    filter,
+    ".filter_map(|mut mat| {",
+    ".sort_unstable_by_key(sort_key_for_match)",
+    "filter must drop stale candidate ids before sorting matches",
+  );
+  assert.match(
+    filter,
+    /self\s*\.\s*symbols\s*\.get\(mat\.candidate_id\)\?/,
+    "filter should skip stale fuzzy matches with a checked symbol lookup",
+  );
+  assert.match(
+    filter,
+    /self\s*\.\s*symbols\s*\.get\(mat\.candidate_id\)\s*\.map\(\|symbol\| symbol\.label\.filter_text\(\)\)/,
+    "sort keys should derive labels through checked symbol lookups",
+  );
+
+  const confirm = functionBody(source, "confirm");
+  assert.match(
+    confirm,
+    /\.and_then\(\|mat\| self\.symbols\.get\(mat\.candidate_id\)\)\s*\.cloned\(\)/,
+    "confirm should ignore a selected match whose candidate id no longer resolves",
+  );
+});
+
+test("project symbols fake workspace-symbol responses skip stale fuzzy candidate ids", () => {
+  const testSourceStart = fullSource.indexOf("#[cfg(test)]");
+  assert.ok(testSourceStart >= 0, "expected project symbols test module");
+  const testSource = fullSource.slice(testSourceStart);
+
+  assert.doesNotMatch(
+    testSource,
+    /fake_symbols\s*\[\s*mat\.candidate_id\s*\]/,
+    "workspace-symbol test helpers must not index fake_symbols directly by candidate_id",
+  );
+
+  const checkedFakeLookups =
+    testSource.match(
+      /\.filter_map\(\|mat\| fake_symbols\.get\(mat\.candidate_id\)\.cloned\(\)\)/g,
+    ) ?? [];
+  assert.equal(
+    checkedFakeLookups.length,
+    2,
+    "both fake workspace-symbol response builders should skip stale fuzzy matches",
   );
 });
 

@@ -229,16 +229,24 @@ impl<T> Outline<T> {
         let mut tree_matches = Vec::new();
 
         let mut prev_item_ix = 0;
-        for mut string_match in matches {
+        'matches: for mut string_match in matches {
             if tree_matches.len() >= MAX_OUTLINE_TREE_MATCHES {
                 break;
             }
 
-            let outline_match = &self.items[string_match.candidate_id];
+            let Some(outline_match) = self.items.get(string_match.candidate_id) else {
+                continue;
+            };
             string_match.string.clone_from(&outline_match.text);
 
             if is_path_query {
-                let prefix_len = self.path_candidate_prefixes[string_match.candidate_id];
+                let Some(prefix_len) = self
+                    .path_candidate_prefixes
+                    .get(string_match.candidate_id)
+                    .copied()
+                else {
+                    continue;
+                };
                 string_match
                     .positions
                     .retain(|position| *position >= prefix_len);
@@ -254,7 +262,10 @@ impl<T> Outline<T> {
                 for position in &mut string_match.positions {
                     while *position >= preceding_ranges_len + name_range.len() {
                         preceding_ranges_len += name_range.len();
-                        name_range = name_ranges.next().unwrap();
+                        let Some(next_name_range) = name_ranges.next() else {
+                            continue 'matches;
+                        };
+                        name_range = next_name_range;
                     }
                     *position = name_range.start + (*position - preceding_ranges_len);
                 }
@@ -262,11 +273,11 @@ impl<T> Outline<T> {
 
             let insertion_ix = tree_matches.len();
             let mut cur_depth = outline_match.depth;
-            for (ix, item) in self.items[prev_item_ix..string_match.candidate_id]
-                .iter()
-                .enumerate()
-                .rev()
-            {
+            let Some(ancestor_candidates) = self.items.get(prev_item_ix..string_match.candidate_id)
+            else {
+                continue;
+            };
+            for (ix, item) in ancestor_candidates.iter().enumerate().rev() {
                 if cur_depth == 0 || tree_matches.len() >= MAX_OUTLINE_TREE_MATCHES {
                     break;
                 }

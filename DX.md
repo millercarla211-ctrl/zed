@@ -46,6 +46,7 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-agent-registry-ui-source.test.ts` - Agent Registry UI query and result materialization boundaries.
 - `node --test script/dx-completion-provider-source.test.ts` - Agent prompt completion candidate materialization boundaries.
 - `node --test script/dx-project-search-source.test.ts` - project search multiline file-read byte boundaries.
+- `node --test script/dx-prompt-store-source.test.ts` - prompt metadata fuzzy candidate materialization boundaries.
 - `node --test script/dx-task-inventory-source.test.ts` - task inventory template, debug scenario, and validation-list boundaries.
 - `node --test script/dx-lsp-aggregation-source.test.ts` - document link and symbol LSP response aggregation boundaries.
 - `node --test script/dx-language-model-selector-source.test.ts` - language model picker provider/model/result materialization boundaries.
@@ -70,10 +71,10 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-project-panel-source.test.ts` - project panel tree, selection, drag/drop, sticky-row, and undo materialization boundaries.
 - `node --test script/dx-diagnostics-ui-source.test.ts` - diagnostics grouping, excerpt, markdown, hint, copy, and status-label materialization boundaries.
 - `node --test script/dx-git-ui-source.test.ts` - Git branch, stash, repository, status, history, remote, and worktree picker materialization boundaries.
-- `node --test script/dx-settings-keymap-source.test.ts` - settings search/picker rows and keymap binding/action/completion materialization boundaries.
+- `node --test script/dx-settings-keymap-source.test.ts` - settings search/picker rows and keymap stale candidate-id materialization boundaries.
 - `node --test script/dx-settings-ui-source.test.ts` - Settings UI font, theme, and icon-theme picker stale fuzzy candidate-id boundaries.
 - `node --test script/dx-extensions-ui-source.test.ts` - extensions search/list/card/suggestion/version-selector materialization boundaries.
-- `node --test script/dx-outline-theme-source.test.ts` - outline, outline-panel, theme/icon-theme selector, and file-icon suffix materialization boundaries.
+- `node --test script/dx-outline-theme-source.test.ts` - outline stale candidate-id, outline-panel, theme/icon-theme selector, and file-icon suffix materialization boundaries.
 - `node --test script/dx-command-palette-source.test.ts` - command palette stale-selection and command materialization boundaries.
 - `node --test script/dx-picker-core-source.test.ts` - picker core stale-selection, selectable fallback, and reveal-scroll boundaries.
 - `node --test script/dx-search-ui-source.test.ts` - project-search active-match label and navigation index boundaries.
@@ -83,8 +84,8 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-collab-notifications-source.test.ts` - collab contact finder async-result selection boundaries.
 - `node --test script/dx-markdown-preview-source.test.ts` - remote directory listing response materialization boundaries.
 - `node --test script/dx-activity-indicator-source.test.ts` - activity indicator status, tooltip, and pending-work menu materialization boundaries.
-- `node --test script/dx-project-symbols-source.test.ts` - project symbols UTF-8 fuzzy-highlight boundary checks.
-- `node --test script/dx-snippets-source.test.ts` - snippet scope candidate and existing scope-file materialization boundaries.
+- `node --test script/dx-project-symbols-source.test.ts` - project symbols UTF-8 highlight and stale fuzzy candidate-id boundaries.
+- `node --test script/dx-snippets-source.test.ts` - snippet scope candidate, existing scope-file, and stale candidate-id boundaries.
 - `node --test script/dx-repl-ui-source.test.ts` - REPL kernel picker stale-selection and selected-kernel materialization boundaries.
 - `node --test script/dx-preview-surfaces-source.test.ts` - CSV preview rendered-index metric materialization boundaries.
 - `node --test script/dx-component-preview-source.test.ts` - Component Preview list/sidebar stale-row render boundaries.
@@ -92,7 +93,7 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-breadcrumbs-source.test.ts` - breadcrumb segment materialization boundaries.
 - `node --test script/dx-icon-picker-source.test.ts` - icon picker TSV sample and representative preview materialization boundaries.
 - `node --test script/dx-language-selector-source.test.ts` - language selector candidate, match, stale-selection, and confirm boundaries.
-- `node --test script/dx-toolchain-selector-source.test.ts` - toolchain selector match and stale-selection boundaries.
+- `node --test script/dx-toolchain-selector-source.test.ts` - toolchain selector match, stale-selection, and stale candidate-id boundaries.
 - `node --test script/dx-dev-container-source.test.ts` - Dev Container template/feature picker stale match-row boundaries.
 - `node --test script/dx-recent-projects-ui-source.test.ts` - recent projects candidate, path label, result, and stale-selection boundaries.
 - `node --test script/dx-notifications-source.test.ts` - status toast message and action label materialization boundaries.
@@ -168,6 +169,8 @@ Adjacent source guards:
 - Wire DX Agents CLI receipts, social/account readiness, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
+
+- Completed a six-agent stale fuzzy-candidate hardening pass for Keymap Editor, Prompt Store, Project Symbols, Outline, Snippets UI, and Toolchain Selector without `just run` or Cargo. Keymap search/materialization and action completions now skip stale candidate IDs before reading bindings or action names; Prompt Store fuzzy metadata search skips stale cache rows; Project Symbols filters stale symbol IDs before sorting, confirming, or building fake workspace-symbol responses; Outline search guards item/prefix/range lookups and outline helper reads; Snippets scope confirm/render guards stale scope candidates; Toolchain Selector confirm ignores stale toolchain candidates before workspace side effects. Added and registered `script/dx-prompt-store-source.test.ts`, and extended `script/dx-settings-keymap-source.test.ts`, `script/dx-project-symbols-source.test.ts`, `script/dx-outline-theme-source.test.ts`, `script/dx-snippets-source.test.ts`, and `script/dx-toolchain-selector-source.test.ts`. Passed source-only integration: 37/37 targeted Node source subtests including the handoff registry, targeted rustfmt checks, refined stale candidate-id pattern scans, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 
 - Completed a six-agent stale UI row and fuzzy-candidate hardening pass for Collab Panel, Dev Container pickers, Debugger stack frames, Inline Prompt history, Project Search navigation, and Component Preview without `just run` or Cargo. Collab Panel now skips stale fuzzy candidate IDs across pending participants, channels, invites, requests, and contacts; Dev Container template/feature rendering guards stale match rows; Debugger stack-frame rendering fails closed for stale filtered rows and entries; Inline Prompt history navigation and edit comparisons use checked history lookups; Project Search selection/focus navigation guards stale computed indexes; Component Preview list/sidebar rows skip stale render indexes. Added and registered `script/dx-collab-panel-source.test.ts`, `script/dx-dev-container-source.test.ts`, `script/dx-debugger-stack-frame-source.test.ts`, and `script/dx-component-preview-source.test.ts`, and extended `script/dx-inline-prompt-source.test.ts` plus `script/dx-search-ui-source.test.ts`. Passed source-only integration: 20/20 targeted Node source subtests including the handoff registry, targeted rustfmt checks, refined stale candidate/index pattern scans, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 

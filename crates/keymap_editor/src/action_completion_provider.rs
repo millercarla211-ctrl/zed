@@ -92,14 +92,14 @@ impl CompletionProvider for ActionCompletionProvider {
             let completions: Vec<project::Completion> = matches
                 .iter()
                 .take(MAX_ACTION_COMPLETION_MATCHES)
-                .map(|m| {
-                    let action_name = action_names[m.candidate_id];
+                .filter_map(|m| {
+                    let action_name = *action_names.get(m.candidate_id)?;
                     let humanized = humanized_names
                         .get(action_name)
                         .cloned()
                         .unwrap_or_else(|| action_name.into());
 
-                    project::Completion {
+                    Some(project::Completion {
                         replace_range: replace_range.clone(),
                         label: language::CodeLabel::plain(humanized.to_string(), None),
                         new_text: action_name.to_string(),
@@ -111,7 +111,7 @@ impl CompletionProvider for ActionCompletionProvider {
                         insert_text_mode: None,
                         confirm: None,
                         group: None,
-                    }
+                    })
                 })
                 .collect();
 

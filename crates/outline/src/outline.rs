@@ -677,8 +677,11 @@ mod tests {
         let (selected_candidate_id, expected_deepest_containing_candidate_id) = outline_view
             .update(cx, |outline_view, cx| {
                 let delegate = &outline_view.delegate;
-                let selected_candidate_id =
-                    delegate.matches[delegate.selected_match_index].candidate_id;
+                let selected_candidate_id = delegate
+                    .matches
+                    .get(delegate.selected_match_index)
+                    .expect("selected match should exist")
+                    .candidate_id;
                 let (buffer, cursor_offset) = delegate.active_editor.update(cx, |editor, cx| {
                     let buffer = editor.buffer().read(cx).snapshot(cx);
                     let cursor_offset = editor
@@ -718,7 +721,11 @@ mod tests {
         cx.run_until_parked();
         let selected_candidate_id = outline_view.read_with(cx, |outline_view, _| {
             let delegate = &outline_view.delegate;
-            delegate.matches[delegate.selected_match_index].candidate_id
+            delegate
+                .matches
+                .get(delegate.selected_match_index)
+                .expect("selected match should exist")
+                .candidate_id
         });
         assert_eq!(
             selected_candidate_id, 0,
@@ -858,7 +865,10 @@ mod tests {
                          cx: &mut VisualTestContext| {
             outline_view.read_with(cx, |outline_view, _| {
                 let delegate = &outline_view.delegate;
-                let selected_match = &delegate.matches[delegate.selected_match_index];
+                let selected_match = delegate
+                    .matches
+                    .get(delegate.selected_match_index)
+                    .expect("selected match should exist");
                 let scored_ids = delegate
                     .matches
                     .iter()
@@ -955,7 +965,7 @@ mod tests {
                 .delegate
                 .matches
                 .iter()
-                .map(|hit| items[hit.candidate_id].text.clone())
+                .filter_map(|hit| items.get(hit.candidate_id).map(|item| item.text.clone()))
                 .collect::<Vec<_>>()
         })
     }
