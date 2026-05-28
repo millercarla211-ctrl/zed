@@ -21,9 +21,24 @@ use crate::AgentPanel;
 use crate::thread_metadata_store::ThreadId;
 
 const NAMESPACE: &str = "agent_draft_prompts";
+const MAX_DRAFT_PROMPT_JSON_BYTES: usize = 1024 * 1024;
 
 /// Maximum length (in characters) of a draft label rendered in the sidebar.
 const MAX_LABEL_CHARS: usize = 250;
+
+fn ensure_draft_prompt_json_within_limit(raw: &str) -> Option<()> {
+    if raw.len() > MAX_DRAFT_PROMPT_JSON_BYTES {
+        Err::<(), _>(anyhow::anyhow!(
+            "{NAMESPACE} KVP payload is too large ({} bytes; max {} bytes)",
+            raw.len(),
+            MAX_DRAFT_PROMPT_JSON_BYTES
+        ))
+        .log_err();
+        return None;
+    }
+
+    Some(())
+}
 
 pub fn read(thread_id: ThreadId, cx: &App) -> Option<Vec<acp::ContentBlock>> {
     let kvp = KeyValueStore::global(cx);
@@ -32,6 +47,7 @@ pub fn read(thread_id: ThreadId, cx: &App) -> Option<Vec<acp::ContentBlock>> {
         .read(&thread_id.to_key_string())
         .log_err()
         .flatten()?;
+    ensure_draft_prompt_json_within_limit(&raw)?;
     serde_json::from_str(&raw).log_err()
 }
 

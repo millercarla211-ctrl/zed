@@ -5902,12 +5902,29 @@ impl WebPreviewView {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(clipboard_text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+        let Some(clipboard) = cx.read_from_clipboard() else {
             self.show_toast(
                 "No clipboard text available for headroom cleanup-result import",
                 cx,
             );
             return;
+        };
+        let clipboard_text = match Self::bounded_agent_browser_clipboard_import_text(&clipboard) {
+            Ok(Some(text)) => text,
+            Ok(None) => {
+                self.show_toast(
+                    "No clipboard text available for headroom cleanup-result import",
+                    cx,
+                );
+                return;
+            }
+            Err(max_bytes) => {
+                self.show_toast(
+                    format!("Headroom cleanup-result clipboard text exceeds {max_bytes} bytes"),
+                    cx,
+                );
+                return;
+            }
         };
         let Ok(value) = serde_json::from_str::<Value>(&clipboard_text) else {
             self.show_toast(
@@ -9367,12 +9384,29 @@ impl WebPreviewView {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(clipboard_text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+        let Some(clipboard) = cx.read_from_clipboard() else {
             self.show_toast(
                 "No clipboard text available for final validation result import",
                 cx,
             );
             return;
+        };
+        let clipboard_text = match Self::bounded_agent_browser_clipboard_import_text(&clipboard) {
+            Ok(Some(text)) => text,
+            Ok(None) => {
+                self.show_toast(
+                    "No clipboard text available for final validation result import",
+                    cx,
+                );
+                return;
+            }
+            Err(max_bytes) => {
+                self.show_toast(
+                    format!("Final validation clipboard text exceeds {max_bytes} bytes"),
+                    cx,
+                );
+                return;
+            }
         };
         let Ok(value) = serde_json::from_str::<Value>(&clipboard_text) else {
             self.show_toast("Clipboard does not contain valid final validation JSON", cx);
@@ -13474,12 +13508,29 @@ impl WebPreviewView {
     }
 
     fn import_agent_browser_panel_control_result_from_clipboard(&mut self, cx: &mut Context<Self>) {
-        let Some(clipboard_text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+        let Some(clipboard) = cx.read_from_clipboard() else {
             self.show_toast(
                 "No clipboard text available for panel control result import",
                 cx,
             );
             return;
+        };
+        let clipboard_text = match Self::bounded_agent_browser_clipboard_import_text(&clipboard) {
+            Ok(Some(text)) => text,
+            Ok(None) => {
+                self.show_toast(
+                    "No clipboard text available for panel control result import",
+                    cx,
+                );
+                return;
+            }
+            Err(max_bytes) => {
+                self.show_toast(
+                    format!("Panel control result clipboard text exceeds {max_bytes} bytes"),
+                    cx,
+                );
+                return;
+            }
         };
         let Ok(value) = serde_json::from_str::<Value>(&clipboard_text) else {
             self.show_toast(
@@ -21647,7 +21698,7 @@ impl WebPreviewView {
         paths
     }
 
-    fn bounded_agent_browser_action_payload_import_text(text: String) -> Result<String, u64> {
+    fn bounded_agent_browser_import_text(text: String) -> Result<String, u64> {
         if u64::try_from(text.len()).unwrap_or(u64::MAX)
             > MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES
         {
@@ -21657,7 +21708,7 @@ impl WebPreviewView {
         }
     }
 
-    fn bounded_agent_browser_action_payload_import_clipboard_text(
+    fn bounded_agent_browser_clipboard_import_text(
         clipboard: &ClipboardItem,
     ) -> Result<Option<String>, u64> {
         let mut total_len = 0usize;
@@ -21684,9 +21735,7 @@ impl WebPreviewView {
                     text.push_str(clipboard_string.text());
                 }
             }
-            return Ok(Some(
-                Self::bounded_agent_browser_action_payload_import_text(text)?,
-            ));
+            return Ok(Some(Self::bounded_agent_browser_import_text(text)?));
         }
 
         let mut text = String::new();
@@ -21708,9 +21757,7 @@ impl WebPreviewView {
         if text.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(
-                Self::bounded_agent_browser_action_payload_import_text(text)?,
-            ))
+            Ok(Some(Self::bounded_agent_browser_import_text(text)?))
         }
     }
 
@@ -21828,21 +21875,20 @@ impl WebPreviewView {
             self.show_toast("No clipboard text available for browser payload import", cx);
             return;
         };
-        let clipboard_text =
-            match Self::bounded_agent_browser_action_payload_import_clipboard_text(&clipboard) {
-                Ok(Some(text)) => text,
-                Ok(None) => {
-                    self.show_toast("No clipboard text available for browser payload import", cx);
-                    return;
-                }
-                Err(max_bytes) => {
-                    self.show_toast(
-                        format!("Browser payload clipboard text exceeds {max_bytes} bytes"),
-                        cx,
-                    );
-                    return;
-                }
-            };
+        let clipboard_text = match Self::bounded_agent_browser_clipboard_import_text(&clipboard) {
+            Ok(Some(text)) => text,
+            Ok(None) => {
+                self.show_toast("No clipboard text available for browser payload import", cx);
+                return;
+            }
+            Err(max_bytes) => {
+                self.show_toast(
+                    format!("Browser payload clipboard text exceeds {max_bytes} bytes"),
+                    cx,
+                );
+                return;
+            }
+        };
         let (imported_payload, imported_as) = match serde_json::from_str::<Value>(&clipboard_text) {
             Ok(payload) => (payload, "json"),
             Err(_) => (

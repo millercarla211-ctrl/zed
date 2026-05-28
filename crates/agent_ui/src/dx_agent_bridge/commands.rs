@@ -13,6 +13,9 @@ use super::{
     is_secret_like_arg, redact_action_scalar, string_field,
 };
 
+const MAX_FAILED_COMMAND_STDERR_BYTES: usize = 2048;
+const MAX_FAILED_COMMAND_STDERR_CHARS: usize = 500;
+
 #[derive(Clone)]
 pub(crate) enum DxAgentPublicCommand {
     Contract,
@@ -183,15 +186,34 @@ fn run_bridge_command(
         .with_context(|| format!("failed to run `{}`", bridge_command_label(&cli_path, &args)))?;
 
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = failed_command_stderr_display(&output.stderr);
         return Err(anyhow!(
             "`{}` failed: {}",
             bridge_command_label(&cli_path, &args),
-            stderr.trim()
+            stderr
         ));
     }
 
     Ok(output)
+}
+
+fn failed_command_stderr_display(stderr: &[u8]) -> String {
+    let truncated_bytes = stderr.len() > MAX_FAILED_COMMAND_STDERR_BYTES;
+    let visible_len = stderr.len().min(MAX_FAILED_COMMAND_STDERR_BYTES);
+    let decoded = String::from_utf8_lossy(&stderr[..visible_len]);
+    let compact = decoded.split_whitespace().collect::<Vec<_>>().join(" ");
+    let truncated_chars = compact.chars().count() > MAX_FAILED_COMMAND_STDERR_CHARS;
+
+    if !truncated_bytes && !truncated_chars {
+        return compact;
+    }
+
+    let mut display = compact
+        .chars()
+        .take(MAX_FAILED_COMMAND_STDERR_CHARS.saturating_sub(3))
+        .collect::<String>();
+    display.push_str("...");
+    display
 }
 
 fn write_json_receipt(path: &Path, stdout: &[u8], expected_schema: &str) -> Result<()> {

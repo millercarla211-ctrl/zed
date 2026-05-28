@@ -1,5 +1,6 @@
 use std::{
-    fs::{self, Metadata},
+    fs::{self, File, Metadata},
+    io::Read,
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -7,7 +8,7 @@ use std::{
 use anyhow::{Context as _, Result, anyhow, bail};
 use serde_json::{Map, Value};
 
-use super::values::string_at;
+use super::{DX_STUDIO_MAX_SOURCE_FILE_BYTES, values::string_at};
 
 pub(super) fn source_file_snapshot(source: &Path, selection: &Value) -> Option<Value> {
     let metadata = fs::metadata(source).ok()?;
@@ -275,10 +276,21 @@ fn is_strong_selection_identity_key(key: &str) -> bool {
     !matches!(key, "route" | "source_file")
 }
 
+fn read_source_file_for_digest(source: &Path) -> Option<Vec<u8>> {
+    let file = File::open(source).ok()?;
+    let mut bytes = Vec::new();
+    let mut limited = file.take(DX_STUDIO_MAX_SOURCE_FILE_BYTES + 1);
+    limited.read_to_end(&mut bytes).ok()?;
+    if bytes.len() as u64 > DX_STUDIO_MAX_SOURCE_FILE_BYTES {
+        return None;
+    }
+
+    Some(bytes)
+}
+
 fn source_content_digest(source: &Path) -> Option<String> {
-    fs::read(source)
-        .ok()
-        .map(|contents| content_digest(&contents))
+    let contents = read_source_file_for_digest(source)?;
+    Some(content_digest(&contents))
 }
 
 fn content_digest(contents: &[u8]) -> String {

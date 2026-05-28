@@ -721,6 +721,8 @@ impl MentionSet {
 }
 
 const MAX_SKILL_MENTION_FILE_BYTES: u64 = 1024 * 1024;
+const MAX_FETCH_MENTION_BODY_BYTES: u64 = 10 * 1024 * 1024;
+const MAX_EXTERNAL_RASTER_IMAGE_FILE_BYTES: u64 = 25 * 1024 * 1024;
 
 fn read_skill_mention_file(path: &Path) -> Result<String> {
     let mut bytes = Vec::new();
@@ -970,6 +972,31 @@ pub(crate) async fn insert_images_as_context(
     }
 }
 
+fn read_external_raster_image_file_bytes(path: &Path) -> Option<Vec<u8>> {
+    if path
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("svg"))
+    {
+        return None;
+    }
+
+    let metadata = std::fs::metadata(path).ok()?;
+    if metadata.len() > MAX_EXTERNAL_RASTER_IMAGE_FILE_BYTES {
+        return None;
+    }
+
+    let mut bytes = Vec::new();
+    let mut file = std::fs::File::open(path)
+        .ok()?
+        .take(MAX_EXTERNAL_RASTER_IMAGE_FILE_BYTES + 1);
+    file.read_to_end(&mut bytes).ok()?;
+    if bytes.len() as u64 > MAX_EXTERNAL_RASTER_IMAGE_FILE_BYTES {
+        return None;
+    }
+    Some(bytes)
+}
+
 fn image_format_from_external_content(format: image::ImageFormat) -> Option<ImageFormat> {
     match format {
         image::ImageFormat::Png => Some(ImageFormat::Png),
@@ -1005,7 +1032,7 @@ pub(crate) fn load_external_image_from_path(
     path: &Path,
     default_name: &SharedString,
 ) -> Option<(Image, SharedString)> {
-    let content = std::fs::read(path).ok()?;
+    let content = read_external_raster_image_file_bytes(path)?;
     let format = image::guess_format(&content)
         .ok()
         .and_then(image_format_from_external_content)?;
@@ -1414,6 +1441,22 @@ impl Render for ImageHover {
     }
 }
 
+async fn read_fetch_mention_body(body: &mut AsyncBody) -> Result<Vec<u8>> {
+    let mut reader = body.take(MAX_FETCH_MENTION_BODY_BYTES + 1);
+    let mut body = Vec::new();
+    reader
+        .read_to_end(&mut body)
+        .await
+        .context("error reading response body")?;
+    if body.len() as u64 > MAX_FETCH_MENTION_BODY_BYTES {
+        anyhow::bail!(
+            "fetched mention body exceeds {} bytes",
+            MAX_FETCH_MENTION_BODY_BYTES
+        );
+    }
+    Ok(body)
+}
+
 async fn fetch_url_content(http_client: Arc<HttpClientWithUrl>, url: String) -> Result<String> {
     #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
     enum ContentType {
@@ -1430,12 +1473,7 @@ async fn fetch_url_content(http_client: Arc<HttpClientWithUrl>, url: String) -> 
     };
 
     let mut response = http_client.get(&url, AsyncBody::default(), true).await?;
-    let mut body = Vec::new();
-    response
-        .body_mut()
-        .read_to_end(&mut body)
-        .await
-        .context("error reading response body")?;
+    let body = read_fetch_mention_body(response.body_mut()).await?;
 
     if response.status().is_client_error() {
         let text = String::from_utf8_lossy(body.as_slice());

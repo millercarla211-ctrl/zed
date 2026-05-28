@@ -220,6 +220,47 @@ fn save_hang_trace(
     );
 }
 
+const MAX_PREVIOUS_MINIDUMP_METADATA_BYTES: u64 = 64 * 1024;
+const MAX_PREVIOUS_MINIDUMP_BYTES: u64 = 64 * 1024 * 1024;
+
+async fn read_limited_previous_minidump_file(
+    path: &Path,
+    max_bytes: u64,
+    label: &str,
+) -> Result<Option<Vec<u8>>> {
+    let file = smol::fs::File::open(path).await?;
+    let mut contents = Vec::new();
+    let mut limited_file = file.take(max_bytes + 1);
+    limited_file.read_to_end(&mut contents).await?;
+
+    if contents.len() as u64 > max_bytes {
+        log::warn!(
+            "Previous minidump {label} file {:?} is too large for previous minidump upload: {} bytes read (limit {} bytes)",
+            path,
+            contents.len(),
+            max_bytes
+        );
+        return Ok(None);
+    }
+
+    Ok(Some(contents))
+}
+
+async fn read_previous_minidump_metadata(path: &Path) -> Result<Option<crashes::CrashInfo>> {
+    let Some(data) =
+        read_limited_previous_minidump_file(path, MAX_PREVIOUS_MINIDUMP_METADATA_BYTES, "metadata")
+            .await?
+    else {
+        return Ok(None);
+    };
+
+    Ok(serde_json::from_slice(&data).ok())
+}
+
+async fn read_previous_minidump_payload(path: &Path) -> Result<Option<Vec<u8>>> {
+    read_limited_previous_minidump_file(path, MAX_PREVIOUS_MINIDUMP_BYTES, "payload").await
+}
+
 pub async fn upload_previous_minidumps(client: Arc<Client>) -> anyhow::Result<()> {
     let Some(minidump_endpoint) = MINIDUMP_ENDPOINT.as_ref() else {
         log::debug!("Minidump endpoint not set; skipping previous minidump upload");
@@ -235,24 +276,20 @@ pub async fn upload_previous_minidumps(client: Arc<Client>) -> anyhow::Result<()
         }
         let mut json_path = child_path.clone();
         json_path.set_extension("json");
-        let Ok(metadata) = smol::fs::read(&json_path)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
-            .and_then(|data| serde_json::from_slice(&data).map_err(|e| anyhow::anyhow!(e)))
-        else {
+        let Ok(Some(metadata)) = read_previous_minidump_metadata(&json_path).await else {
             continue;
         };
-        if upload_minidump(
-            client.clone(),
-            minidump_endpoint,
-            smol::fs::read(&child_path)
-                .await
-                .context("Failed to read minidump")?,
-            &metadata,
-        )
-        .await
-        .log_err()
-        .is_some()
+        let minidump = match read_previous_minidump_payload(&child_path)
+            .await
+            .context("Failed to read minidump")?
+        {
+            Some(minidump) => minidump,
+            None => continue,
+        };
+        if upload_minidump(client.clone(), minidump_endpoint, minidump, &metadata)
+            .await
+            .log_err()
+            .is_some()
         {
             fs::remove_file(child_path).ok();
             fs::remove_file(json_path).ok();

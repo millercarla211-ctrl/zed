@@ -1,3 +1,25 @@
+[2026-05-28] - Local Input Surface Hardening
+
+ADDED:
+- Added `script\dx-agent-persisted-state-source.test.ts` for Agent Panel and draft-prompt persisted KVP JSON boundaries.
+
+CHANGED:
+- Previous minidump uploads now read metadata JSON and `.dmp` payloads through bounded async sentinel reads before JSON parsing or upload.
+- Web Preview final runtime headroom, final validation, panel-control, and browser payload clipboard imports now share bounded clipboard-entry text import before JSON parsing.
+- External mention image file ingestion now bounds raster file reads before format guessing or `Image::from_bytes`, and fetched mention bodies are capped before error rendering, HTML conversion, plaintext decoding, or JSON parsing.
+- DX Studio source-edit snapshot digesting now reads source content through a bounded sentinel read before hashing.
+- Agent Panel last-used-agent, last-created-entry-kind, serialized panel, and draft prompt KVP payloads now reject oversized JSON before deserialization.
+- Failed DX Agents bridge command stderr is compacted and capped before inclusion in UI/log-facing errors.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-windows-reliability-source.test.ts script\web-preview-payload-source.test.ts script\dx-mention-set-source.test.ts script\dx-source-quality.test.ts script\dx-agent-bridge-source.test.ts script\dx-agent-persisted-state-source.test.ts` (35/35 passing)
+- `rustfmt --edition 2024 --check` on all edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - External Payload Boundary Hardening
 
 ADDED:

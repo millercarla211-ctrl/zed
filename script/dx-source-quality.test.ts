@@ -186,6 +186,31 @@ test("DX Studio source edits require content and selection-bound snapshots", () 
   assert.match(receipt, /source snapshot content identity/);
 });
 
+test("DX Studio source snapshot digests bound source reads before hashing", () => {
+  const snapshot = read("crates/web_preview/src/dx_studio_source_edit/snapshot.rs");
+
+  assert.match(snapshot, /use std::\{[\s\S]*fs::\{self, File, Metadata\},[\s\S]*io::Read,/);
+  assert.match(snapshot, /DX_STUDIO_MAX_SOURCE_FILE_BYTES/);
+  assert.match(
+    snapshot,
+    /fn read_source_file_for_digest\(source: &Path\) -> Option<Vec<u8>>/,
+  );
+  assert.match(snapshot, /File::open\(source\)\.ok\(\)\?/);
+  assert.match(snapshot, /\.take\(DX_STUDIO_MAX_SOURCE_FILE_BYTES \+ 1\)/);
+  assert.match(snapshot, /\.read_to_end\(&mut bytes\)\.ok\(\)\?/);
+  assert.match(snapshot, /bytes\.len\(\) as u64 > DX_STUDIO_MAX_SOURCE_FILE_BYTES/);
+  assert.match(snapshot, /let contents = read_source_file_for_digest\(source\)\?/);
+  assert.match(snapshot, /content_digest\(&contents\)/);
+  assert.doesNotMatch(snapshot, /\bfs::read\s*\(/);
+
+  const oversizedCheck = snapshot.indexOf(
+    "bytes.len() as u64 > DX_STUDIO_MAX_SOURCE_FILE_BYTES",
+  );
+  const digest = snapshot.indexOf("content_digest(&contents)");
+  assert.ok(oversizedCheck >= 0, "digest reads should reject the sentinel byte");
+  assert.ok(digest > oversizedCheck, "digesting should happen after the bounded read");
+});
+
 test("DX Studio source writes stay inside bounded file and edit sizes", () => {
   const root = read("crates/web_preview/src/dx_studio_source_edit.rs");
 

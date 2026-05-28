@@ -43,6 +43,7 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-source-quality.test.ts` - DX Studio source/edit manifest and bridge source contracts.
 - `node --test script/dx-studio-project-source.test.ts` - DX Studio project detection and source-edit bounded file-read contracts.
 - `node --test script/dx-agent-panel-clipboard-source.test.ts` - native-agent thread clipboard payload size boundaries.
+- `node --test script/dx-agent-persisted-state-source.test.ts` - Agent Panel and draft prompt persisted KVP JSON boundaries.
 - `node --test script/dx-mention-set-source.test.ts` - external skill mention file bounded reads.
 - `node --test script/dx-message-editor-source.test.ts` - pasted markdown mention-link parsing size boundaries.
 - `node --test script/dx-thread-metadata-source.test.ts` - persisted remote-connection metadata JSON boundaries.
@@ -88,6 +89,8 @@ Adjacent source guards:
 - Wire DX Agents CLI receipts, social/account readiness, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
+
+- Completed a six-agent local input-surface hardening pass without `just run` or Cargo. Previous minidump metadata/payload reads, Web Preview final-proof clipboard imports, external mention image and fetched-body ingestion, DX Studio source snapshot digesting, Agent Panel/draft prompt persisted KVP JSON, and failed DX Agents bridge stderr rendering now reject, skip, or compact oversized input before parse, digest, upload, image conversion, or UI/log display. Added source guard `script\dx-agent-persisted-state-source.test.ts` and extended `script\dx-windows-reliability-source.test.ts`, `script\web-preview-payload-source.test.ts`, `script\dx-mention-set-source.test.ts`, `script\dx-source-quality.test.ts`, and `script\dx-agent-bridge-source.test.ts`. Passed source-only integration: 35/35 targeted Node source subtests, targeted rustfmt checks, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 
 - Completed a six-agent external payload-boundary hardening pass without `just run` or Cargo. Native-agent thread clipboard export/import, Web Preview agent-browser payload imports, reliability build-timing JSON reads, external skill mention files, pasted markdown mention-link parsing, and persisted remote-connection metadata JSON now reject or skip oversized external text/file payloads before text concatenation, base64/zstd decode, parse, prompt insertion, or deserialization. Added source guards `script\dx-agent-panel-clipboard-source.test.ts`, `script\web-preview-payload-source.test.ts`, `script\dx-mention-set-source.test.ts`, `script\dx-message-editor-source.test.ts`, and `script\dx-thread-metadata-source.test.ts`, and extended `script\dx-windows-reliability-source.test.ts`. Passed source-only integration: 20/20 targeted Node source subtests, targeted rustfmt checks, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 

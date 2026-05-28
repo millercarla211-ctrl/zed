@@ -126,6 +126,14 @@ test("Minidump upload skips local and remote missing-commit dev metadata quietly
     previous.indexOf("MINIDUMP_ENDPOINT") < previous.indexOf("paths::logs_dir()"),
     "local minidump reads should stay behind endpoint lookup",
   );
+  assert.match(previous, /read_previous_minidump_metadata\(&json_path\)\.await/);
+  assert.match(previous, /read_previous_minidump_payload\(&child_path\)\s+\.await/);
+  assert.doesNotMatch(previous, /smol::fs::read\(/);
+  assert.ok(
+    previous.indexOf("read_previous_minidump_payload(&child_path)") <
+      previous.indexOf("upload_minidump("),
+    "previous minidump payloads must be bounded before upload",
+  );
 
   const remote = sliceBetween(
     source,
@@ -142,6 +150,84 @@ test("Minidump upload skips local and remote missing-commit dev metadata quietly
   assert.ok(
     remote.indexOf("MINIDUMP_ENDPOINT") < remote.indexOf("request(proto::GetCrashFiles {})"),
     "remote crash-file requests should stay behind endpoint lookup",
+  );
+});
+
+test("Previous minidump upload bounds metadata and payload file reads", () => {
+  const source = read("crates/zed/src/reliability.rs");
+
+  const constants = sliceBetween(
+    source,
+    "const MAX_PREVIOUS_MINIDUMP_METADATA_BYTES",
+    "pub async fn upload_previous_minidumps",
+  );
+  assert.match(
+    constants,
+    /const MAX_PREVIOUS_MINIDUMP_METADATA_BYTES: u64 = 64 \* 1024;/,
+  );
+  assert.match(
+    constants,
+    /const MAX_PREVIOUS_MINIDUMP_BYTES: u64 = 64 \* 1024 \* 1024;/,
+  );
+  assert.match(
+    constants,
+    /async fn read_limited_previous_minidump_file\(\s+path: &Path,\s+max_bytes: u64,\s+label: &str,\s+\) -> Result<Option<Vec<u8>>>/,
+  );
+  assert.match(constants, /smol::fs::File::open\(path\)\.await/);
+  assert.match(constants, /take\(max_bytes \+ 1\)/);
+  assert.match(constants, /read_to_end\(&mut contents\)\.await/);
+  assert.match(constants, /contents\.len\(\) as u64 > max_bytes/);
+  assert.match(constants, /too large for previous minidump upload/);
+  assert.match(constants, /return Ok\(None\);/);
+
+  const boundedRead = sliceBetween(
+    source,
+    "async fn read_limited_previous_minidump_file",
+    "async fn read_previous_minidump_metadata",
+  );
+  assert.doesNotMatch(boundedRead, /serde_json::from_slice/);
+
+  const metadataRead = sliceBetween(
+    source,
+    "async fn read_previous_minidump_metadata",
+    "async fn read_previous_minidump_payload",
+  );
+  assert.match(
+    metadataRead,
+    /read_limited_previous_minidump_file\(\s*path,\s*MAX_PREVIOUS_MINIDUMP_METADATA_BYTES,\s*"metadata"/,
+  );
+  assert.match(metadataRead, /serde_json::from_slice\(&data\)/);
+  assert.ok(
+    metadataRead.indexOf("read_limited_previous_minidump_file") <
+      metadataRead.indexOf("serde_json::from_slice(&data)"),
+    "metadata bytes must pass the sentinel limit before parsing",
+  );
+
+  const payloadRead = sliceBetween(
+    source,
+    "async fn read_previous_minidump_payload",
+    "pub async fn upload_previous_minidumps",
+  );
+  assert.match(
+    payloadRead,
+    /read_limited_previous_minidump_file\(\s*path,\s*MAX_PREVIOUS_MINIDUMP_BYTES,\s*"payload"/,
+  );
+  assert.doesNotMatch(payloadRead, /serde_json::from_slice/);
+
+  const upload = sliceBetween(
+    source,
+    "pub async fn upload_previous_minidumps",
+    "fn has_missing_minidump_commit_sha",
+  );
+  assert.ok(
+    upload.indexOf("read_previous_minidump_metadata(&json_path).await") <
+      upload.indexOf("read_previous_minidump_payload(&child_path)"),
+    "metadata should be parsed only after its limit and before payload upload",
+  );
+  assert.ok(
+    upload.indexOf("read_previous_minidump_payload(&child_path)") <
+      upload.indexOf("upload_minidump("),
+    "payload bytes must pass the sentinel limit before upload",
   );
 });
 

@@ -28,7 +28,7 @@ test("Web Preview clipboard payload import caps text before parsing or wrapping"
   );
   assert.match(
     webPreview,
-    /fn bounded_agent_browser_action_payload_import_clipboard_text\(\s*clipboard: &ClipboardItem,\s*\) -> Result<Option<String>, u64>/,
+    /fn bounded_agent_browser_clipboard_import_text\(\s*clipboard: &ClipboardItem,\s*\) -> Result<Option<String>, u64>/,
   );
   assert.match(
     webPreview,
@@ -41,7 +41,7 @@ test("Web Preview clipboard payload import caps text before parsing or wrapping"
   assert.doesNotMatch(clipboardImport, /\.text\(\)/);
 
   const bound = clipboardImport.indexOf(
-    "Self::bounded_agent_browser_action_payload_import_clipboard_text(&clipboard)",
+    "Self::bounded_agent_browser_clipboard_import_text(&clipboard)",
   );
   const parse = clipboardImport.indexOf("serde_json::from_str::<Value>(&clipboard_text)");
   const plainTextWrap = clipboardImport.indexOf('"text": clipboard_text');
@@ -52,6 +52,61 @@ test("Web Preview clipboard payload import caps text before parsing or wrapping"
     plainTextWrap > bound,
     "plain-text wrapping must happen after clipboard bounding",
   );
+});
+
+test("Web Preview JSON clipboard imports cap text before parsing", () => {
+  const webPreview = source();
+  const imports = [
+    {
+      name: "final validation result import",
+      start: "fn import_agent_browser_final_validation_result_from_clipboard",
+      end: "fn copy_agent_browser_final_validation_result_import_receipt",
+      parse: "serde_json::from_str::<Value>(&clipboard_text)",
+    },
+    {
+      name: "final runtime headroom cleanup-result import",
+      start: "fn import_agent_browser_final_runtime_headroom_cleanup_result_from_clipboard",
+      end: "fn copy_agent_browser_final_runtime_headroom_cleanup_result",
+      parse: "serde_json::from_str::<Value>(&clipboard_text)",
+    },
+    {
+      name: "panel control result import",
+      start: "fn import_agent_browser_panel_control_result_from_clipboard",
+      end: "fn copy_agent_browser_panel_control_result_import_receipt",
+      parse: "serde_json::from_str::<Value>(&clipboard_text)",
+    },
+  ];
+
+  for (const clipboardImport of imports) {
+    const body = sliceBetween(
+      webPreview,
+      clipboardImport.start,
+      clipboardImport.end,
+    );
+    assert.doesNotMatch(
+      body,
+      /read_from_clipboard\(\)\.and_then\(\|item\| item\.text\(\)\)/,
+      `${clipboardImport.name} should not read unbounded clipboard text`,
+    );
+    assert.doesNotMatch(
+      body,
+      /\.text\(\)/,
+      `${clipboardImport.name} should not call ClipboardItem::text directly`,
+    );
+
+    const read = body.indexOf("cx.read_from_clipboard()");
+    const bound = body.indexOf(
+      "Self::bounded_agent_browser_clipboard_import_text(&clipboard)",
+    );
+    const parse = body.indexOf(clipboardImport.parse);
+
+    assert.ok(read >= 0, `${clipboardImport.name} should read the clipboard item`);
+    assert.ok(bound > read, `${clipboardImport.name} should bound clipboard text`);
+    assert.ok(
+      parse > bound,
+      `${clipboardImport.name} must parse JSON only after bounding clipboard text`,
+    );
+  }
 });
 
 test("Web Preview managed queue import uses sentinel-byte bounded reads", () => {

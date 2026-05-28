@@ -118,6 +118,47 @@ test("DX Agent bridge local receipt reads reject post-metadata growth before par
   );
 });
 
+test("DX Agent bridge failed command stderr is compacted before error display", () => {
+  const commands = read("crates/agent_ui/src/dx_agent_bridge/commands.rs");
+  const runStart = commands.indexOf("fn run_bridge_command");
+  const runEnd = commands.indexOf("\nfn write_json_receipt");
+  const helperStart = commands.indexOf("fn failed_command_stderr_display");
+  const helperEnd = commands.indexOf("\nfn write_json_receipt");
+
+  assert.ok(runStart >= 0, "expected run_bridge_command helper");
+  assert.ok(runEnd > runStart, "expected run_bridge_command to stay before receipt writer");
+  assert.ok(helperStart > runStart, "expected focused failed-command stderr display helper");
+  assert.ok(helperEnd > helperStart, "expected helper before receipt writer");
+
+  const runBridgeCommand = commands.slice(runStart, runEnd);
+  const stderrHelper = commands.slice(helperStart, helperEnd);
+
+  assert.match(commands, /const MAX_FAILED_COMMAND_STDERR_BYTES: usize = 2048;/);
+  assert.match(commands, /const MAX_FAILED_COMMAND_STDERR_CHARS: usize = 500;/);
+  assert.match(runBridgeCommand, /is_secret_like_arg\(arg\)/);
+  assert.match(
+    runBridgeCommand,
+    /let stderr = failed_command_stderr_display\(&output\.stderr\);/,
+  );
+  assert.match(runBridgeCommand, /anyhow!\(\s*"`\{\}` failed: \{\}"/);
+  const stderrDisplayCall = runBridgeCommand.indexOf(
+    "failed_command_stderr_display(&output.stderr)",
+  );
+  const failedCommandAnyhow = runBridgeCommand.indexOf("`{}` failed: {}");
+  assert.ok(failedCommandAnyhow > stderrDisplayCall, "expected failed-command anyhow");
+  assert.ok(
+    stderrDisplayCall < failedCommandAnyhow,
+    "stderr must be compacted before inclusion in anyhow",
+  );
+  assert.doesNotMatch(commands, /String::from_utf8_lossy\(&output\.stderr\)/);
+  assert.match(stderrHelper, /stderr\.len\(\) > MAX_FAILED_COMMAND_STDERR_BYTES/);
+  assert.match(stderrHelper, /&stderr\[..visible_len\]/);
+  assert.match(stderrHelper, /String::from_utf8_lossy\(&stderr\[..visible_len\]\)/);
+  assert.match(stderrHelper, /split_whitespace\(\)\.collect::<Vec<_>>\(\)\.join\(" "\)/);
+  assert.match(stderrHelper, /take\(MAX_FAILED_COMMAND_STDERR_CHARS\.saturating_sub\(3\)\)/);
+  assert.match(stderrHelper, /display\.push_str\("\.\.\."\)/);
+});
+
 test("DX Agent receipt display strings are redacted and bounded at parser boundaries", () => {
   const receipts = read("crates/agent_ui/src/dx_agent_bridge/receipts.rs");
   const receiptStrings = read("crates/agent_ui/src/dx_agent_bridge/receipts/receipt_strings.rs");

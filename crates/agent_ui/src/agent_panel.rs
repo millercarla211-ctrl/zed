@@ -128,6 +128,9 @@ const DX_CODING_PANEL_WIDTH: Pixels = px(360.);
 const LAST_USED_AGENT_KEY: &str = "agent_panel__last_used_external_agent";
 const LAST_CREATED_ENTRY_KIND_KEY: &str = "agent_panel__last_created_entry_kind";
 const TERMINAL_AGENT_TELEMETRY_ID: &str = "terminal";
+const MAX_LAST_USED_AGENT_JSON_BYTES: usize = 16 * 1024;
+const MAX_LAST_CREATED_ENTRY_KIND_JSON_BYTES: usize = 4 * 1024;
+const MAX_SERIALIZED_AGENT_PANEL_JSON_BYTES: usize = 256 * 1024;
 const MAX_THREAD_CLIPBOARD_DECODED_BYTES: usize = 16 * 1024 * 1024;
 const MAX_THREAD_CLIPBOARD_ENCODED_BYTES: usize =
     ((MAX_THREAD_CLIPBOARD_DECODED_BYTES + 2) / 3) * 4;
@@ -190,13 +193,34 @@ struct LastCreatedEntryKind {
     entry_kind: AgentPanelEntryKind,
 }
 
+fn ensure_kvp_json_within_limit(json: &str, max_bytes: usize, key: &str) -> Option<()> {
+    if json.len() > max_bytes {
+        Err::<(), _>(anyhow::anyhow!(
+            "{key} KVP payload is too large ({} bytes; max {} bytes)",
+            json.len(),
+            max_bytes
+        ))
+        .log_err();
+        return None;
+    }
+
+    Some(())
+}
+
 /// Reads the most recently used agent across all workspaces. Used as a fallback
 /// when opening a workspace that has no per-workspace agent preference yet.
 fn read_global_last_used_agent(kvp: &KeyValueStore) -> Option<Agent> {
     kvp.read_kvp(LAST_USED_AGENT_KEY)
         .log_err()
         .flatten()
-        .and_then(|json| serde_json::from_str::<LastUsedAgent>(&json).log_err())
+        .and_then(|json| {
+            ensure_kvp_json_within_limit(
+                &json,
+                MAX_LAST_USED_AGENT_JSON_BYTES,
+                LAST_USED_AGENT_KEY,
+            )?;
+            serde_json::from_str::<LastUsedAgent>(&json).log_err()
+        })
         .map(|entry| entry.agent)
 }
 
@@ -212,7 +236,14 @@ fn read_global_last_created_entry_kind(kvp: &KeyValueStore) -> Option<AgentPanel
     kvp.read_kvp(LAST_CREATED_ENTRY_KIND_KEY)
         .log_err()
         .flatten()
-        .and_then(|json| serde_json::from_str::<LastCreatedEntryKind>(&json).log_err())
+        .and_then(|json| {
+            ensure_kvp_json_within_limit(
+                &json,
+                MAX_LAST_CREATED_ENTRY_KIND_JSON_BYTES,
+                LAST_CREATED_ENTRY_KIND_KEY,
+            )?;
+            serde_json::from_str::<LastCreatedEntryKind>(&json).log_err()
+        })
         .map(|entry| entry.entry_kind)
 }
 
@@ -284,11 +315,14 @@ fn read_serialized_panel(
 ) -> Option<SerializedAgentPanel> {
     let scope = kvp.scoped(AGENT_PANEL_KEY);
     let key = i64::from(workspace_id).to_string();
-    scope
-        .read(&key)
-        .log_err()
-        .flatten()
-        .and_then(|json| serde_json::from_str::<SerializedAgentPanel>(&json).log_err())
+    scope.read(&key).log_err().flatten().and_then(|json| {
+        ensure_kvp_json_within_limit(
+            &json,
+            MAX_SERIALIZED_AGENT_PANEL_JSON_BYTES,
+            AGENT_PANEL_KEY,
+        )?;
+        serde_json::from_str::<SerializedAgentPanel>(&json).log_err()
+    })
 }
 
 async fn save_serialized_panel(
@@ -308,7 +342,14 @@ fn read_legacy_serialized_panel(kvp: &KeyValueStore) -> Option<SerializedAgentPa
     kvp.read_kvp(AGENT_PANEL_KEY)
         .log_err()
         .flatten()
-        .and_then(|json| serde_json::from_str::<SerializedAgentPanel>(&json).log_err())
+        .and_then(|json| {
+            ensure_kvp_json_within_limit(
+                &json,
+                MAX_SERIALIZED_AGENT_PANEL_JSON_BYTES,
+                AGENT_PANEL_KEY,
+            )?;
+            serde_json::from_str::<SerializedAgentPanel>(&json).log_err()
+        })
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
