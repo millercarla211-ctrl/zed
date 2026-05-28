@@ -224,3 +224,47 @@ test("workspace pane tab materialization checks stale item indexes", () => {
     "render_tab_bar must check visible indexes before cloning item handles",
   );
 });
+
+test("pane item removal checks stale item indexes before mutation side effects", () => {
+  const removeItem = functionBody(pane, "_remove_item");
+  assert.doesNotMatch(
+    removeItem,
+    /self\.items\s*\[\s*item_index\s*\]/,
+    "_remove_item must not directly index self.items[item_index]",
+  );
+  assertBefore({
+    body: removeItem,
+    before:
+      /let\s+Some\(item_id\)\s*=\s*self\.items\s*\.get\(\s*item_index\s*\)\s*\.map\(\|item\|\s*item\.item_id\(\)\)\s*else/,
+    after: /self\.activation_history\s*[\s\S]*?\.retain\(/,
+    message:
+      "_remove_item must verify item_index before retaining activation history",
+  });
+  assertBefore({
+    body: removeItem,
+    before:
+      /self\.items\s*\.get\(\s*item_index\s*\)\s*\.map\(\|item\|\s*item\.item_id\(\)\)\s*!=\s*Some\(item_id\)/,
+    after: /self\.items\s*\.remove\(\s*item_index\s*\)/,
+    message: "_remove_item must recheck item_index before removing",
+  });
+});
+
+test("pinned tab movement checks current source and destination indexes", () => {
+  const pinnedDrop = functionBody(pane, "handle_pinned_tab_bar_drop");
+  assertBefore({
+    body: pinnedDrop,
+    before:
+      /if\s+actual_ix\s*>=\s*items_len\s*\|\|\s*destination_ix\s*>=\s*items_len/,
+    after: /this\.items\.remove\(\s*actual_ix\s*\)/,
+    message:
+      "pinned tab movement must verify source and destination before removing",
+  });
+  assertBefore({
+    body: pinnedDrop,
+    before:
+      /if\s+actual_ix\s*>=\s*items_len\s*\|\|\s*destination_ix\s*>=\s*items_len/,
+    after: /this\.items\.insert\(\s*destination_ix\s*,\s*item\s*\)/,
+    message:
+      "pinned tab movement must verify source and destination before inserting",
+  });
+});

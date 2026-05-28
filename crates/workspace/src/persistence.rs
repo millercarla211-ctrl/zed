@@ -393,7 +393,9 @@ pub fn read_serialized_multi_workspaces(
                     window_groups.push(Vec::new());
                     window_groups.len() - 1
                 });
-                window_groups[group_index].push(session_workspace);
+                if let Some(window_group) = window_groups.get_mut(group_index) {
+                    window_group.push(session_workspace);
+                }
             }
             None => {
                 window_groups.push(vec![session_workspace]);
@@ -2828,8 +2830,13 @@ fn dedupe_recent_workspaces(
         };
         let key = (location_identity, workspace.identity_paths.paths().to_vec());
         if let Some(&existing_index) = indices_by_key.get(&key) {
-            if workspace.timestamp > result[existing_index].timestamp {
-                result[existing_index] = workspace;
+            if result
+                .get(existing_index)
+                .is_some_and(|existing| workspace.timestamp > existing.timestamp)
+            {
+                if let Some(existing) = result.get_mut(existing_index) {
+                    *existing = workspace;
+                }
             }
         } else {
             indices_by_key.insert(key, result.len());

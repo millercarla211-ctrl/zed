@@ -2326,8 +2326,11 @@ impl Pane {
         cx: &mut Context<Self>,
     ) {
         let activate_on_close = &ItemSettings::get_global(cx).activate_on_close;
+        let Some(item_id) = self.items.get(item_index).map(|item| item.item_id()) else {
+            return;
+        };
         self.activation_history
-            .retain(|entry| entry.entity_id != self.items[item_index].item_id());
+            .retain(|entry| entry.entity_id != item_id);
 
         if self.is_tab_pinned(item_index) {
             self.pinned_tab_count -= 1;
@@ -2374,6 +2377,9 @@ impl Pane {
             }
         }
 
+        if self.items.get(item_index).map(|item| item.item_id()) != Some(item_id) {
+            return;
+        }
         let item = self.items.remove(item_index);
 
         cx.emit(Event::RemovedItem { item: item.clone() });
@@ -4153,6 +4159,10 @@ impl Pane {
                             if actual_ix >= this.pinned_tab_count {
                                 let was_active = this.active_item_index == actual_ix;
                                 let destination_ix = this.pinned_tab_count;
+                                let items_len = this.items.len();
+                                if actual_ix >= items_len || destination_ix >= items_len {
+                                    return;
+                                }
 
                                 // Move item to pinned area if needed
                                 if actual_ix != destination_ix {

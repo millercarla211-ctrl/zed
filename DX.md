@@ -63,6 +63,8 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-editor-search-source.test.ts` - editor search match stale-index boundaries.
 - `node --test script/dx-editor-context-menu-source.test.ts` - editor completion documentation cache stale-index boundaries.
 - `node --test script/dx-editor-lsp-ui-source.test.ts` - editor code-action, code-lens, and completion fanout boundaries.
+- `node --test script/dx-editor-element-source.test.ts` - editor element layout stale visible-row and popover materialization boundaries.
+- `node --test script/dx-editor-line-ops-source.test.ts` - editor line-rotation selection remap stale-row boundaries.
 - `node --test script/dx-language-registry-source.test.ts` - language registry/settings and WASM metadata materialization boundaries.
 - `node --test script/zed-app-fanout-source.test.ts` - app-level quit, channel-note, serialization, and action dump fanout boundaries.
 - `node --test script/dx-terminal-view-source.test.ts` - terminal view persistence, restore, selection, and render materialization boundaries.
@@ -83,6 +85,8 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-picker-core-source.test.ts` - picker core stale-selection, selectable fallback, and reveal-scroll boundaries.
 - `node --test script/dx-search-ui-source.test.ts` - project-search active-match label and navigation index boundaries.
 - `node --test script/dx-debugger-ui-source.test.ts` - debugger console DAP completion materialization boundaries.
+- `node --test script/dx-debugger-panel-source.test.ts` - debugger restart missing-binary boundaries.
+- `node --test script/dx-debugger-run-terminal-source.test.ts` - debugger run-in-terminal missing-binary cwd fallback boundaries.
 - `node --test script/dx-debugger-stack-frame-source.test.ts` - debugger stack-frame filtered-row and entry render boundaries.
 - `node --test script/dx-debugger-module-list-source.test.ts` - debugger module-list stale-row render boundaries.
 - `node --test script/dx-collab-panel-source.test.ts` - collab panel stale fuzzy candidate-id materialization boundaries.
@@ -116,7 +120,7 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-tab-switcher-source.test.ts` - all-pane tab switcher collection, fuzzy label, result mapping, and stale-selection boundaries.
 - `node --test script/dx-agent-server-store-source.test.ts` - agent server discovery and archive-cache enumeration boundaries.
 - `node --test script/dx-workspace-reentrant-source.test.ts` - active-workspace event payload and reentrant update contracts.
-- `node --test script/dx-workspace-persistence-source.test.ts` - workspace persistence KVP and JSON column byte boundaries.
+- `node --test script/dx-workspace-persistence-source.test.ts` - workspace persistence KVP, JSON column byte, and stale-index boundaries.
 - `node --test script/dx-workspace-enumeration-source.test.ts` - workspace history and local discovery enumeration boundaries.
 - `node --test script/dx-source-quality.test.ts` - DX Studio source/edit manifest and bridge source contracts.
 - `node --test script/dx-studio-project-source.test.ts` - DX Studio project detection and source-edit bounded file-read contracts.
@@ -175,6 +179,8 @@ Adjacent source guards:
 - Wire DX Agents CLI receipts, social/account readiness, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
+
+- Completed a six-agent editor/workspace/debugger stale-state hardening pass without `just run` or Cargo. Editor element layout navigation labels, inline diagnostics, and cursor popovers now check visible row/layout/popover indexes before materialization; workspace persistence grouping and recent-workspace de-dupe now use checked collection access; Workspace pane removal and pinned-tab movement now verify source/destination item indexes before mutation; line rotation selection remaps preserve stale selections instead of panicking; debugger restart now fails closed when binary state is missing, and run-in-terminal cwd fallback avoids the missing-binary unwrap while continuing without a binary-derived cwd. Added and registered `script/dx-editor-element-source.test.ts`, `script/dx-editor-line-ops-source.test.ts`, `script/dx-debugger-panel-source.test.ts`, and `script/dx-debugger-run-terminal-source.test.ts`, and extended `script/dx-workspace-persistence-source.test.ts` plus `script/dx-workspace-ui-state-source.test.ts`. Passed source-only integration: 23/23 targeted Node source subtests including the handoff registry, targeted rustfmt checks, stale direct-index/unwrap pattern scan, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 
 - Completed a six-agent command/editor/workspace stale-index hardening pass without `just run` or Cargo. Command Palette confirm-time command removal, Editor diff-review overlay comment submission, Editor search match navigation, Editor reference navigation, Editor completion documentation cache promotion, and Workspace Dock panel activation now use checked lookups or checked removals before reading, mutating, activating, or rendering stale indexes. Added and registered `script/dx-editor-git-source.test.ts`, `script/dx-editor-search-source.test.ts`, and `script/dx-editor-context-menu-source.test.ts`, and extended `script/dx-command-palette-source.test.ts`, `script/dx-editor-navigation-source.test.ts`, and `script/dx-workspace-ui-state-source.test.ts`. Passed source-only integration: 19/19 targeted Node source subtests including the handoff registry, targeted rustfmt checks, stale direct-index pattern scan, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 

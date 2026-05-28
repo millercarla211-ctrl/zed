@@ -2038,7 +2038,9 @@ impl EditorElement {
         }
 
         let row_index = label_row.minus(context.visible_display_row_range.start) as usize;
-        let row_layout = &context.line_layouts[row_index];
+        let Some(row_layout) = context.line_layouts.get(row_index) else {
+            return;
+        };
         let label_column = label_display_point.column().min(row_layout.len as u32) as usize;
         let label_x = row_layout.x_for_index(label_column)
             + row_layout.alignment_offset(context.text_align, context.content_width)
@@ -2572,10 +2574,12 @@ impl EditorElement {
             let pos_y = content_origin.y + line_height * (row.0 as f64 - scroll_position.y) as f32;
 
             let window_ix = row.0.saturating_sub(start_row.0) as usize;
+            let (Some(crease_trailer_layout), Some(line_layout)) =
+                (crease_trailers.get(window_ix), line_layouts.get(window_ix))
+            else {
+                continue;
+            };
             let pos_x = {
-                let crease_trailer_layout = &crease_trailers[window_ix];
-                let line_layout = &line_layouts[window_ix];
-
                 let line_end = if let Some(crease_trailer) = crease_trailer_layout {
                     crease_trailer.bounds.right()
                 } else {
@@ -4853,7 +4857,10 @@ impl EditorElement {
             return None;
         }
 
-        let cursor_row_layout = &line_layouts[cursor.row().minus(start_row) as usize];
+        let cursor_row_ix = cursor.row().minus(start_row) as usize;
+        let Some(cursor_row_layout) = line_layouts.get(cursor_row_ix) else {
+            return None;
+        };
         let target_position = content_origin
             + gpui::Point {
                 x: cmp::max(
@@ -4942,10 +4949,10 @@ impl EditorElement {
         let (menu_ix, (_, menu_bounds)) = laid_out_popovers
             .iter()
             .find_position(|(x, _)| matches!(x, CursorPopoverType::CodeContextMenu))?;
-        let last_ix = laid_out_popovers.len() - 1;
+        let last_ix = laid_out_popovers.len().checked_sub(1)?;
         let menu_is_last = menu_ix == last_ix;
-        let first_popover_bounds = laid_out_popovers[0].1;
-        let last_popover_bounds = laid_out_popovers[last_ix].1;
+        let first_popover_bounds = laid_out_popovers.first()?.1;
+        let last_popover_bounds = laid_out_popovers.last()?.1;
 
         // Bounds to layout the aside around. When y_flipped, the aside goes either above or to the
         // right, and otherwise it goes below or to the right.

@@ -1246,7 +1246,7 @@ impl RunningState {
 
         let cwd = (!request.cwd.is_empty())
             .then(|| PathBuf::from(&request.cwd))
-            .or_else(|| session.binary().unwrap().cwd.clone());
+            .or_else(|| session.binary().and_then(|binary| binary.cwd.clone()));
 
         let mut envs: HashMap<String, String> =
             self.session.read(cx).task_context().project_env.clone();

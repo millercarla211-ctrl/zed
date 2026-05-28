@@ -383,7 +383,10 @@ impl DebugPanel {
         let label = curr_session.read(cx).label();
         let quirks = curr_session.read(cx).quirks();
         let adapter = curr_session.read(cx).adapter();
-        let binary = curr_session.read(cx).binary().cloned().unwrap();
+        let Some(binary) = curr_session.read(cx).binary().cloned() else {
+            log::error!("Attempted to restart a session without a binary");
+            return;
+        };
         let task_context = curr_session.read(cx).task_context().clone();
 
         let curr_session_id = curr_session.read(cx).session_id();

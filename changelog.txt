@@ -1,3 +1,29 @@
+[2026-05-29] - Editor Workspace Debugger Stale State Hardening
+
+ADDED:
+- Added `script\dx-editor-element-source.test.ts` for editor element visible-row/layout/popover stale-index boundaries.
+- Added `script\dx-editor-line-ops-source.test.ts` for editor line-rotation selection remap stale-row boundaries.
+- Added `script\dx-debugger-panel-source.test.ts` for debugger restart missing-binary boundaries.
+- Added `script\dx-debugger-run-terminal-source.test.ts` for debugger run-in-terminal missing-binary cwd fallback boundaries.
+
+CHANGED:
+- Editor element navigation labels, inline diagnostics, cursor row lookup, and cursor popover bounds now check layout/popover indexes before materialization.
+- Workspace persistence window grouping and recent-workspace de-dupe now use checked collection access instead of stale direct indexes.
+- Workspace pane item removal and pinned-tab movement now verify source and destination item indexes before mutation.
+- Editor line rotation now preserves stale selections when row or remapped line indexes disappear instead of panicking.
+- Debugger restart now fails closed when session binary state is missing, and run-in-terminal cwd fallback now avoids the missing-binary unwrap while continuing without a binary-derived cwd.
+- Registered the new source guards in `script\dx-handoff-source-guard-registry.test.ts`, `DX.md`, and `todo.txt`.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-editor-element-source.test.ts script\dx-workspace-persistence-source.test.ts script\dx-workspace-ui-state-source.test.ts script\dx-editor-line-ops-source.test.ts script\dx-debugger-panel-source.test.ts script\dx-debugger-run-terminal-source.test.ts` (23/23 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Targeted stale direct-index and missing-binary unwrap pattern scan over edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-29] - Command Editor Workspace Stale Index Hardening
 
 ADDED:

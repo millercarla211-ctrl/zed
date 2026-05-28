@@ -76,6 +76,23 @@ test("workspace persistence JSON byte caps are explicit", () => {
   assert.match(helper, /bail!\(/);
 });
 
+test("workspace persistence indexing avoids stale direct index panics", () => {
+  const readSerialized = functionBody(
+    persistence,
+    "read_serialized_multi_workspaces",
+  );
+  assert.doesNotMatch(
+    readSerialized,
+    /window_groups\s*\[\s*group_index\s*\]/,
+  );
+  assert.match(readSerialized, /window_groups\s*\.get_mut\(group_index\)/);
+
+  const dedupe = functionBody(persistence, "dedupe_recent_workspaces");
+  assert.doesNotMatch(dedupe, /result\s*\[\s*existing_index\s*\]/);
+  assert.match(dedupe, /result\s*\.get\(existing_index\)/);
+  assert.match(dedupe, /result\s*\.get_mut\(existing_index\)/);
+});
+
 test("workspace KVP JSON is bounded before deserialization", () => {
   const defaultWindowBounds = functionBody(persistence, "read_default_window_bounds");
   assertBefore({

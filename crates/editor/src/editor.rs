@@ -6289,14 +6289,18 @@ impl Editor {
                     .iter()
                     .map(|selection| {
                         let point = buffer.offset_to_point(selection.start);
-                        let old_index = row_to_index[&point.row];
+                        let Some(&old_index) = row_to_index.get(&point.row) else {
+                            return selection.clone();
+                        };
                         let new_index = if reverse {
                             (old_index + num_rows - 1) % num_rows
                         } else {
                             (old_index + 1) % num_rows
                         };
-                        let new_offset =
-                            MultiBufferOffset(new_line_starts[new_index] + point.column as usize);
+                        let Some(&new_line_start) = new_line_starts.get(new_index) else {
+                            return selection.clone();
+                        };
+                        let new_offset = MultiBufferOffset(new_line_start + point.column as usize);
                         Selection {
                             id: selection.id,
                             start: new_offset,
