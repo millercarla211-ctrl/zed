@@ -62,7 +62,7 @@ impl CsvPreviewView {
                     RowRenderMechanism::VariableList => {
                         table.variable_row_height_list(row_count, self.list_state.clone(), {
                             cx.processor(move |this, display_row: usize, _window, cx| {
-                                this.performance_metrics.rendered_indices.push(display_row);
+                                this.performance_metrics.record_rendered_index(display_row);
 
                                 let display_row = DisplayRow(display_row);
                                 Self::render_single_table_row(
@@ -79,10 +79,8 @@ impl CsvPreviewView {
                     RowRenderMechanism::UniformList => {
                         table.uniform_list("csv-table", row_count, {
                             cx.processor(move |this, range: Range<usize>, _window, cx| {
-                                // Record all display indices in the range for performance metrics
                                 this.performance_metrics
-                                    .rendered_indices
-                                    .extend(range.clone());
+                                    .record_rendered_indices(range.clone());
 
                                 range
                                     .filter_map(|display_index| {

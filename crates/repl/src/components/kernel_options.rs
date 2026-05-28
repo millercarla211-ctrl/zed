@@ -175,6 +175,14 @@ where
 }
 
 impl KernelPickerDelegate {
+    fn clamp_entry_index(&self, ix: usize) -> Option<usize> {
+        if self.filtered_entries.is_empty() {
+            return None;
+        }
+
+        Some(ix.min(self.filtered_entries.len() - 1))
+    }
+
     fn first_selectable_index(entries: &[KernelPickerEntry]) -> usize {
         entries
             .iter()
@@ -201,6 +209,13 @@ impl KernelPickerDelegate {
 
         from
     }
+
+    fn sync_selected_kernelspec(&mut self) {
+        self.selected_kernelspec = match self.filtered_entries.get(self.selected_index) {
+            Some(KernelPickerEntry::Kernel { spec, .. }) => Some(spec.clone()),
+            _ => None,
+        };
+    }
 }
 
 impl PickerDelegate for KernelPickerDelegate {
@@ -215,6 +230,13 @@ impl PickerDelegate for KernelPickerDelegate {
     }
 
     fn set_selected_index(&mut self, ix: usize, _: &mut Window, cx: &mut Context<Picker<Self>>) {
+        let Some(ix) = self.clamp_entry_index(ix) else {
+            self.selected_index = 0;
+            self.selected_kernelspec = None;
+            cx.notify();
+            return;
+        };
+
         if matches!(
             self.filtered_entries.get(ix),
             Some(KernelPickerEntry::SectionHeader(_))
@@ -229,11 +251,7 @@ impl PickerDelegate for KernelPickerDelegate {
             self.selected_index = ix;
         }
 
-        if let Some(KernelPickerEntry::Kernel { spec, .. }) =
-            self.filtered_entries.get(self.selected_index)
-        {
-            self.selected_kernelspec = Some(spec.clone());
-        }
+        self.sync_selected_kernelspec();
         cx.notify();
     }
 
@@ -274,11 +292,7 @@ impl PickerDelegate for KernelPickerDelegate {
         }
 
         self.selected_index = Self::first_selectable_index(&self.filtered_entries);
-        if let Some(KernelPickerEntry::Kernel { spec, .. }) =
-            self.filtered_entries.get(self.selected_index)
-        {
-            self.selected_kernelspec = Some(spec.clone());
-        }
+        self.sync_selected_kernelspec();
 
         Task::ready(())
     }

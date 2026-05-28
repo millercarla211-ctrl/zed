@@ -644,6 +644,16 @@ impl ActivityIndicator {
 impl EventEmitter<Event> for ActivityIndicator {}
 
 const MAX_MESSAGE_LEN: usize = 50;
+const MAX_ACTIVITY_INDICATOR_MESSAGE_LABEL_LEN: usize = 4_096;
+const MAX_ACTIVITY_INDICATOR_MENU_LABEL_LEN: usize = 512;
+
+fn bounded_activity_indicator_message(message: &str) -> String {
+    truncate_and_trailoff(message, MAX_ACTIVITY_INDICATOR_MESSAGE_LABEL_LEN)
+}
+
+fn bounded_activity_indicator_menu_label(label: &str) -> String {
+    truncate_and_trailoff(label, MAX_ACTIVITY_INDICATOR_MENU_LABEL_LEN)
+}
 
 impl Render for ActivityIndicator {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -657,7 +667,12 @@ impl Render for ActivityIndicator {
         };
 
         let activity_indicator = cx.entity().downgrade();
-        let truncate_content = content.message.len() > MAX_MESSAGE_LEN;
+        let bounded_message = bounded_activity_indicator_message(&content.message);
+        let bounded_tooltip_message = content
+            .tooltip_message
+            .as_deref()
+            .map(bounded_activity_indicator_message);
+        let truncate_content = bounded_message.len() > MAX_MESSAGE_LEN;
         let has_click_handler = content.on_click.is_some();
 
         result.child(
@@ -665,9 +680,9 @@ impl Render for ActivityIndicator {
                 .trigger(
                     Button::new("activity-indicator-trigger", {
                         if truncate_content {
-                            truncate_and_trailoff(&content.message, MAX_MESSAGE_LEN)
+                            truncate_and_trailoff(&bounded_message, MAX_MESSAGE_LEN)
                         } else {
-                            content.message.clone()
+                            bounded_message.clone()
                         }
                     })
                     .label_size(LabelSize::Small)
@@ -681,9 +696,9 @@ impl Render for ActivityIndicator {
                     })
                     .map(|button| {
                         if truncate_content {
-                            button.tooltip(Tooltip::text(content.message))
+                            button.tooltip(Tooltip::text(bounded_message.clone()))
                         } else {
-                            button.when_some(content.tooltip_message, |this, tooltip_message| {
+                            button.when_some(bounded_tooltip_message, |this, tooltip_message| {
                                 this.tooltip(Tooltip::text(tooltip_message))
                             })
                         }
@@ -712,7 +727,10 @@ impl Render for ActivityIndicator {
                                     has_cancellable_work = true;
                                     let language_server_id = work.language_server_id;
                                     let token = work.progress_token.clone();
-                                    let title = SharedString::from(format!("Cancel {title}"));
+                                    let title =
+                                        SharedString::from(bounded_activity_indicator_menu_label(
+                                            &format!("Cancel {title}"),
+                                        ));
                                     menu = menu.custom_entry(
                                         move |_, _| {
                                             h_flex()
@@ -752,6 +770,7 @@ impl Render for ActivityIndicator {
                                         title.push_str(progress_message);
                                     }
 
+                                    let title = bounded_activity_indicator_menu_label(&title);
                                     menu = menu.label(title);
                                 }
                             }

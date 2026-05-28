@@ -8,7 +8,7 @@ use ordered_float::OrderedFloat;
 use picker::{Picker, PickerDelegate};
 use project::{Project, Symbol, lsp_store::SymbolLocation};
 use settings::Settings;
-use std::{cmp::Reverse, sync::Arc};
+use std::{cmp::Reverse, ops::Range, sync::Arc};
 use theme::ActiveTheme;
 use theme_settings::ThemeSettings;
 use util::ResultExt;
@@ -36,6 +36,19 @@ pub fn init(cx: &mut App) {
 }
 
 pub type ProjectSymbols = Entity<Picker<ProjectSymbolsDelegate>>;
+
+fn fuzzy_highlight_range(label: &str, position: usize) -> Option<Range<usize>> {
+    if position >= label.len() || !label.is_char_boundary(position) {
+        return None;
+    }
+
+    let end = label[position..]
+        .char_indices()
+        .nth(1)
+        .map(|(next, _)| position + next)
+        .unwrap_or(label.len());
+    Some(position..end)
+}
 
 pub struct ProjectSymbolsDelegate {
     workspace: WeakEntity<Workspace>,
@@ -288,7 +301,8 @@ impl PickerDelegate for ProjectSymbolsDelegate {
         let custom_highlights = string_match
             .positions
             .iter()
-            .map(|pos| (*pos..label.ceil_char_boundary(pos + 1), highlight_style));
+            .filter_map(|pos| fuzzy_highlight_range(&label, *pos))
+            .map(|range| (range, highlight_style));
 
         let highlights = gpui::combine_highlights(custom_highlights, syntax_runs);
 

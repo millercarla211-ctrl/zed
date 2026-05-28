@@ -33,6 +33,8 @@ impl ScopeFileName {
 
 const GLOBAL_SCOPE_NAME: &str = "global";
 const GLOBAL_SCOPE_FILE_NAME: &str = "snippets";
+const MAX_SNIPPET_SCOPE_CANDIDATES: usize = 2_000;
+const MAX_EXISTING_SNIPPET_SCOPE_FILES: usize = 4_000;
 
 impl From<ScopeName> for ScopeFileName {
     fn from(value: ScopeName) -> Self {
@@ -149,7 +151,10 @@ impl ScopeSelectorDelegate {
         scope_selector: WeakEntity<ScopeSelector>,
         language_registry: Arc<LanguageRegistry>,
     ) -> Self {
-        let languages = language_registry.language_names().into_iter();
+        let languages = language_registry
+            .language_names()
+            .into_iter()
+            .take(MAX_SNIPPET_SCOPE_CANDIDATES.saturating_sub(1));
 
         let candidates = std::iter::once(LanguageName::new(GLOBAL_SCOPE_NAME))
             .chain(languages)
@@ -160,7 +165,7 @@ impl ScopeSelectorDelegate {
         let mut existing_scopes = HashSet::new();
 
         if let Some(read_dir) = fs::read_dir(snippets_dir()).log_err() {
-            for entry in read_dir {
+            for entry in read_dir.take(MAX_EXISTING_SNIPPET_SCOPE_FILES) {
                 if let Some(entry) = entry.log_err() {
                     let path = entry.path();
                     if let (Some(stem), Some(extension)) = (path.file_stem(), path.extension())

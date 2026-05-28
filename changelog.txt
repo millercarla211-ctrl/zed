@@ -1,3 +1,32 @@
+[2026-05-28] - Activity Symbols Snippets Repl Preview And Acp Tools Hardening
+
+ADDED:
+- Added `script\dx-activity-indicator-source.test.ts` for activity indicator status, tooltip, and menu label materialization boundaries.
+- Added `script\dx-project-symbols-source.test.ts` for Project Symbols UTF-8 fuzzy-highlight boundaries.
+- Added `script\dx-snippets-source.test.ts` for snippet scope candidate and scope-file materialization boundaries.
+- Added `script\dx-repl-ui-source.test.ts` for REPL kernel picker stale-selection and selected-kernel boundaries.
+- Added `script\dx-preview-surfaces-source.test.ts` for CSV preview rendered-index metric boundaries.
+- Added `script\dx-acp-tools-source.test.ts` for ACP request-id chip materialization boundaries.
+
+CHANGED:
+- Activity Indicator now bounds status, tooltip, and pending-work menu labels before button, tooltip, or menu materialization.
+- Project Symbols now skips stale or non-UTF-8-boundary fuzzy highlight positions before combining render highlights.
+- Snippets now caps language scope candidates and existing snippet scope-file discovery before picker materialization.
+- REPL kernel picker now clamps stale filtered entry indexes and clears stale selected kernels after empty or header-only match sets.
+- CSV Preview now caps rendered-index performance metric collection used by debug overlays.
+- ACP tools now truncates oversized request IDs before rendering request-id chips.
+- `DX.md` and the source-guard registry now list the new guards.
+
+PASSED:
+- `node --test script\dx-activity-indicator-source.test.ts script\dx-project-symbols-source.test.ts script\dx-snippets-source.test.ts script\dx-repl-ui-source.test.ts script\dx-preview-surfaces-source.test.ts script\dx-acp-tools-source.test.ts` (11/11 passing)
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-activity-indicator-source.test.ts script\dx-project-symbols-source.test.ts script\dx-snippets-source.test.ts script\dx-repl-ui-source.test.ts script\dx-preview-surfaces-source.test.ts script\dx-acp-tools-source.test.ts` (14/14 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Command Palette Picker Search Debugger Collab And Remote Listing Hardening
 
 ADDED:

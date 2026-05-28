@@ -280,6 +280,9 @@ pub struct PerformanceMetrics {
     /// List of display indices that were rendered in the current frame.
     pub rendered_indices: Vec<usize>,
 }
+
+const MAX_CSV_PREVIEW_RENDERED_INDICES: usize = 2_048;
+
 impl PerformanceMetrics {
     pub fn record<F, R>(&mut self, name: &'static str, mut f: F) -> R
     where
@@ -290,6 +293,24 @@ impl PerformanceMetrics {
         let duration = start_time.elapsed();
         self.timings.insert(name, (duration, Instant::now()));
         ret
+    }
+
+    pub fn record_rendered_index(&mut self, index: usize) {
+        if self.rendered_indices.len() >= MAX_CSV_PREVIEW_RENDERED_INDICES {
+            return;
+        }
+
+        self.rendered_indices.push(index);
+    }
+
+    pub fn record_rendered_indices(&mut self, indices: impl IntoIterator<Item = usize>) {
+        for index in indices {
+            if self.rendered_indices.len() >= MAX_CSV_PREVIEW_RENDERED_INDICES {
+                break;
+            }
+
+            self.record_rendered_index(index);
+        }
     }
 
     /// Displays all metrics sorted A-Z in format: `{name}: {took}ms {ago}s ago`
