@@ -1263,7 +1263,16 @@ impl Editor {
                 return Ok(());
             }
 
-            let Range { start, end } = locations[destination_location_index];
+            let Some(Range { start, end }) =
+                locations.get(destination_location_index).cloned()
+            else {
+                log::error!(
+                    "failed to find destination reference. Destination index: {}, Total references: {}",
+                    destination_location_index,
+                    locations.len()
+                );
+                return Ok(());
+            };
 
             editor.update_in(cx, |editor, window, cx| {
                 let effects = SelectionEffects::scroll(Autoscroll::for_go_to_definition(

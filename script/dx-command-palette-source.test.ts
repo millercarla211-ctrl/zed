@@ -86,15 +86,14 @@ test("command palette clamps stale selection before command materialization", ()
   );
   assert.match(
     confirm,
-    /let Some\(_\) = self\.commands\.get\(action_ix\) else \{\s+return;\s+\};/,
-    "confirm must guard stale command candidate ids before swap_remove",
+    /let Some\(command\)\s*=\s*\(action_ix < self\.commands\.len\(\)\)\.then\(\|\| self\.commands\.remove\(action_ix\)\)\s*else \{\s+return;\s+\};/,
+    "confirm must materialize commands through a checked candidate-id removal",
   );
-  assertBefore({
-    body: confirm,
-    before: "self.commands.get(action_ix)",
-    after: "self.commands.swap_remove(action_ix)",
-    message: "confirm must prove action_ix is in bounds before swap_remove",
-  });
+  assert.doesNotMatch(
+    confirm,
+    /self\.commands\.swap_remove\(action_ix\)/,
+    "confirm must not remove via stale direct swap_remove(action_ix)",
+  );
   assert.doesNotMatch(
     confirm,
     /self\.matches\[self\.selected_ix\]/,

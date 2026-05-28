@@ -505,7 +505,9 @@ impl Editor {
         let Some(overlay_index) = overlay_index else {
             return;
         };
-        let overlay = &self.diff_review_overlays[overlay_index];
+        let Some(overlay) = self.diff_review_overlays.get(overlay_index) else {
+            return;
+        };
 
         let comment_text = overlay.prompt_editor.read(cx).text(cx).trim().to_string();
         if comment_text.is_empty() {

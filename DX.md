@@ -59,6 +59,9 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-profile-selector-source.test.ts` - profile picker candidate, fuzzy-match, and render materialization boundaries.
 - `node --test script/dx-terminal-thread-metadata-source.test.ts` - terminal thread metadata DB, cache, path-list, and serialization boundaries.
 - `node --test script/dx-terminal-display-source.test.ts` - terminal display/search/hyperlink materialization boundaries.
+- `node --test script/dx-editor-git-source.test.ts` - editor diff-review overlay stale-index boundaries.
+- `node --test script/dx-editor-search-source.test.ts` - editor search match stale-index boundaries.
+- `node --test script/dx-editor-context-menu-source.test.ts` - editor completion documentation cache stale-index boundaries.
 - `node --test script/dx-editor-lsp-ui-source.test.ts` - editor code-action, code-lens, and completion fanout boundaries.
 - `node --test script/dx-language-registry-source.test.ts` - language registry/settings and WASM metadata materialization boundaries.
 - `node --test script/zed-app-fanout-source.test.ts` - app-level quit, channel-note, serialization, and action dump fanout boundaries.
@@ -172,6 +175,8 @@ Adjacent source guards:
 - Wire DX Agents CLI receipts, social/account readiness, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
+
+- Completed a six-agent command/editor/workspace stale-index hardening pass without `just run` or Cargo. Command Palette confirm-time command removal, Editor diff-review overlay comment submission, Editor search match navigation, Editor reference navigation, Editor completion documentation cache promotion, and Workspace Dock panel activation now use checked lookups or checked removals before reading, mutating, activating, or rendering stale indexes. Added and registered `script/dx-editor-git-source.test.ts`, `script/dx-editor-search-source.test.ts`, and `script/dx-editor-context-menu-source.test.ts`, and extended `script/dx-command-palette-source.test.ts`, `script/dx-editor-navigation-source.test.ts`, and `script/dx-workspace-ui-state-source.test.ts`. Passed source-only integration: 19/19 targeted Node source subtests including the handoff registry, targeted rustfmt checks, stale direct-index pattern scan, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 
 - Completed a six-agent stale UI materialization hardening pass for Project Panel, Git Panel, Collab Panel, Settings UI, Agent provider configuration, and Workspace pane tabs without `just run` or Cargo. Project Panel previous-selection navigation and active-indent guide lookup, Git tree/prompt selection, Collab Panel row rendering, Settings navbar/file-filter updates, Add LLM Provider model rendering/toggles/removal, and Workspace pane tab materialization now use checked lookups before reading, mutating, focusing, or rendering stale indexes. Extended `script/dx-project-panel-source.test.ts`, `script/dx-git-ui-source.test.ts`, `script/dx-collab-panel-source.test.ts`, `script/dx-settings-keymap-source.test.ts`, `script/dx-agent-configuration-modal-source.test.ts`, and `script/dx-workspace-ui-state-source.test.ts`. Passed source-only integration: 40/40 targeted Node source subtests including the handoff registry, targeted rustfmt checks, stale direct-index pattern scan, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 

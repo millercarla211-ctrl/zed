@@ -130,6 +130,24 @@ test("dock panel-size persist batches are bounded before deferred persistence", 
   });
 });
 
+test("dock panel activation checks target index before active-panel side effects", () => {
+  const activatePanel = functionBody(dock, "activate_panel");
+  assertBefore({
+    body: activatePanel,
+    before: /self\.panel_entries\s*\.get\(\s*panel_ix\s*\)/,
+    after: /active_panel\.panel\.set_active\(false, window, cx\)/,
+    message:
+      "activate_panel must verify the target panel exists before deactivating the current panel",
+  });
+  assertBefore({
+    body: activatePanel,
+    before: /self\.panel_entries\s*\.get\(\s*panel_ix\s*\)/,
+    after: "self.active_panel_index = Some(panel_ix);",
+    message:
+      "activate_panel must verify the target panel exists before storing the active index",
+  });
+});
+
 test("item project-handle collections cap visited items before pushing handles", () => {
   assert.match(item, /const MAX_PROJECT_ITEMS_PER_ITEM: usize = 512;/);
 

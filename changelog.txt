@@ -1,3 +1,29 @@
+[2026-05-29] - Command Editor Workspace Stale Index Hardening
+
+ADDED:
+- Added `script\dx-editor-git-source.test.ts` for Editor diff-review overlay stale-index boundaries.
+- Added `script\dx-editor-search-source.test.ts` for Editor search match stale-index boundaries.
+- Added `script\dx-editor-context-menu-source.test.ts` for Editor completion documentation cache stale-index boundaries.
+
+CHANGED:
+- Command Palette confirm-time command removal now ties candidate-id bounds checking to the removal operation instead of using a later stale direct `swap_remove`.
+- Editor diff-review comment submission now checks the focused overlay index before reading comment text and cloning anchor state.
+- Editor search match navigation now handles empty match lists and clamps stale current indexes before deriving a cursor.
+- Editor reference navigation now checks the destination reference index before unfolding and selecting the target range.
+- Editor completion documentation cache promotion now mutates cache keys through checked cache entry lookups and guards cache rotation indexes.
+- Workspace Dock panel activation now checks target panel indexes before deactivating the current panel or storing a new active index.
+- Extended `script\dx-command-palette-source.test.ts`, `script\dx-editor-navigation-source.test.ts`, and `script\dx-workspace-ui-state-source.test.ts`.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-command-palette-source.test.ts script\dx-editor-git-source.test.ts script\dx-editor-search-source.test.ts script\dx-editor-navigation-source.test.ts script\dx-editor-context-menu-source.test.ts script\dx-workspace-ui-state-source.test.ts` (19/19 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Targeted stale direct-index pattern scan over edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-29] - UI Materialization Stale Index Hardening
 
 CHANGED:

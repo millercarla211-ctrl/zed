@@ -594,10 +594,11 @@ impl PickerDelegate for CommandPaletteDelegate {
             return;
         };
         let action_ix = matching_command.candidate_id;
-        let Some(_) = self.commands.get(action_ix) else {
+        let Some(command) =
+            (action_ix < self.commands.len()).then(|| self.commands.remove(action_ix))
+        else {
             return;
         };
-        let command = self.commands.swap_remove(action_ix);
         telemetry::event!(
             "Action Invoked",
             source = "command palette",

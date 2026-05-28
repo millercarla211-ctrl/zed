@@ -79,13 +79,14 @@ impl Editor {
 
         if let Some(active_path) = target_file_abs_path_for_app(self, cx)
             && is_react_editor_path(&active_path)
-            && let Some((project_root, active_path)) = self.active_project_path(cx).and_then(|path| {
-                let project = self.project()?.read(cx);
-                Some((
-                    project.get_workspace_root(&path, cx)?,
-                    project.absolute_path(&path, cx)?,
-                ))
-            })
+            && let Some((project_root, active_path)) =
+                self.active_project_path(cx).and_then(|path| {
+                    let project = self.project()?.read(cx);
+                    Some((
+                        project.get_workspace_root(&path, cx)?,
+                        project.absolute_path(&path, cx)?,
+                    ))
+                })
         {
             return self.insert_react_icon_asset(icon, &svg, project_root, active_path, window, cx);
         }
@@ -148,13 +149,14 @@ impl Editor {
 
         if let Some(active_path) = target_file_abs_path_for_app(self, cx)
             && is_react_editor_path(&active_path)
-            && let Some((project_root, active_path)) = self.active_project_path(cx).and_then(|path| {
-                let project = self.project()?.read(cx);
-                Some((
-                    project.get_workspace_root(&path, cx)?,
-                    project.absolute_path(&path, cx)?,
-                ))
-            })
+            && let Some((project_root, active_path)) =
+                self.active_project_path(cx).and_then(|path| {
+                    let project = self.project()?.read(cx);
+                    Some((
+                        project.get_workspace_root(&path, cx)?,
+                        project.absolute_path(&path, cx)?,
+                    ))
+                })
         {
             return self.insert_react_icon_asset_on_drop(icon, &svg, project_root, active_path, cx);
         }
@@ -2736,14 +2738,19 @@ impl SearchableItem for Editor {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) -> usize {
+        let Some(last_match_index) = matches.len().checked_sub(1) else {
+            return 0;
+        };
+        let current_match_index = current_index.min(last_match_index);
+
         if count == 0 {
-            return current_index;
+            return current_match_index;
         }
 
         let cursor = if self.selections.disjoint_anchors_arc().len() == 1 {
             self.selections.newest_anchor().head()
         } else {
-            matches[current_index].start
+            matches[current_match_index].start
         };
 
         let buffer = self.buffer().read(cx).snapshot(cx);
@@ -2755,7 +2762,7 @@ impl SearchableItem for Editor {
             Direction::Prev => matches
                 .iter()
                 .rposition(|m| m.end.cmp(&cursor, &buffer).is_lt())
-                .unwrap_or(matches.len() - 1),
+                .unwrap_or(last_match_index),
         } as isize;
 
         // We'll use `count - 1` because the first jump to the next or previous

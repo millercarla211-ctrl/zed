@@ -834,18 +834,24 @@ impl CompletionsMenu {
         }
 
         if let Some((cache_index, (key, markdown))) = matching_entry {
+            let promote_to_candidate =
+                source.is_some() && matches!(key, MarkdownCacheKey::ForCompletionMatch { .. });
             let markdown = markdown.clone();
 
             // Since the markdown source matches, the key can now be ForCandidate.
-            if source.is_some() && matches!(key, MarkdownCacheKey::ForCompletionMatch { .. }) {
-                markdown_cache[cache_index].0 = MarkdownCacheKey::ForCandidate { candidate_id };
+            if promote_to_candidate {
+                if let Some((cache_key, _)) = markdown_cache.get_mut(cache_index) {
+                    *cache_key = MarkdownCacheKey::ForCandidate { candidate_id };
+                }
             }
 
             if is_render && cache_index != 0 {
                 // Move the current selection's cache entry to the front.
-                markdown_cache.rotate_right(1);
                 let cache_len = markdown_cache.len();
-                markdown_cache.swap(0, (cache_index + 1) % cache_len);
+                if cache_index < cache_len {
+                    markdown_cache.rotate_right(1);
+                    markdown_cache.swap(0, (cache_index + 1) % cache_len);
+                }
             }
 
             let is_parsing = markdown.update(cx, |markdown, cx| {

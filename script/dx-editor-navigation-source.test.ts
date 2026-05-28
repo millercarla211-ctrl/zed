@@ -119,6 +119,17 @@ test("navigation hover links and locations are capped before task joins and UI m
     after: ".collect::<Vec<_>>()",
     message: "reference jumps must cap LSP locations before Vec materialization",
   });
+  assert.doesNotMatch(
+    referenceBody,
+    /locations\s*\[\s*destination_location_index\s*\]/,
+    "reference jumps must not direct-index the destination location",
+  );
+  assertBefore({
+    body: referenceBody,
+    before: /locations\.get\(\s*destination_location_index\s*\)/,
+    after: "editor.update_in(cx",
+    message: "reference jumps must check the destination index before UI materialization",
+  });
   assertBefore({
     body: allReferencesBody,
     before: "cap_reference_locations_for_navigation(locations)",
