@@ -310,6 +310,27 @@ fn log_missing_minidump_commit_sha(metadata: &crashes::CrashInfo) {
     }
 }
 
+const MAX_MINIDUMP_UPLOAD_BODY_BYTES: u64 = 65 * 1024 * 1024;
+
+async fn read_limited_minidump_upload_body(form: Form) -> Result<Vec<u8>> {
+    let mut body_bytes = Vec::new();
+    let mut limited_stream = form
+        .into_stream()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+        .into_async_read()
+        .take(MAX_MINIDUMP_UPLOAD_BODY_BYTES + 1);
+    limited_stream.read_to_end(&mut body_bytes).await?;
+
+    if body_bytes.len() as u64 > MAX_MINIDUMP_UPLOAD_BODY_BYTES {
+        anyhow::bail!(
+            "minidump upload request body exceeded {MAX_MINIDUMP_UPLOAD_BODY_BYTES} bytes: {} bytes read",
+            body_bytes.len()
+        );
+    }
+
+    Ok(body_bytes)
+}
+
 const MAX_MINIDUMP_UPLOAD_RESPONSE_BYTES: u64 = 64 * 1024;
 const MAX_MINIDUMP_UPLOAD_RESPONSE_DISPLAY_CHARS: usize = 1024;
 
@@ -491,12 +512,7 @@ async fn upload_minidump(
     // TODO: feature-flag-context, and more of device-context like screen resolution, available ram, device model, etc
 
     let content_type = format!("multipart/form-data; boundary={}", form.boundary());
-    let mut body_bytes = Vec::new();
-    let mut stream = form
-        .into_stream()
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-        .into_async_read();
-    stream.read_to_end(&mut body_bytes).await?;
+    let body_bytes = read_limited_minidump_upload_body(form).await?;
     let req = Request::builder()
         .method(Method::POST)
         .uri(endpoint)

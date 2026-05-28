@@ -11,7 +11,9 @@ use anyhow::Result;
 use cloud_api_types::Plan;
 use collections::HashMap;
 use context_server::ContextServerId;
-use editor::{Editor, MultiBufferOffset, SelectionEffects, scroll::Autoscroll};
+use editor::{
+    Editor, MultiBufferOffset, MultiBufferSnapshot, SelectionEffects, scroll::Autoscroll,
+};
 use extension::ExtensionManifest;
 use extension_host::ExtensionStore;
 use fs::Fs;
@@ -56,6 +58,9 @@ use crate::{
         run_dx_agent_metadata_command, run_dx_agent_public_command,
     },
 };
+
+const MAX_AGENT_SERVER_SETTINGS_INSERTION_BYTES: usize = 512 * 1024;
+const MAX_AGENT_SERVER_SETTINGS_INSERTION_CHARS: usize = 512 * 1024;
 
 pub struct AgentConfiguration {
     fs: Arc<dyn Fs>,
@@ -2749,7 +2754,17 @@ async fn open_new_agent_servers_entry_in_settings_editor(
     settings_editor
         .downgrade()
         .update_in(cx, |item, window, cx| {
-            let text = item.buffer().read(cx).snapshot(cx).text();
+            let snapshot = item.buffer().read(cx).snapshot(cx);
+            if settings_editor_snapshot_exceeds_agent_server_insertion_limit(&snapshot) {
+                show_deferred_agent_configuration_status(
+                    &workspace,
+                    "Settings file is too large to update automatically.",
+                    cx,
+                );
+                return;
+            }
+
+            let text = snapshot.text();
 
             let settings = cx.global::<SettingsStore>();
 
@@ -2832,6 +2847,40 @@ async fn open_new_agent_servers_entry_in_settings_editor(
                 }
             }
         })
+}
+
+fn settings_editor_snapshot_exceeds_agent_server_insertion_limit(
+    snapshot: &MultiBufferSnapshot,
+) -> bool {
+    let summary = snapshot.text_summary();
+    summary.len.0 > MAX_AGENT_SERVER_SETTINGS_INSERTION_BYTES
+        || summary.chars > MAX_AGENT_SERVER_SETTINGS_INSERTION_CHARS
+}
+
+fn show_deferred_agent_configuration_status(
+    workspace: &WeakEntity<Workspace>,
+    message: &'static str,
+    cx: &mut App,
+) {
+    let workspace = workspace.clone();
+    cx.defer(move |cx| {
+        if let Some(workspace) = workspace.upgrade() {
+            workspace
+                .update(cx, |workspace, cx| {
+                    let status_toast = StatusToast::new(message, cx, |this, _cx| {
+                        this.icon(
+                            Icon::new(IconName::Warning)
+                                .size(IconSize::Small)
+                                .color(Color::Warning),
+                        )
+                        .dismiss_button(true)
+                    });
+
+                    workspace.toggle_status_toast(status_toast, cx);
+                })
+                .log_err();
+        }
+    });
 }
 
 fn find_text_in_buffer(

@@ -175,6 +175,151 @@ test("Web Preview managed queue import parses only after the bounded read succee
   assert.ok(parse > boundedRead, "JSON parsing must happen after bounded reads");
 });
 
+test("Web Preview IPC messages are byte-capped before queueing and parsing", () => {
+  const webPreview = source();
+  const windowsVisualWebView = read("crates/web_preview/src/windows_visual_webview.rs");
+
+  assert.match(
+    webPreview,
+    /const MAX_WEB_PREVIEW_IPC_MESSAGE_BYTES: usize = 1024 \* 1024;/,
+  );
+  assert.match(
+    webPreview,
+    /fn ensure_web_preview_ipc_message_within_byte_limit\(message: &str\) -> Result<\(\)>/,
+  );
+  assert.match(
+    webPreview,
+    /message\.len\(\) > MAX_WEB_PREVIEW_IPC_MESSAGE_BYTES/,
+  );
+  assert.match(webPreview, /IpcMessageRejected\(String\)/);
+  assert.ok(
+    webPreview.includes(
+      "pub(crate) fn push_browser_ipc_event(event_queue: &Arc<Mutex<Vec<BrowserEvent>>>, message: String)",
+    ),
+    "expected raw IPC queue helper",
+  );
+
+  const rawIpcPush = sliceBetween(
+    webPreview,
+    "pub(crate) fn push_browser_ipc_event",
+    "\n#[cfg(target_os = \"windows\")]",
+  );
+  assertOrdered(
+    rawIpcPush,
+    "WebPreviewView::ensure_web_preview_ipc_message_within_byte_limit(&message)",
+    "queue.push(BrowserEvent::IpcMessage(message))",
+    "raw IPC messages should be byte-capped before the browser event queue stores them",
+  );
+  assertOrdered(
+    rawIpcPush,
+    "WebPreviewView::ensure_deferred_ipc_queue_has_capacity",
+    "queue.push(BrowserEvent::IpcMessage(message))",
+    "raw IPC messages should be count-capped before the browser event queue stores them",
+  );
+  assert.match(rawIpcPush, /queued_browser_ipc_message_count\(&queue\)/);
+  assert.match(rawIpcPush, /push_browser_ipc_rejection_once/);
+
+  const applyEvents = sliceBetween(
+    webPreview,
+    "fn apply_browser_events",
+    "fn ensure_web_preview_ipc_message_within_byte_limit",
+  );
+  assert.doesNotMatch(
+    applyEvents,
+    /deferred_ipc_messages\.push\(message\)/,
+    "IPC messages should not be queued without the ingestion helper",
+  );
+  assert.match(
+    applyEvents,
+    /self\.queue_deferred_ipc_message\(message, cx\);/,
+    "IPC events should use the guarded queue helper",
+  );
+  assert.match(
+    applyEvents,
+    /BrowserEvent::IpcMessageRejected\(message\) => \{\s+self\.report_action_error_message\(message, cx\);/s,
+    "raw IPC rejections should surface visibly when events are applied",
+  );
+
+  assert.doesNotMatch(
+    webPreview,
+    /push_browser_event\(\s*&event_queue,\s*BrowserEvent::IpcMessage/,
+    "generic raw event push should not be used for IPC messages",
+  );
+  assert.doesNotMatch(
+    windowsVisualWebView,
+    /push_browser_event\(\s*&event_queue,\s*BrowserEvent::IpcMessage/,
+    "WebView2 IPC should use the raw IPC boundary helper",
+  );
+  assert.match(
+    webPreview,
+    /push_browser_ipc_event\(&event_queue, request\.body\(\)\.to_string\(\)\);/,
+    "wry IPC should use the raw IPC boundary helper",
+  );
+  assert.match(
+    windowsVisualWebView,
+    /push_browser_ipc_event\(&event_queue, take_pwstr\(message\)\);/,
+    "WebView2 IPC should use the raw IPC boundary helper",
+  );
+
+  const queueHelper = sliceBetween(
+    webPreview,
+    "fn queue_deferred_ipc_message",
+    "fn flush_deferred_ipc",
+  );
+  assertOrdered(
+    queueHelper,
+    "Self::ensure_web_preview_ipc_message_within_byte_limit(&message)",
+    "self.deferred_ipc_messages.push(message)",
+    "IPC messages should be byte-capped before queueing",
+  );
+
+  const handler = sliceBetween(
+    webPreview,
+    "fn handle_ipc_message",
+    'match kind {',
+  );
+  assertOrdered(
+    handler,
+    "Self::ensure_web_preview_ipc_message_within_byte_limit(message)?",
+    "serde_json::from_str(message)",
+    "IPC messages should be byte-capped before serde parsing",
+  );
+});
+
+test("Web Preview deferred IPC queue has an explicit length cap", () => {
+  const webPreview = source();
+
+  assert.match(
+    webPreview,
+    /const MAX_DEFERRED_WEB_PREVIEW_IPC_MESSAGES: usize = 256;/,
+  );
+  assert.match(
+    webPreview,
+    /fn ensure_deferred_ipc_queue_has_capacity\(current_len: usize\) -> Result<\(\)>/,
+  );
+  assert.match(
+    webPreview,
+    /current_len >= MAX_DEFERRED_WEB_PREVIEW_IPC_MESSAGES/,
+  );
+
+  const queueHelper = sliceBetween(
+    webPreview,
+    "fn queue_deferred_ipc_message",
+    "fn flush_deferred_ipc",
+  );
+  assertOrdered(
+    queueHelper,
+    "Self::ensure_deferred_ipc_queue_has_capacity(self.deferred_ipc_messages.len())",
+    "self.deferred_ipc_messages.push(message)",
+    "deferred IPC queue capacity should be checked before queueing",
+  );
+  assert.match(
+    queueHelper,
+    /self\.report_action_error\("Web Preview bridge message rejected", error, cx\);/,
+    "rejected IPC messages should surface an error instead of being dropped silently",
+  );
+});
+
 test("Web Preview file payload reads use sentinel-byte bounded helpers", () => {
   const webPreview = source();
 

@@ -1070,11 +1070,16 @@ test("DX launch workspace delegates bounded list labels", () => {
   assert.doesNotMatch(parent, /fn yes_no/);
   assert.match(listLabels, /pub\(crate\) fn bounded_items/);
   assert.match(listLabels, /pub\(crate\) fn yes_no/);
+  assert.match(listLabels, /const MAX_BOUNDED_ITEM_CHARS: usize = 120;/);
+  assert.match(listLabels, /fn compact_bounded_item\(value: &str\) -> String/);
   assert.match(listLabels, /bounded_items_ignores_blank_values/);
+  assert.match(listLabels, /bounded_items_compacts_and_caps_individual_values/);
   assert.match(listLabels, /bounded_items_counts_overflow_after_blank_values_are_removed/);
   assert.match(listLabels, /yes_no_labels_boolean_values/);
-  assert.match(listLabels, /filter\(\|value\| !value\.trim\(\)\.is_empty\(\)\)/);
-  assert.match(listLabels, /map\(\|value\| value\.trim\(\)\)/);
+  assert.match(listLabels, /split_whitespace\(\)\.collect::<Vec<_>>\(\)\.join\(" "\)/);
+  assert.match(listLabels, /chars\(\)\s*\.take\(MAX_BOUNDED_ITEM_CHARS - marker_chars\)/);
+  assert.match(listLabels, /"alpha beta, /);
+  assert.match(listLabels, /"alpha, beta two, \+1 more"/);
   assert.ok(lineCount("crates/agent_ui/src/dx_launch_workspace/list_labels.rs") < 100);
 });
 

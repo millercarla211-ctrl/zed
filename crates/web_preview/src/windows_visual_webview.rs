@@ -34,7 +34,9 @@ use webview2_com::Microsoft::Web::WebView2::Win32::*;
 
 use crate::{
     dx_studio_bridge::DX_STUDIO_BRIDGE_SCRIPT,
-    web_preview_view::{BrowserEvent, WEB_PREVIEW_BRIDGE_SCRIPT, push_browser_event},
+    web_preview_view::{
+        BrowserEvent, WEB_PREVIEW_BRIDGE_SCRIPT, push_browser_event, push_browser_ipc_event,
+    },
 };
 
 const IPC_SHIM_SCRIPT: &str = r#"Object.defineProperty(window, 'ipc', { value: Object.freeze({ postMessage: s => window.chrome.webview.postMessage(s) }) });"#;
@@ -649,7 +651,7 @@ fn attach_event_handlers(
                 };
                 let mut message = PWSTR::null();
                 args.TryGetWebMessageAsString(&mut message)?;
-                push_browser_event(&event_queue, BrowserEvent::IpcMessage(take_pwstr(message)));
+                push_browser_ipc_event(&event_queue, take_pwstr(message));
                 Ok(())
             })),
             &mut token,

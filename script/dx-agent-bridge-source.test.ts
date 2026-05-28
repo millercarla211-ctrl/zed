@@ -159,6 +159,63 @@ test("DX Agent bridge failed command stderr is compacted before error display", 
   assert.match(stderrHelper, /display\.push_str\("\.\.\."\)/);
 });
 
+test("DX Agent bridge checks serialized receipt bytes before writing", () => {
+  const commands = read("crates/agent_ui/src/dx_agent_bridge/commands.rs");
+  const writeJsonStart = commands.indexOf("fn write_json_receipt");
+  const writeActionErrorStart = commands.indexOf("fn write_action_error_receipt");
+  const clearActionErrorStart = commands.indexOf("\nfn clear_action_error_receipt");
+  const serializerStart = commands.indexOf("fn serialized_pretty_receipt");
+  const limitStart = commands.indexOf("fn ensure_serialized_receipt_bytes");
+
+  assert.ok(writeJsonStart >= 0, "expected metadata receipt writer");
+  assert.ok(writeActionErrorStart > writeJsonStart, "expected action-error receipt writer");
+  assert.ok(clearActionErrorStart > writeActionErrorStart, "expected clear helper after writes");
+  assert.ok(serializerStart > writeActionErrorStart, "expected shared serializer helper");
+  assert.ok(limitStart > serializerStart, "expected serialized-byte limit helper");
+
+  const writeJson = commands.slice(writeJsonStart, writeActionErrorStart);
+  const writeActionError = commands.slice(writeActionErrorStart, clearActionErrorStart);
+  const serializer = commands.slice(serializerStart, limitStart);
+  const limit = commands.slice(limitStart, clearActionErrorStart);
+
+  assert.match(commands, /const MAX_ACTION_ERROR_DISPLAY_CHARS: usize = 500;/);
+  assert.match(writeJson, /let bytes = serialized_pretty_receipt\(&value, "metadata"\)\?;/);
+  assert.match(
+    writeActionError,
+    /"command": action_error_display_field\(command\)/,
+    "action-error command display must be bounded before serialization",
+  );
+  assert.match(
+    writeActionError,
+    /"error": action_error_display_field\(&error\.to_string\(\)\)/,
+    "action-error error display must be bounded before serialization",
+  );
+  assert.match(
+    writeActionError,
+    /let bytes = serialized_pretty_receipt\(&value, "action error"\)\?;/,
+  );
+  assert.match(serializer, /serde_json::to_vec_pretty\(value\)/);
+  assert.match(serializer, /bytes\.push\(b'\\n'\);/);
+  assert.match(serializer, /ensure_serialized_receipt_bytes\(receipt_kind, &bytes\)\?;/);
+  assert.ok(
+    serializer.indexOf("bytes.push(b'\\n');") <
+      serializer.indexOf("ensure_serialized_receipt_bytes(receipt_kind, &bytes)?"),
+    "serialized receipt size check must include trailing newline",
+  );
+  assert.match(
+    limit,
+    /u64::try_from\(bytes\.len\(\)\)\.unwrap_or\(u64::MAX\) > MAX_RECEIPT_BYTES/,
+  );
+  assert.ok(
+    writeJson.indexOf("serialized_pretty_receipt") < writeJson.indexOf("fs::write"),
+    "metadata receipts must be serialized and bounded before file write",
+  );
+  assert.ok(
+    writeActionError.indexOf("serialized_pretty_receipt") < writeActionError.indexOf("fs::write"),
+    "action-error receipts must be serialized and bounded before file write",
+  );
+});
+
 test("DX Agent receipt display strings are redacted and bounded at parser boundaries", () => {
   const receipts = read("crates/agent_ui/src/dx_agent_bridge/receipts.rs");
   const receiptStrings = read("crates/agent_ui/src/dx_agent_bridge/receipts/receipt_strings.rs");

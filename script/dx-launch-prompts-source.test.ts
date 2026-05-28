@@ -42,6 +42,27 @@ test("DX launch context module owns receipt and audit summaries", () => {
   );
 });
 
+test("bounded_join compacts and caps each item before preserving overflow count", () => {
+  const context = read("crates/agent_ui/src/dx_launch_prompts/context.rs");
+
+  assert.match(context, /const BOUNDED_JOIN_ITEM_CHAR_LIMIT: usize = 240;/);
+  assert.match(context, /const BOUNDED_JOIN_TRUNCATION_MARKER: &str = "\.\.\.";/);
+  assert.match(context, /fn compact_bounded_join_item\(value: &str\) -> String/);
+  assert.match(
+    context,
+    /value\s*\.split_whitespace\(\)\s*\.collect::<Vec<_>>\(\)\s*\.join\(" "\)/s,
+  );
+  assert.match(context, /BOUNDED_JOIN_ITEM_CHAR_LIMIT\.saturating_sub/);
+  assert.match(context, /\.chars\(\)\s*\.take\(keep\)\s*\.collect::<String>\(\)/s);
+  assert.match(
+    context,
+    /\.iter\(\)\s*\.take\(limit\)\s*\.map\(\|value\| compact_bounded_join_item\(value\)\)\s*\.collect::<Vec<_>>\(\)\s*\.join\(", "\)/s,
+  );
+  assert.match(context, /if values\.is_empty\(\)\s*\{\s*return empty\.to_string\(\);/s);
+  assert.match(context, /let remaining_count = values\.len\(\)\.saturating_sub\(limit\);/);
+  assert.match(context, /rendered\.push_str\(&format!\(", \+\{\} more", remaining_count\)\);/);
+});
+
 test("DX launch prompts keep Forge proof wording in a focused module", () => {
   const parent = read("crates/agent_ui/src/dx_launch_prompts.rs");
   const forge = "crates/agent_ui/src/dx_launch_prompts/forge.rs";

@@ -318,6 +318,55 @@ test("Minidump upload bounds and compacts HTTP response bodies", () => {
   assert.doesNotMatch(upload, /read_to_string/);
 });
 
+test("Minidump upload bounds multipart request bodies before AsyncBody", () => {
+  const source = read("crates/zed/src/reliability.rs");
+
+  const helper = sliceBetween(
+    source,
+    "const MAX_MINIDUMP_UPLOAD_BODY_BYTES",
+    "const MAX_MINIDUMP_UPLOAD_RESPONSE_BYTES",
+  );
+  assert.match(
+    helper,
+    /const MAX_MINIDUMP_UPLOAD_BODY_BYTES: u64 = 65 \* 1024 \* 1024;/,
+  );
+  assert.match(
+    helper,
+    /async fn read_limited_minidump_upload_body\(\s*form: Form,?\s*\) -> Result<Vec<u8>>/,
+  );
+  assert.match(helper, /form\s+\.into_stream\(\)/);
+  assert.match(helper, /into_async_read\(\)/);
+  assert.match(helper, /take\(MAX_MINIDUMP_UPLOAD_BODY_BYTES \+ 1\)/);
+  assert.match(helper, /read_to_end\(&mut body_bytes\)\s*\.await/);
+  assert.match(
+    helper,
+    /body_bytes\.len\(\) as u64 > MAX_MINIDUMP_UPLOAD_BODY_BYTES/,
+  );
+  assert.match(helper, /minidump upload request body exceeded/);
+  assert.match(helper, /Ok\(body_bytes\)/);
+
+  const upload = sliceBetween(
+    source,
+    "async fn upload_minidump(",
+    "#[derive(Debug, Deserialize)]",
+  );
+  assert.match(
+    upload,
+    /let body_bytes = read_limited_minidump_upload_body\(form\)\.await\?;/,
+  );
+  assert.ok(
+    upload.indexOf("read_limited_minidump_upload_body(form).await?") <
+      upload.indexOf("Request::builder()"),
+    "multipart request bodies must be bounded before request construction",
+  );
+  assert.ok(
+    upload.indexOf("read_limited_minidump_upload_body(form).await?") <
+      upload.indexOf("AsyncBody::from(body_bytes)"),
+    "multipart request bodies must be bounded before AsyncBody creation",
+  );
+  assert.doesNotMatch(upload, /stream\.read_to_end\(&mut body_bytes\)\.await/);
+});
+
 test("Build timing upload rejects oversized JSON before parsing", () => {
   const source = read("crates/zed/src/reliability.rs");
 

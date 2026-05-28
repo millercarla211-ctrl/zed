@@ -15,6 +15,7 @@ use super::{
 
 const MAX_FAILED_COMMAND_STDERR_BYTES: usize = 2048;
 const MAX_FAILED_COMMAND_STDERR_CHARS: usize = 500;
+const MAX_ACTION_ERROR_DISPLAY_CHARS: usize = 500;
 
 #[derive(Clone)]
 pub(crate) enum DxAgentPublicCommand {
@@ -216,6 +217,13 @@ fn failed_command_stderr_display(stderr: &[u8]) -> String {
     display
 }
 
+fn action_error_display_field(value: &str) -> String {
+    let redacted = redact_action_scalar(value);
+    let display = failed_command_stderr_display(redacted.as_bytes());
+    debug_assert!(display.chars().count() <= MAX_ACTION_ERROR_DISPLAY_CHARS);
+    display
+}
+
 fn write_json_receipt(path: &Path, stdout: &[u8], expected_schema: &str) -> Result<()> {
     if u64::try_from(stdout.len()).unwrap_or(u64::MAX) > MAX_RECEIPT_BYTES {
         return Err(anyhow!("DX Agents metadata response is too large"));
@@ -241,16 +249,13 @@ fn write_json_receipt(path: &Path, stdout: &[u8], expected_schema: &str) -> Resu
         )
     })?;
 
-    let mut bytes =
-        serde_json::to_vec_pretty(&value).context("failed to serialize DX Agents metadata JSON")?;
-    bytes.push(b'\n');
+    let bytes = serialized_pretty_receipt(&value, "metadata")?;
     fs::write(path, bytes).with_context(|| {
         format!(
             "failed to write DX Agents metadata receipt `{}`",
             path.display()
         )
     })?;
-
     Ok(())
 }
 
@@ -276,11 +281,11 @@ fn write_action_error_receipt(
         .unwrap_or_default();
     let value = json!({
         "schema_version": "dx.agents.zed.action_error.v1",
-        "command": redact_action_scalar(command),
+        "command": action_error_display_field(command),
         "status": "missing_config",
         "generated_at": generated_at_ms.to_string(),
         "generated_at_ms": generated_at_ms,
-        "error": redact_action_scalar(&error.to_string()),
+        "error": action_error_display_field(&error.to_string()),
         "next_action": "review_dx_agents_cli_path_or_receipt_root",
         "redaction": {
             "exports_secret_values": false,
@@ -288,15 +293,30 @@ fn write_action_error_receipt(
             "exports_receipt_bodies": false
         }
     });
-    let mut bytes =
-        serde_json::to_vec_pretty(&value).context("failed to serialize DX Agents action error")?;
-    bytes.push(b'\n');
+    let bytes = serialized_pretty_receipt(&value, "action error")?;
     fs::write(&path, bytes).with_context(|| {
         format!(
             "failed to write DX Agents action error receipt `{}`",
             path.display()
         )
     })?;
+    Ok(())
+}
+
+fn serialized_pretty_receipt(value: &Value, receipt_kind: &str) -> Result<Vec<u8>> {
+    let mut bytes = serde_json::to_vec_pretty(value)
+        .with_context(|| format!("failed to serialize DX Agents {receipt_kind} JSON"))?;
+    bytes.push(b'\n');
+    ensure_serialized_receipt_bytes(receipt_kind, &bytes)?;
+    Ok(bytes)
+}
+
+fn ensure_serialized_receipt_bytes(receipt_kind: &str, bytes: &[u8]) -> Result<()> {
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_RECEIPT_BYTES {
+        return Err(anyhow!(
+            "DX Agents {receipt_kind} receipt is too large after serialization"
+        ));
+    }
     Ok(())
 }
 

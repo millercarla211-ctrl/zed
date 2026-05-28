@@ -1,3 +1,25 @@
+[2026-05-28] - Prompt IPC And Receipt Boundary Hardening
+
+ADDED:
+- Added `script\dx-agent-configuration-source.test.ts` to guard Agent Configuration settings insertion boundaries.
+
+CHANGED:
+- Web Preview IPC messages now reject oversized payloads before raw browser-event queue insertion, deferred queue insertion, or serde parsing, and raw/deferred IPC queues have explicit message caps.
+- Minidump multipart upload bodies now use a sentinel-byte size cap before `AsyncBody` construction.
+- Agent Configuration settings insertion now checks the editor snapshot size before materializing the settings text and reports oversized buffers with a deferred status toast.
+- DX Agent bridge metadata and action-error receipts now verify post-serialization bytes before writing, while action-error command/error display fields stay redacted and bounded.
+- Launch prompt bounded joins and launch workspace list labels now compact whitespace and cap each receipt-derived item before preserving overflow counts.
+- `DX.md` and the source-guard registry now list the Agent Configuration source guard.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\web-preview-payload-source.test.ts script\dx-windows-reliability-source.test.ts script\dx-agent-configuration-source.test.ts script\dx-agent-bridge-source.test.ts script\dx-launch-prompts-source.test.ts script\dx-launch-workspace-source.test.ts` (51/51 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on all edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - File And Response Boundary Hardening
 
 ADDED:

@@ -6,6 +6,9 @@ use crate::dx_launch_source_audit::DxLaunchSourceAuditSnapshot;
 use crate::dx_launch_status::DxLaunchStatusSnapshot;
 use crate::dx_www_launch_evidence::DxWwwLaunchEvidenceSnapshot;
 
+const BOUNDED_JOIN_ITEM_CHAR_LIMIT: usize = 240;
+const BOUNDED_JOIN_TRUNCATION_MARKER: &str = "...";
+
 pub(super) fn launch_status_prompt_context(snapshot: &DxLaunchStatusSnapshot) -> String {
     if !snapshot.root_exists {
         return format!(
@@ -347,7 +350,7 @@ pub(super) fn bounded_join(values: &[String], limit: usize, empty: &'static str)
     let mut rendered = values
         .iter()
         .take(limit)
-        .cloned()
+        .map(|value| compact_bounded_join_item(value))
         .collect::<Vec<_>>()
         .join(", ");
     let remaining_count = values.len().saturating_sub(limit);
@@ -356,4 +359,17 @@ pub(super) fn bounded_join(values: &[String], limit: usize, empty: &'static str)
     }
 
     rendered
+}
+
+fn compact_bounded_join_item(value: &str) -> String {
+    let compacted = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    if compacted.chars().count() <= BOUNDED_JOIN_ITEM_CHAR_LIMIT {
+        return compacted;
+    }
+
+    let keep =
+        BOUNDED_JOIN_ITEM_CHAR_LIMIT.saturating_sub(BOUNDED_JOIN_TRUNCATION_MARKER.chars().count());
+    let mut capped = compacted.chars().take(keep).collect::<String>();
+    capped.push_str(BOUNDED_JOIN_TRUNCATION_MARKER);
+    capped
 }
