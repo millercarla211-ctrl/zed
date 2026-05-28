@@ -56,6 +56,10 @@ use crate::{
 
 const NO_ACTION_ARGUMENTS_TEXT: SharedString = SharedString::new_static("<no arguments>");
 const COLS: usize = 6;
+const MAX_KEYMAP_BINDINGS: usize = 10000;
+const MAX_KEYMAP_ACTIONS: usize = 10000;
+const MAX_KEYMAP_MATCHES: usize = 5000;
+const MAX_KEYMAP_CONFLICT_SCAN: usize = 1000;
 
 actions!(
     keymap_editor,
@@ -409,7 +413,7 @@ impl ConflictState {
                         .filter(|&conflict| Some(conflict.index) != keybind_idx);
                     indices.next().map(|origin| KeybindConflict {
                         first_conflict_index: origin.index,
-                        remaining_conflict_amount: indices.count(),
+                        remaining_conflict_amount: indices.take(MAX_KEYMAP_CONFLICT_SCAN).count(),
                     })
                 })
         })
@@ -718,7 +722,7 @@ impl KeymapEditor {
             &action_query,
             true,
             true,
-            keybind_count,
+            MAX_KEYMAP_MATCHES.min(keybind_count),
             &Default::default(),
             executor,
         )
@@ -825,14 +829,24 @@ impl KeymapEditor {
     ) {
         let key_bindings_ptr = cx.key_bindings();
         let lock = key_bindings_ptr.borrow();
-        let key_bindings = lock.bindings().collect::<Vec<_>>();
-        let mut unmapped_action_names = HashSet::from_iter(cx.all_action_names().iter().copied());
+        let key_bindings = lock
+            .bindings()
+            .take(MAX_KEYMAP_BINDINGS)
+            .collect::<Vec<_>>();
+        let action_names = cx
+            .all_action_names()
+            .iter()
+            .copied()
+            .take(MAX_KEYMAP_ACTIONS);
+        let mut unmapped_action_names = HashSet::from_iter(action_names);
         let action_documentation = cx.action_documentation();
         let mut generator = KeymapFile::action_schema_generator();
+        let action_schema_entries = cx
+            .action_schemas(&mut generator)
+            .into_iter()
+            .take(MAX_KEYMAP_ACTIONS);
         let actions_with_schemas = HashSet::from_iter(
-            cx.action_schemas(&mut generator)
-                .into_iter()
-                .filter_map(|(name, schema)| schema.is_some().then_some(name)),
+            action_schema_entries.filter_map(|(name, schema)| schema.is_some().then_some(name)),
         );
 
         let mut processed_bindings = Vec::new();
@@ -940,6 +954,7 @@ impl KeymapEditor {
                     .string_match_candidates
                     .iter()
                     .enumerate()
+                    .take(MAX_KEYMAP_MATCHES)
                     .map(|(ix, candidate)| StringMatch {
                         candidate_id: ix,
                         score: 0.0,
@@ -1716,7 +1731,12 @@ struct HumanizedActionNameCache {
 
 impl HumanizedActionNameCache {
     fn new(cx: &App) -> Self {
-        let cache = HashMap::from_iter(cx.all_action_names().iter().map(|&action_name| {
+        let action_names = cx
+            .all_action_names()
+            .iter()
+            .copied()
+            .take(MAX_KEYMAP_ACTIONS);
+        let cache = HashMap::from_iter(action_names.map(|action_name| {
             (
                 action_name,
                 command_palette::humanize_action_name(action_name).into(),
@@ -2539,7 +2559,12 @@ impl KeybindingEditorModal {
         let has_action_editor = create && editing_keybind.action().name == gpui::NoAction.name();
 
         let (action_editor, action_name_to_static) = if has_action_editor {
-            let actions: Vec<&'static str> = cx.all_action_names().to_vec();
+            let actions: Vec<&'static str> = cx
+                .all_action_names()
+                .iter()
+                .copied()
+                .take(MAX_KEYMAP_ACTIONS)
+                .collect();
 
             let humanized_names: HashMap<&'static str, SharedString> = actions
                 .iter()

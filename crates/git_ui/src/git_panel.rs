@@ -80,7 +80,10 @@ use ui::{
     TintColor, Tooltip, WithScrollbar, prelude::*,
 };
 use util::paths::PathStyle;
-use util::{ResultExt, TryFutureExt, markdown::MarkdownInlineCode, maybe, rel_path::RelPath};
+use util::{
+    ResultExt, TryFutureExt, markdown::MarkdownInlineCode, maybe, rel_path::RelPath,
+    truncate_and_trailoff,
+};
 use workspace::SERIALIZATION_THROTTLE_TIME;
 use workspace::{
     Item, Workspace,
@@ -251,6 +254,15 @@ const GIT_PANEL_KEY: &str = "GitPanel";
 const UPDATE_DEBOUNCE: Duration = Duration::from_millis(50);
 // TODO: We should revise this part. It seems the indentation width is not aligned with the one in project panel
 const TREE_INDENT: f32 = 16.0;
+const MAX_GIT_PANEL_STATUS_ENTRIES: usize = 20_000;
+const MAX_GIT_PANEL_COMMIT_HISTORY_SHAS: usize = 1_000;
+const MAX_GIT_PANEL_REMOTE_PROMPT_OPTIONS: usize = 128;
+const MAX_GIT_PANEL_WORKTREE_PROMPT_OPTIONS: usize = 256;
+const MAX_GIT_PANEL_STATUS_LABEL_CHARS: usize = 512;
+
+fn bounded_git_panel_label(label: &str) -> String {
+    truncate_and_trailoff(label, MAX_GIT_PANEL_STATUS_LABEL_CHARS)
+}
 
 pub fn register(workspace: &mut Workspace) {
     workspace.register_action(|workspace, _: &ToggleFocus, window, cx| {
@@ -2910,7 +2922,11 @@ impl GitPanel {
                 .ok()?
                 .log_err()?;
 
-            let mut remotes: Vec<_> = remotes.into_iter().map(FetchOptions::Remote).collect();
+            let mut remotes: Vec<_> = remotes
+                .into_iter()
+                .take(MAX_GIT_PANEL_REMOTE_PROMPT_OPTIONS)
+                .map(FetchOptions::Remote)
+                .collect();
             if remotes.len() > 1 {
                 remotes.push(FetchOptions::All);
             }
@@ -3001,6 +3017,7 @@ impl GitPanel {
             .project
             .read(cx)
             .visible_worktrees(cx)
+            .take(MAX_GIT_PANEL_WORKTREE_PROMPT_OPTIONS)
             .collect::<Vec<_>>();
 
         let worktree = if worktrees.len() == 1 {
@@ -3022,6 +3039,7 @@ impl GitPanel {
         } else {
             let worktree_directories = worktrees
                 .iter()
+                .take(MAX_GIT_PANEL_WORKTREE_PROMPT_OPTIONS)
                 .map(|worktree| worktree.read(cx).abs_path())
                 .map(|worktree_abs_path| {
                     if let Ok(path) = worktree_abs_path.strip_prefix(util::paths::home_dir()) {
@@ -3374,6 +3392,7 @@ impl GitPanel {
 
             let current_remotes: Vec<_> = current_remotes
                 .into_iter()
+                .take(MAX_GIT_PANEL_REMOTE_PROMPT_OPTIONS)
                 .map(|remotes| remotes.name)
                 .collect();
             let selection = cx
@@ -3747,6 +3766,7 @@ impl GitPanel {
         let mut seen_directories = HashSet::default();
         let mut max_width_estimate = 0usize;
         let mut max_width_item_index = None;
+        let mut materialized_status_entries = 0usize;
 
         let Some(repo) = self.active_repository.as_ref() else {
             // Just clear entries if no repository is active.
@@ -3772,6 +3792,11 @@ impl GitPanel {
             {
                 continue;
             }
+
+            if materialized_status_entries >= MAX_GIT_PANEL_STATUS_ENTRIES {
+                continue;
+            }
+            materialized_status_entries += 1;
 
             let entry = GitStatusEntry {
                 repo_path: entry.repo_path.clone(),
@@ -5284,7 +5309,12 @@ impl GitPanel {
         let log_order = LogOrder::DateOrder;
 
         self.commit_history_shas = active_repository.update(cx, |repository, cx| {
-            let response = repository.graph_data(log_source, log_order, 0..usize::MAX, cx);
+            let response = repository.graph_data(
+                log_source,
+                log_order,
+                0..MAX_GIT_PANEL_COMMIT_HISTORY_SHAS,
+                cx,
+            );
             response.commits.iter().map(|commit| commit.sha).collect()
         });
     }
@@ -6056,7 +6086,7 @@ impl GitPanel {
         let tree_view = settings.tree_view;
         let path_style = self.project.read(cx).path_style(cx);
         let git_path_style = ProjectSettings::get_global(cx).git.path_style;
-        let display_name = entry.display_name(path_style);
+        let display_name = bounded_git_panel_label(&entry.display_name(path_style));
 
         let selected = self.selected_entry == Some(ix);
         let marked = self.marked_entries.contains(&ix);

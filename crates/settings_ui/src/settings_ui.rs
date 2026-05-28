@@ -65,6 +65,14 @@ const HEADER_GROUP_TAB_INDEX: isize = 3;
 const CONTENT_CONTAINER_TAB_INDEX: isize = 4;
 const CONTENT_GROUP_TAB_INDEX: isize = 5;
 
+const MAX_SETTINGS_LANGUAGE_SUBPAGES: usize = 512;
+const MAX_SETTINGS_NAVBAR_ENTRIES: usize = 2048;
+const MAX_SETTINGS_VISIBLE_PAGE_ITEMS: usize = 4096;
+const MAX_SETTINGS_JSON_PATH_MATCHES: usize = 512;
+const MAX_SETTINGS_EXACT_MATCHES: usize = 512;
+const MAX_SETTINGS_FUZZY_MATCHES: usize = 512;
+const MAX_SETTINGS_MATCH_INDICES: usize = 1024;
+
 actions!(
     settings_editor,
     [
@@ -1419,6 +1427,7 @@ fn all_language_names(cx: &App) -> Vec<SharedString> {
         .language_names()
         .into_iter()
         .filter(|name| name.as_ref() != "Zed Keybind Context")
+        .take(MAX_SETTINGS_LANGUAGE_SUBPAGES)
         .map(Into::into)
         .collect()
 }
@@ -1793,6 +1802,10 @@ impl SettingsWindow {
         let mut navbar_entries = Vec::new();
 
         for (page_index, page) in self.pages.iter().enumerate() {
+            if navbar_entries.len() >= MAX_SETTINGS_NAVBAR_ENTRIES {
+                break;
+            }
+
             navbar_entries.push(NavBarEntry {
                 title: page.title,
                 is_root: true,
@@ -1803,6 +1816,10 @@ impl SettingsWindow {
             });
 
             for (item_index, item) in page.items.iter().enumerate() {
+                if navbar_entries.len() >= MAX_SETTINGS_NAVBAR_ENTRIES {
+                    break;
+                }
+
                 let SettingsPageItem::SectionHeader(title) = item else {
                     continue;
                 };
@@ -1855,7 +1872,10 @@ impl SettingsWindow {
                 let included_in_search = if let Some(item_index) = entry.item_index {
                     search_matches[entry.page_index][item_index]
                 } else {
-                    search_matches[entry.page_index].iter().any(|b| *b)
+                    search_matches[entry.page_index]
+                        .iter()
+                        .take(MAX_SETTINGS_VISIBLE_PAGE_ITEMS)
+                        .any(|b| *b)
                         || search_matches[entry.page_index].is_empty()
                 };
                 if included_in_search {
@@ -1934,20 +1954,23 @@ impl SettingsWindow {
         let Some(search_index) = self.search_index.as_ref() else {
             return vec![];
         };
-        let mut indices = vec![];
-        for (index, SearchKeyLUTEntry { json_path, .. }) in search_index.key_lut.iter().enumerate()
-        {
-            let Some(json_path) = json_path else {
-                continue;
-            };
+        search_index
+            .key_lut
+            .iter()
+            .enumerate()
+            .filter_map(|(index, SearchKeyLUTEntry { json_path, .. })| {
+                let json_path = json_path.as_ref()?;
 
-            if let Some(post) = json_path.strip_prefix(path)
-                && (post.is_empty() || post.starts_with('.'))
-            {
-                indices.push(index);
-            }
-        }
-        indices
+                if let Some(post) = json_path.strip_prefix(path)
+                    && (post.is_empty() || post.starts_with('.'))
+                {
+                    Some(index)
+                } else {
+                    None
+                }
+            })
+            .take(MAX_SETTINGS_JSON_PATH_MATCHES)
+            .collect()
     }
 
     fn apply_match_indices(&mut self, match_indices: impl Iterator<Item = usize>, query: &str) {
@@ -1959,7 +1982,7 @@ impl SettingsWindow {
             page.fill(false);
         }
 
-        for match_index in match_indices {
+        for match_index in match_indices.take(MAX_SETTINGS_MATCH_INDICES) {
             let SearchKeyLUTEntry {
                 page_index,
                 header_index,
@@ -2025,6 +2048,7 @@ impl SettingsWindow {
                                     .any(|doc_word| doc_word.starts_with(query_word))
                             })
                         })
+                        .take(MAX_SETTINGS_EXACT_MATCHES)
                         .map(|doc| doc.id)
                         .collect::<Vec<usize>>()
                 }
@@ -2035,7 +2059,7 @@ impl SettingsWindow {
                 &query,
                 false,
                 true,
-                search_index.fuzzy_match_candidates.len(),
+                MAX_SETTINGS_FUZZY_MATCHES.min(search_index.fuzzy_match_candidates.len()),
                 &cancel_flag,
                 cx.background_executor().clone(),
             );
@@ -3029,6 +3053,7 @@ impl SettingsWindow {
             .iter()
             .enumerate()
             .filter(move |&(item_index, _)| self.filter_table[page_idx][item_index])
+            .take(MAX_SETTINGS_VISIBLE_PAGE_ITEMS)
     }
 
     fn render_sub_page_breadcrumbs(&self) -> impl IntoElement {
@@ -3202,7 +3227,7 @@ impl SettingsWindow {
     where
         Items: Iterator<Item = (usize, &'a SettingsPageItem)>,
     {
-        let items: Vec<_> = items.collect();
+        let items: Vec<_> = items.take(MAX_SETTINGS_VISIBLE_PAGE_ITEMS).collect();
         let items_len = items.len();
 
         let has_active_search = !self.search_bar.read(cx).is_empty(cx);

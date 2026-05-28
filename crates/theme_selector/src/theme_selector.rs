@@ -28,6 +28,20 @@ actions!(
     ]
 );
 
+const MAX_THEME_SELECTOR_THEMES: usize = 4_096;
+const MAX_THEME_SELECTOR_MATCHES: usize = 100;
+
+fn cap_theme_selector_themes(themes: &mut Vec<ThemeMeta>) {
+    if themes.len() > MAX_THEME_SELECTOR_THEMES {
+        log::warn!(
+            "truncating theme selector themes from {} to {}",
+            themes.len(),
+            MAX_THEME_SELECTOR_THEMES
+        );
+        themes.truncate(MAX_THEME_SELECTOR_THEMES);
+    }
+}
+
 pub fn init(cx: &mut App) {
     cx.on_action(|action: &zed_actions::theme_selector::Toggle, cx| {
         let action = action.clone();
@@ -164,7 +178,9 @@ impl ThemeSelectorDelegate {
                     true
                 }
             })
+            .take(MAX_THEME_SELECTOR_THEMES + 1)
             .collect::<Vec<_>>();
+        cap_theme_selector_themes(&mut themes);
 
         // Sort by dark vs light, then by name.
         themes.sort_unstable_by(|a, b| {
@@ -176,8 +192,10 @@ impl ThemeSelectorDelegate {
 
         let matches: Vec<StringMatch> = themes
             .iter()
-            .map(|meta| StringMatch {
-                candidate_id: 0,
+            .take(MAX_THEME_SELECTOR_THEMES)
+            .enumerate()
+            .map(|(index, meta)| StringMatch {
+                candidate_id: index,
                 score: 0.0,
                 positions: Default::default(),
                 string: meta.name.to_string(),
@@ -422,6 +440,7 @@ impl PickerDelegate for ThemeSelectorDelegate {
         let candidates = self
             .themes
             .iter()
+            .take(MAX_THEME_SELECTOR_THEMES)
             .enumerate()
             .map(|(id, meta)| StringMatchCandidate::new(id, &meta.name))
             .collect::<Vec<_>>();
@@ -444,7 +463,7 @@ impl PickerDelegate for ThemeSelectorDelegate {
                     &query,
                     false,
                     true,
-                    100,
+                    MAX_THEME_SELECTOR_MATCHES,
                     &Default::default(),
                     background,
                 )

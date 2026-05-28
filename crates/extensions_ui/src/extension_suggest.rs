@@ -12,6 +12,8 @@ use util::rel_path::RelPath;
 use workspace::notifications::simple_message_notification::MessageNotification;
 use workspace::{Workspace, notifications::NotificationId};
 
+const MAX_EXTENSION_SUGGESTION_LABEL_CHARS: usize = 128;
+
 const SUGGESTIONS_BY_EXTENSION_ID: &[(&str, &[&str])] = &[
     ("astro", &["astro"]),
     ("beancount", &["beancount"]),
@@ -134,6 +136,19 @@ fn language_extension_key(extension_id: &str) -> String {
     format!("{}_extension_suggest", extension_id)
 }
 
+fn bounded_extension_suggestion_label(value: &str) -> String {
+    if let Some((truncate_at, _)) = value
+        .char_indices()
+        .nth(MAX_EXTENSION_SUGGESTION_LABEL_CHARS)
+    {
+        let mut bounded = value[..truncate_at].to_string();
+        bounded.push('…');
+        bounded
+    } else {
+        value.to_string()
+    }
+}
+
 pub(crate) fn suggest(buffer: Entity<Buffer>, window: &mut Window, cx: &mut Context<Workspace>) {
     let Some(file) = buffer.read(cx).file().cloned() else {
         return;
@@ -167,13 +182,16 @@ pub(crate) fn suggest(buffer: Entity<Buffer>, window: &mut Window, cx: &mut Cont
         let notification_id = NotificationId::composite::<ExtensionSuggestionNotification>(
             SharedString::from(extension_id.clone()),
         );
+        let extension_id_label = bounded_extension_suggestion_label(&extension_id);
+        let file_name_or_extension_label =
+            bounded_extension_suggestion_label(&file_name_or_extension);
 
         workspace.show_notification(notification_id, cx, |cx| {
             cx.new(move |cx| {
                 MessageNotification::new(
                     format!(
                         "Do you want to install the recommended '{}' extension for '{}' files?",
-                        extension_id, file_name_or_extension
+                        extension_id_label, file_name_or_extension_label
                     ),
                     cx,
                 )

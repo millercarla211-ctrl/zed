@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
-use fuzzy::{StringMatch, StringMatchCandidate};
+use fuzzy::StringMatch;
 use gpui::{AnyElement, App, Context, DismissEvent, SharedString, Task, Window};
 use picker::{Picker, PickerDelegate};
 use theme::ThemeRegistry;
 use ui::{ListItem, ListItemSpacing, prelude::*};
+
+use super::{bounded_picker_matches, bounded_picker_options};
 
 type ThemePicker = Picker<ThemePickerDelegate>;
 
@@ -25,21 +27,13 @@ impl ThemePickerDelegate {
         let theme_registry = ThemeRegistry::global(cx);
 
         let themes = theme_registry.list_names();
+        let themes = bounded_picker_options(themes, &current_theme);
         let selected_index = themes
             .iter()
             .position(|theme| *theme == current_theme)
             .unwrap_or(0);
 
-        let filtered_themes = themes
-            .iter()
-            .enumerate()
-            .map(|(index, theme)| StringMatch {
-                candidate_id: index,
-                string: theme.to_string(),
-                positions: Vec::new(),
-                score: 0.0,
-            })
-            .collect();
+        let filtered_themes = bounded_picker_matches(themes.iter().enumerate());
 
         Self {
             themes,
@@ -79,36 +73,17 @@ impl PickerDelegate for ThemePickerDelegate {
     ) -> Task<()> {
         let themes = self.themes.clone();
         let current_theme = self.current_theme.clone();
+        let query_lower = query.to_lowercase();
 
         let matches: Vec<StringMatch> = if query.is_empty() {
-            themes
-                .iter()
-                .enumerate()
-                .map(|(index, theme)| StringMatch {
-                    candidate_id: index,
-                    string: theme.to_string(),
-                    positions: Vec::new(),
-                    score: 0.0,
-                })
-                .collect()
+            bounded_picker_matches(themes.iter().enumerate())
         } else {
-            let _candidates: Vec<StringMatchCandidate> = themes
-                .iter()
-                .enumerate()
-                .map(|(id, theme)| StringMatchCandidate::new(id, theme.as_ref()))
-                .collect();
-
-            themes
-                .iter()
-                .enumerate()
-                .filter(|(_, theme)| theme.to_lowercase().contains(&query.to_lowercase()))
-                .map(|(index, theme)| StringMatch {
-                    candidate_id: index,
-                    string: theme.to_string(),
-                    positions: Vec::new(),
-                    score: 0.0,
-                })
-                .collect()
+            bounded_picker_matches(
+                themes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, theme)| theme.to_lowercase().contains(&query_lower)),
+            )
         };
 
         let selected_index = if query.is_empty() {

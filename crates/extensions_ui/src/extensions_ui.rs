@@ -9,7 +9,7 @@ use std::{ops::Range, sync::Arc};
 use anyhow::Context as _;
 use cloud_api_types::{ExtensionMetadata, ExtensionProvides};
 use collections::{BTreeMap, BTreeSet};
-use editor::{Editor, EditorElement, EditorStyle};
+use editor::{Editor, EditorElement, EditorStyle, MultiBufferOffset};
 use extension_host::{ExtensionManifest, ExtensionOperation, ExtensionStore};
 use fuzzy::{StringMatchCandidate, match_strings};
 use gpui::{
@@ -39,6 +39,20 @@ use crate::components::ExtensionCard;
 use crate::extension_version_selector::{
     ExtensionVersionSelector, ExtensionVersionSelectorDelegate,
 };
+
+const MAX_EXTENSION_SEARCH_QUERY_CHARS: usize = 256;
+const MAX_EXTENSION_LIST_ENTRIES: usize = 2_000;
+const MAX_EXTENSION_FUZZY_CANDIDATES: usize = 1_000;
+const MAX_FILTERED_EXTENSION_RESULTS: usize = 1_000;
+const MAX_DISPLAYED_EXTENSION_RESULTS: usize = MAX_FILTERED_EXTENSION_RESULTS;
+const MAX_EXTENSION_NAME_CHARS: usize = 128;
+const MAX_EXTENSION_DESCRIPTION_CHARS: usize = 512;
+const MAX_EXTENSION_AUTHORS_TO_RENDER: usize = 16;
+const MAX_EXTENSION_AUTHOR_NAME_CHARS: usize = 128;
+const MAX_EXTENSION_AUTHOR_LABEL_CHARS: usize = 512;
+const MAX_EXTENSION_VERSION_LABEL_CHARS: usize = 64;
+const MAX_EXTENSION_REPOSITORY_URL_LABEL_CHARS: usize = 256;
+const MAX_EXTENSION_PROVIDES_CHIPS: usize = 8;
 
 actions!(
     zed,
@@ -189,6 +203,92 @@ fn extension_provides_label(provides: ExtensionProvides) -> &'static str {
         ExtensionProvides::Snippets => "Snippets",
         ExtensionProvides::DebugAdapters => "Debug Adapters",
     }
+}
+
+fn bounded_extension_ui_text(value: impl AsRef<str>, max_chars: usize) -> String {
+    let value = value.as_ref();
+    if max_chars == 0 {
+        return String::new();
+    }
+
+    if let Some((truncate_at, _)) = value.char_indices().nth(max_chars) {
+        let mut bounded = value[..truncate_at].to_string();
+        bounded.push('…');
+        bounded
+    } else {
+        value.to_string()
+    }
+}
+
+fn bounded_extension_version_label(version: &str) -> String {
+    bounded_extension_ui_text(format!("v{version}"), MAX_EXTENSION_VERSION_LABEL_CHARS)
+}
+
+fn bounded_extension_authors_text(authors: &[String]) -> String {
+    let mut label = String::new();
+
+    for author in authors.iter().take(MAX_EXTENSION_AUTHORS_TO_RENDER) {
+        if !label.is_empty() {
+            label.push_str(", ");
+        }
+        label.push_str(&bounded_extension_ui_text(
+            author,
+            MAX_EXTENSION_AUTHOR_NAME_CHARS,
+        ));
+
+        if label.chars().count() >= MAX_EXTENSION_AUTHOR_LABEL_CHARS {
+            break;
+        }
+    }
+
+    if authors.len() > MAX_EXTENSION_AUTHORS_TO_RENDER {
+        if !label.is_empty() {
+            label.push_str(", ");
+        }
+        label.push('…');
+    }
+
+    bounded_extension_ui_text(label, MAX_EXTENSION_AUTHOR_LABEL_CHARS)
+}
+
+fn bounded_remote_extension_entries(
+    extensions: Vec<ExtensionMetadata>,
+    installed_extension_ids: &BTreeSet<Arc<str>>,
+) -> Vec<ExtensionMetadata> {
+    let mut entries = Vec::new();
+    let mut installed_overflow = Vec::new();
+
+    for extension in extensions {
+        if entries.len() < MAX_EXTENSION_LIST_ENTRIES {
+            entries.push(extension);
+        } else if installed_extension_ids.contains(&extension.id)
+            && !entries.iter().any(|entry| entry.id == extension.id)
+            && !installed_overflow
+                .iter()
+                .any(|entry: &ExtensionMetadata| entry.id == extension.id)
+        {
+            installed_overflow.push(extension);
+        }
+    }
+
+    for installed_extension in installed_overflow {
+        let Some(replacement_ix) = entries
+            .iter()
+            .rposition(|entry| !installed_extension_ids.contains(&entry.id))
+        else {
+            break;
+        };
+        entries[replacement_ix] = installed_extension;
+    }
+
+    entries
+}
+
+fn bounded_extension_focus_query(id: &str) -> String {
+    let mut query = String::from("id:");
+    let remaining = MAX_EXTENSION_SEARCH_QUERY_CHARS.saturating_sub(query.chars().count());
+    query.extend(id.chars().take(remaining));
+    query
 }
 
 #[derive(Clone)]
@@ -349,7 +449,7 @@ impl ExtensionsPage {
                 let mut input = Editor::single_line(window, cx);
                 input.set_placeholder_text("Search extensions...", window, cx);
                 if let Some(id) = focus_extension_id {
-                    input.set_text(format!("id:{id}"), window, cx);
+                    input.set_text(bounded_extension_focus_query(id), window, cx);
                 }
                 input
             });
@@ -454,41 +554,57 @@ impl ExtensionsPage {
     }
 
     fn filter_extension_entries(&mut self, cx: &mut Context<Self>) {
-        self.filtered_remote_extension_indices.clear();
-        self.filtered_remote_extension_indices.extend(
-            self.remote_extension_entries
-                .iter()
-                .enumerate()
-                .filter(|(_, extension)| match self.filter {
-                    ExtensionFilter::All => true,
-                    ExtensionFilter::Installed => {
-                        let status = Self::extension_status(&extension.id, cx);
-                        matches!(status, ExtensionStatus::Installed(_))
-                    }
-                    ExtensionFilter::NotInstalled => {
-                        let status = Self::extension_status(&extension.id, cx);
-
-                        matches!(status, ExtensionStatus::NotInstalled)
-                    }
-                })
-                .filter(|(_, extension)| match self.provides_filter {
-                    Some(provides) => extension.manifest.provides.contains(&provides),
-                    None => true,
-                })
-                .map(|(ix, _)| ix),
-        );
-
         self.filtered_dev_extension_indices.clear();
-        self.filtered_dev_extension_indices.extend(
-            self.dev_extension_entries
-                .iter()
-                .enumerate()
-                .filter(|(_, manifest)| match self.provides_filter {
-                    Some(provides) => manifest.provides().contains(&provides),
-                    None => true,
-                })
-                .map(|(ix, _)| ix),
-        );
+        let dev_limit = if self.filter.include_dev_extensions() {
+            MAX_FILTERED_EXTENSION_RESULTS
+        } else {
+            0
+        };
+        let filtered_dev_extension_indices = self
+            .dev_extension_entries
+            .iter()
+            .enumerate()
+            .filter(|(_, manifest)| match self.provides_filter {
+                Some(provides) => manifest.provides().contains(&provides),
+                None => true,
+            })
+            .map(|(ix, _)| ix)
+            .take(dev_limit)
+            .collect::<Vec<_>>();
+        self.filtered_dev_extension_indices
+            .extend(filtered_dev_extension_indices);
+
+        self.filtered_remote_extension_indices.clear();
+        let remaining = if self.filter.include_dev_extensions() {
+            MAX_FILTERED_EXTENSION_RESULTS.saturating_sub(self.filtered_dev_extension_indices.len())
+        } else {
+            MAX_FILTERED_EXTENSION_RESULTS
+        };
+        let filtered_remote_extension_indices = self
+            .remote_extension_entries
+            .iter()
+            .enumerate()
+            .filter(|(_, extension)| match self.filter {
+                ExtensionFilter::All => true,
+                ExtensionFilter::Installed => {
+                    let status = Self::extension_status(&extension.id, cx);
+                    matches!(status, ExtensionStatus::Installed(_))
+                }
+                ExtensionFilter::NotInstalled => {
+                    let status = Self::extension_status(&extension.id, cx);
+
+                    matches!(status, ExtensionStatus::NotInstalled)
+                }
+            })
+            .filter(|(_, extension)| match self.provides_filter {
+                Some(provides) => extension.manifest.provides.contains(&provides),
+                None => true,
+            })
+            .map(|(ix, _)| ix)
+            .take(remaining)
+            .collect::<Vec<_>>();
+        self.filtered_remote_extension_indices
+            .extend(filtered_remote_extension_indices);
 
         cx.notify();
     }
@@ -514,6 +630,7 @@ impl ExtensionsPage {
         let dev_extensions = extension_store
             .read(cx)
             .dev_extensions()
+            .take(MAX_EXTENSION_LIST_ENTRIES)
             .cloned()
             .collect::<Vec<_>>();
 
@@ -539,6 +656,7 @@ impl ExtensionsPage {
             let dev_extensions = if let Some(search) = search {
                 let match_candidates = dev_extensions
                     .iter()
+                    .take(MAX_EXTENSION_FUZZY_CANDIDATES)
                     .enumerate()
                     .map(|(ix, manifest)| StringMatchCandidate::new(ix, &manifest.name))
                     .collect::<Vec<_>>();
@@ -548,7 +666,7 @@ impl ExtensionsPage {
                     &search,
                     false,
                     true,
-                    match_candidates.len(),
+                    MAX_FILTERED_EXTENSION_RESULTS.min(match_candidates.len()),
                     &Default::default(),
                     cx.background_executor().clone(),
                 )
@@ -571,7 +689,14 @@ impl ExtensionsPage {
                 match fetch_result {
                     Ok(extensions) => {
                         this.fetch_failed = false;
-                        this.remote_extension_entries = extensions;
+                        let installed_extension_ids = ExtensionStore::global(cx)
+                            .read(cx)
+                            .installed_extensions()
+                            .keys()
+                            .cloned()
+                            .collect::<BTreeSet<_>>();
+                        this.remote_extension_entries =
+                            bounded_remote_extension_entries(extensions, &installed_extension_ids);
                         this.filter_extension_entries(cx);
                         if let Some(callback) = on_complete {
                             callback(this, cx);
@@ -637,9 +762,15 @@ impl ExtensionsPage {
                         h_flex()
                             .gap_2()
                             .items_end()
-                            .child(Headline::new(extension.name.clone()).size(HeadlineSize::Medium))
                             .child(
-                                Headline::new(format!("v{}", extension.version))
+                                Headline::new(bounded_extension_ui_text(
+                                    &extension.name,
+                                    MAX_EXTENSION_NAME_CHARS,
+                                ))
+                                .size(HeadlineSize::Medium),
+                            )
+                            .child(
+                                Headline::new(bounded_extension_version_label(&extension.version))
                                     .size(HeadlineSize::XSmall),
                             ),
                     )
@@ -717,7 +848,7 @@ impl ExtensionsPage {
                             } else {
                                 "Author"
                             },
-                            extension.authors.join(", ")
+                            bounded_extension_authors_text(&extension.authors)
                         ))
                         .size(LabelSize::Small)
                         .color(Color::Muted)
@@ -730,7 +861,10 @@ impl ExtensionsPage {
                     .gap_2()
                     .justify_between()
                     .children(extension.description.as_ref().map(|description| {
-                        Label::new(description.clone())
+                        Label::new(bounded_extension_ui_text(
+                            description,
+                            MAX_EXTENSION_DESCRIPTION_CHARS,
+                        ))
                             .size(LabelSize::Small)
                             .color(Color::Default)
                             .truncate()
@@ -748,7 +882,10 @@ impl ExtensionsPage {
                                 cx.open_url(&repository_url);
                             }
                         }))
-                        .tooltip(Tooltip::text(repository_url))
+                        .tooltip(Tooltip::text(bounded_extension_ui_text(
+                            repository_url,
+                            MAX_EXTENSION_REPOSITORY_URL_LABEL_CHARS,
+                        )))
                     })),
             )
     }
@@ -765,6 +902,7 @@ impl ExtensionsPage {
         let extension_id = extension.id.clone();
         let buttons = self.buttons_for_entry(extension, &status, has_dev_extension, cx);
         let version = extension.manifest.version.clone();
+        let version_label = bounded_extension_version_label(&extension.manifest.version);
         let repository_url = extension.manifest.repository.clone();
         let authors = extension.manifest.authors.clone();
 
@@ -782,16 +920,22 @@ impl ExtensionsPage {
                         h_flex()
                             .gap_2()
                             .child(
-                                Headline::new(extension.manifest.name.clone())
-                                    .size(HeadlineSize::Small),
+                                Headline::new(bounded_extension_ui_text(
+                                    &extension.manifest.name,
+                                    MAX_EXTENSION_NAME_CHARS,
+                                ))
+                                .size(HeadlineSize::Small),
                             )
-                            .child(Headline::new(format!("v{version}")).size(HeadlineSize::XSmall))
+                            .child(Headline::new(version_label).size(HeadlineSize::XSmall))
                             .children(
                                 installed_version
                                     .filter(|installed_version| *installed_version != version)
                                     .map(|installed_version| {
-                                        Headline::new(format!("(v{installed_version} installed)",))
-                                            .size(HeadlineSize::XSmall)
+                                        Headline::new(format!(
+                                            "({} installed)",
+                                            bounded_extension_version_label(&installed_version)
+                                        ))
+                                        .size(HeadlineSize::XSmall)
                                     }),
                             )
                             .map(|parent| {
@@ -817,6 +961,7 @@ impl ExtensionsPage {
 
                                                 Some(Chip::new(extension_provides_label(*provides)))
                                             })
+                                            .take(MAX_EXTENSION_PROVIDES_CHIPS)
                                             .collect::<Vec<_>>(),
                                     ),
                                 )
@@ -835,10 +980,13 @@ impl ExtensionsPage {
                     .gap_2()
                     .justify_between()
                     .children(extension.manifest.description.as_ref().map(|description| {
-                        Label::new(description.clone())
-                            .size(LabelSize::Small)
-                            .color(Color::Default)
-                            .truncate()
+                        Label::new(bounded_extension_ui_text(
+                            description,
+                            MAX_EXTENSION_DESCRIPTION_CHARS,
+                        ))
+                        .size(LabelSize::Small)
+                        .color(Color::Default)
+                        .truncate()
                     }))
                     .child(
                         Label::new(format!(
@@ -863,10 +1011,12 @@ impl ExtensionsPage {
                                     .color(Color::Muted),
                             )
                             .child(
-                                Label::new(extension.manifest.authors.join(", "))
-                                    .size(LabelSize::Small)
-                                    .color(Color::Muted)
-                                    .truncate(),
+                                Label::new(bounded_extension_authors_text(
+                                    &extension.manifest.authors,
+                                ))
+                                .size(LabelSize::Small)
+                                .color(Color::Muted)
+                                .truncate(),
                             ),
                     )
                     .child(
@@ -874,7 +1024,10 @@ impl ExtensionsPage {
                             .gap_1()
                             .flex_shrink_0()
                             .child({
-                                let repo_url_for_tooltip = repository_url.clone();
+                                let repo_url_for_tooltip = bounded_extension_ui_text(
+                                    &repository_url,
+                                    MAX_EXTENSION_REPOSITORY_URL_LABEL_CHARS,
+                                );
 
                                 IconButton::new(
                                     SharedString::from(format!("repository-{}", extension.id)),
@@ -956,7 +1109,9 @@ impl ExtensionsPage {
                 .entry("Copy Author Info", None, {
                     let authors = authors.clone();
                     move |_, cx| {
-                        cx.write_to_clipboard(ClipboardItem::new_string(authors.join(", ")));
+                        cx.write_to_clipboard(ClipboardItem::new_string(
+                            bounded_extension_authors_text(&authors),
+                        ));
                     }
                 })
         })
@@ -1136,38 +1291,42 @@ impl ExtensionsPage {
                     None
                 } else {
                     Some(
-                        Button::new(extension_button_id(&extension.id, ExtensionOperation::Upgrade), "Upgrade")
-                          .style(ButtonStyle::Tinted(ui::TintColor::Accent))
-                            .when(!is_compatible, |upgrade_button| {
-                                upgrade_button.disabled(true).tooltip({
-                                    let version = extension.manifest.version.clone();
-                                    move |_, cx| {
-                                        Tooltip::simple(
-                                            format!(
-                                                "v{version} is not compatible with this version of Zed.",
-                                            ),
-                                             cx,
-                                        )
-                                    }
-                                })
-                            })
-                            .disabled(!is_compatible)
-                            .on_click({
-                                let extension_id = extension.id.clone();
-                                let version = extension.manifest.version.clone();
-                                move |_, _, cx| {
-                                    telemetry::event!("Extension Installed", extension_id, version);
-                                    ExtensionStore::global(cx).update(cx, |store, cx| {
-                                        store
-                                            .upgrade_extension(
-                                                extension_id.clone(),
-                                                version.clone(),
-                                                cx,
-                                            )
-                                            .detach_and_log_err(cx)
-                                    });
+                        Button::new(
+                            extension_button_id(&extension.id, ExtensionOperation::Upgrade),
+                            "Upgrade",
+                        )
+                        .style(ButtonStyle::Tinted(ui::TintColor::Accent))
+                        .when(!is_compatible, |upgrade_button| {
+                            upgrade_button.disabled(true).tooltip({
+                                let version =
+                                    bounded_extension_version_label(&extension.manifest.version);
+                                move |_, cx| {
+                                    Tooltip::simple(
+                                        format!(
+                                            "{version} is not compatible with this version of Zed.",
+                                        ),
+                                        cx,
+                                    )
                                 }
-                            }),
+                            })
+                        })
+                        .disabled(!is_compatible)
+                        .on_click({
+                            let extension_id = extension.id.clone();
+                            let version = extension.manifest.version.clone();
+                            move |_, _, cx| {
+                                telemetry::event!("Extension Installed", extension_id, version);
+                                ExtensionStore::global(cx).update(cx, |store, cx| {
+                                    store
+                                        .upgrade_extension(
+                                            extension_id.clone(),
+                                            version.clone(),
+                                            cx,
+                                        )
+                                        .detach_and_log_err(cx)
+                                });
+                            }
+                        }),
                     )
                 },
             },
@@ -1271,7 +1430,7 @@ impl ExtensionsPage {
 
     pub fn focus_extension(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.query_editor.update(cx, |editor, cx| {
-            editor.set_text(format!("id:{id}"), window, cx)
+            editor.set_text(bounded_extension_focus_query(id), window, cx)
         });
         self.refresh_search(cx);
     }
@@ -1321,7 +1480,13 @@ impl ExtensionsPage {
     }
 
     pub fn search_query(&self, cx: &mut App) -> Option<String> {
-        let search = self.query_editor.read(cx).text(cx);
+        let buffer = self.query_editor.read(cx).buffer().clone();
+        let snapshot = buffer.read(cx).snapshot(cx);
+        let search = snapshot
+            .text_for_range(MultiBufferOffset(0)..snapshot.len())
+            .flat_map(str::chars)
+            .take(MAX_EXTENSION_SEARCH_QUERY_CHARS)
+            .collect::<String>();
         if search.trim().is_empty() {
             None
         } else {
@@ -1765,6 +1930,7 @@ impl Render for ExtensionsPage {
                 if self.filter.include_dev_extensions() {
                     count += self.filtered_dev_extension_indices.len();
                 }
+                let count = count.min(MAX_DISPLAYED_EXTENSION_RESULTS);
 
                 if count == 0 {
                     this.child(self.render_empty_state(cx)).into_any_element()

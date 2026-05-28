@@ -6,6 +6,9 @@ use gpui::{Context, Entity, SharedString, Window};
 use language::{self, ToOffset};
 use project::{self, CompletionDisplayOptions};
 
+const MAX_ACTION_COMPLETION_CANDIDATES: usize = 10000;
+const MAX_ACTION_COMPLETION_MATCHES: usize = 50;
+
 pub struct ActionCompletionProvider {
     action_names: Vec<&'static str>,
     humanized_names: HashMap<&'static str, SharedString>,
@@ -58,6 +61,7 @@ impl CompletionProvider for ActionCompletionProvider {
             .action_names
             .iter()
             .enumerate()
+            .take(MAX_ACTION_COMPLETION_CANDIDATES)
             .map(|(ix, &name)| {
                 let humanized = self
                     .humanized_names
@@ -79,7 +83,7 @@ impl CompletionProvider for ActionCompletionProvider {
                 &normalized_query,
                 true,
                 true,
-                action_names.len(),
+                MAX_ACTION_COMPLETION_MATCHES.min(candidates.len()),
                 &Default::default(),
                 executor_for_fuzzy,
             )
@@ -87,7 +91,7 @@ impl CompletionProvider for ActionCompletionProvider {
 
             let completions: Vec<project::Completion> = matches
                 .iter()
-                .take(50)
+                .take(MAX_ACTION_COMPLETION_MATCHES)
                 .map(|m| {
                     let action_name = action_names[m.candidate_id];
                     let humanized = humanized_names

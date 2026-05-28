@@ -14,6 +14,8 @@ use workspace::{HideStatusItem, StatusItemView, ToolbarItemEvent, Workspace, ite
 
 use crate::{Deploy, IncludeWarnings, ProjectDiagnosticsEditor};
 
+const MAX_STATUS_DIAGNOSTIC_LABEL_CHARS: usize = 240;
+
 /// The status bar item that displays diagnostic counts.
 pub struct DiagnosticIndicator {
     summary: project::DiagnosticSummary,
@@ -60,12 +62,9 @@ impl Render for DiagnosticIndicator {
         };
 
         let status = if let Some(diagnostic) = &self.current_diagnostic {
-            let message = diagnostic
-                .message
-                .split_once('\n')
-                .map_or(&*diagnostic.message, |(first, _)| first);
+            let message = diagnostic_status_message(diagnostic);
             Some(
-                Button::new("diagnostic_message", SharedString::new(message))
+                Button::new("diagnostic_message", message)
                     .label_size(LabelSize::Small)
                     .truncate(true)
                     .tooltip(|_window, cx| {
@@ -110,6 +109,25 @@ impl Render for DiagnosticIndicator {
             )
             .children(status)
     }
+}
+
+fn diagnostic_status_message(diagnostic: &Diagnostic) -> SharedString {
+    let message = diagnostic
+        .message
+        .split_once('\n')
+        .map_or(&*diagnostic.message, |(first, _)| first);
+
+    let Some((byte_limit, _)) = message
+        .char_indices()
+        .nth(MAX_STATUS_DIAGNOSTIC_LABEL_CHARS)
+    else {
+        return SharedString::new(message);
+    };
+
+    let mut bounded = String::with_capacity(byte_limit + 3);
+    bounded.push_str(&message[..byte_limit]);
+    bounded.push_str("...");
+    bounded.into()
 }
 
 impl DiagnosticIndicator {

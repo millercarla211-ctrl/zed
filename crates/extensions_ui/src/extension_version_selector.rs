@@ -14,6 +14,11 @@ use ui::{HighlightedLabel, ListItem, ListItemSpacing, prelude::*};
 use util::ResultExt;
 use workspace::ModalView;
 
+const MAX_EXTENSION_VERSION_SELECTOR_ROWS: usize = 256;
+const MAX_EXTENSION_VERSION_SELECTOR_QUERY_CHARS: usize = 128;
+const MAX_EXTENSION_VERSION_SELECTOR_FUZZY_MATCHES: usize = 100;
+const MAX_EXTENSION_VERSION_SELECTOR_LABEL_CHARS: usize = 64;
+
 pub struct ExtensionVersionSelector {
     picker: Entity<Picker<ExtensionVersionSelectorDelegate>>,
 }
@@ -45,6 +50,43 @@ impl ExtensionVersionSelector {
     }
 }
 
+fn bounded_extension_version_selector_text(value: impl AsRef<str>, max_chars: usize) -> String {
+    let value = value.as_ref();
+    if max_chars == 0 {
+        return String::new();
+    }
+
+    if let Some((truncate_at, _)) = value.char_indices().nth(max_chars) {
+        let mut bounded = value[..truncate_at].to_string();
+        bounded.push('…');
+        bounded
+    } else {
+        value.to_string()
+    }
+}
+
+fn bounded_extension_version_selector_label(version: &str) -> String {
+    bounded_extension_version_selector_text(
+        format!("v{version}"),
+        MAX_EXTENSION_VERSION_SELECTOR_LABEL_CHARS,
+    )
+}
+
+fn bounded_extension_version_selector_query(query: String) -> String {
+    if let Some((truncate_at, _)) = query
+        .char_indices()
+        .nth(MAX_EXTENSION_VERSION_SELECTOR_QUERY_CHARS)
+    {
+        query[..truncate_at].to_string()
+    } else {
+        query
+    }
+}
+
+fn cap_extension_version_selector_rows(extension_versions: &mut Vec<ExtensionMetadata>) {
+    extension_versions.truncate(MAX_EXTENSION_VERSION_SELECTOR_ROWS);
+}
+
 pub struct ExtensionVersionSelectorDelegate {
     fs: Arc<dyn Fs>,
     selector: WeakEntity<ExtensionVersionSelector>,
@@ -57,8 +99,9 @@ impl ExtensionVersionSelectorDelegate {
     pub fn new(
         fs: Arc<dyn Fs>,
         selector: WeakEntity<ExtensionVersionSelector>,
-        mut extension_versions: Vec<ExtensionMetadata>,
+        extension_versions: Vec<ExtensionMetadata>,
     ) -> Self {
+        let mut extension_versions = extension_versions;
         extension_versions.sort_unstable_by(|a, b| {
             let a_version = Version::from_str(&a.manifest.version);
             let b_version = Version::from_str(&b.manifest.version);
@@ -68,14 +111,16 @@ impl ExtensionVersionSelectorDelegate {
                 _ => b.published_at.cmp(&a.published_at),
             }
         });
+        cap_extension_version_selector_rows(&mut extension_versions);
 
         let matches = extension_versions
             .iter()
-            .map(|extension| StringMatch {
-                candidate_id: 0,
+            .enumerate()
+            .map(|(index, extension)| StringMatch {
+                candidate_id: index,
                 score: 0.0,
                 positions: Default::default(),
-                string: format!("v{}", extension.manifest.version),
+                string: bounded_extension_version_selector_label(&extension.manifest.version),
             })
             .collect();
 
@@ -120,12 +165,17 @@ impl PickerDelegate for ExtensionVersionSelectorDelegate {
         cx: &mut Context<Picker<Self>>,
     ) -> Task<()> {
         let background_executor = cx.background_executor().clone();
+        let query = bounded_extension_version_selector_query(query);
         let candidates = self
             .extension_versions
             .iter()
+            .take(MAX_EXTENSION_VERSION_SELECTOR_ROWS)
             .enumerate()
             .map(|(id, extension)| {
-                StringMatchCandidate::new(id, &format!("v{}", extension.manifest.version))
+                StringMatchCandidate::new(
+                    id,
+                    &bounded_extension_version_selector_label(&extension.manifest.version),
+                )
             })
             .collect::<Vec<_>>();
 
@@ -147,7 +197,7 @@ impl PickerDelegate for ExtensionVersionSelectorDelegate {
                     &query,
                     false,
                     true,
-                    100,
+                    MAX_EXTENSION_VERSION_SELECTOR_FUZZY_MATCHES,
                     &Default::default(),
                     background_executor,
                 )

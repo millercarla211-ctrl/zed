@@ -14,6 +14,20 @@ use util::ResultExt;
 use workspace::{ModalView, ui::HighlightedLabel};
 use zed_actions::{ExtensionCategoryFilter, Extensions};
 
+const MAX_ICON_THEME_SELECTOR_THEMES: usize = 4_096;
+const MAX_ICON_THEME_SELECTOR_MATCHES: usize = 100;
+
+fn cap_icon_theme_selector_themes(themes: &mut Vec<ThemeMeta>) {
+    if themes.len() > MAX_ICON_THEME_SELECTOR_THEMES {
+        log::warn!(
+            "truncating icon theme selector themes from {} to {}",
+            themes.len(),
+            MAX_ICON_THEME_SELECTOR_THEMES
+        );
+        themes.truncate(MAX_ICON_THEME_SELECTOR_THEMES);
+    }
+}
+
 pub(crate) struct IconThemeSelector {
     picker: Entity<Picker<IconThemeSelectorDelegate>>,
 }
@@ -93,7 +107,9 @@ impl IconThemeSelectorDelegate {
                     true
                 }
             })
+            .take(MAX_ICON_THEME_SELECTOR_THEMES + 1)
             .collect::<Vec<_>>();
+        cap_icon_theme_selector_themes(&mut themes);
 
         themes.sort_unstable_by(|a, b| {
             a.appearance
@@ -103,8 +119,10 @@ impl IconThemeSelectorDelegate {
         });
         let matches = themes
             .iter()
-            .map(|meta| StringMatch {
-                candidate_id: 0,
+            .take(MAX_ICON_THEME_SELECTOR_THEMES)
+            .enumerate()
+            .map(|(index, meta)| StringMatch {
+                candidate_id: index,
                 score: 0.0,
                 positions: Default::default(),
                 string: meta.name.to_string(),
@@ -234,6 +252,7 @@ impl PickerDelegate for IconThemeSelectorDelegate {
         let candidates = self
             .themes
             .iter()
+            .take(MAX_ICON_THEME_SELECTOR_THEMES)
             .enumerate()
             .map(|(id, meta)| StringMatchCandidate::new(id, &meta.name))
             .collect::<Vec<_>>();
@@ -256,7 +275,7 @@ impl PickerDelegate for IconThemeSelectorDelegate {
                     &query,
                     false,
                     true,
-                    100,
+                    MAX_ICON_THEME_SELECTOR_MATCHES,
                     &Default::default(),
                     background,
                 )

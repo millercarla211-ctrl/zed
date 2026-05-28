@@ -20,6 +20,8 @@ use ui::{ListItem, ListItemSpacing, prelude::*};
 use util::ResultExt;
 use workspace::{DismissDecision, ModalView};
 
+const MAX_OUTLINE_VIEW_ITEMS: usize = language::MAX_OUTLINE_ITEMS;
+
 pub fn init(cx: &mut App) {
     cx.observe_new(OutlineView::register).detach();
     zed_actions::outline::TOGGLE_OUTLINE
@@ -86,6 +88,7 @@ fn outline_for_editor(
     Some(cx.background_executor().spawn(async move {
         task.await
             .into_iter()
+            .take(MAX_OUTLINE_VIEW_ITEMS)
             .filter_map(|item| {
                 Some(OutlineItem {
                     depth: item.depth,
@@ -303,6 +306,7 @@ impl PickerDelegate for OutlineViewDelegate {
                 outline
                     .items
                     .iter()
+                    .take(MAX_OUTLINE_VIEW_ITEMS)
                     .enumerate()
                     .map(|(index, _)| StringMatch {
                         candidate_id: index,

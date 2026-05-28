@@ -3,6 +3,40 @@ use fuzzy::{StringMatch, StringMatchCandidate};
 use gpui::{BackgroundExecutor, HighlightStyle};
 use std::ops::Range;
 
+pub const MAX_OUTLINE_ITEMS: usize = 20_000;
+const MAX_OUTLINE_PATH_TEXT_BYTES: usize = 256 * 1024;
+const MAX_OUTLINE_SYMBOL_TEXT_BYTES: usize = 4 * 1024;
+const MAX_OUTLINE_NAME_RANGES: usize = 256;
+pub const MAX_OUTLINE_SEARCH_MATCHES: usize = 100;
+const MAX_OUTLINE_TREE_MATCHES: usize = 2_000;
+
+fn warn_truncated_outline_materialization(label: &str, actual: usize, max: usize) {
+    if actual > max {
+        log::warn!("truncating {label} from {actual} to {max} entries");
+    }
+}
+
+fn bounded_utf8_prefix(text: &str, max_bytes: usize) -> &str {
+    if text.len() <= max_bytes {
+        return text;
+    }
+
+    let mut end = max_bytes;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
+fn push_bounded_outline_text(target: &mut String, text: &str, max_bytes: usize) {
+    if target.len() >= max_bytes {
+        return;
+    }
+
+    let remaining = max_bytes - target.len();
+    target.push_str(bounded_utf8_prefix(text, remaining));
+}
+
 /// An outline of all the symbols contained in a buffer.
 #[derive(Debug)]
 pub struct Outline<T> {
@@ -99,10 +133,13 @@ impl<T: ToPoint> OutlineItem<T> {
 }
 
 impl<T> Outline<T> {
-    pub fn new(items: Vec<OutlineItem<T>>) -> Self {
-        let mut candidates = Vec::new();
-        let mut path_candidates = Vec::new();
-        let mut path_candidate_prefixes = Vec::new();
+    pub fn new(mut items: Vec<OutlineItem<T>>) -> Self {
+        warn_truncated_outline_materialization("outline items", items.len(), MAX_OUTLINE_ITEMS);
+        items.truncate(MAX_OUTLINE_ITEMS);
+
+        let mut candidates = Vec::with_capacity(items.len());
+        let mut path_candidates = Vec::with_capacity(items.len());
+        let mut path_candidate_prefixes = Vec::with_capacity(items.len());
         let mut path_text = String::new();
         let mut path_stack = Vec::new();
 
@@ -111,18 +148,26 @@ impl<T> Outline<T> {
                 path_stack.truncate(item.depth);
                 path_text.truncate(path_stack.last().copied().unwrap_or(0));
             }
-            if !path_text.is_empty() {
+            if !path_text.is_empty() && path_text.len() < MAX_OUTLINE_PATH_TEXT_BYTES {
                 path_text.push(' ');
             }
             path_candidate_prefixes.push(path_text.len());
-            path_text.push_str(&item.text);
+            push_bounded_outline_text(&mut path_text, &item.text, MAX_OUTLINE_PATH_TEXT_BYTES);
             path_stack.push(path_text.len());
 
-            let candidate_text = item
-                .name_ranges
-                .iter()
-                .map(|range| &item.text[range.start..range.end])
-                .collect::<String>();
+            let mut candidate_text = String::new();
+            for range in item.name_ranges.iter().take(MAX_OUTLINE_NAME_RANGES) {
+                if let Some(text) = item.text.get(range.clone()) {
+                    push_bounded_outline_text(
+                        &mut candidate_text,
+                        text,
+                        MAX_OUTLINE_SYMBOL_TEXT_BYTES,
+                    );
+                }
+                if candidate_text.len() >= MAX_OUTLINE_SYMBOL_TEXT_BYTES {
+                    break;
+                }
+            }
 
             path_candidates.push(StringMatchCandidate::new(id, &path_text));
             candidates.push(StringMatchCandidate::new(id, &candidate_text));
@@ -174,7 +219,7 @@ impl<T> Outline<T> {
             query,
             smart_case,
             true,
-            100,
+            MAX_OUTLINE_SEARCH_MATCHES,
             &Default::default(),
             executor.clone(),
         )
@@ -185,6 +230,10 @@ impl<T> Outline<T> {
 
         let mut prev_item_ix = 0;
         for mut string_match in matches {
+            if tree_matches.len() >= MAX_OUTLINE_TREE_MATCHES {
+                break;
+            }
+
             let outline_match = &self.items[string_match.candidate_id];
             string_match.string.clone_from(&outline_match.text);
 
@@ -218,12 +267,15 @@ impl<T> Outline<T> {
                 .enumerate()
                 .rev()
             {
-                if cur_depth == 0 {
+                if cur_depth == 0 || tree_matches.len() >= MAX_OUTLINE_TREE_MATCHES {
                     break;
                 }
 
                 let candidate_index = ix + prev_item_ix;
                 if item.depth == cur_depth - 1 {
+                    if tree_matches.len() >= MAX_OUTLINE_TREE_MATCHES {
+                        break;
+                    }
                     tree_matches.insert(
                         insertion_ix,
                         StringMatch {
@@ -238,6 +290,9 @@ impl<T> Outline<T> {
             }
 
             prev_item_ix = string_match.candidate_id + 1;
+            if tree_matches.len() >= MAX_OUTLINE_TREE_MATCHES {
+                break;
+            }
             tree_matches.push(string_match);
         }
 

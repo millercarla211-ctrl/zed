@@ -6,6 +6,8 @@ use ui::{
     ButtonSize, ContextMenu, DropdownMenu, DropdownStyle, FluentBuilder as _, IconPosition, px,
 };
 
+const MAX_ENUM_DROPDOWN_VARIANTS: usize = 256;
+
 #[derive(IntoElement)]
 pub struct EnumVariantDropdown<T>
 where
@@ -66,7 +68,9 @@ where
 
         let context_menu = window.use_keyed_state(current_value_label, cx, |window, cx| {
             ContextMenu::new(window, cx, move |mut menu, _, _| {
-                for (&value, &label) in std::iter::zip(self.variants, self.labels) {
+                for (&value, &label) in
+                    std::iter::zip(self.variants, self.labels).take(MAX_ENUM_DROPDOWN_VARIANTS)
+                {
                     let on_change = self.on_change.clone();
                     let current_value = self.current_value;
                     menu = menu.toggleable_entry(

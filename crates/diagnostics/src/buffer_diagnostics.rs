@@ -1,7 +1,10 @@
 use crate::{
-    DIAGNOSTICS_UPDATE_DEBOUNCE, IncludeWarnings, ToggleWarnings, context_range_for_entry,
+    DIAGNOSTICS_UPDATE_DEBOUNCE, IncludeWarnings, MAX_DIAGNOSTIC_EXCERPTS_PER_BUFFER,
+    MAX_DIAGNOSTICS_PER_BUFFER, ToggleWarnings, context_range_for_entry,
     diagnostic_renderer::{DiagnosticBlock, DiagnosticRenderer},
+    push_diagnostic_group_entry,
     toolbar_controls::DiagnosticsToolbarEditor,
+    truncate_diagnostic_blocks_for_buffer,
 };
 use anyhow::Result;
 use collections::HashMap;
@@ -23,7 +26,7 @@ use project::{
 use settings::Settings;
 use std::{
     any::{Any, TypeId},
-    cmp::{self, Ordering},
+    cmp,
     ops::Range,
     sync::Arc,
 };
@@ -327,6 +330,7 @@ impl BufferDiagnosticsEditor {
             // nothing to update.
             let diagnostics = buffer_snapshot
                 .diagnostics_in_range::<_, Anchor>(Point::zero()..buffer_snapshot_max, false)
+                .take(MAX_DIAGNOSTICS_PER_BUFFER)
                 .collect::<Vec<_>>();
 
             let unchanged =
@@ -348,13 +352,13 @@ impl BufferDiagnosticsEditor {
             // Mapping between the Group ID and a vector of DiagnosticEntry.
             let mut grouped: HashMap<usize, Vec<_>> = HashMap::default();
             for entry in diagnostics {
-                grouped
-                    .entry(entry.diagnostic.group_id)
-                    .or_default()
-                    .push(DiagnosticEntryRef {
+                push_diagnostic_group_entry(
+                    &mut grouped,
+                    DiagnosticEntryRef {
                         range: entry.range.to_point(&buffer_snapshot),
                         diagnostic: entry.diagnostic,
-                    })
+                    },
+                );
             }
 
             let mut blocks: Vec<DiagnosticBlock> = Vec::new();
@@ -385,40 +389,22 @@ impl BufferDiagnosticsEditor {
                     )
                 })?;
 
-                // For each of the diagnostic blocks to be displayed in the
-                // editor, figure out its index in the list of blocks.
-                //
-                // The following rules are used to determine the order:
-                // 1. Blocks with a lower start position should come first.
-                // 2. If two blocks have the same start position, the one with
-                // the higher end position should come first.
-                for diagnostic_block in diagnostic_blocks {
-                    let index = blocks.partition_point(|probe| {
-                        match probe
-                            .initial_range
-                            .start
-                            .cmp(&diagnostic_block.initial_range.start)
-                        {
-                            Ordering::Less => true,
-                            Ordering::Greater => false,
-                            Ordering::Equal => {
-                                probe.initial_range.end > diagnostic_block.initial_range.end
-                            }
-                        }
-                    });
-
-                    blocks.insert(index, diagnostic_block);
-                }
+                blocks.extend(diagnostic_blocks);
             }
+            truncate_diagnostic_blocks_for_buffer(&mut blocks);
 
             // Build the excerpt ranges for this specific buffer's diagnostics,
             // so those excerpts can later be used to update the excerpts shown
             // in the editor.
             // This is done by iterating over the list of diagnostic blocks and
             // determine what range does the diagnostic block span.
-            let mut excerpt_ranges: Vec<ExcerptRange<_>> = Vec::new();
+            let mut excerpt_ranges: Vec<ExcerptRange<_>> =
+                Vec::with_capacity(blocks.len().min(MAX_DIAGNOSTIC_EXCERPTS_PER_BUFFER));
 
             for diagnostic_block in blocks.iter() {
+                if excerpt_ranges.len() >= MAX_DIAGNOSTIC_EXCERPTS_PER_BUFFER {
+                    break;
+                }
                 let excerpt_range = context_range_for_entry(
                     diagnostic_block.initial_range.clone(),
                     multibuffer_context,

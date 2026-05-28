@@ -6,7 +6,48 @@ use picker::{Picker, PickerDelegate, PickerEditorPosition};
 use project::{Project, git_store::Repository};
 use std::sync::Arc;
 use ui::{ListItem, ListItemSpacing, prelude::*};
+use util::truncate_and_trailoff;
 use workspace::{ModalView, Workspace};
+
+const MAX_REPOSITORY_SELECTOR_ENTRIES: usize = 1_024;
+const MAX_REPOSITORY_SELECTOR_MATCHES: usize = 256;
+const MAX_REPOSITORY_SELECTOR_LABEL_CHARS: usize = 512;
+
+fn bounded_repository_label(label: &str) -> String {
+    truncate_and_trailoff(label, MAX_REPOSITORY_SELECTOR_LABEL_CHARS)
+}
+
+fn sort_repository_entries(repos: &mut [Entity<Repository>], cx: &App) {
+    repos.sort_by(|a, b| {
+        bounded_repository_label(a.read(cx).display_name().as_ref())
+            .to_lowercase()
+            .cmp(&bounded_repository_label(b.read(cx).display_name().as_ref()).to_lowercase())
+    });
+}
+
+fn bounded_repository_entries(
+    repositories: impl IntoIterator<Item = Entity<Repository>>,
+    active_repository: Option<&Entity<Repository>>,
+    cx: &App,
+) -> Vec<Entity<Repository>> {
+    let mut repos = Vec::new();
+
+    for repo in repositories {
+        if active_repository.is_some_and(|active| active == &repo) {
+            if !repos.iter().any(|existing| existing == &repo) {
+                if repos.len() >= MAX_REPOSITORY_SELECTOR_ENTRIES {
+                    repos.pop();
+                }
+                repos.push(repo);
+            }
+        } else if repos.len() < MAX_REPOSITORY_SELECTOR_ENTRIES {
+            repos.push(repo);
+        }
+    }
+
+    sort_repository_entries(&mut repos, cx);
+    repos
+}
 
 pub fn register(workspace: &mut Workspace) {
     workspace.register_action(open);
@@ -37,28 +78,22 @@ impl RepositorySelector {
         cx: &mut Context<Self>,
     ) -> Self {
         let git_store = project_handle.read(cx).git_store().clone();
+        let active_repository = git_store.read(cx).active_repository();
         let repository_entries = git_store.update(cx, |git_store, _cx| {
-            let mut repos: Vec<_> = git_store.repositories().values().cloned().collect();
-
-            repos.sort_by(|a, b| {
-                a.read(_cx)
-                    .display_name()
-                    .to_lowercase()
-                    .cmp(&b.read(_cx).display_name().to_lowercase())
-            });
-
-            repos
+            bounded_repository_entries(
+                git_store.repositories().values().cloned(),
+                active_repository.as_ref(),
+                _cx,
+            )
         });
         let filtered_repositories = repository_entries.clone();
 
         let widest_item_ix = repository_entries.iter().position_max_by(|a, b| {
-            a.read(cx)
-                .display_name()
+            bounded_repository_label(a.read(cx).display_name().as_ref())
                 .len()
-                .cmp(&b.read(cx).display_name().len())
+                .cmp(&bounded_repository_label(b.read(cx).display_name().as_ref()).len())
         });
 
-        let active_repository = git_store.read(cx).active_repository();
         let selected_index = active_repository
             .as_ref()
             .and_then(|active| filtered_repositories.iter().position(|repo| repo == active))
@@ -141,7 +176,8 @@ pub struct RepositorySelectorDelegate {
 }
 
 impl RepositorySelectorDelegate {
-    pub fn update_repository_entries(&mut self, all_repositories: Vec<Entity<Repository>>) {
+    pub fn update_repository_entries(&mut self, mut all_repositories: Vec<Entity<Repository>>) {
+        all_repositories.truncate(MAX_REPOSITORY_SELECTOR_ENTRIES);
         self.repository_entries = all_repositories.clone();
         self.filtered_repositories = all_repositories;
         self.selected_index = self
@@ -195,7 +231,13 @@ impl PickerDelegate for RepositorySelectorDelegate {
 
         let repo_names: Vec<(Entity<Repository>, String)> = all_repositories
             .iter()
-            .map(|repo| (repo.clone(), repo.read(cx).display_name().to_lowercase()))
+            .take(MAX_REPOSITORY_SELECTOR_MATCHES)
+            .map(|repo| {
+                (
+                    repo.clone(),
+                    bounded_repository_label(repo.read(cx).display_name().as_ref()).to_lowercase(),
+                )
+            })
             .collect();
 
         cx.spawn_in(window, async move |this, cx| {
@@ -203,11 +245,15 @@ impl PickerDelegate for RepositorySelectorDelegate {
                 .background_spawn(async move {
                     if query.is_empty() {
                         all_repositories
+                            .into_iter()
+                            .take(MAX_REPOSITORY_SELECTOR_MATCHES)
+                            .collect()
                     } else {
                         let query_lower = query.to_lowercase();
                         repo_names
                             .into_iter()
                             .filter(|(_, display_name)| display_name.contains(&query_lower))
+                            .take(MAX_REPOSITORY_SELECTOR_MATCHES)
                             .map(|(repo, _)| repo)
                             .collect()
                     }
@@ -216,12 +262,7 @@ impl PickerDelegate for RepositorySelectorDelegate {
 
             this.update_in(cx, |this, window, cx| {
                 let mut sorted_repositories = filtered_repositories;
-                sorted_repositories.sort_by(|a, b| {
-                    a.read(cx)
-                        .display_name()
-                        .to_lowercase()
-                        .cmp(&b.read(cx).display_name().to_lowercase())
-                });
+                sort_repository_entries(&mut sorted_repositories, cx);
                 let selected_index = this
                     .delegate
                     .active_repository
@@ -275,7 +316,7 @@ impl PickerDelegate for RepositorySelectorDelegate {
             .child(
                 h_flex()
                     .gap_1()
-                    .child(Label::new(display_name))
+                    .child(Label::new(bounded_repository_label(display_name.as_ref())))
                     .when(is_active, |this| {
                         this.child(
                             Icon::new(IconName::Check)

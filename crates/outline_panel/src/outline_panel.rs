@@ -106,9 +106,49 @@ actions!(
 
 const OUTLINE_PANEL_KEY: &str = "OutlinePanel";
 const UPDATE_DEBOUNCE: Duration = Duration::from_millis(50);
+const MAX_OUTLINE_PANEL_CACHED_ENTRIES: usize = 50_000;
+const MAX_OUTLINE_PANEL_MATCH_CANDIDATES: usize = MAX_OUTLINE_PANEL_CACHED_ENTRIES;
+const MAX_OUTLINE_PANEL_FILTER_MATCHES: usize = 10_000;
+const MAX_OUTLINE_PANEL_SEARCH_MATCHES: usize = 20_000;
+const MAX_OUTLINE_PANEL_SEARCH_MATCHES_PER_BUFFER: usize = 10_000;
+const MAX_OUTLINE_PANEL_OUTLINES_PER_EXCERPT: usize = language::MAX_OUTLINE_ITEMS;
+const MAX_OUTLINE_PANEL_OUTLINE_LOCATION_ITEMS: usize = language::MAX_OUTLINE_ITEMS;
+const MAX_OUTLINE_PANEL_EXCERPT_RANGES: usize = 4_096;
 
 type Outline = OutlineItem<language::Anchor>;
 type HighlightStyleData = Arc<OnceLock<Vec<(Range<usize>, HighlightStyle)>>>;
+
+fn warn_truncated_outline_panel_materialization(label: &str, actual: usize, max: usize) {
+    if actual > max {
+        log::warn!("truncating outline panel {label} from {actual} to {max} entries");
+    }
+}
+
+fn capped_outline_refs<'a>(outlines: impl Iterator<Item = &'a Outline>) -> Vec<&'a Outline> {
+    let mut outlines = outlines
+        .take(MAX_OUTLINE_PANEL_OUTLINES_PER_EXCERPT + 1)
+        .collect::<Vec<_>>();
+    if outlines.len() > MAX_OUTLINE_PANEL_OUTLINES_PER_EXCERPT {
+        warn_truncated_outline_panel_materialization(
+            "outlines per excerpt",
+            outlines.len(),
+            MAX_OUTLINE_PANEL_OUTLINES_PER_EXCERPT,
+        );
+        outlines.truncate(MAX_OUTLINE_PANEL_OUTLINES_PER_EXCERPT);
+    }
+    outlines
+}
+
+fn cap_outline_location_items<T>(items: &mut Vec<T>) {
+    if items.len() > MAX_OUTLINE_PANEL_OUTLINE_LOCATION_ITEMS {
+        warn_truncated_outline_panel_materialization(
+            "outline location items",
+            items.len(),
+            MAX_OUTLINE_PANEL_OUTLINE_LOCATION_ITEMS,
+        );
+        items.truncate(MAX_OUTLINE_PANEL_OUTLINE_LOCATION_ITEMS);
+    }
+}
 
 pub struct OutlinePanel {
     fs: Arc<dyn Fs>,
@@ -185,6 +225,7 @@ impl SearchState {
             query,
             matches: new_matches
                 .into_iter()
+                .take(MAX_OUTLINE_PANEL_SEARCH_MATCHES)
                 .map(|range| {
                     let search_data = previous_matches
                         .get(&range)
@@ -3282,7 +3323,7 @@ impl OutlinePanel {
         selection_display_point: DisplayPoint,
         cx: &App,
     ) -> Option<PanelEntry> {
-        let excerpt_outlines = self
+        let mut excerpt_outlines = self
             .buffers
             .get(&selection_anchor.buffer_id)
             .into_iter()
@@ -3296,7 +3337,9 @@ impl OutlinePanel {
                     outline,
                 ))
             })
+            .take(MAX_OUTLINE_PANEL_OUTLINE_LOCATION_ITEMS + 1)
             .collect::<Vec<_>>();
+        cap_outline_location_items(&mut excerpt_outlines);
 
         let mut matching_outline_indices = Vec::new();
         let mut children = HashMap::default();
@@ -4067,7 +4110,7 @@ impl OutlinePanel {
                 &query,
                 true,
                 true,
-                usize::MAX,
+                MAX_OUTLINE_PANEL_FILTER_MATCHES,
                 &AtomicBool::default(),
                 cx.background_executor().clone(),
             )
@@ -4122,7 +4165,18 @@ impl OutlinePanel {
             entry
         };
 
-        if track_matches {
+        if state.entries.len() >= MAX_OUTLINE_PANEL_CACHED_ENTRIES {
+            if !state.cached_entries_truncated {
+                log::warn!(
+                    "truncating outline panel cached entries at {} rows",
+                    MAX_OUTLINE_PANEL_CACHED_ENTRIES
+                );
+                state.cached_entries_truncated = true;
+            }
+            return;
+        }
+
+        if track_matches && state.match_candidates.len() < MAX_OUTLINE_PANEL_MATCH_CANDIDATES {
             let id = state.entries.len();
             match &entry {
                 PanelEntry::Fs(fs_entry) => {
@@ -4362,7 +4416,7 @@ impl OutlinePanel {
 
             let mut last_depth_at_level: Vec<Option<Range<Anchor>>> = vec![None; 10];
 
-            let all_outlines: Vec<_> = buffer.iter_outlines().collect();
+            let all_outlines = capped_outline_refs(buffer.iter_outlines());
 
             let mut outline_has_children = HashMap::default();
             let mut visible_outlines = Vec::new();
@@ -4407,6 +4461,9 @@ impl OutlinePanel {
                 }
 
                 if should_include {
+                    if visible_outlines.len() >= MAX_OUTLINE_PANEL_OUTLINES_PER_EXCERPT {
+                        break;
+                    }
                     visible_outlines.push(outline);
                 }
             }
@@ -4468,6 +4525,7 @@ impl OutlinePanel {
 
         let excerpt_ranges = excerpts
             .iter()
+            .take(MAX_OUTLINE_PANEL_EXCERPT_RANGES)
             .filter_map(|excerpt| {
                 let start = search
                     .multi_buffer_snapshot
@@ -4480,11 +4538,16 @@ impl OutlinePanel {
             .collect::<Vec<_>>();
 
         let depth = if is_singleton { 0 } else { parent_depth + 1 };
+        let mut pushed_matches = 0usize;
         for (match_range, search_data) in buffer_matches.iter().filter(|(match_range, _)| {
             excerpt_ranges.iter().any(|excerpt_range| {
                 excerpt_range.overlaps(match_range, &search.multi_buffer_snapshot)
             })
         }) {
+            if pushed_matches >= MAX_OUTLINE_PANEL_SEARCH_MATCHES_PER_BUFFER {
+                break;
+            }
+            pushed_matches += 1;
             self.push_entry(
                 state,
                 track_matches,
@@ -5322,6 +5385,7 @@ struct GenerationState {
     entries: Vec<CachedEntry>,
     match_candidates: Vec<StringMatchCandidate>,
     max_width_estimate_and_index: Option<(u64, usize)>,
+    cached_entries_truncated: bool,
 }
 
 impl GenerationState {
@@ -5329,6 +5393,7 @@ impl GenerationState {
         self.entries.clear();
         self.match_candidates.clear();
         self.max_width_estimate_and_index = None;
+        self.cached_entries_truncated = false;
     }
 }
 

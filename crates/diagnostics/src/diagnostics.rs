@@ -92,6 +92,11 @@ impl EventEmitter<EditorEvent> for ProjectDiagnosticsEditor {}
 
 const DIAGNOSTICS_UPDATE_DEBOUNCE: Duration = Duration::from_millis(50);
 const DIAGNOSTICS_SUMMARY_UPDATE_DEBOUNCE: Duration = Duration::from_millis(30);
+pub(crate) const MAX_DIAGNOSTICS_PER_BUFFER: usize = 4_096;
+pub(crate) const MAX_DIAGNOSTIC_GROUPS_PER_BUFFER: usize = 2_048;
+pub(crate) const MAX_DIAGNOSTIC_BLOCKS_PER_BUFFER: usize = 2_048;
+pub(crate) const MAX_DIAGNOSTIC_EXCERPTS_PER_BUFFER: usize = 2_048;
+const MAX_DIAGNOSTIC_PATHS_PER_REFRESH: usize = 2_048;
 
 impl Render for ProjectDiagnosticsEditor {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -462,6 +467,7 @@ impl ProjectDiagnosticsEditor {
             self.paths_to_update = project
                 .diagnostic_summaries(false, cx)
                 .map(|(project_path, _, _)| project_path)
+                .take(MAX_DIAGNOSTIC_PATHS_PER_REFRESH)
                 .collect::<BTreeSet<_>>();
         });
 
@@ -508,6 +514,7 @@ impl ProjectDiagnosticsEditor {
                     Point::zero()..buffer_snapshot.max_point(),
                     false,
                 )
+                .take(MAX_DIAGNOSTICS_PER_BUFFER)
                 .collect::<Vec<_>>();
 
             let unchanged = this.update(cx, |this, _| {
@@ -531,13 +538,13 @@ impl ProjectDiagnosticsEditor {
 
             let mut grouped: HashMap<usize, Vec<_>> = HashMap::default();
             for entry in diagnostics {
-                grouped
-                    .entry(entry.diagnostic.group_id)
-                    .or_default()
-                    .push(DiagnosticEntryRef {
+                push_diagnostic_group_entry(
+                    &mut grouped,
+                    DiagnosticEntryRef {
                         range: entry.range.to_point(&buffer_snapshot),
                         diagnostic: entry.diagnostic,
-                    })
+                    },
+                );
             }
             let mut blocks: Vec<DiagnosticBlock> = Vec::new();
 
@@ -562,6 +569,7 @@ impl ProjectDiagnosticsEditor {
 
                 blocks.extend(more);
             }
+            truncate_diagnostic_blocks_for_buffer(&mut blocks);
 
             let cmp_excerpts = |buffer_snapshot: &BufferSnapshot,
                                 a: &ExcerptRange<text::Anchor>,
@@ -587,6 +595,7 @@ impl ProjectDiagnosticsEditor {
                         RetainExcerpts::All | RetainExcerpts::Dirty => multi_buffer
                             .snapshot(cx)
                             .excerpts_for_buffer(buffer_id)
+                            .take(MAX_DIAGNOSTIC_EXCERPTS_PER_BUFFER)
                             .sorted_by(|a, b| cmp_excerpts(&buffer_snapshot, a, b))
                             .collect(),
                     }
@@ -596,6 +605,9 @@ impl ProjectDiagnosticsEditor {
             let mut result_blocks = vec![None; excerpt_ranges.len()];
             let context_lines = cx.update(|_, cx| multibuffer_context_lines(cx))?;
             for b in blocks {
+                if excerpt_ranges.len() >= MAX_DIAGNOSTIC_EXCERPTS_PER_BUFFER {
+                    break;
+                }
                 let excerpt_range = context_range_for_entry(
                     b.initial_range.clone(),
                     context_lines,
@@ -718,6 +730,28 @@ impl ProjectDiagnosticsEditor {
         self.summary = self.project.read(cx).diagnostic_summary(false, cx);
         cx.emit(EditorEvent::TitleChanged);
     }
+}
+
+pub(crate) fn push_diagnostic_group_entry<'a>(
+    grouped: &mut HashMap<usize, Vec<DiagnosticEntryRef<'a, Point>>>,
+    entry: DiagnosticEntryRef<'a, Point>,
+) {
+    let group_id = entry.diagnostic.group_id;
+    if grouped.contains_key(&group_id) || grouped.len() < MAX_DIAGNOSTIC_GROUPS_PER_BUFFER {
+        grouped.entry(group_id).or_default().push(entry);
+    }
+}
+
+pub(crate) fn truncate_diagnostic_blocks_for_buffer(blocks: &mut Vec<DiagnosticBlock>) {
+    blocks.sort_by(diagnostic_block_display_order);
+    blocks.truncate(MAX_DIAGNOSTIC_BLOCKS_PER_BUFFER);
+}
+
+fn diagnostic_block_display_order(a: &DiagnosticBlock, b: &DiagnosticBlock) -> cmp::Ordering {
+    a.initial_range
+        .start
+        .cmp(&b.initial_range.start)
+        .then_with(|| b.initial_range.end.cmp(&a.initial_range.end))
 }
 
 impl Focusable for ProjectDiagnosticsEditor {

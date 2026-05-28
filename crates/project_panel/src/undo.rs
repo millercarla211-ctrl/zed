@@ -214,6 +214,7 @@ impl Change {
 
 // Imagine pressing undo 10000+ times?!
 const MAX_UNDO_OPERATIONS: usize = 10_000;
+const MAX_PROJECT_PANEL_UNDO_BATCH_CHANGES: usize = 4_096;
 
 struct Inner {
     workspace: WeakEntity<Workspace>,
@@ -267,8 +268,22 @@ impl UndoManager {
             .context("Undo and redo task can not keep up")
     }
     pub fn record(&mut self, changes: impl IntoIterator<Item = Change>) -> Result<()> {
+        let changes = changes
+            .into_iter()
+            .take(MAX_PROJECT_PANEL_UNDO_BATCH_CHANGES + 1)
+            .collect::<Vec<_>>();
+        if changes.len() > MAX_PROJECT_PANEL_UNDO_BATCH_CHANGES {
+            telemetry::event!(
+                "Project Panel Undo Batch Capped",
+                cap = MAX_PROJECT_PANEL_UNDO_BATCH_CHANGES as u64
+            );
+            return Err(anyhow!(
+                "Project panel undo batch exceeded {MAX_PROJECT_PANEL_UNDO_BATCH_CHANGES} changes"
+            ));
+        }
+
         self.tx
-            .try_send(UndoMessage::Changed(changes.into_iter().collect()))
+            .try_send(UndoMessage::Changed(changes))
             .context("Undo and redo task can not keep up")
     }
     /// just for the UI, an undo may still fail if there are concurrent file

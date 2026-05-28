@@ -1,3 +1,31 @@
+[2026-05-28] - Project Panel Diagnostics Git Settings Extensions And Outline Hardening
+
+ADDED:
+- Added `script\dx-project-panel-source.test.ts` for Project Panel tree, expansion, selection, drag/drop, remote download, sticky-row, display-label, sibling, and undo materialization boundaries.
+- Added `script\dx-diagnostics-ui-source.test.ts` for diagnostic grouping, block, excerpt, markdown, hint-link, copy-payload, refresh-path, and status-label boundaries.
+- Added `script\dx-git-ui-source.test.ts` for Git branch, stash, repository, status, commit-history, remote prompt, and worktree prompt materialization boundaries.
+- Added `script\dx-settings-keymap-source.test.ts` for settings search/page/picker and keymap binding/action/conflict/completion boundaries.
+- Added `script\dx-extensions-ui-source.test.ts` for extension search/list/card/suggestion/version-selector materialization boundaries.
+- Added `script\dx-outline-theme-source.test.ts` for outline, outline-panel, theme/icon-theme selector, and file-icon suffix boundaries.
+
+CHANGED:
+- Project Panel now caps visible worktrees/entries, expanded dir ids, selection ranges, drag/drop selections, external drop paths, remote download file lists, sticky parents, sibling sorting, undo batches, and oversized display labels before materialization.
+- Diagnostics UI now caps buffer diagnostics, diagnostic groups, diagnostic blocks, excerpts, refresh paths, markdown/copy payloads, hint links, inline metadata, and status-bar diagnostic labels.
+- Git UI now caps branch/stash/repository candidates and labels, status row materialization, commit-history graph ranges, remote prompt options, and worktree prompt options.
+- Settings and keymap UI now caps language subpages, navbar and visible page rows, JSON path/exact/fuzzy match results, enum/picker options, keymap bindings/actions/matches/conflict scans, and action completions.
+- Extensions UI now caps search query text, extension lists, fuzzy candidates, filtered/rendered rows, card labels/descriptions/authors/version labels/provides chips, suggestion labels, and version selector rows/query/matches.
+- Outline/theme/icon paths now cap outline rows/search expansion/panel cache/location scans, theme/icon-theme candidates and matches, and file-icon suffix bytes/dot-segment expansion.
+- `DX.md` and the source-guard registry now list the new guards.
+
+PASSED:
+- `node --test script\dx-project-panel-source.test.ts script\dx-diagnostics-ui-source.test.ts script\dx-git-ui-source.test.ts script\dx-settings-keymap-source.test.ts script\dx-extensions-ui-source.test.ts script\dx-outline-theme-source.test.ts` (31/31 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on all edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Terminal View File Finder Agent Diff And Editor State Hardening
 
 ADDED:

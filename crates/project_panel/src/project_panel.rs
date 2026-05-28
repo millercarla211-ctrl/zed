@@ -91,6 +91,56 @@ use crate::{
 
 const PROJECT_PANEL_KEY: &str = "ProjectPanel";
 const NEW_ENTRY_ID: ProjectEntryId = ProjectEntryId::MAX;
+const MAX_PROJECT_PANEL_VISIBLE_WORKTREES: usize = 256;
+const MAX_PROJECT_PANEL_VISIBLE_ENTRIES: usize = 200_000;
+const MAX_PROJECT_PANEL_VISIBLE_ENTRIES_PER_WORKTREE: usize = 50_000;
+const MAX_PROJECT_PANEL_EXPANDED_DIRS_PER_WORKTREE: usize = 50_000;
+const MAX_PROJECT_PANEL_SELECTION_RANGE_ENTRIES: usize = 20_000;
+const MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES: usize = 4_096;
+const MAX_PROJECT_PANEL_EXTERNAL_DROP_PATHS: usize = 4_096;
+const MAX_PROJECT_PANEL_DOWNLOAD_FILES: usize = 10_000;
+const MAX_PROJECT_PANEL_STICKY_PARENTS: usize = 128;
+const MAX_PROJECT_PANEL_SIBLING_ENTRIES: usize = 20_000;
+
+fn project_panel_cap_hit(boundary: &'static str, cap: usize) {
+    telemetry::event!(
+        "Project Panel Materialization Capped",
+        boundary = boundary,
+        cap = cap as u64
+    );
+}
+
+fn push_project_panel_expanded_dir(
+    expanded_dir_ids: &mut Vec<ProjectEntryId>,
+    entry_id: ProjectEntryId,
+) -> bool {
+    match expanded_dir_ids.binary_search(&entry_id) {
+        Ok(_) => true,
+        Err(ix) => {
+            if expanded_dir_ids.len() >= MAX_PROJECT_PANEL_EXPANDED_DIRS_PER_WORKTREE {
+                project_panel_cap_hit(
+                    "expanded-dir-ids",
+                    MAX_PROJECT_PANEL_EXPANDED_DIRS_PER_WORKTREE,
+                );
+                return false;
+            }
+            expanded_dir_ids.insert(ix, entry_id);
+            true
+        }
+    }
+}
+
+fn cap_project_panel_entry_set(
+    entries: BTreeSet<SelectedEntry>,
+    boundary: &'static str,
+) -> Option<BTreeSet<SelectedEntry>> {
+    if entries.len() > MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES {
+        project_panel_cap_hit(boundary, MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES);
+        None
+    } else {
+        Some(entries)
+    }
+}
 
 struct VisibleEntriesForWorktree {
     worktree_id: WorktreeId,
@@ -704,12 +754,20 @@ impl ProjectPanel {
                                         continue;
                                     }
 
+                                    if dirs_to_expand.len()
+                                        >= MAX_PROJECT_PANEL_EXPANDED_DIRS_PER_WORKTREE
+                                    {
+                                        project_panel_cap_hit(
+                                            "expand-all-worklist",
+                                            MAX_PROJECT_PANEL_EXPANDED_DIRS_PER_WORKTREE,
+                                        );
+                                        break;
+                                    }
                                     dirs_to_expand.push(child.id);
 
-                                    if let Err(ix) = expanded_dir_ids.binary_search(&child.id) {
-                                        expanded_dir_ids.insert(ix, child.id);
+                                    if push_project_panel_expanded_dir(expanded_dir_ids, child.id) {
+                                        this.state.unfolded_dir_ids.insert(child.id);
                                     }
-                                    this.state.unfolded_dir_ids.insert(child.id);
                                 }
                             }
                             this.update_visible_entries(None, false, false, window, cx);
@@ -1278,14 +1336,14 @@ impl ProjectPanel {
                     return;
                 };
 
-                match expanded_dir_ids.binary_search(&entry_id) {
-                    Ok(_) => self.select_next(&SelectNext, window, cx),
-                    Err(ix) => {
+                if expanded_dir_ids.binary_search(&entry_id).is_ok() {
+                    self.select_next(&SelectNext, window, cx);
+                } else {
+                    if push_project_panel_expanded_dir(expanded_dir_ids, entry_id) {
                         self.project.update(cx, |project, cx| {
                             project.expand_entry(worktree_id, entry_id, cx);
                         });
 
-                        expanded_dir_ids.insert(ix, entry_id);
                         self.update_visible_entries(None, false, false, window, cx);
                         cx.notify();
                     }
@@ -1456,9 +1514,10 @@ impl ProjectPanel {
                     Ok(ix) => {
                         expanded_dir_ids.remove(ix);
                     }
-                    Err(ix) => {
-                        project.expand_entry(worktree_id, entry_id, cx);
-                        expanded_dir_ids.insert(ix, entry_id);
+                    Err(_) => {
+                        if push_project_panel_expanded_dir(expanded_dir_ids, entry_id) {
+                            project.expand_entry(worktree_id, entry_id, cx);
+                        }
                     }
                 }
             });
@@ -1502,6 +1561,16 @@ impl ProjectPanel {
                 .worktree_for_id(worktree_id, cx)
                 .zip(self.state.expanded_dir_ids.get_mut(&worktree_id))
             {
+                if expanded_dir_ids.len() >= MAX_PROJECT_PANEL_EXPANDED_DIRS_PER_WORKTREE
+                    && expanded_dir_ids.binary_search(&entry_id).is_err()
+                {
+                    project_panel_cap_hit(
+                        "expand-all-project-fanout",
+                        MAX_PROJECT_PANEL_EXPANDED_DIRS_PER_WORKTREE,
+                    );
+                    return;
+                }
+
                 if let Some(task) = project.expand_all_for_entry(worktree_id, entry_id, cx) {
                     task.detach();
                 }
@@ -1510,8 +1579,8 @@ impl ProjectPanel {
 
                 if let Some(mut entry) = worktree.entry_for_id(entry_id) {
                     loop {
-                        if let Err(ix) = expanded_dir_ids.binary_search(&entry.id) {
-                            expanded_dir_ids.insert(ix, entry.id);
+                        if !push_project_panel_expanded_dir(expanded_dir_ids, entry.id) {
+                            break;
                         }
 
                         if let Some(parent_entry) =
@@ -1553,6 +1622,15 @@ impl ProjectPanel {
                     }
                     for child in worktree.child_entries(&current_entry.path) {
                         if child.is_dir() {
+                            if dirs_to_collapse.len()
+                                >= MAX_PROJECT_PANEL_EXPANDED_DIRS_PER_WORKTREE
+                            {
+                                project_panel_cap_hit(
+                                    "collapse-all-worklist",
+                                    MAX_PROJECT_PANEL_EXPANDED_DIRS_PER_WORKTREE,
+                                );
+                                break;
+                            }
                             dirs_to_collapse.push(child.id);
                         }
                     }
@@ -2046,8 +2124,8 @@ impl ProjectPanel {
             if let Some(mut entry) = worktree.entry_for_id(new_entry_id) {
                 loop {
                     if entry.is_dir() {
-                        if let Err(ix) = expanded_dir_ids.binary_search(&entry.id) {
-                            expanded_dir_ids.insert(ix, entry.id);
+                        if !push_project_panel_expanded_dir(expanded_dir_ids, entry.id) {
+                            return;
                         }
                         directory_id = entry.id;
                         break;
@@ -2519,17 +2597,24 @@ impl ProjectPanel {
         let repo_snapshots = git_store.repo_snapshots(cx);
         let worktree_snapshot = worktree.snapshot();
         let hide_gitignore = ProjectPanelSettings::get_global(cx).hide_gitignore;
-        let mut siblings: Vec<_> =
-            ChildEntriesGitIter::new(&repo_snapshots, &worktree_snapshot, parent_path)
-                .filter(|sibling| {
-                    (sibling.id == latest_entry.id)
-                        || (!marked_entries_in_worktree.contains(&&SelectedEntry {
-                            worktree_id,
-                            entry_id: sibling.id,
-                        }) && (!hide_gitignore || !sibling.is_ignored))
-                })
-                .map(|entry| entry.to_owned())
-                .collect();
+        let mut siblings = Vec::new();
+        for sibling in ChildEntriesGitIter::new(&repo_snapshots, &worktree_snapshot, parent_path) {
+            if (sibling.id == latest_entry.id)
+                || (!marked_entries_in_worktree.contains(&&SelectedEntry {
+                    worktree_id,
+                    entry_id: sibling.id,
+                }) && (!hide_gitignore || !sibling.is_ignored))
+            {
+                if siblings.len() >= MAX_PROJECT_PANEL_SIBLING_ENTRIES {
+                    project_panel_cap_hit(
+                        "delete-sibling-entries",
+                        MAX_PROJECT_PANEL_SIBLING_ENTRIES,
+                    );
+                    break;
+                }
+                siblings.push(sibling.to_owned());
+            }
+        }
 
         let sort_mode = ProjectPanelSettings::get_global(cx).sort_mode;
         let sort_order = ProjectPanelSettings::get_global(cx).sort_order;
@@ -3120,7 +3205,15 @@ impl ProjectPanel {
             let mut paste_tasks = Vec::new();
             let mut disambiguation_range = None;
             let clip_is_cut = clipboard_entries.is_cut();
-            for clipboard_entry in clipboard_entries.items() {
+            if clipboard_entries.items().len() > MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES {
+                project_panel_cap_hit("paste-selection", MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES);
+                return None;
+            }
+            for clipboard_entry in clipboard_entries
+                .items()
+                .iter()
+                .take(MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES)
+            {
                 let (new_path, new_disambiguation_range) =
                     self.create_paste_path(clipboard_entry, self.selected_sub_entry(cx)?, cx)?;
                 let clip_entry_id = clipboard_entry.entry_id;
@@ -3246,7 +3339,7 @@ impl ProjectPanel {
         // For directories, we collect all files under them recursively
         let mut files_to_download: Vec<(WorktreeId, Arc<RelPath>, PathBuf)> = Vec::new();
 
-        for selected in entries.iter() {
+        'download_entries: for selected in entries.iter() {
             let Some(worktree) = project.worktree_for_id(selected.worktree_id, cx) else {
                 continue;
             };
@@ -3262,6 +3355,13 @@ impl ProjectPanel {
                     .file_name()
                     .map(str::to_string)
                     .unwrap_or_default();
+                if files_to_download.len() >= MAX_PROJECT_PANEL_DOWNLOAD_FILES {
+                    project_panel_cap_hit(
+                        "remote-download-files",
+                        MAX_PROJECT_PANEL_DOWNLOAD_FILES,
+                    );
+                    break 'download_entries;
+                }
                 files_to_download.push((
                     selected.worktree_id,
                     entry.path.clone(),
@@ -3299,6 +3399,13 @@ impl ProjectPanel {
                                         .unwrap_or_default(),
                                 )
                             });
+                        if files_to_download.len() >= MAX_PROJECT_PANEL_DOWNLOAD_FILES {
+                            project_panel_cap_hit(
+                                "remote-download-files",
+                                MAX_PROJECT_PANEL_DOWNLOAD_FILES,
+                            );
+                            break 'download_entries;
+                        }
                         files_to_download.push((
                             selected.worktree_id,
                             child_entry.path.clone(),
@@ -3709,7 +3816,8 @@ impl ProjectPanel {
     }
 
     fn disjoint_effective_entries(&self, cx: &App) -> BTreeSet<SelectedEntry> {
-        self.disjoint_entries(self.effective_entries(), cx)
+        let entries = self.disjoint_entries(self.effective_entries(), cx);
+        cap_project_panel_entry_set(entries, "effective-selection").unwrap_or_default()
     }
 
     fn disjoint_entries(
@@ -3721,6 +3829,10 @@ impl ProjectPanel {
         if entries.is_empty() {
             return sanitized_entries;
         }
+
+        let Some(entries) = cap_project_panel_entry_set(entries, "disjoint-selection") else {
+            return sanitized_entries;
+        };
 
         let project = self.project.read(cx);
         let entries_by_worktree: HashMap<WorktreeId, Vec<SelectedEntry>> = entries
@@ -3785,13 +3897,16 @@ impl ProjectPanel {
         // Return only marked entries since we've already handled special cases where
         // only selection should take precedence. At this point, marked entries may or
         // may not include the current selection, which is intentional.
-        self.marked_entries
+        let marked_entries = self
+            .marked_entries
             .iter()
+            .take(MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES + 1)
             .map(|entry| SelectedEntry {
                 entry_id: self.resolve_entry(entry.entry_id),
                 worktree_id: entry.worktree_id,
             })
-            .collect::<BTreeSet<_>>()
+            .collect::<BTreeSet<_>>();
+        cap_project_panel_entry_set(marked_entries, "marked-selection").unwrap_or_default()
     }
 
     /// Finds the currently selected subentry for a given leaf entry id. If a given entry
@@ -3847,9 +3962,16 @@ impl ProjectPanel {
     }
 
     fn write_entries_to_system_clipboard(&self, entries: &BTreeSet<SelectedEntry>, cx: &mut App) {
+        if entries.len() > MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES {
+            project_panel_cap_hit(
+                "clipboard-entry-paths",
+                MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES,
+            );
+        }
         let project = self.project.read(cx);
         let paths: Vec<String> = entries
             .iter()
+            .take(MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES)
             .filter_map(|entry| {
                 let worktree = project.worktree_for_id(entry.worktree_id, cx)?;
                 let worktree = worktree.read(cx);
@@ -3914,10 +4036,8 @@ impl ProjectPanel {
             let Some(entry) = worktree.entry_for_path(path) else {
                 continue;
             };
-            if entry.is_dir()
-                && let Err(idx) = expanded_dir_ids.binary_search(&entry.id)
-            {
-                expanded_dir_ids.insert(idx, entry.id);
+            if entry.is_dir() && !push_project_panel_expanded_dir(expanded_dir_ids, entry.id) {
+                break;
             }
         }
 
@@ -3977,17 +4097,31 @@ impl ProjectPanel {
             .map(|entry| entry.id);
         let mut max_width_item = None;
 
-        let visible_worktrees: Vec<_> = project
-            .visible_worktrees(cx)
+        let mut visible_worktree_iter = project.visible_worktrees(cx);
+        let visible_worktrees: Vec<_> = visible_worktree_iter
+            .by_ref()
+            .take(MAX_PROJECT_PANEL_VISIBLE_WORKTREES)
             .map(|worktree| worktree.read(cx).snapshot())
             .collect();
+        if visible_worktree_iter.next().is_some() {
+            project_panel_cap_hit("visible-worktrees", MAX_PROJECT_PANEL_VISIBLE_WORKTREES);
+        }
         let hide_root = settings.hide_root && visible_worktrees.len() == 1;
         let hide_hidden = settings.hide_hidden;
 
         let visible_entries_task = cx.spawn_in(window, async move |this, cx| {
             let new_state = cx
                 .background_spawn(async move {
+                    let mut visible_entries_total = 0usize;
                     for worktree_snapshot in visible_worktrees {
+                        if visible_entries_total >= MAX_PROJECT_PANEL_VISIBLE_ENTRIES {
+                            project_panel_cap_hit(
+                                "visible-entries-total",
+                                MAX_PROJECT_PANEL_VISIBLE_ENTRIES,
+                            );
+                            break;
+                        }
+
                         let worktree_id = worktree_snapshot.id();
 
                         let mut new_entry_parent_id = None;
@@ -4012,6 +4146,17 @@ impl ProjectPanel {
                         while let Some(entry) = entry_iter.entry() {
                             if hide_root && Some(entry.entry) == worktree_snapshot.root_entry() {
                                 if new_entry_parent_id == Some(entry.id) {
+                                    if visible_worktree_entries.len()
+                                        >= MAX_PROJECT_PANEL_VISIBLE_ENTRIES_PER_WORKTREE
+                                        || visible_entries_total + visible_worktree_entries.len()
+                                            >= MAX_PROJECT_PANEL_VISIBLE_ENTRIES
+                                    {
+                                        project_panel_cap_hit(
+                                            "visible-entry-rows",
+                                            MAX_PROJECT_PANEL_VISIBLE_ENTRIES_PER_WORKTREE,
+                                        );
+                                        break;
+                                    }
                                     visible_worktree_entries.push(Self::create_new_git_entry(
                                         entry.entry,
                                         entry.git_summary,
@@ -4082,6 +4227,17 @@ impl ProjectPanel {
                             if (!hide_gitignore || !entry.is_ignored)
                                 && (!hide_hidden || !entry.is_hidden)
                             {
+                                if visible_worktree_entries.len()
+                                    >= MAX_PROJECT_PANEL_VISIBLE_ENTRIES_PER_WORKTREE
+                                    || visible_entries_total + visible_worktree_entries.len()
+                                        >= MAX_PROJECT_PANEL_VISIBLE_ENTRIES
+                                {
+                                    project_panel_cap_hit(
+                                        "visible-entry-rows",
+                                        MAX_PROJECT_PANEL_VISIBLE_ENTRIES_PER_WORKTREE,
+                                    );
+                                    break;
+                                }
                                 visible_worktree_entries.push(entry.to_owned());
                             }
                             let precedes_new_entry = if let Some(new_entry_id) = new_entry_parent_id
@@ -4098,6 +4254,17 @@ impl ProjectPanel {
                                 && (!hide_gitignore || !entry.is_ignored)
                                 && (!hide_hidden || !entry.is_hidden)
                             {
+                                if visible_worktree_entries.len()
+                                    >= MAX_PROJECT_PANEL_VISIBLE_ENTRIES_PER_WORKTREE
+                                    || visible_entries_total + visible_worktree_entries.len()
+                                        >= MAX_PROJECT_PANEL_VISIBLE_ENTRIES
+                                {
+                                    project_panel_cap_hit(
+                                        "visible-entry-rows",
+                                        MAX_PROJECT_PANEL_VISIBLE_ENTRIES_PER_WORKTREE,
+                                    );
+                                    break;
+                                }
                                 visible_worktree_entries.push(Self::create_new_git_entry(
                                     entry.entry,
                                     entry.git_summary,
@@ -4123,6 +4290,7 @@ impl ProjectPanel {
                                     })
                                     .log_err()
                                 else {
+                                    entry_iter.advance();
                                     continue;
                                 };
                                 let depth = entry.path.ancestors().count() - 1;
@@ -4200,6 +4368,14 @@ impl ProjectPanel {
                             sort_mode,
                             sort_order,
                         );
+                        if visible_entries_total >= MAX_PROJECT_PANEL_VISIBLE_ENTRIES {
+                            project_panel_cap_hit(
+                                "visible-entries-total",
+                                MAX_PROJECT_PANEL_VISIBLE_ENTRIES,
+                            );
+                            break;
+                        }
+                        visible_entries_total += visible_worktree_entries.len();
                         new_state.visible_entries.push(VisibleEntriesForWorktree {
                             worktree_id,
                             entries: visible_worktree_entries,
@@ -4289,8 +4465,8 @@ impl ProjectPanel {
 
                 if let Some(mut entry) = worktree.entry_for_id(entry_id) {
                     loop {
-                        if let Err(ix) = expanded_dir_ids.binary_search(&entry.id) {
-                            expanded_dir_ids.insert(ix, entry.id);
+                        if !push_project_panel_expanded_dir(expanded_dir_ids, entry.id) {
+                            break;
                         }
 
                         if let Some(parent_entry) =
@@ -4313,7 +4489,14 @@ impl ProjectPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mut paths: Vec<Arc<Path>> = paths.iter().map(|path| Arc::from(path.clone())).collect();
+        if paths.len() > MAX_PROJECT_PANEL_EXTERNAL_DROP_PATHS {
+            project_panel_cap_hit("external-drop-paths", MAX_PROJECT_PANEL_EXTERNAL_DROP_PATHS);
+        }
+        let mut paths: Vec<Arc<Path>> = paths
+            .iter()
+            .take(MAX_PROJECT_PANEL_EXTERNAL_DROP_PATHS)
+            .map(|path| Arc::from(path.clone()))
+            .collect();
 
         let open_file_after_drop = paths.len() == 1 && paths[0].is_file();
 
@@ -4340,7 +4523,10 @@ impl ProjectPanel {
             {
                 let target_path = target_directory.join(RelPath::unix(name).unwrap());
                 if worktree.read(cx).entry_for_path(&target_path).is_some() {
-                    paths_to_replace.push((name.to_string(), path.clone()));
+                    paths_to_replace.push((
+                        utils::bounded_project_panel_label(name.to_string()),
+                        path.clone(),
+                    ));
                 }
             }
         }
@@ -4462,14 +4648,29 @@ impl ProjectPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let mut raw_selection_count = 0usize;
         let resolved_selections = selections
             .items()
+            .take(MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES + 1)
+            .inspect(|_| raw_selection_count += 1)
             .map(|entry| SelectedEntry {
                 entry_id: self.resolve_entry(entry.entry_id),
                 worktree_id: entry.worktree_id,
             })
             .collect::<BTreeSet<SelectedEntry>>();
+        if raw_selection_count > MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES {
+            project_panel_cap_hit("drag-selection", MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES);
+            return;
+        }
+        let Some(resolved_selections) =
+            cap_project_panel_entry_set(resolved_selections, "drag-selection")
+        else {
+            return;
+        };
         let entries = self.disjoint_entries(resolved_selections, cx);
+        let Some(entries) = cap_project_panel_entry_set(entries, "drag-disjoint-selection") else {
+            return;
+        };
 
         if Self::is_copy_modifier_set(&window.modifiers()) {
             let _ = maybe!({
@@ -4543,7 +4744,10 @@ impl ProjectPanel {
                 let mut info = Vec::new();
                 let mut folded_entries = HashSet::default();
 
-                for selection in selections.items() {
+                for selection in selections
+                    .items()
+                    .take(MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES)
+                {
                     let resolved_id = self.resolve_entry(selection.entry_id);
                     if resolved_id == selection.entry_id {
                         continue;
@@ -5376,14 +5580,13 @@ impl ProjectPanel {
             .canonical_path
             .as_ref()
             .map(|f| f.to_string_lossy().into_owned());
-        let hover_badge =
-            self.render_entry_info_badge(
-                kind,
-                details.size,
-                details.folder_file_count,
-                &details.absolute_path,
-                cx,
-            );
+        let hover_badge = self.render_entry_info_badge(
+            kind,
+            details.size,
+            details.folder_file_count,
+            &details.absolute_path,
+            cx,
+        );
         let path_style = self.project.read(cx).path_style(cx);
         let path = details.path.clone();
         let path_for_external_paths = path.clone();
@@ -5391,12 +5594,28 @@ impl ProjectPanel {
 
         let depth = details.depth;
         let worktree_id = details.worktree_id;
+        let marked_selections: Arc<[SelectedEntry]> =
+            if self.marked_entries.len() > MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES {
+                project_panel_cap_hit(
+                    "drag-preview-selection",
+                    MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES,
+                );
+                Arc::from(
+                    self.marked_entries
+                        .iter()
+                        .take(MAX_PROJECT_PANEL_DRAG_SELECTION_ENTRIES)
+                        .copied()
+                        .collect::<Vec<_>>(),
+                )
+            } else {
+                Arc::from(self.marked_entries.clone())
+            };
         let dragged_selection = DraggedSelection {
             active_selection: SelectedEntry {
                 worktree_id: selection.worktree_id,
                 entry_id: selection.entry_id,
             },
-            marked_selections: Arc::from(self.marked_entries.clone()),
+            marked_selections,
         };
 
         let bg_color = if is_marked {
@@ -5731,6 +5950,13 @@ impl ProjectPanel {
                         {
                             let range_start = source_index.min(target_index);
                             let range_end = source_index.max(target_index) + 1;
+                            if range_end - range_start > MAX_PROJECT_PANEL_SELECTION_RANGE_ENTRIES {
+                                project_panel_cap_hit(
+                                    "shift-selection-range",
+                                    MAX_PROJECT_PANEL_SELECTION_RANGE_ENTRIES,
+                                );
+                                return;
+                            }
                             let mut new_selections = Vec::new();
                             project_panel.for_each_visible_entry(
                                 range_start..range_end,
@@ -5833,13 +6059,16 @@ impl ProjectPanel {
                                             .color(Color::Error),
                                     )
                                 })
-                                .when(count.warning_count > 0, |this| {
-                                    this.child(
-                                        Label::new(count.capped_warning_count())
-                                            .size(LabelSize::Small)
-                                            .color(Color::Warning),
-                                    )
-                                })
+                                .when(
+                                    count.warning_count > 0,
+                                    |this| {
+                                        this.child(
+                                            Label::new(count.capped_warning_count())
+                                                .size(LabelSize::Small)
+                                                .color(Color::Warning),
+                                        )
+                                    },
+                                )
                             })
                             .when_some(git_indicator, |this, (label, color)| {
                                 let git_indicator = if kind.is_dir() {
@@ -6273,6 +6502,7 @@ impl ProjectPanel {
                 .map(|name| name.to_string())
                 .unwrap_or_else(|| root_name.as_unix_str().to_string())
         };
+        let filename = utils::bounded_project_panel_label(filename);
 
         let selection = SelectedEntry {
             worktree_id,
@@ -6334,7 +6564,9 @@ impl ProjectPanel {
                             .count()
                     })
                     .unwrap_or_default();
-                self.folder_file_counts.borrow_mut().insert(cache_key, count);
+                self.folder_file_counts
+                    .borrow_mut()
+                    .insert(cache_key, count);
                 count
             }
         });
@@ -6546,6 +6778,13 @@ impl ProjectPanel {
                     if paths.contains(ancestor_path)
                         && let Some(parent_entry) = worktree.entry_for_path(ancestor_path)
                     {
+                        if sticky_parents.len() >= MAX_PROJECT_PANEL_STICKY_PARENTS {
+                            project_panel_cap_hit(
+                                "sticky-parent-rows",
+                                MAX_PROJECT_PANEL_STICKY_PARENTS,
+                            );
+                            break 'outer;
+                        }
                         sticky_parents.push(parent_entry.clone());
                         current_path = parent_entry.path.clone();
                         continue 'outer;

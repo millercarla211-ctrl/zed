@@ -39,6 +39,15 @@ actions!(
     ]
 );
 
+const MAX_BRANCH_PICKER_BRANCHES: usize = 2_048;
+const MAX_BRANCH_PICKER_MATCH_CANDIDATES: usize = MAX_BRANCH_PICKER_BRANCHES;
+const MAX_BRANCH_PICKER_MATCHES: usize = 512;
+const MAX_BRANCH_PICKER_LABEL_CHARS: usize = 512;
+
+fn bounded_branch_label(label: &str) -> String {
+    util::truncate_and_trailoff(label, MAX_BRANCH_PICKER_LABEL_CHARS)
+}
+
 pub fn checkout_branch(
     workspace: &mut Workspace,
     _: &zed_actions::git::CheckoutBranch,
@@ -750,6 +759,33 @@ fn branch_remote_name(branch: &Branch) -> Option<&str> {
     })
 }
 
+fn push_priority_branch_entry<'a>(
+    branch_entries: &mut Vec<&'a Branch>,
+    branch: &'a Branch,
+    preserved_branch: Option<&SharedString>,
+) {
+    if branch_entries
+        .iter()
+        .any(|entry| entry.ref_name == branch.ref_name)
+    {
+        return;
+    }
+
+    if branch_entries.len() >= MAX_BRANCH_PICKER_BRANCHES {
+        let Some(replacement_ix) = branch_entries.iter().rposition(|entry| {
+            !entry.is_head
+                && !preserved_branch
+                    .as_ref()
+                    .is_some_and(|preserved_branch| branch_matches_ref(entry, preserved_branch))
+        }) else {
+            return;
+        };
+        branch_entries.remove(replacement_ix);
+    }
+
+    branch_entries.push(branch);
+}
+
 fn sort_branch_entries(
     matches: &mut [Entry],
     branch_selection_context: Option<&BranchSelectionContext>,
@@ -770,7 +806,25 @@ fn process_branches(
     branches: &Arc<[Branch]>,
     preserved_branch: Option<&SharedString>,
 ) -> Vec<Branch> {
-    let remote_upstreams: HashSet<_> = branches
+    let mut branch_entries = branches
+        .iter()
+        .take(MAX_BRANCH_PICKER_BRANCHES)
+        .collect::<Vec<_>>();
+    for branch in branches.iter().filter(|branch| branch.is_head) {
+        push_priority_branch_entry(&mut branch_entries, branch, preserved_branch);
+    }
+    if let Some(preserved_branch) = preserved_branch
+        && !branch_entries
+            .iter()
+            .any(|branch| preserved_branch == branch.name())
+        && let Some(branch) = branches
+            .iter()
+            .find(|branch| preserved_branch == branch.name())
+    {
+        push_priority_branch_entry(&mut branch_entries, branch, Some(preserved_branch));
+    }
+
+    let remote_upstreams: HashSet<_> = branch_entries
         .iter()
         .filter_map(|branch| {
             branch
@@ -781,8 +835,8 @@ fn process_branches(
         })
         .collect();
 
-    let mut result: Vec<Branch> = branches
-        .iter()
+    let mut result: Vec<Branch> = branch_entries
+        .into_iter()
         .filter(|branch| {
             !remote_upstreams.contains(&branch.ref_name)
                 || preserved_branch
@@ -1176,24 +1230,28 @@ impl PickerDelegate for BranchListDelegate {
                     .collect();
 
                 sort_branch_entries(&mut matches, branch_selection_context.as_ref());
+                matches.truncate(MAX_BRANCH_PICKER_MATCHES);
 
                 matches
             } else {
                 let branches = all_branches
                     .iter()
                     .filter(|branch| branch_matches_filter(branch))
+                    .take(MAX_BRANCH_PICKER_MATCH_CANDIDATES)
                     .collect::<Vec<_>>();
                 let candidates = branches
                     .iter()
                     .enumerate()
-                    .map(|(ix, branch)| StringMatchCandidate::new(ix, branch.name()))
+                    .map(|(ix, branch)| {
+                        StringMatchCandidate::new(ix, bounded_branch_label(branch.name()))
+                    })
                     .collect::<Vec<StringMatchCandidate>>();
                 let mut matches: Vec<Entry> = fuzzy_nucleo::match_strings_async(
                     &candidates,
                     &query,
                     fuzzy_nucleo::Case::Smart,
                     fuzzy_nucleo::LengthPenalty::On,
-                    10000,
+                    MAX_BRANCH_PICKER_MATCHES,
                     &Default::default(),
                     cx.background_executor().clone(),
                 )
@@ -1433,16 +1491,19 @@ impl PickerDelegate for BranchListDelegate {
                 .single_line()
                 .truncate()
                 .into_any_element(),
-            Entry::NewBranch { name } => Label::new(format!("Create Branch: \"{name}\"…"))
-                .single_line()
-                .truncate()
-                .into_any_element(),
+            Entry::NewBranch { name } => Label::new(format!(
+                "Create Branch: \"{}\"…",
+                bounded_branch_label(name)
+            ))
+            .single_line()
+            .truncate()
+            .into_any_element(),
             Entry::NewRemoteName { name, .. } => Label::new(format!("Create Remote: \"{name}\""))
                 .single_line()
                 .truncate()
                 .into_any_element(),
             Entry::Branch { branch, positions } => {
-                HighlightedLabel::new(branch.name().to_string(), positions.clone())
+                HighlightedLabel::new(bounded_branch_label(branch.name()), positions.clone())
                     .single_line()
                     .truncate()
                     .into_any_element()
@@ -1498,7 +1559,11 @@ impl PickerDelegate for BranchListDelegate {
         };
 
         let create_from_default_button = self.default_branch.as_ref().map(|default_branch| {
-            let tooltip_label: SharedString = format!("Create New From: {default_branch}").into();
+            let tooltip_label: SharedString = format!(
+                "Create New From: {}",
+                bounded_branch_label(default_branch.as_ref())
+            )
+            .into();
             let focus_handle = self.focus_handle.clone();
 
             IconButton::new("create_from_default", IconName::GitBranchPlus)
@@ -1600,11 +1665,13 @@ impl PickerDelegate for BranchListDelegate {
                                             .when_some(subject, |this, subj| {
                                                 this.when(has_commit, |this| this.child(dot()))
                                                     .child(
-                                                        Label::new(subj.to_string())
-                                                            .color(Color::Muted)
-                                                            .size(LabelSize::Small)
-                                                            .truncate()
-                                                            .flex_1(),
+                                                        Label::new(bounded_branch_label(
+                                                            subj.as_ref(),
+                                                        ))
+                                                        .color(Color::Muted)
+                                                        .size(LabelSize::Small)
+                                                        .truncate()
+                                                        .flex_1(),
                                                     )
                                             })
                                             .when(!has_commit, |this| {
@@ -1616,7 +1683,7 @@ impl PickerDelegate for BranchListDelegate {
                                             })
                                             .into_any_element()
                                     } else {
-                                        Label::new(message)
+                                        Label::new(bounded_branch_label(&message))
                                             .size(LabelSize::Small)
                                             .color(Color::Muted)
                                             .truncate()
@@ -1624,7 +1691,7 @@ impl PickerDelegate for BranchListDelegate {
                                     }
                                 })
                                 .when_some(
-                                    entry.as_branch().map(|b| b.name().to_string()),
+                                    entry.as_branch().map(|b| bounded_branch_label(b.name())),
                                     |this, branch_name| {
                                         let absolute_time = absolute_time.clone();
                                         this.tooltip({

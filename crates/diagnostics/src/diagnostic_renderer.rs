@@ -1,4 +1,4 @@
-use std::{ops::Range, sync::Arc};
+use std::{borrow::Cow, ops::Range, sync::Arc};
 
 use editor::{
     Anchor, Editor, EditorSnapshot, ToOffset,
@@ -17,7 +17,19 @@ use util::maybe;
 
 use crate::toolbar_controls::DiagnosticsToolbarEditor;
 
+const MAX_DIAGNOSTIC_BLOCKS_PER_GROUP: usize = 128;
+const MAX_DIAGNOSTIC_HINT_LINKS_PER_GROUP: usize = 32;
+const MAX_DIAGNOSTIC_MARKDOWN_CHARS: usize = 16_384;
+const MAX_DIAGNOSTIC_INLINE_METADATA_CHARS: usize = 512;
+const MAX_DIAGNOSTIC_COPY_MESSAGE_CHARS: usize = 16_384;
+const DIAGNOSTIC_TRUNCATION_MARKER: &str = "\n\n[diagnostic output truncated]";
+
 pub struct DiagnosticRenderer;
+
+struct BoundedDiagnosticEntry<'a> {
+    ix: usize,
+    entry: DiagnosticEntryRef<'a, Point>,
+}
 
 impl DiagnosticRenderer {
     pub fn diagnostic_blocks_for_group(
@@ -33,67 +45,110 @@ impl DiagnosticRenderer {
         else {
             return Vec::new();
         };
-        let primary = &diagnostic_group[primary_ix];
+        let bounded_entries = Self::bounded_diagnostic_group_entries(&diagnostic_group, primary_ix);
+        let Some(primary_entry) = bounded_entries.iter().find(|entry| entry.ix == primary_ix)
+        else {
+            return Vec::new();
+        };
+        let primary = &primary_entry.entry;
         let group_id = primary.diagnostic.group_id;
-        let mut results = vec![];
-        for entry in diagnostic_group.iter() {
-            let mut markdown = Self::markdown(&entry.diagnostic);
-            if entry.diagnostic.is_primary {
-                let diagnostic = &primary.diagnostic;
+        let mut results = Vec::with_capacity(bounded_entries.len());
+        for entry in bounded_entries.iter() {
+            let mut markdown = Self::bounded_diagnostic_markdown(entry.entry.diagnostic);
+            if entry.entry.diagnostic.is_primary {
+                let diagnostic = primary.diagnostic;
                 if diagnostic.source.is_some() || diagnostic.code.is_some() {
                     markdown.push_str(" (");
                 }
                 if let Some(source) = diagnostic.source.as_ref() {
-                    markdown.push_str(&Markdown::escape(source));
+                    markdown.push_str(&Self::escaped_bounded_diagnostic_text(
+                        source,
+                        MAX_DIAGNOSTIC_INLINE_METADATA_CHARS,
+                    ));
                 }
                 if diagnostic.source.is_some() && diagnostic.code.is_some() {
                     markdown.push(' ');
                 }
                 if let Some(code) = diagnostic.code.as_ref() {
+                    let code = code.to_string();
                     if let Some(description) = diagnostic.code_description.as_ref() {
                         markdown.push('[');
-                        markdown.push_str(&Markdown::escape(&code.to_string()));
+                        markdown.push_str(&Self::escaped_bounded_diagnostic_text(
+                            &code,
+                            MAX_DIAGNOSTIC_INLINE_METADATA_CHARS,
+                        ));
                         markdown.push_str("](");
-                        markdown.push_str(&Markdown::escape(description.as_ref()));
+                        markdown.push_str(&Self::escaped_bounded_diagnostic_text(
+                            description.as_ref(),
+                            MAX_DIAGNOSTIC_INLINE_METADATA_CHARS,
+                        ));
                         markdown.push(')');
                     } else {
-                        markdown.push_str(&Markdown::escape(&code.to_string()));
+                        markdown.push_str(&Self::escaped_bounded_diagnostic_text(
+                            &code,
+                            MAX_DIAGNOSTIC_INLINE_METADATA_CHARS,
+                        ));
                     }
                 }
                 if diagnostic.source.is_some() || diagnostic.code.is_some() {
                     markdown.push(')');
                 }
 
-                for (ix, entry) in diagnostic_group.iter().enumerate() {
-                    if entry.range.start.row.abs_diff(primary.range.start.row) >= 5 {
-                        markdown.push_str("\n- hint: [");
-                        markdown.push_str(&Markdown::escape(&entry.diagnostic.message));
-                        markdown.push_str(&format!(
-                            "](file://#diagnostic-{buffer_id}-{group_id}-{ix})\n",
-                        ))
-                    }
+                for entry in bounded_entries
+                    .iter()
+                    .filter(|entry| {
+                        entry
+                            .entry
+                            .range
+                            .start
+                            .row
+                            .abs_diff(primary.range.start.row)
+                            >= 5
+                    })
+                    .take(MAX_DIAGNOSTIC_HINT_LINKS_PER_GROUP)
+                {
+                    markdown.push_str("\n- hint: [");
+                    markdown.push_str(&Self::escaped_bounded_diagnostic_text(
+                        &entry.entry.diagnostic.message,
+                        MAX_DIAGNOSTIC_INLINE_METADATA_CHARS,
+                    ));
+                    let ix = entry.ix;
+                    markdown.push_str(&format!(
+                        "](file://#diagnostic-{buffer_id}-{group_id}-{ix})\n",
+                    ))
                 }
 
                 results.push(DiagnosticBlock {
                     initial_range: primary.range.clone(),
                     severity: primary.diagnostic.severity,
                     diagnostics_editor: diagnostics_editor.clone(),
-                    copy_message: primary.diagnostic.message.clone().into(),
+                    copy_message: Self::bounded_diagnostic_copy_message(
+                        &primary.diagnostic.message,
+                    ),
                     markdown: cx.new(|cx| {
                         Markdown::new(markdown.into(), language_registry.clone(), None, cx)
                     }),
                 });
             } else {
-                if entry.range.start.row.abs_diff(primary.range.start.row) >= 5 {
+                if entry
+                    .entry
+                    .range
+                    .start
+                    .row
+                    .abs_diff(primary.range.start.row)
+                    >= 5
+                {
                     markdown.push_str(&format!(
                         " ([back](file://#diagnostic-{buffer_id}-{group_id}-{primary_ix}))"
                     ));
                 }
                 results.push(DiagnosticBlock {
-                    initial_range: entry.range.clone(),
-                    severity: entry.diagnostic.severity,
+                    initial_range: entry.entry.range.clone(),
+                    severity: entry.entry.diagnostic.severity,
                     diagnostics_editor: diagnostics_editor.clone(),
-                    copy_message: entry.diagnostic.message.clone().into(),
+                    copy_message: Self::bounded_diagnostic_copy_message(
+                        &entry.entry.diagnostic.message,
+                    ),
                     markdown: cx.new(|cx| {
                         Markdown::new(markdown.into(), language_registry.clone(), None, cx)
                     }),
@@ -104,15 +159,68 @@ impl DiagnosticRenderer {
         results
     }
 
-    fn markdown(diagnostic: &Diagnostic) -> String {
-        let mut markdown = String::new();
+    fn bounded_diagnostic_group_entries<'a>(
+        diagnostic_group: &[DiagnosticEntryRef<'a, Point>],
+        primary_ix: usize,
+    ) -> Vec<BoundedDiagnosticEntry<'a>> {
+        let mut entries =
+            Vec::with_capacity(diagnostic_group.len().min(MAX_DIAGNOSTIC_BLOCKS_PER_GROUP));
+        for (ix, entry) in diagnostic_group.iter().enumerate() {
+            if entries.len() >= MAX_DIAGNOSTIC_BLOCKS_PER_GROUP {
+                break;
+            }
+            entries.push(BoundedDiagnosticEntry {
+                ix,
+                entry: entry.clone(),
+            });
+        }
 
+        if !entries.iter().any(|entry| entry.ix == primary_ix)
+            && let Some(primary) = diagnostic_group.get(primary_ix)
+        {
+            if entries.len() >= MAX_DIAGNOSTIC_BLOCKS_PER_GROUP {
+                entries.pop();
+            }
+            entries.push(BoundedDiagnosticEntry {
+                ix: primary_ix,
+                entry: primary.clone(),
+            });
+            entries.sort_by_key(|entry| entry.ix);
+        }
+
+        entries
+    }
+
+    fn bounded_diagnostic_markdown(diagnostic: &Diagnostic) -> String {
         if let Some(md) = &diagnostic.markdown {
-            markdown.push_str(md);
+            Self::bounded_diagnostic_text(md, MAX_DIAGNOSTIC_MARKDOWN_CHARS).into_owned()
         } else {
-            markdown.push_str(&Markdown::escape(&diagnostic.message));
+            Self::escaped_bounded_diagnostic_text(
+                &diagnostic.message,
+                MAX_DIAGNOSTIC_MARKDOWN_CHARS,
+            )
+        }
+    }
+
+    fn bounded_diagnostic_copy_message(message: &str) -> SharedString {
+        Self::bounded_diagnostic_text(message, MAX_DIAGNOSTIC_COPY_MESSAGE_CHARS)
+            .into_owned()
+            .into()
+    }
+
+    fn escaped_bounded_diagnostic_text(text: &str, max_chars: usize) -> String {
+        Markdown::escape(Self::bounded_diagnostic_text(text, max_chars).as_ref()).into_owned()
+    }
+
+    fn bounded_diagnostic_text(text: &str, max_chars: usize) -> Cow<'_, str> {
+        let Some((byte_limit, _)) = text.char_indices().nth(max_chars) else {
+            return Cow::Borrowed(text);
         };
-        markdown
+
+        let mut truncated = String::with_capacity(byte_limit + DIAGNOSTIC_TRUNCATION_MARKER.len());
+        truncated.push_str(&text[..byte_limit]);
+        truncated.push_str(DIAGNOSTIC_TRUNCATION_MARKER);
+        Cow::Owned(truncated)
     }
 }
 

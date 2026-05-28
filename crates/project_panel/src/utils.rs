@@ -1,3 +1,16 @@
+pub(crate) const MAX_PROJECT_PANEL_DISPLAY_LABEL_CHARS: usize = 1_024;
+
+pub(crate) fn bounded_project_panel_label(label: String) -> String {
+    if label.chars().count() <= MAX_PROJECT_PANEL_DISPLAY_LABEL_CHARS {
+        return label;
+    }
+
+    let keep_chars = MAX_PROJECT_PANEL_DISPLAY_LABEL_CHARS.saturating_sub(3);
+    let mut bounded = label.chars().take(keep_chars).collect::<String>();
+    bounded.push_str("...");
+    bounded
+}
+
 pub(crate) struct ReversibleIterable<It> {
     pub(crate) it: It,
     pub(crate) reverse: bool,

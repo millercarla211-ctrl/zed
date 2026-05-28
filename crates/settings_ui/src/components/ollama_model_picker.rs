@@ -7,6 +7,7 @@ use settings::SettingsStore;
 use ui::{ListItem, ListItemSpacing, PopoverMenu, prelude::*};
 use util::ResultExt;
 
+use super::{bounded_picker_matches, bounded_picker_options};
 use crate::{
     SettingField, SettingsFieldMetadata, SettingsUiFile, render_picker_trigger_button,
     update_settings_file,
@@ -33,22 +34,14 @@ impl OllamaModelPickerDelegate {
         if !current_model.is_empty() && !current_in_list {
             models.insert(0, current_model.clone());
         }
+        let models = bounded_picker_options(models, &current_model);
 
         let selected_index = models
             .iter()
             .position(|model| *model == current_model)
             .unwrap_or(0);
 
-        let filtered_models = models
-            .iter()
-            .enumerate()
-            .map(|(index, model)| StringMatch {
-                candidate_id: index,
-                string: model.to_string(),
-                positions: Vec::new(),
-                score: 0.0,
-            })
-            .collect();
+        let filtered_models = bounded_picker_matches(models.iter().enumerate());
 
         Self {
             models,
@@ -92,18 +85,10 @@ impl PickerDelegate for OllamaModelPickerDelegate {
     ) -> Task<()> {
         let query_lower = query.to_lowercase();
 
-        self.filtered_models = self
-            .models
-            .iter()
-            .enumerate()
-            .filter(|(_, model)| query.is_empty() || model.to_lowercase().contains(&query_lower))
-            .map(|(index, model)| StringMatch {
-                candidate_id: index,
-                string: model.to_string(),
-                positions: Vec::new(),
-                score: 0.0,
-            })
-            .collect();
+        self.filtered_models =
+            bounded_picker_matches(self.models.iter().enumerate().filter(|(_, model)| {
+                query.is_empty() || model.to_lowercase().contains(&query_lower)
+            }));
 
         self.selected_index = 0;
         cx.notify();
