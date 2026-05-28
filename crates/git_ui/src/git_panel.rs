@@ -3407,8 +3407,11 @@ impl GitPanel {
                 })?
                 .await;
 
-            Ok(selection.map(|selection| Remote {
-                name: current_remotes[selection].clone(),
+            Ok(selection.and_then(|selection| {
+                current_remotes
+                    .get(selection)
+                    .cloned()
+                    .map(|name| Remote { name })
             }))
         }
     }

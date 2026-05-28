@@ -7,6 +7,7 @@ const read = (path: string) => readFileSync(path, "utf8");
 const dock = read("crates/workspace/src/dock.rs");
 const historyManager = read("crates/workspace/src/history_manager.rs");
 const item = read("crates/workspace/src/item.rs");
+const workspace = read("crates/workspace/src/workspace.rs");
 
 const functionBody = (source: string, name: string) => {
   const start = source.indexOf(`fn ${name}(`);
@@ -156,4 +157,30 @@ test("item project-handle collections cap visited items before pushing handles",
     after: "*visited += 1;",
     message: "project-item collection helper must check cap before incrementing visits",
   });
+});
+
+test("workspace pane cycling uses checked target pane lookups", () => {
+  const nextPane = functionBody(workspace, "activate_next_pane");
+  assert.doesNotMatch(
+    nextPane,
+    /panes\s*\[\s*next_ix\s*\]/,
+    "next-pane activation must not directly index stale pane snapshots",
+  );
+  assert.match(
+    nextPane,
+    /panes\s*\.get\(\s*next_ix\s*\)/,
+    "next-pane activation must check the target pane still exists",
+  );
+
+  const previousPane = functionBody(workspace, "activate_previous_pane");
+  assert.doesNotMatch(
+    previousPane,
+    /panes\s*\[\s*prev_ix\s*\]/,
+    "previous-pane activation must not directly index stale pane snapshots",
+  );
+  assert.match(
+    previousPane,
+    /panes\s*\.get\(\s*prev_ix\s*\)/,
+    "previous-pane activation must check the target pane still exists",
+  );
 });

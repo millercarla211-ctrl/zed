@@ -12,6 +12,12 @@ const sliceBetween = (source: string, start: string, end: string) => {
   return source.slice(startIndex, endIndex);
 };
 
+const matchIndex = (source: string, pattern: RegExp, description: string) => {
+  const match = pattern.exec(source);
+  assert.ok(match?.index !== undefined, `missing ${description}`);
+  return match.index;
+};
+
 test("Agent panel DX launch status reads the deferred workspace snapshot", () => {
   const source = read("crates/agent_ui/src/agent_panel.rs");
 
@@ -185,6 +191,71 @@ test("Sidebar active workspace helpers use the cached event payload", () => {
   assert.match(showArchive, /self\.active_workspace\(cx\)/);
   assert.doesNotMatch(showArchive, /self\.multi_workspace\.upgrade\(\)/);
   assert.doesNotMatch(showArchive, /multi_workspace\.read\(cx\)\.workspace\(\)/);
+});
+
+test("Sidebar project and thread cyclers guard stale target indexes", () => {
+  const source = read("crates/sidebar/src/sidebar.rs");
+
+  const projectCycler = sliceBetween(
+    source,
+    "fn cycle_project_impl",
+    "fn on_next_project",
+  );
+  const spaceLookup = matchIndex(
+    projectCycler,
+    /spaces\s*\.get\(next_pos\)/,
+    "checked space lookup",
+  );
+  const projectHeaderLookup = matchIndex(
+    projectCycler,
+    /\.project_header_indices\s*\.get\(next_pos\)/,
+    "checked project header lookup",
+  );
+  const projectActivation = matchIndex(
+    projectCycler,
+    /self\.activate_space\(/,
+    "project activation",
+  );
+  assert.ok(
+    spaceLookup < projectActivation,
+    "project cycler must check the target space before activation",
+  );
+  assert.ok(
+    projectHeaderLookup < projectActivation,
+    "project cycler must check the target header before activation",
+  );
+  assert.doesNotMatch(projectCycler, /spaces\s*\[\s*next_pos\s*\]/);
+  assert.doesNotMatch(
+    projectCycler,
+    /project_header_indices\s*\[\s*next_pos\s*\]/,
+  );
+
+  const threadCycler = sliceBetween(
+    source,
+    "fn cycle_thread_impl",
+    "fn on_next_thread",
+  );
+  const threadIndexLookup = matchIndex(
+    threadCycler,
+    /thread_indices\s*\.get\(next_pos\)/,
+    "checked thread index lookup",
+  );
+  const threadEntryLookup = matchIndex(
+    threadCycler,
+    /\.entries\s*\.get\(entry_ix\)/,
+    "checked thread entry lookup",
+  );
+  assert.ok(
+    threadIndexLookup < threadEntryLookup,
+    "thread cycler must check the target index before reading the entry",
+  );
+  assert.match(
+    threadCycler,
+    /\.position\(\|&ix\| \{\s+self\s*\.contents\s*\.entries\s*\.get\(ix\)\s*\.is_some_and\(\|entry\| active\.matches_entry\(entry\)\)\s+\}\)/,
+  );
+  assert.doesNotMatch(threadCycler, /contents\.entries\s*\[\s*ix\s*\]/);
+  assert.doesNotMatch(threadCycler, /thread_indices\s*\[\s*next_pos\s*\]/);
+  assert.doesNotMatch(threadCycler, /contents\.entries\s*\[\s*entry_ix\s*\]/);
 });
 
 test("Call integration consumes active workspace events without re-reading them", () => {

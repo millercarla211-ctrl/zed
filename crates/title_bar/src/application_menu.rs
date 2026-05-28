@@ -258,10 +258,17 @@ impl ApplicationMenu {
             }
         };
 
-        self.entries[current_index].handle.hide(cx);
+        let Some(current_entry) = self.entries.get(current_index) else {
+            return;
+        };
+        let Some(next_entry) = self.entries.get(next_index) else {
+            return;
+        };
+
+        current_entry.handle.hide(cx);
 
         // We need to defer this so that this menu handle can take focus from the previous menu
-        let next_handle = self.entries[next_index].handle.clone();
+        let next_handle = next_entry.handle.clone();
         cx.defer_in(window, move |_, window, cx| next_handle.show(window, cx));
     }
 

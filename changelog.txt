@@ -1,3 +1,27 @@
+[2026-05-29] - UI Navigation Stale Index Hardening
+
+ADDED:
+- Added `script\dx-title-bar-source.test.ts` for Title Bar application menu stale entry activation boundaries.
+
+CHANGED:
+- Buffer Search field cycling now checks `handles.get(new_index)` before focusing a field handle.
+- Terminal Panel next/previous pane activation now checks `panes.get(next_ix)` and `panes.get(prev_ix)` before focusing pane handles.
+- Workspace next/previous pane activation now checks `panes.get(next_ix)` and `panes.get(prev_ix)` before activating panes.
+- Git remote picker selection now checks `current_remotes.get(selection)` before returning a remote.
+- Sidebar project and thread cycling now checks project spaces, header indexes, thread indexes, and entries before activation.
+- Title Bar application menu navigation now checks current and next menu entries before hiding or showing handles.
+- `DX.md`, `todo.txt`, and the handoff source guard registry now list the new Title Bar guard and the extended stale-index coverage.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-search-ui-source.test.ts script\dx-terminal-view-source.test.ts script\dx-workspace-ui-state-source.test.ts script\dx-git-ui-source.test.ts script\dx-workspace-reentrant-source.test.ts script\dx-title-bar-source.test.ts` (31/31 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Targeted stale direct-index pattern scan over edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-29] - Selector Cycle And Stale Row Hardening
 
 ADDED:

@@ -158,6 +158,42 @@ test("terminal panel task and selection materialization is bounded before collec
   assert.match(selections, /selections\.truncate\(MAX_TERMINAL_PANEL_SELECTIONS\)/);
 });
 
+test("terminal panel next and previous pane actions use checked pane lookups", () => {
+  const panel = read("crates/terminal_view/src/terminal_panel.rs");
+  const nextPaneAction = sliceBetween(
+    panel,
+    "_action: &ActivateNextPane",
+    "_action: &ActivatePreviousPane",
+  );
+  const previousPaneAction = sliceBetween(
+    panel,
+    "_action: &ActivatePreviousPane",
+    "action: &ActivatePane",
+  );
+
+  assert.doesNotMatch(
+    nextPaneAction,
+    /panes\s*\[\s*next_ix\s*\]/,
+    "ActivateNextPane must not index panes directly with next_ix",
+  );
+  assert.match(
+    nextPaneAction,
+    /panes\.get\(next_ix\)/,
+    "ActivateNextPane must focus only a pane returned by panes.get(next_ix)",
+  );
+
+  assert.doesNotMatch(
+    previousPaneAction,
+    /panes\s*\[\s*prev_ix\s*\]/,
+    "ActivatePreviousPane must not index panes directly with prev_ix",
+  );
+  assert.match(
+    previousPaneAction,
+    /panes\.get\(prev_ix\)/,
+    "ActivatePreviousPane must focus only a pane returned by panes.get(prev_ix)",
+  );
+});
+
 test("terminal view user-data vectors are bounded before path paste and match storage", () => {
   const view = read("crates/terminal_view/src/terminal_view.rs");
 

@@ -7033,15 +7033,20 @@ impl Sidebar {
             None => 0,
         };
 
-        let workspace_id = spaces[next_pos].workspace_id;
-        self.activate_space(workspace_id, window, cx);
-
-        let header_entry_ix = self.contents.project_header_indices[next_pos];
+        let Some(space) = spaces.get(next_pos) else {
+            return;
+        };
+        let Some(&header_entry_ix) = self.contents.project_header_indices.get(next_pos) else {
+            return;
+        };
         let Some(ListEntry::ProjectHeader { key, .. }) = self.contents.entries.get(header_entry_ix)
         else {
             return;
         };
+        let workspace_id = space.workspace_id;
         let key = key.clone();
+
+        self.activate_space(workspace_id, window, cx);
 
         // Uncollapse the target group so that threads become visible.
         self.set_group_expanded(&key, true, cx);
@@ -7089,9 +7094,12 @@ impl Sidebar {
         }
 
         let current_thread_pos = self.active_entry.as_ref().and_then(|active| {
-            thread_indices
-                .iter()
-                .position(|&ix| active.matches_entry(&self.contents.entries[ix]))
+            thread_indices.iter().position(|&ix| {
+                self.contents
+                    .entries
+                    .get(ix)
+                    .is_some_and(|entry| active.matches_entry(entry))
+            })
         });
 
         let next_pos = match current_thread_pos {
@@ -7106,9 +7114,11 @@ impl Sidebar {
             None => 0,
         };
 
-        let entry_ix = thread_indices[next_pos];
-        match &self.contents.entries[entry_ix] {
-            ListEntry::Thread(thread) => {
+        let Some(&entry_ix) = thread_indices.get(next_pos) else {
+            return;
+        };
+        match self.contents.entries.get(entry_ix) {
+            Some(ListEntry::Thread(thread)) => {
                 let metadata = thread.metadata.clone();
                 match &thread.workspace {
                     ThreadEntryWorkspace::Open(workspace) => {
@@ -7131,12 +7141,12 @@ impl Sidebar {
                     }
                 }
             }
-            ListEntry::Terminal(terminal) => {
+            Some(ListEntry::Terminal(terminal)) => {
                 let metadata = terminal.metadata.clone();
                 let workspace = terminal.workspace.clone();
                 self.activate_terminal_entry(metadata, workspace, true, window, cx);
             }
-            ListEntry::ProjectHeader { .. } => {}
+            Some(ListEntry::ProjectHeader { .. }) | None => {}
         }
     }
 

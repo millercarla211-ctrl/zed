@@ -394,6 +394,16 @@ test("git panel bounds status, history, remote, and worktree materialization", (
     "picker_prompt::prompt",
     "push remote prompt options must be capped before prompting",
   );
+  assert.match(
+    getRemote,
+    /current_remotes\s*\.get\(selection\)\s*\.cloned\(\)/,
+    "push remote prompt result must ignore stale selections",
+  );
+  assert.doesNotMatch(
+    getRemote,
+    /current_remotes\s*\[\s*selection\s*\]/,
+    "push remote prompt result must not direct-index stale selections",
+  );
   assertBefore(
     gitInit,
     ".take(MAX_GIT_PANEL_WORKTREE_PROMPT_OPTIONS)",

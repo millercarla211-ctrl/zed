@@ -147,3 +147,20 @@ test("project search field cycling guards stale focus indexes before focusing vi
     message: "field cycling must guard the computed focus index before focusing",
   });
 });
+
+test("buffer search field cycling guards stale focus indexes before focusing handles", () => {
+  const source = read("crates/search/src/buffer_search.rs");
+  const cycleField = functionBody(source, "cycle_field");
+
+  assert.doesNotMatch(cycleField, /handles\s*\[\s*new_index\s*\]/);
+  assert.match(
+    cycleField,
+    /let Some\(next_focus_handle\) = handles\.get\(new_index\) else \{/,
+  );
+  assertBefore({
+    body: cycleField,
+    before: "handles.get(new_index)",
+    after: "self.focus(next_focus_handle, window, cx);",
+    message: "field cycling must guard the computed focus index before focusing",
+  });
+});

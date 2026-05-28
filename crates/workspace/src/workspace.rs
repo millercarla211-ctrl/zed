@@ -5043,8 +5043,9 @@ impl Workspace {
         let panes = self.center.panes();
         if let Some(ix) = panes.iter().position(|pane| **pane == self.active_pane) {
             let next_ix = (ix + 1) % panes.len();
-            let next_pane = panes[next_ix].clone();
-            window.focus(&next_pane.focus_handle(cx), cx);
+            if let Some(next_pane) = panes.get(next_ix).cloned() {
+                window.focus(&next_pane.focus_handle(cx), cx);
+            }
         }
     }
 
@@ -5052,8 +5053,9 @@ impl Workspace {
         let panes = self.center.panes();
         if let Some(ix) = panes.iter().position(|pane| **pane == self.active_pane) {
             let prev_ix = cmp::min(ix.wrapping_sub(1), panes.len() - 1);
-            let prev_pane = panes[prev_ix].clone();
-            window.focus(&prev_pane.focus_handle(cx), cx);
+            if let Some(prev_pane) = panes.get(prev_ix).cloned() {
+                window.focus(&prev_pane.focus_handle(cx), cx);
+            }
         }
     }
 

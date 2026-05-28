@@ -1762,7 +1762,9 @@ impl BufferSearchBar {
             Direction::Prev if current_index == 0 => handles.len() - 1,
             Direction::Prev => (current_index - 1) % handles.len(),
         };
-        let next_focus_handle = &handles[new_index];
+        let Some(next_focus_handle) = handles.get(new_index) else {
+            return;
+        };
         self.focus(next_focus_handle, window, cx);
         cx.stop_propagation();
     }

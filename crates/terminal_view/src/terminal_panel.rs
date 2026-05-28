@@ -1470,7 +1470,9 @@ impl Render for TerminalPanel {
                             .position(|pane| **pane == terminal_panel.active_pane)
                         {
                             let next_ix = (ix + 1) % panes.len();
-                            window.focus(&panes[next_ix].focus_handle(cx), cx);
+                            if let Some(&pane) = panes.get(next_ix) {
+                                window.focus(&pane.focus_handle(cx), cx);
+                            }
                         }
                     }),
                 )
@@ -1482,7 +1484,9 @@ impl Render for TerminalPanel {
                             .position(|pane| **pane == terminal_panel.active_pane)
                         {
                             let prev_ix = cmp::min(ix.wrapping_sub(1), panes.len() - 1);
-                            window.focus(&panes[prev_ix].focus_handle(cx), cx);
+                            if let Some(&pane) = panes.get(prev_ix) {
+                                window.focus(&pane.focus_handle(cx), cx);
+                            }
                         }
                     },
                 ))
