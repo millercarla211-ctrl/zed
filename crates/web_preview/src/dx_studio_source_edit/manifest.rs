@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{fs::File, io::Read, path::Path};
 
 use serde_json::{Map, Value};
 
@@ -19,6 +19,20 @@ use self::{
     },
     summaries::{edit_contract_summary, operation_summary, surface_summary},
 };
+
+const DX_STUDIO_MAX_MANIFEST_BYTES: u64 = 2_000_000;
+
+fn read_manifest_candidate(candidate: &Path) -> Option<String> {
+    let file = File::open(candidate).ok()?;
+    let mut bytes = Vec::new();
+    let mut limited = file.take(DX_STUDIO_MAX_MANIFEST_BYTES + 1);
+    limited.read_to_end(&mut bytes).ok()?;
+    if bytes.len() as u64 > DX_STUDIO_MAX_MANIFEST_BYTES {
+        return None;
+    }
+
+    String::from_utf8(bytes).ok()
+}
 
 pub(super) fn selection_with_manifest_contract(
     root_path: Option<&Path>,
@@ -162,7 +176,7 @@ fn manifest_match_from_json(
     candidate: &Path,
     selection: &Value,
 ) -> Option<ManifestSelectionLookup> {
-    let contents = fs::read_to_string(candidate).ok()?;
+    let contents = read_manifest_candidate(candidate)?;
     let manifest = serde_json::from_str::<Value>(&contents).ok()?;
     let contract = edit_contract_value(&manifest)?.clone();
     let surface = match select_manifest_surface(
@@ -192,7 +206,7 @@ fn manifest_match_from_typescript(
     candidate: &Path,
     selection: &Value,
 ) -> Option<ManifestSelectionLookup> {
-    let contents = fs::read_to_string(candidate).ok()?;
+    let contents = read_manifest_candidate(candidate)?;
     let contract = edit_contract_from_typescript(&contents)?;
     let surface = match select_manifest_surface(
         matching_surfaces(&Value::Null, &contract, selection),

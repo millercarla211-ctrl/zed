@@ -1,3 +1,19 @@
+[2026-05-28] - Receipt And Manifest Read-Bound Hardening
+
+CHANGED:
+- Agent bridge local receipt reads, runtime-proof receipt reads, DX source-set receipt reads, extensionless `dx` config reads, receipt-history JSON IO, launch receipt/status reads, and DX Studio manifest/session/policy reads now use sentinel-byte bounded reads before parsing.
+- Oversized files are rejected instead of being parsed from truncated prefixes or accepted after metadata-only size checks.
+- Source guards now pin those bounded-read contracts across Agent bridge, runtime proof, source sets, receipt history, launch receipts/status, and DX Studio source-quality tests.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-agent-bridge-source.test.ts script\dx-runtime-proof-status-source.test.ts script\dx-source-sets-source.test.ts script\dx-receipt-history-source.test.ts script\dx-launch-receipts-source.test.ts script\dx-launch-status-source.test.ts script\dx-source-quality.test.ts script\dx-launch-workspace-source.test.ts script\dx-deploy-panel-source.test.ts` (44/44 passing)
+- `rustfmt --edition 2024 --check` on all edited Rust files
+- Conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipped Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Final Source Hardening Integration
 
 CHANGED:

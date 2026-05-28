@@ -1,5 +1,6 @@
 use std::{
-    fs,
+    fs::File,
+    io::Read,
     path::{Path, PathBuf},
 };
 
@@ -13,6 +14,21 @@ use super::{
     operation_values, selector_marker_values, string_for_keys, string_values_for_keys,
     unique_strings,
 };
+
+const DX_STUDIO_MAX_MANIFEST_BYTES: u64 = 2_000_000;
+
+fn read_manifest_candidate(candidate: &Path) -> Option<String> {
+    let file = File::open(candidate).ok()?;
+    let mut bytes = Vec::new();
+    let mut limited = file.take(DX_STUDIO_MAX_MANIFEST_BYTES + 1);
+    limited.read_to_end(&mut bytes).ok()?;
+    if bytes.len() as u64 > DX_STUDIO_MAX_MANIFEST_BYTES {
+        return None;
+    }
+
+    String::from_utf8(bytes).ok()
+}
+
 pub fn manifest_candidates(root: &Path) -> Vec<PathBuf> {
     vec![
         root.join(".dx")
@@ -66,7 +82,7 @@ pub fn edit_contract_summary(root: &Path) -> Option<DxStudioEditContractSummary>
             continue;
         }
 
-        let Ok(contents) = fs::read_to_string(&candidate) else {
+        let Some(contents) = read_manifest_candidate(&candidate) else {
             continue;
         };
         let (manifest, contract) = match extension {

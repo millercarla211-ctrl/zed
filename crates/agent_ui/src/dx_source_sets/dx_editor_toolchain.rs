@@ -32,7 +32,7 @@ fn dx_editor_toolchain_source(root: &PathBuf) -> Option<DxSourceItem> {
         return None;
     }
 
-    let config = read_bounded_utf8(&config_path).unwrap_or_default();
+    let config = read_bounded_utf8(&config_path)?;
     let serializer_dir = root.join(".dx").join("serializer");
     let machine_count = count_files_with_extension(&serializer_dir, "machine");
     let sr_count = count_sr_files(&root.join(".dx"));
@@ -135,9 +135,12 @@ fn read_bounded_utf8(path: &Path) -> Option<String> {
     let mut file = File::open(path).ok()?;
     let mut buffer = Vec::new();
     file.by_ref()
-        .take(MAX_DX_CONFIG_BYTES)
+        .take(MAX_DX_CONFIG_BYTES + 1)
         .read_to_end(&mut buffer)
         .ok()?;
+    if buffer.len() as u64 > MAX_DX_CONFIG_BYTES {
+        return None;
+    }
     String::from_utf8(buffer).ok()
 }
 

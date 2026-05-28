@@ -46,6 +46,10 @@ test("DX launch receipts keep IO, paths, fields, freshness, and summaries focuse
   assert.match(paths, /pub\(super\) fn now_ms/);
   assert.match(receiptIo, /pub\(super\) fn read_json_receipt/);
   assert.match(receiptIo, /MAX_RECEIPT_BYTES/);
+  assert.match(receiptIo, /take\(MAX_RECEIPT_BYTES \+ 1\)/);
+  assert.match(receiptIo, /if buffer\.len\(\) as u64 > MAX_RECEIPT_BYTES/);
+  assert.match(receiptIo, /serde_json::from_slice\(&buffer\)/);
+  assert.doesNotMatch(receiptIo, /read_to_string/);
   assert.match(summary, /impl DxLaunchReceiptSummary/);
   assert.match(summary, /pub\(super\) fn from_path/);
 

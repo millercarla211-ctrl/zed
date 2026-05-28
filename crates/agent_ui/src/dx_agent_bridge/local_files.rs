@@ -15,10 +15,14 @@ pub(super) fn read_json(path: &Path) -> Option<Value> {
     if metadata.len() > MAX_RECEIPT_BYTES {
         return None;
     }
-    let mut file = File::open(path).ok()?;
-    let mut source = String::new();
-    file.read_to_string(&mut source).ok()?;
-    serde_json::from_str(&source).ok()
+    let file = File::open(path).ok()?;
+    let mut source = Vec::new();
+    let mut limited = file.take(MAX_RECEIPT_BYTES + 1);
+    limited.read_to_end(&mut source).ok()?;
+    if u64::try_from(source.len()).unwrap_or(u64::MAX) > MAX_RECEIPT_BYTES {
+        return None;
+    }
+    serde_json::from_slice(&source).ok()
 }
 
 pub(super) fn read_first_json(root: &Path, names: &[&str]) -> Option<Value> {

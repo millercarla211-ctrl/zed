@@ -1,10 +1,13 @@
 use crate::dx_studio;
 use serde_json::Value;
 use std::{
-    fs,
+    fs::{self, File},
+    io::Read,
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
+
+const DX_STUDIO_MAX_SESSION_MANIFEST_BYTES: u64 = 2_000_000;
 
 pub(crate) fn contract_snapshot(root_path: Option<&Path>) -> Option<Value> {
     let root_path = root_path?;
@@ -215,7 +218,7 @@ fn manifest_candidate_snapshot(path: &Path) -> Value {
         candidate_status = "not_file";
         parse_status = Some("not_parsed");
     } else if metadata.is_some() {
-        match fs::read_to_string(path) {
+        match read_manifest_candidate(path) {
             Ok(contents) => {
                 read_status = "readable";
                 match extension {
@@ -251,7 +254,12 @@ fn manifest_candidate_snapshot(path: &Path) -> Value {
                     }
                 }
             }
-            Err(_) => {
+            Err(ManifestCandidateReadError::Oversized) => {
+                read_status = "oversized";
+                parse_status = Some("not_parsed");
+                candidate_status = "oversized";
+            }
+            Err(ManifestCandidateReadError::Unreadable) => {
                 read_status = "unreadable";
                 parse_status = Some("not_parsed");
                 candidate_status = "unreadable";
@@ -286,9 +294,13 @@ fn manifest_index_snapshot(candidates: &[std::path::PathBuf]) -> Value {
             continue;
         }
 
-        let contents = match fs::read_to_string(candidate) {
+        let contents = match read_manifest_candidate(candidate) {
             Ok(contents) => contents,
-            Err(_) => {
+            Err(ManifestCandidateReadError::Oversized) => {
+                skipped_candidates.push(skipped_manifest_index_candidate(candidate, "oversized"));
+                continue;
+            }
+            Err(ManifestCandidateReadError::Unreadable) => {
                 if candidate.exists() {
                     skipped_candidates
                         .push(skipped_manifest_index_candidate(candidate, "unreadable"));
@@ -357,6 +369,30 @@ fn manifest_index_snapshot(candidates: &[std::path::PathBuf]) -> Value {
     }
 }
 
+enum ManifestCandidateReadError {
+    Oversized,
+    Unreadable,
+}
+
+fn read_manifest_candidate(path: &Path) -> Result<String, ManifestCandidateReadError> {
+    let metadata = fs::metadata(path).map_err(|_| ManifestCandidateReadError::Unreadable)?;
+    if metadata.len() > DX_STUDIO_MAX_SESSION_MANIFEST_BYTES {
+        return Err(ManifestCandidateReadError::Oversized);
+    }
+
+    let file = File::open(path).map_err(|_| ManifestCandidateReadError::Unreadable)?;
+    let mut bytes = Vec::new();
+    let mut limited = file.take(DX_STUDIO_MAX_SESSION_MANIFEST_BYTES + 1);
+    limited
+        .read_to_end(&mut bytes)
+        .map_err(|_| ManifestCandidateReadError::Unreadable)?;
+    if bytes.len() as u64 > DX_STUDIO_MAX_SESSION_MANIFEST_BYTES {
+        return Err(ManifestCandidateReadError::Oversized);
+    }
+
+    String::from_utf8(bytes).map_err(|_| ManifestCandidateReadError::Unreadable)
+}
+
 fn candidate_issue_snapshots(
     candidates: &[Value],
     include_missing_edit_contract: bool,
@@ -375,7 +411,7 @@ fn candidate_has_issue(candidate: &Value, include_missing_edit_contract: bool) -
         .unwrap_or_default();
     if matches!(
         candidate_status,
-        "unreadable" | "malformed_json" | "not_file"
+        "unreadable" | "malformed_json" | "not_file" | "oversized"
     ) {
         return true;
     }

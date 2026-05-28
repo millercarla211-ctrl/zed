@@ -36,6 +36,10 @@ test("DX runtime proof status keeps receipt IO and JSON helpers focused", () => 
   assert.match(receipts, /pub\(super\) fn count_receipt_files/);
   assert.match(receipts, /pub\(super\) fn latest_receipt_paths/);
   assert.match(receipts, /pub\(super\) fn read_json/);
+  assert.match(receipts, /const MAX_RECEIPT_BYTES: u64 = 128 \* 1024;/);
+  assert.match(receipts, /\.take\(MAX_RECEIPT_BYTES \+ 1\)/);
+  assert.match(receipts, /if buffer\.len\(\) > MAX_RECEIPT_BYTES as usize \{\s*return None;\s*\}/);
+  assert.doesNotMatch(receipts, /\.take\(MAX_RECEIPT_BYTES\)/);
   assert.match(fields, /pub\(super\) fn string_at/);
   assert.match(fields, /pub\(super\) fn compact_string_array_at/);
   assert.match(fields, /fn compact_text/);

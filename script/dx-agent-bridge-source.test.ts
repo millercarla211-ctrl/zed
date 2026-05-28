@@ -86,3 +86,26 @@ test("DX Agent bridge delegates bridge commands and receipt parsing", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/receipts.rs") < 560);
   assert.ok(lineCount("crates/agent_ui/src/dx_agent_bridge/runtime.rs") < 420);
 });
+
+test("DX Agent bridge local receipt reads reject post-metadata growth before parsing", () => {
+  const localFiles = read("crates/agent_ui/src/dx_agent_bridge/local_files.rs");
+  const readJsonStart = localFiles.indexOf("pub(super) fn read_json");
+  const readJsonEnd = localFiles.indexOf("\npub(super) fn read_first_json");
+
+  assert.ok(readJsonStart >= 0, "expected local read_json helper");
+  assert.ok(readJsonEnd > readJsonStart, "expected read_json to stay focused");
+
+  const readJson = localFiles.slice(readJsonStart, readJsonEnd);
+  const growthLimitCheck =
+    "u64::try_from(source.len()).unwrap_or(u64::MAX) > MAX_RECEIPT_BYTES";
+
+  assert.match(readJson, /take\(MAX_RECEIPT_BYTES \+ 1\)/);
+  assert.match(readJson, /read_to_end\(&mut source\)/);
+  assert.match(readJson, new RegExp(growthLimitCheck.replace(/[().+]/g, "\\$&")));
+  assert.match(readJson, /serde_json::from_slice\(&source\)/);
+  assert.doesNotMatch(readJson, /read_to_string/);
+  assert.ok(
+    readJson.indexOf(growthLimitCheck) < readJson.indexOf("serde_json::from_slice"),
+    "receipt buffers must be rejected over MAX_RECEIPT_BYTES before parsing",
+  );
+});

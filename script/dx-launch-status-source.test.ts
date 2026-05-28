@@ -40,6 +40,10 @@ test("DX launch status keeps receipt IO, JSON helpers, review, and summaries foc
   assert.match(fields, /pub\(super\) fn pointer_usize/);
   assert.match(receipts, /pub\(super\) fn read_json_receipt/);
   assert.match(receipts, /MAX_RECEIPT_BYTES/);
+  assert.match(receipts, /take\(MAX_RECEIPT_BYTES \+ 1\)/);
+  assert.match(receipts, /if buffer\.len\(\) as u64 > MAX_RECEIPT_BYTES/);
+  assert.match(receipts, /serde_json::from_slice\(&buffer\)/);
+  assert.doesNotMatch(receipts, /read_to_string/);
   assert.match(review, /pub\(super\) fn redaction_requires_review/);
   assert.match(review, /exports_secret_values/);
   assert.match(summaries, /pub\(super\) fn agents_summary/);

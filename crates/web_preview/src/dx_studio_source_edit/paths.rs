@@ -1,5 +1,6 @@
 use std::{
-    fs,
+    fs::{self, File},
+    io::Read,
     path::{Component, Path, PathBuf},
 };
 
@@ -12,6 +13,8 @@ use super::{
     manifest_ts::edit_contract_from_typescript,
     values::{bool_at, push_string_at, string_at, unique_strings},
 };
+
+const DX_STUDIO_MAX_POLICY_MANIFEST_BYTES: u64 = 2_000_000;
 
 pub(super) fn resolve_selection_source(root_path: &Path, selection: &Value) -> Result<PathBuf> {
     if let Some(source) = resolved_source_candidates(root_path, selection)
@@ -295,7 +298,7 @@ fn manifest_allows_generated_edit(root_path: &Path, selection: &Value) -> bool {
         let extension = candidate
             .extension()
             .and_then(|extension| extension.to_str());
-        let Ok(contents) = fs::read_to_string(&candidate) else {
+        let Some(contents) = read_manifest_policy_candidate(&candidate) else {
             continue;
         };
         let manifest = match extension {
@@ -334,7 +337,7 @@ fn source_from_manifest(root_path: &Path, selection: &Value) -> Option<String> {
             continue;
         }
 
-        let Ok(contents) = fs::read_to_string(candidate) else {
+        let Some(contents) = read_manifest_policy_candidate(&candidate) else {
             continue;
         };
         let Ok(manifest) = serde_json::from_str::<Value>(&contents) else {
@@ -368,6 +371,18 @@ fn source_from_manifest(root_path: &Path, selection: &Value) -> Option<String> {
     }
 
     None
+}
+
+fn read_manifest_policy_candidate(candidate: &Path) -> Option<String> {
+    let file = File::open(candidate).ok()?;
+    let mut bytes = Vec::new();
+    let mut limited = file.take(DX_STUDIO_MAX_POLICY_MANIFEST_BYTES + 1);
+    limited.read_to_end(&mut bytes).ok()?;
+    if bytes.len() as u64 > DX_STUDIO_MAX_POLICY_MANIFEST_BYTES {
+        return None;
+    }
+
+    String::from_utf8(bytes).ok()
 }
 
 fn manifest_surface_matches_selection(surface: &Value, selection: &Value) -> bool {

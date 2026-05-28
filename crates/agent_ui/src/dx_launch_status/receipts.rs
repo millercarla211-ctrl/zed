@@ -14,10 +14,20 @@ pub(super) fn read_json_receipt(path: &Path) -> Result<Value, String> {
         ));
     }
 
-    let mut contents = String::new();
-    File::open(path)
-        .and_then(|mut file| file.read_to_string(&mut contents))
+    let mut file = File::open(path)
         .map_err(|error| format!("Unable to read launch status receipt: {error}"))?;
-    serde_json::from_str(&contents)
+    let mut buffer = Vec::new();
+    file.by_ref()
+        .take(MAX_RECEIPT_BYTES + 1)
+        .read_to_end(&mut buffer)
+        .map_err(|error| format!("Unable to read launch status receipt: {error}"))?;
+    if buffer.len() as u64 > MAX_RECEIPT_BYTES {
+        return Err(format!(
+            "Launch status receipt grew beyond the safe render limit: {} bytes",
+            buffer.len()
+        ));
+    }
+
+    serde_json::from_slice(&buffer)
         .map_err(|error| format!("Unable to parse launch status receipt: {error}"))
 }

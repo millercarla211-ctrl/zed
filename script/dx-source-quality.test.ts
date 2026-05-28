@@ -135,8 +135,13 @@ test("DX Studio session surfaces invalid manifest candidates", () => {
   assert.match(session, /"skipped_candidates":/);
   assert.match(session, /"malformed_json"/);
   assert.match(session, /"unreadable"/);
+  assert.match(session, /"oversized"/);
   assert.match(session, /"missing_edit_contract"/);
   assert.match(session, /"loaded_edit_contract"/);
+  assert.match(session, /const DX_STUDIO_MAX_SESSION_MANIFEST_BYTES: u64 = 2_000_000;/);
+  assert.match(session, /fn read_manifest_candidate\(path: &Path\) -> Result<String, ManifestCandidateReadError>/);
+  assert.match(session, /ManifestCandidateReadError::Oversized/);
+  assert.doesNotMatch(session, /fs::read_to_string/);
 });
 
 test("DX Studio session summary can load TypeScript edit contracts", () => {
@@ -188,4 +193,36 @@ test("DX Studio source writes stay inside bounded file and edit sizes", () => {
   assert.match(root, /const DX_STUDIO_MAX_SOURCE_EDIT_DELTA_BYTES: i64 = 200_000;/);
   assert.match(root, /ensure_source_file_size_allows_edit\(&source, metadata\.len\(\)\)\?/);
   assert.match(root, /ensure_source_write_bounds\(&source, edit\.updated\.len\(\), edit\.changed_bytes\)\?/);
+});
+
+test("DX Studio manifest contract reads stay bounded before parsing", () => {
+  const manifest = read("crates/web_preview/src/dx_studio/manifest.rs");
+  const paths = read("crates/web_preview/src/dx_studio_source_edit/paths.rs");
+  const sourceEditManifest = read(
+    "crates/web_preview/src/dx_studio_source_edit/manifest.rs",
+  );
+
+  for (const source of [manifest, sourceEditManifest]) {
+    assert.match(source, /const DX_STUDIO_MAX_MANIFEST_BYTES: u64 = 2_000_000;/);
+    assert.match(source, /fn read_manifest_candidate\(candidate: &Path\) -> Option<String>/);
+    assert.match(source, /\.take\(DX_STUDIO_MAX_MANIFEST_BYTES \+ 1\)/);
+    assert.match(source, /\.read_to_end\(&mut bytes\)/);
+    assert.match(source, /bytes\.len\(\) as u64 > DX_STUDIO_MAX_MANIFEST_BYTES/);
+    assert.doesNotMatch(source, /fs::read_to_string/);
+  }
+
+  assert.match(manifest, /let Some\(contents\) = read_manifest_candidate\(&candidate\) else/);
+  assert.match(
+    sourceEditManifest,
+    /let contents = read_manifest_candidate\(candidate\)\?/,
+  );
+  assert.match(paths, /const DX_STUDIO_MAX_POLICY_MANIFEST_BYTES: u64 = 2_000_000;/);
+  assert.match(paths, /fn read_manifest_policy_candidate\(candidate: &Path\) -> Option<String>/);
+  assert.match(paths, /\.take\(DX_STUDIO_MAX_POLICY_MANIFEST_BYTES \+ 1\)/);
+  assert.match(paths, /read_manifest_policy_candidate\(&candidate\)/);
+  assert.ok(
+    paths.match(/read_manifest_policy_candidate\(&candidate\)/g)?.length >= 2,
+    "generated-edit policy and source-from-manifest reads should both use bounded manifest reads",
+  );
+  assert.doesNotMatch(paths, /fs::read_to_string/);
 });

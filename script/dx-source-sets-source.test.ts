@@ -57,3 +57,21 @@ test("DX source sets keep receipt IO and JSON field helpers in focused modules",
   assert.ok(lineCount(fieldsPath) < 70, "source-set field helper module should stay small");
   assert.ok(lineCount(restorePath) < 50, "source-set restore warning module should stay small");
 });
+
+test("DX source-set bounded readers reject files larger than their parse limits", () => {
+  const receiptsPath = "crates/agent_ui/src/dx_source_sets/receipts.rs";
+  const toolchainPath = "crates/agent_ui/src/dx_source_sets/dx_editor_toolchain.rs";
+
+  const receipts = read(receiptsPath);
+  const toolchain = read(toolchainPath);
+
+  assert.match(receipts, /\.take\(MAX_RECEIPT_BYTES \+ 1\)/);
+  assert.match(receipts, /buffer\.len\(\) as u64 > MAX_RECEIPT_BYTES/);
+  assert.doesNotMatch(receipts, /\.take\(MAX_RECEIPT_BYTES\)/);
+
+  assert.match(toolchain, /\.take\(MAX_DX_CONFIG_BYTES \+ 1\)/);
+  assert.match(toolchain, /buffer\.len\(\) as u64 > MAX_DX_CONFIG_BYTES/);
+  assert.match(toolchain, /let config = read_bounded_utf8\(&config_path\)\?;/);
+  assert.doesNotMatch(toolchain, /\.take\(MAX_DX_CONFIG_BYTES\)/);
+  assert.doesNotMatch(toolchain, /read_bounded_utf8\(&config_path\)\.unwrap_or_default\(\)/);
+});

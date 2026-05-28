@@ -68,6 +68,13 @@ test("DX receipt history keeps bucket scanning, receipt IO, Forge summaries, and
   assert.match(receiptFiles, /fn is_receipt_file/);
   assert.match(receiptIo, /pub\(super\) fn read_json/);
   assert.match(receiptIo, /MAX_RECEIPT_BYTES/);
+  assert.match(receiptIo, /file\.take\(MAX_RECEIPT_BYTES \+ 1\)/);
+  assert.match(receiptIo, /read_to_end\(&mut buffer\)/);
+  assert.match(receiptIo, /\(buffer\.len\(\) as u64\) > MAX_RECEIPT_BYTES[\s\S]*return None;/);
+  assert.match(receiptIo, /serde_json::from_slice\(&buffer\)/);
+  assert.doesNotMatch(receiptIo, /serde_json::from_reader/);
+  assert.doesNotMatch(receiptIo, /Take<File>/);
+  assert.doesNotMatch(receiptIo, /fn receipt_reader/);
 
   assert.ok(lineCount(parentPath) < 95, "dx_receipt_history.rs should stay focused on cache and public snapshot types");
   assert.ok(lineCount(bucketsPath) < 95, "receipt-history bucket scanner should stay small");
