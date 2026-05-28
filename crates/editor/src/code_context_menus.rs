@@ -67,6 +67,8 @@ const MARKDOWN_CACHE_AFTER_ITEMS: usize = 2;
 // Number of items beyond the visible items to resolve documentation.
 const RESOLVE_BEFORE_ITEMS: usize = 4;
 const RESOLVE_AFTER_ITEMS: usize = 4;
+const MAX_COMPLETION_RESOLVE_CANDIDATES: usize = 256;
+const MAX_COMPLETION_MARKDOWN_PARSE_CANDIDATES: usize = 16;
 
 #[derive(Clone, Debug)]
 pub enum CompletionMenuEntry {
@@ -694,10 +696,21 @@ impl CompletionsMenu {
             drop(completions);
             return;
         };
-        let candidate_ids = iter::once(selected_candidate_id)
+        let mut candidate_id_iter = iter::once(selected_candidate_id)
             .chain(candidate_ids.filter(|id| *id != selected_candidate_id))
+            .peekable();
+        let candidate_ids = candidate_id_iter
+            .by_ref()
+            .take(MAX_COMPLETION_RESOLVE_CANDIDATES)
             .collect::<Vec<usize>>();
+        if candidate_id_iter.peek().is_some() {
+            log::warn!(
+                "truncating completion resolve fanout to {} candidates",
+                MAX_COMPLETION_RESOLVE_CANDIDATES
+            );
+        }
         drop(entries);
+        drop(completions);
 
         if candidate_ids.is_empty() {
             return;
@@ -735,15 +748,25 @@ impl CompletionsMenu {
         // TODO: This means that the nearer items will actually be further back in the cache, which
         // is not ideal. In practice this is fine because `get_or_create_markdown` moves the current
         // selection to the front (when `is_render = true`).
-        let entry_indices = util::wrapped_usize_outward_from(
+        let mut entry_indices = util::wrapped_usize_outward_from(
             self.selected_item,
             MARKDOWN_CACHE_BEFORE_ITEMS,
             MARKDOWN_CACHE_AFTER_ITEMS,
             self.entries.borrow().len(),
-        );
+        )
+        .peekable();
 
-        for index in entry_indices {
+        for index in entry_indices
+            .by_ref()
+            .take(MAX_COMPLETION_MARKDOWN_PARSE_CANDIDATES)
+        {
             self.get_or_create_entry_markdown(index, cx);
+        }
+        if entry_indices.peek().is_some() {
+            log::warn!(
+                "truncating completion markdown parse fanout to {} candidates",
+                MAX_COMPLETION_MARKDOWN_PARSE_CANDIDATES
+            );
         }
     }
 

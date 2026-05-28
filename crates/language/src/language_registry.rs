@@ -35,6 +35,48 @@ use theme::Theme;
 use unicase::UniCase;
 use util::{maybe, post_inc};
 
+const MAX_LANGUAGE_NAMES_TO_MATERIALIZE: usize = 4096;
+const MAX_GRAMMAR_NAMES_TO_MATERIALIZE: usize = 4096;
+const MAX_REGISTERED_WASM_GRAMMARS: usize = 4096;
+const MAX_WASM_GRAMMAR_BYTES: u64 = 64 * 1024 * 1024;
+
+fn warn_truncated_registry_materialization(label: &str, actual: usize, max: usize) {
+    if actual > max {
+        log::warn!("truncating {label} from {actual} to {max} entries");
+    }
+}
+
+fn cap_wasm_grammar_entries(grammars: Vec<(Arc<str>, PathBuf)>) -> Vec<(Arc<str>, PathBuf)> {
+    warn_truncated_registry_materialization(
+        "registered WASM grammars",
+        grammars.len(),
+        MAX_REGISTERED_WASM_GRAMMARS,
+    );
+
+    grammars
+        .into_iter()
+        .take(MAX_REGISTERED_WASM_GRAMMARS)
+        .collect::<Vec<_>>()
+}
+
+fn guard_wasm_grammar_size(wasm_path: &Path) -> Result<()> {
+    let byte_len = std::fs::metadata(wasm_path)
+        .with_context(|| format!("failed to stat WASM grammar {}", wasm_path.display()))?
+        .len();
+    if byte_len > MAX_WASM_GRAMMAR_BYTES {
+        log::warn!(
+            "rejecting WASM grammar {} because it is {byte_len} bytes; max is {MAX_WASM_GRAMMAR_BYTES} bytes",
+            wasm_path.display()
+        );
+        anyhow::bail!(
+            "WASM grammar {} is {byte_len} bytes, exceeding the {MAX_WASM_GRAMMAR_BYTES} byte limit",
+            wasm_path.display()
+        );
+    }
+
+    Ok(())
+}
+
 pub struct LanguageRegistry {
     state: RwLock<LanguageRegistryState>,
     language_server_download_dir: Option<Arc<Path>>,
@@ -439,6 +481,7 @@ impl LanguageRegistry {
 
     /// Adds paths to WASM grammar files, which can be loaded if needed.
     pub fn register_wasm_grammars(&self, grammars: Vec<(Arc<str>, PathBuf)>) {
+        let grammars = cap_wasm_grammar_entries(grammars);
         if grammars.is_empty() {
             return;
         }
@@ -460,11 +503,23 @@ impl LanguageRegistry {
 
     pub fn language_names(&self) -> Vec<LanguageName> {
         let state = self.state.read();
+        let language_count = state
+            .available_languages
+            .iter()
+            .filter(|language| language.loaded.not())
+            .count()
+            + state.languages.len();
+        warn_truncated_registry_materialization(
+            "language names",
+            language_count,
+            MAX_LANGUAGE_NAMES_TO_MATERIALIZE,
+        );
         let mut result = state
             .available_languages
             .iter()
             .filter_map(|l| l.loaded.not().then_some(l.name.clone()))
             .chain(state.languages.iter().map(|l| l.config.name.clone()))
+            .take(MAX_LANGUAGE_NAMES_TO_MATERIALIZE)
             .collect::<Vec<_>>();
         result.sort_unstable_by_key(|language_name| language_name.as_ref().to_lowercase());
         result
@@ -472,7 +527,17 @@ impl LanguageRegistry {
 
     pub fn grammar_names(&self) -> Vec<Arc<str>> {
         let state = self.state.read();
-        let mut result = state.grammars.keys().cloned().collect::<Vec<_>>();
+        warn_truncated_registry_materialization(
+            "grammar names",
+            state.grammars.len(),
+            MAX_GRAMMAR_NAMES_TO_MATERIALIZE,
+        );
+        let mut result = state
+            .grammars
+            .keys()
+            .cloned()
+            .take(MAX_GRAMMAR_NAMES_TO_MATERIALIZE)
+            .collect::<Vec<_>>();
         result.sort_unstable_by_key(|grammar_name| grammar_name.to_lowercase());
         result
     }
@@ -982,6 +1047,7 @@ impl LanguageRegistry {
                     self.executor
                         .spawn(async move {
                             let grammar_result = maybe!({
+                                guard_wasm_grammar_size(&wasm_path)?;
                                 let wasm_bytes = std::fs::read(&wasm_path)?;
                                 let grammar_name = wasm_path
                                     .file_stem()

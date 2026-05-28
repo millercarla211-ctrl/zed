@@ -1998,6 +1998,13 @@ impl MultiWorkspace {
         tasks
     }
 
+    pub fn pending_removal_task_count(&self) -> usize {
+        self.pending_removal_tasks
+            .iter()
+            .filter(|task| !task.is_ready())
+            .count()
+    }
+
     #[cfg(any(test, feature = "test-support"))]
     pub fn test_expand_all_groups(&mut self) {
         self.set_all_groups_expanded(true);

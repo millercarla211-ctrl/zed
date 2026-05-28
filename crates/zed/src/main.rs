@@ -18,6 +18,8 @@ const MAX_BUILTIN_JSON_SCHEMA_BYTES: usize = 8 * 1024 * 1024;
 const MAX_USER_THEME_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_USER_THEME_DIR_ENTRIES: usize = 256;
 const MAX_USER_THEME_WATCH_EVENT_PATHS: usize = 256;
+const MAX_CHANNEL_NOTE_OPEN_PROMISES: usize = 256;
+const MAX_DUMP_GPUI_ACTION_DEFINITIONS: usize = 16_384;
 #[cfg(debug_assertions)]
 const MAX_DEBUG_LANGUAGE_WATCH_DIR_ENTRIES: usize = 256;
 
@@ -1413,8 +1415,23 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
 
                 let workspace = workspace_window.read_with(cx, |mw, _| mw.workspace().clone())?;
 
-                let mut promises = Vec::new();
-                for (channel_id, heading) in request.open_channel_notes {
+                let open_channel_notes = request.open_channel_notes;
+                if open_channel_notes.len() > MAX_CHANNEL_NOTE_OPEN_PROMISES {
+                    log::warn!(
+                        "Channel-note open fanout truncated to {MAX_CHANNEL_NOTE_OPEN_PROMISES} notes; skipped {} additional notes",
+                        open_channel_notes.len() - MAX_CHANNEL_NOTE_OPEN_PROMISES
+                    );
+                }
+
+                let mut promises = Vec::with_capacity(
+                    open_channel_notes
+                        .len()
+                        .min(MAX_CHANNEL_NOTE_OPEN_PROMISES),
+                );
+                for (channel_id, heading) in open_channel_notes
+                    .into_iter()
+                    .take(MAX_CHANNEL_NOTE_OPEN_PROMISES)
+                {
                     promises.push(cx.update_window(workspace_window.into(), |_, window, cx| {
                         ChannelView::open(
                             client::ChannelId(channel_id),
@@ -2102,20 +2119,31 @@ fn dump_all_gpui_actions() {
         documentation: Option<&'static str>,
     }
     let mut generator = settings::KeymapFile::action_schema_generator();
-    let mut actions = gpui::generate_list_of_all_registered_actions()
-        .map(|action| {
-            let schema = (action.json_schema)(&mut generator)
-                .map(|s| serde_json::to_value(s).expect("Failed to serialize action schema"));
-            ActionDef {
-                name: action.name,
-                human_name: command_palette::humanize_action_name(action.name),
-                schema,
-                deprecated_aliases: action.deprecated_aliases,
-                deprecation_message: action.deprecation_message,
-                documentation: action.documentation,
-            }
-        })
-        .collect::<Vec<ActionDef>>();
+    let mut actions = Vec::with_capacity(MAX_DUMP_GPUI_ACTION_DEFINITIONS);
+    let mut truncated_actions = 0usize;
+    for action in gpui::generate_list_of_all_registered_actions() {
+        if actions.len() >= MAX_DUMP_GPUI_ACTION_DEFINITIONS {
+            truncated_actions += 1;
+            continue;
+        }
+
+        let schema = (action.json_schema)(&mut generator)
+            .map(|s| serde_json::to_value(s).expect("Failed to serialize action schema"));
+        actions.push(ActionDef {
+            name: action.name,
+            human_name: command_palette::humanize_action_name(action.name),
+            schema,
+            deprecated_aliases: action.deprecated_aliases,
+            deprecation_message: action.deprecation_message,
+            documentation: action.documentation,
+        });
+    }
+
+    if truncated_actions > 0 {
+        eprintln!(
+            "Zed action definition dump truncated to {MAX_DUMP_GPUI_ACTION_DEFINITIONS} actions; skipped {truncated_actions} additional actions"
+        );
+    }
 
     actions.sort_by_key(|a| a.name);
 

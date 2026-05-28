@@ -109,6 +109,9 @@ use zed_actions::{
 
 const DOCS_URL: &str = "https://zed.dev/docs/";
 const STATUS_URL: &str = "https://status.zed.dev";
+const MAX_QUIT_WORKSPACE_WINDOWS: usize = 512;
+const MAX_QUIT_WORKSPACES_PER_WINDOW: usize = 512;
+const MAX_QUIT_SERIALIZATION_FLUSH_TASKS: usize = 8_192;
 
 pub struct CrashHandler(pub Arc<crashes::Client>);
 
@@ -1597,6 +1600,78 @@ fn install_cli(
 }
 
 static WAITING_QUIT_CONFIRMATION: AtomicBool = AtomicBool::new(false);
+
+fn collect_quit_workspace_windows(cx: &mut App) -> Option<Vec<WindowHandle<MultiWorkspace>>> {
+    let mut workspace_windows = Vec::with_capacity(MAX_QUIT_WORKSPACE_WINDOWS);
+    let mut truncated_windows = 0usize;
+
+    for window in cx.windows() {
+        let Some(window) = window.downcast::<MultiWorkspace>() else {
+            continue;
+        };
+
+        if workspace_windows.len() >= MAX_QUIT_WORKSPACE_WINDOWS {
+            truncated_windows += 1;
+            continue;
+        }
+
+        workspace_windows.push(window);
+    }
+
+    if truncated_windows > 0 {
+        log::warn!(
+            "Quit workspace/window fanout truncated to {MAX_QUIT_WORKSPACE_WINDOWS} windows; cancelled quit instead of skipping {truncated_windows} additional multi-workspace windows"
+        );
+        return None;
+    }
+
+    Some(workspace_windows)
+}
+
+fn collect_quit_workspaces_for_window(
+    multi_workspace: &MultiWorkspace,
+) -> Option<Vec<Entity<Workspace>>> {
+    let mut workspaces = Vec::with_capacity(MAX_QUIT_WORKSPACES_PER_WINDOW);
+    let mut truncated_workspaces = 0usize;
+
+    for workspace in multi_workspace.workspaces() {
+        if workspaces.len() >= MAX_QUIT_WORKSPACES_PER_WINDOW {
+            truncated_workspaces += 1;
+            continue;
+        }
+
+        workspaces.push(workspace.clone());
+    }
+
+    if truncated_workspaces > 0 {
+        log::warn!(
+            "Quit workspace fanout truncated to {MAX_QUIT_WORKSPACES_PER_WINDOW} workspaces for one window; cancelled quit instead of skipping {truncated_workspaces} additional workspaces"
+        );
+        return None;
+    }
+
+    Some(workspaces)
+}
+
+fn push_quit_flush_task(
+    flush_tasks: &mut Vec<Task<()>>,
+    truncated_flush_tasks: &mut usize,
+    make_task: impl FnOnce() -> Task<()>,
+) -> bool {
+    if flush_tasks.len() >= MAX_QUIT_SERIALIZATION_FLUSH_TASKS {
+        *truncated_flush_tasks += 1;
+        if *truncated_flush_tasks == 1 {
+            log::warn!(
+                "Quit serialization flush task fanout exceeded {MAX_QUIT_SERIALIZATION_FLUSH_TASKS}; cancelled quit instead of skipping additional pending flush tasks"
+            );
+        }
+        return false;
+    }
+
+    flush_tasks.push(make_task());
+    true
+}
+
 fn quit(_: &Quit, cx: &mut App) {
     if WAITING_QUIT_CONFIRMATION.load(atomic::Ordering::Acquire) {
         return;
@@ -1604,12 +1679,9 @@ fn quit(_: &Quit, cx: &mut App) {
 
     let should_confirm = WorkspaceSettings::get_global(cx).confirm_quit;
     cx.spawn(async move |cx| {
-        let mut workspace_windows: Vec<WindowHandle<MultiWorkspace>> = cx.update(|cx| {
-            cx.windows()
-                .into_iter()
-                .filter_map(|window| window.downcast::<MultiWorkspace>())
-                .collect::<Vec<_>>()
-        });
+        let Some(mut workspace_windows) = cx.update(|cx| collect_quit_workspace_windows(cx)) else {
+            return Ok(());
+        };
 
         // If multiple windows have unsaved changes, and need a save prompt,
         // prompt in the active window before switching to a different window.
@@ -1645,12 +1717,13 @@ fn quit(_: &Quit, cx: &mut App) {
             let window = *window;
             let workspaces = window
                 .update(cx, |multi_workspace, _, _cx| {
-                    multi_workspace.workspaces().cloned().collect::<Vec<_>>()
+                    collect_quit_workspaces_for_window(multi_workspace)
                 })
-                .log_err();
+                .log_err()
+                .flatten();
 
             let Some(workspaces) = workspaces else {
-                continue;
+                return Ok(());
             };
 
             for workspace in workspaces {
@@ -1672,19 +1745,77 @@ fn quit(_: &Quit, cx: &mut App) {
         }
         // Flush all pending workspace serialization before quitting so that
         // session_id/window_id are up-to-date in the database.
-        let mut flush_tasks = Vec::new();
+        let mut flush_tasks = Vec::with_capacity(MAX_QUIT_SERIALIZATION_FLUSH_TASKS);
+        let mut truncated_flush_tasks = 0usize;
         for window in &workspace_windows {
-            window
+            let quit_flush_ready = window
                 .update(cx, |multi_workspace, window, cx| {
-                    for workspace in multi_workspace.workspaces() {
-                        flush_tasks.push(workspace.update(cx, |workspace, cx| {
-                            workspace.flush_serialization(window, cx)
-                        }));
+                    let Some(workspaces) = collect_quit_workspaces_for_window(multi_workspace)
+                    else {
+                        return false;
+                    };
+
+                    let pending_removal_task_count = multi_workspace.pending_removal_task_count();
+                    let required_flush_tasks = workspaces
+                        .len()
+                        .saturating_add(pending_removal_task_count)
+                        .saturating_add(1);
+                    if flush_tasks.len().saturating_add(required_flush_tasks)
+                        > MAX_QUIT_SERIALIZATION_FLUSH_TASKS
+                    {
+                        truncated_flush_tasks =
+                            truncated_flush_tasks.saturating_add(required_flush_tasks);
+                        log::warn!(
+                            "Quit serialization flush task fanout would exceed {MAX_QUIT_SERIALIZATION_FLUSH_TASKS}; cancelled quit before draining {pending_removal_task_count} pending removal tasks"
+                        );
+                        return false;
                     }
-                    flush_tasks.append(&mut multi_workspace.take_pending_removal_tasks());
-                    flush_tasks.push(multi_workspace.flush_serialization());
+
+                    for workspace in workspaces {
+                        if !push_quit_flush_task(
+                            &mut flush_tasks,
+                            &mut truncated_flush_tasks,
+                            || {
+                                workspace.update(cx, |workspace, cx| {
+                                    workspace.flush_serialization(window, cx)
+                                })
+                            },
+                        ) {
+                            return false;
+                        }
+                    }
+                    for task in multi_workspace.take_pending_removal_tasks() {
+                        if !push_quit_flush_task(
+                            &mut flush_tasks,
+                            &mut truncated_flush_tasks,
+                            move || task,
+                        ) {
+                            return false;
+                        }
+                    }
+                    if !push_quit_flush_task(
+                        &mut flush_tasks,
+                        &mut truncated_flush_tasks,
+                        || multi_workspace.flush_serialization(),
+                    ) {
+                        return false;
+                    }
+
+                    true
                 })
                 .log_err();
+
+            if quit_flush_ready != Some(true) {
+                futures::future::join_all(flush_tasks).await;
+                return Ok(());
+            }
+        }
+        if truncated_flush_tasks > 0 {
+            log::warn!(
+                "Quit cancelled after {truncated_flush_tasks} serialization flush tasks exceeded the {MAX_QUIT_SERIALIZATION_FLUSH_TASKS} task cap"
+            );
+            futures::future::join_all(flush_tasks).await;
+            return Ok(());
         }
         futures::future::join_all(flush_tasks).await;
 

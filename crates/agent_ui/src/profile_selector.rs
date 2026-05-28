@@ -21,6 +21,11 @@ use ui::{
     PopoverMenuHandle, Tooltip, prelude::*,
 };
 
+const MAX_PROFILE_SELECTOR_CANDIDATES: usize = 4096;
+const MAX_PROFILE_SELECTOR_MATCH_CANDIDATES: usize = MAX_PROFILE_SELECTOR_CANDIDATES;
+const MAX_PROFILE_SELECTOR_MATCHES: usize = 100;
+const MAX_PROFILE_SELECTOR_RENDER_ENTRIES: usize = MAX_PROFILE_SELECTOR_CANDIDATES + 1;
+
 /// Trait for types that can provide and manage agent profiles
 pub trait ProfileProvider {
     /// Get the current profile ID
@@ -308,12 +313,13 @@ impl ProfilePickerDelegate {
         self.string_candidates = Arc::new(Self::string_candidates(&self.candidates));
         self.query = query;
 
-        if self.query.is_empty() {
-            self.filtered_entries = Self::entries_from_candidates(&self.candidates);
+        let filtered_entries = if self.query.is_empty() {
+            Self::entries_from_candidates(&self.candidates)
         } else {
             let matches = self.search_blocking(&self.query);
-            self.filtered_entries = self.entries_from_matches(matches);
-        }
+            self.entries_from_matches(matches)
+        };
+        self.filtered_entries = filtered_entries;
 
         self.selected_index = self
             .index_of_profile(&self.provider.profile_id(cx))
@@ -322,8 +328,18 @@ impl ProfilePickerDelegate {
     }
 
     fn candidates_from(profiles: AvailableProfiles) -> Vec<ProfileCandidate> {
+        let profile_count = profiles.len();
+        if profile_count > MAX_PROFILE_SELECTOR_CANDIDATES {
+            log::warn!(
+                "truncating agent profile selector candidates from {} to {}",
+                profile_count,
+                MAX_PROFILE_SELECTOR_CANDIDATES
+            );
+        }
+
         profiles
             .into_iter()
+            .take(MAX_PROFILE_SELECTOR_CANDIDATES)
             .map(|(id, name)| ProfileCandidate {
                 is_builtin: builtin_profiles::is_builtin(&id),
                 id,
@@ -333,8 +349,17 @@ impl ProfilePickerDelegate {
     }
 
     fn string_candidates(candidates: &[ProfileCandidate]) -> Vec<StringMatchCandidate> {
+        if candidates.len() > MAX_PROFILE_SELECTOR_MATCH_CANDIDATES {
+            log::warn!(
+                "truncating agent profile selector match candidates from {} to {}",
+                candidates.len(),
+                MAX_PROFILE_SELECTOR_MATCH_CANDIDATES
+            );
+        }
+
         candidates
             .iter()
+            .take(MAX_PROFILE_SELECTOR_MATCH_CANDIDATES)
             .enumerate()
             .map(|(index, candidate)| StringMatchCandidate::new(index, candidate.name.as_ref()))
             .collect()
@@ -353,34 +378,73 @@ impl ProfilePickerDelegate {
         let mut entries = Vec::new();
         let mut inserted_custom_header = false;
 
+        fn push_picker_entry(
+            entries: &mut Vec<ProfilePickerEntry>,
+            entry: ProfilePickerEntry,
+        ) -> bool {
+            if entries.len() >= MAX_PROFILE_SELECTOR_RENDER_ENTRIES {
+                return false;
+            }
+
+            entries.push(entry);
+            true
+        }
+
         for (idx, candidate) in candidates.iter().enumerate() {
             if !candidate.is_builtin && !inserted_custom_header {
                 if !entries.is_empty() {
-                    entries.push(ProfilePickerEntry::Header("Custom Profiles".into()));
+                    if !push_picker_entry(
+                        &mut entries,
+                        ProfilePickerEntry::Header("Custom Profiles".into()),
+                    ) {
+                        log::warn!(
+                            "truncating agent profile selector picker entries at {} rows",
+                            MAX_PROFILE_SELECTOR_RENDER_ENTRIES
+                        );
+                        return entries;
+                    }
                 }
                 inserted_custom_header = true;
             }
 
-            entries.push(ProfilePickerEntry::Profile(ProfileMatchEntry {
-                candidate_index: idx,
-                positions: Vec::new(),
-            }));
+            if !push_picker_entry(
+                &mut entries,
+                ProfilePickerEntry::Profile(ProfileMatchEntry {
+                    candidate_index: idx,
+                    positions: Vec::new(),
+                }),
+            ) {
+                log::warn!(
+                    "truncating agent profile selector picker entries at {} rows",
+                    MAX_PROFILE_SELECTOR_RENDER_ENTRIES
+                );
+                return entries;
+            }
         }
 
         entries
     }
 
     fn entries_from_matches(&self, matches: Vec<StringMatch>) -> Vec<ProfilePickerEntry> {
-        let mut entries = Vec::new();
-        for mat in matches {
-            if self.candidates.get(mat.candidate_id).is_some() {
-                entries.push(ProfilePickerEntry::Profile(ProfileMatchEntry {
+        if matches.len() > MAX_PROFILE_SELECTOR_MATCHES {
+            log::warn!(
+                "truncating agent profile selector fuzzy matches from {} to {}",
+                matches.len(),
+                MAX_PROFILE_SELECTOR_MATCHES
+            );
+        }
+
+        matches
+            .into_iter()
+            .take(MAX_PROFILE_SELECTOR_MATCHES)
+            .filter_map(|mat| {
+                self.candidates.get(mat.candidate_id)?;
+                Some(ProfilePickerEntry::Profile(ProfileMatchEntry {
                     candidate_index: mat.candidate_id,
                     positions: mat.positions,
-                }));
-            }
-        }
-        entries
+                }))
+            })
+            .collect()
     }
 
     fn first_selectable_index(&self) -> Option<usize> {
@@ -404,6 +468,7 @@ impl ProfilePickerDelegate {
             return self
                 .string_candidates
                 .iter()
+                .take(MAX_PROFILE_SELECTOR_MATCHES)
                 .map(|candidate| StringMatch {
                     candidate_id: candidate.id,
                     score: 0.0,
@@ -420,7 +485,7 @@ impl ProfilePickerDelegate {
             query,
             false,
             true,
-            100,
+            MAX_PROFILE_SELECTOR_MATCHES,
             &cancel_flag,
             self.background.clone(),
         ))
@@ -471,7 +536,8 @@ impl PickerDelegate for ProfilePickerDelegate {
     ) -> Task<()> {
         if query.is_empty() {
             self.query.clear();
-            self.filtered_entries = Self::entries_from_candidates(&self.candidates);
+            let filtered_entries = Self::entries_from_candidates(&self.candidates);
+            self.filtered_entries = filtered_entries;
             self.selected_index = self
                 .index_of_profile(&self.provider.profile_id(cx))
                 .unwrap_or_else(|| self.first_selectable_index().unwrap_or(0));
@@ -498,7 +564,7 @@ impl PickerDelegate for ProfilePickerDelegate {
                 &query,
                 false,
                 true,
-                100,
+                MAX_PROFILE_SELECTOR_MATCHES,
                 cancel_for_future.as_ref(),
                 background,
             )
@@ -509,7 +575,8 @@ impl PickerDelegate for ProfilePickerDelegate {
                     return;
                 }
 
-                this.delegate.filtered_entries = this.delegate.entries_from_matches(matches);
+                let filtered_entries = this.delegate.entries_from_matches(matches);
+                this.delegate.filtered_entries = filtered_entries;
                 this.delegate.selected_index = this
                     .delegate
                     .index_of_profile(&provider.profile_id(cx))

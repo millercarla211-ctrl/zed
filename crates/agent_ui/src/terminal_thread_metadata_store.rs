@@ -14,7 +14,7 @@ use futures::{FutureExt, future::Shared};
 use gpui::{AppContext as _, Entity, Global, Task};
 use remote::{RemoteConnectionOptions, same_remote_connection_identity};
 use ui::{App, Context, SharedString};
-use util::ResultExt as _;
+use util::{ResultExt as _, truncate_to_byte_limit};
 use workspace::PathList;
 
 use crate::{TerminalId, thread_metadata_store::WorktreePaths};
@@ -45,6 +45,246 @@ impl TestTerminalMetadataDbName {
 }
 
 const MAX_TERMINAL_THREAD_REMOTE_CONNECTION_JSON_BYTES: usize = 64 * 1024;
+const MAX_TERMINAL_THREAD_METADATA_DB_ROWS: usize = 10_000;
+const MAX_TERMINAL_THREAD_METADATA_PENDING_DB_OPERATIONS: usize = 2_048;
+const MAX_TERMINAL_THREAD_METADATA_STRING_BYTES: usize = 16 * 1024;
+const MAX_TERMINAL_THREAD_METADATA_PATH_LIST_ENTRIES: usize = 512;
+const MAX_TERMINAL_THREAD_METADATA_PATH_LIST_BYTES: usize = 256 * 1024;
+
+fn terminal_thread_metadata_db_list_limit() -> i64 {
+    MAX_TERMINAL_THREAD_METADATA_DB_ROWS
+        .saturating_add(1)
+        .min(i64::MAX as usize) as i64
+}
+
+fn bounded_terminal_metadata_rows(
+    mut rows: Vec<TerminalThreadMetadata>,
+) -> Vec<TerminalThreadMetadata> {
+    if rows.len() > MAX_TERMINAL_THREAD_METADATA_DB_ROWS {
+        let original_len = rows.len();
+        rows.truncate(MAX_TERMINAL_THREAD_METADATA_DB_ROWS);
+        log::warn!(
+            "terminal thread metadata database load capped at {} rows; skipped at least {} older rows",
+            MAX_TERMINAL_THREAD_METADATA_DB_ROWS,
+            original_len.saturating_sub(MAX_TERMINAL_THREAD_METADATA_DB_ROWS)
+        );
+    }
+
+    rows
+}
+
+fn bounded_terminal_metadata_text(
+    terminal_id: TerminalId,
+    context: &str,
+    field_name: &str,
+    text: &str,
+) -> Option<String> {
+    if text.len() <= MAX_TERMINAL_THREAD_METADATA_STRING_BYTES {
+        return None;
+    }
+
+    let truncated =
+        truncate_to_byte_limit(text, MAX_TERMINAL_THREAD_METADATA_STRING_BYTES).to_string();
+    log::warn!(
+        "terminal thread metadata {context} {field_name} truncated for terminal {} ({} bytes; max {} bytes)",
+        terminal_id.to_key_string(),
+        text.len(),
+        MAX_TERMINAL_THREAD_METADATA_STRING_BYTES
+    );
+    Some(truncated)
+}
+
+fn bounded_terminal_metadata_shared_string(
+    terminal_id: TerminalId,
+    context: &str,
+    field_name: &str,
+    text: SharedString,
+) -> SharedString {
+    bounded_terminal_metadata_text(terminal_id, context, field_name, text.as_ref())
+        .map(SharedString::from)
+        .unwrap_or(text)
+}
+
+fn bounded_terminal_metadata_working_directory(
+    terminal_id: TerminalId,
+    context: &str,
+    working_directory: Option<PathBuf>,
+) -> Option<PathBuf> {
+    let working_directory = working_directory?;
+    let path_len = working_directory.to_string_lossy().len();
+    if path_len <= MAX_TERMINAL_THREAD_METADATA_STRING_BYTES {
+        return Some(working_directory);
+    }
+
+    log::warn!(
+        "terminal thread metadata {context} working_directory skipped for terminal {} ({} bytes; max {} bytes)",
+        terminal_id.to_key_string(),
+        path_len,
+        MAX_TERMINAL_THREAD_METADATA_STRING_BYTES
+    );
+    None
+}
+
+fn bounded_terminal_metadata_worktree_paths(
+    terminal_id: TerminalId,
+    context: &str,
+    worktree_paths: WorktreePaths,
+) -> WorktreePaths {
+    let pair_count = worktree_paths.ordered_pairs().count();
+    if pair_count == 0 {
+        return worktree_paths;
+    }
+
+    let mut main_paths = Vec::new();
+    let mut folder_paths = Vec::new();
+    let mut total_path_bytes = 0usize;
+    let mut skipped_pairs = 0usize;
+    let mut capped = false;
+
+    for (index, (main_path, folder_path)) in worktree_paths.ordered_pairs().enumerate() {
+        if index >= MAX_TERMINAL_THREAD_METADATA_PATH_LIST_ENTRIES {
+            skipped_pairs += pair_count.saturating_sub(index);
+            capped = true;
+            break;
+        }
+
+        let main_path_text = main_path.to_string_lossy();
+        let folder_path_text = folder_path.to_string_lossy();
+        if main_path_text.len() > MAX_TERMINAL_THREAD_METADATA_STRING_BYTES
+            || folder_path_text.len() > MAX_TERMINAL_THREAD_METADATA_STRING_BYTES
+        {
+            skipped_pairs += 1;
+            capped = true;
+            continue;
+        }
+
+        let pair_bytes = main_path_text
+            .len()
+            .saturating_add(folder_path_text.len())
+            .saturating_add(2);
+        if total_path_bytes.saturating_add(pair_bytes)
+            > MAX_TERMINAL_THREAD_METADATA_PATH_LIST_BYTES
+        {
+            skipped_pairs += pair_count.saturating_sub(index);
+            capped = true;
+            break;
+        }
+
+        total_path_bytes = total_path_bytes.saturating_add(pair_bytes);
+        main_paths.push(main_path.clone());
+        folder_paths.push(folder_path.clone());
+    }
+
+    if !capped {
+        return worktree_paths;
+    }
+
+    log::warn!(
+        "terminal thread metadata {context} path list capped for terminal {} (kept {} of {} pairs; skipped {}; max {} pairs, {} bytes)",
+        terminal_id.to_key_string(),
+        folder_paths.len(),
+        pair_count,
+        skipped_pairs,
+        MAX_TERMINAL_THREAD_METADATA_PATH_LIST_ENTRIES,
+        MAX_TERMINAL_THREAD_METADATA_PATH_LIST_BYTES
+    );
+
+    WorktreePaths::from_path_lists(PathList::new(&main_paths), PathList::new(&folder_paths))
+        .unwrap_or_else(|error| {
+            log::warn!(
+                "terminal thread metadata {context} path list skipped for terminal {} after capping: {error}",
+                terminal_id.to_key_string()
+            );
+            WorktreePaths::default()
+        })
+}
+
+fn bounded_terminal_metadata(
+    mut metadata: TerminalThreadMetadata,
+    context: &str,
+) -> TerminalThreadMetadata {
+    let terminal_id = metadata.terminal_id;
+    metadata.title =
+        bounded_terminal_metadata_shared_string(terminal_id, context, "title", metadata.title);
+    metadata.custom_title = metadata.custom_title.map(|custom_title| {
+        bounded_terminal_metadata_shared_string(terminal_id, context, "custom_title", custom_title)
+    });
+    metadata.working_directory = bounded_terminal_metadata_working_directory(
+        terminal_id,
+        context,
+        metadata.working_directory,
+    );
+    metadata.worktree_paths =
+        bounded_terminal_metadata_worktree_paths(terminal_id, context, metadata.worktree_paths);
+    metadata
+}
+
+fn serialized_path_list_entry_count(paths: &str) -> usize {
+    if paths.is_empty() {
+        0
+    } else {
+        paths.bytes().filter(|byte| *byte == b'\n').count() + 1
+    }
+}
+
+fn deserialize_bounded_terminal_path_list(
+    terminal_id: &str,
+    field_name: &str,
+    paths: Option<String>,
+    order: Option<String>,
+) -> PathList {
+    let Some(paths) = paths else {
+        return PathList::default();
+    };
+    let order = order.unwrap_or_default();
+    let entry_count = serialized_path_list_entry_count(&paths);
+
+    if paths.len() > MAX_TERMINAL_THREAD_METADATA_PATH_LIST_BYTES
+        || order.len() > MAX_TERMINAL_THREAD_METADATA_PATH_LIST_BYTES
+        || entry_count > MAX_TERMINAL_THREAD_METADATA_PATH_LIST_ENTRIES
+    {
+        log::warn!(
+            "terminal thread metadata database load {field_name} skipped for terminal {terminal_id} ({} entries, {} path bytes, {} order bytes; max {} entries, {} bytes)",
+            entry_count,
+            paths.len(),
+            order.len(),
+            MAX_TERMINAL_THREAD_METADATA_PATH_LIST_ENTRIES,
+            MAX_TERMINAL_THREAD_METADATA_PATH_LIST_BYTES
+        );
+        return PathList::default();
+    }
+
+    PathList::deserialize(&util::path_list::SerializedPathList { paths, order })
+}
+
+fn serialize_bounded_terminal_path_list(
+    terminal_id: TerminalId,
+    field_name: &str,
+    path_list: &PathList,
+) -> anyhow::Result<(Option<String>, Option<String>)> {
+    if path_list.is_empty() {
+        return Ok((None, None));
+    }
+
+    let serialized = path_list.serialize();
+    let entry_count = serialized_path_list_entry_count(&serialized.paths);
+    if serialized.paths.len() > MAX_TERMINAL_THREAD_METADATA_PATH_LIST_BYTES
+        || serialized.order.len() > MAX_TERMINAL_THREAD_METADATA_PATH_LIST_BYTES
+        || entry_count > MAX_TERMINAL_THREAD_METADATA_PATH_LIST_ENTRIES
+    {
+        anyhow::bail!(
+            "serialize terminal thread metadata {field_name} for terminal {}: path list is too large ({} entries, {} path bytes, {} order bytes; max {} entries, {} bytes)",
+            terminal_id.to_key_string(),
+            entry_count,
+            serialized.paths.len(),
+            serialized.order.len(),
+            MAX_TERMINAL_THREAD_METADATA_PATH_LIST_ENTRIES,
+            MAX_TERMINAL_THREAD_METADATA_PATH_LIST_BYTES
+        );
+    }
+
+    Ok((Some(serialized.paths), Some(serialized.order)))
+}
 
 fn deserialize_terminal_thread_remote_connection(
     remote_connection_json: &str,
@@ -249,6 +489,7 @@ impl TerminalThreadMetadataStore {
     }
 
     fn save_internal(&mut self, metadata: TerminalThreadMetadata) {
+        let metadata = bounded_terminal_metadata(metadata, "save");
         if let Some(existing) = self.terminals.get(&metadata.terminal_id) {
             if existing.folder_paths() != metadata.folder_paths()
                 && let Some(ids) = self.terminals_by_paths.get_mut(existing.folder_paths())
@@ -266,9 +507,7 @@ impl TerminalThreadMetadataStore {
         }
 
         self.cache_terminal_metadata(metadata.clone());
-        self.pending_terminal_ops_tx
-            .try_send(DbOperation::Upsert(metadata))
-            .log_err();
+        self.queue_db_operation(DbOperation::Upsert(metadata));
     }
 
     fn cache_terminal_metadata(&mut self, metadata: TerminalThreadMetadata) {
@@ -301,22 +540,17 @@ impl TerminalThreadMetadataStore {
                 ids.remove(&terminal_id);
             }
         }
-        self.pending_terminal_ops_tx
-            .try_send(DbOperation::Delete(terminal_id))
-            .log_err();
+        self.queue_db_operation(DbOperation::Delete(terminal_id));
         cx.notify();
     }
 
     fn new(db: TerminalThreadMetadataDb, cx: &mut Context<Self>) -> Self {
-        let (tx, rx) = async_channel::unbounded();
+        let (tx, rx) = async_channel::bounded(MAX_TERMINAL_THREAD_METADATA_PENDING_DB_OPERATIONS);
         let _db_operations_task = cx.background_spawn({
             let db = db.clone();
             async move {
                 while let Ok(first_update) = rx.recv().await {
-                    let mut updates = vec![first_update];
-                    while let Ok(update) = rx.try_recv() {
-                        updates.push(update);
-                    }
+                    let updates = Self::drain_pending_terminal_db_operations(first_update, &rx);
                     let updates = Self::dedup_db_operations(updates);
                     for operation in updates {
                         match operation {
@@ -343,6 +577,59 @@ impl TerminalThreadMetadataStore {
         };
         this.reload(cx);
         this
+    }
+
+    fn queue_db_operation(&self, operation: DbOperation) {
+        let terminal_id = operation.id();
+        match self.pending_terminal_ops_tx.try_send(operation) {
+            Ok(()) => {}
+            Err(async_channel::TrySendError::Full(operation)) => {
+                log::warn!(
+                    "terminal thread metadata database operation backpressured for terminal {}: pending queue cap {} reached",
+                    terminal_id.to_key_string(),
+                    MAX_TERMINAL_THREAD_METADATA_PENDING_DB_OPERATIONS
+                );
+                if self
+                    .pending_terminal_ops_tx
+                    .send_blocking(operation)
+                    .is_err()
+                {
+                    log::warn!(
+                        "terminal thread metadata database operation skipped for terminal {}: pending queue closed",
+                        terminal_id.to_key_string()
+                    );
+                }
+            }
+            Err(async_channel::TrySendError::Closed(_)) => {
+                log::warn!(
+                    "terminal thread metadata database operation skipped for terminal {}: pending queue closed",
+                    terminal_id.to_key_string()
+                );
+            }
+        }
+    }
+
+    fn drain_pending_terminal_db_operations(
+        first_update: DbOperation,
+        rx: &async_channel::Receiver<DbOperation>,
+    ) -> Vec<DbOperation> {
+        let mut updates = vec![first_update];
+        while updates.len() < MAX_TERMINAL_THREAD_METADATA_PENDING_DB_OPERATIONS {
+            let Ok(update) = rx.try_recv() else {
+                break;
+            };
+            updates.push(update);
+        }
+
+        let remaining = rx.len();
+        if remaining > 0 {
+            log::warn!(
+                "terminal thread metadata database operation drain capped at {} operations; {remaining} queued operations deferred",
+                MAX_TERMINAL_THREAD_METADATA_PENDING_DB_OPERATIONS
+            );
+        }
+
+        updates
     }
 
     fn dedup_db_operations(operations: Vec<DbOperation>) -> Vec<DbOperation> {
@@ -374,7 +661,9 @@ impl TerminalThreadMetadataStore {
                     this.terminals_by_paths.clear();
                     this.terminals_by_main_paths.clear();
 
+                    let rows = bounded_terminal_metadata_rows(rows);
                     for row in rows {
+                        let row = bounded_terminal_metadata(row, "database load");
                         this.cache_terminal_metadata(row);
                     }
 
@@ -412,16 +701,18 @@ db::static_connection!(TerminalThreadMetadataDb, []);
 
 impl TerminalThreadMetadataDb {
     pub fn list(&self) -> anyhow::Result<Vec<TerminalThreadMetadata>> {
-        self.select::<TerminalThreadMetadata>(
+        self.select_bound::<i64, TerminalThreadMetadata>(
             "SELECT terminal_id, title, custom_title, created_at, \
             working_directory, folder_paths, folder_paths_order, main_worktree_paths, \
             main_worktree_paths_order, remote_connection \
             FROM sidebar_terminal_threads \
-            ORDER BY created_at DESC",
-        )?()
+            ORDER BY created_at DESC \
+            LIMIT ?1",
+        )?(terminal_thread_metadata_db_list_limit())
     }
 
     pub async fn save(&self, row: TerminalThreadMetadata) -> anyhow::Result<()> {
+        let row = bounded_terminal_metadata(row, "database save");
         let terminal_id = row.terminal_id.to_key_string();
         let title = row.title.to_string();
         let custom_title = row.custom_title.as_ref().map(ToString::to_string);
@@ -430,25 +721,32 @@ impl TerminalThreadMetadataDb {
             .working_directory
             .as_ref()
             .map(|path| path.to_string_lossy().into_owned());
-        let serialized = row.folder_paths().serialize();
-        let (folder_paths, folder_paths_order) = if row.folder_paths().is_empty() {
-            (None, None)
-        } else {
-            (Some(serialized.paths), Some(serialized.order))
-        };
-        let main_serialized = row.main_worktree_paths().serialize();
+        let (folder_paths, folder_paths_order) = serialize_bounded_terminal_path_list(
+            row.terminal_id,
+            "folder_paths",
+            row.folder_paths(),
+        )?;
         let (main_worktree_paths, main_worktree_paths_order) =
-            if row.main_worktree_paths().is_empty() {
-                (None, None)
-            } else {
-                (Some(main_serialized.paths), Some(main_serialized.order))
-            };
-        let remote_connection = row
-            .remote_connection
-            .as_ref()
-            .map(serde_json::to_string)
-            .transpose()
-            .context("serialize terminal thread remote connection")?;
+            serialize_bounded_terminal_path_list(
+                row.terminal_id,
+                "main_worktree_paths",
+                row.main_worktree_paths(),
+            )?;
+        let remote_connection = match row.remote_connection.as_ref() {
+            Some(remote_connection) => {
+                let json = serde_json::to_string(remote_connection)
+                    .context("serialize terminal thread remote connection")?;
+                if json.len() > MAX_TERMINAL_THREAD_REMOTE_CONNECTION_JSON_BYTES {
+                    anyhow::bail!(
+                        "serialize terminal thread remote connection: remote_connection_json is too large ({} bytes; max {} bytes)",
+                        json.len(),
+                        MAX_TERMINAL_THREAD_REMOTE_CONNECTION_JSON_BYTES
+                    );
+                }
+                Some(json)
+            }
+            None => None,
+        };
 
         self.write(move |conn| {
             let sql = "INSERT INTO sidebar_terminal_threads(terminal_id, title, custom_title, created_at, working_directory, folder_paths, folder_paths_order, main_worktree_paths, main_worktree_paths_order, remote_connection) \
@@ -510,23 +808,19 @@ impl Column for TerminalThreadMetadata {
         let (remote_connection_json, next): (Option<String>, i32) =
             Column::column(statement, next)?;
 
-        let folder_paths = folder_paths_str
-            .map(|paths| {
-                PathList::deserialize(&util::path_list::SerializedPathList {
-                    paths,
-                    order: folder_paths_order_str.unwrap_or_default(),
-                })
-            })
-            .unwrap_or_default();
+        let folder_paths = deserialize_bounded_terminal_path_list(
+            &terminal_id,
+            "folder_paths",
+            folder_paths_str,
+            folder_paths_order_str,
+        );
 
-        let main_worktree_paths = main_worktree_paths_str
-            .map(|paths| {
-                PathList::deserialize(&util::path_list::SerializedPathList {
-                    paths,
-                    order: main_worktree_paths_order_str.unwrap_or_default(),
-                })
-            })
-            .unwrap_or_default();
+        let main_worktree_paths = deserialize_bounded_terminal_path_list(
+            &terminal_id,
+            "main_worktree_paths",
+            main_worktree_paths_str,
+            main_worktree_paths_order_str,
+        );
 
         let remote_connection = remote_connection_json
             .as_deref()
@@ -534,20 +828,29 @@ impl Column for TerminalThreadMetadata {
             .transpose()?;
 
         let worktree_paths = WorktreePaths::from_path_lists(main_worktree_paths, folder_paths)
-            .unwrap_or_else(|_| WorktreePaths::default());
+            .unwrap_or_else(|error| {
+                log::warn!(
+                    "terminal thread metadata database load path list skipped for terminal {terminal_id}: {error}"
+                );
+                WorktreePaths::default()
+            });
+        let terminal_id = TerminalId::from_key_string(&terminal_id)?;
 
         Ok((
-            TerminalThreadMetadata {
-                terminal_id: TerminalId::from_key_string(&terminal_id)?,
-                title: SharedString::from(title),
-                custom_title: custom_title
-                    .filter(|title| !title.trim().is_empty())
-                    .map(SharedString::from),
-                created_at: DateTime::parse_from_rfc3339(&created_at)?.with_timezone(&Utc),
-                worktree_paths,
-                remote_connection,
-                working_directory: working_directory.map(PathBuf::from),
-            },
+            bounded_terminal_metadata(
+                TerminalThreadMetadata {
+                    terminal_id,
+                    title: SharedString::from(title),
+                    custom_title: custom_title
+                        .filter(|title| !title.trim().is_empty())
+                        .map(SharedString::from),
+                    created_at: DateTime::parse_from_rfc3339(&created_at)?.with_timezone(&Utc),
+                    worktree_paths,
+                    remote_connection,
+                    working_directory: working_directory.map(PathBuf::from),
+                },
+                "database row",
+            ),
             next,
         ))
     }

@@ -21,6 +21,10 @@ use crate::{
 
 static EMPTY_LENS_FALLBACK_TITLE: SharedString = SharedString::new_static("0 references");
 const CODE_LENS_SEPARATOR: &str = " | ";
+const MAX_CODE_LENS_VISIBLE_BUFFERS: usize = 32;
+const MAX_CODE_LENS_ACTIONS_PER_BUFFER: usize = 4_096;
+const MAX_CODE_LENS_BLOCKS_PER_BUFFER: usize = 2_048;
+const MAX_CODE_LENS_RESOLVE_TASKS: usize = 2_048;
 
 #[derive(Clone, Debug)]
 struct CodeLensLine {
@@ -184,7 +188,7 @@ impl Editor {
             return;
         };
 
-        let buffers_to_query = self
+        let mut buffer_candidates = self
             .visible_buffers(cx)
             .into_iter()
             .filter(|buffer| self.is_lsp_relevant(buffer.read(cx).file(), cx))
@@ -195,7 +199,17 @@ impl Editor {
                     && self.registered_buffers.contains_key(&editor_buffer_id)
             })
             .unique_by(|buffer| buffer.read(cx).remote_id())
+            .peekable();
+        let buffers_to_query = buffer_candidates
+            .by_ref()
+            .take(MAX_CODE_LENS_VISIBLE_BUFFERS)
             .collect::<Vec<_>>();
+        if buffer_candidates.peek().is_some() {
+            log::warn!(
+                "truncating code lens visible-buffer fanout to {} buffers",
+                MAX_CODE_LENS_VISIBLE_BUFFERS
+            );
+        }
 
         if buffers_to_query.is_empty() {
             return;
@@ -267,6 +281,7 @@ impl Editor {
         snapshot: &MultiBufferSnapshot,
         cx: &mut Context<Self>,
     ) {
+        let actions = cap_code_lens_actions_for_buffer(buffer_id, actions);
         let mut all_lenses = Vec::new();
         for (_, action) in actions.iter().sorted_by_key(|(id, _)| **id) {
             let Some(position) = snapshot.anchor_in_excerpt(action.range.start) else {
@@ -288,9 +303,18 @@ impl Editor {
             }
         }
 
-        let mut new_lines_by_row = group_lenses_by_row(all_lenses, snapshot)
+        let mut grouped_lenses = group_lenses_by_row(all_lenses, snapshot).peekable();
+        let mut new_lines_by_row = grouped_lenses
+            .by_ref()
+            .take(MAX_CODE_LENS_BLOCKS_PER_BUFFER)
             .map(|line| (MultiBufferRow(line.position.to_point(snapshot).row), line))
             .collect::<HashMap<_, _>>();
+        if grouped_lenses.peek().is_some() {
+            log::warn!(
+                "truncating code lens UI blocks for buffer {buffer_id:?} to {} blocks",
+                MAX_CODE_LENS_BLOCKS_PER_BUFFER
+            );
+        }
 
         let editor_handle = cx.entity().downgrade();
         let code_lens = self.code_lens.get_or_insert_with(CodeLensState::default);
@@ -437,7 +461,15 @@ impl Editor {
         let lsp_store = project.read(cx).lsp_store();
 
         let mut pending_resolves = Vec::new();
-        for (buffer_snapshot, visible_range, _) in self.visible_buffer_ranges(cx) {
+        let mut truncated_visible_ranges = false;
+        let mut truncated_resolves = false;
+        for (visible_range_ix, (buffer_snapshot, visible_range, _)) in
+            self.visible_buffer_ranges(cx).enumerate()
+        {
+            if visible_range_ix >= MAX_CODE_LENS_VISIBLE_BUFFERS {
+                truncated_visible_ranges = true;
+                break;
+            }
             let buffer_id = buffer_snapshot.remote_id();
             let Some(buffer) = self.buffer.read(cx).buffer(buffer_id) else {
                 continue;
@@ -450,6 +482,10 @@ impl Editor {
                 continue;
             };
             for (lens_id, action) in actions {
+                if pending_resolves.len() >= MAX_CODE_LENS_RESOLVE_TASKS {
+                    truncated_resolves = true;
+                    break;
+                }
                 if action.resolved {
                     continue;
                 }
@@ -467,6 +503,21 @@ impl Editor {
                 });
                 pending_resolves.push((buffer_id, resolve_task));
             }
+            if truncated_resolves {
+                break;
+            }
+        }
+        if truncated_visible_ranges {
+            log::warn!(
+                "truncating code lens visible resolve-buffer fanout to {} buffers",
+                MAX_CODE_LENS_VISIBLE_BUFFERS
+            );
+        }
+        if truncated_resolves {
+            log::warn!(
+                "truncating code lens resolve fanout to {} tasks",
+                MAX_CODE_LENS_RESOLVE_TASKS
+            );
         }
         if pending_resolves.is_empty() {
             return;
@@ -518,6 +569,26 @@ impl Editor {
         }
         self.refresh_code_lens_task = Task::ready(());
     }
+}
+
+fn cap_code_lens_actions_for_buffer(
+    buffer_id: BufferId,
+    actions: CodeLensActions,
+) -> CodeLensActions {
+    if actions.len() <= MAX_CODE_LENS_ACTIONS_PER_BUFFER {
+        return actions;
+    }
+
+    log::warn!(
+        "truncating code lens actions for buffer {buffer_id:?} from {} to {} actions",
+        actions.len(),
+        MAX_CODE_LENS_ACTIONS_PER_BUFFER
+    );
+    actions
+        .into_iter()
+        .sorted_by_key(|(id, _)| *id)
+        .take(MAX_CODE_LENS_ACTIONS_PER_BUFFER)
+        .collect()
 }
 
 /// Whether two lens lines would render the same on screen — same indent

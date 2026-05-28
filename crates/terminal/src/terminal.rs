@@ -117,6 +117,18 @@ const DEBUG_TERMINAL_WIDTH: Pixels = px(500.);
 const DEBUG_TERMINAL_HEIGHT: Pixels = px(30.);
 const DEBUG_CELL_WIDTH: Pixels = px(5.);
 const DEBUG_LINE_HEIGHT: Pixels = px(5.);
+const TERMINAL_EVENT_DRAIN_BATCH_LIMIT: usize = 100;
+const TERMINAL_DISPLAY_CELL_LIMIT: usize = 262_144;
+const TERMINAL_SEARCH_MATCH_LIMIT: usize = 100_000;
+const TERMINAL_SELECT_MATCH_LIMIT: usize = 10_000;
+const TERMINAL_LOGICAL_LINE_RESULT_LIMIT: usize = 4_096;
+const TERMINAL_LOGICAL_LINE_ROW_LIMIT: usize = 4_096;
+const TERMINAL_LOGICAL_LINE_BYTE_LIMIT: usize = 1_048_576;
+const TERMINAL_ROW_STRING_CELL_LIMIT: usize = 16_384;
+#[cfg(any(test, feature = "test-support"))]
+const TERMINAL_INPUT_LOG_ENTRY_LIMIT: usize = 256;
+#[cfg(any(test, feature = "test-support"))]
+const TERMINAL_INPUT_LOG_ENTRY_BYTE_LIMIT: usize = 16 * 1024;
 
 /// Inserts Zed-specific environment variables for terminal sessions.
 /// Used by both local terminals and remote terminals (via SSH).
@@ -725,10 +737,21 @@ impl TerminalBuilder {
                                     if matches!(event, AlacTermEvent::Wakeup) {
                                         wakeup = true;
                                     } else {
+                                        if events.len() >= TERMINAL_EVENT_DRAIN_BATCH_LIMIT {
+                                            log::warn!(
+                                                "Terminal event drain batch limit reached: processing {} events before continuing drain",
+                                                events.len()
+                                            );
+                                            break;
+                                        }
                                         events.push(event);
                                     }
 
-                                    if events.len() > 100 {
+                                    if events.len() == TERMINAL_EVENT_DRAIN_BATCH_LIMIT {
+                                        log::warn!(
+                                            "Terminal event drain batch limit reached: processing {} events before continuing drain",
+                                            events.len()
+                                        );
                                         break;
                                     }
                                 } else {
@@ -1357,12 +1380,22 @@ impl Terminal {
     }
 
     pub fn select_matches(&mut self, matches: &[RangeInclusive<AlacPoint>]) {
-        let matches_to_select = self
+        let mut matches_to_select =
+            Vec::with_capacity(self.matches.len().min(TERMINAL_SELECT_MATCH_LIMIT));
+        for self_match in self
             .matches
             .iter()
             .filter(|self_match| matches.contains(self_match))
-            .cloned()
-            .collect::<Vec<_>>();
+        {
+            if matches_to_select.len() >= TERMINAL_SELECT_MATCH_LIMIT {
+                log::warn!(
+                    "Terminal selected search matches truncated at {} matches",
+                    TERMINAL_SELECT_MATCH_LIMIT
+                );
+                break;
+            }
+            matches_to_select.push(self_match.clone());
+        }
         for match_to_select in matches_to_select {
             self.set_selection(Some((
                 make_selection(&match_to_select),
@@ -1490,9 +1523,35 @@ impl Terminal {
         self.keyboard_input_sent = true;
         let input = input.into();
         #[cfg(any(test, feature = "test-support"))]
-        self.input_log.push(input.to_vec());
+        self.record_input_log_entry(input.as_ref());
 
         self.write_to_pty(input);
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn record_input_log_entry(&mut self, input: &[u8]) {
+        let input = if input.len() > TERMINAL_INPUT_LOG_ENTRY_BYTE_LIMIT {
+            log::warn!(
+                "Terminal input log truncated entry from {} to {} bytes",
+                input.len(),
+                TERMINAL_INPUT_LOG_ENTRY_BYTE_LIMIT
+            );
+            &input[..TERMINAL_INPUT_LOG_ENTRY_BYTE_LIMIT]
+        } else {
+            input
+        };
+
+        if self.input_log.len() >= TERMINAL_INPUT_LOG_ENTRY_LIMIT {
+            let entries_to_drop = self.input_log.len() + 1 - TERMINAL_INPUT_LOG_ENTRY_LIMIT;
+            self.input_log.drain(0..entries_to_drop);
+            log::warn!(
+                "Terminal input log truncated: dropped {} oldest entries to keep at most {} entries",
+                entries_to_drop,
+                TERMINAL_INPUT_LOG_ENTRY_LIMIT
+            );
+        }
+
+        self.input_log.push(input.to_vec());
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -1644,8 +1703,18 @@ impl Terminal {
         let term = self.term.clone();
         let mut terminal = term.lock_unfair();
         //Note that the ordering of events matters for event processing
+        let mut processed_events = 0;
         while let Some(e) = self.events.pop_front() {
-            self.process_terminal_event(&e, &mut terminal, window, cx)
+            if processed_events >= TERMINAL_EVENT_DRAIN_BATCH_LIMIT {
+                self.events.push_front(e);
+                log::warn!(
+                    "Terminal event drain batch limit reached: processed {} internal events; remaining events stay queued",
+                    TERMINAL_EVENT_DRAIN_BATCH_LIMIT
+                );
+                break;
+            }
+            self.process_terminal_event(&e, &mut terminal, window, cx);
+            processed_events += 1;
         }
 
         self.last_content = Self::make_content(&terminal, &self.last_content);
@@ -1656,12 +1725,21 @@ impl Terminal {
 
         // Pre-allocate with estimated size to reduce reallocations
         let estimated_size = content.display_iter.size_hint().0;
-        let mut cells = Vec::with_capacity(estimated_size);
+        let mut cells = Vec::with_capacity(estimated_size.min(TERMINAL_DISPLAY_CELL_LIMIT));
 
-        cells.extend(content.display_iter.map(|ic| IndexedCell {
-            point: ic.point,
-            cell: ic.cell.clone(),
-        }));
+        for ic in content.display_iter {
+            if cells.len() >= TERMINAL_DISPLAY_CELL_LIMIT {
+                log::warn!(
+                    "Terminal display content truncated at {} materialized cells",
+                    TERMINAL_DISPLAY_CELL_LIMIT
+                );
+                break;
+            }
+            cells.push(IndexedCell {
+                point: ic.point,
+                cell: ic.cell.clone(),
+            });
+        }
 
         let selection_text = if content.selection.is_some() {
             term.selection_to_string()
@@ -1695,12 +1773,20 @@ impl Terminal {
         let term = self.term.clone();
         let terminal = term.lock_unfair();
         let grid = terminal.grid();
+        let requested_lines = n.min(TERMINAL_LOGICAL_LINE_RESULT_LIMIT);
+        if requested_lines < n {
+            log::warn!(
+                "Terminal logical line result truncated from {} to {} lines",
+                n,
+                requested_lines
+            );
+        }
         let mut lines = Vec::new();
 
         let mut current_line = grid.bottommost_line().0;
         let topmost_line = grid.topmost_line().0;
 
-        while current_line >= topmost_line && lines.len() < n {
+        while current_line >= topmost_line && lines.len() < requested_lines {
             let logical_line_start = self.find_logical_line_start(grid, current_line, topmost_line);
             let logical_line = self.construct_logical_line(grid, logical_line_start, current_line);
 
@@ -1731,9 +1817,39 @@ impl Terminal {
 
     fn construct_logical_line(&self, grid: &Grid<Cell>, start: i32, end: i32) -> String {
         let mut logical_line = String::new();
-        for row in start..=end {
+        let row_limit_end = start.saturating_add(TERMINAL_LOGICAL_LINE_ROW_LIMIT as i32 - 1);
+        let capped_end = end.min(row_limit_end);
+        if capped_end < end {
+            log::warn!(
+                "Terminal logical line truncated from {} to {} rows",
+                end.saturating_sub(start).saturating_add(1),
+                TERMINAL_LOGICAL_LINE_ROW_LIMIT
+            );
+        }
+
+        for row in start..=capped_end {
             let grid_row = &grid[Line(row)];
-            logical_line.push_str(&row_to_string(grid_row));
+            let row_string = row_to_string(grid_row);
+            if logical_line.len().saturating_add(row_string.len())
+                > TERMINAL_LOGICAL_LINE_BYTE_LIMIT
+            {
+                let remaining_bytes =
+                    TERMINAL_LOGICAL_LINE_BYTE_LIMIT.saturating_sub(logical_line.len());
+                let mut safe_end = 0;
+                for (index, ch) in row_string.char_indices() {
+                    if index.saturating_add(ch.len_utf8()) > remaining_bytes {
+                        break;
+                    }
+                    safe_end = index + ch.len_utf8();
+                }
+                logical_line.push_str(&row_string[..safe_end]);
+                log::warn!(
+                    "Terminal logical line truncated at {} bytes",
+                    TERMINAL_LOGICAL_LINE_BYTE_LIMIT
+                );
+                break;
+            }
+            logical_line.push_str(&row_string);
         }
         logical_line
     }
@@ -2030,7 +2146,15 @@ impl Terminal {
             if self.selection_phase == SelectionPhase::Ended {
                 let mouse_cell_index =
                     content_index_for_mouse(position, &self.last_content.terminal_bounds);
-                if let Some(link) = self.last_content.cells[mouse_cell_index].hyperlink() {
+                let mouse_cell = self.last_content.cells.get(mouse_cell_index);
+                if mouse_cell.is_none() {
+                    log::warn!(
+                        "Terminal hyperlink cell lookup skipped: index {} exceeded {} materialized cells",
+                        mouse_cell_index,
+                        self.last_content.cells.len()
+                    );
+                }
+                if let Some(link) = mouse_cell.and_then(|cell| cell.hyperlink()) {
                     cx.open_url(link.uri());
                 } else if e.modifiers.secondary() {
                     self.events
@@ -2122,7 +2246,18 @@ impl Terminal {
         cx.background_spawn(async move {
             let term = term.lock();
 
-            all_search_matches(&term, &mut searcher).collect()
+            let mut matches = Vec::with_capacity(TERMINAL_SEARCH_MATCH_LIMIT.min(1024));
+            for search_match in all_search_matches(&term, &mut searcher) {
+                if matches.len() >= TERMINAL_SEARCH_MATCH_LIMIT {
+                    log::warn!(
+                        "Terminal search matches truncated at {} matches",
+                        TERMINAL_SEARCH_MATCH_LIMIT
+                    );
+                    break;
+                }
+                matches.push(search_match);
+            }
+            matches
         })
     }
 
@@ -2357,7 +2492,16 @@ impl Terminal {
 
 // Helper function to convert a grid row to a string
 pub fn row_to_string(row: &Row<Cell>) -> String {
-    row[..Column(row.len())]
+    let cell_limit = row.len().min(TERMINAL_ROW_STRING_CELL_LIMIT);
+    if cell_limit < row.len() {
+        log::warn!(
+            "Terminal row string truncated from {} to {} cells",
+            row.len(),
+            TERMINAL_ROW_STRING_CELL_LIMIT
+        );
+    }
+
+    row[..Column(cell_limit)]
         .iter()
         .map(|cell| cell.c)
         .collect::<String>()

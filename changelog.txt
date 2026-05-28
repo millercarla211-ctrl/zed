@@ -1,3 +1,32 @@
+[2026-05-28] - Profile Terminal Editor Language And App Fanout Hardening
+
+ADDED:
+- Added `script\dx-profile-selector-source.test.ts` for profile selector candidate, fuzzy-match, and render materialization boundaries.
+- Added `script\dx-terminal-thread-metadata-source.test.ts` for terminal thread metadata DB, queue, path-list, and serialization boundaries.
+- Added `script\dx-terminal-display-source.test.ts` for terminal display, search, and hyperlink materialization boundaries.
+- Added `script\dx-editor-lsp-ui-source.test.ts` for editor code-action, code-lens, completion, and markdown fanout boundaries.
+- Added `script\dx-language-registry-source.test.ts` for language registry/settings and WASM metadata boundaries.
+- Added `script\zed-app-fanout-source.test.ts` for app-level quit, channel-note, serialization, and action dump fanout boundaries.
+
+CHANGED:
+- Profile selection now caps profile candidates, fuzzy matches, match candidates, rendered entries, and picker row pushes before materialization.
+- Terminal thread metadata now bounds DB row reads, backpressures pending DB operations instead of dropping full-queue writes, caps persisted title/path strings, path-list entries/bytes, and remote JSON writes.
+- Terminal display and hyperlinks now cap event drains, display cells, search/select match vectors, test input logs, logical-line strings, regex slices, and decoded OSC8 paths before collection or lookup.
+- Editor code actions, code lenses, debug scenarios, completion resolve candidates, and markdown parse fanout now use named caps before UI or task materialization.
+- Language registry and language settings now cap language/grammar names, registered WASM grammars, WASM metadata bytes, settings-backed arrays, and Prettier plugin sets before reads or list construction.
+- Zed app-level quit now checks capacity before draining pending removal tasks, awaits already-collected flush tasks before cancelling, and cancels on pathological window/workspace/flush fanout instead of skipping unchecked close or serialization work, while channel-note opening, serialization flush, and `--dump-all-actions` action definition paths cap fanout before collection or `join_all`.
+- `DX.md` and the source-guard registry now list the new guards.
+
+PASSED:
+- Worker-reported source lane checks for the six new guards and targeted rustfmt checks.
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-profile-selector-source.test.ts script\dx-terminal-thread-metadata-source.test.ts script\dx-terminal-display-source.test.ts script\dx-editor-lsp-ui-source.test.ts script\dx-language-registry-source.test.ts script\zed-app-fanout-source.test.ts` (31/31 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on all edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-28] - Picker Open Listener Context Server Worktree And Entry Boundary Hardening
 
 ADDED:
